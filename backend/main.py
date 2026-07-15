@@ -7,6 +7,7 @@ import os
 
 from database import engine, Base
 from routers.avatars import router as avatars_router
+from routers.chat import router as chat_router
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -39,6 +40,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include routers
 app.include_router(avatars_router)
+app.include_router(chat_router)
 
 
 @app.get("/")

@@ -20,6 +20,7 @@ class Avatar(Base):
 
     # Relationship to selections
     selections = relationship("UserSelection", back_populates="avatar")
+    conversations = relationship("ChatConversation", back_populates="avatar")
 
     def __repr__(self):
         return f"<Avatar(id={self.id}, name='{self.name}', category='{self.category}')>"
@@ -39,3 +40,50 @@ class UserSelection(Base):
 
     def __repr__(self):
         return f"<UserSelection(id={self.id}, avatar_id={self.avatar_id})>"
+
+
+class ChatConversation(Base):
+    """Represents a chat conversation with an avatar."""
+
+    __tablename__ = "chat_conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    avatar_id = Column(Integer, ForeignKey("avatars.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # Relationships
+    avatar = relationship("Avatar", back_populates="conversations")
+    messages = relationship(
+        "ChatMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at",
+    )
+
+    def __repr__(self):
+        return f"<ChatConversation(id={self.id}, avatar_id={self.avatar_id})>"
+
+
+class ChatMessage(Base):
+    """Stores a single message in a chat conversation."""
+
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(
+        Integer, ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role = Column(String(20), nullable=False)  # 'user' or 'assistant'
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    conversation = relationship("ChatConversation", back_populates="messages")
+
+    def __repr__(self):
+        return f"<ChatMessage(id={self.id}, role='{self.role}')>"

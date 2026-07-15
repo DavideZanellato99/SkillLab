@@ -1,9 +1,14 @@
+import { Link, useLocation } from 'react-router-dom';
+
 export default function Navbar() {
+  const location = useLocation();
+  const isHome = location.pathname === '/';
+
   return (
     <nav className="navbar" id="navbar">
       <div className="navbar-inner">
         {/* Logo */}
-        <a href="/" className="navbar-logo" id="navbar-logo">
+        <Link to="/" className="navbar-logo" id="navbar-logo">
           <div className="navbar-logo-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <defs>
@@ -24,11 +29,11 @@ export default function Navbar() {
           <span className="navbar-logo-text">
             Skill<span className="navbar-logo-accent">Lab</span>
           </span>
-        </a>
+        </Link>
 
         {/* Center nav links */}
         <div className="navbar-links" id="navbar-links">
-          <a href="#avatar-grid" className="navbar-link active">
+          <Link to="/" className={`navbar-link${isHome ? ' active' : ''}`}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
@@ -36,13 +41,7 @@ export default function Navbar() {
               <rect x="3" y="14" width="7" height="7" rx="1" />
             </svg>
             Gallery
-          </a>
-          <a href="#category-filter" className="navbar-link">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-            </svg>
-            Categories
-          </a>
+          </Link>
         </div>
 
         {/* Right side */}

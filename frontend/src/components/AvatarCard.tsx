@@ -1,14 +1,14 @@
+import { useNavigate } from 'react-router-dom';
 import type { Avatar } from '../services/api';
 import { getAvatarImageUrl } from '../services/api';
 
 interface AvatarCardProps {
   avatar: Avatar;
-  isSelected: boolean;
-  onSelect: (avatar: Avatar) => void;
   index: number;
 }
 
-export default function AvatarCard({ avatar, isSelected, onSelect, index }: AvatarCardProps) {
+export default function AvatarCard({ avatar, index }: AvatarCardProps) {
+  const navigate = useNavigate();
   const categoryClass = avatar.category.toLowerCase().replace('-', '-');
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -24,33 +24,25 @@ export default function AvatarCard({ avatar, isSelected, onSelect, index }: Avat
     card.appendChild(ripple);
     setTimeout(() => ripple.remove(), 600);
 
-    onSelect(avatar);
+    navigate(`/chat/${avatar.id}`);
   };
 
   return (
     <div
-      className={`avatar-card${isSelected ? ' selected' : ''}`}
+      className="avatar-card"
       onClick={handleClick}
       style={{ animationDelay: `${index * 0.08}s` }}
       id={`avatar-card-${avatar.id}`}
       role="button"
       tabIndex={0}
-      aria-label={`Select avatar ${avatar.name}`}
+      aria-label={`Chatta con ${avatar.name}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onSelect(avatar);
+          navigate(`/chat/${avatar.id}`);
         }
       }}
     >
-      {isSelected && (
-        <div className="selected-check">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </div>
-      )}
-
       <div className="avatar-card-image">
         <img
           src={getAvatarImageUrl(avatar.image_url)}
@@ -74,15 +66,12 @@ export default function AvatarCard({ avatar, isSelected, onSelect, index }: Avat
           </svg>
           {avatar.selection_count} {avatar.selection_count === 1 ? 'selection' : 'selections'}
         </span>
-        <button
-          className={`select-btn${isSelected ? ' selected' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(avatar);
-          }}
-        >
-          {isSelected ? '✓ Selected' : 'Select'}
-        </button>
+        <span className="chat-hint">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          Chatta
+        </span>
       </div>
     </div>
   );

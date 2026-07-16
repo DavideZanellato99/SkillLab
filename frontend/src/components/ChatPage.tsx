@@ -11,14 +11,13 @@ import {
 } from '../hooks/useApi';
 
 export default function ChatPage() {
-  const { avatarId: rawId } = useParams<{ avatarId: string }>();
-  const avatarId = rawId ? parseInt(rawId, 10) : undefined;
+  const { avatarId } = useParams<{ avatarId: string }>();
 
   // ── TanStack queries ──────────────────────────────
   const { data: avatar, isError: avatarError } = useAvatar(avatarId);
   const { data: conversations = [] } = useConversations(avatarId);
 
-  const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
 
   const {
     data: conversationData,
@@ -57,7 +56,7 @@ export default function ChatPage() {
   }, [messages, scrollToBottom]);
 
   // Load a conversation's messages
-  const loadConversation = (conversationId: number) => {
+  const loadConversation = (conversationId: string) => {
     setCurrentConversationId(conversationId);
     setError(null);
   };
@@ -80,7 +79,7 @@ export default function ChatPage() {
 
     // Optimistically add user message
     const tempUserMsg: ChatMessage = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       role: 'user',
       content: userContent,
       created_at: new Date().toISOString(),
@@ -119,7 +118,7 @@ export default function ChatPage() {
   };
 
   // Delete a conversation
-  const handleDeleteConversation = (convId: number, e: React.MouseEvent) => {
+  const handleDeleteConversation = (convId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     deleteConversationMutation.mutate(convId, {
       onSuccess: () => {

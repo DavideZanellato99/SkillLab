@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Uuid
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -12,7 +12,7 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     cognito_sub = Column(String(255), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     nome = Column(String(100), nullable=False, default="")
@@ -38,7 +38,7 @@ class Avatar(Base):
 
     __tablename__ = "avatars"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String(100), nullable=False)
     image_url = Column(String(500), nullable=False)
     category = Column(String(50), nullable=False, index=True)
@@ -58,9 +58,9 @@ class UserSelection(Base):
 
     __tablename__ = "user_selections"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    avatar_id = Column(Integer, ForeignKey("avatars.id"), nullable=False)
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    avatar_id = Column(Uuid, ForeignKey("avatars.id"), nullable=False)
     selected_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
@@ -76,9 +76,9 @@ class ChatConversation(Base):
 
     __tablename__ = "chat_conversations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
-    avatar_id = Column(Integer, ForeignKey("avatars.id"), nullable=False, index=True)
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    avatar_id = Column(Uuid, ForeignKey("avatars.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime,
@@ -105,9 +105,9 @@ class ChatMessage(Base):
 
     __tablename__ = "chat_messages"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
     conversation_id = Column(
-        Integer, ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False, index=True
+        Uuid, ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role = Column(String(20), nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
@@ -118,4 +118,3 @@ class ChatMessage(Base):
 
     def __repr__(self):
         return f"<ChatMessage(id={self.id}, role='{self.role}')>"
-

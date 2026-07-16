@@ -9,7 +9,7 @@ const API_BASE_URL = 'http://localhost:8000';
 // =====================================================
 
 export interface Avatar {
-  id: number;
+  id: string;
   name: string;
   image_url: string;
   category: string;
@@ -19,8 +19,8 @@ export interface Avatar {
 }
 
 export interface UserSelection {
-  id: number;
-  avatar_id: number;
+  id: string;
+  avatar_id: string;
   selected_at: string;
   avatar: Avatar;
 }
@@ -31,23 +31,23 @@ export interface MessageResponse {
 }
 
 export interface ChatMessage {
-  id: number;
+  id: string;
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
 }
 
 export interface ChatConversation {
-  id: number;
-  avatar_id: number;
+  id: string;
+  avatar_id: string;
   created_at: string;
   updated_at: string;
   messages: ChatMessage[];
 }
 
 export interface ChatConversationSummary {
-  id: number;
-  avatar_id: number;
+  id: string;
+  avatar_id: string;
   created_at: string;
   updated_at: string;
   message_count: number;
@@ -55,7 +55,7 @@ export interface ChatConversationSummary {
 }
 
 export interface ChatSendResponse {
-  conversation_id: number;
+  conversation_id: string;
   user_message: ChatMessage;
   assistant_message: ChatMessage;
 }
@@ -146,13 +146,13 @@ export const fetchAvatars = (category?: string) =>
     params: category ? { category } : undefined,
   });
 
-export const fetchAvatar = (avatarId: number) =>
+export const fetchAvatar = (avatarId: string) =>
   apiFetch<Avatar>(`/api/avatars/${avatarId}`);
 
 export const fetchCategories = () =>
   apiFetch<string[]>('/api/avatars/categories');
 
-export const selectAvatar = (avatarId: number) =>
+export const selectAvatar = (avatarId: string) =>
   apiFetch<MessageResponse>('/api/avatars/select', {
     method: 'POST',
     body: { avatar_id: avatarId },
@@ -160,23 +160,23 @@ export const selectAvatar = (avatarId: number) =>
 
 // --- Chat ---
 
-export const fetchConversations = (avatarId: number) =>
+export const fetchConversations = (avatarId: string) =>
   apiFetch<ChatConversationSummary[]>(`/api/chat/avatar/${avatarId}/conversations`);
 
-export const fetchConversation = (conversationId: number) =>
+export const fetchConversation = (conversationId: string) =>
   apiFetch<ChatConversation>(`/api/chat/conversation/${conversationId}`);
 
 export const sendChatMessage = (
-  avatarId: number,
+  avatarId: string,
   content: string,
-  conversationId?: number | null,
+  conversationId?: string | null,
 ) =>
   apiFetch<ChatSendResponse>(`/api/chat/avatar/${avatarId}/send`, {
     method: 'POST',
     body: { content, conversation_id: conversationId ?? null },
   });
 
-export const deleteConversation = (conversationId: number) =>
+export const deleteConversation = (conversationId: string) =>
   apiFetch<MessageResponse>(`/api/chat/conversation/${conversationId}`, {
     method: 'DELETE',
   });

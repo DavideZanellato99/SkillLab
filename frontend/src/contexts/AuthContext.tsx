@@ -8,7 +8,6 @@ import {
   logout as authLogout,
   isNewPasswordRequired,
   storeAuthData,
-  getStoredUser,
   isAuthenticated as checkIsAuthenticated,
   fetchCurrentUser,
 } from '../services/auth';

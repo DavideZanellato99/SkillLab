@@ -1,5 +1,7 @@
 """Chat API endpoints for avatar conversations."""
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -22,7 +24,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 @router.get("/avatar/{avatar_id}/conversations", response_model=list[ChatConversationSummary])
 def list_conversations(
-    avatar_id: int,
+    avatar_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -76,7 +78,7 @@ def list_conversations(
 
 @router.get("/conversation/{conversation_id}", response_model=ChatConversationResponse)
 def get_conversation(
-    conversation_id: int,
+    conversation_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -118,7 +120,7 @@ def get_conversation(
 
 @router.post("/avatar/{avatar_id}/send", response_model=ChatSendResponse)
 def send_message(
-    avatar_id: int,
+    avatar_id: UUID,
     request: ChatSendRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -210,7 +212,7 @@ def send_message(
 
 @router.delete("/conversation/{conversation_id}", response_model=MessageResponse)
 def delete_conversation(
-    conversation_id: int,
+    conversation_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

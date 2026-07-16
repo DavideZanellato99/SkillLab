@@ -25,12 +25,12 @@ export const queryKeys = {
   avatars: {
     all: ['avatars'] as const,
     list: (category?: string) => ['avatars', 'list', category ?? '__all__'] as const,
-    detail: (id: number) => ['avatars', 'detail', id] as const,
+    detail: (id: string) => ['avatars', 'detail', id] as const,
   },
   categories: ['categories'] as const,
   conversations: {
-    byAvatar: (avatarId: number) => ['conversations', 'avatar', avatarId] as const,
-    detail: (id: number) => ['conversations', 'detail', id] as const,
+    byAvatar: (avatarId: string) => ['conversations', 'avatar', avatarId] as const,
+    detail: (id: string) => ['conversations', 'detail', id] as const,
   },
 } as const;
 
@@ -47,7 +47,7 @@ export function useAvatars(category?: string | null) {
 }
 
 /** Fetch a single avatar by ID. */
-export function useAvatar(avatarId: number | undefined) {
+export function useAvatar(avatarId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.avatars.detail(avatarId!),
     queryFn: () => fetchAvatar(avatarId!),
@@ -68,7 +68,7 @@ export function useCategories() {
 // =====================================================
 
 /** Fetch all conversations for a given avatar. */
-export function useConversations(avatarId: number | undefined) {
+export function useConversations(avatarId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.conversations.byAvatar(avatarId!),
     queryFn: () => fetchConversations(avatarId!),
@@ -77,7 +77,7 @@ export function useConversations(avatarId: number | undefined) {
 }
 
 /** Fetch a single conversation with all its messages. */
-export function useConversation(conversationId: number | null) {
+export function useConversation(conversationId: string | null) {
   return useQuery({
     queryKey: queryKeys.conversations.detail(conversationId!),
     queryFn: () => fetchConversation(conversationId!),
@@ -90,9 +90,9 @@ export function useConversation(conversationId: number | null) {
 // =====================================================
 
 interface SendMessageVars {
-  avatarId: number;
+  avatarId: string;
   content: string;
-  conversationId?: number | null;
+  conversationId?: string | null;
 }
 
 /** Send a chat message and receive the AI response. */
@@ -117,7 +117,7 @@ export function useDeleteConversation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (conversationId: number) => deleteConversation(conversationId),
+    mutationFn: (conversationId: string) => deleteConversation(conversationId),
 
     onSuccess: () => {
       // Invalidate all conversation lists

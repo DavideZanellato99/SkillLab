@@ -1,6 +1,7 @@
 """Pydantic schemas for request/response validation."""
 
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel
 
 
@@ -21,7 +22,7 @@ class AvatarCreate(AvatarBase):
 
 class AvatarResponse(AvatarBase):
     """Schema for avatar API responses."""
-    id: int
+    id: UUID
     created_at: datetime
     selection_count: int = 0
 
@@ -32,13 +33,13 @@ class AvatarResponse(AvatarBase):
 
 class SelectionCreate(BaseModel):
     """Schema for creating a new avatar selection."""
-    avatar_id: int
+    avatar_id: UUID
 
 
 class SelectionResponse(BaseModel):
     """Schema for selection API responses."""
-    id: int
-    avatar_id: int
+    id: UUID
+    avatar_id: UUID
     selected_at: datetime
     avatar: AvatarResponse
 
@@ -55,12 +56,12 @@ class ChatMessageCreate(BaseModel):
 class ChatSendRequest(BaseModel):
     """Schema for the chat send endpoint."""
     content: str
-    conversation_id: int | None = None
+    conversation_id: UUID | None = None
 
 
 class ChatMessageResponse(BaseModel):
     """Schema for a single chat message in API responses."""
-    id: int
+    id: UUID
     role: str
     content: str
     created_at: datetime
@@ -70,8 +71,8 @@ class ChatMessageResponse(BaseModel):
 
 class ChatConversationResponse(BaseModel):
     """Schema for conversation API responses."""
-    id: int
-    avatar_id: int
+    id: UUID
+    avatar_id: UUID
     created_at: datetime
     updated_at: datetime
     messages: list[ChatMessageResponse] = []
@@ -81,8 +82,8 @@ class ChatConversationResponse(BaseModel):
 
 class ChatConversationSummary(BaseModel):
     """Lightweight schema for listing conversations (without full messages)."""
-    id: int
-    avatar_id: int
+    id: UUID
+    avatar_id: UUID
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
@@ -93,7 +94,7 @@ class ChatConversationSummary(BaseModel):
 
 class ChatSendResponse(BaseModel):
     """Schema for the response after sending a chat message."""
-    conversation_id: int
+    conversation_id: UUID
     user_message: ChatMessageResponse
     assistant_message: ChatMessageResponse
 
@@ -141,7 +142,7 @@ class RefreshTokenResponse(BaseModel):
 
 class UserResponse(BaseModel):
     """Schema for user profile response."""
-    id: str
+    id: UUID
     cognito_sub: str
     email: str
     nome: str

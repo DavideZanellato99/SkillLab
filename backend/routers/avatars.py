@@ -1,5 +1,7 @@
 """Avatar API endpoints."""
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -66,7 +68,7 @@ def get_categories(
 
 @router.get("/{avatar_id}", response_model=AvatarResponse)
 def get_avatar(
-    avatar_id: int,
+    avatar_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

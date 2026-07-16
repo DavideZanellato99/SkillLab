@@ -12,9 +12,29 @@ export interface AuthUser {
   email: string;
   nome: string;
   cognome: string;
-  ruolo: string;
+  role_id: string;
+  ruolo: string; // role name: 'super_admin' | 'organization_admin' | 'user'
   created_at: string;
   updated_at: string;
+}
+
+// =====================================================
+//  ROLES
+// =====================================================
+
+export type RoleName = 'super_admin' | 'organization_admin' | 'user';
+
+export const ADMIN_ROLES: RoleName[] = ['super_admin', 'organization_admin'];
+
+export const ROLE_LABELS: Record<string, string> = {
+  super_admin: 'Super Admin',
+  organization_admin: 'Org Admin',
+  user: 'User',
+};
+
+/** True if the user holds an admin role (super_admin or organization_admin). */
+export function isAdminUser(user: AuthUser | null): boolean {
+  return !!user && (ADMIN_ROLES as string[]).includes(user.ruolo);
 }
 
 export interface LoginResponse {

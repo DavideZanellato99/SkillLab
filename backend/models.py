@@ -6,6 +6,30 @@ from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Uuid
 from sqlalchemy.orm import relationship
 from database import Base
 
+# Canonical role names (rows of the `roles` table)
+ROLE_SUPER_ADMIN = "super_admin"
+ROLE_ORGANIZATION_ADMIN = "organization_admin"
+ROLE_USER = "user"
+ALL_ROLES = [ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN, ROLE_USER]
+
+# Roles allowed to access the admin endpoints
+ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN]
+
+
+class Role(Base):
+    """A system role assignable to users."""
+
+    __tablename__ = "roles"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    name = Column(String(50), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    users = relationship("User", back_populates="role")
+
+    def __repr__(self):
+        return f"<Role(id={self.id}, name='{self.name}')>"
+
 
 class User(Base):
     """Represents an authenticated user linked to a Cognito identity."""
@@ -17,7 +41,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     nome = Column(String(100), nullable=False, default="")
     cognome = Column(String(100), nullable=False, default="")
-    ruolo = Column(String(20), nullable=False, default="utente")  # "admin" | "utente"
+    role_id = Column(Uuid, ForeignKey("roles.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime,
@@ -26,8 +50,14 @@ class User(Base):
     )
 
     # Relationships
+    role = relationship("Role", back_populates="users", lazy="joined")
     selections = relationship("UserSelection", back_populates="user")
     conversations = relationship("ChatConversation", back_populates="user")
+
+    @property
+    def ruolo(self) -> str:
+        """Role name exposed to the API (kept for backwards compatibility)."""
+        return self.role.name if self.role else ""
 
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', ruolo='{self.ruolo}')>"
@@ -43,6 +73,9 @@ class Avatar(Base):
     image_url = Column(String(500), nullable=False)
     category = Column(String(50), nullable=False, index=True)
     description = Column(Text, nullable=True)
+    # Hume voice id used for the voice conversation mode (falls back to
+    # HUME_DEFAULT_VOICE_ID when null)
+    voice_id = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship to selections

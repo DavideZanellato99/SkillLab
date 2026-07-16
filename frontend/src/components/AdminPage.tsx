@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAllUsers, createNewUser } from '../services/admin';
-import type { AuthUser } from '../services/auth';
+import { isAdminUser, ROLE_LABELS } from '../services/auth';
+import type { AuthUser, RoleName } from '../services/auth';
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -15,7 +16,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState('');
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
-  const [ruolo, setRuolo] = useState<'utente' | 'admin'>('utente');
+  const [ruolo, setRuolo] = useState<RoleName>('user');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -33,7 +34,7 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (user?.ruolo === 'admin') {
+    if (isAdminUser(user)) {
       loadUsers();
     }
   }, [user, loadUsers]);
@@ -55,7 +56,7 @@ export default function AdminPage() {
       setEmail('');
       setNome('');
       setCognome('');
-      setRuolo('utente');
+      setRuolo('user');
       setSuccessMsg(`Utente ${created.email} creato con successo! Un'email con la password temporanea è stata inviata via Cognito.`);
       setTimeout(() => setSuccessMsg(''), 6000);
     } catch (err) {
@@ -65,7 +66,7 @@ export default function AdminPage() {
     }
   };
 
-  if (user?.ruolo !== 'admin') {
+  if (!isAdminUser(user)) {
     return (
       <div className="admin-container">
         <div className="admin-access-denied">
@@ -163,7 +164,7 @@ export default function AdminPage() {
                     <td><span className="admin-user-email">{u.email}</span></td>
                     <td>
                       <span className={`user-menu-role user-menu-role--${u.ruolo}`}>
-                        {u.ruolo}
+                        {ROLE_LABELS[u.ruolo] ?? u.ruolo}
                       </span>
                     </td>
                     <td><code className="admin-sub-badge">{u.cognito_sub.slice(0, 13)}...</code></td>
@@ -284,11 +285,12 @@ export default function AdminPage() {
                     className="auth-input"
                     style={{ background: 'transparent', cursor: 'pointer' }}
                     value={ruolo}
-                    onChange={(e) => setRuolo(e.target.value as 'utente' | 'admin')}
+                    onChange={(e) => setRuolo(e.target.value as RoleName)}
                     disabled={isSubmitting}
                   >
-                    <option value="utente" style={{ background: '#111827' }}>Utente standard</option>
-                    <option value="admin" style={{ background: '#111827' }}>Amministratore (Admin)</option>
+                    <option value="user" style={{ background: '#111827' }}>User (utente standard)</option>
+                    <option value="organization_admin" style={{ background: '#111827' }}>Organization Admin</option>
+                    <option value="super_admin" style={{ background: '#111827' }}>Super Admin</option>
                   </select>
                 </div>
               </div>

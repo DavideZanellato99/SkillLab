@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { VoiceProvider, useVoice } from '@humeai/voice-react';
 import type { ChatMessage } from '../services/api';
 import { getAvatarImageUrl } from '../services/api';
 import {
@@ -9,8 +11,17 @@ import {
   useSendMessage,
   useDeleteConversation,
 } from '../hooks/useApi';
+import VoiceButton from './VoiceButton';
 
 export default function ChatPage() {
+  return (
+    <VoiceProvider>
+      <ChatPageContent />
+    </VoiceProvider>
+  );
+}
+
+function ChatPageContent() {
   const { avatarId } = useParams<{ avatarId: string }>();
 
   // ── TanStack queries ──────────────────────────────
@@ -28,6 +39,11 @@ export default function ChatPage() {
   const sendMessageMutation = useSendMessage();
   const deleteConversationMutation = useDeleteConversation();
 
+  // ── Voice mode ────────────────────────────────────
+  const queryClient = useQueryClient();
+  const { status: voiceStatus } = useVoice();
+  const voiceActive = voiceStatus.value === 'connected' || voiceStatus.value === 'connecting';
+
   // ── Local state ───────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -43,12 +59,13 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Sync messages from loaded conversation
+  // Sync messages from loaded conversation (paused while the voice session
+  // is live: transcripts arrive in real time and the DB catches up at the end)
   useEffect(() => {
-    if (conversationData?.messages) {
+    if (conversationData?.messages && !voiceActive) {
       setMessages(conversationData.messages);
     }
-  }, [conversationData]);
+  }, [conversationData, voiceActive]);
 
   // Scroll when messages change
   useEffect(() => {
@@ -116,6 +133,35 @@ export default function ChatPage() {
       handleSend();
     }
   };
+
+  // ── Voice mode handlers ───────────────────────────
+
+  // Append a live voice transcript bubble; consecutive assistant segments
+  // of the same turn are merged into a single bubble
+  const handleVoiceTranscript = useCallback((msg: ChatMessage) => {
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (
+        msg.role === 'assistant' &&
+        last?.role === 'assistant' &&
+        typeof last.id === 'string' &&
+        last.id.startsWith('voice-')
+      ) {
+        return [...prev.slice(0, -1), { ...last, content: `${last.content} ${msg.content}` }];
+      }
+      return [...prev, msg];
+    });
+  }, []);
+
+  const handleVoiceConversationId = useCallback((id: string) => {
+    setCurrentConversationId((prev) => (prev === id ? prev : id));
+    setError(null);
+  }, []);
+
+  // When the voice session ends, re-sync everything from the DB
+  const handleVoiceSessionEnd = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+  }, [queryClient]);
 
   // Delete a conversation
   const handleDeleteConversation = (convId: string, e: React.MouseEvent) => {
@@ -373,15 +419,29 @@ export default function ChatPage() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Scrivi un messaggio a ${avatar.name}...`}
+              placeholder={
+                voiceActive
+                  ? 'Modalità vocale attiva — parla con l\'avatar...'
+                  : `Scrivi un messaggio a ${avatar.name}...`
+              }
               rows={1}
-              disabled={isTyping}
+              disabled={isTyping || voiceActive}
               id="chat-input"
             />
+            {avatarId && (
+              <VoiceButton
+                avatarId={avatarId}
+                conversationId={currentConversationId}
+                onConversationId={handleVoiceConversationId}
+                onTranscript={handleVoiceTranscript}
+                onError={setError}
+                onSessionEnd={handleVoiceSessionEnd}
+              />
+            )}
             <button
               className="chat-send-btn"
               onClick={handleSend}
-              disabled={!inputValue.trim() || isTyping}
+              disabled={!inputValue.trim() || isTyping || voiceActive}
               id="chat-send-btn"
               aria-label="Invia messaggio"
             >
@@ -392,7 +452,11 @@ export default function ChatPage() {
             </button>
           </div>
           <p className="chat-input-hint">
-            Premi <kbd>Invio</kbd> per inviare · <kbd>Shift+Invio</kbd> per andare a capo
+            {voiceActive ? (
+              <>Conversazione vocale in corso · premi <span className="voice-hint-icon">■</span> per terminare</>
+            ) : (
+              <>Premi <kbd>Invio</kbd> per inviare · <kbd>Shift+Invio</kbd> per andare a capo · 🎙️ per parlare</>
+            )}
           </p>
         </div>
       </main>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { isNewPasswordRequired } from '../services/auth';
+import { isNewPasswordRequired, isAdminUser, ROLE_LABELS } from '../services/auth';
 
 type AuthStep = 'login' | 'new-password';
 
@@ -132,7 +132,7 @@ export default function Navbar() {
               </svg>
               Gallery
             </Link>
-            {isAuthenticated && user?.ruolo === 'admin' && (
+            {isAuthenticated && isAdminUser(user) && (
               <Link to="/admin" className={`navbar-link${isAdminPage ? ' active' : ''}`}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -187,11 +187,11 @@ export default function Navbar() {
                         </span>
                         <span className="user-menu-email">{user.email}</span>
                         <span className={`user-menu-role user-menu-role--${user.ruolo}`}>
-                          {user.ruolo}
+                          {ROLE_LABELS[user.ruolo] ?? user.ruolo}
                         </span>
                       </div>
                     </div>
-                    {user.ruolo === 'admin' && (
+                    {isAdminUser(user) && (
                       <>
                         <div className="user-menu-divider" />
                         <Link

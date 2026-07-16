@@ -99,6 +99,23 @@ class ChatSendResponse(BaseModel):
     assistant_message: ChatMessageResponse
 
 
+# --- Voice Schemas ---
+
+class VoiceSessionRequest(BaseModel):
+    """Schema for starting a voice session with an avatar."""
+    avatar_id: UUID
+    conversation_id: UUID | None = None
+
+
+class VoiceSessionResponse(BaseModel):
+    """Schema returned to the client to open the EVI WebSocket."""
+    access_token: str
+    config_id: str
+    custom_session_id: str
+    conversation_id: UUID
+    voice_id: str | None = None
+
+
 # --- Auth Schemas ---
 
 class LoginRequest(BaseModel):
@@ -147,7 +164,8 @@ class UserResponse(BaseModel):
     email: str
     nome: str
     cognome: str
-    ruolo: str
+    role_id: UUID
+    ruolo: str  # role name, resolved from the roles table
     created_at: datetime
     updated_at: datetime
 
@@ -161,7 +179,7 @@ class CreateUserRequest(BaseModel):
     email: str
     nome: str
     cognome: str
-    ruolo: str = "utente"  # "admin" | "utente"
+    ruolo: str = "user"  # "super_admin" | "organization_admin" | "user"
 
 
 # --- Generic Response ---

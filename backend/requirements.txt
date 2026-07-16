@@ -8,3 +8,4 @@ google-genai
 boto3
 python-jose[cryptography]
 requests
+truststore

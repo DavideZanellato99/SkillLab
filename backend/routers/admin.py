@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User
-from auth_dependency import get_current_admin
+from models import User, ALL_ROLES
+from auth_dependency import get_current_admin, get_role_by_name
 from cognito_service import admin_create_user
 from schemas import (
     CreateUserRequest,
@@ -44,11 +44,17 @@ def create_user(
             detail="Un utente con questa email è già registrato nel sistema locale.",
         )
 
-    # Validate role
-    if request.ruolo not in ["admin", "utente"]:
+    # Validate role against the roles table
+    if request.ruolo not in ALL_ROLES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Il ruolo deve essere 'admin' oppure 'utente'.",
+            detail=f"Il ruolo deve essere uno tra: {', '.join(ALL_ROLES)}.",
+        )
+    role = get_role_by_name(db, request.ruolo)
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ruolo '{request.ruolo}' non presente nel database.",
         )
 
     # Create user in AWS Cognito
@@ -66,7 +72,7 @@ def create_user(
         email=request.email,
         nome=request.nome,
         cognome=request.cognome,
-        ruolo=request.ruolo,
+        role_id=role.id,
     )
     db.add(new_user)
     db.commit()

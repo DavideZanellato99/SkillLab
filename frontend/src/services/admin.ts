@@ -1,12 +1,12 @@
 /* Admin API service for managing users */
 import { apiFetch } from './api';
-import type { AuthUser } from './auth';
+import type { AuthUser, RoleName } from './auth';
 
 export interface CreateUserPayload {
   email: string;
   nome: string;
   cognome: string;
-  ruolo: 'admin' | 'utente';
+  ruolo: RoleName;
 }
 
 /**

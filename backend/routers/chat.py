@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models import Avatar, ChatConversation, ChatMessage
+from models import Avatar, User, ChatConversation, ChatMessage
+from auth_dependency import get_current_user
 from schemas import (
     ChatSendRequest,
     ChatSendResponse,
@@ -20,8 +21,12 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.get("/avatar/{avatar_id}/conversations", response_model=list[ChatConversationSummary])
-def list_conversations(avatar_id: int, db: Session = Depends(get_db)):
-    """List all conversations for a given avatar."""
+def list_conversations(
+    avatar_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all conversations for a given avatar belonging to the current user."""
     # Verify avatar exists
     avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
     if not avatar:
@@ -29,7 +34,10 @@ def list_conversations(avatar_id: int, db: Session = Depends(get_db)):
 
     conversations = (
         db.query(ChatConversation)
-        .filter(ChatConversation.avatar_id == avatar_id)
+        .filter(
+            ChatConversation.avatar_id == avatar_id,
+            ChatConversation.user_id == current_user.id,
+        )
         .order_by(ChatConversation.updated_at.desc())
         .all()
     )
@@ -67,11 +75,18 @@ def list_conversations(avatar_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/conversation/{conversation_id}", response_model=ChatConversationResponse)
-def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
-    """Get a conversation with all its messages."""
+def get_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get a conversation with all its messages (only if it belongs to the current user)."""
     conversation = (
         db.query(ChatConversation)
-        .filter(ChatConversation.id == conversation_id)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.user_id == current_user.id,
+        )
         .first()
     )
     if not conversation:
@@ -102,7 +117,12 @@ def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/avatar/{avatar_id}/send", response_model=ChatSendResponse)
-def send_message(avatar_id: int, request: ChatSendRequest, db: Session = Depends(get_db)):
+def send_message(
+    avatar_id: int,
+    request: ChatSendRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Send a message and get an AI response in character."""
     # Verify avatar exists
     avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
@@ -116,13 +136,14 @@ def send_message(avatar_id: int, request: ChatSendRequest, db: Session = Depends
             .filter(
                 ChatConversation.id == request.conversation_id,
                 ChatConversation.avatar_id == avatar_id,
+                ChatConversation.user_id == current_user.id,
             )
             .first()
         )
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
-        conversation = ChatConversation(avatar_id=avatar_id)
+        conversation = ChatConversation(avatar_id=avatar_id, user_id=current_user.id)
         db.add(conversation)
         db.flush()  # Get the ID
 
@@ -188,11 +209,18 @@ def send_message(avatar_id: int, request: ChatSendRequest, db: Session = Depends
 
 
 @router.delete("/conversation/{conversation_id}", response_model=MessageResponse)
-def delete_conversation(conversation_id: int, db: Session = Depends(get_db)):
-    """Delete a conversation and all its messages."""
+def delete_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a conversation and all its messages (only if it belongs to the current user)."""
     conversation = (
         db.query(ChatConversation)
-        .filter(ChatConversation.id == conversation_id)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.user_id == current_user.id,
+        )
         .first()
     )
     if not conversation:

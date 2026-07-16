@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models import Avatar, UserSelection
+from models import Avatar, User, UserSelection
+from auth_dependency import get_current_user
 from schemas import (
     AvatarResponse,
     AvatarCreate,
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/api/avatars", tags=["avatars"])
 @router.get("", response_model=list[AvatarResponse])
 def get_avatars(
     category: str | None = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get all avatars, optionally filtered by category."""
@@ -53,14 +55,21 @@ def get_avatars(
 
 
 @router.get("/categories", response_model=list[str])
-def get_categories(db: Session = Depends(get_db)):
+def get_categories(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get all distinct avatar categories."""
     categories = db.query(Avatar.category).distinct().order_by(Avatar.category).all()
     return [c[0] for c in categories]
 
 
 @router.get("/{avatar_id}", response_model=AvatarResponse)
-def get_avatar(avatar_id: int, db: Session = Depends(get_db)):
+def get_avatar(
+    avatar_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get a specific avatar by ID."""
     avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
     if not avatar:
@@ -84,15 +93,19 @@ def get_avatar(avatar_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/select", response_model=MessageResponse)
-def select_avatar(selection: SelectionCreate, db: Session = Depends(get_db)):
+def select_avatar(
+    selection: SelectionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Save a user's avatar selection."""
     # Check that the avatar exists
     avatar = db.query(Avatar).filter(Avatar.id == selection.avatar_id).first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar not found")
 
-    # Create selection record
-    db_selection = UserSelection(avatar_id=selection.avatar_id)
+    # Create selection record linked to the user
+    db_selection = UserSelection(avatar_id=selection.avatar_id, user_id=current_user.id)
     db.add(db_selection)
     db.commit()
 
@@ -103,7 +116,10 @@ def select_avatar(selection: SelectionCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/selections/all", response_model=list[SelectionResponse])
-def get_selections(db: Session = Depends(get_db)):
+def get_selections(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get all avatar selections."""
     selections = (
         db.query(UserSelection)

@@ -98,6 +98,71 @@ class ChatSendResponse(BaseModel):
     assistant_message: ChatMessageResponse
 
 
+# --- Auth Schemas ---
+
+class LoginRequest(BaseModel):
+    """Schema for login request."""
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    """Schema for successful login response."""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: "UserResponse"
+
+
+class NewPasswordRequiredResponse(BaseModel):
+    """Schema returned when Cognito requires a new password."""
+    challenge: str = "NEW_PASSWORD_REQUIRED"
+    session: str
+    message: str = "È necessario impostare una nuova password."
+
+
+class NewPasswordRequest(BaseModel):
+    """Schema for completing the new password challenge."""
+    email: str
+    new_password: str
+    session: str
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema for refreshing the access token."""
+    refresh_token: str
+
+
+class RefreshTokenResponse(BaseModel):
+    """Schema for refresh token response."""
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserResponse(BaseModel):
+    """Schema for user profile response."""
+    id: str
+    cognito_sub: str
+    email: str
+    nome: str
+    cognome: str
+    ruolo: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- Admin Schemas ---
+
+class CreateUserRequest(BaseModel):
+    """Schema for admin creating a new user."""
+    email: str
+    nome: str
+    cognome: str
+    ruolo: str = "utente"  # "admin" | "utente"
+
+
 # --- Generic Response ---
 
 class MessageResponse(BaseModel):

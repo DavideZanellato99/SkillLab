@@ -1,5 +1,7 @@
 /* API service for communicating with the FastAPI backend */
 
+import { getAccessToken, refreshAccessToken, clearAuthData } from './auth';
+
 const API_BASE_URL = 'http://localhost:8000';
 
 // =====================================================
@@ -69,7 +71,8 @@ interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
 
 /**
  * Unified fetch wrapper used by every API call.
- * Handles JSON serialization, query params, error extraction, and base URL.
+ * Handles JSON serialization, query params, error extraction, base URL,
+ * and automatic Bearer token injection + 401 refresh.
  */
 export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
   const { body, params, headers, ...rest } = options;
@@ -84,10 +87,14 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
     if (qs) url += `?${qs}`;
   }
 
-  // Build headers
-  const requestHeaders: HeadersInit = { ...headers };
+  // Build headers — inject Authorization if token exists
+  const requestHeaders: Record<string, string> = { ...(headers as Record<string, string>) };
   if (body !== undefined) {
-    (requestHeaders as Record<string, string>)['Content-Type'] = 'application/json';
+    requestHeaders['Content-Type'] = 'application/json';
+  }
+  const token = getAccessToken();
+  if (token) {
+    requestHeaders['Authorization'] = `Bearer ${token}`;
   }
 
   const response = await fetch(url, {
@@ -95,6 +102,28 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
     headers: requestHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  // Handle 401 — try to refresh the token once
+  if (response.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      requestHeaders['Authorization'] = `Bearer ${newToken}`;
+      const retryResponse = await fetch(url, {
+        ...rest,
+        headers: requestHeaders,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+
+      if (retryResponse.ok) {
+        return retryResponse.json() as Promise<T>;
+      }
+    }
+
+    // Refresh failed — clear auth and throw
+    clearAuthData();
+    window.location.reload();
+    throw new Error('Sessione scaduta. Effettua nuovamente il login.');
+  }
 
   if (!response.ok) {
     // Try to extract a detail message from the JSON error body

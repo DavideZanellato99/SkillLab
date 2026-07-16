@@ -1,9 +1,36 @@
 """SQLAlchemy ORM models for the Avatar Selection app."""
 
+import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base
+
+
+class User(Base):
+    """Represents an authenticated user linked to a Cognito identity."""
+
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    cognito_sub = Column(String(255), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    nome = Column(String(100), nullable=False, default="")
+    cognome = Column(String(100), nullable=False, default="")
+    ruolo = Column(String(20), nullable=False, default="utente")  # "admin" | "utente"
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # Relationships
+    selections = relationship("UserSelection", back_populates="user")
+    conversations = relationship("ChatConversation", back_populates="user")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, email='{self.email}', ruolo='{self.ruolo}')>"
 
 
 class Avatar(Base):
@@ -32,14 +59,16 @@ class UserSelection(Base):
     __tablename__ = "user_selections"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     avatar_id = Column(Integer, ForeignKey("avatars.id"), nullable=False)
     selected_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    # Relationship to avatar
+    # Relationships
+    user = relationship("User", back_populates="selections")
     avatar = relationship("Avatar", back_populates="selections")
 
     def __repr__(self):
-        return f"<UserSelection(id={self.id}, avatar_id={self.avatar_id})>"
+        return f"<UserSelection(id={self.id}, user_id={self.user_id}, avatar_id={self.avatar_id})>"
 
 
 class ChatConversation(Base):
@@ -48,6 +77,7 @@ class ChatConversation(Base):
     __tablename__ = "chat_conversations"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     avatar_id = Column(Integer, ForeignKey("avatars.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
@@ -57,6 +87,7 @@ class ChatConversation(Base):
     )
 
     # Relationships
+    user = relationship("User", back_populates="conversations")
     avatar = relationship("Avatar", back_populates="conversations")
     messages = relationship(
         "ChatMessage",
@@ -66,7 +97,7 @@ class ChatConversation(Base):
     )
 
     def __repr__(self):
-        return f"<ChatConversation(id={self.id}, avatar_id={self.avatar_id})>"
+        return f"<ChatConversation(id={self.id}, user_id={self.user_id}, avatar_id={self.avatar_id})>"
 
 
 class ChatMessage(Base):
@@ -87,3 +118,4 @@ class ChatMessage(Base):
 
     def __repr__(self):
         return f"<ChatMessage(id={self.id}, role='{self.role}')>"
+

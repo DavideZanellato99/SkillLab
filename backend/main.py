@@ -5,12 +5,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
-from database import engine, Base
+from database import engine, Base, SessionLocal
 from routers.avatars import router as avatars_router
 from routers.chat import router as chat_router
+from routers.auth import router as auth_router
+from routers.admin import router as admin_router
+from auth_dependency import get_or_create_mock_admin
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
+
+# Ensure mock admin user is seeded on startup
+with SessionLocal() as _db:
+    get_or_create_mock_admin(_db)
 
 app = FastAPI(
     title="SkillLab — Avatar Selection API",
@@ -39,6 +46,8 @@ os.makedirs("static/avatars", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include routers
+app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(avatars_router)
 app.include_router(chat_router)
 

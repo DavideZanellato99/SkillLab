@@ -113,10 +113,11 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    """Schema for successful login response."""
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
+    """Schema for successful login response.
+
+    The tokens are NOT in the body: they travel only as HttpOnly cookies
+    set by the auth endpoints (XSS mitigation).
+    """
     user: "UserResponse"
 
 
@@ -132,17 +133,6 @@ class NewPasswordRequest(BaseModel):
     email: str
     new_password: str
     session: str
-
-
-class RefreshTokenRequest(BaseModel):
-    """Schema for refreshing the access token."""
-    refresh_token: str
-
-
-class RefreshTokenResponse(BaseModel):
-    """Schema for refresh token response."""
-    access_token: str
-    token_type: str = "bearer"
 
 
 class UserResponse(BaseModel):

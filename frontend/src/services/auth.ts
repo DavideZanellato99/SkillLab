@@ -82,9 +82,7 @@ export function getUnmetPasswordRules(password: string): string[] {
 }
 
 export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
+  /** The tokens are NOT here: they live in HttpOnly cookies (XSS mitigation). */
   user: AuthUser;
 }
 
@@ -94,59 +92,14 @@ export interface NewPasswordRequiredResponse {
   message: string;
 }
 
-export interface RefreshTokenResponse {
-  access_token: string;
-  token_type: string;
-}
-
 export type AuthResult = LoginResponse | NewPasswordRequiredResponse;
 
 // =====================================================
-//  TOKEN STORAGE
-// =====================================================
-
-const TOKEN_KEYS = {
-  accessToken: 'skilllab_access_token',
-  refreshToken: 'skilllab_refresh_token',
-  user: 'skilllab_user',
-} as const;
-
-export function getAccessToken(): string | null {
-  return localStorage.getItem(TOKEN_KEYS.accessToken);
-}
-
-export function getRefreshToken(): string | null {
-  return localStorage.getItem(TOKEN_KEYS.refreshToken);
-}
-
-export function getStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem(TOKEN_KEYS.user);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as AuthUser;
-  } catch {
-    return null;
-  }
-}
-
-export function storeAuthData(data: LoginResponse): void {
-  localStorage.setItem(TOKEN_KEYS.accessToken, data.access_token);
-  localStorage.setItem(TOKEN_KEYS.refreshToken, data.refresh_token);
-  localStorage.setItem(TOKEN_KEYS.user, JSON.stringify(data.user));
-}
-
-export function clearAuthData(): void {
-  localStorage.removeItem(TOKEN_KEYS.accessToken);
-  localStorage.removeItem(TOKEN_KEYS.refreshToken);
-  localStorage.removeItem(TOKEN_KEYS.user);
-}
-
-export function isAuthenticated(): boolean {
-  return !!getAccessToken();
-}
-
-// =====================================================
 //  AUTH API CALLS
+//
+//  Tokens travel exclusively in HttpOnly + Secure + SameSite=Lax cookies
+//  set by the backend: JS never sees them. Every request just needs
+//  `credentials: 'include'` so the browser attaches them.
 // =====================================================
 
 function isNewPasswordRequired(result: AuthResult): result is NewPasswordRequiredResponse {
@@ -155,11 +108,12 @@ function isNewPasswordRequired(result: AuthResult): result is NewPasswordRequire
 
 export { isNewPasswordRequired };
 
-async function authFetch<T>(endpoint: string, body: unknown): Promise<T> {
+async function authFetch<T>(endpoint: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    credentials: 'include',
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (!response.ok) {
@@ -172,8 +126,9 @@ async function authFetch<T>(endpoint: string, body: unknown): Promise<T> {
 }
 
 /**
- * Login with email and password.
- * Returns LoginResponse on success or NewPasswordRequiredResponse if password change is needed.
+ * Login with email and password. On success the backend sets the auth
+ * cookies; the body only carries the user profile.
+ * Returns NewPasswordRequiredResponse if a password change is needed.
  */
 export async function login(email: string, password: string): Promise<AuthResult> {
   return authFetch<AuthResult>('/api/auth/login', { email, password });
@@ -195,49 +150,33 @@ export async function completeNewPassword(
 }
 
 /**
- * Refresh the access token using the stored refresh token.
+ * Rotate the access token cookie using the refresh token cookie.
+ * Returns false when the session can't be renewed.
  */
-export async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
-
+export async function refreshSession(): Promise<boolean> {
   try {
-    const result = await authFetch<RefreshTokenResponse>('/api/auth/refresh', {
-      refresh_token: refreshToken,
-    });
-    localStorage.setItem(TOKEN_KEYS.accessToken, result.access_token);
-    return result.access_token;
+    await authFetch('/api/auth/refresh');
+    return true;
   } catch {
-    // Refresh token expired — clear everything
-    clearAuthData();
-    return null;
+    return false;
   }
 }
 
 /**
- * Fetch the current user profile (verifies token is still valid).
+ * Fetch the current user profile from the cookie session; retries once
+ * after a token refresh. Throws when there is no valid session.
  */
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  const token = getAccessToken();
-  if (!token) throw new Error('Non autenticato.');
+  const getMe = () =>
+    fetch(`${API_BASE_URL}/api/auth/me`, { credentials: 'include' });
 
-  const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  let response = await getMe();
+  if (response.status === 401 && (await refreshSession())) {
+    response = await getMe();
+  }
 
   if (!response.ok) {
     if (response.status === 401) {
-      // Try refreshing the token
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        const retryResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${newToken}` },
-        });
-        if (retryResponse.ok) {
-          return retryResponse.json() as Promise<AuthUser>;
-        }
-      }
-      clearAuthData();
       throw new Error('Sessione scaduta. Effettua nuovamente il login.');
     }
     throw new Error('Errore nel recupero del profilo utente.');
@@ -247,8 +186,12 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
 }
 
 /**
- * Logout — clear all stored auth data.
+ * Logout — the backend clears the HttpOnly cookies (JS can't touch them).
  */
-export function logout(): void {
-  clearAuthData();
+export async function logout(): Promise<void> {
+  try {
+    await authFetch('/api/auth/logout');
+  } catch {
+    // Even if the request fails the UI resets; cookies expire on their own
+  }
 }

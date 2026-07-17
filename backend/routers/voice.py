@@ -54,7 +54,7 @@ def start_voice_session(
 
     avatar = db.query(Avatar).filter(Avatar.id == request.avatar_id).first()
     if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found")
+        raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
     # Get or create the conversation (shared with the text chat)
     if request.conversation_id:
@@ -68,7 +68,7 @@ def start_voice_session(
             .first()
         )
         if not conversation:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+            raise HTTPException(status_code=404, detail="Conversazione non trovata.")
     else:
         conversation = ChatConversation(avatar_id=request.avatar_id, user_id=current_user.id)
         db.add(conversation)

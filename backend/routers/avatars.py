@@ -75,7 +75,7 @@ def get_avatar(
     """Get a specific avatar by ID."""
     avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
     if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found")
+        raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
     count = (
         db.query(func.count(UserSelection.id))
@@ -105,7 +105,7 @@ def select_avatar(
     # Check that the avatar exists
     avatar = db.query(Avatar).filter(Avatar.id == selection.avatar_id).first()
     if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found")
+        raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
     # Create selection record linked to the user
     db_selection = UserSelection(avatar_id=selection.avatar_id, user_id=current_user.id)
@@ -113,7 +113,7 @@ def select_avatar(
     db.commit()
 
     return MessageResponse(
-        message=f"Avatar '{avatar.name}' selected successfully!",
+        message=f"Avatar '{avatar.name}' selezionato con successo!",
         success=True,
     )
 

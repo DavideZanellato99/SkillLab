@@ -273,7 +273,7 @@ function ChatPageContent() {
       <button
         className="fixed bottom-8 left-4 z-50 hidden h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-white/6 bg-gray-900/90 text-slate-100 shadow-[0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-lg transition hover:border-violet-600 hover:bg-violet-600/20 max-[900px]:flex"
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        aria-label="Toggle sidebar"
+        aria-label="Apri o chiudi la barra laterale"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           {sidebarOpen ? (

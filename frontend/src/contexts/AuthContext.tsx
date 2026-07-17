@@ -7,8 +7,6 @@ import {
   completeNewPassword as authCompleteNewPassword,
   logout as authLogout,
   isNewPasswordRequired,
-  storeAuthData,
-  isAuthenticated as checkIsAuthenticated,
   fetchCurrentUser,
 } from '../services/auth';
 
@@ -39,20 +37,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // On mount, check if there's a stored session
+  // On mount, resume the cookie session (HttpOnly: JS can't inspect it,
+  // asking the backend for the profile is the only way to know)
   useEffect(() => {
     async function initAuth() {
-      if (!checkIsAuthenticated()) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        // Verify the token is still valid by fetching the user profile
         const currentUser = await fetchCurrentUser();
         setUser(currentUser);
       } catch {
-        // Token is invalid or expired
+        // No valid session
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -65,11 +58,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const result = await authLogin(email, password);
 
-    // If it's a successful login (not a password challenge), store data
+    // If it's a successful login (not a password challenge), the backend
+    // has set the auth cookies — only the user profile reaches the JS
     if (!isNewPasswordRequired(result)) {
-      const loginResult = result as LoginResponse;
-      storeAuthData(loginResult);
-      setUser(loginResult.user);
+      setUser((result as LoginResponse).user);
     }
 
     return result;
@@ -78,14 +70,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const completeNewPassword = useCallback(
     async (email: string, newPassword: string, session: string): Promise<void> => {
       const result = await authCompleteNewPassword(email, newPassword, session);
-      storeAuthData(result);
       setUser(result.user);
     },
     [],
   );
 
   const logout = useCallback(() => {
-    authLogout();
+    // Fire-and-forget: the backend clears the HttpOnly cookies
+    void authLogout();
     setUser(null);
   }, []);
 

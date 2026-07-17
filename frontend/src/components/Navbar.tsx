@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { OPEN_LOGIN_EVENT } from './LandingPage';
 import {
   isNewPasswordRequired,
   isSuperAdmin,
@@ -56,6 +57,23 @@ export default function Navbar() {
     setErrorMessage('');
     setIsSubmitting(false);
   };
+
+  // The landing page CTAs ask to open the login modal via this event
+  useEffect(() => {
+    const openLogin = () => {
+      setEmail('');
+      setPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setCognitoSession('');
+      setAuthStep('login');
+      setErrorMessage('');
+      setIsSubmitting(false);
+      setShowAuthModal(true);
+    };
+    window.addEventListener(OPEN_LOGIN_EVENT, openLogin);
+    return () => window.removeEventListener(OPEN_LOGIN_EVENT, openLogin);
+  }, []);
 
   const closeModal = () => {
     setShowAuthModal(false);

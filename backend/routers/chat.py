@@ -34,7 +34,7 @@ def list_conversations(
     # Verify avatar exists
     avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
     if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found")
+        raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
     conversations = (
         db.query(ChatConversation)
@@ -94,7 +94,7 @@ def get_conversation(
         .first()
     )
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
 
     messages = (
         db.query(ChatMessage)
@@ -136,7 +136,7 @@ def delete_conversation(
         .first()
     )
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
 
     db.delete(conversation)
     db.commit()

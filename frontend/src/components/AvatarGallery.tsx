@@ -4,7 +4,7 @@ import Toast from './Toast';
 import { useAvatars, useCategories } from '../hooks/useApi';
 
 interface AvatarGalleryProps {
-  onStatsUpdate: (totalAvatars: number, totalSelections: number) => void;
+  onStatsUpdate: (totalAvatars: number, totalSelections: number, totalCategories: number) => void;
 }
 
 const filterBtnBase =
@@ -47,13 +47,13 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
   // Update stats when avatars change
   useEffect(() => {
     const totalSelections = avatars.reduce((sum, a) => sum + a.selection_count, 0);
-    onStatsUpdate(avatars.length, totalSelections);
-  }, [avatars, onStatsUpdate]);
+    onStatsUpdate(avatars.length, totalSelections, categories.length);
+  }, [avatars, categories, onStatsUpdate]);
 
   // Show error toast on query failure
   useEffect(() => {
     if (isError) {
-      addToast('Connection Error', 'Unable to connect to the server. Make sure the backend is running.', 'error');
+      addToast('Errore di connessione', 'Impossibile contattare il server. Verifica che il backend sia in esecuzione.', 'error');
     }
   }, [isError, addToast]);
 
@@ -65,7 +65,7 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
           className={`${filterBtnBase} ${activeCategory === null ? filterBtnActive : filterBtnInactive}`}
           onClick={() => setActiveCategory(null)}
         >
-          All
+          Tutti
         </button>
         {categories.map((cat) => (
           <button
@@ -95,7 +95,7 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
       ) : avatars.length === 0 ? (
         <div className="animate-fade-in p-16 text-center">
           <div className="mb-4 animate-float text-5xl">🎭</div>
-          <p className="text-lg text-slate-500">No avatars found in this category.</p>
+          <p className="text-lg text-slate-500">Nessun avatar trovato in questa categoria.</p>
         </div>
       ) : (
         <div className={gridCls} id="avatar-grid">

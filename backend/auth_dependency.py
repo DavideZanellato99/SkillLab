@@ -1,6 +1,6 @@
 """FastAPI dependency for extracting and verifying the current authenticated user."""
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -8,8 +8,12 @@ from database import get_db
 from models import User, Role, ALL_ROLES, ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN
 from cognito_service import verify_access_token
 
-# Security scheme — extracts Bearer token from Authorization header
-_bearer_scheme = HTTPBearer(auto_error=True)
+# Tokens travel in HttpOnly cookies (XSS mitigation: JS can never read them).
+# The Authorization header is kept as a fallback for API tools/tests.
+ACCESS_TOKEN_COOKIE = "skilllab_access_token"
+REFRESH_TOKEN_COOKIE = "skilllab_refresh_token"
+
+_bearer_scheme = HTTPBearer(auto_error=False)
 
 # Cognito sub of the local mock super admin (dev account, not on Cognito)
 MOCK_ADMIN_SUB = "mock-admin-sub-0000-0000-0000"
@@ -54,17 +58,27 @@ def get_or_create_mock_admin(db: Session) -> User:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     """
     FastAPI dependency that:
-    1. Extracts the Bearer token from the Authorization header
+    1. Extracts the access token from the HttpOnly cookie (or, as a
+       fallback, from the Authorization Bearer header)
     2. Verifies the JWT with Cognito's JWKS
     3. Looks up the user in the DB by cognito_sub
     4. Returns the User object or raises 401
     """
-    token = credentials.credentials
+    token = request.cookies.get(ACCESS_TOKEN_COOKIE) or (
+        credentials.credentials if credentials else None
+    )
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Non autenticato.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Verify the token with Cognito
     try:

@@ -1,6 +1,6 @@
 /* API service for communicating with the FastAPI backend */
 
-import { getAccessToken, refreshAccessToken, clearAuthData } from './auth';
+import { refreshSession } from './auth';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -67,8 +67,9 @@ interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
 
 /**
  * Unified fetch wrapper used by every API call.
- * Handles JSON serialization, query params, error extraction, base URL,
- * and automatic Bearer token injection + 401 refresh.
+ * Handles JSON serialization, query params, error extraction and base URL.
+ * Auth travels in HttpOnly cookies (credentials: 'include'); on 401 the
+ * session is refreshed via cookie and the request retried once.
  */
 export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
   const { body, params, headers, ...rest } = options;
@@ -83,42 +84,31 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
     if (qs) url += `?${qs}`;
   }
 
-  // Build headers — inject Authorization if token exists
   const requestHeaders: Record<string, string> = { ...(headers as Record<string, string>) };
   if (body !== undefined) {
     requestHeaders['Content-Type'] = 'application/json';
   }
-  const token = getAccessToken();
-  if (token) {
-    requestHeaders['Authorization'] = `Bearer ${token}`;
-  }
 
-  const response = await fetch(url, {
-    ...rest,
-    headers: requestHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const doFetch = () =>
+    fetch(url, {
+      ...rest,
+      credentials: 'include',
+      headers: requestHeaders,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
 
-  // Handle 401 — try to refresh the token once
-  if (response.status === 401 && token) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      requestHeaders['Authorization'] = `Bearer ${newToken}`;
-      const retryResponse = await fetch(url, {
-        ...rest,
-        headers: requestHeaders,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-      });
+  let response = await doFetch();
 
-      if (retryResponse.ok) {
-        return retryResponse.json() as Promise<T>;
-      }
+  // Handle 401 — rotate the access token cookie once and retry
+  if (response.status === 401) {
+    if (await refreshSession()) {
+      response = await doFetch();
     }
-
-    // Refresh failed — clear auth and throw
-    clearAuthData();
-    window.location.reload();
-    throw new Error('Sessione scaduta. Effettua nuovamente il login.');
+    if (response.status === 401) {
+      // Session is gone — reload so the app falls back to the login screen
+      window.location.reload();
+      throw new Error('Sessione scaduta. Effettua nuovamente il login.');
+    }
   }
 
   if (!response.ok) {

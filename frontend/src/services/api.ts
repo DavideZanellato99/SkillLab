@@ -16,6 +16,8 @@ export interface Avatar {
   description: string | null;
   created_at: string;
   selection_count: number;
+  /** Difficulty grade of the training persona (e.g. "8/10"), if any. */
+  difficulty: string | null;
 }
 
 export interface UserSelection {

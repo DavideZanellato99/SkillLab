@@ -21,10 +21,16 @@ class AvatarCreate(AvatarBase):
 
 
 class AvatarResponse(AvatarBase):
-    """Schema for avatar API responses."""
+    """Schema for avatar API responses.
+
+    Note: the persona sheet (Avatar.profile) is intentionally NOT exposed —
+    students must not see secrets, hidden objectives or the real cause of
+    the problem. Only the derived difficulty grade is safe to show.
+    """
     id: UUID
     created_at: datetime
     selection_count: int = 0
+    difficulty: str | None = None
 
     model_config = {"from_attributes": True}
 

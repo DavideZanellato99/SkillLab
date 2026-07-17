@@ -1,5 +1,6 @@
 /** Tailwind classes for the category badge pill, keyed by category slug. */
 export const CATEGORY_BADGE_CLASSES: Record<string, string> = {
+  clienti: 'bg-orange-500/15 text-orange-400',
   fantasy: 'bg-violet-600/15 text-violet-400',
   'sci-fi': 'bg-cyan-500/15 text-cyan-400',
   nature: 'bg-emerald-500/15 text-emerald-500',

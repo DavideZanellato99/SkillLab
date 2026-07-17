@@ -50,6 +50,7 @@ def get_avatars(
             description=avatar.description,
             created_at=avatar.created_at,
             selection_count=count or 0,
+            difficulty=avatar.difficulty,
         )
         result.append(avatar_data)
 
@@ -91,6 +92,7 @@ def get_avatar(
         description=avatar.description,
         created_at=avatar.created_at,
         selection_count=count or 0,
+        difficulty=avatar.difficulty,
     )
 
 
@@ -151,6 +153,7 @@ def get_selections(
                     description=avatar.description,
                     created_at=avatar.created_at,
                     selection_count=count or 0,
+                    difficulty=avatar.difficulty,
                 ),
             )
         )

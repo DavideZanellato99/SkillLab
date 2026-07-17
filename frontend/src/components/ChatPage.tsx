@@ -181,9 +181,22 @@ function ChatPageContent() {
             <img className="h-full w-full object-cover" src={getAvatarImageUrl(avatar.image_url)} alt={avatar.name} />
           </div>
           <h2 className="mb-1 font-heading text-xl font-bold text-slate-100">{avatar.name}</h2>
-          <span className={`mb-2 inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(avatar.category)}`}>
-            {avatar.category}
-          </span>
+          <div className="mb-2 flex items-center justify-center gap-2">
+            <span className={`inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(avatar.category)}`}>
+              {avatar.category}
+            </span>
+            {avatar.difficulty && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[0.7rem] font-semibold text-orange-400"
+                title="Grado di difficoltà dello scenario"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
+                </svg>
+                {avatar.difficulty}
+              </span>
+            )}
+          </div>
           <p className="text-[0.8rem] leading-normal text-slate-500">{avatar.description}</p>
         </div>
 

@@ -183,6 +183,7 @@ async def clm_chat_completions(request: Request, custom_session_id: str | None =
                     avatar_description=avatar.description or "",
                     avatar_category=avatar.category,
                     messages_history=full_history,
+                    avatar_profile=avatar.profile,
                 ):
                     assistant_text += text_chunk
                     yield _sse_chunk(chunk_id, created, text_chunk)

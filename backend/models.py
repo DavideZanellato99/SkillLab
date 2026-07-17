@@ -2,7 +2,8 @@
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Uuid
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Uuid, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -73,11 +74,23 @@ class Avatar(Base):
     # Hume voice id used for the voice conversation mode (falls back to
     # HUME_DEFAULT_VOICE_ID when null)
     voice_id = Column(String(100), nullable=True)
+    # Training persona sheet (anagrafica, personalità, scenario, segreti...).
+    # Server-side only: never expose it through the API — students must not
+    # see hidden objectives, secrets or the real cause of the problem.
+    profile = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship to selections
     selections = relationship("UserSelection", back_populates="avatar")
     conversations = relationship("ChatConversation", back_populates="avatar")
+
+    @property
+    def difficulty(self) -> str | None:
+        """Safe-to-expose difficulty grade from the persona sheet (e.g. '8/10')."""
+        if not self.profile:
+            return None
+        value = str(self.profile.get("GRADO_DIFFICOLTA", "") or "").strip()
+        return value or None
 
     def __repr__(self):
         return f"<Avatar(id={self.id}, name='{self.name}', category='{self.category}')>"

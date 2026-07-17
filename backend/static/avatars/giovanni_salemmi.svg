@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0a0e1a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#bg)"/>
+  <circle cx="200" cy="330" r="130" fill="url(#accent)" opacity="0.25"/>
+  <!-- shoulders -->
+  <path d="M 90 400 Q 90 300 200 300 Q 310 300 310 400 Z" fill="#334155"/>
+  <path d="M 90 400 Q 90 300 200 300 Q 310 300 310 400 Z" fill="url(#accent)" opacity="0.35"/>
+  <!-- head -->
+  <circle cx="200" cy="185" r="80" fill="#d6b59a"/>
+  <!-- hair -->
+  <path d="M 120 175 Q 120 100 200 100 Q 280 100 280 175 Q 280 150 255 140 Q 240 118 200 118 Q 160 118 145 140 Q 120 150 120 175 Z" fill="#3f2f25"/>
+  <!-- eyebrows (angry) -->
+  <path d="M 150 168 L 185 178" stroke="#3f2f25" stroke-width="7" stroke-linecap="round"/>
+  <path d="M 250 168 L 215 178" stroke="#3f2f25" stroke-width="7" stroke-linecap="round"/>
+  <!-- eyes -->
+  <circle cx="170" cy="192" r="7" fill="#22140c"/>
+  <circle cx="230" cy="192" r="7" fill="#22140c"/>
+  <!-- mouth (displeased) -->
+  <path d="M 175 245 Q 200 235 225 245" stroke="#8a5a44" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- phone -->
+  <rect x="272" y="160" width="34" height="70" rx="9" fill="#111827" stroke="url(#accent)" stroke-width="3" transform="rotate(8 289 195)"/>
+</svg>

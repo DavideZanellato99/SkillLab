@@ -7,6 +7,19 @@ interface AvatarGalleryProps {
   onStatsUpdate: (totalAvatars: number, totalSelections: number) => void;
 }
 
+const filterBtnBase =
+  'cursor-pointer rounded-full border px-6 py-2 text-[0.85rem] font-medium tracking-wide transition max-[480px]:px-4 max-[480px]:py-1 max-[480px]:text-[0.8rem]';
+const filterBtnInactive =
+  'border-white/6 bg-white/4 text-slate-400 hover:-translate-y-px hover:border-white/12 hover:bg-white/8 hover:text-slate-100';
+const filterBtnActive =
+  'border-violet-600 bg-violet-600/15 text-slate-100 shadow-[0_0_20px_rgba(124,58,237,0.2)]';
+
+const gridCls =
+  'grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-8 p-2 max-md:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] max-md:gap-4 max-[480px]:grid-cols-1';
+
+const shimmerCls =
+  'animate-shimmer bg-[linear-gradient(90deg,#111827_0%,rgba(255,255,255,0.05)_50%,#111827_100%)] bg-[length:200%_100%]';
+
 export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Array<{
@@ -47,9 +60,9 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
   return (
     <>
       {/* Category Filters */}
-      <div className="category-filter" id="category-filter">
+      <div className="mb-12 flex animate-fade-in-up flex-wrap justify-center gap-2 [animation-delay:0.3s] max-[480px]:gap-1" id="category-filter">
         <button
-          className={`filter-btn${activeCategory === null ? ' active' : ''}`}
+          className={`${filterBtnBase} ${activeCategory === null ? filterBtnActive : filterBtnInactive}`}
           onClick={() => setActiveCategory(null)}
         >
           All
@@ -57,7 +70,7 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
         {categories.map((cat) => (
           <button
             key={cat}
-            className={`filter-btn${activeCategory === cat ? ' active' : ''}`}
+            className={`${filterBtnBase} ${activeCategory === cat ? filterBtnActive : filterBtnInactive}`}
             onClick={() => setActiveCategory(cat)}
           >
             {cat}
@@ -67,25 +80,25 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
 
       {/* Avatar Grid */}
       {isLoading ? (
-        <div className="avatar-grid">
+        <div className={gridCls}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="skeleton-card">
-              <div className="skeleton-image" />
-              <div className="skeleton-body">
-                <div className="skeleton-line short" />
-                <div className="skeleton-line medium" />
-                <div className="skeleton-line" />
+            <div key={i} className="overflow-hidden rounded-3xl border border-white/6 bg-gray-900/60">
+              <div className={`aspect-square ${shimmerCls}`} />
+              <div className="p-6">
+                <div className={`mb-2 h-3 w-3/5 rounded-md ${shimmerCls}`} />
+                <div className={`mb-2 h-3 w-4/5 rounded-md ${shimmerCls}`} />
+                <div className={`mb-2 h-3 rounded-md ${shimmerCls}`} />
               </div>
             </div>
           ))}
         </div>
       ) : avatars.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">🎭</div>
-          <p className="empty-state-text">No avatars found in this category.</p>
+        <div className="animate-fade-in p-16 text-center">
+          <div className="mb-4 animate-float text-5xl">🎭</div>
+          <p className="text-lg text-slate-500">No avatars found in this category.</p>
         </div>
       ) : (
-        <div className="avatar-grid" id="avatar-grid">
+        <div className={gridCls} id="avatar-grid">
           {avatars.map((avatar, index) => (
             <AvatarCard
               key={avatar.id}
@@ -97,7 +110,7 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
       )}
 
       {/* Toast Notifications */}
-      <div className="toast-container">
+      <div className="fixed right-8 top-20 z-[1000] flex flex-col gap-2 max-md:inset-x-4 max-md:top-[4.5rem]">
         {toasts.map((toast) => (
           <Toast
             key={toast.id}

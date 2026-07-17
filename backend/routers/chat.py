@@ -1,4 +1,9 @@
-"""Chat API endpoints for avatar conversations."""
+"""Chat history API endpoints for avatar conversations.
+
+The conversations are voice-only (Hume EVI + Gemini, see routers/voice.py):
+these endpoints only expose the persisted transcripts — there is no
+endpoint to send text messages.
+"""
 
 from uuid import UUID
 
@@ -10,14 +15,11 @@ from database import get_db
 from models import Avatar, User, ChatConversation, ChatMessage
 from auth_dependency import get_current_user
 from schemas import (
-    ChatSendRequest,
-    ChatSendResponse,
     ChatMessageResponse,
     ChatConversationResponse,
     ChatConversationSummary,
     MessageResponse,
 )
-from gemini_service import get_avatar_response
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -115,98 +117,6 @@ def get_conversation(
             )
             for msg in messages
         ],
-    )
-
-
-@router.post("/avatar/{avatar_id}/send", response_model=ChatSendResponse)
-def send_message(
-    avatar_id: UUID,
-    request: ChatSendRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Send a message and get an AI response in character."""
-    # Verify avatar exists
-    avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
-    if not avatar:
-        raise HTTPException(status_code=404, detail="Avatar not found")
-
-    # Get or create conversation
-    if request.conversation_id:
-        conversation = (
-            db.query(ChatConversation)
-            .filter(
-                ChatConversation.id == request.conversation_id,
-                ChatConversation.avatar_id == avatar_id,
-                ChatConversation.user_id == current_user.id,
-            )
-            .first()
-        )
-        if not conversation:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-    else:
-        conversation = ChatConversation(avatar_id=avatar_id, user_id=current_user.id)
-        db.add(conversation)
-        db.flush()  # Get the ID
-
-    # Load existing messages for context
-    existing_messages = (
-        db.query(ChatMessage)
-        .filter(ChatMessage.conversation_id == conversation.id)
-        .order_by(ChatMessage.created_at.asc())
-        .all()
-    )
-    messages_history = [
-        {"role": msg.role, "content": msg.content} for msg in existing_messages
-    ]
-
-    # Call Gemini
-    try:
-        ai_response = get_avatar_response(
-            avatar_name=avatar.name,
-            avatar_description=avatar.description or "",
-            avatar_category=avatar.category,
-            messages_history=messages_history,
-            user_message=request.content,
-        )
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-
-    # Save user message
-    user_msg = ChatMessage(
-        conversation_id=conversation.id,
-        role="user",
-        content=request.content,
-    )
-    db.add(user_msg)
-
-    # Save assistant message
-    assistant_msg = ChatMessage(
-        conversation_id=conversation.id,
-        role="assistant",
-        content=ai_response,
-    )
-    db.add(assistant_msg)
-
-    db.commit()
-    db.refresh(user_msg)
-    db.refresh(assistant_msg)
-    db.refresh(conversation)
-
-    return ChatSendResponse(
-        conversation_id=conversation.id,
-        user_message=ChatMessageResponse(
-            id=user_msg.id,
-            role=user_msg.role,
-            content=user_msg.content,
-            created_at=user_msg.created_at,
-        ),
-        assistant_message=ChatMessageResponse(
-            id=assistant_msg.id,
-            role=assistant_msg.role,
-            content=assistant_msg.content,
-            created_at=assistant_msg.created_at,
-        ),
     )
 
 

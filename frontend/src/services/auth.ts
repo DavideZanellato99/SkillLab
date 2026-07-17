@@ -24,17 +24,22 @@ export interface AuthUser {
 
 export type RoleName = 'super_admin' | 'organization_admin' | 'user';
 
-export const ADMIN_ROLES: RoleName[] = ['super_admin', 'organization_admin'];
-
 export const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
   organization_admin: 'Org Admin',
   user: 'User',
 };
 
-/** True if the user holds an admin role (super_admin or organization_admin). */
-export function isAdminUser(user: AuthUser | null): boolean {
-  return !!user && (ADMIN_ROLES as string[]).includes(user.ruolo);
+/** Tailwind classes for the role badge pill, per role name. */
+export const ROLE_BADGE_CLASSES: Record<string, string> = {
+  super_admin: 'border border-pink-500/30 bg-pink-500/15 text-pink-500',
+  organization_admin: 'border border-violet-600/30 bg-violet-600/15 text-violet-400',
+  user: 'border border-cyan-500/25 bg-cyan-500/10 text-cyan-400',
+};
+
+/** True if the user is a super admin — the only role allowed to manage users. */
+export function isSuperAdmin(user: AuthUser | null): boolean {
+  return user?.ruolo === 'super_admin';
 }
 
 // =====================================================

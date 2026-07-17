@@ -46,18 +46,7 @@ class SelectionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# --- Chat Schemas ---
-
-class ChatMessageCreate(BaseModel):
-    """Schema for sending a new chat message."""
-    content: str
-
-
-class ChatSendRequest(BaseModel):
-    """Schema for the chat send endpoint."""
-    content: str
-    conversation_id: UUID | None = None
-
+# --- Chat Schemas (voice conversation transcripts) ---
 
 class ChatMessageResponse(BaseModel):
     """Schema for a single chat message in API responses."""
@@ -90,13 +79,6 @@ class ChatConversationSummary(BaseModel):
     last_message_preview: str | None = None
 
     model_config = {"from_attributes": True}
-
-
-class ChatSendResponse(BaseModel):
-    """Schema for the response after sending a chat message."""
-    conversation_id: UUID
-    user_message: ChatMessageResponse
-    assistant_message: ChatMessageResponse
 
 
 # --- Voice Schemas ---
@@ -180,6 +162,13 @@ class CreateUserRequest(BaseModel):
     nome: str
     cognome: str
     ruolo: str = "user"  # "super_admin" | "organization_admin" | "user"
+
+
+class UpdateUserRequest(BaseModel):
+    """Schema for admin updating a user; omitted fields are left unchanged."""
+    nome: str | None = None
+    cognome: str | None = None
+    ruolo: str | None = None
 
 
 # --- Generic Response ---

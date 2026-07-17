@@ -12,9 +12,6 @@ ROLE_ORGANIZATION_ADMIN = "organization_admin"
 ROLE_USER = "user"
 ALL_ROLES = [ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN, ROLE_USER]
 
-# Roles allowed to access the admin endpoints
-ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN]
-
 
 class Role(Base):
     """A system role assignable to users."""

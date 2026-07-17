@@ -54,12 +54,6 @@ export interface ChatConversationSummary {
   last_message_preview: string | null;
 }
 
-export interface ChatSendResponse {
-  conversation_id: string;
-  user_message: ChatMessage;
-  assistant_message: ChatMessage;
-}
-
 // =====================================================
 //  UNIFIED API CLIENT
 // =====================================================
@@ -158,23 +152,13 @@ export const selectAvatar = (avatarId: string) =>
     body: { avatar_id: avatarId },
   });
 
-// --- Chat ---
+// --- Chat history (voice conversation transcripts) ---
 
 export const fetchConversations = (avatarId: string) =>
   apiFetch<ChatConversationSummary[]>(`/api/chat/avatar/${avatarId}/conversations`);
 
 export const fetchConversation = (conversationId: string) =>
   apiFetch<ChatConversation>(`/api/chat/conversation/${conversationId}`);
-
-export const sendChatMessage = (
-  avatarId: string,
-  content: string,
-  conversationId?: string | null,
-) =>
-  apiFetch<ChatSendResponse>(`/api/chat/avatar/${avatarId}/send`, {
-    method: 'POST',
-    body: { content, conversation_id: conversationId ?? null },
-  });
 
 export const deleteConversation = (conversationId: string) =>
   apiFetch<MessageResponse>(`/api/chat/conversation/${conversationId}`, {

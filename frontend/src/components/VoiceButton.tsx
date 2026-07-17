@@ -22,6 +22,23 @@ const STATE_LABELS: Record<VoiceUiState, string | null> = {
   speaking: 'Sta parlando...',
 };
 
+/* Status pill + blink dot styling per state */
+const STATUS_CLASSES: Record<VoiceUiState, string> = {
+  idle: '',
+  connecting: 'border-white/6 bg-white/4 text-slate-500',
+  listening: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500',
+  processing: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',
+  speaking: 'border-violet-600/35 bg-violet-600/10 text-violet-400',
+};
+
+const DOT_ANIMATION: Record<VoiceUiState, string> = {
+  idle: '',
+  connecting: '',
+  listening: 'animate-voice-blink',
+  processing: 'animate-voice-blink [animation-duration:0.7s]',
+  speaking: 'animate-voice-blink [animation-duration:1s]',
+};
+
 export default function VoiceButton({
   avatarId,
   conversationId,
@@ -132,17 +149,22 @@ export default function VoiceButton({
   };
 
   const label = STATE_LABELS[uiState];
+  const inCall = uiState === 'listening' || uiState === 'processing' || uiState === 'speaking';
 
   return (
-    <div className="voice-controls">
+    <div className="flex shrink-0 flex-col items-center gap-2">
       {label && (
-        <span className={`voice-status voice-status--${uiState}`}>
-          <span className="voice-status-dot" />
+        <span className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[0.72rem] font-medium ${STATUS_CLASSES[uiState]}`}>
+          <span className={`h-[7px] w-[7px] rounded-full bg-current ${DOT_ANIMATION[uiState]}`} />
           {label}
         </span>
       )}
       <button
-        className={`voice-btn voice-btn--${uiState}`}
+        className={`flex h-16 w-16 cursor-pointer items-center justify-center rounded-full border-none text-white transition disabled:cursor-wait disabled:opacity-60 ${
+          inCall
+            ? `bg-red-500/90 shadow-[0_8px_24px_rgba(239,68,68,0.4)] hover:scale-[1.08] ${uiState === 'listening' ? 'animate-voice-pulse' : ''}`
+            : 'bg-gradient-to-br from-violet-600 to-cyan-500 shadow-[0_8px_24px_rgba(124,58,237,0.35)] hover:scale-[1.08] hover:shadow-[0_10px_28px_rgba(124,58,237,0.5)]'
+        }`}
         onClick={handleClick}
         disabled={uiState === 'connecting'}
         id="voice-btn"
@@ -153,14 +175,14 @@ export default function VoiceButton({
       >
         {isConnected ? (
           /* Stop icon while in call */
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
             <rect x="6" y="6" width="12" height="12" rx="2" />
           </svg>
         ) : uiState === 'connecting' ? (
-          <span className="voice-btn-spinner" />
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
         ) : (
           /* Microphone icon */
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
             <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
             <line x1="12" y1="19" x2="12" y2="23" />

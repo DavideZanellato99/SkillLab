@@ -267,3 +267,26 @@ def admin_create_user(email: str) -> str:
 
     return cognito_sub
 
+
+def admin_delete_user(email: str) -> None:
+    """
+    Delete a user from Cognito as an admin.
+
+    A user missing on Cognito is not an error (e.g. already deleted, or a
+    local-only account): the local DB cleanup must proceed anyway.
+    Raises RuntimeError on any other failure.
+    """
+    try:
+        _cognito_client.admin_delete_user(
+            UserPoolId=COGNITO_USER_POOL_ID,
+            Username=email,
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "UserNotFoundException":
+            return
+        raise RuntimeError(
+            f"Errore nell'eliminazione da Cognito: {e.response['Error']['Message']}"
+        )
+    except Exception as e:
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+

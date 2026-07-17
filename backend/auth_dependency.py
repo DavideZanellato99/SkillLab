@@ -5,11 +5,14 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Role, ALL_ROLES, ADMIN_ROLES, ROLE_SUPER_ADMIN
+from models import User, Role, ALL_ROLES, ROLE_SUPER_ADMIN
 from cognito_service import verify_access_token
 
 # Security scheme — extracts Bearer token from Authorization header
 _bearer_scheme = HTTPBearer(auto_error=True)
+
+# Cognito sub of the local mock super admin (dev account, not on Cognito)
+MOCK_ADMIN_SUB = "mock-admin-sub-0000-0000-0000"
 
 
 def ensure_roles(db: Session) -> dict[str, Role]:
@@ -32,13 +35,13 @@ def get_role_by_name(db: Session, name: str) -> Role | None:
 
 def get_or_create_mock_admin(db: Session) -> User:
     """Ensure the mock super admin user exists in the local database and return it."""
-    user = db.query(User).filter(User.cognito_sub == "mock-admin-sub-0000-0000-0000").first()
+    user = db.query(User).filter(User.cognito_sub == MOCK_ADMIN_SUB).first()
     if not user:
         user = db.query(User).filter(User.email == "admin").first()
     if not user:
         roles = ensure_roles(db)
         user = User(
-            cognito_sub="mock-admin-sub-0000-0000-0000",
+            cognito_sub=MOCK_ADMIN_SUB,
             email="admin",
             nome="Admin",
             cognome="Mock",
@@ -81,7 +84,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if cognito_sub == "mock-admin-sub-0000-0000-0000":
+    if cognito_sub == MOCK_ADMIN_SUB:
         return get_or_create_mock_admin(db)
 
     # Look up user in DB
@@ -96,17 +99,17 @@ def get_current_user(
     return user
 
 
-def get_current_admin(
+def get_current_super_admin(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """
-    FastAPI dependency that ensures the current user has an admin role
-    (super_admin or organization_admin). Raises 403 Forbidden otherwise.
+    FastAPI dependency that ensures the current user is a super_admin.
+    User management endpoints are restricted to this role only.
     """
-    if current_user.ruolo not in ADMIN_ROLES:
+    if current_user.ruolo != ROLE_SUPER_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accesso riservato agli amministratori.",
+            detail="Accesso riservato al Super Admin.",
         )
     return current_user
 

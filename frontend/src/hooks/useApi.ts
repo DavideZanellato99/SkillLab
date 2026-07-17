@@ -12,10 +12,8 @@ import {
   fetchCategories,
   fetchConversations,
   fetchConversation,
-  sendChatMessage,
   deleteConversation,
 } from '../services/api';
-import type { ChatSendResponse } from '../services/api';
 
 // =====================================================
 //  QUERY KEY FACTORY — single source of truth for keys
@@ -88,29 +86,6 @@ export function useConversation(conversationId: string | null) {
 // =====================================================
 //  CHAT MUTATIONS
 // =====================================================
-
-interface SendMessageVars {
-  avatarId: string;
-  content: string;
-  conversationId?: string | null;
-}
-
-/** Send a chat message and receive the AI response. */
-export function useSendMessage() {
-  const queryClient = useQueryClient();
-
-  return useMutation<ChatSendResponse, Error, SendMessageVars>({
-    mutationFn: ({ avatarId, content, conversationId }) =>
-      sendChatMessage(avatarId, content, conversationId),
-
-    onSuccess: (_data, variables) => {
-      // Invalidate conversations list so sidebar updates
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.conversations.byAvatar(variables.avatarId),
-      });
-    },
-  });
-}
 
 /** Delete a conversation. */
 export function useDeleteConversation() {

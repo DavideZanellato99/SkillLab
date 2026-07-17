@@ -46,3 +46,34 @@ export const deleteUser = (userId: string) =>
   apiFetch<{ message: string; success: boolean }>(`/api/admin/users/${userId}`, {
     method: 'DELETE',
   });
+
+// ── Activity report (read-only) ──────────────────────
+
+export interface ConversationReport {
+  id: string;
+  avatar_id: string;
+  avatar_name: string;
+  avatar_category: string;
+  created_at: string;
+  message_count: number;
+  duration_seconds: number;
+}
+
+export interface UserActivityReport {
+  id: string;
+  email: string;
+  nome: string;
+  cognome: string;
+  ruolo: string;
+  created_at: string;
+  conversation_count: number;
+  total_duration_seconds: number;
+  conversations: ConversationReport[];
+}
+
+/**
+ * Fetch the read-only users activity recap: conversations per avatar and
+ * durations (Super Admin + Organization Admin).
+ */
+export const fetchUsersReport = () =>
+  apiFetch<UserActivityReport[]>('/api/admin/users-report');

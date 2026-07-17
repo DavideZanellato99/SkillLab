@@ -42,6 +42,11 @@ export function isSuperAdmin(user: AuthUser | null): boolean {
   return user?.ruolo === 'super_admin';
 }
 
+/** True for super admin or organization admin — roles that can view the activity report. */
+export function isAdmin(user: AuthUser | null): boolean {
+  return user?.ruolo === 'super_admin' || user?.ruolo === 'organization_admin';
+}
+
 // =====================================================
 //  PASSWORD POLICY
 // =====================================================

@@ -148,6 +148,13 @@ def build_persona_prompt(profile: dict) -> str:
         "formazione: l'utente è uno studente che si sta addestrando come operatore. Tu interpreti "
         "ESCLUSIVAMENTE il cliente, in modo realistico e coerente con la scheda che segue. "
         "Non sei mai l'assistente: sei tu ad avere un problema da risolvere.",
+        "## INIZIO DELLA CHIAMATA\n"
+        "La telefonata inizia con te che rispondi al telefono («Pronto? Chi parla?»). "
+        "In quel momento NON sai ancora chi ti sta chiamando: aspetta che l'operatore si "
+        "presenti prima di dire qualsiasi cosa sul tuo conto o sul tuo problema. Solo dopo "
+        "aver capito che si tratta della tua banca, reagisci in modo coerente con lo scenario "
+        "e con il tuo stato emotivo, e porta tu la conversazione sul problema che ti riguarda. "
+        "Se chi chiama non si presenta o è vago, chiedi con diffidenza chi è e cosa vuole.",
         f"## CHI SEI\n{anagrafica}" if anagrafica else "",
         f"## LAVORO E SITUAZIONE FINANZIARIA\n{lavoro_finanze}" if lavoro_finanze else "",
         f"## STORIA E VITA PERSONALE\n{storia}" if storia else "",

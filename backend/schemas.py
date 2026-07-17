@@ -93,6 +93,9 @@ class VoiceSessionRequest(BaseModel):
     """Schema for starting a voice session with an avatar."""
     avatar_id: UUID
     conversation_id: UUID | None = None
+    # Call mode: the session simulates an outbound phone call — the avatar
+    # answers first ("Pronto? Chi parla?") and waits for the operator.
+    call_mode: bool = False
 
 
 class VoiceSessionResponse(BaseModel):
@@ -102,6 +105,8 @@ class VoiceSessionResponse(BaseModel):
     custom_session_id: str
     conversation_id: UUID
     voice_id: str | None = None
+    # Opening line the avatar speaks when answering the call (call mode only)
+    greeting: str | None = None
 
 
 # --- Auth Schemas ---
@@ -175,6 +180,31 @@ class UpdateUserRequest(BaseModel):
     nome: str | None = None
     cognome: str | None = None
     ruolo: str | None = None
+
+
+class ConversationReport(BaseModel):
+    """Read-only recap of a single conversation for the activity report."""
+    id: UUID
+    avatar_id: UUID
+    avatar_name: str
+    avatar_category: str
+    created_at: datetime
+    message_count: int
+    # First-to-last message span; 0 when the conversation has < 2 messages
+    duration_seconds: int
+
+
+class UserActivityReport(BaseModel):
+    """Read-only recap of a user with their conversations and durations."""
+    id: UUID
+    email: str
+    nome: str
+    cognome: str
+    ruolo: str
+    created_at: datetime
+    conversation_count: int
+    total_duration_seconds: int
+    conversations: list[ConversationReport]
 
 
 # --- Generic Response ---

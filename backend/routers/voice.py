@@ -85,6 +85,23 @@ def start_voice_session(
     )
     prior_history = [{"role": m.role, "content": m.content} for m in existing_messages]
 
+    # Call mode: the customer answers the phone before the operator speaks.
+    # The opening line is persisted and added to the CLM context so Gemini
+    # knows the call already started with the customer picking up.
+    greeting = None
+    if request.call_mode:
+        greeting = "Pronto? Chi parla?"
+        db.add(
+            ChatMessage(
+                conversation_id=conversation.id,
+                role="assistant",
+                content=greeting,
+            )
+        )
+        conversation.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        prior_history.append({"role": "assistant", "content": greeting})
+
     try:
         access_token = fetch_access_token()
     except RuntimeError as e:
@@ -103,6 +120,7 @@ def start_voice_session(
         custom_session_id=custom_session_id,
         conversation_id=conversation.id,
         voice_id=avatar.voice_id or HUME_DEFAULT_VOICE_ID or None,
+        greeting=greeting,
     )
 
 
@@ -149,6 +167,17 @@ async def clm_chat_completions(request: Request, custom_session_id: str | None =
     live_history = _extract_clm_history(payload)
     if not live_history or live_history[-1]["role"] != "user":
         raise HTTPException(status_code=400, detail="Nessun messaggio utente nella richiesta.")
+
+    # In call mode the opening line ("Pronto? Chi parla?") is already in
+    # prior_history AND gets spoken via assistant_input, so Hume echoes it
+    # back in the live transcript: drop the duplicate.
+    if (
+        session.prior_history
+        and session.prior_history[-1]["role"] == "assistant"
+        and live_history[0]["role"] == "assistant"
+        and live_history[0]["content"] == session.prior_history[-1]["content"]
+    ):
+        live_history = live_history[1:]
 
     full_history = session.prior_history + live_history
     user_message = live_history[-1]["content"]

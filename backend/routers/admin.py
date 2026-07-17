@@ -1,19 +1,36 @@
 """Admin API endpoints for managing users (super admin only)."""
 
+from collections import defaultdict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, UserSelection, ChatConversation, ChatMessage, ALL_ROLES, ROLE_SUPER_ADMIN
-from auth_dependency import get_current_super_admin, get_role_by_name, MOCK_ADMIN_SUB
+from models import (
+    User,
+    UserSelection,
+    Avatar,
+    ChatConversation,
+    ChatMessage,
+    ALL_ROLES,
+    ROLE_SUPER_ADMIN,
+)
+from auth_dependency import (
+    get_current_super_admin,
+    get_current_admin,
+    get_role_by_name,
+    MOCK_ADMIN_SUB,
+)
 from cognito_service import admin_create_user, admin_delete_user
 from schemas import (
     CreateUserRequest,
     UpdateUserRequest,
     UserResponse,
     MessageResponse,
+    ConversationReport,
+    UserActivityReport,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -49,6 +66,74 @@ def list_users(
     """List all registered users in the database (Super Admin only)."""
     users = db.query(User).order_by(User.created_at.desc()).all()
     return [UserResponse.model_validate(u) for u in users]
+
+
+@router.get("/users-report", response_model=list[UserActivityReport])
+def users_activity_report(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Read-only activity recap (Super Admin + Organization Admin): every user
+    with their conversations per avatar, the duration of each conversation
+    (first-to-last message span) and the total duration.
+    """
+    # Message stats aggregated per conversation in a single query
+    stats = {
+        row.conversation_id: row
+        for row in db.query(
+            ChatMessage.conversation_id.label("conversation_id"),
+            func.count(ChatMessage.id).label("message_count"),
+            func.min(ChatMessage.created_at).label("first_at"),
+            func.max(ChatMessage.created_at).label("last_at"),
+        ).group_by(ChatMessage.conversation_id)
+    }
+
+    rows = (
+        db.query(ChatConversation, Avatar.name, Avatar.category)
+        .join(Avatar, Avatar.id == ChatConversation.avatar_id)
+        .order_by(ChatConversation.created_at.desc())
+        .all()
+    )
+
+    conversations_by_user: dict[UUID, list[ConversationReport]] = defaultdict(list)
+    for conv, avatar_name, avatar_category in rows:
+        s = stats.get(conv.id)
+        message_count = s.message_count if s else 0
+        duration = (
+            int((s.last_at - s.first_at).total_seconds())
+            if s and s.message_count >= 2
+            else 0
+        )
+        conversations_by_user[conv.user_id].append(
+            ConversationReport(
+                id=conv.id,
+                avatar_id=conv.avatar_id,
+                avatar_name=avatar_name,
+                avatar_category=avatar_category,
+                created_at=conv.created_at,
+                message_count=message_count,
+                duration_seconds=duration,
+            )
+        )
+
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return [
+        UserActivityReport(
+            id=u.id,
+            email=u.email,
+            nome=u.nome,
+            cognome=u.cognome,
+            ruolo=u.ruolo,
+            created_at=u.created_at,
+            conversation_count=len(conversations_by_user.get(u.id, [])),
+            total_duration_seconds=sum(
+                c.duration_seconds for c in conversations_by_user.get(u.id, [])
+            ),
+            conversations=conversations_by_user.get(u.id, []),
+        )
+        for u in users
+    ]
 
 
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

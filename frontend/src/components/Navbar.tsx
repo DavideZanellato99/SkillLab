@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   isNewPasswordRequired,
   isSuperAdmin,
+  isAdmin,
   ROLE_LABELS,
   ROLE_BADGE_CLASSES,
   PASSWORD_MIN_LENGTH,
@@ -30,6 +31,7 @@ export default function Navbar() {
   const location = useLocation();
   const isHome = location.pathname === '/';
   const isAdminPage = location.pathname === '/admin';
+  const isReportPage = location.pathname === '/admin/report';
   const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth();
 
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -191,6 +193,23 @@ export default function Navbar() {
                 Gestione Utenti
               </Link>
             )}
+            {isAuthenticated && isAdmin(user) && (
+              <Link
+                to="/admin/report"
+                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
+                  isReportPage
+                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
+                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
+                }`}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10" />
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <line x1="6" y1="20" x2="6" y2="14" />
+                </svg>
+                Report Attività
+              </Link>
+            )}
           </div>
 
           {/* Right side */}
@@ -242,21 +261,35 @@ export default function Navbar() {
                         </span>
                       </div>
                     </div>
-                    {isSuperAdmin(user) && (
+                    {isAdmin(user) && (
                       <>
                         <div className="my-1 h-px bg-white/6" />
+                        {isSuperAdmin(user) && (
+                          <Link
+                            to="/admin"
+                            className={menuItemCls}
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                              <circle cx="8.5" cy="7" r="4" />
+                              <line x1="20" y1="8" x2="20" y2="14" />
+                              <line x1="23" y1="11" x2="17" y2="11" />
+                            </svg>
+                            Gestione Utenti
+                          </Link>
+                        )}
                         <Link
-                          to="/admin"
+                          to="/admin/report"
                           className={menuItemCls}
                           onClick={() => setShowUserMenu(false)}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                            <circle cx="8.5" cy="7" r="4" />
-                            <line x1="20" y1="8" x2="20" y2="14" />
-                            <line x1="23" y1="11" x2="17" y2="11" />
+                            <line x1="18" y1="20" x2="18" y2="10" />
+                            <line x1="12" y1="20" x2="12" y2="4" />
+                            <line x1="6" y1="20" x2="6" y2="14" />
                           </svg>
-                          Gestione Utenti
+                          Report Attività
                         </Link>
                       </>
                     )}

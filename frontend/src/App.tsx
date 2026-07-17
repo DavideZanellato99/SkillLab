@@ -6,6 +6,7 @@ import Header from './components/Header';
 import AvatarGallery from './components/AvatarGallery';
 import ChatPage from './components/ChatPage';
 import AdminPage from './components/AdminPage';
+import UserReportPage from './components/UserReportPage';
 import './index.css';
 
 function HomePage() {
@@ -51,6 +52,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/chat/:avatarId" element={<ChatPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/report" element={<UserReportPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         ) : (

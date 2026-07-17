@@ -5,7 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Role, ALL_ROLES, ROLE_SUPER_ADMIN
+from models import User, Role, ALL_ROLES, ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN
 from cognito_service import verify_access_token
 
 # Security scheme — extracts Bearer token from Authorization header
@@ -110,6 +110,21 @@ def get_current_super_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accesso riservato al Super Admin.",
+        )
+    return current_user
+
+
+def get_current_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    FastAPI dependency that ensures the current user is a super_admin or an
+    organization_admin. Used for read-only admin views (activity reports).
+    """
+    if current_user.ruolo not in (ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accesso riservato agli amministratori.",
         )
     return current_user
 

@@ -1,5 +1,7 @@
 """Authentication API endpoints."""
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -22,6 +24,28 @@ from schemas import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# Password policy — must mirror the Cognito user pool policy (and the
+# frontend checklist in Navbar.tsx). Cognito counts only these characters
+# as symbols for the RequireSymbols rule.
+PASSWORD_MIN_LENGTH = 12
+_COGNITO_SYMBOLS = set("^$*.[]{}()?-\"!@#%&/\\,><':;|_~`+=")
+
+
+def validate_password_strength(password: str) -> list[str]:
+    """Return the password policy requirements that `password` does not meet."""
+    unmet: list[str] = []
+    if len(password) < PASSWORD_MIN_LENGTH:
+        unmet.append(f"almeno {PASSWORD_MIN_LENGTH} caratteri")
+    if not re.search(r"[A-Z]", password):
+        unmet.append("una lettera maiuscola")
+    if not re.search(r"[a-z]", password):
+        unmet.append("una lettera minuscola")
+    if not re.search(r"[0-9]", password):
+        unmet.append("un numero")
+    if not any(c in _COGNITO_SYMBOLS for c in password):
+        unmet.append("un simbolo (es. !@#$%)")
+    return unmet
 
 
 @router.post("/login")
@@ -70,6 +94,13 @@ def complete_new_password(request: NewPasswordRequest, db: Session = Depends(get
 
     Called when the user logs in for the first time with a temporary password.
     """
+    unmet = validate_password_strength(request.new_password)
+    if unmet:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La password non soddisfa i requisiti: " + ", ".join(unmet) + ".",
+        )
+
     try:
         result = respond_to_new_password_challenge(
             email=request.email,

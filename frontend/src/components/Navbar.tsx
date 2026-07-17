@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { isNewPasswordRequired, isAdminUser, ROLE_LABELS } from '../services/auth';
+import {
+  isNewPasswordRequired,
+  isAdminUser,
+  ROLE_LABELS,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_RULES,
+  getUnmetPasswordRules,
+} from '../services/auth';
 
 type AuthStep = 'login' | 'new-password';
 
@@ -71,8 +78,11 @@ export default function Navbar() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setErrorMessage('La password deve essere di almeno 8 caratteri.');
+    const unmetRules = getUnmetPasswordRules(newPassword);
+    if (unmetRules.length > 0) {
+      setErrorMessage(
+        `La password non soddisfa i requisiti: ${unmetRules.join(', ').toLowerCase()}.`,
+      );
       return;
     }
 
@@ -385,7 +395,7 @@ export default function Navbar() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       required
-                      minLength={8}
+                      minLength={PASSWORD_MIN_LENGTH}
                       autoComplete="new-password"
                       disabled={isSubmitting}
                     />
@@ -406,7 +416,7 @@ export default function Navbar() {
                       value={confirmNewPassword}
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
                       required
-                      minLength={8}
+                      minLength={PASSWORD_MIN_LENGTH}
                       autoComplete="new-password"
                       disabled={isSubmitting}
                     />
@@ -416,10 +426,11 @@ export default function Navbar() {
                 <div className="auth-password-requirements">
                   <p className="auth-requirements-title">Requisiti password:</p>
                   <ul className="auth-requirements-list">
-                    <li className={newPassword.length >= 8 ? 'met' : ''}>Almeno 8 caratteri</li>
-                    <li className={/[A-Z]/.test(newPassword) ? 'met' : ''}>Una lettera maiuscola</li>
-                    <li className={/[a-z]/.test(newPassword) ? 'met' : ''}>Una lettera minuscola</li>
-                    <li className={/[0-9]/.test(newPassword) ? 'met' : ''}>Un numero</li>
+                    {PASSWORD_RULES.map((rule) => (
+                      <li key={rule.label} className={rule.test(newPassword) ? 'met' : ''}>
+                        {rule.label}
+                      </li>
+                    ))}
                   </ul>
                 </div>
 

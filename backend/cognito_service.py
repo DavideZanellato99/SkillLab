@@ -72,7 +72,13 @@ def authenticate(email: str, password: str) -> dict:
         )
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
+        error_message = e.response["Error"]["Message"]
         if error_code == "NotAuthorizedException":
+            if "expired" in error_message.lower():
+                raise RuntimeError(
+                    "La password temporanea è scaduta. "
+                    "Contatta l'amministratore per ricevere un nuovo invito."
+                )
             raise RuntimeError("Email o password non corretti.")
         elif error_code == "UserNotFoundException":
             raise RuntimeError("Email o password non corretti.")
@@ -120,7 +126,7 @@ def respond_to_new_password_challenge(
         error_code = e.response["Error"]["Code"]
         if error_code == "InvalidPasswordException":
             raise RuntimeError("La password non soddisfa i requisiti di sicurezza.")
-        elif error_code == "CodeMismatchException":
+        elif error_code in ("CodeMismatchException", "NotAuthorizedException"):
             raise RuntimeError("Sessione scaduta. Effettua nuovamente il login.")
         else:
             raise RuntimeError(f"Errore nel cambio password: {e.response['Error']['Message']}")

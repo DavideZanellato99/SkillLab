@@ -37,6 +37,40 @@ export function isAdminUser(user: AuthUser | null): boolean {
   return !!user && (ADMIN_ROLES as string[]).includes(user.ruolo);
 }
 
+// =====================================================
+//  PASSWORD POLICY
+// =====================================================
+
+// Must mirror the Cognito user pool policy and the backend validation
+// (backend/routers/auth.py). Cognito counts only these characters as symbols.
+export const PASSWORD_MIN_LENGTH = 12;
+
+const COGNITO_SYMBOLS = new Set("^$*.[]{}()?-\"!@#%&/\\,><':;|_~`+=");
+
+export interface PasswordRule {
+  label: string;
+  test: (password: string) => boolean;
+}
+
+export const PASSWORD_RULES: PasswordRule[] = [
+  {
+    label: `Almeno ${PASSWORD_MIN_LENGTH} caratteri`,
+    test: (pw) => pw.length >= PASSWORD_MIN_LENGTH,
+  },
+  { label: 'Una lettera maiuscola', test: (pw) => /[A-Z]/.test(pw) },
+  { label: 'Una lettera minuscola', test: (pw) => /[a-z]/.test(pw) },
+  { label: 'Un numero', test: (pw) => /[0-9]/.test(pw) },
+  {
+    label: 'Un simbolo (es. !@#$%)',
+    test: (pw) => [...pw].some((ch) => COGNITO_SYMBOLS.has(ch)),
+  },
+];
+
+/** Labels of the password policy rules that `password` does not meet. */
+export function getUnmetPasswordRules(password: string): string[] {
+  return PASSWORD_RULES.filter((rule) => !rule.test(password)).map((rule) => rule.label);
+}
+
 export interface LoginResponse {
   access_token: string;
   refresh_token: string;

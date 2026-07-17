@@ -55,7 +55,7 @@ def build_system_prompt(avatar_name: str, avatar_description: str, avatar_catego
         "- Sii coinvolgente, creativo e resta nel personaggio.\n"
         "- Usa un tono che rispecchi la personalità del personaggio.\n"
         "- Non rompere mai il personaggio e non rivelare di essere un'intelligenza artificiale.\n"
-        "- Mantieni le risposte concise ma interessanti (2-4 paragrafi massimo).\n"
+        "- Mantieni le risposte concise ma interessanti (1-2 paragrafi massimo).\n"
     )
 
 

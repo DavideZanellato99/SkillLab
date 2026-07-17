@@ -75,9 +75,11 @@ class Avatar(Base):
     # HUME_DEFAULT_VOICE_ID when null)
     voice_id = Column(String(100), nullable=True)
     # Training persona sheet (anagrafica, personalità, scenario, segreti...).
-    # Server-side only: never expose it through the API — students must not
-    # see hidden objectives, secrets or the real cause of the problem.
-    profile = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
+    # Required: every avatar IS a training persona — the sheet drives the
+    # roleplay prompt. Server-side only: never expose it through the API —
+    # students must not see hidden objectives, secrets or the real cause of
+    # the problem.
+    profile = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship to selections

@@ -17,6 +17,7 @@ from routers.avatars import router as avatars_router
 from routers.chat import router as chat_router
 from routers.auth import router as auth_router
 from routers.admin import router as admin_router
+from routers.admin_avatars import router as admin_avatars_router
 from routers.voice import router as voice_router
 from auth_dependency import get_or_create_mock_admin, ensure_roles
 
@@ -57,6 +58,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Include routers
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(admin_avatars_router)
 app.include_router(avatars_router)
 app.include_router(chat_router)
 app.include_router(voice_router)

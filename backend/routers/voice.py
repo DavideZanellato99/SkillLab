@@ -208,9 +208,6 @@ async def clm_chat_completions(request: Request, custom_session_id: str | None =
 
             try:
                 for text_chunk in stream_avatar_response(
-                    avatar_name=avatar.name,
-                    avatar_description=avatar.description or "",
-                    avatar_category=avatar.category,
                     messages_history=full_history,
                     avatar_profile=avatar.profile,
                 ):

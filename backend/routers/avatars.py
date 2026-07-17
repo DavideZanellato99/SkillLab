@@ -11,7 +11,6 @@ from models import Avatar, User, UserSelection
 from auth_dependency import get_current_user
 from schemas import (
     AvatarResponse,
-    AvatarCreate,
     SelectionCreate,
     SelectionResponse,
     MessageResponse,

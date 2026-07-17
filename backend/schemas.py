@@ -15,11 +15,6 @@ class AvatarBase(BaseModel):
     description: str | None = None
 
 
-class AvatarCreate(AvatarBase):
-    """Schema for creating a new avatar."""
-    pass
-
-
 class AvatarResponse(AvatarBase):
     """Schema for avatar API responses.
 
@@ -180,6 +175,31 @@ class UpdateUserRequest(BaseModel):
     nome: str | None = None
     cognome: str | None = None
     ruolo: str | None = None
+
+
+class AdminAvatarPayload(BaseModel):
+    """Schema for creating/updating an avatar (training persona) from the
+    admin page. The avatar name is derived from profile NOME + COGNOME."""
+    category: str = "Clienti"
+    description: str | None = None
+    # Empty → the backend generates an initials placeholder image
+    image_url: str | None = None
+    voice_id: str | None = None
+    profile: dict
+
+
+class AdminAvatarResponse(BaseModel):
+    """Avatar including the full persona sheet — super admin only."""
+    id: UUID
+    name: str
+    image_url: str
+    category: str
+    description: str | None = None
+    voice_id: str | None = None
+    difficulty: str | None = None
+    profile: dict
+    created_at: datetime
+    conversation_count: int = 0
 
 
 class ConversationReport(BaseModel):

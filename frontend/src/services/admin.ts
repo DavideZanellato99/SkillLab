@@ -47,6 +47,53 @@ export const deleteUser = (userId: string) =>
     method: 'DELETE',
   });
 
+// ── Avatar CRUD (super admin only) ───────────────────
+
+export interface AdminAvatar {
+  id: string;
+  name: string;
+  image_url: string;
+  category: string;
+  description: string | null;
+  voice_id: string | null;
+  difficulty: string | null;
+  profile: Record<string, string>;
+  created_at: string;
+  conversation_count: number;
+}
+
+export interface AdminAvatarPayload {
+  category: string;
+  description: string | null;
+  image_url: string | null;
+  voice_id: string | null;
+  profile: Record<string, string>;
+}
+
+/** List all avatars with their full persona sheet (Super Admin only). */
+export const fetchAdminAvatars = () =>
+  apiFetch<AdminAvatar[]>('/api/admin/avatars');
+
+/** Create a new avatar/persona (Super Admin only). */
+export const createAvatar = (payload: AdminAvatarPayload) =>
+  apiFetch<AdminAvatar>('/api/admin/avatars', {
+    method: 'POST',
+    body: payload,
+  });
+
+/** Update an avatar/persona (Super Admin only). */
+export const updateAvatar = (avatarId: string, payload: AdminAvatarPayload) =>
+  apiFetch<AdminAvatar>(`/api/admin/avatars/${avatarId}`, {
+    method: 'PUT',
+    body: payload,
+  });
+
+/** Delete an avatar with its conversations and selections (Super Admin only). */
+export const deleteAvatar = (avatarId: string) =>
+  apiFetch<{ message: string; success: boolean }>(`/api/admin/avatars/${avatarId}`, {
+    method: 'DELETE',
+  });
+
 // ── Activity report (read-only) ──────────────────────
 
 export interface ConversationReport {

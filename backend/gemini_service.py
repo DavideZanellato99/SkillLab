@@ -193,33 +193,6 @@ def build_persona_prompt(profile: dict) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-def build_system_prompt(
-    avatar_name: str,
-    avatar_description: str,
-    avatar_category: str,
-    avatar_profile: dict | None = None,
-) -> str:
-    """Build the system prompt for avatar roleplay.
-
-    Avatars with a persona sheet (training customers) get the full persona
-    prompt; legacy avatars fall back to the generic character prompt.
-    """
-    if avatar_profile:
-        return build_persona_prompt(avatar_profile)
-
-    return (
-        f"Sei {avatar_name}. {avatar_description}\n"
-        f"Appartieni alla categoria: {avatar_category}.\n\n"
-        "ISTRUZIONI:\n"
-        "- Devi interpretare questo personaggio in ogni risposta.\n"
-        "- Rispondi SEMPRE in italiano.\n"
-        "- Sii coinvolgente, creativo e resta nel personaggio.\n"
-        "- Usa un tono che rispecchi la personalità del personaggio.\n"
-        "- Non rompere mai il personaggio e non rivelare di essere un'intelligenza artificiale.\n"
-        "- Mantieni le risposte concise ma interessanti (1-2 paragrafi massimo).\n"
-    )
-
-
 def _build_contents(messages_history: list[dict], user_message: str | None = None) -> list:
     """Convert role/content dicts into Gemini Content objects."""
     contents = []
@@ -232,27 +205,27 @@ def _build_contents(messages_history: list[dict], user_message: str | None = Non
 
 
 def stream_avatar_response(
-    avatar_name: str,
-    avatar_description: str,
-    avatar_category: str,
     messages_history: list[dict],
-    avatar_profile: dict | None = None,
+    avatar_profile: dict,
 ):
     """
     Stream a roleplay response from Google Gemini as text chunks.
 
-    The last entry of messages_history must be the new user message.
-    Yields text fragments as soon as Gemini produces them.
+    Every avatar is a training persona: avatar_profile is its sheet
+    (required). The last entry of messages_history must be the new user
+    message. Yields text fragments as soon as Gemini produces them.
     """
     if not client:
         raise RuntimeError(
             "GEMINI_API_KEY non configurata. "
             "Aggiungi GEMINI_API_KEY al file .env del backend."
         )
+    if not avatar_profile:
+        raise RuntimeError(
+            "Avatar senza scheda persona: impossibile generare la risposta."
+        )
 
-    system_prompt = build_system_prompt(
-        avatar_name, avatar_description or "", avatar_category, avatar_profile
-    )
+    system_prompt = build_persona_prompt(avatar_profile)
     contents = _build_contents(messages_history)
 
     last_error: Exception | None = None

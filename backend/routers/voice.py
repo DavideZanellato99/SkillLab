@@ -1,4 +1,4 @@
-"""Voice conversation API endpoints (Hume EVI + Gemini CLM pipeline).
+"""Voice conversation API endpoints (Hume EVI + OpenAI CLM pipeline).
 
 Flow:
 1. The client calls POST /api/voice/session (authenticated) and receives a
@@ -8,7 +8,7 @@ Flow:
    microphone. Hume performs streaming STT and turn-taking.
 3. For each user turn, Hume calls POST /api/voice/clm/chat/completions
    (public, reachable through a tunnel in dev) with the live transcript.
-   We inject the avatar profile + persisted history and stream Gemini
+   We inject the avatar profile + persisted history and stream OpenAI
    tokens back as OpenAI-compatible SSE chunks; EVI starts speaking on the
    first tokens (streaming TTS).
 """
@@ -27,7 +27,12 @@ from database import get_db, SessionLocal
 from models import Avatar, User, ChatConversation, ChatMessage
 from auth_dependency import get_current_user
 from schemas import VoiceSessionRequest, VoiceSessionResponse
-from gemini_service import stream_avatar_response, GEMINI_MODEL
+from gemini_service import avatar_starts_conversation
+from openai_service import (
+    stream_avatar_response,
+    generate_opening_line,
+    OPENAI_MODEL,
+)
 from hume_service import (
     HUME_EVI_CONFIG_ID,
     HUME_DEFAULT_VOICE_ID,
@@ -85,12 +90,14 @@ def start_voice_session(
     )
     prior_history = [{"role": m.role, "content": m.content} for m in existing_messages]
 
-    # Call mode: the customer answers the phone before the operator speaks.
-    # The opening line is persisted and added to the CLM context so Gemini
-    # knows the call already started with the customer picking up.
+    # Call mode: the persona sheet decides who speaks first. If the avatar
+    # starts, it opens with a brief self-introduction (generated in
+    # character); otherwise greeting stays None and the avatar waits in
+    # silence for the operator. The opening line is persisted and added to
+    # the CLM context so the conversation LLM knows how the call started.
     greeting = None
-    if request.call_mode:
-        greeting = "Pronto? Chi parla?"
+    if request.call_mode and avatar_starts_conversation(avatar.profile):
+        greeting = generate_opening_line(avatar.profile)
         db.add(
             ChatMessage(
                 conversation_id=conversation.id,
@@ -145,7 +152,7 @@ def _sse_chunk(chunk_id: str, created: int, content: str | None, finish: str | N
         "id": chunk_id,
         "object": "chat.completion.chunk",
         "created": created,
-        "model": GEMINI_MODEL,
+        "model": OPENAI_MODEL,
         "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
     }
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
@@ -168,7 +175,7 @@ async def clm_chat_completions(request: Request, custom_session_id: str | None =
     if not live_history or live_history[-1]["role"] != "user":
         raise HTTPException(status_code=400, detail="Nessun messaggio utente nella richiesta.")
 
-    # In call mode the opening line ("Pronto? Chi parla?") is already in
+    # When the avatar starts the call, its opening line is already in
     # prior_history AND gets spoken via assistant_input, so Hume echoes it
     # back in the live transcript: drop the duplicate.
     if (
@@ -214,7 +221,7 @@ async def clm_chat_completions(request: Request, custom_session_id: str | None =
                     assistant_text += text_chunk
                     yield _sse_chunk(chunk_id, created, text_chunk)
             except RuntimeError as e:
-                print(f"[ERROR] CLM Gemini failure: {e}")
+                print(f"[ERROR] CLM OpenAI failure: {e}")
                 fallback = "Mi dispiace, ho avuto un problema tecnico. Puoi ripetere?"
                 assistant_text = assistant_text or fallback
                 yield _sse_chunk(chunk_id, created, fallback)

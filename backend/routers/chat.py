@@ -12,16 +12,31 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models import Avatar, User, ChatConversation, ChatMessage
+from models import Avatar, User, ChatConversation, ChatMessage, ConversationEvaluation
 from auth_dependency import get_current_user
+from gemini_service import evaluate_conversation
 from schemas import (
     ChatMessageResponse,
     ChatConversationResponse,
     ChatConversationSummary,
+    ConversationEvaluationResponse,
     MessageResponse,
 )
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+
+def _evaluation_response(evaluation: ConversationEvaluation) -> ConversationEvaluationResponse:
+    data = evaluation.result or {}
+    return ConversationEvaluationResponse(
+        id=evaluation.id,
+        conversation_id=evaluation.conversation_id,
+        overall_score=evaluation.overall_score,
+        summary=data.get("summary", ""),
+        criteria=data.get("criteria", []),
+        created_at=evaluation.created_at,
+        updated_at=evaluation.updated_at,
+    )
 
 
 @router.get("/avatar/{avatar_id}/conversations", response_model=list[ChatConversationSummary])
@@ -118,6 +133,101 @@ def get_conversation(
             for msg in messages
         ],
     )
+
+
+@router.post(
+    "/conversation/{conversation_id}/evaluate",
+    response_model=ConversationEvaluationResponse,
+)
+def create_conversation_evaluation(
+    conversation_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Judge the whole conversation with the AI trainer (same Gemini model of
+    the roleplay) and store the result. Re-evaluating a conversation (e.g.
+    after resuming the call) replaces the previous evaluation.
+    """
+    conversation = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.conversation_id == conversation_id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+    if not any(m.role == "user" for m in messages):
+        raise HTTPException(
+            status_code=400,
+            detail="La conversazione è troppo breve per essere valutata: l'operatore non ha ancora parlato.",
+        )
+
+    avatar = db.query(Avatar).filter(Avatar.id == conversation.avatar_id).first()
+    history = [{"role": m.role, "content": m.content} for m in messages]
+
+    try:
+        result = evaluate_conversation(history, avatar.profile if avatar else {})
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    evaluation = (
+        db.query(ConversationEvaluation)
+        .filter(ConversationEvaluation.conversation_id == conversation_id)
+        .first()
+    )
+    if evaluation:
+        evaluation.overall_score = result["overall_score"]
+        evaluation.result = result
+    else:
+        evaluation = ConversationEvaluation(
+            conversation_id=conversation.id,
+            overall_score=result["overall_score"],
+            result=result,
+        )
+        db.add(evaluation)
+    db.commit()
+    db.refresh(evaluation)
+
+    return _evaluation_response(evaluation)
+
+
+@router.get(
+    "/conversation/{conversation_id}/evaluation",
+    response_model=ConversationEvaluationResponse | None,
+)
+def get_conversation_evaluation(
+    conversation_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the stored evaluation for a conversation, or null if absent."""
+    conversation = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+
+    evaluation = (
+        db.query(ConversationEvaluation)
+        .filter(ConversationEvaluation.conversation_id == conversation_id)
+        .first()
+    )
+    return _evaluation_response(evaluation) if evaluation else None
 
 
 @router.delete("/conversation/{conversation_id}", response_model=MessageResponse)

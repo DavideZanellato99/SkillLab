@@ -9,6 +9,7 @@ import {
   isNewPasswordRequired,
   fetchCurrentUser,
 } from '../services/auth';
+import { useIdleLogout } from '../hooks/useIdleLogout';
 
 // =====================================================
 //  CONTEXT TYPE
@@ -76,10 +77,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 
   const logout = useCallback(() => {
-    // Fire-and-forget: the backend clears the HttpOnly cookies
+    // Fire-and-forget: the backend revokes the tokens and clears the
+    // HttpOnly cookies
     void authLogout();
     setUser(null);
   }, []);
+
+  // Session already killed elsewhere (another tab's idle logout): the
+  // cookies are gone, only the local state needs to drop
+  const dropLocalSession = useCallback(() => {
+    setUser(null);
+  }, []);
+
+  // Auto-logout after 30 minutes without user activity, in sync across
+  // tabs: using one tab keeps the session alive in all of them
+  useIdleLogout({
+    enabled: !!user,
+    onIdle: logout,
+    onRemoteLogout: dropLocalSession,
+  });
 
   const value: AuthContextType = {
     user,

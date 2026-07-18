@@ -16,8 +16,10 @@ export interface VoiceSession {
  * conversation, registers the session for the CLM endpoint and returns
  * the Hume credentials needed to open the EVI WebSocket.
  *
- * With callMode the session simulates an outbound phone call: the backend
- * returns the opening line the avatar speaks when "answering".
+ * With callMode the session simulates a phone call: if the avatar's persona
+ * sheet says it starts the conversation, greeting carries the opening line
+ * it speaks after the ring; otherwise greeting is null and the avatar waits
+ * for the operator to talk first.
  */
 export const startVoiceSession = (
   avatarId: string,

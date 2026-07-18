@@ -70,6 +70,27 @@ class ChatConversationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EvaluationCriterionResponse(BaseModel):
+    """Score and feedback for a single evaluation criterion."""
+    key: str
+    label: str
+    score: float
+    comment: str
+    # Improvement suggestions, present only when score < 7
+    suggestions: str | None = None
+
+
+class ConversationEvaluationResponse(BaseModel):
+    """AI evaluation of the operator's performance in a conversation."""
+    id: UUID
+    conversation_id: UUID
+    overall_score: float
+    summary: str
+    criteria: list[EvaluationCriterionResponse]
+    created_at: datetime
+    updated_at: datetime
+
+
 class ChatConversationSummary(BaseModel):
     """Lightweight schema for listing conversations (without full messages)."""
     id: UUID
@@ -88,8 +109,9 @@ class VoiceSessionRequest(BaseModel):
     """Schema for starting a voice session with an avatar."""
     avatar_id: UUID
     conversation_id: UUID | None = None
-    # Call mode: the session simulates an outbound phone call — the avatar
-    # answers first ("Pronto? Chi parla?") and waits for the operator.
+    # Call mode: the session simulates a phone call. Whether the avatar
+    # speaks first (brief self-introduction) or waits in silence for the
+    # operator depends on its persona sheet (CHI_INIZIA_CONVERSAZIONE).
     call_mode: bool = False
 
 
@@ -100,7 +122,8 @@ class VoiceSessionResponse(BaseModel):
     custom_session_id: str
     conversation_id: UUID
     voice_id: str | None = None
-    # Opening line the avatar speaks when answering the call (call mode only)
+    # Opening line the avatar speaks after the ring when its persona sheet
+    # says it starts the conversation; None when it waits for the operator
     greeting: str | None = None
 
 
@@ -215,6 +238,28 @@ class UserActivityReport(BaseModel):
     conversation_count: int
     total_duration_seconds: int
     conversations: list[ConversationReport]
+
+
+class EvaluationCriterionScore(BaseModel):
+    """Score of a single criterion inside the evaluations report."""
+    key: str
+    label: str
+    score: float
+
+
+class EvaluationReportRow(BaseModel):
+    """One evaluated conversation, flattened for the dashboard charts."""
+    conversation_id: UUID
+    user_id: UUID
+    user_email: str
+    user_nome: str
+    user_cognome: str
+    avatar_id: UUID
+    avatar_name: str
+    conversation_at: datetime
+    evaluated_at: datetime
+    overall_score: float
+    criteria: list[EvaluationCriterionScore]
 
 
 # --- Generic Response ---

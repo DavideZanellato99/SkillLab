@@ -47,6 +47,25 @@ export interface ChatConversation {
   messages: ChatMessage[];
 }
 
+export interface EvaluationCriterion {
+  key: string;
+  label: string;
+  score: number;
+  comment: string;
+  /** Improvement suggestions, present only when score < 7. */
+  suggestions: string | null;
+}
+
+export interface ConversationEvaluation {
+  id: string;
+  conversation_id: string;
+  overall_score: number;
+  summary: string;
+  criteria: EvaluationCriterion[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ChatConversationSummary {
   id: string;
   avatar_id: string;
@@ -156,6 +175,16 @@ export const deleteConversation = (conversationId: string) =>
   apiFetch<MessageResponse>(`/api/chat/conversation/${conversationId}`, {
     method: 'DELETE',
   });
+
+/** Ask the AI trainer to judge the whole conversation (replaces any previous evaluation). */
+export const evaluateConversation = (conversationId: string) =>
+  apiFetch<ConversationEvaluation>(`/api/chat/conversation/${conversationId}/evaluate`, {
+    method: 'POST',
+  });
+
+/** Fetch the stored evaluation for a conversation; null if none exists yet. */
+export const fetchConversationEvaluation = (conversationId: string) =>
+  apiFetch<ConversationEvaluation | null>(`/api/chat/conversation/${conversationId}/evaluation`);
 
 // =====================================================
 //  UTILS

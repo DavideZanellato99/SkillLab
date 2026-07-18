@@ -168,12 +168,44 @@ def refresh_tokens(refresh_token: str) -> dict:
     }
 
 
-def verify_access_token(token: str) -> dict:
+def revoke_refresh_token(refresh_token: str) -> None:
+    """
+    Revoke a refresh token on Cognito (server-side blacklist).
+
+    After revocation every initiate_auth(REFRESH_TOKEN_AUTH) with this token
+    fails: a refresh token stolen from the browser dies with the logout
+    instead of staying spendable for 30 days. Requires token revocation
+    enabled on the app client (EnableTokenRevocation, the default).
+
+    Raises RuntimeError on failure.
+    """
+    if refresh_token == "mock-admin-refresh-token":
+        return
+
+    try:
+        _cognito_client.revoke_token(
+            Token=refresh_token,
+            ClientId=COGNITO_APP_CLIENT_ID,
+        )
+    except ClientError as e:
+        raise RuntimeError(
+            f"Errore nella revoca del refresh token: {e.response['Error']['Message']}"
+        )
+    except Exception as e:
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+
+
+def verify_access_token(token: str, verify_exp: bool = True) -> dict:
     """
     Verify a Cognito JWT access token.
 
     Returns the decoded token claims on success.
     Raises RuntimeError on invalid/expired token.
+
+    With verify_exp=False the signature/issuer are still verified but an
+    expired token is accepted: the refresh endpoint uses it to identify
+    the OLD access token (jti) for the session-binding pre-check — the
+    identifier matters there, not the validity.
     """
     if token == "mock-admin-access-token":
         return {
@@ -206,7 +238,10 @@ def verify_access_token(token: str) -> dict:
             algorithms=["RS256"],
             audience=COGNITO_APP_CLIENT_ID,
             issuer=f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}",
-            options={"verify_aud": False},  # Access tokens use client_id, not aud
+            options={
+                "verify_aud": False,  # Access tokens use client_id, not aud
+                "verify_exp": verify_exp,
+            },
         )
 
         # Verify token_use is "access"

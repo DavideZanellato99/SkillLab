@@ -10,6 +10,7 @@ import type { AdminAvatar, AdminAvatarPayload } from '../services/admin';
 import { isSuperAdmin } from '../services/auth';
 import { getAvatarImageUrl } from '../services/api';
 import { categoryBadgeClasses } from './categoryStyles';
+import Select from './Select';
 
 /* Shared styles (same look as the users admin page) */
 const fieldCls = 'flex flex-col gap-1.5';
@@ -39,12 +40,14 @@ const sectionTitleCls =
 
 /* ── Persona sheet form definition ─────────────────────
  * Every avatar is a training persona: the form is generated from this
- * config. `textarea` marks long fields rendered full-width. */
+ * config. `textarea` marks long fields rendered full-width; `options`
+ * renders a select (the first option is the default). */
 interface ProfileField {
   key: string;
   label: string;
   textarea?: boolean;
   placeholder?: string;
+  options?: string[];
 }
 
 interface ProfileSection {
@@ -138,6 +141,7 @@ const PROFILE_SECTIONS: ProfileSection[] = [
   {
     title: 'Scenario della chiamata',
     fields: [
+      { key: 'CHI_INIZIA_CONVERSAZIONE', label: 'Chi inizia la conversazione (Avatar = si presenta per primo, Operatore = l’avatar aspetta)', options: ['Operatore', 'Avatar'] },
       { key: 'TIPO_SCENARIO', label: 'Tipo di scenario', textarea: true, placeholder: 'Cosa è successo e perché il cliente è coinvolto...' },
       { key: 'DESCRIZIONE_PROBLEMATICA', label: 'Vera causa del problema (il cliente NON la conosce)', textarea: true },
       { key: 'OBIEZIONI_PREVISTE', label: 'Obiezioni previste', textarea: true },
@@ -557,6 +561,17 @@ export default function AvatarAdminPage() {
                             placeholder={field.placeholder}
                             value={form.profile[field.key] ?? ''}
                             onChange={(e) => setProfileField(field.key, e.target.value)}
+                            disabled={isSaving}
+                          />
+                        </div>
+                      ) : field.options ? (
+                        <div key={field.key} className={fieldCls}>
+                          <label className={labelCls} htmlFor={`pf-${field.key}`}>{field.label}</label>
+                          <Select
+                            id={`pf-${field.key}`}
+                            value={form.profile[field.key] || field.options[0]}
+                            onChange={(value) => setProfileField(field.key, value)}
+                            options={field.options.map((option) => ({ value: option, label: option }))}
                             disabled={isSaving}
                           />
                         </div>

@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Uuid, JSON
+from sqlalchemy import Column, String, Text, DateTime, Float, ForeignKey, Uuid, JSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from database import Base
@@ -116,6 +116,49 @@ class UserSelection(Base):
         return f"<UserSelection(id={self.id}, user_id={self.user_id}, avatar_id={self.avatar_id})>"
 
 
+class RevokedJti(Base):
+    """Denylisted access-token identifier (server-side logout).
+
+    Cognito's revoke_token only kills the refresh token: access tokens
+    already issued stay valid until exp. At logout the access token's jti
+    (and origin_jti) land here; get_current_user rejects them with 401.
+    Rows are purged once expires_at passes (the JWT exp check takes over).
+    """
+
+    __tablename__ = "revoked_jti"
+
+    jti = Column(String(64), primary_key=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f"<RevokedJti(jti='{self.jti}', expires_at={self.expires_at})>"
+
+
+class TokenSession(Base):
+    """Client context bound to an access token at mint time (session binding).
+
+    One row per access-token jti (expires with the token) plus one row per
+    origin_jti — the session anchor recorded at login and checked at
+    refresh. Every authenticated request compares the caller's IP and
+    User-Agent with the row of its jti: a mismatch means the cookie left
+    the owner's browser, so the token is denylisted and rejected.
+    """
+
+    __tablename__ = "token_session"
+
+    jti = Column(String(64), primary_key=True)
+    # Informational (auditing): not used by the enforcement itself
+    user_id = Column(Uuid, nullable=True, index=True)
+    client_ip = Column(String(64), nullable=False)
+    user_agent = Column(String(400), nullable=False, default="")
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f"<TokenSession(jti='{self.jti}', client_ip='{self.client_ip}')>"
+
+
 class ChatConversation(Base):
     """Represents a chat conversation with an avatar."""
 
@@ -140,9 +183,49 @@ class ChatConversation(Base):
         cascade="all, delete-orphan",
         order_by="ChatMessage.created_at",
     )
+    evaluation = relationship(
+        "ConversationEvaluation",
+        back_populates="conversation",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<ChatConversation(id={self.id}, user_id={self.user_id}, avatar_id={self.avatar_id})>"
+
+
+class ConversationEvaluation(Base):
+    """AI judgement of the operator's performance over a whole conversation.
+
+    One evaluation per conversation: re-evaluating (e.g. after resuming the
+    call) replaces the previous result.
+    """
+
+    __tablename__ = "conversation_evaluations"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
+    conversation_id = Column(
+        Uuid,
+        ForeignKey("chat_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    overall_score = Column(Float, nullable=False)
+    # Structured result: {"summary": str, "criteria": [{key, label, score,
+    # comment, suggestions}]} — suggestions only where score < 7
+    result = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    conversation = relationship("ChatConversation", back_populates="evaluation")
+
+    def __repr__(self):
+        return f"<ConversationEvaluation(id={self.id}, conversation_id={self.conversation_id}, overall_score={self.overall_score})>"
 
 
 class ChatMessage(Base):

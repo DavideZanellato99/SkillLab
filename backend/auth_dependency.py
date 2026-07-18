@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Role, ALL_ROLES, ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN
 from cognito_service import verify_access_token
+from token_denylist import is_jti_revoked
+from token_sessions import enforce_session_binding
 
 # Tokens travel in HttpOnly cookies (XSS mitigation: JS can never read them).
 # The Authorization header is kept as a fallback for API tools/tests.
@@ -89,6 +91,22 @@ def get_current_user(
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Server-side logout: a signature-valid token whose jti (or origin_jti,
+    # shared by the whole session) was denylisted at logout is rejected —
+    # a stolen access token dies with the logout instead of living out its
+    # remaining 60 minutes.
+    if is_jti_revoked(db, claims.get("jti"), claims.get("origin_jti")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessione terminata. Effettua nuovamente il login.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Session binding: the token must be spent from the same IP +
+    # User-Agent it was minted for. A mismatch denylists the whole
+    # session and rejects the request (raises 401).
+    enforce_session_binding(db, claims, request)
 
     cognito_sub = claims.get("sub")
     if not cognito_sub:

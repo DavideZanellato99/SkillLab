@@ -13,6 +13,8 @@ import {
   fetchConversations,
   fetchConversation,
   deleteConversation,
+  evaluateConversation,
+  fetchConversationEvaluation,
 } from '../services/api';
 
 // =====================================================
@@ -29,6 +31,10 @@ export const queryKeys = {
   conversations: {
     byAvatar: (avatarId: string) => ['conversations', 'avatar', avatarId] as const,
     detail: (id: string) => ['conversations', 'detail', id] as const,
+  },
+  evaluations: {
+    byConversation: (conversationId: string) =>
+      ['evaluations', 'conversation', conversationId] as const,
   },
 } as const;
 
@@ -83,9 +89,31 @@ export function useConversation(conversationId: string | null) {
   });
 }
 
+/** Fetch the stored AI evaluation of a conversation (null when none exists). */
+export function useConversationEvaluation(conversationId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.evaluations.byConversation(conversationId!),
+    queryFn: () => fetchConversationEvaluation(conversationId!),
+    enabled: conversationId !== null,
+  });
+}
+
 // =====================================================
 //  CHAT MUTATIONS
 // =====================================================
+
+/** Run the AI evaluation of a conversation and cache the result. */
+export function useEvaluateConversation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (conversationId: string) => evaluateConversation(conversationId),
+
+    onSuccess: (data, conversationId) => {
+      queryClient.setQueryData(queryKeys.evaluations.byConversation(conversationId), data);
+    },
+  });
+}
 
 /** Delete a conversation. */
 export function useDeleteConversation() {

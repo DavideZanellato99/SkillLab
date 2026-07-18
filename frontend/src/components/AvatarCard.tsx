@@ -65,7 +65,7 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
               </svg>
-              {avatar.difficulty}
+              Difficoltà: {avatar.difficulty}
             </span>
           )}
         </div>

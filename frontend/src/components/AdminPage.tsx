@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { fetchAllUsers, createNewUser, updateUser, deleteUser } from '../services/admin';
 import { isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES } from '../services/auth';
 import type { AuthUser, RoleName } from '../services/auth';
+import Select from './Select';
 
 /* Shared form styles (modals, same look as the auth modal) */
 const fieldCls = 'flex flex-col gap-1.5';
@@ -411,19 +412,13 @@ export default function AdminPage() {
 
               <div className={fieldCls}>
                 <label className={labelCls} htmlFor="admin-ruolo">Ruolo del sistema</label>
-                <div className={`${inputWrapperCls} pr-3`}>
-                  <select
-                    id="admin-ruolo"
-                    className={`${inputCls} cursor-pointer`}
-                    value={ruolo}
-                    onChange={(e) => setRuolo(e.target.value as RoleName)}
-                    disabled={isSubmitting}
-                  >
-                    {ROLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value} className="bg-gray-900">{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
+                <Select
+                  id="admin-ruolo"
+                  value={ruolo}
+                  onChange={(value) => setRuolo(value as RoleName)}
+                  options={ROLE_OPTIONS}
+                  disabled={isSubmitting}
+                />
               </div>
 
               <button type="submit" className={submitBtnCls} disabled={isSubmitting}>
@@ -501,19 +496,13 @@ export default function AdminPage() {
 
               <div className={fieldCls}>
                 <label className={labelCls} htmlFor="edit-ruolo">Ruolo del sistema</label>
-                <div className={`${inputWrapperCls} pr-3`}>
-                  <select
-                    id="edit-ruolo"
-                    className={`${inputCls} cursor-pointer`}
-                    value={editRuolo}
-                    onChange={(e) => setEditRuolo(e.target.value as RoleName)}
-                    disabled={isSavingEdit || editingUser.id === user?.id || editingUser.cognito_sub.startsWith('mock-')}
-                  >
-                    {ROLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value} className="bg-gray-900">{opt.label}</option>
-                    ))}
-                  </select>
-                </div>
+                <Select
+                  id="edit-ruolo"
+                  value={editRuolo}
+                  onChange={(value) => setEditRuolo(value as RoleName)}
+                  options={ROLE_OPTIONS}
+                  disabled={isSavingEdit || editingUser.id === user?.id || editingUser.cognito_sub.startsWith('mock-')}
+                />
                 {(editingUser.id === user?.id || editingUser.cognito_sub.startsWith('mock-')) && (
                   <p className="text-[0.7rem] text-slate-500">
                     {editingUser.id === user?.id

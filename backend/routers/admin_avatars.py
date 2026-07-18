@@ -14,7 +14,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Avatar, UserSelection, ChatConversation, ChatMessage
+from models import (
+    User,
+    Avatar,
+    UserSelection,
+    ChatConversation,
+    ChatMessage,
+    ConversationEvaluation,
+)
 from auth_dependency import get_current_super_admin
 from schemas import AdminAvatarPayload, AdminAvatarResponse, MessageResponse
 
@@ -203,6 +210,9 @@ def delete_avatar(
         db.query(ChatMessage).filter(ChatMessage.conversation_id.in_(conv_ids)).delete(
             synchronize_session=False
         )
+        db.query(ConversationEvaluation).filter(
+            ConversationEvaluation.conversation_id.in_(conv_ids)
+        ).delete(synchronize_session=False)
         db.query(ChatConversation).filter(ChatConversation.id.in_(conv_ids)).delete(
             synchronize_session=False
         )

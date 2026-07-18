@@ -8,7 +8,6 @@ type VoiceUiState = 'idle' | 'ringing' | 'listening' | 'processing' | 'speaking'
 
 /* Duration of the outgoing-call ring before the customer picks up */
 const RING_DURATION_MS = 4000;
-const DEFAULT_GREETING = 'Pronto? Chi parla?';
 
 interface VoiceButtonProps {
   avatarId: string;
@@ -191,8 +190,12 @@ export default function VoiceButton({
         return;
       }
 
-      // The customer answers: EVI speaks the opening line, then waits
-      sendAssistantInput(session.greeting ?? DEFAULT_GREETING);
+      // Call connected: if the persona starts the conversation EVI speaks
+      // its self-introduction; otherwise the avatar stays silent and waits
+      // for the operator to talk first
+      if (session.greeting) {
+        sendAssistantInput(session.greeting);
+      }
       unmute();
     } catch (err) {
       if (!callCancelledRef.current) {

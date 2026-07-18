@@ -9,8 +9,11 @@ import {
   useConversations,
   useConversation,
   useDeleteConversation,
+  useConversationEvaluation,
+  useEvaluateConversation,
 } from '../hooks/useApi';
 import VoiceButton from './VoiceButton';
+import EvaluationModal from './EvaluationModal';
 import { categoryBadgeClasses } from './categoryStyles';
 
 function TypingIndicator() {
@@ -47,6 +50,12 @@ function ChatPageContent() {
 
   // ── TanStack mutations ────────────────────────────
   const deleteConversationMutation = useDeleteConversation();
+
+  // ── AI evaluation of the conversation ─────────────
+  const { data: evaluation } = useConversationEvaluation(currentConversationId);
+  const evaluateMutation = useEvaluateConversation();
+  const { mutate: runEvaluation } = evaluateMutation;
+  const [showEvaluation, setShowEvaluation] = useState(false);
 
   // ── Voice mode ────────────────────────────────────
   const queryClient = useQueryClient();
@@ -114,10 +123,14 @@ function ChatPageContent() {
     setError(null);
   }, []);
 
-  // When the voice session ends, re-sync everything from the DB
+  // When the voice session ends, re-sync from the DB and have the AI
+  // trainer judge the whole conversation (only if the operator spoke)
   const handleVoiceSessionEnd = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
-  }, [queryClient]);
+    if (!currentConversationId || !messages.some((m) => m.role === 'user')) return;
+    setShowEvaluation(true);
+    runEvaluation(currentConversationId);
+  }, [queryClient, currentConversationId, messages, runEvaluation]);
 
   // Delete a conversation
   const handleDeleteConversation = (convId: string, e: React.MouseEvent) => {
@@ -193,7 +206,7 @@ function ChatPageContent() {
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
                 </svg>
-                {avatar.difficulty}
+                Difficoltà: {avatar.difficulty}
               </span>
             )}
           </div>
@@ -301,24 +314,26 @@ function ChatPageContent() {
             </div>
             <div>
               <h2 className="font-heading text-base font-bold text-slate-100">{avatar.name}</h2>
-              <span className="flex items-center gap-1.5 text-xs text-emerald-500">
-                <span className="h-1.5 w-1.5 animate-status-pulse rounded-full bg-emerald-500"></span>
-                In personaggio
-              </span>
             </div>
           </div>
-          <span
-            className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-violet-600/35 bg-violet-600/10 px-3 py-1 text-xs font-semibold text-violet-400"
-            title="Con questo avatar si interagisce solo a voce"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-            Solo vocale
-          </span>
+          <div className="flex items-center gap-2">
+            {evaluation && !voiceActive && (
+              <button
+                className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400 transition hover:-translate-y-px hover:bg-cyan-500/20"
+                onClick={() => {
+                  evaluateMutation.reset();
+                  setShowEvaluation(true);
+                }}
+                title="Rivedi la valutazione della conversazione"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                </svg>
+                Valutazione · {evaluation.overall_score.toLocaleString('it-IT', { maximumFractionDigits: 1 })}/10
+              </button>
+            )}
+          </div>
         </header>
 
         {/* Messages Area */}
@@ -417,6 +432,21 @@ function ChatPageContent() {
             )}
           </p>
         </div>
+
+        {/* Post-call evaluation */}
+        {showEvaluation && (
+          <EvaluationModal
+            avatarName={avatar.name}
+            evaluation={evaluation ?? null}
+            isLoading={evaluateMutation.isPending}
+            error={evaluateMutation.error instanceof Error ? evaluateMutation.error.message : null}
+            onRetry={() => currentConversationId && runEvaluation(currentConversationId)}
+            onClose={() => {
+              setShowEvaluation(false);
+              evaluateMutation.reset();
+            }}
+          />
+        )}
       </main>
     </div>
   );

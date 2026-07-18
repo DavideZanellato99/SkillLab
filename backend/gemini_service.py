@@ -1,5 +1,6 @@
 """Google Gemini service for avatar chat roleplay."""
 
+import json
 import os
 from dotenv import load_dotenv
 from google import genai
@@ -42,6 +43,12 @@ def _generation_config(system_prompt: str) -> types.GenerateContentConfig:
         # No thinking: keeps voice-mode latency low
         thinking_config=types.ThinkingConfig(thinking_budget=0),
     )
+
+
+def avatar_starts_conversation(profile: dict) -> bool:
+    """True when the persona sheet says the avatar opens the call speaking first."""
+    value = str((profile or {}).get("CHI_INIZIA_CONVERSAZIONE", "") or "").strip().lower()
+    return value == "avatar"
 
 
 def _profile_section(profile: dict, entries: list[tuple[str, str]]) -> str:
@@ -142,19 +149,34 @@ def build_persona_prompt(profile: dict) -> str:
     non_rivelare = str(profile.get("INFORMAZIONI_DA_NON_RIVELARE_SPONTANEAMENTE", "") or "").strip()
     argomenti_sensibili = str(profile.get("ARGOMENTI_SENSIBILI", "") or "").strip()
 
+    if avatar_starts_conversation(profile):
+        inizio_chiamata = (
+            "## INIZIO DELLA CHIAMATA\n"
+            "Sei stato TU a chiamare il customer banking center della tua banca. La telefonata "
+            "inizia con te che ti presenti brevemente (saluto, nome e cognome) e accenni al "
+            "motivo della chiamata, senza rivelare subito tutti i dettagli. Dopo la tua "
+            "presentazione lascia parlare l'operatore e prosegui in modo coerente con lo "
+            "scenario e con il tuo stato emotivo."
+        )
+    else:
+        inizio_chiamata = (
+            "## INIZIO DELLA CHIAMATA\n"
+            "L'operatore ti ha chiamato e tu hai appena risposto al telefono SENZA dire nulla: "
+            "è lui a parlare per primo. In quel momento NON sai ancora chi ti sta chiamando: "
+            "aspetta che l'operatore si presenti prima di dire qualsiasi cosa sul tuo conto o "
+            "sul tuo problema. Solo dopo aver capito che si tratta della tua banca, reagisci "
+            "in modo coerente con lo scenario e con il tuo stato emotivo, e porta tu la "
+            "conversazione sul problema che ti riguarda. Se chi chiama non si presenta o è "
+            "vago, chiedi con diffidenza chi è e cosa vuole."
+        )
+
     parts = [
         f"Sei {nome} {cognome}, un cliente di una banca. Stai parlando AL TELEFONO con un "
         "operatore del servizio clienti (customer banking center). Questa è una simulazione di "
         "formazione: l'utente è uno studente che si sta addestrando come operatore. Tu interpreti "
         "ESCLUSIVAMENTE il cliente, in modo realistico e coerente con la scheda che segue. "
         "Non sei mai l'assistente: sei tu ad avere un problema da risolvere.",
-        "## INIZIO DELLA CHIAMATA\n"
-        "La telefonata inizia con te che rispondi al telefono («Pronto? Chi parla?»). "
-        "In quel momento NON sai ancora chi ti sta chiamando: aspetta che l'operatore si "
-        "presenti prima di dire qualsiasi cosa sul tuo conto o sul tuo problema. Solo dopo "
-        "aver capito che si tratta della tua banca, reagisci in modo coerente con lo scenario "
-        "e con il tuo stato emotivo, e porta tu la conversazione sul problema che ti riguarda. "
-        "Se chi chiama non si presenta o è vago, chiedi con diffidenza chi è e cosa vuole.",
+        inizio_chiamata,
         f"## CHI SEI\n{anagrafica}" if anagrafica else "",
         f"## LAVORO E SITUAZIONE FINANZIARIA\n{lavoro_finanze}" if lavoro_finanze else "",
         f"## STORIA E VITA PERSONALE\n{storia}" if storia else "",
@@ -193,6 +215,53 @@ def build_persona_prompt(profile: dict) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
+# Instruction (not persisted) used to make the persona produce its opening line
+_OPENING_LINE_INSTRUCTION = (
+    "(L'operatore del servizio clienti ha appena risposto alla tua chiamata. "
+    "Pronuncia la tua battuta di apertura: saluta, presentati brevemente con nome e "
+    "cognome e accenna in una frase al motivo per cui chiami, senza rivelare i dettagli "
+    "che riveleresti solo su domanda. Rispondi SOLO con la battuta, senza virgolette né "
+    "altro testo.)"
+)
+
+
+def generate_opening_line(avatar_profile: dict) -> str:
+    """
+    Generate the brief self-introduction the avatar speaks when it is the one
+    starting the call. Falls back to a neutral presentation if Gemini fails.
+    """
+    nome = str((avatar_profile or {}).get("NOME", "") or "").strip()
+    cognome = str((avatar_profile or {}).get("COGNOME", "") or "").strip()
+    fallback = (
+        f"Pronto, buongiorno. Sono {nome} {cognome}. "
+        "La chiamo perché ho un problema che vorrei risolvere con voi."
+    )
+
+    if not client or not avatar_profile:
+        return fallback
+
+    system_prompt = build_persona_prompt(avatar_profile)
+    contents = _build_contents([{"role": "user", "content": _OPENING_LINE_INSTRUCTION}])
+
+    for model in _candidate_models():
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=_generation_config(system_prompt),
+            )
+            text = (response.text or "").strip()
+            if text:
+                return text
+        except Exception as e:
+            if not _is_retryable(e):
+                print(f"[ERROR] Gemini opening line failed ({model}): {e}")
+                break
+            print(f"[WARN] Modello {model} non disponibile per la battuta di apertura: {str(e)[:120]}")
+
+    return fallback
+
+
 def _build_contents(messages_history: list[dict], user_message: str | None = None) -> list:
     """Convert role/content dicts into Gemini Content objects."""
     contents = []
@@ -202,6 +271,149 @@ def _build_contents(messages_history: list[dict], user_message: str | None = Non
     if user_message is not None:
         contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_message)]))
     return contents
+
+
+# ── Post-call evaluation (operator coaching) ──────────
+
+EVALUATION_CRITERIA = [
+    ("linguaggio", "Linguaggio e professionalità"),
+    ("affidabilita", "Affidabilità e competenza"),
+    ("empatia", "Empatia e ascolto"),
+    ("gestione_emotiva", "Gestione dell'emotività del cliente"),
+    ("risoluzione", "Efficacia e risoluzione del problema"),
+]
+
+# Below this score a criterion comes with improvement suggestions
+EVALUATION_SUGGESTION_THRESHOLD = 7
+
+
+def _evaluation_prompt(profile: dict) -> str:
+    """System prompt for the trainer that judges the operator's performance."""
+    nome = str(profile.get("NOME", "") or "").strip()
+    cognome = str(profile.get("COGNOME", "") or "").strip()
+    cliente = f"{nome} {cognome}".strip() or "il cliente simulato"
+
+    contesto = _profile_section(profile, [
+        ("TIPO_SCENARIO", "Scenario della chiamata"),
+        ("DESCRIZIONE_PROBLEMATICA", "Vera causa del problema (ignota al cliente)"),
+        ("OBIETTIVO_NASCOSTO", "Obiettivo nascosto della simulazione"),
+        ("EMOZIONE_INIZIALE", "Emozione iniziale del cliente"),
+        ("GRADO_DIFFICOLTA", "Grado di difficoltà"),
+    ])
+    criteri = "\n".join(f'- "{key}": {label}' for key, label in EVALUATION_CRITERIA)
+
+    return (
+        "Sei un formatore esperto di customer service bancario. Valuta la performance "
+        "dell'OPERATORE (mai quella del cliente) nella trascrizione di una telefonata di "
+        f"formazione tra un operatore in addestramento e {cliente}, un cliente simulato.\n\n"
+        + (f"## CONTESTO DELLA SIMULAZIONE\n{contesto}\n\n" if contesto else "")
+        + f"## CRITERI DA VALUTARE\n{criteri}\n\n"
+        "## ISTRUZIONI\n"
+        "- Assegna a ogni criterio un punteggio intero da 0 a 10.\n"
+        "- Per ogni criterio scrivi un commento breve (1-2 frasi), citando quando utile "
+        "momenti specifici della chiamata.\n"
+        f"- Se il punteggio di un criterio è inferiore a {EVALUATION_SUGGESTION_THRESHOLD}, "
+        "aggiungi suggerimenti concreti e pratici su come migliorare; altrimenti usa null.\n"
+        "- Assegna anche un punteggio complessivo da 0 a 10 e una sintesi di 2-3 frasi.\n"
+        "- Scrivi tutto in italiano.\n\n"
+        "## FORMATO DELLA RISPOSTA\n"
+        "Rispondi SOLO con un oggetto JSON con questa struttura esatta:\n"
+        '{"criteria": {"<chiave criterio>": {"score": 0-10, "comment": "...", '
+        '"suggestions": "..." oppure null}}, "overall_score": 0-10, "summary": "..."}'
+    )
+
+
+def _clamp_score(value) -> float:
+    score = float(value)  # raises TypeError/ValueError on junk → retried
+    return max(0.0, min(10.0, round(score, 1)))
+
+
+def _normalize_evaluation(raw: dict) -> dict:
+    """Validate/normalize the model's JSON into the stored result shape."""
+    raw_criteria = raw.get("criteria") or {}
+    criteria = []
+    for key, label in EVALUATION_CRITERIA:
+        entry = raw_criteria.get(key) or {}
+        score = _clamp_score(entry.get("score"))
+        suggestions = str(entry.get("suggestions") or "").strip() or None
+        if score >= EVALUATION_SUGGESTION_THRESHOLD:
+            suggestions = None
+        criteria.append({
+            "key": key,
+            "label": label,
+            "score": score,
+            "comment": str(entry.get("comment") or "").strip(),
+            "suggestions": suggestions,
+        })
+
+    try:
+        overall = _clamp_score(raw.get("overall_score"))
+    except (TypeError, ValueError):
+        overall = round(sum(c["score"] for c in criteria) / len(criteria), 1)
+
+    return {
+        "overall_score": overall,
+        "summary": str(raw.get("summary") or "").strip(),
+        "criteria": criteria,
+    }
+
+
+def evaluate_conversation(messages_history: list[dict], avatar_profile: dict) -> dict:
+    """
+    Judge the operator's performance over the whole conversation with the
+    same Gemini model used for the roleplay.
+
+    Returns {"overall_score": float, "summary": str, "criteria": [...]}
+    where each criterion carries score, comment and (only when score < 7)
+    improvement suggestions. Raises RuntimeError on failure.
+    """
+    if not client:
+        raise RuntimeError(
+            "GEMINI_API_KEY non configurata. "
+            "Aggiungi GEMINI_API_KEY al file .env del backend."
+        )
+
+    transcript = "\n".join(
+        f"{'OPERATORE' if m['role'] == 'user' else 'CLIENTE'}: {m['content']}"
+        for m in messages_history
+        if str(m.get("content", "")).strip()
+    )
+    if not transcript:
+        raise RuntimeError("Conversazione vuota: impossibile generare la valutazione.")
+
+    config = types.GenerateContentConfig(
+        system_instruction=_evaluation_prompt(avatar_profile or {}),
+        temperature=0.3,
+        max_output_tokens=2048,
+        response_mime_type="application/json",
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
+    )
+    contents = _build_contents(
+        [{"role": "user", "content": f"## TRASCRIZIONE DELLA CHIAMATA\n{transcript}"}]
+    )
+
+    last_error: Exception | None = None
+    for model in _candidate_models():
+        try:
+            response = client.models.generate_content(
+                model=model, contents=contents, config=config
+            )
+        except Exception as e:
+            if not _is_retryable(e):
+                print(f"[ERROR] Gemini evaluation failed ({model}): {e}")
+                raise RuntimeError(f"Errore nella generazione della valutazione: {str(e)}")
+            print(f"[WARN] Modello {model} non disponibile per la valutazione: {str(e)[:120]}")
+            last_error = e
+            continue
+        try:
+            return _normalize_evaluation(json.loads(response.text or ""))
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            # Malformed/incomplete JSON: try the next model
+            print(f"[WARN] Valutazione non valida da {model}, provo il successivo: {e}")
+            last_error = e
+
+    print(f"[ERROR] Valutazione fallita su tutti i modelli Gemini: {last_error}")
+    raise RuntimeError(f"Errore nella generazione della valutazione: {str(last_error)}")
 
 
 def stream_avatar_response(

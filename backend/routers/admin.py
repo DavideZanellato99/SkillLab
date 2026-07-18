@@ -14,6 +14,7 @@ from models import (
     Avatar,
     ChatConversation,
     ChatMessage,
+    ConversationEvaluation,
     ALL_ROLES,
     ROLE_SUPER_ADMIN,
 )
@@ -31,6 +32,8 @@ from schemas import (
     MessageResponse,
     ConversationReport,
     UserActivityReport,
+    EvaluationCriterionScore,
+    EvaluationReportRow,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -133,6 +136,49 @@ def users_activity_report(
             conversations=conversations_by_user.get(u.id, []),
         )
         for u in users
+    ]
+
+
+@router.get("/evaluations-report", response_model=list[EvaluationReportRow])
+def evaluations_report(
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Read-only recap of every evaluated conversation (Super Admin +
+    Organization Admin): user, avatar, dates and the evaluation scores —
+    the data source for the dashboard charts.
+    """
+    rows = (
+        db.query(ConversationEvaluation, ChatConversation, User, Avatar.name)
+        .join(ChatConversation, ChatConversation.id == ConversationEvaluation.conversation_id)
+        .join(User, User.id == ChatConversation.user_id)
+        .join(Avatar, Avatar.id == ChatConversation.avatar_id)
+        .order_by(ChatConversation.created_at.asc())
+        .all()
+    )
+    return [
+        EvaluationReportRow(
+            conversation_id=conv.id,
+            user_id=user.id,
+            user_email=user.email,
+            user_nome=user.nome,
+            user_cognome=user.cognome,
+            avatar_id=conv.avatar_id,
+            avatar_name=avatar_name,
+            conversation_at=conv.created_at,
+            evaluated_at=evaluation.created_at,
+            overall_score=evaluation.overall_score,
+            criteria=[
+                EvaluationCriterionScore(
+                    key=str(c.get("key", "")),
+                    label=str(c.get("label", "")),
+                    score=float(c.get("score", 0) or 0),
+                )
+                for c in ((evaluation.result or {}).get("criteria") or [])
+            ],
+        )
+        for evaluation, conv, user, avatar_name in rows
     ]
 
 

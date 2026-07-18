@@ -5,6 +5,7 @@ psycopg[binary]
 python-dotenv
 pydantic
 google-genai
+openai
 boto3
 python-jose[cryptography]
 requests

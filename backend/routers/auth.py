@@ -6,6 +6,7 @@ attaches them automatically; the frontend only sees the user profile.
 """
 
 import re
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -23,6 +24,16 @@ from cognito_service import (
     authenticate,
     respond_to_new_password_challenge,
     refresh_tokens,
+    revoke_refresh_token,
+    verify_access_token,
+)
+from token_denylist import revoke_jtis, is_jti_revoked
+from token_sessions import (
+    access_binding_matches,
+    bind_access_token,
+    client_ip,
+    revocation_entries,
+    session_anchor_matches,
 )
 from rate_limit import SlidingWindowLimiter
 from schemas import (
@@ -97,20 +108,25 @@ _ip_limiter = SlidingWindowLimiter(max_failures=10, window_seconds=_LOGIN_WINDOW
 _GENERIC_LOGIN_ERROR = "Credenziali non valide."
 
 
-def _client_ip(request: Request) -> str:
-    # First hop of X-Forwarded-For when behind a trusted reverse proxy;
-    # direct connections fall back to the socket peer address.
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 def _retry_message(seconds: int) -> str:
     if seconds >= 60:
         minutes = (seconds + 59) // 60
         return f"Troppi tentativi di accesso. Riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}."
     return f"Troppi tentativi di accesso. Riprova tra {seconds} secondi."
+
+
+def _bind_fresh_token(db: Session, access_token: str, http_request: Request, user_id) -> None:
+    """
+    Record the session binding (jti ↔ IP + User-Agent) for a freshly
+    minted access token. Best-effort: if the JWKS is unreachable the
+    login/refresh still succeeds — the same outage would block every
+    verified request anyway.
+    """
+    try:
+        claims = verify_access_token(access_token)
+        bind_access_token(db, claims, http_request, user_id)
+    except RuntimeError as e:
+        print(f"[ERROR] Session binding non registrato: {e}")
 
 
 def validate_password_strength(password: str) -> list[str]:
@@ -145,7 +161,7 @@ def login(
     if Cognito requires a password change.
     """
     email_key = request.email.strip().lower()
-    ip_key = _client_ip(http_request)
+    ip_key = client_ip(http_request)
 
     wait = max(_email_limiter.retry_after(email_key), _ip_limiter.retry_after(ip_key))
     if wait:
@@ -188,6 +204,7 @@ def login(
             detail=_GENERIC_LOGIN_ERROR,
         )
 
+    _bind_fresh_token(db, result["access_token"], http_request, user.id)
     _set_access_cookie(response, result["access_token"])
     _set_refresh_cookie(response, result["refresh_token"])
     return LoginResponse(user=UserResponse.model_validate(user))
@@ -195,7 +212,10 @@ def login(
 
 @router.post("/new-password")
 def complete_new_password(
-    request: NewPasswordRequest, response: Response, db: Session = Depends(get_db)
+    request: NewPasswordRequest,
+    http_request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
 ):
     """
     Complete the NEW_PASSWORD_REQUIRED challenge.
@@ -229,14 +249,22 @@ def complete_new_password(
             detail="Utente non trovato nel database. Contatta l'amministratore.",
         )
 
+    _bind_fresh_token(db, result["access_token"], http_request, user.id)
     _set_access_cookie(response, result["access_token"])
     _set_refresh_cookie(response, result["refresh_token"])
     return LoginResponse(user=UserResponse.model_validate(user))
 
 
 @router.post("/refresh", response_model=MessageResponse)
-def refresh_access_token(request: Request, response: Response):
-    """Rotate the access token cookie using the refresh token cookie."""
+def refresh_access_token(request: Request, response: Response, db: Session = Depends(get_db)):
+    """
+    Rotate the access token cookie using the refresh token cookie.
+
+    Session binding: the new access token is only issued if the caller's
+    IP + User-Agent match the session anchor (origin_jti) recorded at
+    login. A stolen refresh token replayed from another browser/device
+    kills the whole session instead of minting fresh tokens.
+    """
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
     if not refresh_token:
         raise HTTPException(
@@ -244,14 +272,12 @@ def refresh_access_token(request: Request, response: Response):
             detail="Refresh token mancante.",
         )
 
-    try:
-        result = refresh_tokens(refresh_token)
-    except RuntimeError as e:
-        # Generic message to the client (no Cognito internals); real cause
-        # in the server log. Cookies must be cleared on the error response
+    def _rejected(log_message: str) -> JSONResponse:
+        # Generic message to the client (no internals); real cause in the
+        # server log. Cookies must be cleared on the error response
         # itself: headers on the injected Response are dropped when an
         # HTTPException is raised
-        print(f"[WARN] Refresh token non valido: {e}")
+        print(log_message)
         error = JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Sessione scaduta. Effettua nuovamente il login."},
@@ -259,13 +285,141 @@ def refresh_access_token(request: Request, response: Response):
         _clear_auth_cookies(error)
         return error
 
-    _set_access_cookie(response, result["access_token"])
+    # ── Binding pre-check on the OLD access token ─────
+    # The refresh is a rotation point: without this check a thief holding
+    # both cookies could mint a fresh access token bound to HIS context.
+    # The old jti identifies the session even if the token is expired
+    # (signature still verified; exp ignored). Runs BEFORE the Cognito
+    # call: on mismatch no token is ever minted.
+    old_access = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    if old_access:
+        try:
+            old_claims = verify_access_token(old_access, verify_exp=False)
+        except RuntimeError:
+            # Unreadable/garbage cookie: can't identify the old token —
+            # the post-mint anchor check below still guards the rotation
+            old_claims = None
+
+        if old_claims and old_claims.get("jti"):
+            if is_jti_revoked(db, old_claims.get("jti"), old_claims.get("origin_jti")):
+                try:
+                    revoke_refresh_token(refresh_token)
+                except RuntimeError as e:
+                    print(f"[ERROR] Refresh: revoca del refresh token fallita: {e}")
+                return _rejected("[WARN] Refresh rifiutato: sessione già revocata (pre-check).")
+
+            if not access_binding_matches(db, old_claims, request):
+                revoke_jtis(db, revocation_entries(old_claims))
+                try:
+                    revoke_refresh_token(refresh_token)
+                except RuntimeError as e:
+                    print(f"[ERROR] Refresh: revoca del refresh token fallita: {e}")
+                return _rejected(
+                    "[WARN] Refresh rifiutato: contesto diverso dal binding del vecchio "
+                    f"access token (ip={client_ip(request)})"
+                )
+
+    try:
+        result = refresh_tokens(refresh_token)
+    except RuntimeError as e:
+        return _rejected(f"[WARN] Refresh token non valido: {e}")
+
+    access_token = result["access_token"]
+    try:
+        claims = verify_access_token(access_token)
+    except RuntimeError as e:
+        return _rejected(f"[WARN] Refresh: access token emesso non verificabile: {e}")
+
+    if claims.get("jti"):
+        # A denylisted session (logout or binding violation) must not mint
+        # new tokens: reject and revoke the refresh token upstream too
+        if is_jti_revoked(db, claims.get("jti"), claims.get("origin_jti")):
+            try:
+                revoke_refresh_token(refresh_token)
+            except RuntimeError as e:
+                print(f"[ERROR] Refresh: revoca del refresh token fallita: {e}")
+            return _rejected("[WARN] Refresh rifiutato: sessione revocata.")
+
+        if not session_anchor_matches(db, claims, request):
+            # Context mismatch (or session never bound): kill everything —
+            # denylist the fresh token + session anchor and revoke the
+            # refresh token upstream on Cognito
+            revoke_jtis(db, revocation_entries(claims))
+            try:
+                revoke_refresh_token(refresh_token)
+            except RuntimeError as e:
+                print(f"[ERROR] Refresh: revoca del refresh token fallita: {e}")
+            return _rejected(
+                "[WARN] Refresh rifiutato: contesto client diverso da quello della sessione "
+                f"(ip={client_ip(request)})"
+            )
+
+        user = db.query(User).filter(User.cognito_sub == claims.get("sub")).first()
+        bind_access_token(db, claims, request, user.id if user else None)
+
+    _set_access_cookie(response, access_token)
     return MessageResponse(message="Token aggiornato.", success=True)
 
 
+def _denylist_access_token(db: Session, access_token: str) -> None:
+    """
+    Push the access token's jti and origin_jti into the server-side
+    denylist. origin_jti is shared by every access token minted from the
+    same refresh token, so the whole session dies, not just this token.
+    """
+    claims = verify_access_token(access_token)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    entries: list[tuple[str, datetime]] = []
+    jti = claims.get("jti")
+    exp = claims.get("exp")
+    if jti:
+        expires_at = (
+            datetime.fromtimestamp(exp, tz=timezone.utc).replace(tzinfo=None)
+            if exp
+            else now + timedelta(seconds=_ACCESS_COOKIE_MAX_AGE)
+        )
+        entries.append((jti, expires_at))
+
+    origin_jti = claims.get("origin_jti")
+    if origin_jti:
+        # Sibling tokens of the session can outlive this one by at most a
+        # full access-token validity window
+        entries.append((origin_jti, now + timedelta(seconds=_ACCESS_COOKIE_MAX_AGE)))
+
+    revoke_jtis(db, entries)
+
+
 @router.post("/logout", response_model=MessageResponse)
-def logout(response: Response):
-    """Clear the auth cookies (HttpOnly cookies can't be removed by JS)."""
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    """
+    Log out: revoke the refresh token on Cognito, denylist the access
+    token's jti server-side, then clear the auth cookies (HttpOnly
+    cookies can't be removed by JS).
+
+    Together the two revocations kill the whole session: a stolen refresh
+    token can't mint new access tokens, and the stolen access token stops
+    working immediately instead of living out its remaining 60 minutes.
+    Both steps are best-effort — the logout always clears the cookies, or
+    an outage would keep the user trapped in the session.
+    """
+    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
+    if refresh_token:
+        try:
+            revoke_refresh_token(refresh_token)
+        except RuntimeError as e:
+            print(f"[ERROR] Logout: revoca del refresh token fallita: {e}")
+
+    access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    if access_token:
+        try:
+            _denylist_access_token(db, access_token)
+        except RuntimeError:
+            # Invalid/expired access token: already unusable, nothing to deny
+            pass
+        except Exception as e:
+            print(f"[ERROR] Logout: denylist del jti fallita: {e}")
+
     _clear_auth_cookies(response)
     return MessageResponse(message="Logout effettuato.", success=True)
 

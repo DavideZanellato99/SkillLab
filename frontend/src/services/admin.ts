@@ -124,3 +124,32 @@ export interface UserActivityReport {
  */
 export const fetchUsersReport = () =>
   apiFetch<UserActivityReport[]>('/api/admin/users-report');
+
+// ── Evaluations dashboard (read-only) ────────────────
+
+export interface EvaluationCriterionScore {
+  key: string;
+  label: string;
+  score: number;
+}
+
+export interface EvaluationReportRow {
+  conversation_id: string;
+  user_id: string;
+  user_email: string;
+  user_nome: string;
+  user_cognome: string;
+  avatar_id: string;
+  avatar_name: string;
+  conversation_at: string;
+  evaluated_at: string;
+  overall_score: number;
+  criteria: EvaluationCriterionScore[];
+}
+
+/**
+ * Fetch every evaluated conversation with its scores — the data source for
+ * the dashboard charts (Super Admin + Organization Admin).
+ */
+export const fetchEvaluationsReport = () =>
+  apiFetch<EvaluationReportRow[]>('/api/admin/evaluations-report');

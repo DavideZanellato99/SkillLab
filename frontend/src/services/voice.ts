@@ -1,32 +1,26 @@
-/* Voice session API service (Hume EVI integration) */
+/* Voice session API service (ElevenLabs STT + OpenAI + Cartesia TTS) */
 
 import { apiFetch } from './api';
 
 export interface VoiceSession {
-  access_token: string;
-  config_id: string;
-  custom_session_id: string;
+  session_id: string;
   conversation_id: string;
-  voice_id: string | null;
-  greeting: string | null;
 }
 
 /**
  * Start a voice session for an avatar. The backend creates/reuses the
- * conversation, registers the session for the CLM endpoint and returns
- * the Hume credentials needed to open the EVI WebSocket.
+ * conversation, registers the session for the voice WebSocket and returns
+ * the unguessable session id used to open it.
  *
- * With callMode the session simulates a phone call: if the avatar's persona
- * sheet says it starts the conversation, greeting carries the opening line
- * it speaks after the ring; otherwise greeting is null and the avatar waits
- * for the operator to talk first.
+ * The session simulates the avatar phoning the bank's toll-free number:
+ * after the ring the avatar waits in silence for the operator (the user)
+ * to answer and introduce themselves, then it states why it is calling.
  */
 export const startVoiceSession = (
   avatarId: string,
   conversationId?: string | null,
-  callMode = false,
 ) =>
   apiFetch<VoiceSession>('/api/voice/session', {
     method: 'POST',
-    body: { avatar_id: avatarId, conversation_id: conversationId ?? null, call_mode: callMode },
+    body: { avatar_id: avatarId, conversation_id: conversationId ?? null },
   });

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { VoiceProvider, useVoice } from '@humeai/voice-react';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdmin } from '../services/auth';
 import type { ChatMessage } from '../services/api';
@@ -31,16 +30,6 @@ function TypingIndicator() {
 }
 
 export default function ChatPage() {
-  return (
-    // Default messageHistoryLimit is 100 EVENTS (not turns): a long call
-    // exceeds it and the SDK starts dropping from the front of the array
-    <VoiceProvider messageHistoryLimit={1000}>
-      <ChatPageContent />
-    </VoiceProvider>
-  );
-}
-
-function ChatPageContent() {
   const { avatarId } = useParams<{ avatarId: string }>();
   const { user } = useAuth();
   const canDeleteConversations = isAdmin(user);
@@ -67,8 +56,7 @@ function ChatPageContent() {
 
   // ── Voice mode ────────────────────────────────────
   const queryClient = useQueryClient();
-  const { status: voiceStatus } = useVoice();
-  const voiceActive = voiceStatus.value === 'connected' || voiceStatus.value === 'connecting';
+  const [voiceActive, setVoiceActive] = useState(false);
 
   // ── Local state ───────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -437,6 +425,7 @@ function ChatPageContent() {
               onTranscript={handleVoiceTranscript}
               onError={setError}
               onSessionEnd={handleVoiceSessionEnd}
+              onActiveChange={setVoiceActive}
             />
           )}
           <p className="text-center text-xs text-slate-500">

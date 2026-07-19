@@ -9,7 +9,8 @@ export default defineConfig({
     // Forward API and avatar-image requests to the FastAPI backend so the
     // browser only ever talks to this dev server (single port to expose).
     proxy: {
-      '/api': 'http://localhost:8000',
+      // ws:true also proxies the voice call WebSocket (/api/voice/ws)
+      '/api': { target: 'http://localhost:8000', ws: true },
       '/static': 'http://localhost:8000',
     },
     // Cloudflare quick tunnels get a random *.trycloudflare.com hostname.

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useVoice } from '@humeai/voice-react';
 import { startVoiceSession } from '../services/voice';
+import { VoiceCall } from '../services/voiceCall';
 import { startRingback, type Ringback } from '../services/ringtone';
 import type { ChatMessage } from '../services/api';
 import Tooltip from './Tooltip';
@@ -17,6 +17,8 @@ interface VoiceButtonProps {
   onTranscript: (msg: ChatMessage) => void;
   onError: (message: string) => void;
   onSessionEnd: () => void;
+  /** Mirrors whether a call is live (ChatPage pauses DB sync during calls). */
+  onActiveChange: (active: boolean) => void;
 }
 
 const STATE_LABELS: Record<VoiceUiState, string | null> = {
@@ -51,75 +53,36 @@ export default function VoiceButton({
   onTranscript,
   onError,
   onSessionEnd,
+  onActiveChange,
 }: VoiceButtonProps) {
-  const {
-    connect,
-    disconnect,
-    status,
-    isPlaying,
-    messages,
-    error,
-    lastUserMessage,
-    lastVoiceMessage,
-    sendAssistantInput,
-    mute,
-    unmute,
-  } = useVoice();
-
   const [isRinging, setIsRinging] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const callRef = useRef<VoiceCall | null>(null);
   const ringbackRef = useRef<Ringback | null>(null);
   const callCancelledRef = useRef(false);
-  // SDK messages already forwarded as chat bubbles, tracked per object:
-  // the SDK also mutates its array in place (interim replacement, history
-  // limit trimming), so an index cursor would silently skip messages
-  const forwardedMessages = useRef(new WeakSet<object>());
-  const wasConnected = useRef(false);
 
-  const isConnected = status.value === 'connected';
+  // Live callbacks without re-creating the call client
+  const onTranscriptRef = useRef(onTranscript);
+  onTranscriptRef.current = onTranscript;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const onSessionEndRef = useRef(onSessionEnd);
+  onSessionEndRef.current = onSessionEnd;
 
-  // Forward live transcripts (user + assistant) as chat bubbles. Interim
-  // user messages are skipped: only the final transcript of each turn
-  // becomes a bubble, so it is always complete.
   useEffect(() => {
-    for (const m of messages) {
-      if (m.type !== 'user_message' && m.type !== 'assistant_message') continue;
-      if (m.type === 'user_message' && m.interim) continue;
-      if (forwardedMessages.current.has(m)) continue;
-      forwardedMessages.current.add(m);
-      const content = m.message.content ?? '';
-      if (content.trim()) {
-        onTranscript({
-          id: `voice-${crypto.randomUUID()}`,
-          role: m.type === 'user_message' ? 'user' : 'assistant',
-          content,
-          created_at: new Date().toISOString(),
-        });
-      }
-    }
-  }, [messages, onTranscript]);
+    onActiveChange(isRinging || isConnected);
+  }, [isRinging, isConnected, onActiveChange]);
 
-  // Surface SDK errors (socket, mic, audio) to the chat error area
-  useEffect(() => {
-    if (error) {
-      onError(`Errore modalità vocale: ${error.message}`);
-    }
-  }, [error, onError]);
-
-  // Notify when a session ends (either by user click or remote close)
-  useEffect(() => {
-    if (isConnected) {
-      wasConnected.current = true;
-    } else if (wasConnected.current) {
-      wasConnected.current = false;
-      onSessionEnd();
-    }
-  }, [isConnected, onSessionEnd]);
-
-  // Stop the ringback if the component unmounts mid-ring
+  // Hang up if the component unmounts mid-call
   useEffect(() => {
     return () => {
       ringbackRef.current?.stop();
       ringbackRef.current = null;
+      callRef.current?.disconnect();
+      callRef.current = null;
     };
   }, []);
 
@@ -128,17 +91,27 @@ export default function VoiceButton({
     ringbackRef.current = null;
   };
 
+  const pushTranscript = (role: 'user' | 'assistant', content: string) => {
+    if (!content.trim()) return;
+    onTranscriptRef.current({
+      id: `voice-${crypto.randomUUID()}`,
+      role,
+      content,
+      created_at: new Date().toISOString(),
+    });
+  };
+
   // Derive the UI state shown on the button + status pill
   let uiState: VoiceUiState = 'idle';
   if (isRinging) {
     uiState = 'ringing';
   } else if (isConnected) {
-    if (isPlaying) {
+    if (isSpeaking) {
       uiState = 'speaking';
+    } else if (isProcessing) {
+      uiState = 'processing';
     } else {
-      const userAt = lastUserMessage?.receivedAt?.getTime() ?? 0;
-      const assistantAt = lastVoiceMessage?.receivedAt?.getTime() ?? 0;
-      uiState = userAt > assistantAt ? 'processing' : 'listening';
+      uiState = 'listening';
     }
   }
 
@@ -148,13 +121,14 @@ export default function VoiceButton({
       callCancelledRef.current = true;
       stopRingback();
       setIsRinging(false);
-      await disconnect();
+      callRef.current?.disconnect();
+      callRef.current = null;
       return;
     }
 
     // Hang up during the conversation
     if (isConnected) {
-      await disconnect();
+      callRef.current?.disconnect();
       return;
     }
 
@@ -166,42 +140,48 @@ export default function VoiceButton({
     const ringDone = new Promise((resolve) => setTimeout(resolve, RING_DURATION_MS));
 
     try {
-      const session = await startVoiceSession(avatarId, conversationId, true);
+      const session = await startVoiceSession(avatarId, conversationId);
       if (callCancelledRef.current) return;
       onConversationId(session.conversation_id);
 
-      await connect({
-        auth: { type: 'accessToken', value: session.access_token },
-        configId: session.config_id,
-        sessionSettings: {
-          type: 'session_settings',
-          customSessionId: session.custom_session_id,
-          ...(session.voice_id ? { voiceId: session.voice_id } : {}),
+      const call = new VoiceCall(session.session_id, {
+        onUserFinal: (text) => pushTranscript('user', text),
+        onAssistantEnd: (text) => pushTranscript('assistant', text),
+        onSpeakingChange: setIsSpeaking,
+        onProcessingChange: setIsProcessing,
+        onError: (message) => onErrorRef.current(`Errore modalità vocale: ${message}`),
+        onClose: () => {
+          callRef.current = null;
+          setIsConnected(false);
+          setIsSpeaking(false);
+          setIsProcessing(false);
+          onSessionEndRef.current();
         },
       });
+      callRef.current = call;
+
+      // Connect during the ring (mic stays muted) to hide the setup latency
+      await call.connect();
       if (callCancelledRef.current) {
-        await disconnect();
+        call.disconnect();
         return;
       }
 
-      // The customer hasn't picked up yet: keep the mic muted while it rings
-      mute();
       await ringDone;
       if (callCancelledRef.current) {
-        await disconnect();
+        call.disconnect();
         return;
       }
 
-      // Call connected: if the persona starts the conversation EVI speaks
-      // its self-introduction; otherwise the avatar stays silent and waits
-      // for the operator to talk first
-      if (session.greeting) {
-        sendAssistantInput(session.greeting);
-      }
-      unmute();
+      // Call connected: the avatar is the caller and stays silent until
+      // the operator (the user) answers and introduces themselves
+      setIsConnected(true);
+      call.start();
     } catch (err) {
+      callRef.current?.disconnect();
+      callRef.current = null;
       if (!callCancelledRef.current) {
-        onError(
+        onErrorRef.current(
           err instanceof Error
             ? `Impossibile avviare la chiamata: ${err.message}`
             : 'Impossibile avviare la chiamata.',

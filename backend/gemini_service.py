@@ -1,4 +1,9 @@
-"""Google Gemini service for avatar chat roleplay."""
+"""Google Gemini service: persona prompt building + post-call evaluation.
+
+The live conversation runs on OpenAI (openai_service); here live the
+provider-agnostic persona prompt and the Gemini-powered post-call
+evaluation.
+"""
 
 import json
 import os
@@ -33,22 +38,6 @@ def _is_retryable(error: Exception) -> bool:
     """True for transient overload/quota errors worth retrying on another model."""
     msg = str(error)
     return any(s in msg for s in ("503", "UNAVAILABLE", "overloaded", "429", "RESOURCE_EXHAUSTED"))
-
-
-def _generation_config(system_prompt: str) -> types.GenerateContentConfig:
-    return types.GenerateContentConfig(
-        system_instruction=system_prompt,
-        temperature=0.9,
-        max_output_tokens=1024,
-        # No thinking: keeps voice-mode latency low
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
-    )
-
-
-def avatar_starts_conversation(profile: dict) -> bool:
-    """True when the persona sheet says the avatar opens the call speaking first."""
-    value = str((profile or {}).get("CHI_INIZIA_CONVERSAZIONE", "") or "").strip().lower()
-    return value == "avatar"
 
 
 def _profile_section(profile: dict, entries: list[tuple[str, str]]) -> str:
@@ -149,26 +138,16 @@ def build_persona_prompt(profile: dict) -> str:
     non_rivelare = str(profile.get("INFORMAZIONI_DA_NON_RIVELARE_SPONTANEAMENTE", "") or "").strip()
     argomenti_sensibili = str(profile.get("ARGOMENTI_SENSIBILI", "") or "").strip()
 
-    if avatar_starts_conversation(profile):
-        inizio_chiamata = (
-            "## INIZIO DELLA CHIAMATA\n"
-            "Sei stato TU a chiamare il customer banking center della tua banca. La telefonata "
-            "inizia con te che ti presenti brevemente (saluto, nome e cognome) e accenni al "
-            "motivo della chiamata, senza rivelare subito tutti i dettagli. Dopo la tua "
-            "presentazione lascia parlare l'operatore e prosegui in modo coerente con lo "
-            "scenario e con il tuo stato emotivo."
-        )
-    else:
-        inizio_chiamata = (
-            "## INIZIO DELLA CHIAMATA\n"
-            "L'operatore ti ha chiamato e tu hai appena risposto al telefono SENZA dire nulla: "
-            "è lui a parlare per primo. In quel momento NON sai ancora chi ti sta chiamando: "
-            "aspetta che l'operatore si presenti prima di dire qualsiasi cosa sul tuo conto o "
-            "sul tuo problema. Solo dopo aver capito che si tratta della tua banca, reagisci "
-            "in modo coerente con lo scenario e con il tuo stato emotivo, e porta tu la "
-            "conversazione sul problema che ti riguarda. Se chi chiama non si presenta o è "
-            "vago, chiedi con diffidenza chi è e cosa vuole."
-        )
+    inizio_chiamata = (
+        "## INIZIO DELLA CHIAMATA\n"
+        "Sei stato TU a chiamare il numero verde del servizio clienti della tua banca, "
+        "quindi sai già che ti risponderà un operatore telefonico. La chiamata inizia "
+        "SEMPRE con l'operatore che risponde e si presenta: tu NON parli per primo. "
+        "Subito dopo la presentazione dell'operatore tocca a te: saluta, presentati "
+        "brevemente con nome e cognome ed esponi la problematica per cui stai chiamando, "
+        "in modo coerente con lo scenario e con il tuo stato emotivo, senza rivelare "
+        "subito i dettagli che riveleresti solo su domanda."
+    )
 
     parts = [
         f"Sei {nome} {cognome}, un cliente di una banca. Stai parlando AL TELEFONO con un "
@@ -213,53 +192,6 @@ def build_persona_prompt(profile: dict) -> str:
     ]
 
     return "\n\n".join(p for p in parts if p)
-
-
-# Instruction (not persisted) used to make the persona produce its opening line
-_OPENING_LINE_INSTRUCTION = (
-    "(L'operatore del servizio clienti ha appena risposto alla tua chiamata. "
-    "Pronuncia la tua battuta di apertura: saluta, presentati brevemente con nome e "
-    "cognome e accenna in una frase al motivo per cui chiami, senza rivelare i dettagli "
-    "che riveleresti solo su domanda. Rispondi SOLO con la battuta, senza virgolette né "
-    "altro testo.)"
-)
-
-
-def generate_opening_line(avatar_profile: dict) -> str:
-    """
-    Generate the brief self-introduction the avatar speaks when it is the one
-    starting the call. Falls back to a neutral presentation if Gemini fails.
-    """
-    nome = str((avatar_profile or {}).get("NOME", "") or "").strip()
-    cognome = str((avatar_profile or {}).get("COGNOME", "") or "").strip()
-    fallback = (
-        f"Pronto, buongiorno. Sono {nome} {cognome}. "
-        "La chiamo perché ho un problema che vorrei risolvere con voi."
-    )
-
-    if not client or not avatar_profile:
-        return fallback
-
-    system_prompt = build_persona_prompt(avatar_profile)
-    contents = _build_contents([{"role": "user", "content": _OPENING_LINE_INSTRUCTION}])
-
-    for model in _candidate_models():
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=_generation_config(system_prompt),
-            )
-            text = (response.text or "").strip()
-            if text:
-                return text
-        except Exception as e:
-            if not _is_retryable(e):
-                print(f"[ERROR] Gemini opening line failed ({model}): {e}")
-                break
-            print(f"[WARN] Modello {model} non disponibile per la battuta di apertura: {str(e)[:120]}")
-
-    return fallback
 
 
 def _build_contents(messages_history: list[dict], user_message: str | None = None) -> list:
@@ -414,53 +346,3 @@ def evaluate_conversation(messages_history: list[dict], avatar_profile: dict) ->
 
     print(f"[ERROR] Valutazione fallita su tutti i modelli Gemini: {last_error}")
     raise RuntimeError(f"Errore nella generazione della valutazione: {str(last_error)}")
-
-
-def stream_avatar_response(
-    messages_history: list[dict],
-    avatar_profile: dict,
-):
-    """
-    Stream a roleplay response from Google Gemini as text chunks.
-
-    Every avatar is a training persona: avatar_profile is its sheet
-    (required). The last entry of messages_history must be the new user
-    message. Yields text fragments as soon as Gemini produces them.
-    """
-    if not client:
-        raise RuntimeError(
-            "GEMINI_API_KEY non configurata. "
-            "Aggiungi GEMINI_API_KEY al file .env del backend."
-        )
-    if not avatar_profile:
-        raise RuntimeError(
-            "Avatar senza scheda persona: impossibile generare la risposta."
-        )
-
-    system_prompt = build_persona_prompt(avatar_profile)
-    contents = _build_contents(messages_history)
-
-    last_error: Exception | None = None
-    for model in _candidate_models():
-        started = False
-        try:
-            stream = client.models.generate_content_stream(
-                model=model,
-                contents=contents,
-                config=_generation_config(system_prompt),
-            )
-            for chunk in stream:
-                if chunk.text:
-                    started = True
-                    yield chunk.text
-            return
-        except Exception as e:
-            # Once text has been emitted we can't switch model mid-response
-            if started or not _is_retryable(e):
-                print(f"[ERROR] Gemini streaming call failed ({model}): {e}")
-                raise RuntimeError(f"Errore nella comunicazione con Gemini: {str(e)}")
-            print(f"[WARN] Modello {model} non disponibile, provo il successivo: {str(e)[:120]}")
-            last_error = e
-
-    print(f"[ERROR] Tutti i modelli Gemini non disponibili: {last_error}")
-    raise RuntimeError(f"Errore nella comunicazione con Gemini: {str(last_error)}")

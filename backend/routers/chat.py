@@ -1,6 +1,7 @@
 """Chat history API endpoints for avatar conversations.
 
-The conversations are voice-only (Hume EVI + Gemini, see routers/voice.py):
+The conversations are voice-only (ElevenLabs STT + OpenAI + Cartesia TTS,
+see routers/voice.py):
 these endpoints only expose the persisted transcripts — there is no
 endpoint to send text messages.
 """

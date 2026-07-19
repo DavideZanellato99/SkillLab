@@ -152,7 +152,6 @@ const PROFILE_SECTIONS: ProfileSection[] = [
   {
     title: 'Scenario della chiamata',
     fields: [
-      { key: 'CHI_INIZIA_CONVERSAZIONE', label: 'Chi inizia la conversazione (Avatar = si presenta per primo, Operatore = l’avatar aspetta)', options: ['Operatore', 'Avatar'] },
       { key: 'TIPO_SCENARIO', label: 'Tipo di scenario', textarea: true, placeholder: 'Cosa è successo e perché il cliente è coinvolto...' },
       { key: 'DESCRIZIONE_PROBLEMATICA', label: 'Vera causa del problema (il cliente NON la conosce)', textarea: true },
       { key: 'OBIEZIONI_PREVISTE', label: 'Obiezioni previste', textarea: true },
@@ -519,7 +518,7 @@ export default function AvatarAdminPage() {
                   </div>
                 </div>
                 <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="av-voice">Voice ID Hume</label>
+                  <label className={labelCls} htmlFor="av-voice">Voice ID Cartesia</label>
                   <div className={inputWrapperCls}>
                     <input
                       type="text"

@@ -106,25 +106,20 @@ class ChatConversationSummary(BaseModel):
 # --- Voice Schemas ---
 
 class VoiceSessionRequest(BaseModel):
-    """Schema for starting a voice session with an avatar."""
+    """Schema for starting a voice session with an avatar.
+
+    The session simulates the avatar phoning the bank's toll-free number:
+    the operator (the user) answers and speaks first, then the avatar
+    states its problem.
+    """
     avatar_id: UUID
     conversation_id: UUID | None = None
-    # Call mode: the session simulates a phone call. Whether the avatar
-    # speaks first (brief self-introduction) or waits in silence for the
-    # operator depends on its persona sheet (CHI_INIZIA_CONVERSAZIONE).
-    call_mode: bool = False
 
 
 class VoiceSessionResponse(BaseModel):
-    """Schema returned to the client to open the EVI WebSocket."""
-    access_token: str
-    config_id: str
-    custom_session_id: str
+    """Schema returned to the client to open the voice WebSocket."""
+    session_id: str
     conversation_id: UUID
-    voice_id: str | None = None
-    # Opening line the avatar speaks after the ring when its persona sheet
-    # says it starts the conversation; None when it waits for the operator
-    greeting: str | None = None
 
 
 # --- Auth Schemas ---

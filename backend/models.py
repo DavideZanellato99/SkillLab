@@ -80,8 +80,8 @@ class Avatar(Base):
     image_url = Column(String(500), nullable=False)
     category = Column(String(50), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    # Hume voice id used for the voice conversation mode (falls back to
-    # HUME_DEFAULT_VOICE_ID when null)
+    # Cartesia voice id used for the voice conversation mode (falls back
+    # to CARTESIA_DEFAULT_VOICE_ID when null)
     voice_id = Column(String(100), nullable=True)
     # Training persona sheet (anagrafica, personalità, scenario, segreti...).
     # Required: every avatar IS a training persona — the sheet drives the

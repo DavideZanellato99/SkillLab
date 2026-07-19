@@ -53,7 +53,6 @@ const USER_COLUMNS: DataTableColumn[] = [
   { key: 'email', label: 'Email' },
   { key: 'ruolo', label: 'Ruolo' },
   { key: 'stato', label: 'Stato' },
-  { key: 'sub', label: 'Cognito Sub' },
   { key: 'creazione', label: 'Data Creazione' },
   { key: 'azioni', label: 'Azioni', align: 'right' },
 ];
@@ -360,7 +359,6 @@ export default function AdminPage() {
                     {STATUS_LABELS[u.status] ?? u.status}
                   </span>
                 </Td>
-                <Td><code className="rounded-lg bg-white/5 px-2 py-1 text-xs text-violet-400">{u.cognito_sub.slice(0, 13)}...</code></Td>
                 <Td>
                   <span className="text-[0.85rem] text-slate-500">
                     {new Date(u.created_at).toLocaleDateString('it-IT', {

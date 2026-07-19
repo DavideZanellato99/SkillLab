@@ -442,7 +442,7 @@ export default function Navbar() {
             {authStep === 'login' && (
               <form className="flex flex-col gap-4" onSubmit={handleLogin} id="auth-form">
                 <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-email">Email / Username</label>
+                  <label className={labelCls} htmlFor="auth-email">Email</label>
                   <div className={inputWrapperCls}>
                     <svg className={inputIconCls} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="2" y="4" width="20" height="16" rx="2" />

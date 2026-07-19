@@ -143,7 +143,7 @@ export default function Navbar() {
         className="fixed inset-x-0 top-0 z-[100] h-16 animate-slide-down border-b border-white/6 bg-night/70 backdrop-blur-2xl backdrop-saturate-150"
         id="navbar"
       >
-        <div className="mx-auto flex h-full max-w-[1400px] items-center justify-between px-8 max-md:px-4">
+        <div className="flex h-full w-full items-center justify-between px-4">
           {/* Logo */}
           <Link
             to="/"
@@ -452,7 +452,7 @@ export default function Navbar() {
                       type="text"
                       id="auth-email"
                       className={inputCls}
-                      placeholder="nome@esempio.com oppure admin"
+                      placeholder="nome@esempio.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required

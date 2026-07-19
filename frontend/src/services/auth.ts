@@ -1,10 +1,13 @@
 /* Auth service for communicating with the backend auth endpoints */
 
-const API_BASE_URL = 'http://localhost:8000';
+// Same-origin: the Vite dev server proxies /api to the backend (vite.config.ts).
+const API_BASE_URL = '';
 
 // =====================================================
 //  TYPES
 // =====================================================
+
+export type UserStatus = 'active' | 'suspended' | 'disabled';
 
 export interface AuthUser {
   id: string;
@@ -14,6 +17,7 @@ export interface AuthUser {
   cognome: string;
   role_id: string;
   ruolo: string; // role name: 'super_admin' | 'organization_admin' | 'user'
+  status: UserStatus;
   created_at: string;
   updated_at: string;
 }

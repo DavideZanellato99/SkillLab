@@ -4,7 +4,7 @@ import Toast from './Toast';
 import { useAvatars, useCategories } from '../hooks/useApi';
 
 interface AvatarGalleryProps {
-  onStatsUpdate: (totalAvatars: number, totalSelections: number, totalCategories: number) => void;
+  onStatsUpdate: (totalAvatars: number, totalCategories: number) => void;
 }
 
 const filterBtnBase =
@@ -46,8 +46,7 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
 
   // Update stats when avatars change
   useEffect(() => {
-    const totalSelections = avatars.reduce((sum, a) => sum + a.selection_count, 0);
-    onStatsUpdate(avatars.length, totalSelections, categories.length);
+    onStatsUpdate(avatars.length, categories.length);
   }, [avatars, categories, onStatsUpdate]);
 
   // Show error toast on query failure

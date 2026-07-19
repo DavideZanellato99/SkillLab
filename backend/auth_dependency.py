@@ -5,7 +5,14 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import User, Role, ALL_ROLES, ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN
+from models import (
+    User,
+    Role,
+    ALL_ROLES,
+    ROLE_SUPER_ADMIN,
+    ROLE_ORGANIZATION_ADMIN,
+    USER_STATUS_ACTIVE,
+)
 from cognito_service import verify_access_token
 from token_denylist import is_jti_revoked
 from token_sessions import enforce_session_binding
@@ -125,6 +132,16 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Utente non trovato nel sistema.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Suspended/disabled accounts die immediately: the check runs on every
+    # request, so tokens already issued stop working the moment the admin
+    # flips the status (Cognito alone would let them live until exp).
+    if user.status != USER_STATUS_ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="L'account è stato sospeso o disabilitato. Contatta l'amministratore.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

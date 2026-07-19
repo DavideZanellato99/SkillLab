@@ -24,6 +24,18 @@ from auth_dependency import get_or_create_mock_admin, ensure_roles
 # Create all database tables
 Base.metadata.create_all(bind=engine)
 
+# Lightweight migrations: create_all never ALTERs existing tables, so
+# columns added to a model after the first deploy go here (idempotent).
+from sqlalchemy import text
+
+with engine.begin() as _conn:
+    _conn.execute(
+        text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+            "status VARCHAR(20) NOT NULL DEFAULT 'active'"
+        )
+    )
+
 # Ensure system roles and the mock super admin exist on startup
 with SessionLocal() as _db:
     ensure_roles(_db)

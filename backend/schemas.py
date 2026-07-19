@@ -167,6 +167,7 @@ class UserResponse(BaseModel):
     cognome: str
     role_id: UUID
     ruolo: str  # role name, resolved from the roles table
+    status: str  # "active" | "suspended" | "disabled"
     created_at: datetime
     updated_at: datetime
 
@@ -188,6 +189,11 @@ class UpdateUserRequest(BaseModel):
     nome: str | None = None
     cognome: str | None = None
     ruolo: str | None = None
+
+
+class UpdateUserStatusRequest(BaseModel):
+    """Schema for admin changing an account's state."""
+    status: str  # "active" | "suspended" | "disabled"
 
 
 class AdminAvatarPayload(BaseModel):
@@ -260,6 +266,13 @@ class EvaluationReportRow(BaseModel):
     evaluated_at: datetime
     overall_score: float
     criteria: list[EvaluationCriterionScore]
+
+
+class AdminConversationDetail(BaseModel):
+    """Full transcript + stored evaluation of a conversation, for the admin dashboard."""
+    conversation_id: UUID
+    messages: list[ChatMessageResponse]
+    evaluation: ConversationEvaluationResponse | None = None
 
 
 # --- Generic Response ---

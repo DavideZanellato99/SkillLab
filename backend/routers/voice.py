@@ -118,6 +118,7 @@ def start_voice_session(
         user_id=str(current_user.id),
         avatar_id=str(avatar.id),
         conversation_id=str(conversation.id),
+        avatar_profile=avatar.profile,
         prior_history=prior_history,
     )
 
@@ -197,12 +198,6 @@ async def clm_chat_completions(request: Request, custom_session_id: str | None =
         db = SessionLocal()
         assistant_text = ""
         try:
-            avatar = db.query(Avatar).filter(Avatar.id == UUID(session.avatar_id)).first()
-            if not avatar:
-                yield _sse_chunk(chunk_id, created, "Mi dispiace, si è verificato un errore.", "stop")
-                yield "data: [DONE]\n\n"
-                return
-
             # Persist the user's transcript right away
             db.add(
                 ChatMessage(
@@ -216,7 +211,7 @@ async def clm_chat_completions(request: Request, custom_session_id: str | None =
             try:
                 for text_chunk in stream_avatar_response(
                     messages_history=full_history,
-                    avatar_profile=avatar.profile,
+                    avatar_profile=session.avatar_profile,
                 ):
                     assistant_text += text_chunk
                     yield _sse_chunk(chunk_id, created, text_chunk)

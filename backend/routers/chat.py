@@ -13,7 +13,7 @@ from sqlalchemy import func
 
 from database import get_db
 from models import Avatar, User, ChatConversation, ChatMessage, ConversationEvaluation
-from auth_dependency import get_current_user
+from auth_dependency import get_current_user, get_current_admin
 from gemini_service import evaluate_conversation
 from schemas import (
     ChatMessageResponse,
@@ -233,10 +233,14 @@ def get_conversation_evaluation(
 @router.delete("/conversation/{conversation_id}", response_model=MessageResponse)
 def delete_conversation(
     conversation_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Delete a conversation and all its messages (only if it belongs to the current user)."""
+    """Delete one of the caller's conversations with all its messages.
+
+    Admin-only (super_admin / organization_admin): normal users must not be
+    able to delete their conversation history.
+    """
     conversation = (
         db.query(ChatConversation)
         .filter(

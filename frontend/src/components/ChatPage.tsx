@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { VoiceProvider, useVoice } from '@humeai/voice-react';
+import { useAuth } from '../contexts/AuthContext';
+import { isAdmin } from '../services/auth';
 import type { ChatMessage } from '../services/api';
 import { getAvatarImageUrl } from '../services/api';
 import {
@@ -14,6 +16,8 @@ import {
 } from '../hooks/useApi';
 import VoiceButton from './VoiceButton';
 import EvaluationModal from './EvaluationModal';
+import MessageEmotions, { splitEmotionTag } from './MessageEmotions';
+import Tooltip from './Tooltip';
 import { categoryBadgeClasses } from './categoryStyles';
 
 function TypingIndicator() {
@@ -28,7 +32,9 @@ function TypingIndicator() {
 
 export default function ChatPage() {
   return (
-    <VoiceProvider>
+    // Default messageHistoryLimit is 100 EVENTS (not turns): a long call
+    // exceeds it and the SDK starts dropping from the front of the array
+    <VoiceProvider messageHistoryLimit={1000}>
       <ChatPageContent />
     </VoiceProvider>
   );
@@ -36,6 +42,8 @@ export default function ChatPage() {
 
 function ChatPageContent() {
   const { avatarId } = useParams<{ avatarId: string }>();
+  const { user } = useAuth();
+  const canDeleteConversations = isAdmin(user);
 
   // ── TanStack queries ──────────────────────────────
   const { data: avatar, isError: avatarError } = useAvatar(avatarId);
@@ -199,15 +207,14 @@ function ChatPageContent() {
               {avatar.category}
             </span>
             {avatar.difficulty && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[0.7rem] font-semibold text-orange-400"
-                title="Grado di difficoltà dello scenario"
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
-                </svg>
-                Difficoltà: {avatar.difficulty}
-              </span>
+              <Tooltip content="Grado di difficoltà dello scenario">
+                <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[0.7rem] font-semibold text-orange-400">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
+                  </svg>
+                  Difficoltà: {avatar.difficulty}
+                </span>
+              </Tooltip>
             )}
           </div>
           <p className="text-[0.8rem] leading-normal text-slate-500">{avatar.description}</p>
@@ -251,16 +258,18 @@ function ChatPageContent() {
                         {formatDate(conv.updated_at)} · {conv.message_count} msg
                       </span>
                     </div>
-                    <button
-                      className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-500 group-hover/conv:opacity-100"
-                      onClick={(e) => handleDeleteConversation(conv.id, e)}
-                      aria-label="Elimina conversazione"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
+                    {canDeleteConversations && (
+                      <button
+                        className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-500 group-hover/conv:opacity-100"
+                        onClick={(e) => handleDeleteConversation(conv.id, e)}
+                        aria-label="Elimina conversazione"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -318,20 +327,21 @@ function ChatPageContent() {
           </div>
           <div className="flex items-center gap-2">
             {evaluation && !voiceActive && (
-              <button
-                className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400 transition hover:-translate-y-px hover:bg-cyan-500/20"
-                onClick={() => {
-                  evaluateMutation.reset();
-                  setShowEvaluation(true);
-                }}
-                title="Rivedi la valutazione della conversazione"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 11l3 3L22 4" />
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                </svg>
-                Valutazione · {evaluation.overall_score.toLocaleString('it-IT', { maximumFractionDigits: 1 })}/10
-              </button>
+              <Tooltip content="Rivedi la valutazione della conversazione">
+                <button
+                  className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400 transition hover:-translate-y-px hover:bg-cyan-500/20"
+                  onClick={() => {
+                    evaluateMutation.reset();
+                    setShowEvaluation(true);
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 11l3 3L22 4" />
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                  </svg>
+                  Valutazione · {evaluation.overall_score.toLocaleString('it-IT', { maximumFractionDigits: 1 })}/10
+                </button>
+              </Tooltip>
             )}
           </div>
         </header>
@@ -366,33 +376,38 @@ function ChatPageContent() {
             </div>
           )}
 
-          {messages.map((msg, index) => (
-            <div
-              key={msg.id}
-              className={`flex max-w-[75%] animate-message-in gap-2 max-[900px]:max-w-[90%] ${
-                msg.role === 'user' ? 'flex-row-reverse self-end' : 'self-start'
-              }`}
-              style={{ animationDelay: `${index * 0.05}s` }}
-            >
-              {msg.role === 'assistant' && (
-                <div className="mt-1 h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-white/6">
-                  <img className="h-full w-full object-cover" src={getAvatarImageUrl(avatar.image_url)} alt={avatar.name} />
-                </div>
-              )}
+          {messages.map((msg, index) => {
+            const { text, emotions } =
+              msg.role === 'user' ? splitEmotionTag(msg.content) : { text: msg.content, emotions: [] };
+            return (
               <div
-                className={`relative rounded-2xl px-6 py-4 leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'rounded-br-[4px] bg-gradient-to-br from-violet-600 to-violet-700 text-white'
-                    : 'rounded-bl-[4px] border border-white/6 bg-slate-800/70 text-slate-100 backdrop-blur-md'
+                key={msg.id}
+                className={`flex max-w-[75%] animate-message-in gap-2 max-[900px]:max-w-[90%] ${
+                  msg.role === 'user' ? 'flex-row-reverse self-end' : 'self-start'
                 }`}
+                style={{ animationDelay: `${index * 0.05}s` }}
               >
-                <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
-                <span className={`mt-1 block text-[0.65rem] opacity-60 ${msg.role === 'user' ? 'text-right text-white/70' : 'text-slate-500'}`}>
-                  {formatTime(msg.created_at)}
-                </span>
+                {msg.role === 'assistant' && (
+                  <div className="mt-1 h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-white/6">
+                    <img className="h-full w-full object-cover" src={getAvatarImageUrl(avatar.image_url)} alt={avatar.name} />
+                  </div>
+                )}
+                <div
+                  className={`relative rounded-2xl px-6 py-4 leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'rounded-br-[4px] bg-gradient-to-br from-violet-600 to-violet-700 text-white'
+                      : 'rounded-bl-[4px] border border-white/6 bg-slate-800/70 text-slate-100 backdrop-blur-md'
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap break-words text-sm">{text}</p>
+                  <MessageEmotions emotions={emotions} />
+                  <span className={`mt-1 block text-[0.65rem] opacity-60 ${msg.role === 'user' ? 'text-right text-white/70' : 'text-slate-500'}`}>
+                    {formatTime(msg.created_at)}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <div ref={messagesEndRef} />
         </div>

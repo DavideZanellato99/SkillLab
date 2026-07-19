@@ -59,6 +59,10 @@ class VoiceSession:
     user_id: str
     avatar_id: str
     conversation_id: str
+    # Snapshot of the avatar's persona sheet taken when the session starts:
+    # the CLM endpoint reads it from here, keeping the per-turn hot path
+    # free of avatar lookups.
+    avatar_profile: dict = field(default_factory=dict)
     # Snapshot of the DB history taken when the session starts. During the
     # session Hume sends the live transcript, so we never re-read the DB.
     prior_history: list[dict] = field(default_factory=list)
@@ -72,7 +76,11 @@ _sessions_lock = threading.Lock()
 
 
 def create_voice_session(
-    user_id: str, avatar_id: str, conversation_id: str, prior_history: list[dict]
+    user_id: str,
+    avatar_id: str,
+    conversation_id: str,
+    avatar_profile: dict,
+    prior_history: list[dict],
 ) -> str:
     """Register a new voice session and return its unguessable id."""
     session_id = secrets.token_urlsafe(24)
@@ -87,6 +95,7 @@ def create_voice_session(
             user_id=user_id,
             avatar_id=avatar_id,
             conversation_id=conversation_id,
+            avatar_profile=avatar_profile,
             prior_history=prior_history,
         )
     return session_id

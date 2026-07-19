@@ -1,6 +1,7 @@
 /* Admin API service for managing users */
 import { apiFetch } from './api';
-import type { AuthUser, RoleName } from './auth';
+import type { ChatMessage, ConversationEvaluation } from './api';
+import type { AuthUser, RoleName, UserStatus } from './auth';
 
 export interface CreateUserPayload {
   email: string;
@@ -45,6 +46,27 @@ export const updateUser = (userId: string, payload: UpdateUserPayload) =>
 export const deleteUser = (userId: string) =>
   apiFetch<{ message: string; success: boolean }>(`/api/admin/users/${userId}`, {
     method: 'DELETE',
+  });
+
+/**
+ * Change an account's state (Super Admin only): 'suspended' is reversible,
+ * 'disabled' is final. Any non-active state blocks login and kills the
+ * user's open sessions immediately.
+ */
+export const setUserStatus = (userId: string, status: UserStatus) =>
+  apiFetch<AuthUser>(`/api/admin/users/${userId}/status`, {
+    method: 'PUT',
+    body: { status },
+  });
+
+/**
+ * Send the user a fresh temporary password via Cognito email (Super Admin
+ * only). The old credentials stop working; on the next login the user must
+ * set a new password.
+ */
+export const resendUserCredentials = (userId: string) =>
+  apiFetch<{ message: string; success: boolean }>(`/api/admin/users/${userId}/resend-credentials`, {
+    method: 'POST',
   });
 
 // ── Avatar CRUD (super admin only) ───────────────────
@@ -151,5 +173,18 @@ export interface EvaluationReportRow {
  * Fetch every evaluated conversation with its scores — the data source for
  * the dashboard charts (Super Admin + Organization Admin).
  */
+export interface AdminConversationDetail {
+  conversation_id: string;
+  messages: ChatMessage[];
+  evaluation: ConversationEvaluation | null;
+}
+
+/**
+ * Fetch the full transcript + stored evaluation of any conversation
+ * (Super Admin + Organization Admin) — used by the dashboard detail modal.
+ */
+export const fetchAdminConversation = (conversationId: string) =>
+  apiFetch<AdminConversationDetail>(`/api/admin/conversations/${conversationId}`);
+
 export const fetchEvaluationsReport = () =>
   apiFetch<EvaluationReportRow[]>('/api/admin/evaluations-report');

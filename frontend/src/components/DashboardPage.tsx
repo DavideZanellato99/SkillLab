@@ -3,10 +3,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { fetchEvaluationsReport } from '../services/admin';
 import type { EvaluationReportRow } from '../services/admin';
 import { isAdmin } from '../services/auth';
-import Select from './Select';
+import SearchSelect from './SearchSelect';
+import DataTable, { Td, Tr } from './DataTable';
+import Tooltip from './Tooltip';
+import { matchesSearch } from './tableSearch';
+import ConversationDetailModal from './ConversationDetailModal';
 
 /* Dashboard admin: grafici di riepilogo sui punteggi delle valutazioni,
- * globali o filtrati per singolo utente tramite il dropdown in alto. */
+ * globali o filtrati per singolo utente tramite la ricerca in alto. */
 
 const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md';
 
@@ -268,7 +272,9 @@ function MeterRow({
       } ${highlighted ? 'bg-white/4' : ''}`}
     >
       <div className="min-w-0">
-        <p className="truncate text-[0.82rem] font-medium text-slate-300" title={label}>{label}</p>
+        <Tooltip content={label}>
+          <p className="truncate text-[0.82rem] font-medium text-slate-300">{label}</p>
+        </Tooltip>
         {sub && <p className="truncate text-[0.68rem] text-slate-500">{sub}</p>}
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white/6">
@@ -301,6 +307,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [search, setSearch] = useState('');
+  const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null);
 
   useEffect(() => {
     if (!isAdmin(user)) return;
@@ -324,7 +332,7 @@ export default function DashboardPage() {
     };
   }, [user]);
 
-  /* Utenti presenti nelle valutazioni (per il dropdown) */
+  /* Utenti presenti nelle valutazioni (per la ricerca utente) */
   const usersInData = useMemo(() => {
     const map = new Map<string, { name: string; email: string }>();
     for (const r of rows) {
@@ -429,6 +437,14 @@ export default function DashboardPage() {
     [filtered],
   );
 
+  const searchedRows = useMemo(
+    () =>
+      detailRows.filter((r) =>
+        matchesSearch(search, displayName(r), r.user_email, r.avatar_name, formatDateTime(r.conversation_at)),
+      ),
+    [detailRows, search],
+  );
+
   if (!isAdmin(user)) {
     return (
       <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
@@ -491,15 +507,14 @@ export default function DashboardPage() {
             <label htmlFor="dashboard-user-filter" className="text-xs font-medium tracking-wide text-slate-400">
               Utente
             </label>
-            <Select
+            <SearchSelect
               id="dashboard-user-filter"
               value={selectedUserId}
               onChange={setSelectedUserId}
-              options={[
-                { value: '', label: 'Tutti gli utenti' },
-                ...usersInData.map((u) => ({ value: u.id, label: u.name })),
-              ]}
-              className="min-w-[220px]"
+              options={usersInData.map((u) => ({ value: u.id, label: u.name, sub: u.email }))}
+              placeholder="Cerca per nome o email..."
+              emptyHint="Tutti gli utenti"
+              className="w-full max-w-[440px]"
             />
           </div>
 
@@ -523,9 +538,11 @@ export default function DashboardPage() {
             <KpiCard label="Criterio più forte">
               {bestCriterion ? (
                 <>
-                  <p className="truncate text-[0.95rem] font-semibold text-slate-100" title={bestCriterion.label}>
-                    {bestCriterion.label}
-                  </p>
+                  <Tooltip content={bestCriterion.label}>
+                    <p className="truncate text-[0.95rem] font-semibold text-slate-100">
+                      {bestCriterion.label}
+                    </p>
+                  </Tooltip>
                   <p className={`mt-1 text-xl font-bold ${scoreTextColor(bestCriterion.avg)}`}>
                     {formatScore(bestCriterion.avg)}
                     <span className="text-xs font-medium text-slate-500"> /10</span>
@@ -538,9 +555,11 @@ export default function DashboardPage() {
             <KpiCard label="Criterio più debole">
               {worstCriterion ? (
                 <>
-                  <p className="truncate text-[0.95rem] font-semibold text-slate-100" title={worstCriterion.label}>
-                    {worstCriterion.label}
-                  </p>
+                  <Tooltip content={worstCriterion.label}>
+                    <p className="truncate text-[0.95rem] font-semibold text-slate-100">
+                      {worstCriterion.label}
+                    </p>
+                  </Tooltip>
                   <p className={`mt-1 text-xl font-bold ${scoreTextColor(worstCriterion.avg)}`}>
                     {formatScore(worstCriterion.avg)}
                     <span className="text-xs font-medium text-slate-500"> /10</span>
@@ -567,98 +586,103 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="mb-6 grid grid-cols-2 gap-6 max-lg:grid-cols-1">
-            {/* Media per criterio */}
-            <div className={cardCls}>
-              <h2 className="text-sm font-semibold text-slate-300">Media per criterio</h2>
-              <p className="mb-4 text-xs text-slate-500">
-                Punteggio medio dei 5 criteri di valutazione
-              </p>
-              <div className="flex flex-col gap-1.5">
-                {criteriaAvgs.map((c) => (
-                  <MeterRow key={c.key} label={c.label} score={c.avg} />
-                ))}
-              </div>
+          {/* Media per criterio */}
+          <div className={`${cardCls} mb-6`}>
+            <h2 className="text-sm font-semibold text-slate-300">Media per criterio</h2>
+            <p className="mb-4 text-xs text-slate-500">
+              Punteggio medio dei 5 criteri di valutazione
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {criteriaAvgs.map((c) => (
+                <MeterRow key={c.key} label={c.label} score={c.avg} />
+              ))}
             </div>
+          </div>
 
-            {/* Confronto tra utenti */}
-            <div className={cardCls}>
-              <h2 className="text-sm font-semibold text-slate-300">Confronto tra utenti</h2>
-              <p className="mb-4 text-xs text-slate-500">
-                Voto medio complessivo per utente, su tutte le valutazioni
-              </p>
-              <div className="flex flex-col gap-1.5">
-                {userAvgs.map((u) => (
-                  <MeterRow
-                    key={u.userId}
-                    label={u.name}
-                    sub={`${u.count} ${u.count === 1 ? 'valutazione' : 'valutazioni'}`}
-                    score={u.avg}
-                    dimmed={selectedUserId !== '' && u.userId !== selectedUserId}
-                    highlighted={selectedUserId !== '' && u.userId === selectedUserId}
-                  />
-                ))}
-              </div>
+          {/* Confronto tra utenti */}
+          <div className={`${cardCls} mb-6`}>
+            <h2 className="text-sm font-semibold text-slate-300">Confronto tra utenti</h2>
+            <p className="mb-4 text-xs text-slate-500">
+              Voto medio complessivo per utente, su tutte le valutazioni
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {userAvgs.map((u) => (
+                <MeterRow
+                  key={u.userId}
+                  label={u.name}
+                  sub={`${u.count} ${u.count === 1 ? 'valutazione' : 'valutazioni'}`}
+                  score={u.avg}
+                  dimmed={selectedUserId !== '' && u.userId !== selectedUserId}
+                  highlighted={selectedUserId !== '' && u.userId === selectedUserId}
+                />
+              ))}
             </div>
           </div>
 
           {/* Vista tabellare: tutti i valori raggiungibili senza hover */}
-          <div className="overflow-x-auto rounded-2xl border border-white/6 bg-gray-900/60 backdrop-blur-md">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr>
-                  <th className="border-b border-white/6 bg-gray-900/80 px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Data</th>
-                  <th className="border-b border-white/6 bg-gray-900/80 px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Utente</th>
-                  <th className="border-b border-white/6 bg-gray-900/80 px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Avatar</th>
-                  {criteriaAvgs.map((c) => (
-                    <th
-                      key={c.key}
-                      className="border-b border-white/6 bg-gray-900/80 px-3 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400"
-                      title={c.label}
-                    >
-                      {c.label.split(' ')[0]}
-                    </th>
-                  ))}
-                  <th className="border-b border-white/6 bg-gray-900/80 px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Voto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detailRows.map((r) => (
-                  <tr key={r.conversation_id} className="transition hover:[&>td]:bg-white/4">
-                    <td className="border-b border-white/6 px-6 py-3 text-[0.82rem] text-slate-400">
-                      {formatDateTime(r.conversation_at)}
-                    </td>
-                    <td className="border-b border-white/6 px-6 py-3">
-                      <span className="text-[0.85rem] font-medium text-slate-100">{displayName(r)}</span>
-                    </td>
-                    <td className="border-b border-white/6 px-6 py-3 text-[0.82rem] text-slate-400">
-                      {r.avatar_name}
-                    </td>
-                    {criteriaAvgs.map((c) => {
-                      const crit = r.criteria.find((rc) => rc.key === c.key);
-                      return (
-                        <td key={c.key} className="border-b border-white/6 px-3 py-3 text-center">
-                          {crit ? (
-                            <span className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(crit.score)}`}>
-                              {formatScore(crit.score)}
-                            </span>
-                          ) : (
-                            <span className="text-slate-600">—</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="border-b border-white/6 px-6 py-3 text-right">
-                      <span className={`text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}>
-                        {formatScore(r.overall_score)}/10
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={[
+              { key: 'data', label: 'Data' },
+              { key: 'utente', label: 'Utente' },
+              { key: 'avatar', label: 'Avatar' },
+              ...criteriaAvgs.map((c) => ({
+                key: c.key,
+                label: c.label.split(' ')[0],
+                title: c.label,
+                align: 'center' as const,
+                compact: true,
+              })),
+              { key: 'voto', label: 'Voto', align: 'right' },
+            ]}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Cerca per utente o avatar..."
+            isEmpty={searchedRows.length === 0}
+            emptyMessage={
+              search
+                ? 'Nessuna valutazione corrisponde alla ricerca.'
+                : 'Nessuna valutazione per la selezione corrente.'
+            }
+          >
+            {searchedRows.map((r) => (
+              <Tooltip key={r.conversation_id} content="Vedi conversazione e valutazione" anchor="cursor">
+                <Tr
+                  className="cursor-pointer"
+                  onClick={() => setDetailRow(r)}
+                >
+                <Td className="text-[0.82rem] text-slate-400">{formatDateTime(r.conversation_at)}</Td>
+                <Td>
+                  <span className="text-[0.85rem] font-medium text-slate-100">{displayName(r)}</span>
+                </Td>
+                <Td className="text-[0.82rem] text-slate-400">{r.avatar_name}</Td>
+                {criteriaAvgs.map((c) => {
+                  const crit = r.criteria.find((rc) => rc.key === c.key);
+                  return (
+                    <Td key={c.key} align="center" compact>
+                      {crit ? (
+                        <span className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(crit.score)}`}>
+                          {formatScore(crit.score)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
+                    </Td>
+                  );
+                })}
+                  <Td align="right">
+                    <span className={`text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}>
+                      {formatScore(r.overall_score)}/10
+                    </span>
+                  </Td>
+                </Tr>
+              </Tooltip>
+            ))}
+          </DataTable>
         </>
+      )}
+
+      {detailRow && (
+        <ConversationDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
       )}
     </div>
   );

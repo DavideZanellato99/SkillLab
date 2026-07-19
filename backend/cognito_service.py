@@ -79,6 +79,10 @@ def authenticate(email: str, password: str) -> dict:
                     "La password temporanea è scaduta. "
                     "Contatta l'amministratore per ricevere un nuovo invito."
                 )
+            if "disabled" in error_message.lower():
+                raise RuntimeError(
+                    "L'account è stato sospeso o disabilitato. Contatta l'amministratore."
+                )
             raise RuntimeError("Email o password non corretti.")
         elif error_code == "UserNotFoundException":
             raise RuntimeError("Email o password non corretti.")
@@ -301,6 +305,96 @@ def admin_create_user(email: str) -> str:
         raise RuntimeError("Impossibile ottenere il cognito_sub dell'utente creato.")
 
     return cognito_sub
+
+
+def admin_set_user_enabled(email: str, enabled: bool) -> None:
+    """
+    Enable or disable sign-in for the user on Cognito.
+
+    Disabling immediately blocks new logins and refresh-token use. A user
+    missing on Cognito is tolerated (local-only accounts): the local status
+    flag still enforces the block on every authenticated request.
+    Raises RuntimeError on any other failure.
+    """
+    try:
+        if enabled:
+            _cognito_client.admin_enable_user(
+                UserPoolId=COGNITO_USER_POOL_ID, Username=email
+            )
+        else:
+            _cognito_client.admin_disable_user(
+                UserPoolId=COGNITO_USER_POOL_ID, Username=email
+            )
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "UserNotFoundException":
+            return
+        action = "riattivazione" if enabled else "sospensione"
+        raise RuntimeError(
+            f"Errore nella {action} su Cognito: {e.response['Error']['Message']}"
+        )
+    except Exception as e:
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+
+
+def admin_resend_credentials(email: str) -> str:
+    """
+    Send the user a fresh temporary password via Cognito email.
+
+    Two cases, depending on the account state:
+    - The user has never completed the first login (FORCE_CHANGE_PASSWORD):
+      the invitation is re-sent (MessageAction=RESEND) — Cognito generates
+      a new temporary password and emails it; the previous temporary
+      password stops working.
+    - The user already set a permanent password (CONFIRMED): Cognito has no
+      re-invite for confirmed accounts, so the account is recreated
+      (delete + create) and Cognito emails a brand-new temporary password.
+      The old password and any active session stop working; on the next
+      login the user is forced to choose a new password.
+
+    Returns the (possibly new) cognito sub: the caller MUST persist it,
+    because recreation changes it.
+    Raises RuntimeError on failure.
+    """
+    try:
+        cognito_user = _cognito_client.admin_get_user(
+            UserPoolId=COGNITO_USER_POOL_ID,
+            Username=email,
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "UserNotFoundException":
+            # Orphan account (e.g. a previous recreation failed halfway):
+            # create it again so the invitation goes out anyway
+            return admin_create_user(email)
+        raise RuntimeError(
+            f"Errore nella lettura dell'utente da Cognito: {e.response['Error']['Message']}"
+        )
+    except Exception as e:
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+
+    if cognito_user.get("UserStatus") == "FORCE_CHANGE_PASSWORD":
+        try:
+            _cognito_client.admin_create_user(
+                UserPoolId=COGNITO_USER_POOL_ID,
+                Username=email,
+                MessageAction="RESEND",
+                DesiredDeliveryMediums=["EMAIL"],
+            )
+        except ClientError as e:
+            raise RuntimeError(
+                f"Errore nel rinvio dell'invito: {e.response['Error']['Message']}"
+            )
+        except Exception as e:
+            raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+
+        for attr in cognito_user.get("UserAttributes", []):
+            if attr["Name"] == "sub":
+                return attr["Value"]
+        raise RuntimeError("Impossibile ottenere il cognito_sub dell'utente.")
+
+    # CONFIRMED (or any other state): recreate the account to trigger a new
+    # invitation email with a temporary password
+    admin_delete_user(email)
+    return admin_create_user(email)
 
 
 def admin_delete_user(email: str) -> None:

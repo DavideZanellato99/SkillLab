@@ -17,6 +17,9 @@ from models import (
     ConversationEvaluation,
     ALL_ROLES,
     ROLE_SUPER_ADMIN,
+    ALL_USER_STATUSES,
+    USER_STATUS_ACTIVE,
+    USER_STATUS_DISABLED,
 )
 from auth_dependency import (
     get_current_super_admin,
@@ -24,17 +27,26 @@ from auth_dependency import (
     get_role_by_name,
     MOCK_ADMIN_SUB,
 )
-from cognito_service import admin_create_user, admin_delete_user
+from cognito_service import (
+    admin_create_user,
+    admin_delete_user,
+    admin_resend_credentials,
+    admin_set_user_enabled,
+)
 from schemas import (
     CreateUserRequest,
     UpdateUserRequest,
+    UpdateUserStatusRequest,
     UserResponse,
     MessageResponse,
     ConversationReport,
     UserActivityReport,
     EvaluationCriterionScore,
     EvaluationReportRow,
+    AdminConversationDetail,
+    ChatMessageResponse,
 )
+from routers.chat import _evaluation_response
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -182,6 +194,42 @@ def evaluations_report(
     ]
 
 
+@router.get("/conversations/{conversation_id}", response_model=AdminConversationDetail)
+def conversation_detail(
+    conversation_id: UUID,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Full transcript and stored evaluation of a single conversation (Super
+    Admin + Organization Admin) — backs the dashboard detail modal.
+    """
+    conversation = (
+        db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
+    )
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
+        )
+
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.conversation_id == conversation_id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+    evaluation = (
+        db.query(ConversationEvaluation)
+        .filter(ConversationEvaluation.conversation_id == conversation_id)
+        .first()
+    )
+    return AdminConversationDetail(
+        conversation_id=conversation.id,
+        messages=[ChatMessageResponse.model_validate(m) for m in messages],
+        evaluation=_evaluation_response(evaluation) if evaluation else None,
+    )
+
+
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     request: CreateUserRequest,
@@ -258,6 +306,114 @@ def update_user(
     db.commit()
     db.refresh(user)
     return UserResponse.model_validate(user)
+
+
+@router.put("/users/{user_id}/status", response_model=UserResponse)
+def set_user_status(
+    user_id: UUID,
+    request: UpdateUserStatusRequest,
+    current_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Change an account's state (Super Admin only): suspend (reversible),
+    reactivate, or disable permanently. Any non-active state blocks new
+    logins on Cognito AND kills the sessions already open. A disabled
+    account is final: it can only be deleted.
+    """
+    user = _get_user_or_404(db, user_id)
+
+    if user.id == current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Non puoi modificare lo stato del tuo stesso account.",
+        )
+    if user.cognito_sub == MOCK_ADMIN_SUB:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Non è possibile modificare lo stato dell'account di sistema.",
+        )
+    if request.status not in ALL_USER_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Lo stato deve essere uno tra: {', '.join(ALL_USER_STATUSES)}.",
+        )
+    if user.status == USER_STATUS_DISABLED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'account è disabilitato definitivamente e non può cambiare stato.",
+        )
+
+    if request.status != user.status:
+        try:
+            admin_set_user_enabled(user.email, enabled=request.status == USER_STATUS_ACTIVE)
+        except RuntimeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(e),
+            )
+        user.status = request.status
+        db.commit()
+        db.refresh(user)
+
+    return UserResponse.model_validate(user)
+
+
+@router.post("/users/{user_id}/resend-credentials", response_model=MessageResponse)
+def resend_credentials(
+    user_id: UUID,
+    current_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Send the user a fresh temporary password via Cognito email (Super Admin
+    only). Works both before the first login (the invitation is re-sent)
+    and after (the account is re-invited): in both cases only the emailed
+    temporary password is accepted from now on, and on the next login the
+    user must set a new password.
+    """
+    user = _get_user_or_404(db, user_id)
+
+    if user.id == current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Non puoi rinviare le credenziali del tuo stesso account.",
+        )
+    if user.cognito_sub == MOCK_ADMIN_SUB:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Non è possibile rinviare le credenziali dell'account di sistema.",
+        )
+    # A resend on a confirmed account recreates it on Cognito, which would
+    # silently re-enable a suspended/disabled login: block it explicitly.
+    if user.status != USER_STATUS_ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'account non è attivo: riattivalo prima di rinviare le credenziali.",
+        )
+
+    try:
+        new_sub = admin_resend_credentials(user.email)
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e),
+        )
+
+    # Re-invited confirmed accounts get a new Cognito identity: persist it
+    # (this also kills any session still bound to the old sub)
+    if new_sub != user.cognito_sub:
+        user.cognito_sub = new_sub
+        db.commit()
+
+    return MessageResponse(
+        message=(
+            f"Nuova password temporanea inviata a {user.email}. "
+            "Le vecchie credenziali non sono più valide: al prossimo accesso "
+            "l'utente dovrà impostare una nuova password."
+        ),
+        success=True,
+    )
 
 
 @router.delete("/users/{user_id}", response_model=MessageResponse)

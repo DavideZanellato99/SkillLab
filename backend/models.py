@@ -13,6 +13,14 @@ ROLE_ORGANIZATION_ADMIN = "organization_admin"
 ROLE_USER = "user"
 ALL_ROLES = [ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN, ROLE_USER]
 
+# Account states: suspended is reversible, disabled is final (the account
+# can only be deleted). Any non-active state blocks login AND kills the
+# sessions already open (checked on every authenticated request).
+USER_STATUS_ACTIVE = "active"
+USER_STATUS_SUSPENDED = "suspended"
+USER_STATUS_DISABLED = "disabled"
+ALL_USER_STATUSES = [USER_STATUS_ACTIVE, USER_STATUS_SUSPENDED, USER_STATUS_DISABLED]
+
 
 class Role(Base):
     """A system role assignable to users."""
@@ -40,6 +48,7 @@ class User(Base):
     nome = Column(String(100), nullable=False, default="")
     cognome = Column(String(100), nullable=False, default="")
     role_id = Column(Uuid, ForeignKey("roles.id"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default=USER_STATUS_ACTIVE)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime,

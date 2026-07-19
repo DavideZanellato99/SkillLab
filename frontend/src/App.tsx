@@ -14,18 +14,16 @@ import './index.css';
 
 function HomePage() {
   const [totalAvatars, setTotalAvatars] = useState(0);
-  const [totalSelections, setTotalSelections] = useState(0);
   const [totalCategories, setTotalCategories] = useState(0);
 
-  const handleStatsUpdate = useCallback((avatars: number, selections: number, categories: number) => {
+  const handleStatsUpdate = useCallback((avatars: number, categories: number) => {
     setTotalAvatars(avatars);
-    setTotalSelections(selections);
     setTotalCategories(categories);
   }, []);
 
   return (
     <>
-      <Header totalAvatars={totalAvatars} totalSelections={totalSelections} totalCategories={totalCategories} />
+      <Header totalAvatars={totalAvatars} totalCategories={totalCategories} />
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 pb-12 max-md:p-4">
         <AvatarGallery onStatsUpdate={handleStatsUpdate} />
       </main>

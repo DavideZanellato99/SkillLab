@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Avatar } from '../services/api';
 import { getAvatarImageUrl } from '../services/api';
 import { categoryBadgeClasses } from './categoryStyles';
+import Tooltip from './Tooltip';
 
 interface AvatarCardProps {
   avatar: Avatar;
@@ -58,28 +59,21 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
             {avatar.category}
           </span>
           {avatar.difficulty && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[0.7rem] font-semibold text-orange-400"
-              title="Grado di difficoltà dello scenario"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
-              </svg>
-              Difficoltà: {avatar.difficulty}
-            </span>
+            <Tooltip content="Grado di difficoltà dello scenario">
+              <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[0.7rem] font-semibold text-orange-400">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
+                </svg>
+                Difficoltà: {avatar.difficulty}
+              </span>
+            </Tooltip>
           )}
         </div>
         <h3 className="mb-1 font-heading text-lg font-bold text-slate-100">{avatar.name}</h3>
         <p className="line-clamp-2 text-[0.82rem] leading-normal text-slate-500">{avatar.description}</p>
       </div>
 
-      <div className="flex items-center justify-between px-6 pb-6 pt-2">
-        <span className="flex items-center gap-1 text-xs text-slate-500">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-          </svg>
-          {avatar.selection_count} {avatar.selection_count === 1 ? 'selezione' : 'selezioni'}
-        </span>
+      <div className="flex items-center justify-end px-6 pb-6 pt-2">
         <span className="flex items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1 text-[0.8rem] font-medium text-slate-500 transition group-hover:scale-105 group-hover:border-violet-600 group-hover:bg-violet-600/15 group-hover:text-violet-400">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />

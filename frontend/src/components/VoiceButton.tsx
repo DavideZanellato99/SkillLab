@@ -3,6 +3,7 @@ import { useVoice } from '@humeai/voice-react';
 import { startVoiceSession } from '../services/voice';
 import { startRingback, type Ringback } from '../services/ringtone';
 import type { ChatMessage } from '../services/api';
+import Tooltip from './Tooltip';
 
 type VoiceUiState = 'idle' | 'ringing' | 'listening' | 'processing' | 'speaking';
 
@@ -68,32 +69,33 @@ export default function VoiceButton({
   const [isRinging, setIsRinging] = useState(false);
   const ringbackRef = useRef<Ringback | null>(null);
   const callCancelledRef = useRef(false);
-  const processedCount = useRef(0);
+  // SDK messages already forwarded as chat bubbles, tracked per object:
+  // the SDK also mutates its array in place (interim replacement, history
+  // limit trimming), so an index cursor would silently skip messages
+  const forwardedMessages = useRef(new WeakSet<object>());
   const wasConnected = useRef(false);
 
   const isConnected = status.value === 'connected';
 
-  // Forward live transcripts (user + assistant) as chat bubbles
+  // Forward live transcripts (user + assistant) as chat bubbles. Interim
+  // user messages are skipped: only the final transcript of each turn
+  // becomes a bubble, so it is always complete.
   useEffect(() => {
-    // The SDK clears messages on disconnect — reset the cursor
-    if (messages.length < processedCount.current) {
-      processedCount.current = 0;
-    }
-    for (let i = processedCount.current; i < messages.length; i++) {
-      const m = messages[i];
-      if (m.type === 'user_message' || m.type === 'assistant_message') {
-        const content = m.message.content ?? '';
-        if (content.trim()) {
-          onTranscript({
-            id: `voice-${crypto.randomUUID()}`,
-            role: m.type === 'user_message' ? 'user' : 'assistant',
-            content,
-            created_at: new Date().toISOString(),
-          });
-        }
+    for (const m of messages) {
+      if (m.type !== 'user_message' && m.type !== 'assistant_message') continue;
+      if (m.type === 'user_message' && m.interim) continue;
+      if (forwardedMessages.current.has(m)) continue;
+      forwardedMessages.current.add(m);
+      const content = m.message.content ?? '';
+      if (content.trim()) {
+        onTranscript({
+          id: `voice-${crypto.randomUUID()}`,
+          role: m.type === 'user_message' ? 'user' : 'assistant',
+          content,
+          created_at: new Date().toISOString(),
+        });
       }
     }
-    processedCount.current = messages.length;
   }, [messages, onTranscript]);
 
   // Surface SDK errors (socket, mic, audio) to the chat error area
@@ -222,6 +224,7 @@ export default function VoiceButton({
           {label}
         </span>
       )}
+      <Tooltip content={callActive ? 'Riaggancia' : 'Chiama l’avatar'}>
       <button
         className={`flex h-16 cursor-pointer items-center justify-center rounded-full border-none text-white transition ${
           callActive
@@ -233,7 +236,6 @@ export default function VoiceButton({
         onClick={handleClick}
         id="voice-btn"
         aria-label={callActive ? 'Riaggancia' : 'Chiama l’avatar'}
-        title={callActive ? 'Riaggancia' : 'Chiama l’avatar'}
       >
         {callActive ? (
           /* Hang-up icon (rotated phone) */
@@ -250,6 +252,7 @@ export default function VoiceButton({
           </>
         )}
       </button>
+      </Tooltip>
     </div>
   );
 }

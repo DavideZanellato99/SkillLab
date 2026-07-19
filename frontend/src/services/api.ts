@@ -2,7 +2,10 @@
 
 import { refreshSession } from './auth';
 
-const API_BASE_URL = 'http://localhost:8000';
+// Empty base URL: requests are same-origin and the Vite dev server proxies
+// /api and /static to the backend (see vite.config.ts). This lets the app
+// work through tunnels (cloudflared) without touching CORS.
+const API_BASE_URL = '';
 
 // =====================================================
 //  TYPES

@@ -11,6 +11,10 @@ import { isSuperAdmin } from '../services/auth';
 import { getAvatarImageUrl } from '../services/api';
 import { categoryBadgeClasses } from './categoryStyles';
 import Select from './Select';
+import DataTable, { Td, Tr } from './DataTable';
+import Tooltip from './Tooltip';
+import { matchesSearch } from './tableSearch';
+import type { DataTableColumn } from './DataTable';
 
 /* Shared styles (same look as the users admin page) */
 const fieldCls = 'flex flex-col gap-1.5';
@@ -30,13 +34,20 @@ const modalCloseCls =
 const formErrorCls =
   'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]';
 const spinnerCls = 'h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white';
-const thCls =
-  'border-b border-white/6 bg-gray-900/80 px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-400';
-const tdCls = 'border-b border-white/6 px-6 py-4 align-middle';
 const actionBtnCls =
   'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40';
 const sectionTitleCls =
   'mb-3 mt-2 border-b border-white/6 pb-2 text-[0.72rem] font-semibold uppercase tracking-widest text-violet-400';
+
+const AVATAR_COLUMNS: DataTableColumn[] = [
+  { key: 'avatar', label: 'Avatar' },
+  { key: 'categoria', label: 'Categoria' },
+  { key: 'difficolta', label: 'Difficoltà' },
+  { key: 'voce', label: 'Voce' },
+  { key: 'conversazioni', label: 'Conversazioni', align: 'center' },
+  { key: 'creato', label: 'Creato' },
+  { key: 'azioni', label: 'Azioni', align: 'right' },
+];
 
 /* ── Persona sheet form definition ─────────────────────
  * Every avatar is a training persona: the form is generated from this
@@ -207,6 +218,11 @@ export default function AvatarAdminPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [search, setSearch] = useState('');
+
+  const visibleAvatars = avatars.filter((a) =>
+    matchesSearch(search, a.name, a.description, a.category, a.difficulty),
+  );
 
   // Modal state: 'new' = create, AdminAvatar = edit, null = closed
   const [editing, setEditing] = useState<AdminAvatar | 'new' | null>(null);
@@ -361,98 +377,88 @@ export default function AvatarAdminPage() {
           <p>Caricamento avatar...</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-white/6 bg-gray-900/60 backdrop-blur-md">
-          <table className="w-full border-collapse text-left">
-            <thead>
-              <tr>
-                <th className={thCls}>Avatar</th>
-                <th className={thCls}>Categoria</th>
-                <th className={thCls}>Difficoltà</th>
-                <th className={thCls}>Voce</th>
-                <th className={`${thCls} text-center`}>Conversazioni</th>
-                <th className={thCls}>Creato</th>
-                <th className={`${thCls} text-right`}>Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {avatars.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-16 text-center text-slate-500">
-                    Nessun avatar presente. Crea il primo con "Nuovo Avatar".
-                  </td>
-                </tr>
-              ) : (
-                avatars.map((a) => (
-                  <tr key={a.id} className="last:[&>td]:border-b-0 hover:[&>td]:bg-white/4">
-                    <td className={tdCls}>
-                      <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-white/6">
-                          <img className="h-full w-full object-cover" src={getAvatarImageUrl(a.image_url)} alt={a.name} />
-                        </div>
-                        <div className="flex min-w-0 flex-col">
-                          <span className="truncate font-semibold text-slate-100">{a.name}</span>
-                          {a.description && (
-                            <span className="max-w-[320px] truncate text-xs text-slate-500">{a.description}</span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className={tdCls}>
-                      <span className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${categoryBadgeClasses(a.category)}`}>
-                        {a.category}
-                      </span>
-                    </td>
-                    <td className={tdCls}>
-                      <span className="text-[0.85rem] text-orange-400">{a.difficulty ?? '—'}</span>
-                    </td>
-                    <td className={tdCls}>
-                      {a.voice_id ? (
-                        <code className="rounded-lg bg-white/5 px-2 py-1 text-xs text-violet-400">{a.voice_id.slice(0, 12)}...</code>
-                      ) : (
-                        <span className="text-xs text-slate-500">default</span>
-                      )}
-                    </td>
-                    <td className={`${tdCls} text-center`}>
-                      <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
-                        {a.conversation_count}
-                      </span>
-                    </td>
-                    <td className={tdCls}>
-                      <span className="text-[0.85rem] text-slate-500">
-                        {new Date(a.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </span>
-                    </td>
-                    <td className={tdCls}>
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
-                          onClick={() => openEdit(a)}
-                          title="Modifica avatar"
-                          aria-label={`Modifica ${a.name}`}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                          </svg>
-                        </button>
-                        <button
-                          className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
-                          onClick={() => { setDeleteError(''); setDeleting(a); }}
-                          title="Elimina avatar"
-                          aria-label={`Elimina ${a.name}`}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={AVATAR_COLUMNS}
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Cerca per nome, categoria o difficoltà..."
+          isEmpty={visibleAvatars.length === 0}
+          emptyMessage={
+            search
+              ? 'Nessun avatar corrisponde alla ricerca.'
+              : 'Nessun avatar presente. Crea il primo con "Nuovo Avatar".'
+          }
+        >
+          {visibleAvatars.map((a) => (
+            <Tr key={a.id}>
+              <Td>
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-white/6">
+                    <img className="h-full w-full object-cover" src={getAvatarImageUrl(a.image_url)} alt={a.name} />
+                  </div>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate font-semibold text-slate-100">{a.name}</span>
+                    {a.description && (
+                      <span className="max-w-[320px] truncate text-xs text-slate-500">{a.description}</span>
+                    )}
+                  </div>
+                </div>
+              </Td>
+              <Td>
+                <span className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${categoryBadgeClasses(a.category)}`}>
+                  {a.category}
+                </span>
+              </Td>
+              <Td>
+                <span className="text-[0.85rem] text-orange-400">{a.difficulty ?? '—'}</span>
+              </Td>
+              <Td>
+                {a.voice_id ? (
+                  <code className="rounded-lg bg-white/5 px-2 py-1 text-xs text-violet-400">{a.voice_id.slice(0, 12)}...</code>
+                ) : (
+                  <span className="text-xs text-slate-500">default</span>
+                )}
+              </Td>
+              <Td align="center">
+                <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
+                  {a.conversation_count}
+                </span>
+              </Td>
+              <Td>
+                <span className="text-[0.85rem] text-slate-500">
+                  {new Date(a.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+              </Td>
+              <Td>
+                <div className="flex items-center justify-end gap-2">
+                  <Tooltip content="Modifica avatar">
+                    <button
+                      className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
+                      onClick={() => openEdit(a)}
+                      aria-label={`Modifica ${a.name}`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                      </svg>
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Elimina avatar">
+                    <button
+                      className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
+                      onClick={() => { setDeleteError(''); setDeleting(a); }}
+                      aria-label={`Elimina ${a.name}`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </Tooltip>
+                </div>
+              </Td>
+            </Tr>
+          ))}
+        </DataTable>
       )}
 
       {/* Modal Crea/Modifica Avatar */}
@@ -479,9 +485,6 @@ export default function AvatarAdminPage() {
               <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
                 {editing === 'new' ? 'Crea Nuovo Avatar' : `Modifica ${editing.name}`}
               </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                Il nome dell'avatar viene composto da Nome + Cognome della scheda persona.
-              </p>
             </div>
 
             {formError && <ErrorBox message={formError} />}
@@ -516,7 +519,7 @@ export default function AvatarAdminPage() {
                   </div>
                 </div>
                 <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="av-voice">Voice ID Hume (vuoto = voce di default)</label>
+                  <label className={labelCls} htmlFor="av-voice">Voice ID Hume</label>
                   <div className={inputWrapperCls}>
                     <input
                       type="text"
@@ -530,7 +533,7 @@ export default function AvatarAdminPage() {
                   </div>
                 </div>
                 <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="av-image">URL immagine (vuoto = generata)</label>
+                  <label className={labelCls} htmlFor="av-image">URL immagine</label>
                   <div className={inputWrapperCls}>
                     <input
                       type="text"

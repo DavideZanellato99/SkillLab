@@ -21,6 +21,11 @@ USER_STATUS_SUSPENDED = "suspended"
 USER_STATUS_DISABLED = "disabled"
 ALL_USER_STATUSES = [USER_STATUS_ACTIVE, USER_STATUS_SUSPENDED, USER_STATUS_DISABLED]
 
+# Channel a conversation runs on: a simulated phone call (STT + LLM + TTS)
+# or a written chat with the same avatar (LLM only)
+CONVERSATION_MODE_VOICE = "voice"
+CONVERSATION_MODE_TEXT = "text"
+
 
 class Role(Base):
     """A system role assignable to users."""
@@ -179,6 +184,10 @@ class ChatConversation(Base):
     # Always set: a new conversation is born with a "<Category> <n>" default
     # (see conversation_titles) that the owner can rename, never blank
     title = Column(String(120), nullable=False)
+    # Channel the conversation was opened on, fixed for its whole life: a
+    # phone call (voice) or the written chat (text). The two are never
+    # mixed — the persona prompt and the UI dock both follow this.
+    mode = Column(String(10), nullable=False, default=CONVERSATION_MODE_VOICE)
     # Set when the call hangs up: a closed conversation is a read-only
     # transcript, it can no longer be resumed (only renamed)
     ended_at = Column(DateTime, nullable=True)

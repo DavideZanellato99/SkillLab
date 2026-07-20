@@ -14,6 +14,8 @@ import {
   fetchConversations,
   fetchConversation,
   renameConversation,
+  sendChatMessage,
+  endChatConversation,
   evaluateConversation,
   fetchConversationEvaluation,
 } from '../services/api';
@@ -113,6 +115,55 @@ export function useEvaluateConversation() {
 
     onSuccess: (data, conversationId) => {
       queryClient.setQueryData(queryKeys.evaluations.byConversation(conversationId), data);
+    },
+  });
+}
+
+/**
+ * Send one operator message in a text chat and receive the avatar's reply.
+ *
+ * The conversation list is invalidated on success: the exchange bumps the
+ * message count and the preview, and the very first message also creates
+ * the conversation the list does not know about yet.
+ */
+export function useSendChatMessage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      avatarId,
+      conversationId,
+      content,
+    }: {
+      avatarId: string;
+      conversationId: string | null;
+      content: string;
+    }) => sendChatMessage(avatarId, conversationId, content),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+  });
+}
+
+/** Close a text chat: the transcript becomes final and cannot be resumed. */
+export function useEndChatConversation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (conversationId: string) => endChatConversation(conversationId),
+
+    // Patch the caches with the returned summary instead of refetching, so
+    // ended_at is known at once and the dock stops offering to write more.
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ChatConversationSummary[]>(
+        queryKeys.conversations.byAvatar(updated.avatar_id),
+        (list) => list?.map((conv) => (conv.id === updated.id ? { ...conv, ...updated } : conv)),
+      );
+      queryClient.setQueryData<ChatConversation>(
+        queryKeys.conversations.detail(updated.id),
+        (conv) => (conv ? { ...conv, ended_at: updated.ended_at } : conv),
+      );
     },
   });
 }

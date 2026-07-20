@@ -13,7 +13,12 @@ import os
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
-from persona_prompt import build_persona_prompt, profile_section
+from persona_prompt import (
+    CHANNEL_TEXT,
+    CHANNEL_VOICE,
+    build_persona_prompt,
+    profile_section,
+)
 
 load_dotenv()
 
@@ -97,6 +102,24 @@ def _build_messages(system_prompt: str, messages_history: list[dict]) -> list[di
     return messages
 
 
+def _roleplay_messages(
+    messages_history: list[dict],
+    avatar_profile: dict,
+    channel: str,
+) -> list[dict]:
+    """Preflight the roleplay request and build its messages payload."""
+    if not async_client:
+        raise RuntimeError(
+            "OPENAI_API_KEY non configurata. "
+            "Aggiungi OPENAI_API_KEY al file .env del backend."
+        )
+    if not avatar_profile:
+        raise RuntimeError(
+            "Avatar senza scheda persona: impossibile generare la risposta."
+        )
+    return _build_messages(build_persona_prompt(avatar_profile, channel), messages_history)
+
+
 async def stream_avatar_response(
     messages_history: list[dict],
     avatar_profile: dict,
@@ -107,18 +130,7 @@ async def stream_avatar_response(
     sheet (required). The last entry of messages_history must be the new
     user message. Yields text fragments as soon as OpenAI produces them.
     """
-    if not async_client:
-        raise RuntimeError(
-            "OPENAI_API_KEY non configurata. "
-            "Aggiungi OPENAI_API_KEY al file .env del backend."
-        )
-    if not avatar_profile:
-        raise RuntimeError(
-            "Avatar senza scheda persona: impossibile generare la risposta."
-        )
-
-    system_prompt = build_persona_prompt(avatar_profile)
-    messages = _build_messages(system_prompt, messages_history)
+    messages = _roleplay_messages(messages_history, avatar_profile, CHANNEL_VOICE)
 
     last_error: Exception | None = None
     for model in _candidate_models():
@@ -149,6 +161,49 @@ async def stream_avatar_response(
     raise RuntimeError(f"Errore nella comunicazione con OpenAI: {str(last_error)}")
 
 
+async def generate_avatar_reply(
+    messages_history: list[dict],
+    avatar_profile: dict,
+) -> str:
+    """
+    Generate one roleplay reply as a whole string (text chat mode).
+
+    Same persona and same fallback chain as the voice mode, but the reply
+    is not streamed: the chat endpoint answers a single HTTP request, so
+    there is nothing to stream it into. The last entry of messages_history
+    must be the new operator message. Raises RuntimeError on failure.
+    """
+    messages = _roleplay_messages(messages_history, avatar_profile, CHANNEL_TEXT)
+
+    last_error: Exception | None = None
+    for model in _candidate_models():
+        try:
+            response = await async_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_completion_tokens=1024,
+                **_completion_kwargs(model),
+            )
+        except Exception as e:
+            if not _is_retryable(e):
+                print(f"[ERROR] OpenAI chat call failed ({model}): {e}")
+                raise RuntimeError(f"Errore nella comunicazione con OpenAI: {str(e)}")
+            print(f"[WARN] Modello {model} non disponibile, provo il successivo: {str(e)[:120]}")
+            last_error = e
+            continue
+
+        reply = (response.choices[0].message.content or "").strip() if response.choices else ""
+        if reply:
+            return reply
+        # An empty reply leaves the operator with nothing to answer to:
+        # treat it like an unavailable model and try the next one.
+        print(f"[WARN] Risposta vuota da {model}, provo il successivo")
+        last_error = RuntimeError("risposta vuota")
+
+    print(f"[ERROR] Tutti i modelli OpenAI non disponibili: {last_error}")
+    raise RuntimeError(f"Errore nella comunicazione con OpenAI: {str(last_error)}")
+
+
 # ── Post-call evaluation (operator coaching) ──────────
 
 EVALUATION_CRITERIA = [
@@ -163,11 +218,12 @@ EVALUATION_CRITERIA = [
 EVALUATION_SUGGESTION_THRESHOLD = 10
 
 
-def _evaluation_prompt(profile: dict) -> str:
+def _evaluation_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
     """System prompt for the trainer that judges the operator's performance."""
     nome = str(profile.get("NOME", "") or "").strip()
     cognome = str(profile.get("COGNOME", "") or "").strip()
     cliente = f"{nome} {cognome}".strip() or "il cliente simulato"
+    contatto = "chat" if channel == CHANNEL_TEXT else "telefonata"
 
     contesto = profile_section(profile, [
         ("TIPO_SCENARIO", "Scenario della chiamata"),
@@ -180,7 +236,7 @@ def _evaluation_prompt(profile: dict) -> str:
 
     return (
         "Sei un formatore esperto di customer service bancario. Valuta la performance "
-        "dell'OPERATORE (mai quella del cliente) nella trascrizione di una telefonata di "
+        f"dell'OPERATORE (mai quella del cliente) nella trascrizione di una {contatto} di "
         f"formazione tra un operatore in addestramento e {cliente}, un cliente simulato.\n\n"
         + (f"## CONTESTO DELLA SIMULAZIONE\n{contesto}\n\n" if contesto else "")
         + f"## CRITERI DA VALUTARE\n{criteri}\n\n"
@@ -202,7 +258,7 @@ def _evaluation_prompt(profile: dict) -> str:
         "## ISTRUZIONI\n"
         "- Assegna a ogni criterio un punteggio intero da 0 a 10, seguendo la scala sopra.\n"
         "- Per ogni criterio scrivi un commento breve (1-2 frasi), citando quando utile "
-        "momenti specifici della chiamata.\n"
+        f"momenti specifici della {contatto}.\n"
         f"- Se il punteggio di un criterio è inferiore a {EVALUATION_SUGGESTION_THRESHOLD}, "
         "aggiungi suggerimenti concreti e pratici su come migliorare; altrimenti usa null.\n"
         "- Assegna anche un punteggio complessivo da 0 a 10 e una sintesi di 2-3 frasi.\n"
@@ -249,10 +305,18 @@ def _normalize_evaluation(raw: dict) -> dict:
     }
 
 
-async def evaluate_conversation(messages_history: list[dict], avatar_profile: dict) -> dict:
+async def evaluate_conversation(
+    messages_history: list[dict],
+    avatar_profile: dict,
+    channel: str = CHANNEL_VOICE,
+) -> dict:
     """
     Judge the operator's performance over the whole conversation with a
     reasoning-capable OpenAI model (OPENAI_EVAL_MODEL).
+
+    The criteria are the same for a call and a chat; the channel only tells
+    the trainer which medium it is reading, so the feedback speaks of the
+    right one.
 
     Returns {"overall_score": float, "summary": str, "criteria": [...]}
     where each criterion carries score, comment and (only when score < 10)
@@ -272,9 +336,10 @@ async def evaluate_conversation(messages_history: list[dict], avatar_profile: di
     if not transcript:
         raise RuntimeError("Conversazione vuota: impossibile generare la valutazione.")
 
+    contatto = "CHAT" if channel == CHANNEL_TEXT else "CHIAMATA"
     messages = [
-        {"role": "system", "content": _evaluation_prompt(avatar_profile or {})},
-        {"role": "user", "content": f"## TRASCRIZIONE DELLA CHIAMATA\n{transcript}"},
+        {"role": "system", "content": _evaluation_prompt(avatar_profile or {}, channel)},
+        {"role": "user", "content": f"## TRASCRIZIONE DELLA {contatto}\n{transcript}"},
     ]
 
     last_error: Exception | None = None

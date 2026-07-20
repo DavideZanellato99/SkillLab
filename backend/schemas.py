@@ -4,6 +4,8 @@ from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
+from models import CONVERSATION_MODE_VOICE
+
 
 # --- Avatar Schemas ---
 
@@ -65,7 +67,9 @@ class ChatConversationResponse(BaseModel):
     id: UUID
     avatar_id: UUID
     title: str
-    # When set, the call is over: the transcript is read-only
+    # Channel the conversation runs on: "voice" (call) or "text" (chat)
+    mode: str = CONVERSATION_MODE_VOICE
+    # When set, the conversation is over: the transcript is read-only
     ended_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
@@ -89,6 +93,33 @@ class ConversationRenameRequest(BaseModel):
         if not v:
             raise ValueError("Il titolo non può essere vuoto.")
         return v
+
+
+class ChatMessageRequest(BaseModel):
+    """Schema for one operator message sent to the avatar in text chat.
+
+    Without a conversation_id a new text conversation is opened; the
+    operator always writes first, exactly as they speak first on a call.
+    """
+    avatar_id: UUID
+    conversation_id: UUID | None = None
+    content: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("content")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Il messaggio non può essere vuoto.")
+        return v
+
+
+class ChatMessageExchange(BaseModel):
+    """One completed chat round trip: the operator's message and the reply."""
+    conversation_id: UUID
+    title: str
+    user_message: ChatMessageResponse
+    assistant_message: ChatMessageResponse
 
 
 class EvaluationCriterionResponse(BaseModel):
@@ -117,7 +148,9 @@ class ChatConversationSummary(BaseModel):
     id: UUID
     avatar_id: UUID
     title: str
-    # When set, the call is over: the transcript is read-only
+    # Channel the conversation runs on: "voice" (call) or "text" (chat)
+    mode: str = CONVERSATION_MODE_VOICE
+    # When set, the conversation is over: the transcript is read-only
     ended_at: datetime | None = None
     created_at: datetime
     updated_at: datetime

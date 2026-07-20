@@ -19,7 +19,13 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Avatar, User, ChatConversation, ChatMessage
+from models import (
+    CONVERSATION_MODE_VOICE,
+    Avatar,
+    User,
+    ChatConversation,
+    ChatMessage,
+)
 from auth_dependency import get_current_user
 from conversation_titles import next_conversation_title
 from schemas import VoiceSessionRequest, VoiceSessionResponse
@@ -61,6 +67,13 @@ def start_voice_session(
         )
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+        # The channel is fixed at creation: a written chat is not something
+        # the operator can pick up the phone and continue.
+        if conversation.mode != CONVERSATION_MODE_VOICE:
+            raise HTTPException(
+                status_code=409,
+                detail="Questa conversazione è una chat: non può proseguire al telefono.",
+            )
         # A hung-up call is final: the transcript can no longer be extended
         if conversation.ended_at is not None:
             raise HTTPException(
@@ -72,6 +85,7 @@ def start_voice_session(
             avatar_id=request.avatar_id,
             user_id=current_user.id,
             title=next_conversation_title(db, current_user.id, avatar.category),
+            mode=CONVERSATION_MODE_VOICE,
         )
         db.add(conversation)
         db.commit()

@@ -41,12 +41,19 @@ with engine.begin() as _conn:
     _conn.execute(
         text("ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP")
     )
+    _conn.execute(
+        text(
+            "ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS "
+            "mode VARCHAR(10) NOT NULL DEFAULT 'voice'"
+        )
+    )
     # Voice sessions live in memory, so no call survives a restart: every
-    # conversation still open at boot is over and is closed retroactively.
+    # call still open at boot is over and is closed retroactively. Text
+    # chats hold no server-side state, so they stay open across restarts.
     _conn.execute(
         text(
             "UPDATE chat_conversations SET ended_at = updated_at "
-            "WHERE ended_at IS NULL"
+            "WHERE ended_at IS NULL AND mode = 'voice'"
         )
     )
 

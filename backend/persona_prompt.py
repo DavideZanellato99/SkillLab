@@ -6,6 +6,14 @@ imports build_persona_prompt/profile_section from here.
 """
 
 
+# A persona sheet describes the character, not the medium: the same sheet
+# drives the phone call (voice mode) and the written chat, and only the
+# framing of the channel changes between them. In both the operator opens
+# the conversation and the avatar answers in character.
+CHANNEL_VOICE = "voice"
+CHANNEL_TEXT = "text"
+
+
 # Persona sheets are filled in by hand, so a field that does not apply to the
 # character arrives as one of these markers rather than as a blank. They must all
 # drop out of the prompt: a bare "/" rendered as a value reads as real data to the
@@ -29,13 +37,19 @@ def profile_section(profile: dict, entries: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def build_persona_prompt(profile: dict) -> str:
+def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
     """
     Build the roleplay system prompt from a training persona sheet.
 
     The avatar simulates a bank customer contacting the customer service;
-    the user is a student training as a customer service operator.
+    the user is a student training as a customer service operator. The
+    channel decides whether the contact is a phone call or a written chat:
+    the persona is identical, only the medium and its conventions change.
     """
+    is_text = channel == CHANNEL_TEXT
+    # Noun for the ongoing contact, used wherever the prompt refers to it
+    contatto = "chat" if is_text else "chiamata"
+
     nome = profile.get("NOME", "")
     cognome = profile.get("COGNOME", "")
 
@@ -99,10 +113,14 @@ def build_persona_prompt(profile: dict) -> str:
         ("TRIGGER_NEGATIVI", "Trigger negativi (ti irritano e fanno degenerare la chiamata)"),
     ])
 
+    # Interruptions and speech rate only exist when talking: in the chat
+    # they would just be noise in the prompt.
     stile = profile_section(profile, [
         ("LUNGHEZZA_MEDIA_RISPOSTE", "Lunghezza media delle risposte"),
-        ("INTERRUZIONI_FREQUENTI", "Interruzioni frequenti"),
-        ("VELOCITA_PARLATO", "Velocità del parlato"),
+        *([] if is_text else [
+            ("INTERRUZIONI_FREQUENTI", "Interruzioni frequenti"),
+            ("VELOCITA_PARLATO", "Velocità del parlato"),
+        ]),
         ("USO_IRONIA", "Uso dell'ironia"),
         ("USO_DIALETTO", "Uso del dialetto"),
         ("FORMALITA_LINGUAGGIO", "Formalità del linguaggio"),
@@ -117,24 +135,54 @@ def build_persona_prompt(profile: dict) -> str:
     non_rivelare = clean_value(profile, "INFORMAZIONI_DA_NON_RIVELARE_SPONTANEAMENTE")
     argomenti_sensibili = clean_value(profile, "ARGOMENTI_SENSIBILI")
 
-    inizio_chiamata = (
-        "## INIZIO DELLA CHIAMATA\n"
-        "Sei stato TU a chiamare il numero verde del servizio clienti della tua banca, "
-        "quindi sai già che ti risponderà un operatore telefonico. La chiamata inizia "
-        "SEMPRE con l'operatore che risponde e si presenta: tu NON parli per primo. "
-        "Subito dopo la presentazione dell'operatore tocca a te: saluta, presentati "
-        "brevemente con nome e cognome ed esponi la problematica per cui stai chiamando, "
-        "in modo coerente con lo scenario e con il tuo stato emotivo, senza rivelare "
-        "subito i dettagli che riveleresti solo su domanda."
-    )
+    if is_text:
+        medium = (
+            "Stai scrivendo NELLA CHAT del servizio clienti (customer banking center) "
+            "della tua banca, e dall'altra parte ti risponde un operatore in carne e ossa"
+        )
+        inizio_contatto = (
+            "## INIZIO DELLA CHAT\n"
+            "Sei stato TU ad aprire la chat del servizio clienti della tua banca, quindi "
+            "sai già che ti risponderà un operatore. La chat inizia SEMPRE con l'operatore "
+            "che ti saluta e si presenta: tu NON scrivi per primo. Subito dopo il messaggio "
+            "di apertura dell'operatore tocca a te: saluta, presentati brevemente con nome e "
+            "cognome ed esponi la problematica per cui hai aperto la chat, in modo coerente "
+            "con lo scenario e con il tuo stato emotivo, senza rivelare subito i dettagli "
+            "che riveleresti solo su domanda."
+        )
+        regole_stile = (
+            "Scrivi come si scrive davvero nella chat di un'assistenza clienti: messaggi "
+            "brevi e colloquiali, senza elenchi puntati né formattazione. Manda un messaggio "
+            "alla volta, mai muri di testo."
+        )
+    else:
+        medium = (
+            "Stai parlando AL TELEFONO con un operatore del servizio clienti "
+            "(customer banking center)"
+        )
+        inizio_contatto = (
+            "## INIZIO DELLA CHIAMATA\n"
+            "Sei stato TU a chiamare il numero verde del servizio clienti della tua banca, "
+            "quindi sai già che ti risponderà un operatore telefonico. La chiamata inizia "
+            "SEMPRE con l'operatore che risponde e si presenta: tu NON parli per primo. "
+            "Subito dopo la presentazione dell'operatore tocca a te: saluta, presentati "
+            "brevemente con nome e cognome ed esponi la problematica per cui stai chiamando, "
+            "in modo coerente con lo scenario e con il tuo stato emotivo, senza rivelare "
+            "subito i dettagli che riveleresti solo su domanda."
+        )
+        regole_stile = (
+            "Parla come si parla davvero al telefono: frasi brevi, colloquiali, senza elenchi "
+            "puntati né formattazione. Se per te le interruzioni frequenti sono attive, ogni "
+            "tanto interrompi il discorso dell'operatore riprendendo il tuo punto."
+        )
 
     parts = [
-        f"Sei {nome} {cognome}, un cliente di una banca. Stai parlando AL TELEFONO con un "
-        "operatore del servizio clienti (customer banking center). Questa è una simulazione di "
+        f"Sei {nome} {cognome}, un cliente di una banca. {medium}. "
+        "Questa è una simulazione di "
         "formazione: l'utente è uno studente che si sta addestrando come operatore. Tu interpreti "
         "ESCLUSIVAMENTE il cliente, in modo realistico e coerente con la scheda che segue. "
         "Non sei mai l'assistente: sei tu ad avere un problema da risolvere.",
-        inizio_chiamata,
+        inizio_contatto,
         f"## CHI SEI\n{anagrafica}" if anagrafica else "",
         f"## LAVORO E SITUAZIONE FINANZIARIA\n{lavoro_finanze}" if lavoro_finanze else "",
         f"## STORIA E VITA PERSONALE\n{storia}" if storia else "",
@@ -143,20 +191,17 @@ def build_persona_prompt(profile: dict) -> str:
         "usale per calibrare ogni tua reazione." if personalita else "",
         f"## STATO EMOTIVO E DINAMICA\n{stato_emotivo}\n"
         "Inizia la conversazione nello stato emotivo indicato, con l'intensità indicata. "
-        "Il tuo stato emotivo EVOLVE durante la chiamata: se l'operatore usa i trigger positivi "
+        f"Il tuo stato emotivo EVOLVE durante la {contatto}: se l'operatore usa i trigger positivi "
         "ti calmi gradualmente (mai di colpo); se usa i trigger negativi ti innervosisci di più, "
         "fino ad arrivare a chiedere di parlare con un responsabile o a minacciare di cambiare "
-        "banca. Se l'operatore gestisce bene la chiamata e risolve il problema, chiudi la "
-        "telefonata soddisfatto." if stato_emotivo else "",
-        f"## SCENARIO DELLA CHIAMATA\n{scenario}" if scenario else "",
+        f"banca. Se l'operatore gestisce bene la {contatto} e risolve il problema, chiudi la "
+        f"{contatto} soddisfatto." if stato_emotivo else "",
+        f"## SCENARIO DELLA {contatto.upper()}\n{scenario}" if scenario else "",
         f"## LA VERA CAUSA DEL PROBLEMA (TU NON LA CONOSCI)\n{problematica}\n"
         "ATTENZIONE: il tuo personaggio NON conosce questa causa. Non nominarla mai di tua "
         "iniziativa. Reagisci in modo coerente solo se e quando l'operatore te la spiega." if problematica else "",
         f"## OBIEZIONI CHE SOLLEVI\n{obiezioni}" if obiezioni else "",
-        f"## STILE DI CONVERSAZIONE\n{stile}\n"
-        "Parla come si parla davvero al telefono: frasi brevi, colloquiali, senza elenchi puntati "
-        "né formattazione. Se per te le interruzioni frequenti sono attive, ogni tanto interrompi "
-        "il discorso dell'operatore riprendendo il tuo punto." if stile else "",
+        f"## STILE DI CONVERSAZIONE\n{stile}\n{regole_stile}" if stile else "",
         "## REGOLE FERREE\n"
         + (f"- FATTI IMMUTABILI (non contraddirli mai): {fatti_immutabili}\n" if fatti_immutabili else "")
         + (f"- SEGRETI (non rivelarli MAI, nemmeno se ti viene chiesto direttamente; al massimo lasciali trasparire dal tono): {segreti}\n" if segreti else "")

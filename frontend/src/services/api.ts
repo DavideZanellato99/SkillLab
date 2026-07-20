@@ -42,12 +42,17 @@ export interface ChatMessage {
   created_at: string;
 }
 
+/** Channel a conversation runs on, fixed when it is opened. */
+export type ConversationMode = 'voice' | 'text';
+
 export interface ChatConversation {
   id: string;
   avatar_id: string;
   /** Always set: defaults to "<Category> <n>" and can be renamed, never blank. */
   title: string;
-  /** Set when the call hung up: the transcript is read-only and cannot be resumed. */
+  /** "voice" for a phone call, "text" for a written chat. */
+  mode: ConversationMode;
+  /** Set when the conversation ended: the transcript is read-only and cannot be resumed. */
   ended_at: string | null;
   created_at: string;
   updated_at: string;
@@ -78,12 +83,22 @@ export interface ChatConversationSummary {
   avatar_id: string;
   /** Always set: defaults to "<Category> <n>" and can be renamed, never blank. */
   title: string;
-  /** Set when the call hung up: the transcript is read-only and cannot be resumed. */
+  /** "voice" for a phone call, "text" for a written chat. */
+  mode: ConversationMode;
+  /** Set when the conversation ended: the transcript is read-only and cannot be resumed. */
   ended_at: string | null;
   created_at: string;
   updated_at: string;
   message_count: number;
   last_message_preview: string | null;
+}
+
+/** One completed chat round trip: the operator's message and the avatar's reply. */
+export interface ChatMessageExchange {
+  conversation_id: string;
+  title: string;
+  user_message: ChatMessage;
+  assistant_message: ChatMessage;
 }
 
 // =====================================================
@@ -187,6 +202,27 @@ export const renameConversation = (conversationId: string, title: string) =>
   apiFetch<ChatConversationSummary>(`/api/chat/conversation/${conversationId}`, {
     method: 'PATCH',
     body: { title },
+  });
+
+/**
+ * Send one operator message in a text chat and get the avatar's reply.
+ * Without a conversationId a new text conversation is opened, so the
+ * operator writes first just as they speak first on a call.
+ */
+export const sendChatMessage = (
+  avatarId: string,
+  conversationId: string | null,
+  content: string,
+) =>
+  apiFetch<ChatMessageExchange>('/api/chat/message', {
+    method: 'POST',
+    body: { avatar_id: avatarId, conversation_id: conversationId, content },
+  });
+
+/** Close a text chat: the transcript becomes final, like hanging up a call. */
+export const endChatConversation = (conversationId: string) =>
+  apiFetch<ChatConversationSummary>(`/api/chat/conversation/${conversationId}/end`, {
+    method: 'POST',
   });
 
 /* Deleting a conversation is admin-only and lives in services/admin.ts

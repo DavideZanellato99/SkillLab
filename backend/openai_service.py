@@ -4,7 +4,7 @@ post-call evaluation.
 The live voice conversation streams from a low-latency model (OPENAI_MODEL).
 The post-call evaluation runs separately on a stronger reasoning model
 (OPENAI_EVAL_MODEL) since it's a single one-shot judgment call, not
-latency-sensitive. The persona prompt building lives in gemini_service
+latency-sensitive. The persona prompt building lives in persona_prompt
 (pure string templating, provider-agnostic).
 """
 
@@ -13,7 +13,7 @@ import os
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
-from gemini_service import build_persona_prompt, profile_section
+from persona_prompt import build_persona_prompt, profile_section
 
 load_dotenv()
 

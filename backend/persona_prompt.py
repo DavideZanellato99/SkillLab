@@ -6,12 +6,25 @@ imports build_persona_prompt/profile_section from here.
 """
 
 
+# Persona sheets are filled in by hand, so a field that does not apply to the
+# character arrives as one of these markers rather than as a blank. They must all
+# drop out of the prompt: a bare "/" rendered as a value reads as real data to the
+# model. Matched against the whole cell, so a genuine "8/10" is untouched.
+_EMPTY_MARKERS = {"/", "//", "\\", "-", "--", ".", "n/a", "n/d", "na", "nd", "n.d."}
+
+
+def clean_value(profile: dict, key: str) -> str:
+    """Read a profile field, normalizing 'not applicable' markers to ''."""
+    value = str(profile.get(key, "") or "").strip()
+    return "" if value.lower() in _EMPTY_MARKERS else value
+
+
 def profile_section(profile: dict, entries: list[tuple[str, str]]) -> str:
     """Render '- label: value' lines for the profile keys that have a value."""
     lines = []
     for key, label in entries:
-        value = str(profile.get(key, "") or "").strip()
-        if value and value != "/":
+        value = clean_value(profile, key)
+        if value:
             lines.append(f"- {label}: {value}")
     return "\n".join(lines)
 
@@ -95,14 +108,14 @@ def build_persona_prompt(profile: dict) -> str:
         ("FORMALITA_LINGUAGGIO", "Formalità del linguaggio"),
     ])
 
-    scenario = str(profile.get("TIPO_SCENARIO", "") or "").strip()
-    problematica = str(profile.get("DESCRIZIONE_PROBLEMATICA", "") or "").strip()
-    obiezioni = str(profile.get("OBIEZIONI_PREVISTE", "") or "").strip()
-    obiettivo_nascosto = str(profile.get("OBIETTIVO_NASCOSTO", "") or "").strip()
-    fatti_immutabili = str(profile.get("FATTI_IMMUTABILI", "") or "").strip()
-    segreti = str(profile.get("SEGRETI", "") or "").strip()
-    non_rivelare = str(profile.get("INFORMAZIONI_DA_NON_RIVELARE_SPONTANEAMENTE", "") or "").strip()
-    argomenti_sensibili = str(profile.get("ARGOMENTI_SENSIBILI", "") or "").strip()
+    scenario = clean_value(profile, "TIPO_SCENARIO")
+    problematica = clean_value(profile, "DESCRIZIONE_PROBLEMATICA")
+    obiezioni = clean_value(profile, "OBIEZIONI_PREVISTE")
+    obiettivo_nascosto = clean_value(profile, "OBIETTIVO_NASCOSTO")
+    fatti_immutabili = clean_value(profile, "FATTI_IMMUTABILI")
+    segreti = clean_value(profile, "SEGRETI")
+    non_rivelare = clean_value(profile, "INFORMAZIONI_DA_NON_RIVELARE_SPONTANEAMENTE")
+    argomenti_sensibili = clean_value(profile, "ARGOMENTI_SENSIBILI")
 
     inizio_chiamata = (
         "## INIZIO DELLA CHIAMATA\n"

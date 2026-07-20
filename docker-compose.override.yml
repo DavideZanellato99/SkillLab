@@ -1,0 +1,41 @@
+# Local dev override — Docker Compose picks this up automatically next to
+# docker-compose.yml (no -f flag needed), and merges it on top.
+#
+# Swaps both services from their production build (backend: plain uvicorn,
+# frontend: static files behind nginx) to a hot-reload setup: the source is
+# bind-mounted in and the dev server watches it, so edits on the host show
+# up without rebuilding or restarting containers.
+#
+# docker-compose.yml itself is untouched — `docker compose -f
+# docker-compose.yml up` (explicitly excluding this file) still gives the
+# real production build, e.g. to sanity-check it before deploying.
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      # Stop at the Node build stage — skip the nginx runtime stage, we run
+      # `vite dev` instead of serving a prebuilt dist/.
+      target: build
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume: keeps the container's own Linux node_modules
+      # (installed by `npm ci` at image build time) from being shadowed by
+      # the bind mount above, which would otherwise expose the host's
+      # node_modules (built for Windows, not Alpine Linux).
+      - /app/node_modules
+    environment:
+      # Inside the compose network "localhost" is the frontend container
+      # itself — point the Vite proxy (vite.config.ts) at the backend
+      # service by name instead.
+      BACKEND_URL: http://backend:8000
+    # Vite listens on 5173 inside the container; !override (rather than the
+    # default concat merge) replaces docker-compose.yml's "3000:80" so the
+    # app stays on the same host port 3000 in both dev and prod mode.
+    command: npm run dev -- --host 0.0.0.0
+    ports: !override
+      - "3000:5173"

@@ -258,13 +258,40 @@ function MeterRow({
   score,
   dimmed = false,
   highlighted = false,
+  fullLabel = false,
 }: {
   label: string;
   sub?: string;
   score: number;
   dimmed?: boolean;
   highlighted?: boolean;
+  /* Etichetta sempre per intero su una riga (mai troncata): la mette sopra
+   * la barra invece che affiancata, così non deve condividere spazio con nulla. */
+  fullLabel?: boolean;
 }) {
+  if (fullLabel) {
+    return (
+      <div
+        className={`rounded-lg px-2 py-1.5 transition-opacity ${dimmed ? 'opacity-40' : ''} ${
+          highlighted ? 'bg-white/4' : ''
+        }`}
+      >
+        <div className="mb-1.5 flex items-baseline justify-between gap-3">
+          <p className="whitespace-nowrap text-[0.82rem] font-medium text-slate-300">{label}</p>
+          <span className={`shrink-0 text-right text-sm font-bold ${scoreTextColor(score)}`}>
+            {formatScore(score)}
+          </span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-white/6">
+          <div
+            className={`h-full rounded-full transition-all ${scoreBarColor(score)}`}
+            style={{ width: `${Math.max(0, Math.min(100, score * 10))}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`grid grid-cols-[minmax(0,200px)_1fr_56px] items-center gap-4 rounded-lg px-2 py-1.5 transition-opacity max-sm:grid-cols-[minmax(0,130px)_1fr_56px] ${
@@ -272,7 +299,7 @@ function MeterRow({
       } ${highlighted ? 'bg-white/4' : ''}`}
     >
       <div className="min-w-0">
-        <Tooltip content={label}>
+        <Tooltip content={label} truncateOnly>
           <p className="truncate text-[0.82rem] font-medium text-slate-300">{label}</p>
         </Tooltip>
         {sub && <p className="truncate text-[0.68rem] text-slate-500">{sub}</p>}
@@ -538,7 +565,7 @@ export default function DashboardPage() {
             <KpiCard label="Criterio più forte">
               {bestCriterion ? (
                 <>
-                  <Tooltip content={bestCriterion.label}>
+                  <Tooltip content={bestCriterion.label} truncateOnly>
                     <p className="truncate text-[0.95rem] font-semibold text-slate-100">
                       {bestCriterion.label}
                     </p>
@@ -555,7 +582,7 @@ export default function DashboardPage() {
             <KpiCard label="Criterio più debole">
               {worstCriterion ? (
                 <>
-                  <Tooltip content={worstCriterion.label}>
+                  <Tooltip content={worstCriterion.label} truncateOnly>
                     <p className="truncate text-[0.95rem] font-semibold text-slate-100">
                       {worstCriterion.label}
                     </p>
@@ -592,9 +619,9 @@ export default function DashboardPage() {
             <p className="mb-4 text-xs text-slate-500">
               Punteggio medio dei 5 criteri di valutazione
             </p>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2.5">
               {criteriaAvgs.map((c) => (
-                <MeterRow key={c.key} label={c.label} score={c.avg} />
+                <MeterRow key={c.key} label={c.label} score={c.avg} fullLabel />
               ))}
             </div>
           </div>
@@ -687,3 +714,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

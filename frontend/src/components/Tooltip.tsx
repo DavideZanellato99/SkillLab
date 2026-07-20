@@ -26,8 +26,16 @@ interface TooltipProps {
   /** Avvolge il figlio in uno span: necessario per elementi `disabled`,
    * che non emettono eventi mouse */
   wrap?: boolean;
+  /** Per testo semplice (non bottoni/icone): mostra il tooltip solo se il
+   * figlio è effettivamente troncato (ellissi). Su testo non troncato il
+   * tooltip sarebbe ridondante col testo già visibile, quindi resta nascosto. */
+  truncateOnly?: boolean;
   children: ReactElement<Record<string, unknown>>;
 }
+
+/* Troncato = il contenuto reale è più largo dello spazio visibile
+ * (funziona con .truncate / overflow-hidden + white-space: nowrap) */
+const isTruncated = (el: Element) => el.scrollWidth > el.clientWidth + 1;
 
 interface Pos {
   x: number;
@@ -42,6 +50,7 @@ export default function Tooltip({
   side = 'top',
   anchor = 'element',
   wrap = false,
+  truncateOnly = false,
   children,
 }: TooltipProps) {
   const [pos, setPos] = useState<Pos | null>(null);
@@ -55,6 +64,7 @@ export default function Tooltip({
   };
 
   const handleMouseEnter = (e: ReactMouseEvent) => {
+    if (truncateOnly && !isTruncated(e.currentTarget)) return;
     if (anchor === 'cursor') setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 });
     else showFromElement(e.currentTarget);
   };
@@ -62,7 +72,10 @@ export default function Tooltip({
     anchor === 'cursor'
       ? (e: ReactMouseEvent) => setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 })
       : undefined;
-  const handleFocus = (e: FocusEvent) => showFromElement(e.currentTarget);
+  const handleFocus = (e: FocusEvent) => {
+    if (truncateOnly && !isTruncated(e.currentTarget)) return;
+    showFromElement(e.currentTarget);
+  };
   const hide = () => {
     setPos(null);
     setFlip(false);

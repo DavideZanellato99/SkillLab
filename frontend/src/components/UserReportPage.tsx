@@ -1,12 +1,27 @@
 import { Fragment, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchUsersReport } from '../services/admin';
-import type { UserActivityReport } from '../services/admin';
-import { isAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES } from '../services/auth';
+import { fetchUsersReport, deleteAdminConversation } from '../services/admin';
+import type { UserActivityReport, ConversationReport } from '../services/admin';
+import { isAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../services/auth';
 import { categoryBadgeClasses } from './categoryStyles';
 import DataTable, { Td, Tr } from './DataTable';
 import { matchesSearch } from './tableSearch';
 import type { DataTableColumn } from './DataTable';
+
+const overlayCls =
+  'fixed inset-0 z-[200] flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-lg [animation-duration:0.2s]';
+const modalCls =
+  'relative max-h-[90vh] w-full max-w-[420px] animate-modal-in overflow-y-auto rounded-3xl border border-white/6 bg-gray-900/95 p-12 shadow-[0_24px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(124,58,237,0.08)] backdrop-blur-2xl max-[480px]:rounded-2xl max-[480px]:p-8';
+const modalCloseCls =
+  'absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100';
+const formErrorCls =
+  'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]';
+const spinnerCls = 'h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white';
+
+interface DeletingConversation {
+  userId: string;
+  conversation: ConversationReport;
+}
 
 const REPORT_COLUMNS: DataTableColumn[] = [
   { key: 'utente', label: 'Utente' },
@@ -45,6 +60,9 @@ export default function UserReportPage() {
   const [error, setError] = useState('');
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [deletingConversation, setDeletingConversation] = useState<DeletingConversation | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const visibleReport = report.filter((u) =>
     matchesSearch(search, `${u.nome} ${u.cognome}`, u.email, ROLE_LABELS[u.ruolo] ?? u.ruolo),
@@ -68,6 +86,32 @@ export default function UserReportPage() {
       loadReport();
     }
   }, [user, loadReport]);
+
+  const handleConfirmDeleteConversation = async () => {
+    if (!deletingConversation) return;
+    setDeleteError('');
+    setIsDeleting(true);
+
+    try {
+      await deleteAdminConversation(deletingConversation.conversation.id);
+      setReport((prev) =>
+        prev.map((u) => {
+          if (u.id !== deletingConversation.userId) return u;
+          return {
+            ...u,
+            conversation_count: u.conversation_count - 1,
+            total_duration_seconds: u.total_duration_seconds - deletingConversation.conversation.duration_seconds,
+            conversations: u.conversations.filter((c) => c.id !== deletingConversation.conversation.id),
+          };
+        }),
+      );
+      setDeletingConversation(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Errore durante l'eliminazione della conversazione.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   if (!isAdmin(user)) {
     return (
@@ -133,7 +177,7 @@ export default function UserReportPage() {
                   <Td>
                     <div className="flex items-center gap-4">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
-                        {(u.nome || u.email)[0].toUpperCase()}
+                        {getInitials(u.nome, u.cognome, u.email)}
                       </div>
                       <span className="font-semibold text-slate-100">
                         {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}
@@ -199,6 +243,21 @@ export default function UserReportPage() {
                               <span className="min-w-[90px] text-right text-[0.85rem] font-semibold text-cyan-400">
                                 {formatDuration(conv.duration_seconds)}
                               </span>
+                              <button
+                                type="button"
+                                className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400"
+                                aria-label="Elimina conversazione"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteError('');
+                                  setDeletingConversation({ userId: u.id, conversation: conv });
+                                }}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                </svg>
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -210,6 +269,62 @@ export default function UserReportPage() {
             );
           })}
         </DataTable>
+      )}
+
+      {/* Modal Conferma Eliminazione Conversazione */}
+      {deletingConversation && (
+        <div className={overlayCls} onClick={() => !isDeleting && setDeletingConversation(null)}>
+          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
+            <button className={modalCloseCls} onClick={() => setDeletingConversation(null)} disabled={isDeleting}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-red-500/25 bg-red-500/10">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </div>
+              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">Elimina Conversazione</h2>
+              <p className="text-[0.85rem] text-slate-500">
+                Stai per eliminare la conversazione con{' '}
+                <strong className="text-slate-100">{deletingConversation.conversation.avatar_name}</strong> del{' '}
+                {formatDateTime(deletingConversation.conversation.created_at)}, incluse tutte le sue trascrizioni e
+                valutazioni. L'operazione non è reversibile.
+              </p>
+            </div>
+
+            {deleteError && <div className={formErrorCls}>{deleteError}</div>}
+
+            <div className="flex gap-3">
+              <button
+                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => setDeletingConversation(null)}
+                disabled={isDeleting}
+              >
+                Annulla
+              </button>
+              <button
+                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleConfirmDeleteConversation}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <span className={spinnerCls} />
+                    Eliminazione...
+                  </>
+                ) : (
+                  'Elimina Definitivamente'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

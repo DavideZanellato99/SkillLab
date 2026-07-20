@@ -51,6 +51,12 @@ export function isAdmin(user: AuthUser | null): boolean {
   return user?.ruolo === 'super_admin' || user?.ruolo === 'organization_admin';
 }
 
+/** Two-letter initials for an avatar badge (first name + last name); falls back to the email's first letter. */
+export function getInitials(nome: string, cognome: string, email: string): string {
+  const initials = `${nome?.trim()?.[0] ?? ''}${cognome?.trim()?.[0] ?? ''}`.toUpperCase();
+  return initials || email[0]?.toUpperCase() || '?';
+}
+
 // =====================================================
 //  PASSWORD POLICY
 // =====================================================

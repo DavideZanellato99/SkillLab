@@ -15,6 +15,7 @@ class AvatarBase(BaseModel):
     description: str | None = None
 
 
+
 class AvatarResponse(AvatarBase):
     """Schema for avatar API responses.
 
@@ -167,6 +168,20 @@ class UserResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UpdateProfileRequest(BaseModel):
+    """Schema for the authenticated user updating their own profile
+    (self-service). Email and role are not editable here."""
+    nome: str | None = None
+    cognome: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    """Schema for the authenticated user changing their own password
+    (self-service): Cognito verifies current_password server-side."""
+    current_password: str
+    new_password: str
 
 
 # --- Admin Schemas ---

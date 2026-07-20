@@ -15,7 +15,9 @@ load_dotenv()
 
 COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID", "")
 COGNITO_APP_CLIENT_ID = os.getenv("COGNITO_APP_CLIENT_ID", "")
-COGNITO_REGION = os.getenv("COGNITO_REGION", "eu-central-1")
+COGNITO_REGION = os.getenv("COGNITO_REGION")
+if not COGNITO_REGION:
+    raise RuntimeError("COGNITO_REGION non configurata. Aggiungila al file .env del backend.")
 
 # Cognito client
 _cognito_client = boto3.client("cognito-idp", region_name=COGNITO_REGION)
@@ -141,6 +143,35 @@ def respond_to_new_password_challenge(
         "refresh_token": auth_result["RefreshToken"],
         "id_token": auth_result["IdToken"],
     }
+
+
+def change_own_password(access_token: str, previous_password: str, new_password: str) -> None:
+    """
+    Change the password of the currently authenticated user (self-service),
+    using their own access token. Cognito verifies `previous_password`
+    server-side before accepting the new one — exactly like the hosted UI's
+    "change password" flow.
+
+    Raises RuntimeError on failure.
+    """
+    try:
+        _cognito_client.change_password(
+            PreviousPassword=previous_password,
+            ProposedPassword=new_password,
+            AccessToken=access_token,
+        )
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        if error_code == "NotAuthorizedException":
+            raise RuntimeError("La password attuale non è corretta.")
+        elif error_code == "InvalidPasswordException":
+            raise RuntimeError("La nuova password non soddisfa i requisiti di sicurezza.")
+        elif error_code == "LimitExceededException":
+            raise RuntimeError("Troppi tentativi. Riprova più tardi.")
+        else:
+            raise RuntimeError(f"Errore nel cambio password: {e.response['Error']['Message']}")
+    except Exception as e:
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
 
 
 def refresh_tokens(refresh_token: str) -> dict:

@@ -9,6 +9,7 @@ import AdminPage from './components/AdminPage';
 import DashboardPage from './components/DashboardPage';
 import UserReportPage from './components/UserReportPage';
 import AvatarAdminPage from './components/AvatarAdminPage';
+import ProfilePage from './components/ProfilePage';
 import LandingPage from './components/LandingPage';
 import './index.css';
 
@@ -54,6 +55,7 @@ function App() {
           <>
             <Route path="/" element={<HomePage />} />
             <Route path="/chat/:avatarId" element={<ChatPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/dashboard" element={<DashboardPage />} />
             <Route path="/admin/report" element={<UserReportPage />} />

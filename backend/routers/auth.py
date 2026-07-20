@@ -19,6 +19,7 @@ from auth_dependency import (
     get_or_create_mock_admin,
     ACCESS_TOKEN_COOKIE,
     REFRESH_TOKEN_COOKIE,
+    MOCK_ADMIN_SUB,
 )
 from cognito_service import (
     authenticate,
@@ -26,6 +27,7 @@ from cognito_service import (
     refresh_tokens,
     revoke_refresh_token,
     verify_access_token,
+    change_own_password,
 )
 from token_denylist import revoke_jtis, is_jti_revoked
 from token_sessions import (
@@ -43,6 +45,8 @@ from schemas import (
     NewPasswordRequest,
     MessageResponse,
     UserResponse,
+    UpdateProfileRequest,
+    ChangePasswordRequest,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -428,3 +432,77 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 def get_me(current_user: User = Depends(get_current_user)):
     """Get the current authenticated user's profile."""
     return UserResponse.model_validate(current_user)
+
+
+@router.put("/me", response_model=UserResponse)
+def update_my_profile(
+    request: UpdateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update the authenticated user's own first/last name (self-service,
+    every role). Email and role are read-only here — only a Super Admin can
+    change those, via /api/admin/users/{id}.
+    """
+    if request.nome is not None:
+        nome = request.nome.strip()
+        if not nome:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Il nome non può essere vuoto.",
+            )
+        current_user.nome = nome
+
+    if request.cognome is not None:
+        cognome = request.cognome.strip()
+        if not cognome:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Il cognome non può essere vuoto.",
+            )
+        current_user.cognome = cognome
+
+    db.commit()
+    db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
+
+
+@router.post("/change-password", response_model=MessageResponse)
+def change_my_password(
+    request: ChangePasswordRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Change the authenticated user's own password (self-service, every
+    role). Cognito verifies request.current_password server-side before
+    accepting the new one — a stolen session cookie alone isn't enough to
+    take over the account.
+    """
+    if current_user.cognito_sub == MOCK_ADMIN_SUB:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Non è possibile cambiare la password dell'account di sistema.",
+        )
+
+    unmet = validate_password_strength(request.new_password)
+    if unmet:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La nuova password non soddisfa i requisiti: " + ", ".join(unmet) + ".",
+        )
+
+    access_token = http_request.cookies.get(ACCESS_TOKEN_COOKIE)
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessione non valida. Effettua nuovamente il login.",
+        )
+
+    try:
+        change_own_password(access_token, request.current_password, request.new_password)
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return MessageResponse(message="Password aggiornata con successo.", success=True)

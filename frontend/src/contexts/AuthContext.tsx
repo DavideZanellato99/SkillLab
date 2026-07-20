@@ -22,6 +22,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthResult>;
   completeNewPassword: (email: string, newPassword: string, session: string) => Promise<void>;
   logout: () => void;
+  /** Replace the in-memory user profile — used after a self-service profile edit. */
+  updateUser: (user: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -89,6 +91,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(null);
   }, []);
 
+  // The backend is the source of truth for the profile — callers pass the
+  // fresh object returned by the update-profile API instead of patching
+  // fields locally
+  const updateUser = useCallback((updated: AuthUser) => {
+    setUser(updated);
+  }, []);
+
   // Auto-logout after 30 minutes without user activity, in sync across
   // tabs: using one tab keeps the session alive in all of them
   useIdleLogout({
@@ -104,6 +113,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     login,
     completeNewPassword,
     logout,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

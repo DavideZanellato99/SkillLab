@@ -18,8 +18,12 @@ from gemini_service import build_persona_prompt, profile_section
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-OPENAI_EVAL_MODEL = os.getenv("OPENAI_EVAL_MODEL", "gpt-5.6-terra")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL")
+if not OPENAI_MODEL:
+    raise RuntimeError("OPENAI_MODEL non configurato. Aggiungilo al file .env del backend.")
+OPENAI_EVAL_MODEL = os.getenv("OPENAI_EVAL_MODEL")
+if not OPENAI_EVAL_MODEL:
+    raise RuntimeError("OPENAI_EVAL_MODEL non configurato. Aggiungilo al file .env del backend.")
 
 # When the primary model is saturated or unavailable we retry the same
 # request on these, in order (comma-separated; empty = no fallback).
@@ -30,7 +34,7 @@ OPENAI_FALLBACK_MODELS = [
 ]
 OPENAI_EVAL_FALLBACK_MODELS = [
     m.strip()
-    for m in os.getenv("OPENAI_EVAL_FALLBACK_MODELS", "gpt-5.1,gpt-4.1-mini").split(",")
+    for m in os.getenv("OPENAI_EVAL_FALLBACK_MODELS", "").split(",")
     if m.strip()
 ]
 

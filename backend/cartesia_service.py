@@ -15,12 +15,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY", "")
-CARTESIA_MODEL = os.getenv("CARTESIA_MODEL", "sonic-3.5")
-CARTESIA_VERSION = os.getenv("CARTESIA_VERSION", "2026-03-01")
+CARTESIA_MODEL = os.getenv("CARTESIA_MODEL")
+if not CARTESIA_MODEL:
+    raise RuntimeError("CARTESIA_MODEL non configurato. Aggiungilo al file .env del backend.")
+CARTESIA_VERSION = os.getenv("CARTESIA_VERSION")
+if not CARTESIA_VERSION:
+    raise RuntimeError("CARTESIA_VERSION non configurato. Aggiungilo al file .env del backend.")
 CARTESIA_DEFAULT_VOICE_ID = os.getenv("CARTESIA_DEFAULT_VOICE_ID", "")
-CARTESIA_LANGUAGE = os.getenv("CARTESIA_LANGUAGE", "it")
+CARTESIA_LANGUAGE = os.getenv("CARTESIA_LANGUAGE")
+if not CARTESIA_LANGUAGE:
+    raise RuntimeError("CARTESIA_LANGUAGE non configurato. Aggiungilo al file .env del backend.")
 
-_TTS_WS_BASE = os.getenv("CARTESIA_TTS_WS_URL", "wss://api.cartesia.ai/tts/websocket")
+_TTS_WS_BASE = os.getenv("CARTESIA_TTS_WS_URL")
+if not _TTS_WS_BASE:
+    raise RuntimeError("CARTESIA_TTS_WS_URL non configurato. Aggiungilo al file .env del backend.")
 
 # Raw PCM16 mono the browser plays back directly
 TTS_SAMPLE_RATE = 24000

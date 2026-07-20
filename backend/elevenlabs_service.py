@@ -14,16 +14,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
-ELEVENLABS_STT_MODEL = os.getenv("ELEVENLABS_STT_MODEL", "scribe_v2_realtime")
+ELEVENLABS_STT_MODEL = os.getenv("ELEVENLABS_STT_MODEL")
+if not ELEVENLABS_STT_MODEL:
+    raise RuntimeError("ELEVENLABS_STT_MODEL non configurato. Aggiungilo al file .env del backend.")
 # ISO 639-1; the whole product is Italian-first
-ELEVENLABS_STT_LANGUAGE = os.getenv("ELEVENLABS_STT_LANGUAGE", "it")
+ELEVENLABS_STT_LANGUAGE = os.getenv("ELEVENLABS_STT_LANGUAGE")
+if not ELEVENLABS_STT_LANGUAGE:
+    raise RuntimeError("ELEVENLABS_STT_LANGUAGE non configurato. Aggiungilo al file .env del backend.")
 # Seconds of silence after speech before the turn is committed. Lower =
 # snappier replies but more risk of cutting the operator off mid-sentence.
-ELEVENLABS_VAD_SILENCE_SECS = float(os.getenv("ELEVENLABS_VAD_SILENCE_SECS", "0.8"))
+_vad_silence_secs = os.getenv("ELEVENLABS_VAD_SILENCE_SECS")
+if not _vad_silence_secs:
+    raise RuntimeError("ELEVENLABS_VAD_SILENCE_SECS non configurato. Aggiungilo al file .env del backend.")
+ELEVENLABS_VAD_SILENCE_SECS = float(_vad_silence_secs)
 
-_STT_WS_BASE = os.getenv(
-    "ELEVENLABS_STT_WS_URL", "wss://api.elevenlabs.io/v1/speech-to-text/realtime"
-)
+_STT_WS_BASE = os.getenv("ELEVENLABS_STT_WS_URL")
+if not _STT_WS_BASE:
+    raise RuntimeError("ELEVENLABS_STT_WS_URL non configurato. Aggiungilo al file .env del backend.")
 
 # Audio format the browser capture worklet produces
 STT_SAMPLE_RATE = 16000

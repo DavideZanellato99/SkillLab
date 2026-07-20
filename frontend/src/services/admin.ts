@@ -186,5 +186,15 @@ export interface AdminConversationDetail {
 export const fetchAdminConversation = (conversationId: string) =>
   apiFetch<AdminConversationDetail>(`/api/admin/conversations/${conversationId}`);
 
+/**
+ * Delete any user's conversation together with its messages and evaluation
+ * (Super Admin + Organization Admin only — a normal user cannot delete
+ * their own conversations).
+ */
+export const deleteAdminConversation = (conversationId: string) =>
+  apiFetch<{ message: string; success: boolean }>(`/api/admin/conversations/${conversationId}`, {
+    method: 'DELETE',
+  });
+
 export const fetchEvaluationsReport = () =>
   apiFetch<EvaluationReportRow[]>('/api/admin/evaluations-report');

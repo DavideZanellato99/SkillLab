@@ -230,6 +230,31 @@ def conversation_detail(
     )
 
 
+@router.delete("/conversations/{conversation_id}", response_model=MessageResponse)
+def delete_conversation(
+    conversation_id: UUID,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete any user's conversation together with its messages and evaluation
+    (Super Admin + Organization Admin). Normal users cannot delete their own
+    conversation history — there is no equivalent endpoint for role 'user'.
+    """
+    conversation = (
+        db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
+    )
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
+        )
+
+    db.delete(conversation)
+    db.commit()
+
+    return MessageResponse(message="Conversazione eliminata con successo.", success=True)
+
+
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     request: CreateUserRequest,

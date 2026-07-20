@@ -14,14 +14,13 @@ from sqlalchemy import func
 
 from database import get_db
 from models import Avatar, User, ChatConversation, ChatMessage, ConversationEvaluation
-from auth_dependency import get_current_user, get_current_admin
+from auth_dependency import get_current_user
 from openai_service import evaluate_conversation
 from schemas import (
     ChatMessageResponse,
     ChatConversationResponse,
     ChatConversationSummary,
     ConversationEvaluationResponse,
-    MessageResponse,
 )
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -230,31 +229,3 @@ def get_conversation_evaluation(
         .first()
     )
     return _evaluation_response(evaluation) if evaluation else None
-
-
-@router.delete("/conversation/{conversation_id}", response_model=MessageResponse)
-def delete_conversation(
-    conversation_id: UUID,
-    current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db),
-):
-    """Delete one of the caller's conversations with all its messages.
-
-    Admin-only (super_admin / organization_admin): normal users must not be
-    able to delete their conversation history.
-    """
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.user_id == current_user.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
-
-    db.delete(conversation)
-    db.commit()
-
-    return MessageResponse(message="Conversazione eliminata con successo.", success=True)

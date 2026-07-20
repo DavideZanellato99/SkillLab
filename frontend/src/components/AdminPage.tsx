@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAllUsers, createNewUser, updateUser, deleteUser, resendUserCredentials, setUserStatus } from '../services/admin';
-import { isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES } from '../services/auth';
+import { isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../services/auth';
 import type { AuthUser, RoleName, UserStatus } from '../services/auth';
 import Select from './Select';
 import DataTable, { Td, Tr } from './DataTable';
@@ -341,7 +341,7 @@ export default function AdminPage() {
                 <Td>
                   <div className="flex items-center gap-4">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
-                      {(u.nome || u.email)[0].toUpperCase()}
+                      {getInitials(u.nome, u.cognome, u.email)}
                     </div>
                     <span className="font-semibold text-slate-100">
                       {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}

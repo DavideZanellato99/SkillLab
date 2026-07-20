@@ -11,6 +11,7 @@ import {
   PASSWORD_MIN_LENGTH,
   PASSWORD_RULES,
   getUnmetPasswordRules,
+  getInitials,
 } from '../services/auth';
 
 type AuthStep = 'login' | 'new-password';
@@ -241,7 +242,7 @@ export default function Navbar() {
                   id="user-menu-trigger"
                 >
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
-                    {(user.nome || user.email)[0].toUpperCase()}
+                    {getInitials(user.nome, user.cognome, user.email)}
                   </div>
                   <span className="max-w-[120px] truncate max-[480px]:hidden">
                     {user.nome && user.cognome
@@ -260,7 +261,7 @@ export default function Navbar() {
                   >
                     <div className="flex items-center gap-2 p-2">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-base font-bold text-white">
-                        {(user.nome || user.email)[0].toUpperCase()}
+                        {getInitials(user.nome, user.cognome, user.email)}
                       </div>
                       <div className="flex min-w-0 flex-col">
                         <span className="truncate text-[0.85rem] font-semibold text-slate-100">
@@ -274,9 +275,20 @@ export default function Navbar() {
                         </span>
                       </div>
                     </div>
+                    <div className="my-1 h-px bg-white/6" />
+                    <Link
+                      to="/profile"
+                      className={menuItemCls}
+                      onClick={() => setShowUserMenu(false)}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M4 20c0-4 3.58-6 8-6s8 2 8 6" />
+                      </svg>
+                      Il Mio Profilo
+                    </Link>
                     {isAdmin(user) && (
                       <>
-                        <div className="my-1 h-px bg-white/6" />
                         {isSuperAdmin(user) && (
                           <Link
                             to="/admin"
@@ -299,8 +311,10 @@ export default function Navbar() {
                             onClick={() => setShowUserMenu(false)}
                           >
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                              <circle cx="12" cy="7" r="4" />
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                              <circle cx="9" cy="7" r="4" />
+                              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                             </svg>
                             Gestione Avatar
                           </Link>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { startVoiceSession } from '../services/voice';
+import { startVoiceSession, uploadRecording } from '../services/voice';
 import { VoiceCall } from '../services/voiceCall';
 import { startRingback, type Ringback } from '../services/ringtone';
 import type { ChatMessage } from '../services/api';
@@ -91,6 +91,23 @@ export default function VoiceButton({
     ringbackRef.current = null;
   };
 
+  /* Upload the call audio once the recorder has flushed, after hang-up.
+   * The transcript is already safe in the database at this point, so a
+   * failure here costs the recording and nothing else: it is reported as
+   * such instead of looking like the call itself went wrong. */
+  const saveRecording = async (conversationId: string, call: VoiceCall) => {
+    try {
+      const recording = await call.recording();
+      if (recording) await uploadRecording(conversationId, recording);
+    } catch (err) {
+      onErrorRef.current(
+        err instanceof Error
+          ? `Registrazione della chiamata non salvata: ${err.message}`
+          : 'Registrazione della chiamata non salvata.',
+      );
+    }
+  };
+
   const pushTranscript = (role: 'user' | 'assistant', content: string) => {
     if (!content.trim()) return;
     onTranscriptRef.current({
@@ -155,6 +172,7 @@ export default function VoiceButton({
           setIsConnected(false);
           setIsSpeaking(false);
           setIsProcessing(false);
+          void saveRecording(session.conversation_id, call);
           onSessionEndRef.current();
         },
       });

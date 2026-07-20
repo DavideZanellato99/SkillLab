@@ -14,27 +14,39 @@ Flow:
 """
 
 import json
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import (
     CONVERSATION_MODE_VOICE,
+    ROLE_ORGANIZATION_ADMIN,
+    ROLE_SUPER_ADMIN,
     Avatar,
     User,
     ChatConversation,
     ChatMessage,
+    ConversationRecording,
 )
 from auth_dependency import get_current_user
 from conversation_titles import next_conversation_title
-from schemas import VoiceSessionRequest, VoiceSessionResponse
+from schemas import VoiceRecordingInfo, VoiceSessionRequest, VoiceSessionResponse
 from voice_sessions import create_voice_session, get_voice_session
 from voice_pipeline import VoicePipeline
 from elevenlabs_service import ELEVENLABS_API_KEY
 from cartesia_service import CARTESIA_API_KEY
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
+
+# Opus voice runs about 2 MB per 10 minutes, so this is a very long call.
+# It guards against a client posting something absurd, it is not a real cap.
+MAX_RECORDING_BYTES = 50 * 1024 * 1024
+
+# Containers MediaRecorder produces, matched on the part before ";codecs=":
+# webm/opus on Chrome and Firefox, mp4/aac on Safari.
+_ALLOWED_RECORDING_TYPES = {"audio/webm", "audio/ogg", "audio/mp4"}
 
 
 @router.post("/session", response_model=VoiceSessionResponse)
@@ -116,6 +128,135 @@ def start_voice_session(
     return VoiceSessionResponse(
         session_id=session_id,
         conversation_id=conversation.id,
+    )
+
+
+def _readable_conversation(
+    conversation_id: UUID, user: User, db: Session
+) -> ChatConversation:
+    """Fetch a conversation the user is allowed to listen back to.
+
+    The owner always is; admins are too, matching the read-only admin views
+    over the same transcripts. A conversation the caller may not see is
+    reported as missing rather than forbidden, so the endpoint never
+    confirms that someone else's conversation exists.
+    """
+    conversation = (
+        db.query(ChatConversation)
+        .filter(ChatConversation.id == conversation_id)
+        .first()
+    )
+    is_admin = user.ruolo in (ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN)
+    if not conversation or (conversation.user_id != user.id and not is_admin):
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+    return conversation
+
+
+@router.post("/recording/{conversation_id}", response_model=VoiceRecordingInfo)
+async def upload_recording(
+    conversation_id: UUID,
+    request: Request,
+    duration_ms: int | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Store the mixed audio of a call, posted by the browser on hang-up.
+
+    The body is the raw recording and its Content-Type is whatever the
+    browser's MediaRecorder settled on. Only the owner can upload, and a
+    second upload for the same conversation replaces the first: a retry
+    after a flaky POST must not leave two half recordings behind.
+    """
+    conversation = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+
+    content_type = (request.headers.get("content-type") or "").strip()
+    container = content_type.split(";")[0].strip().lower()
+    if container not in _ALLOWED_RECORDING_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Formato audio non supportato: {container or 'assente'}.",
+        )
+
+    # Reject on the declared length before buffering the body, then check
+    # again on the real thing: Content-Length is a claim, not a guarantee.
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_RECORDING_BYTES:
+        raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
+
+    audio = await request.body()
+    if not audio:
+        raise HTTPException(status_code=400, detail="Registrazione vuota.")
+    if len(audio) > MAX_RECORDING_BYTES:
+        raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
+
+    recording = (
+        db.query(ConversationRecording)
+        .filter(ConversationRecording.conversation_id == conversation_id)
+        .first()
+    )
+    if recording is None:
+        recording = ConversationRecording(conversation_id=conversation_id)
+        db.add(recording)
+    recording.mime_type = content_type[:64]
+    recording.duration_ms = duration_ms
+    recording.size_bytes = len(audio)
+    recording.audio = audio
+    db.commit()
+    db.refresh(recording)
+
+    return VoiceRecordingInfo.model_validate(recording)
+
+
+@router.get("/recording/{conversation_id}/info", response_model=VoiceRecordingInfo | None)
+def get_recording_info(
+    conversation_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Metadata only, null when the call was never recorded.
+
+    Lets the UI decide whether to render a player without pulling the audio
+    it may never play: the blob column is deferred, so this touches none of it.
+    """
+    _readable_conversation(conversation_id, current_user, db)
+    return (
+        db.query(ConversationRecording)
+        .filter(ConversationRecording.conversation_id == conversation_id)
+        .first()
+    )
+
+
+@router.get("/recording/{conversation_id}")
+def get_recording(
+    conversation_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The audio itself, served back in the format it was recorded in."""
+    _readable_conversation(conversation_id, current_user, db)
+    recording = (
+        db.query(ConversationRecording)
+        .filter(ConversationRecording.conversation_id == conversation_id)
+        .first()
+    )
+    if not recording:
+        raise HTTPException(status_code=404, detail="Registrazione non trovata.")
+
+    # Accessing .audio is what loads the deferred blob: one extra query,
+    # only on the endpoint that actually needs the bytes.
+    return Response(
+        content=recording.audio,
+        media_type=recording.mime_type,
+        headers={"Cache-Control": "private, max-age=3600"},
     )
 
 

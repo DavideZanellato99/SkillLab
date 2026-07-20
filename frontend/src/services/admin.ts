@@ -1,6 +1,6 @@
 /* Admin API service for managing users */
 import { apiFetch } from './api';
-import type { ChatMessage, ConversationEvaluation } from './api';
+import type { ChatMessage, ConversationEvaluation, ConversationMode } from './api';
 import type { AuthUser, RoleName, UserStatus } from './auth';
 
 export interface CreateUserPayload {
@@ -121,6 +121,8 @@ export const deleteAvatar = (avatarId: string) =>
 export interface ConversationReport {
   id: string;
   title: string;
+  /** Channel it ran on: "voice" for a call, "text" for a chat. */
+  mode: ConversationMode;
   avatar_id: string;
   avatar_name: string;
   avatar_category: string;
@@ -159,6 +161,8 @@ export interface EvaluationCriterionScore {
 export interface EvaluationReportRow {
   conversation_id: string;
   conversation_title: string;
+  /** Channel it ran on: "voice" for a call, "text" for a chat. */
+  mode: ConversationMode;
   user_id: string;
   user_email: string;
   user_nome: string;

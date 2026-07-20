@@ -179,6 +179,21 @@ class VoiceSessionResponse(BaseModel):
     conversation_id: UUID
 
 
+class VoiceRecordingInfo(BaseModel):
+    """Metadata of a stored call recording, without the audio itself.
+
+    Lets the UI decide whether to show a player without pulling megabytes
+    of audio it may never play.
+    """
+    conversation_id: UUID
+    mime_type: str
+    duration_ms: int | None
+    size_bytes: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # --- Auth Schemas ---
 
 class LoginRequest(BaseModel):
@@ -291,6 +306,8 @@ class ConversationReport(BaseModel):
     """Read-only recap of a single conversation for the activity report."""
     id: UUID
     title: str
+    # Channel it ran on: "voice" (call) or "text" (chat)
+    mode: str = CONVERSATION_MODE_VOICE
     avatar_id: UUID
     avatar_name: str
     avatar_category: str
@@ -324,6 +341,8 @@ class EvaluationReportRow(BaseModel):
     """One evaluated conversation, flattened for the dashboard charts."""
     conversation_id: UUID
     conversation_title: str
+    # Channel it ran on: "voice" (call) or "text" (chat)
+    mode: str = CONVERSATION_MODE_VOICE
     user_id: UUID
     user_email: str
     user_nome: str

@@ -124,6 +124,7 @@ def users_activity_report(
             ConversationReport(
                 id=conv.id,
                 title=conv.title,
+                mode=conv.mode,
                 avatar_id=conv.avatar_id,
                 avatar_name=avatar_name,
                 avatar_category=avatar_category,
@@ -174,6 +175,7 @@ def evaluations_report(
         EvaluationReportRow(
             conversation_id=conv.id,
             conversation_title=conv.title,
+            mode=conv.mode,
             user_id=user.id,
             user_email=user.email,
             user_nome=user.nome,

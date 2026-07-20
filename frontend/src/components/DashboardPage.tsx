@@ -4,6 +4,7 @@ import { fetchEvaluationsReport } from '../services/admin';
 import type { EvaluationReportRow } from '../services/admin';
 import { isAdmin } from '../services/auth';
 import SearchSelect from './SearchSelect';
+import ConversationModeBadge, { conversationModeLabel } from './ConversationModeBadge';
 import DataTable, { Td, Tr } from './DataTable';
 import Tooltip from './Tooltip';
 import { matchesSearch } from './tableSearch';
@@ -470,6 +471,8 @@ export default function DashboardPage() {
         matchesSearch(
           search,
           r.conversation_title,
+          // The channel is searchable by the same word the badge shows
+          conversationModeLabel(r.mode),
           displayName(r),
           r.user_email,
           r.avatar_name,
@@ -686,7 +689,10 @@ export default function DashboardPage() {
                   onClick={() => setDetailRow(r)}
                 >
                 <Td>
-                  <span className="text-[0.85rem] font-medium text-slate-100">{r.conversation_title}</span>
+                  <div className="flex items-center gap-2">
+                    <ConversationModeBadge mode={r.mode} iconOnly />
+                    <span className="text-[0.85rem] font-medium text-slate-100">{r.conversation_title}</span>
+                  </div>
                 </Td>
                 <Td className="text-[0.82rem] text-slate-400">{formatDateTime(r.conversation_at)}</Td>
                 <Td>

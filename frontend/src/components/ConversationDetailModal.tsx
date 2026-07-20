@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { fetchAdminConversation } from '../services/admin';
 import type { AdminConversationDetail, EvaluationReportRow } from '../services/admin';
+import CallRecordingPlayer from './CallRecordingPlayer';
+import ConversationModeBadge from './ConversationModeBadge';
 import EvaluationReport from './EvaluationReport';
 import MessageEmotions, { splitEmotionTag } from './MessageEmotions';
 
@@ -76,13 +78,23 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
           </svg>
         </button>
 
-        <header className="mb-6">
-          <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-            Dettaglio conversazione
-          </h2>
-          <p className="text-[0.85rem] text-slate-500">
-            {userName} con {row.avatar_name} · {formatDateTime(row.conversation_at)}
-          </p>
+        {/* pr-12 keeps the header clear of the absolutely placed close button */}
+        <header className="mb-6 flex items-start justify-between gap-4 pr-12">
+          <div>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h2 className="font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
+                Dettaglio conversazione
+              </h2>
+              <ConversationModeBadge mode={row.mode} />
+            </div>
+            <p className="text-[0.85rem] text-slate-500">
+              {userName} con {row.avatar_name} · {formatDateTime(row.conversation_at)}
+            </p>
+          </div>
+          {/* Calls leave an audio recording behind; chats do not */}
+          {row.mode === 'voice' && (
+            <CallRecordingPlayer conversationId={row.conversation_id} variant="inline" />
+          )}
         </header>
 
         {isLoading ? (

@@ -56,6 +56,12 @@ with engine.begin() as _conn:
             "WHERE ended_at IS NULL AND mode = 'voice'"
         )
     )
+    # Call recordings are already-compressed Opus (or AAC on Safari), so
+    # TOAST's compression pass only burns CPU on incompressible bytes.
+    # EXTERNAL stores them out of line, uncompressed.
+    _conn.execute(
+        text("ALTER TABLE conversation_recordings ALTER COLUMN audio SET STORAGE EXTERNAL")
+    )
 
 # The title is mandatory: conversations created before it became so are
 # backfilled with the same "<Category> <n>" default used for new ones, then

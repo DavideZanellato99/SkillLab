@@ -2,9 +2,20 @@
 
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, DateTime, Float, ForeignKey, Uuid, JSON
+from sqlalchemy import (
+    Column,
+    String,
+    Text,
+    DateTime,
+    Float,
+    Integer,
+    LargeBinary,
+    ForeignKey,
+    Uuid,
+    JSON,
+)
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, deferred
 from database import Base
 
 # Canonical role names (rows of the `roles` table)
@@ -213,6 +224,12 @@ class ChatConversation(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    recording = relationship(
+        "ConversationRecording",
+        back_populates="conversation",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<ChatConversation(id={self.id}, user_id={self.user_id}, avatar_id={self.avatar_id})>"
@@ -250,6 +267,41 @@ class ConversationEvaluation(Base):
 
     def __repr__(self):
         return f"<ConversationEvaluation(id={self.id}, conversation_id={self.conversation_id}, overall_score={self.overall_score})>"
+
+
+class ConversationRecording(Base):
+    """Mixed audio of a voice call: the operator and the avatar in one track.
+
+    The browser records the call (mic + the avatar's playback, mixed by the
+    Web Audio graph) and uploads it on hang-up, so the timeline is exactly
+    what the operator heard, pauses included.
+
+    Its own table, one row per conversation: the blob is heavy and must
+    never be dragged in by an ordinary query on chat_conversations. The
+    audio column is deferred for the same reason, so reading the metadata
+    (has a recording? how long?) costs nothing.
+    """
+
+    __tablename__ = "conversation_recordings"
+
+    conversation_id = Column(
+        Uuid,
+        ForeignKey("chat_conversations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # Whatever MediaRecorder actually produced: audio/webm;codecs=opus on
+    # Chrome and Firefox, audio/mp4 on Safari. Stored so playback is served
+    # back with the same type it was recorded in.
+    mime_type = Column(String(64), nullable=False)
+    duration_ms = Column(Integer, nullable=True)
+    size_bytes = Column(Integer, nullable=False)
+    audio = deferred(Column(LargeBinary, nullable=False))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    conversation = relationship("ChatConversation", back_populates="recording")
+
+    def __repr__(self):
+        return f"<ConversationRecording(conversation_id={self.conversation_id}, size_bytes={self.size_bytes})>"
 
 
 class ChatMessage(Base):

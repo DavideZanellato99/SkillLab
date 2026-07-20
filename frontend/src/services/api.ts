@@ -111,12 +111,11 @@ interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
 }
 
 /**
- * Unified fetch wrapper used by every API call.
- * Handles JSON serialization, query params, error extraction and base URL.
- * Auth travels in HttpOnly cookies (credentials: 'include'); on 401 the
- * session is refreshed via cookie and the request retried once.
+ * Performs the request and returns the raw Response, already past the auth
+ * retry and the error check. Callers decode the body themselves: most want
+ * JSON (apiFetch), audio downloads want a Blob (apiFetchBlob).
  */
-export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
+async function apiRequest(endpoint: string, options: ApiFetchOptions = {}): Promise<Response> {
   const { body, params, headers, ...rest } = options;
 
   // Build URL with optional query params
@@ -129,8 +128,11 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
     if (qs) url += `?${qs}`;
   }
 
+  // A Blob body travels as-is (audio uploads): fetch derives its
+  // Content-Type from blob.type, so serializing it would corrupt it.
+  const isRawBody = body instanceof Blob;
   const requestHeaders: Record<string, string> = { ...(headers as Record<string, string>) };
-  if (body !== undefined) {
+  if (body !== undefined && !isRawBody) {
     requestHeaders['Content-Type'] = 'application/json';
   }
 
@@ -139,7 +141,7 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
       ...rest,
       credentials: 'include',
       headers: requestHeaders,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isRawBody ? (body as Blob) : JSON.stringify(body),
     });
 
   let response = await doFetch();
@@ -163,7 +165,31 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
     throw new Error(message);
   }
 
+  return response;
+}
+
+/**
+ * Unified fetch wrapper used by every API call.
+ * Handles JSON serialization, query params, error extraction and base URL.
+ * Auth travels in HttpOnly cookies (credentials: 'include'); on 401 the
+ * session is refreshed via cookie and the request retried once.
+ */
+export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {}): Promise<T> {
+  const response = await apiRequest(endpoint, options);
   return response.json() as Promise<T>;
+}
+
+/**
+ * Same wrapper for binary responses (call recordings). The whole body is
+ * buffered, which suits files of a few MB: seeking inside the returned
+ * Blob is instant, at the cost of no progressive playback.
+ */
+export async function apiFetchBlob(
+  endpoint: string,
+  options: ApiFetchOptions = {},
+): Promise<Blob> {
+  const response = await apiRequest(endpoint, options);
+  return response.blob();
 }
 
 // =====================================================

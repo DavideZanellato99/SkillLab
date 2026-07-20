@@ -45,6 +45,10 @@ export interface ChatMessage {
 export interface ChatConversation {
   id: string;
   avatar_id: string;
+  /** Always set: defaults to "<Category> <n>" and can be renamed, never blank. */
+  title: string;
+  /** Set when the call hung up: the transcript is read-only and cannot be resumed. */
+  ended_at: string | null;
   created_at: string;
   updated_at: string;
   messages: ChatMessage[];
@@ -72,6 +76,10 @@ export interface ConversationEvaluation {
 export interface ChatConversationSummary {
   id: string;
   avatar_id: string;
+  /** Always set: defaults to "<Category> <n>" and can be renamed, never blank. */
+  title: string;
+  /** Set when the call hung up: the transcript is read-only and cannot be resumed. */
+  ended_at: string | null;
   created_at: string;
   updated_at: string;
   message_count: number;
@@ -174,10 +182,15 @@ export const fetchConversations = (avatarId: string) =>
 export const fetchConversation = (conversationId: string) =>
   apiFetch<ChatConversation>(`/api/chat/conversation/${conversationId}`);
 
-export const deleteConversation = (conversationId: string) =>
-  apiFetch<MessageResponse>(`/api/chat/conversation/${conversationId}`, {
-    method: 'DELETE',
+/** Rename a conversation; the title is mandatory, a blank one is rejected. */
+export const renameConversation = (conversationId: string, title: string) =>
+  apiFetch<ChatConversationSummary>(`/api/chat/conversation/${conversationId}`, {
+    method: 'PATCH',
+    body: { title },
   });
+
+/* Deleting a conversation is admin-only and lives in services/admin.ts
+ * (deleteAdminConversation): the chat router exposes no delete endpoint. */
 
 /** Ask the AI trainer to judge the whole conversation (replaces any previous evaluation). */
 export const evaluateConversation = (conversationId: string) =>

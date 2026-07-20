@@ -21,6 +21,7 @@ from schemas import (
     ChatConversationResponse,
     ChatConversationSummary,
     ConversationEvaluationResponse,
+    ConversationRenameRequest,
 )
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -36,6 +37,35 @@ def _evaluation_response(evaluation: ConversationEvaluation) -> ConversationEval
         criteria=data.get("criteria", []),
         created_at=evaluation.created_at,
         updated_at=evaluation.updated_at,
+    )
+
+
+def _conversation_summary(db: Session, conv: ChatConversation) -> ChatConversationSummary:
+    """Build the list entry for a conversation: counter plus last message preview."""
+    msg_count = (
+        db.query(func.count(ChatMessage.id))
+        .filter(ChatMessage.conversation_id == conv.id)
+        .scalar()
+    )
+    last_msg = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.conversation_id == conv.id)
+        .order_by(ChatMessage.created_at.desc())
+        .first()
+    )
+    preview = None
+    if last_msg:
+        preview = last_msg.content[:100] + ("..." if len(last_msg.content) > 100 else "")
+
+    return ChatConversationSummary(
+        id=conv.id,
+        avatar_id=conv.avatar_id,
+        title=conv.title,
+        ended_at=conv.ended_at,
+        created_at=conv.created_at,
+        updated_at=conv.updated_at,
+        message_count=msg_count or 0,
+        last_message_preview=preview,
     )
 
 
@@ -61,36 +91,7 @@ def list_conversations(
         .all()
     )
 
-    result = []
-    for conv in conversations:
-        msg_count = (
-            db.query(func.count(ChatMessage.id))
-            .filter(ChatMessage.conversation_id == conv.id)
-            .scalar()
-        )
-        # Get the last message for preview
-        last_msg = (
-            db.query(ChatMessage)
-            .filter(ChatMessage.conversation_id == conv.id)
-            .order_by(ChatMessage.created_at.desc())
-            .first()
-        )
-        preview = None
-        if last_msg:
-            preview = last_msg.content[:100] + ("..." if len(last_msg.content) > 100 else "")
-
-        result.append(
-            ChatConversationSummary(
-                id=conv.id,
-                avatar_id=conv.avatar_id,
-                created_at=conv.created_at,
-                updated_at=conv.updated_at,
-                message_count=msg_count or 0,
-                last_message_preview=preview,
-            )
-        )
-
-    return result
+    return [_conversation_summary(db, conv) for conv in conversations]
 
 
 @router.get("/conversation/{conversation_id}", response_model=ChatConversationResponse)
@@ -121,6 +122,8 @@ def get_conversation(
     return ChatConversationResponse(
         id=conversation.id,
         avatar_id=conversation.avatar_id,
+        title=conversation.title,
+        ended_at=conversation.ended_at,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         messages=[
@@ -135,6 +138,46 @@ def get_conversation(
     )
 
 
+@router.patch("/conversation/{conversation_id}", response_model=ChatConversationSummary)
+def rename_conversation(
+    conversation_id: UUID,
+    payload: ConversationRenameRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Rename one of the current user's conversations.
+
+    The title is mandatory, so a blank one is rejected upstream by the
+    schema. Every user can rename their own conversations: no admin role
+    required.
+    """
+    conversation = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+
+    # Renaming is not activity: updated_at orders the sidebar and dates each
+    # call, so it is written explicitly with its current value — otherwise the
+    # column's onupdate would bump it and move the conversation to the top.
+    db.query(ChatConversation).filter(ChatConversation.id == conversation.id).update(
+        {
+            ChatConversation.title: payload.title,
+            ChatConversation.updated_at: conversation.updated_at,
+        },
+        synchronize_session=False,
+    )
+    db.commit()
+    db.refresh(conversation)
+
+    return _conversation_summary(db, conversation)
+
+
 @router.post(
     "/conversation/{conversation_id}/evaluate",
     response_model=ConversationEvaluationResponse,
@@ -147,8 +190,7 @@ async def create_conversation_evaluation(
     """
     Judge the whole conversation with the AI trainer (OpenAI reasoning
     model, see openai_service.evaluate_conversation) and store the result.
-    Re-evaluating a conversation (e.g. after resuming the call) replaces
-    the previous evaluation.
+    Re-running the judgement replaces the previous evaluation.
     """
     conversation = (
         db.query(ChatConversation)

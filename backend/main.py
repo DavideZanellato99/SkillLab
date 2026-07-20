@@ -35,6 +35,45 @@ with engine.begin() as _conn:
             "status VARCHAR(20) NOT NULL DEFAULT 'active'"
         )
     )
+    _conn.execute(
+        text("ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS title VARCHAR(120)")
+    )
+    _conn.execute(
+        text("ALTER TABLE chat_conversations ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP")
+    )
+    # Voice sessions live in memory, so no call survives a restart: every
+    # conversation still open at boot is over and is closed retroactively.
+    _conn.execute(
+        text(
+            "UPDATE chat_conversations SET ended_at = updated_at "
+            "WHERE ended_at IS NULL"
+        )
+    )
+
+# The title is mandatory: conversations created before it became so are
+# backfilled with the same "<Category> <n>" default used for new ones, then
+# the column is locked down (both steps are idempotent).
+from models import Avatar, ChatConversation
+from conversation_titles import next_conversation_title
+from sqlalchemy import or_
+
+with SessionLocal() as _db:
+    _untitled = (
+        _db.query(ChatConversation, Avatar.category)
+        .join(Avatar, Avatar.id == ChatConversation.avatar_id)
+        .filter(or_(ChatConversation.title.is_(None), ChatConversation.title == ""))
+        .order_by(ChatConversation.created_at.asc())
+        .all()
+    )
+    for _conv, _category in _untitled:
+        _conv.title = next_conversation_title(_db, _conv.user_id, _category)
+        _db.flush()
+    _db.commit()
+
+with engine.begin() as _conn:
+    _conn.execute(
+        text("ALTER TABLE chat_conversations ALTER COLUMN title SET NOT NULL")
+    )
 
 # Ensure system roles and the mock super admin exist on startup
 with SessionLocal() as _db:

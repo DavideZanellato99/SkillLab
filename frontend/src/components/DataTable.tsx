@@ -161,7 +161,7 @@ export default function DataTable({
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
             <span className="whitespace-nowrap tabular-nums">
-              {rangeStart}–{rangeEnd} di {totalRows}
+              Da {rangeStart} a {rangeEnd} di {totalRows}
             </span>
             <div className="flex items-center gap-1">
               <button

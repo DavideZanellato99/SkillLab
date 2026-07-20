@@ -36,7 +36,7 @@ const FEATURES: Feature[] = [
   {
     title: 'Personaggi con carattere',
     text:
-      'Ogni personaggio ha una personalità completa: emozioni, obiettivi, punti deboli. Reagisce a come parli — si tranquillizza, si irrita, cambia atteggiamento — e non esce mai dal ruolo.',
+      'Ogni personaggio ha una personalità completa: emozioni, obiettivi, punti deboli. Reagisce a come parli, si tranquillizza, si irrita, cambia atteggiamento, e non esce mai dal ruolo.',
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -58,6 +58,17 @@ const FEATURES: Feature[] = [
     ),
   },
   {
+    title: 'Valutazione con feedback AI',
+    text:
+      'Dopo ogni chiamata ricevi un punteggio su linguaggio, affidabilità, empatia, gestione emotiva e capacità di risoluzione, con suggerimenti concreti su cosa migliorare la volta successiva.',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="7" />
+        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+      </svg>
+    ),
+  },
+  {
     title: 'Scenari su misura',
     text:
       'Assistenza clienti, vendita, colloqui, negoziazione: ogni conversazione può diventare allenamento. Chi amministra la piattaforma crea personaggi e scenari nuovi in pochi minuti.',
@@ -72,6 +83,17 @@ const FEATURES: Feature[] = [
         <line x1="1" y1="14" x2="7" y2="14" />
         <line x1="9" y1="8" x2="15" y2="8" />
         <line x1="17" y1="16" x2="23" y2="16" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Dashboard per i team',
+    text:
+      'Chi amministra l\'account vede l\'andamento di tutta l\'organizzazione: punteggio medio, criteri più forti e più deboli, confronto tra utenti e trend nel tempo.',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+        <polyline points="17 6 23 6 23 12" />
       </svg>
     ),
   },
@@ -91,7 +113,7 @@ const STEPS = [
   {
     n: '3',
     title: 'Migliora',
-    text: 'Rileggi la trascrizione, ripeti lo scenario e misura i tuoi progressi chiamata dopo chiamata.',
+    text: 'Ricevi subito un feedback con punteggi dettagliati, rileggi la trascrizione e ripeti lo scenario per misurare i tuoi progressi chiamata dopo chiamata.',
   },
 ];
 
@@ -124,7 +146,7 @@ export default function LandingPage() {
         <p className="mx-auto mb-10 max-w-[640px] animate-fade-in-up text-lg leading-relaxed text-slate-400 [animation-delay:0.2s] max-md:text-base">
           SkillLab ti mette al telefono con persone simulate dall'intelligenza artificiale:
           interlocutori con carattere, emozioni e obiettivi, per allenare le tue capacità di
-          comunicazione in un ambiente sicuro — dove sbagliare è il modo migliore di imparare.
+          comunicazione in un ambiente sicuro, dove sbagliare è il modo migliore di imparare.
         </p>
 
         <div className="flex animate-fade-in-up items-center justify-center gap-4 [animation-delay:0.3s] max-[480px]:flex-col">
@@ -146,7 +168,7 @@ export default function LandingPage() {
 
       {/* ── Features ── */}
       <section className="relative mx-auto max-w-[1100px] px-6 pb-24">
-        <div className="grid grid-cols-2 gap-6 max-md:grid-cols-1">
+        <div className="grid grid-cols-3 gap-6 max-lg:grid-cols-2 max-md:grid-cols-1">
           {FEATURES.map((f, i) => (
             <div key={f.title} className={`${cardCls} animate-fade-in-up`} style={{ animationDelay: `${0.1 + i * 0.1}s` }}>
               <div className={cardIconCls}>{f.icon}</div>

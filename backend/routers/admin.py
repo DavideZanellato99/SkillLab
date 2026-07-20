@@ -123,6 +123,7 @@ def users_activity_report(
         conversations_by_user[conv.user_id].append(
             ConversationReport(
                 id=conv.id,
+                title=conv.title,
                 avatar_id=conv.avatar_id,
                 avatar_name=avatar_name,
                 avatar_category=avatar_category,
@@ -172,6 +173,7 @@ def evaluations_report(
     return [
         EvaluationReportRow(
             conversation_id=conv.id,
+            conversation_title=conv.title,
             user_id=user.id,
             user_email=user.email,
             user_nome=user.nome,

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Avatar Schemas ---
@@ -64,11 +64,31 @@ class ChatConversationResponse(BaseModel):
     """Schema for conversation API responses."""
     id: UUID
     avatar_id: UUID
+    title: str
+    # When set, the call is over: the transcript is read-only
+    ended_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     messages: list[ChatMessageResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class ConversationRenameRequest(BaseModel):
+    """Schema for renaming a conversation.
+
+    The title is mandatory: a blank one is rejected, so a conversation is
+    never left without a name.
+    """
+    title: str = Field(min_length=1, max_length=120)
+
+    @field_validator("title")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Il titolo non può essere vuoto.")
+        return v
 
 
 class EvaluationCriterionResponse(BaseModel):
@@ -96,6 +116,9 @@ class ChatConversationSummary(BaseModel):
     """Lightweight schema for listing conversations (without full messages)."""
     id: UUID
     avatar_id: UUID
+    title: str
+    # When set, the call is over: the transcript is read-only
+    ended_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
@@ -234,6 +257,7 @@ class AdminAvatarResponse(BaseModel):
 class ConversationReport(BaseModel):
     """Read-only recap of a single conversation for the activity report."""
     id: UUID
+    title: str
     avatar_id: UUID
     avatar_name: str
     avatar_category: str
@@ -266,6 +290,7 @@ class EvaluationCriterionScore(BaseModel):
 class EvaluationReportRow(BaseModel):
     """One evaluated conversation, flattened for the dashboard charts."""
     conversation_id: UUID
+    conversation_title: str
     user_id: UUID
     user_email: str
     user_nome: str

@@ -120,6 +120,7 @@ export const deleteAvatar = (avatarId: string) =>
 
 export interface ConversationReport {
   id: string;
+  title: string;
   avatar_id: string;
   avatar_name: string;
   avatar_category: string;
@@ -157,6 +158,7 @@ export interface EvaluationCriterionScore {
 
 export interface EvaluationReportRow {
   conversation_id: string;
+  conversation_title: string;
   user_id: string;
   user_email: string;
   user_nome: string;

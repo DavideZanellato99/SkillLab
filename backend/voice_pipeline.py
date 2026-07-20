@@ -83,6 +83,28 @@ def _persist_message(conversation_id: str, role: str, content: str) -> None:
         db.close()
 
 
+def _mark_conversation_ended(conversation_id: str) -> None:
+    """Close the conversation for good. Blocking, called via asyncio.to_thread.
+
+    Once the call hangs up the transcript is final: no later session can
+    reopen it (see routers/voice.start_voice_session).
+    """
+    db = SessionLocal()
+    try:
+        conversation = (
+            db.query(ChatConversation)
+            .filter(ChatConversation.id == UUID(conversation_id))
+            .first()
+        )
+        if conversation and conversation.ended_at is None:
+            conversation.ended_at = datetime.now(timezone.utc)
+            db.commit()
+    except Exception as e:
+        print(f"[ERROR] Chiusura conversazione fallita: {e}")
+    finally:
+        db.close()
+
+
 class VoicePipeline:
     def __init__(self, browser: WebSocket, session: VoiceSession):
         self.browser = browser
@@ -166,6 +188,12 @@ class VoicePipeline:
             )
         finally:
             await self._cancel_turn(notify=False)
+            # Awaited, not fire-and-forget like _persist, so the write is
+            # never left pending when the handler returns. It is still no
+            # synchronisation point: on a hang-up the browser closed this
+            # socket, so it knows the call is over before this runs and
+            # tracks the closure on its side.
+            await asyncio.to_thread(_mark_conversation_ended, self.session.conversation_id)
 
     # ── Browser → STT ─────────────────────────────────
 

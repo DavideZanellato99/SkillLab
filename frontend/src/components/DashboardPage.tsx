@@ -467,7 +467,14 @@ export default function DashboardPage() {
   const searchedRows = useMemo(
     () =>
       detailRows.filter((r) =>
-        matchesSearch(search, displayName(r), r.user_email, r.avatar_name, formatDateTime(r.conversation_at)),
+        matchesSearch(
+          search,
+          r.conversation_title,
+          displayName(r),
+          r.user_email,
+          r.avatar_name,
+          formatDateTime(r.conversation_at),
+        ),
       ),
     [detailRows, search],
   );
@@ -649,6 +656,7 @@ export default function DashboardPage() {
           {/* Vista tabellare: tutti i valori raggiungibili senza hover */}
           <DataTable
             columns={[
+              { key: 'conversazione', label: 'Conversazione' },
               { key: 'data', label: 'Data' },
               { key: 'utente', label: 'Utente' },
               { key: 'avatar', label: 'Avatar' },
@@ -663,7 +671,7 @@ export default function DashboardPage() {
             ]}
             searchValue={search}
             onSearchChange={setSearch}
-            searchPlaceholder="Cerca per utente o avatar..."
+            searchPlaceholder="Cerca per conversazione, utente o avatar..."
             isEmpty={searchedRows.length === 0}
             emptyMessage={
               search
@@ -677,6 +685,9 @@ export default function DashboardPage() {
                   className="cursor-pointer"
                   onClick={() => setDetailRow(r)}
                 >
+                <Td>
+                  <span className="text-[0.85rem] font-medium text-slate-100">{r.conversation_title}</span>
+                </Td>
                 <Td className="text-[0.82rem] text-slate-400">{formatDateTime(r.conversation_at)}</Td>
                 <Td>
                   <span className="text-[0.85rem] font-medium text-slate-100">{displayName(r)}</span>

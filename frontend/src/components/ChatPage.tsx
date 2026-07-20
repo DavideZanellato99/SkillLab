@@ -3,12 +3,13 @@ import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdmin } from '../services/auth';
-import type { ChatMessage } from '../services/api';
+import type { ChatMessage, ChatConversationSummary } from '../services/api';
 import { getAvatarImageUrl } from '../services/api';
 import {
   useAvatar,
   useConversations,
   useConversation,
+  useRenameConversation,
   useDeleteConversation,
   useConversationEvaluation,
   useEvaluateConversation,
@@ -47,21 +48,35 @@ export default function ChatPage() {
 
   // ── TanStack mutations ────────────────────────────
   const deleteConversationMutation = useDeleteConversation();
+  const renameConversationMutation = useRenameConversation();
 
   // ── AI evaluation of the conversation ─────────────
   const { data: evaluation } = useConversationEvaluation(currentConversationId);
   const evaluateMutation = useEvaluateConversation();
   const { mutate: runEvaluation } = evaluateMutation;
   const [showEvaluation, setShowEvaluation] = useState(false);
+  // True only for the modal opened by a call that just ended: there the
+  // conversation must be named before the modal can be dismissed
+  const [isPostCall, setIsPostCall] = useState(false);
 
   // ── Voice mode ────────────────────────────────────
   const queryClient = useQueryClient();
   const [voiceActive, setVoiceActive] = useState(false);
+  // Conversation hung up in this session: known to be closed before the
+  // backend has finished recording it
+  const [endedConversationId, setEndedConversationId] = useState<string | null>(null);
 
   // ── Local state ───────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // ── Inline rename of a sidebar conversation ───────
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  // Esc unmounts the input, which also triggers its blur: this tells the
+  // blur handler to discard instead of saving
+  const renameCancelled = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -123,10 +138,54 @@ export default function ChatPage() {
   // trainer judge the whole conversation (only if the operator spoke)
   const handleVoiceSessionEnd = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    // Hanging up closes the socket from here, so this fires while the
+    // backend is still writing ended_at: the refetch above can still come
+    // back "open". The id is remembered locally so the dock does not wait
+    // for the server to catch up.
+    setEndedConversationId(currentConversationId);
     if (!currentConversationId || !messages.some((m) => m.role === 'user')) return;
+    setIsPostCall(true);
     setShowEvaluation(true);
     runEvaluation(currentConversationId);
   }, [queryClient, currentConversationId, messages, runEvaluation]);
+
+  // ── Rename a conversation (available to every user) ──
+  const startRename = (conv: ChatConversationSummary, e: React.MouseEvent) => {
+    e.stopPropagation();
+    renameCancelled.current = false;
+    setRenamingId(conv.id);
+    setRenameValue(conv.title);
+  };
+
+  // The title is mandatory: an empty name is discarded and the current one kept
+  const commitRename = (conv: ChatConversationSummary) => {
+    if (renameCancelled.current) return;
+    const title = renameValue.trim();
+    setRenamingId(null);
+    if (title && title !== conv.title) {
+      renameConversationMutation.mutate({ conversationId: conv.id, title });
+    }
+  };
+
+  const cancelRename = () => {
+    renameCancelled.current = true;
+    setRenamingId(null);
+  };
+
+  // Naming the conversation is what closes the post-call modal
+  const handleSubmitTitle = (title: string) => {
+    if (!currentConversationId) return;
+    renameConversationMutation.mutate(
+      { conversationId: currentConversationId, title },
+      {
+        onSuccess: () => {
+          setShowEvaluation(false);
+          setIsPostCall(false);
+          evaluateMutation.reset();
+        },
+      },
+    );
+  };
 
   // Delete a conversation
   const handleDeleteConversation = (convId: string, e: React.MouseEvent) => {
@@ -150,6 +209,30 @@ export default function ChatPage() {
     const date = new Date(dateStr);
     return date.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
   };
+
+  // Summary of the open conversation, taken from the sidebar list: it is
+  // already cached, so selecting a conversation shows the right dock at
+  // once. Reading ended_at from the detail query instead would flash the
+  // call button for as long as its fetch takes.
+  const currentSummary = conversations.find((conv) => conv.id === currentConversationId);
+
+  // Once the call hangs up the transcript is final: the backend refuses to
+  // reopen it, so the call button disappears. voiceActive keeps VoiceButton
+  // mounted while a call is live, and the explicit id check matters because
+  // with nothing selected both ids are null and would compare equal.
+  const isConversationClosed =
+    !voiceActive &&
+    currentConversationId !== null &&
+    (endedConversationId === currentConversationId || !!currentSummary?.ended_at);
+
+  // The list entry answers instantly when switching conversations; the
+  // detail query covers the conversation just created by a call, which the
+  // list has not caught up with yet.
+  const currentTitle = currentSummary?.title ?? conversationData?.title ?? null;
+
+  // Post-call the modal offers to replace the automatic name. Without an id
+  // there is nothing to save a new name to, so the field is hidden.
+  const renamableTitle = isPostCall && currentConversationId ? currentTitle : null;
 
   // ── Render guards ─────────────────────────────────
 
@@ -230,23 +313,58 @@ export default function ChatPage() {
             <ul className="flex list-none flex-col gap-1">
               {conversations.map((conv) => {
                 const isActive = currentConversationId === conv.id;
+                const isRenaming = renamingId === conv.id;
                 return (
                   <li
                     key={conv.id}
                     className={`group/conv flex cursor-pointer items-center gap-2 rounded-lg p-2 transition ${
                       isActive ? 'border-l-2 border-violet-600 bg-violet-600/10' : 'hover:bg-white/8'
                     }`}
-                    onClick={() => loadConversation(conv.id)}
+                    onClick={() => !isRenaming && loadConversation(conv.id)}
                   >
                     <div className="min-w-0 flex-1">
-                      <span className={`block truncate text-[0.8rem] ${isActive ? 'text-slate-100' : 'text-slate-400'}`}>
-                        {conv.last_message_preview || 'Nuova conversazione'}
-                      </span>
+                      {isRenaming ? (
+                        <input
+                          className="w-full rounded-md border border-violet-600/50 bg-gray-900/80 px-2 py-1 text-[0.8rem] text-slate-100 outline-none transition focus:border-violet-500"
+                          value={renameValue}
+                          maxLength={120}
+                          autoFocus
+                          placeholder="Nome della conversazione"
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onBlur={() => commitRename(conv)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              commitRename(conv);
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              cancelRename();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className={`block truncate text-[0.8rem] ${isActive ? 'text-slate-100' : 'text-slate-400'}`}>
+                          {conv.title}
+                        </span>
+                      )}
                       <span className="mt-0.5 block text-[0.68rem] text-slate-500">
                         {formatDate(conv.updated_at)} · {conv.message_count} msg
                       </span>
                     </div>
-                    {canDeleteConversations && (
+                    {!isRenaming && (
+                      <button
+                        className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 opacity-0 transition hover:bg-violet-600/12 hover:text-violet-400 focus-visible:opacity-100 group-hover/conv:opacity-100 max-[900px]:opacity-100"
+                        onClick={(e) => startRename(conv, e)}
+                        aria-label="Rinomina conversazione"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                        </svg>
+                      </button>
+                    )}
+                    {canDeleteConversations && !isRenaming && (
                       <button
                         className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-500 group-hover/conv:opacity-100"
                         onClick={(e) => handleDeleteConversation(conv.id, e)}
@@ -309,8 +427,11 @@ export default function ChatPage() {
             <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-white/6">
               <img className="h-full w-full object-cover" src={getAvatarImageUrl(avatar.image_url)} alt={avatar.name} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="font-heading text-base font-bold text-slate-100">{avatar.name}</h2>
+              {currentTitle && (
+                <p className="truncate text-[0.72rem] text-slate-500">{currentTitle}</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -320,6 +441,7 @@ export default function ChatPage() {
                   className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400 transition hover:-translate-y-px hover:bg-cyan-500/20"
                   onClick={() => {
                     evaluateMutation.reset();
+                    setIsPostCall(false);
                     setShowEvaluation(true);
                   }}
                 >
@@ -417,24 +539,49 @@ export default function ChatPage() {
           className="flex flex-col items-center gap-2 border-t border-white/6 bg-gray-900/30 px-8 py-6 backdrop-blur-lg max-[900px]:px-4"
           id="voice-dock"
         >
-          {avatarId && (
-            <VoiceButton
-              avatarId={avatarId}
-              conversationId={currentConversationId}
-              onConversationId={handleVoiceConversationId}
-              onTranscript={handleVoiceTranscript}
-              onError={setError}
-              onSessionEnd={handleVoiceSessionEnd}
-              onActiveChange={setVoiceActive}
-            />
+          {isConversationClosed ? (
+            /* Call hung up: the transcript is final, only a new call is possible */
+            <div className="flex flex-col items-center gap-3 text-center">
+              <p className="flex items-center gap-2 text-xs text-slate-500">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Questa conversazione è terminata e non può essere ripresa.
+              </p>
+              <button
+                className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400"
+                onClick={handleNewConversation}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Chiama di nuovo {avatar.name}
+              </button>
+            </div>
+          ) : (
+            <>
+              {avatarId && (
+                <VoiceButton
+                  avatarId={avatarId}
+                  conversationId={currentConversationId}
+                  onConversationId={handleVoiceConversationId}
+                  onTranscript={handleVoiceTranscript}
+                  onError={setError}
+                  onSessionEnd={handleVoiceSessionEnd}
+                  onActiveChange={setVoiceActive}
+                />
+              )}
+              <p className="text-center text-xs text-slate-500">
+                {voiceActive ? (
+                  <>Chiamata in corso · premi il pulsante rosso per riagganciare</>
+                ) : (
+                  <>📞 Premi Chiama per telefonare a {avatar.name}</>
+                )}
+              </p>
+            </>
           )}
-          <p className="text-center text-xs text-slate-500">
-            {voiceActive ? (
-              <>Chiamata in corso · premi il pulsante rosso per riagganciare</>
-            ) : (
-              <>📞 Premi Chiama per telefonare a {avatar.name}</>
-            )}
-          </p>
         </div>
 
         {/* Post-call evaluation */}
@@ -445,9 +592,19 @@ export default function ChatPage() {
             isLoading={evaluateMutation.isPending}
             error={evaluateMutation.error instanceof Error ? evaluateMutation.error.message : null}
             onRetry={() => currentConversationId && runEvaluation(currentConversationId)}
+            currentTitle={renamableTitle}
+            onSubmitTitle={handleSubmitTitle}
+            isSavingTitle={renameConversationMutation.isPending}
+            titleError={
+              renameConversationMutation.error instanceof Error
+                ? renameConversationMutation.error.message
+                : null
+            }
             onClose={() => {
               setShowEvaluation(false);
+              setIsPostCall(false);
               evaluateMutation.reset();
+              renameConversationMutation.reset();
             }}
           />
         )}

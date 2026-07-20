@@ -6,8 +6,11 @@ import type { AuthUser, RoleName, UserStatus } from '../services/auth';
 import Select from './Select';
 import DataTable, { Td, Tr } from './DataTable';
 import Tooltip from './Tooltip';
+import KebabMenu from './KebabMenu';
 import { matchesSearch } from './tableSearch';
+import type { ReactNode } from 'react';
 import type { DataTableColumn } from './DataTable';
+import type { KebabMenuItem } from './KebabMenu';
 
 /* Shared form styles (modals, same look as the auth modal) */
 const fieldCls = 'flex flex-col gap-1.5';
@@ -46,6 +49,112 @@ const STATUS_BADGE_CLASSES: Record<UserStatus, string> = {
   active: 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
   suspended: 'border border-amber-500/30 bg-amber-500/10 text-amber-400',
   disabled: 'border border-red-500/30 bg-red-500/10 text-red-400',
+};
+
+/* Icone 14x14 delle voci del menu kebab */
+const suspendIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="10" y1="15" x2="10" y2="9" />
+    <line x1="14" y1="15" x2="14" y2="9" />
+  </svg>
+);
+const reactivateIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="9 12 11 14 15 10" />
+  </svg>
+);
+const disableIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+  </svg>
+);
+const resendIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+  </svg>
+);
+
+/* Sospensione, riattivazione e disabilitazione sono azioni distinte: ognuna
+ * ha la propria voce di menu e la propria modale di conferma, con copy e
+ * accento dedicati. La chiave è lo stato verso cui si sta passando. */
+interface StatusAction {
+  title: string;
+  iconWrapperCls: string;
+  icon: ReactNode;
+  description: (email: string) => ReactNode;
+  confirmLabel: string;
+  pendingLabel: string;
+  confirmCls: string;
+  /** Participio usato nel messaggio di conferma in cima alla pagina */
+  successVerb: string;
+}
+
+const STATUS_ACTIONS: Record<UserStatus, StatusAction> = {
+  active: {
+    title: 'Riattiva Account',
+    iconWrapperCls: 'border border-emerald-500/25 bg-emerald-500/10',
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="9 12 11 14 15 10" />
+      </svg>
+    ),
+    description: (email) => (
+      <>
+        L'account di <strong className="text-slate-100">{email}</strong> torna attivo: l'utente potrà
+        accedere di nuovo con le credenziali che possiede già.
+      </>
+    ),
+    confirmLabel: 'Riattiva Account',
+    pendingLabel: 'Riattivazione...',
+    confirmCls: 'border border-emerald-500/35 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
+    successVerb: 'riattivato',
+  },
+  suspended: {
+    title: 'Sospendi Account',
+    iconWrapperCls: 'border border-amber-500/25 bg-amber-500/10',
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="10" y1="15" x2="10" y2="9" />
+        <line x1="14" y1="15" x2="14" y2="9" />
+      </svg>
+    ),
+    description: (email) => (
+      <>
+        Blocchi temporaneamente l'accesso di <strong className="text-slate-100">{email}</strong>: il login
+        viene impedito e le sessioni aperte chiuse subito. La sospensione è reversibile, puoi riattivare
+        l'account quando vuoi.
+      </>
+    ),
+    confirmLabel: 'Sospendi Account',
+    pendingLabel: 'Sospensione...',
+    confirmCls: 'border border-amber-500/35 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
+    successVerb: 'sospeso',
+  },
+  disabled: {
+    title: 'Disabilita Account',
+    iconWrapperCls: 'border border-red-500/25 bg-red-500/10',
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+      </svg>
+    ),
+    description: (email) => (
+      <>
+        Disabiliti in modo definitivo <strong className="text-slate-100">{email}</strong>: il login viene
+        bloccato, le sessioni aperte chiuse subito e l'account non potrà più essere riattivato.
+      </>
+    ),
+    confirmLabel: 'Disabilita Definitivamente',
+    pendingLabel: 'Disabilitazione...',
+    confirmCls: 'border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]',
+    successVerb: 'disabilitato definitivamente',
+  },
 };
 
 const USER_COLUMNS: DataTableColumn[] = [
@@ -115,9 +224,9 @@ export default function AdminPage() {
   const [isResending, setIsResending] = useState(false);
   const [resendError, setResendError] = useState('');
 
-  // Account-status modal states (pendingStatus = the transition in flight)
-  const [statusUser, setStatusUser] = useState<AuthUser | null>(null);
-  const [pendingStatus, setPendingStatus] = useState<UserStatus | null>(null);
+  // Account-status confirmation states (`target` = the status being applied)
+  const [statusAction, setStatusAction] = useState<{ user: AuthUser; target: UserStatus } | null>(null);
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [statusError, setStatusError] = useState('');
 
   const flashSuccess = (msg: string) => {
@@ -235,27 +344,24 @@ export default function AdminPage() {
     }
   };
 
-  const handleSetStatus = async (newStatus: UserStatus) => {
-    if (!statusUser || pendingStatus) return;
+  const handleConfirmStatus = async () => {
+    if (!statusAction) return;
     setStatusError('');
-    setPendingStatus(newStatus);
+    setIsSavingStatus(true);
 
     try {
-      const updated = await setUserStatus(statusUser.id, newStatus);
+      const updated = await setUserStatus(statusAction.user.id, statusAction.target);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-      setStatusUser(null);
-      const verbs: Record<UserStatus, string> = {
-        active: 'riattivato',
-        suspended: 'sospeso',
-        disabled: 'disabilitato definitivamente',
-      };
-      flashSuccess(`Utente ${updated.email} ${verbs[newStatus]}.`);
+      setStatusAction(null);
+      flashSuccess(`Utente ${updated.email} ${STATUS_ACTIONS[statusAction.target].successVerb}.`);
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : "Errore durante il cambio di stato dell'account.");
     } finally {
-      setPendingStatus(null);
+      setIsSavingStatus(false);
     }
   };
+
+  const statusCfg = statusAction ? STATUS_ACTIONS[statusAction.target] : null;
 
   if (!isSuperAdmin(user)) {
     return (
@@ -336,6 +442,57 @@ export default function AdminPage() {
             const isSystemAccount = u.cognito_sub.startsWith('mock-');
             const deleteDisabled = isSelf || isSystemAccount;
             const isActive = u.status === 'active';
+
+            // Azioni secondarie: restano nel kebab, con il motivo dell'eventuale blocco
+            const statusBlockedReason = isSelf
+              ? 'Non puoi modificare lo stato del tuo stesso account'
+              : "Non è possibile modificare lo stato dell'account di sistema";
+            const openStatusModal = (target: UserStatus) => {
+              setStatusError('');
+              setStatusAction({ user: u, target });
+            };
+
+            const menuItems: KebabMenuItem[] = [];
+            // La disabilitazione è definitiva: su un account già disabilitato
+            // non resta alcuna transizione di stato possibile.
+            if (u.status !== 'disabled') {
+              const toggleTarget: UserStatus = u.status === 'suspended' ? 'active' : 'suspended';
+              menuItems.push({
+                key: 'toggle',
+                label: toggleTarget === 'active' ? 'Riattiva account' : 'Sospendi account',
+                icon: toggleTarget === 'active' ? reactivateIcon : suspendIcon,
+                disabled: deleteDisabled,
+                disabledReason: statusBlockedReason,
+                onSelect: () => openStatusModal(toggleTarget),
+              });
+              menuItems.push({
+                key: 'disable',
+                label: 'Disabilita account',
+                icon: disableIcon,
+                danger: true,
+                disabled: deleteDisabled,
+                disabledReason: statusBlockedReason,
+                onSelect: () => openStatusModal('disabled'),
+              });
+            }
+            menuItems.push({
+              key: 'resend',
+              label: 'Rinvia credenziali',
+              icon: resendIcon,
+              disabled: deleteDisabled || !isActive,
+              disabledReason: isSelf
+                ? 'Non puoi rinviare le credenziali del tuo stesso account'
+                : isSystemAccount
+                  ? "Non è possibile rinviare le credenziali dell'account di sistema"
+                  : u.status === 'disabled'
+                    ? "L'account è disabilitato definitivamente"
+                    : "L'account è sospeso: riattivalo prima di rinviare le credenziali",
+              onSelect: () => {
+                setResendError('');
+                setResendingUser(u);
+              },
+            });
+
             return (
               <Tr key={u.id} className={isActive ? '' : 'opacity-60'}>
                 <Td>
@@ -385,57 +542,6 @@ export default function AdminPage() {
                       wrap
                       content={
                         isSelf
-                          ? 'Non puoi modificare lo stato del tuo stesso account'
-                          : isSystemAccount
-                            ? "Non è possibile modificare lo stato dell'account di sistema"
-                            : u.status === 'disabled'
-                              ? 'Account disabilitato definitivamente'
-                              : u.status === 'suspended'
-                                ? "Riattiva o disabilita l'account"
-                                : "Sospendi o disabilita l'account"
-                      }
-                    >
-                      <button
-                        className={`${actionBtnCls} hover:border-amber-500 hover:bg-amber-500/10 hover:text-amber-400`}
-                        onClick={() => { setStatusError(''); setStatusUser(u); }}
-                        disabled={deleteDisabled || u.status === 'disabled'}
-                        aria-label={`Stato account di ${u.email}`}
-                      >
-                        {/* Ban icon (circle-slash) */}
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                        </svg>
-                      </button>
-                    </Tooltip>
-                    <Tooltip
-                      wrap
-                      content={
-                        isSelf
-                          ? 'Non puoi rinviare le credenziali del tuo stesso account'
-                          : isSystemAccount
-                            ? "Non è possibile rinviare le credenziali dell'account di sistema"
-                            : !isActive
-                              ? "L'account non è attivo: riattivalo prima di rinviare le credenziali"
-                              : 'Rinvia credenziali via Cognito'
-                      }
-                    >
-                      <button
-                        className={`${actionBtnCls} hover:border-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400`}
-                        onClick={() => { setResendError(''); setResendingUser(u); }}
-                        disabled={deleteDisabled || !isActive}
-                        aria-label={`Rinvia credenziali a ${u.email}`}
-                      >
-                        {/* Key icon */}
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                        </svg>
-                      </button>
-                    </Tooltip>
-                    <Tooltip
-                      wrap
-                      content={
-                        isSelf
                           ? 'Non puoi eliminare il tuo stesso account'
                           : isSystemAccount
                             ? "Non è possibile eliminare l'account di sistema"
@@ -453,6 +559,13 @@ export default function AdminPage() {
                           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                         </svg>
                       </button>
+                    </Tooltip>
+                    <Tooltip wrap content="Altre azioni">
+                      <KebabMenu
+                        label={`Altre azioni per ${u.email}`}
+                        items={menuItems}
+                        buttonClassName={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
+                      />
                     </Tooltip>
                   </div>
                 </Td>
@@ -658,11 +771,11 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Modal Stato Account (sospendi / riattiva / disabilita) */}
-      {statusUser && (
-        <div className={overlayCls} onClick={() => !pendingStatus && setStatusUser(null)}>
+      {/* Modal Conferma Cambio Stato (sospendi / riattiva / disabilita) */}
+      {statusAction && statusCfg && (
+        <div className={overlayCls} onClick={() => !isSavingStatus && setStatusAction(null)}>
           <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button className={modalCloseCls} onClick={() => setStatusUser(null)} disabled={!!pendingStatus}>
+            <button className={modalCloseCls} onClick={() => setStatusAction(null)} disabled={isSavingStatus}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
@@ -670,83 +783,36 @@ export default function AdminPage() {
             </button>
 
             <div className="mb-6 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                </svg>
+              <div className={`mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl ${statusCfg.iconWrapperCls}`}>
+                {statusCfg.icon}
               </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">Stato Account</h2>
-              <p className="text-[0.85rem] text-slate-500">
-                {statusUser.status === 'suspended' ? (
-                  <>
-                    L'account di <strong className="text-slate-100">{statusUser.email}</strong> è sospeso:
-                    puoi riattivarlo oppure disabilitarlo definitivamente.
-                  </>
-                ) : (
-                  <>
-                    Limita l'accesso di <strong className="text-slate-100">{statusUser.email}</strong>: la
-                    sospensione è reversibile, la disabilitazione è definitiva. In entrambi i casi il login
-                    viene bloccato e le sessioni aperte chiuse immediatamente.
-                  </>
-                )}
-              </p>
+              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">{statusCfg.title}</h2>
+              <p className="text-[0.85rem] text-slate-500">{statusCfg.description(statusAction.user.email)}</p>
             </div>
 
             {statusError && <ErrorBox message={statusError} />}
 
-            <div className="flex flex-col gap-3">
-              {statusUser.status === 'suspended' ? (
-                <button
-                  className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => handleSetStatus('active')}
-                  disabled={!!pendingStatus}
-                >
-                  {pendingStatus === 'active' ? (
-                    <>
-                      <span className={spinnerCls} />
-                      Riattivazione...
-                    </>
-                  ) : (
-                    "Riattiva l'Account"
-                  )}
-                </button>
-              ) : (
-                <button
-                  className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => handleSetStatus('suspended')}
-                  disabled={!!pendingStatus}
-                >
-                  {pendingStatus === 'suspended' ? (
-                    <>
-                      <span className={spinnerCls} />
-                      Sospensione...
-                    </>
-                  ) : (
-                    'Sospendi (reversibile)'
-                  )}
-                </button>
-              )}
+            <div className="flex gap-3">
               <button
-                className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => handleSetStatus('disabled')}
-                disabled={!!pendingStatus}
-              >
-                {pendingStatus === 'disabled' ? (
-                  <>
-                    <span className={spinnerCls} />
-                    Disabilitazione...
-                  </>
-                ) : (
-                  'Disabilita Definitivamente'
-                )}
-              </button>
-              <button
-                className="flex cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => setStatusUser(null)}
-                disabled={!!pendingStatus}
+                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => setStatusAction(null)}
+                disabled={isSavingStatus}
               >
                 Annulla
+              </button>
+              <button
+                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${statusCfg.confirmCls}`}
+                onClick={handleConfirmStatus}
+                disabled={isSavingStatus}
+              >
+                {isSavingStatus ? (
+                  <>
+                    <span className={spinnerCls} />
+                    {statusCfg.pendingLabel}
+                  </>
+                ) : (
+                  statusCfg.confirmLabel
+                )}
               </button>
             </div>
           </div>

@@ -176,6 +176,12 @@ class ChatConversation(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
     avatar_id = Column(Uuid, ForeignKey("avatars.id"), nullable=False, index=True)
+    # Always set: a new conversation is born with a "<Category> <n>" default
+    # (see conversation_titles) that the owner can rename, never blank
+    title = Column(String(120), nullable=False)
+    # Set when the call hangs up: a closed conversation is a read-only
+    # transcript, it can no longer be resumed (only renamed)
+    ended_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime,
@@ -206,8 +212,8 @@ class ChatConversation(Base):
 class ConversationEvaluation(Base):
     """AI judgement of the operator's performance over a whole conversation.
 
-    One evaluation per conversation: re-evaluating (e.g. after resuming the
-    call) replaces the previous result.
+    One evaluation per conversation: re-running the judgement replaces the
+    previous result.
     """
 
     __tablename__ = "conversation_evaluations"

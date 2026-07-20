@@ -6,16 +6,18 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { ChatConversation, ChatConversationSummary } from '../services/api';
 import {
   fetchAvatars,
   fetchAvatar,
   fetchCategories,
   fetchConversations,
   fetchConversation,
-  deleteConversation,
+  renameConversation,
   evaluateConversation,
   fetchConversationEvaluation,
 } from '../services/api';
+import { deleteAdminConversation } from '../services/admin';
 
 // =====================================================
 //  QUERY KEY FACTORY — single source of truth for keys
@@ -115,12 +117,38 @@ export function useEvaluateConversation() {
   });
 }
 
-/** Delete a conversation. */
+/** Rename a conversation; the title is mandatory, a blank one is rejected. */
+export function useRenameConversation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
+      renameConversation(conversationId, title),
+
+    // Patch the cached copies instead of refetching: the response already
+    // carries the updated summary. It also carries ended_at, which the
+    // caches can still be missing when the rename follows a hang-up.
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ChatConversationSummary[]>(
+        queryKeys.conversations.byAvatar(updated.avatar_id),
+        (list) => list?.map((conv) => (conv.id === updated.id ? { ...conv, ...updated } : conv)),
+      );
+      queryClient.setQueryData<ChatConversation>(
+        queryKeys.conversations.detail(updated.id),
+        (conv) =>
+          conv ? { ...conv, title: updated.title, ended_at: updated.ended_at } : conv,
+      );
+    },
+  });
+}
+
+/** Delete a conversation. Admin-only: the backend has no endpoint for a
+ *  normal user to delete their own history. */
 export function useDeleteConversation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (conversationId: string) => deleteConversation(conversationId),
+    mutationFn: (conversationId: string) => deleteAdminConversation(conversationId),
 
     onSuccess: () => {
       // Invalidate all conversation lists

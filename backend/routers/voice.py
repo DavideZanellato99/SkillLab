@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Avatar, User, ChatConversation, ChatMessage
 from auth_dependency import get_current_user
+from conversation_titles import next_conversation_title
 from schemas import VoiceSessionRequest, VoiceSessionResponse
 from voice_sessions import create_voice_session, get_voice_session
 from voice_pipeline import VoicePipeline
@@ -60,8 +61,18 @@ def start_voice_session(
         )
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+        # A hung-up call is final: the transcript can no longer be extended
+        if conversation.ended_at is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Questa conversazione è terminata: avviane una nuova per parlare ancora con l'avatar.",
+            )
     else:
-        conversation = ChatConversation(avatar_id=request.avatar_id, user_id=current_user.id)
+        conversation = ChatConversation(
+            avatar_id=request.avatar_id,
+            user_id=current_user.id,
+            title=next_conversation_title(db, current_user.id, avatar.category),
+        )
         db.add(conversation)
         db.commit()
         db.refresh(conversation)

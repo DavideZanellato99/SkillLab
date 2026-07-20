@@ -760,62 +760,71 @@ export default function ChatPage() {
               </button>
             </div>
           ) : isChatMode ? (
-            /* Text chat: the operator writes, the avatar answers in character */
-            <div className="flex w-full max-w-[760px] flex-col gap-2">
-              <div className="flex items-end gap-2 rounded-2xl border border-white/6 bg-slate-800/50 px-4 py-2 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]">
-                <textarea
-                  ref={chatInputRef}
-                  className="max-h-32 flex-1 resize-none border-none bg-transparent py-2 text-sm leading-relaxed text-slate-100 outline-none placeholder:text-slate-500"
-                  rows={1}
-                  maxLength={2000}
-                  value={chatInput}
-                  placeholder={`Scrivi a ${avatar.name}...`}
-                  onChange={(e) => {
-                    setChatInput(e.target.value);
-                    // Grow with the text, up to the max-height above
-                    e.target.style.height = 'auto';
-                    e.target.style.height = `${e.target.scrollHeight}px`;
-                  }}
-                  onKeyDown={(e) => {
-                    // Enter sends, Shift+Enter breaks the line
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                />
-                <Tooltip content="Invia il messaggio">
+            /* Text chat: the operator writes, the avatar answers in character.
+               Ending it is the same gesture as hanging up — the round red
+               button sits where the hang-up one sits during a call. */
+            <div className="flex w-full max-w-[860px] flex-col gap-2">
+              <div className="flex items-end gap-4">
+                <div className="flex min-w-0 flex-1 items-end gap-2 rounded-2xl border border-white/6 bg-slate-800/50 px-4 py-2 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]">
+                  <textarea
+                    ref={chatInputRef}
+                    className="max-h-32 flex-1 resize-none border-none bg-transparent py-2 text-sm leading-relaxed text-slate-100 outline-none placeholder:text-slate-500"
+                    rows={1}
+                    maxLength={2000}
+                    value={chatInput}
+                    placeholder={`Scrivi a ${avatar.name}...`}
+                    onChange={(e) => {
+                      setChatInput(e.target.value);
+                      // Grow with the text, up to the max-height above
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${e.target.scrollHeight}px`;
+                    }}
+                    onKeyDown={(e) => {
+                      // Enter sends, Shift+Enter breaks the line
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                  />
+                  <Tooltip content="Invia il messaggio">
+                    <button
+                      className="mb-1 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-gradient-to-br from-violet-600 to-violet-700 text-white shadow-[0_4px_12px_rgba(124,58,237,0.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+                      onClick={handleSendMessage}
+                      disabled={!chatInput.trim() || sendMessageMutation.isPending}
+                      aria-label="Invia il messaggio"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                      </svg>
+                    </button>
+                  </Tooltip>
+                </div>
+                <Tooltip content="Termina la chat">
                   <button
-                    className="mb-1 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-gradient-to-br from-violet-600 to-violet-700 text-white shadow-[0_4px_12px_rgba(124,58,237,0.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
-                    onClick={handleSendMessage}
-                    disabled={!chatInput.trim() || sendMessageMutation.isPending}
-                    aria-label="Invia il messaggio"
+                    className="flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-red-500/90 text-white shadow-[0_8px_24px_rgba(239,68,68,0.4)] transition hover:scale-[1.08] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+                    onClick={handleEndChat}
+                    disabled={endChatMutation.isPending}
+                    id="end-chat-btn"
+                    aria-label="Termina la chat"
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="22" y1="2" x2="11" y2="13" />
-                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                   </button>
                 </Tooltip>
               </div>
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-slate-500">
-                  {sendMessageMutation.isPending
-                    ? `${avatar.name} sta scrivendo...`
-                    : '💬 Invio per mandare il messaggio, Shift+Invio per andare a capo'}
-                </p>
-                <button
-                  className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-white/6 bg-white/4 px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:-translate-y-px hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={handleEndChat}
-                  disabled={endChatMutation.isPending}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                  {endChatMutation.isPending ? 'Chiusura...' : 'Termina chat'}
-                </button>
-              </div>
+              <p className="text-center text-xs text-slate-500">
+                {sendMessageMutation.isPending ? (
+                  <>{avatar.name} sta scrivendo...</>
+                ) : endChatMutation.isPending ? (
+                  <>Chiusura della chat in corso...</>
+                ) : (
+                  <>💬 Invio manda il messaggio, Shift+Invio va a capo · Premi il pulsante rosso per terminare</>
+                )}
+              </p>
             </div>
           ) : (
             <>

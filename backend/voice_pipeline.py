@@ -14,9 +14,12 @@ Browser-sent JSON events:
   start (ring finished; the avatar — the caller — waits in silence for
   the operator to answer and speak first), end (hang up)
 
-Barge-in: a partial transcript while a turn is generating/speaking
-cancels the LLM task, cancels the Cartesia context and tells the
-browser to flush its audio queue.
+Half-duplex: the operator never talks over the avatar. The browser
+gates the mic (sends silence) from the committed transcript until the
+avatar's audio has finished playing, and partial transcripts never
+interrupt a turn. Only a committed transcript arriving while a turn is
+in flight cancels it — the VAD split one operator sentence into two
+commits, so the turn restarts with the fuller history.
 """
 
 import asyncio
@@ -206,9 +209,6 @@ class VoicePipeline:
                 if not text:
                     continue
                 await self._send_json({"type": "user_partial", "text": text})
-                # Barge-in: the operator talks over the avatar
-                if self._speaking or (self._turn_task and not self._turn_task.done()):
-                    await self._cancel_turn(notify=True)
 
             elif message_type in (
                 "committed_transcript",
@@ -217,8 +217,12 @@ class VoicePipeline:
                 text = (event.get("text") or "").strip()
                 if not text:
                     continue
-                await self._send_json({"type": "user_final", "text": text})
+                # A commit while a turn is in flight means the VAD split the
+                # operator's sentence: restart with the fuller history. The
+                # cancel goes first so the browser's mic gate (armed by
+                # user_final) stays closed through the regeneration.
                 await self._cancel_turn(notify=True)
+                await self._send_json({"type": "user_final", "text": text})
                 self.history.append({"role": "user", "content": text})
                 self._persist("user", text)
                 self._start_turn()
@@ -265,7 +269,7 @@ class VoicePipeline:
         self._turn_task = asyncio.create_task(self._run_turn())
 
     async def _cancel_turn(self, notify: bool) -> None:
-        """Stop the in-flight turn (barge-in or hang-up)."""
+        """Stop the in-flight turn (restart on a late commit, or hang-up)."""
         interrupted = False
         task_cancelled = False
         if self._turn_task and not self._turn_task.done():

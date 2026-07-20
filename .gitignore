@@ -11,3 +11,7 @@ venv/
 # Node
 node_modules/
 dist/
+
+# Local TLS-inspection root CA (machine-specific, needed only to build
+# Docker images behind an intercepting antivirus/proxy) — see Dockerfiles.
+avast-root.crt

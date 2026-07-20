@@ -80,6 +80,9 @@ export class VoiceCall {
   private scheduled = new Set<AudioBufferSourceNode>();
   private serverDoneSpeaking = true;
   private audible = false;
+  // True from the operator's committed turn until the avatar's reply audio
+  // starts (or the turn dies). Mic is gated while processing or audible.
+  private processing = false;
 
   private muted = true; // stays muted until start() (during the ring)
   private closed = false;
@@ -116,7 +119,13 @@ export class VoiceCall {
     }
     this.captureNode = new AudioWorkletNode(this.ctx, 'pcm-capture');
     this.captureNode.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
-      if (!this.muted && this.ws?.readyState === WebSocket.OPEN) {
+      if (this.muted || this.ws?.readyState !== WebSocket.OPEN) return;
+      if (this.processing || this.audible) {
+        // Half-duplex: the operator never talks over the avatar. Send
+        // same-length silence instead of the mic so the STT stream stays
+        // alive and its VAD closes any utterance cleanly.
+        this.ws.send(new ArrayBuffer(e.data.byteLength));
+      } else {
         this.ws.send(e.data);
       }
     };
@@ -164,6 +173,7 @@ export class VoiceCall {
             this.cb.onUserPartial?.(msg.text ?? '');
             break;
           case 'user_final':
+            this.processing = true;
             this.cb.onUserFinal(msg.text ?? '');
             this.cb.onProcessingChange(true);
             break;
@@ -172,16 +182,19 @@ export class VoiceCall {
             break;
           case 'speaking_start':
             this.serverDoneSpeaking = false;
+            this.processing = false;
             this.cb.onProcessingChange(false);
             break;
           case 'speaking_end':
             this.serverDoneSpeaking = true;
+            this.processing = false;
             this.cb.onProcessingChange(false);
             // If the queue already drained, close the speaking state now
             if (this.scheduled.size === 0) this.setAudible(false);
             break;
           case 'interrupt':
             this.flushPlayback();
+            this.processing = false;
             this.cb.onProcessingChange(false);
             break;
           case 'error':

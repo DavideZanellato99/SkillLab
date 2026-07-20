@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: skilllab_db
+    volumes:
+      - db_data:/var/lib/postgresql
+    ports:
+      # Host 5432 is already taken by the native Windows Postgres, so the
+      # containerized one is exposed on 5433 (user: postgres / pw: postgres).
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overrides the value from backend/.env: inside the compose network
+      # Postgres is reachable at the "db" service name, not localhost.
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/skilllab_db
+    volumes:
+      # Persist uploaded avatar images across rebuilds/restarts.
+      - backend_static:/app/static
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  backend_static:

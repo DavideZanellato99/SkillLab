@@ -15,7 +15,7 @@ from sqlalchemy import func
 from database import get_db
 from models import Avatar, User, ChatConversation, ChatMessage, ConversationEvaluation
 from auth_dependency import get_current_user, get_current_admin
-from gemini_service import evaluate_conversation
+from openai_service import evaluate_conversation
 from schemas import (
     ChatMessageResponse,
     ChatConversationResponse,
@@ -140,15 +140,16 @@ def get_conversation(
     "/conversation/{conversation_id}/evaluate",
     response_model=ConversationEvaluationResponse,
 )
-def create_conversation_evaluation(
+async def create_conversation_evaluation(
     conversation_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Judge the whole conversation with the AI trainer (same Gemini model of
-    the roleplay) and store the result. Re-evaluating a conversation (e.g.
-    after resuming the call) replaces the previous evaluation.
+    Judge the whole conversation with the AI trainer (OpenAI reasoning
+    model, see openai_service.evaluate_conversation) and store the result.
+    Re-evaluating a conversation (e.g. after resuming the call) replaces
+    the previous evaluation.
     """
     conversation = (
         db.query(ChatConversation)
@@ -177,7 +178,7 @@ def create_conversation_evaluation(
     history = [{"role": m.role, "content": m.content} for m in messages]
 
     try:
-        result = evaluate_conversation(history, avatar.profile if avatar else {})
+        result = await evaluate_conversation(history, avatar.profile if avatar else {})
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

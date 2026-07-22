@@ -3,7 +3,7 @@ import type { ConversationEvaluation } from '../services/api';
 import EvaluationReport from './EvaluationReport';
 
 /* Post-call evaluation modal: overall score, per-criterion scores and
- * improvement suggestions (present only where the score is below 7).
+ * improvement suggestions (present only where the score is below 8).
  *
  * Right after a call it also offers to rename the conversation. The name is
  * mandatory but never missing: it is assigned automatically when the call

@@ -13,6 +13,10 @@ const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    // Same port the app is reachable on in every mode (Docker maps it 1:1,
+    // and the prod nginx image is published on 3000 too), so the URL Vite
+    // prints is always the URL that actually works in the browser.
+    port: 3000,
     // Forward API and avatar-image requests to the FastAPI backend so the
     // browser only ever talks to this dev server (single port to expose).
     proxy: {

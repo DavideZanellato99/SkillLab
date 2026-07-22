@@ -1,5 +1,7 @@
 """Service for communicating with AWS Cognito for authentication."""
 
+import tls_setup  # noqa: F401  (TLS via OS store: must precede the requests/boto3 imports)
+
 import os
 import json
 import time

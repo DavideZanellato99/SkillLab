@@ -143,7 +143,6 @@ const PROFILE_SECTIONS: ProfileSection[] = [
     fields: [
       { key: 'LUNGHEZZA_MEDIA_RISPOSTE', label: 'Lunghezza media risposte', placeholder: 'Breve / Media / Lunga' },
       { key: 'VELOCITA_PARLATO', label: 'Velocità del parlato', placeholder: 'Bassa / Media / Alta' },
-      { key: 'INTERRUZIONI_FREQUENTI', label: 'Interruzioni frequenti', placeholder: 'Si / No' },
       { key: 'USO_IRONIA', label: 'Uso dell’ironia', placeholder: 'Si, moderato / No' },
       { key: 'USO_DIALETTO', label: 'Uso del dialetto', placeholder: 'Si / No' },
       { key: 'FORMALITA_LINGUAGGIO', label: 'Formalità del linguaggio', placeholder: 'Formale / Informale' },

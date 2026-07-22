@@ -1,11 +1,9 @@
 """FastAPI application entry point."""
 
-# Use the Windows/OS certificate store for TLS verification (fixes
-# CERTIFICATE_VERIFY_FAILED behind TLS-inspecting proxies/antivirus).
-# Must run before any HTTP client is imported.
-import truststore
-
-truststore.inject_into_ssl()
+# TLS verification against the OS certificate store (see tls_setup).
+# Kept first so the injection happens before any HTTP client is imported,
+# even though the modules that need it import tls_setup themselves.
+import tls_setup  # noqa: F401
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

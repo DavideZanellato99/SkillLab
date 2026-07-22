@@ -253,8 +253,10 @@ class ConversationEvaluation(Base):
         index=True,
     )
     overall_score = Column(Float, nullable=False)
-    # Structured result: {"summary": str, "criteria": [{key, label, score,
-    # comment, suggestions}]} — suggestions only where score < 7
+    # Structured result: {"summary": str, "criteria": [{key, label, weight,
+    # score, comment, suggestions}]}, suggestions only where score < 8.
+    # overall_score is the weighted average of the criteria (see
+    # openai_service.EVALUATION_CRITERIA for keys and weights).
     result = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(

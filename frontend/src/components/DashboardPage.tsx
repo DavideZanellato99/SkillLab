@@ -5,6 +5,7 @@ import type { EvaluationReportRow } from '../services/admin';
 import { isAdmin } from '../services/auth';
 import SearchSelect from './SearchSelect';
 import ConversationModeBadge, { conversationModeLabel } from './ConversationModeBadge';
+import type { ConversationMode } from '../services/api';
 import DataTable, { Td, Tr } from './DataTable';
 import Tooltip from './Tooltip';
 import { matchesSearch } from './tableSearch';
@@ -63,12 +64,87 @@ interface CriterionAvg {
   avg: number;
 }
 
+/* Intestazioni brevi per le colonne dei criteri nella tabella. La prima parola
+ * dell'etichetta completa non basta a distinguerli, "Corretta identificazione
+ * del cliente" diventerebbe "Corretta". L'etichetta intera resta nel tooltip.
+ * Le chiavi sono quelle di openai_service.EVALUATION_CRITERIA. */
+const CRITERION_SHORT_LABELS: Record<string, string> = {
+  rispetto_fasi_chiamata: 'Fasi',
+  empatia: 'Empatia',
+  sicurezza_competenza: 'Sicurezza',
+  appropriatezza_linguaggio: 'Linguaggio',
+  identificazione_cliente: 'Identificazione',
+  comprensione_casistica: 'Casistica',
+};
+
+function shortCriterionLabel(key: string, label: string): string {
+  return CRITERION_SHORT_LABELS[key] ?? label.split(' ')[0].replace(/[,;:]$/, '');
+}
+
 interface UserAvg {
   userId: string;
   name: string;
   email: string;
   avg: number;
   count: number;
+}
+
+/* ── Selettore di canale: scopa l'intera dashboard ──
+ *
+ * Le due modalità si valutano sugli stessi criteri ma non sono confrontabili
+ * alla pari (al telefono contano tono e tempi, in chat la scrittura), quindi
+ * di default la dashboard mostra le sole chiamate e i due canali si mescolano
+ * solo se lo si chiede esplicitamente. */
+
+type ModeFilter = ConversationMode | 'all';
+
+const MODE_FILTERS: { value: ModeFilter; label: string }[] = [
+  { value: 'voice', label: 'Chiamate' },
+  { value: 'text', label: 'Chat' },
+  { value: 'all', label: 'Entrambe' },
+];
+
+/* Come si legge il canale attivo dentro le descrizioni delle sezioni */
+const MODE_SUFFIX: Record<ModeFilter, string> = {
+  voice: 'sulle chiamate',
+  text: 'sulle chat',
+  all: 'su chiamate e chat',
+};
+
+function ModeFilterTabs({
+  value,
+  onChange,
+}: {
+  value: ModeFilter;
+  onChange: (value: ModeFilter) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Canale delle conversazioni"
+      className="flex shrink-0 gap-1 rounded-xl border border-white/6 bg-slate-800/50 p-1"
+    >
+      {MODE_FILTERS.map((opt) => {
+        const isActive = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            onClick={() => onChange(opt.value)}
+            className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              isActive
+                ? 'bg-violet-600/20 text-violet-200 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.35)]'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+            }`}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 /* ── Grafico a linee: media giornaliera del voto complessivo ── */
@@ -335,6 +411,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [modeFilter, setModeFilter] = useState<ModeFilter>('voice');
   const [search, setSearch] = useState('');
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null);
 
@@ -360,7 +437,17 @@ export default function DashboardPage() {
     };
   }, [user]);
 
-  /* Utenti presenti nelle valutazioni (per la ricerca utente) */
+  /* Il selettore di canale sta a monte di tutto il resto: ogni conteggio,
+   * media e grafico qui sotto parte da queste righe, non da rows. */
+  const scopedRows = useMemo(
+    () => (modeFilter === 'all' ? rows : rows.filter((r) => r.mode === modeFilter)),
+    [rows, modeFilter],
+  );
+
+  /* Utenti presenti nelle valutazioni (per la ricerca utente).
+   * Volutamente su tutte le righe e non su scopedRows: se l'elenco si
+   * restringesse col canale, l'utente selezionato potrebbe sparire dalle
+   * opzioni e la sua chip svanirebbe pur restando il filtro attivo. */
   const usersInData = useMemo(() => {
     const map = new Map<string, { name: string; email: string }>();
     for (const r of rows) {
@@ -373,8 +460,8 @@ export default function DashboardPage() {
 
   /* Il filtro utente scopa KPI, andamento e criteri */
   const filtered = useMemo(
-    () => (selectedUserId ? rows.filter((r) => r.user_id === selectedUserId) : rows),
-    [rows, selectedUserId],
+    () => (selectedUserId ? scopedRows.filter((r) => r.user_id === selectedUserId) : scopedRows),
+    [scopedRows, selectedUserId],
   );
 
   const overallAvg = useMemo(
@@ -441,10 +528,11 @@ export default function DashboardPage() {
     [criteriaAvgs],
   );
 
-  /* Confronto tra utenti: sempre su tutti i dati; il filtro evidenzia */
+  /* Confronto tra utenti: sempre su tutti gli utenti del canale attivo,
+   * il filtro utente evidenzia soltanto */
   const userAvgs = useMemo<UserAvg[]>(() => {
     const acc = new Map<string, UserAvg & { sum: number }>();
-    for (const r of rows) {
+    for (const r of scopedRows) {
       const entry =
         acc.get(r.user_id) ??
         { userId: r.user_id, name: displayName(r), email: r.user_email, avg: 0, count: 0, sum: 0 };
@@ -455,7 +543,7 @@ export default function DashboardPage() {
     return Array.from(acc.values())
       .map((e) => ({ userId: e.userId, name: e.name, email: e.email, avg: e.sum / e.count, count: e.count }))
       .sort((a, b) => b.avg - a.avg);
-  }, [rows]);
+  }, [scopedRows]);
 
   const detailRows = useMemo(
     () =>
@@ -505,7 +593,8 @@ export default function DashboardPage() {
       <header className="mb-8">
         <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Dashboard</h1>
         <p className="text-[0.95rem] text-slate-500">
-          Riepilogo dei punteggi delle valutazioni delle conversazioni, globale o per singolo utente.
+          Riepilogo dei punteggi delle valutazioni delle conversazioni, per canale e globale o per
+          singolo utente.
         </p>
       </header>
 
@@ -540,7 +629,7 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Riga filtri: scopa tutto ciò che sta sotto */}
-          <div className="mb-6 flex items-center gap-3">
+          <div className="mb-6 flex items-center gap-3 max-lg:flex-wrap">
             <label htmlFor="dashboard-user-filter" className="text-xs font-medium tracking-wide text-slate-400">
               Utente
             </label>
@@ -553,7 +642,27 @@ export default function DashboardPage() {
               emptyHint="Tutti gli utenti"
               className="w-full max-w-[440px]"
             />
+            <span className="ml-auto text-xs font-medium tracking-wide text-slate-400 max-lg:ml-0">
+              Canale
+            </span>
+            <ModeFilterTabs value={modeFilter} onChange={setModeFilter} />
           </div>
+
+          {/* Il canale può non avere nessuna conversazione: senza questo avviso
+            * i KPI a zero si leggerebbero come un errore di caricamento. */}
+          {scopedRows.length === 0 && (
+            <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-500">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="16" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+              <span>
+                Nessuna valutazione {MODE_SUFFIX[modeFilter]}. Cambia canale per vedere i dati
+                disponibili.
+              </span>
+            </div>
+          )}
 
           {/* KPI */}
           <div className="mb-6 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
@@ -612,7 +721,8 @@ export default function DashboardPage() {
           <div className={`${cardCls} mb-6`}>
             <h2 className="text-sm font-semibold text-slate-300">Andamento nel tempo</h2>
             <p className="mb-4 text-xs text-slate-500">
-              Media giornaliera del voto complessivo{selectedUserId ? ' dell’utente selezionato' : ''}
+              Media giornaliera del voto complessivo {MODE_SUFFIX[modeFilter]}
+              {selectedUserId ? ', per l’utente selezionato' : ''}
             </p>
             {trendPoints.length > 0 ? (
               <TrendChart points={trendPoints} />
@@ -627,33 +737,45 @@ export default function DashboardPage() {
           <div className={`${cardCls} mb-6`}>
             <h2 className="text-sm font-semibold text-slate-300">Media per criterio</h2>
             <p className="mb-4 text-xs text-slate-500">
-              Punteggio medio dei 5 criteri di valutazione
+              Punteggio medio dei 6 criteri di valutazione {MODE_SUFFIX[modeFilter]}
             </p>
-            <div className="flex flex-col gap-2.5">
-              {criteriaAvgs.map((c) => (
-                <MeterRow key={c.key} label={c.label} score={c.avg} fullLabel />
-              ))}
-            </div>
+            {criteriaAvgs.length > 0 ? (
+              <div className="flex flex-col gap-2.5">
+                {criteriaAvgs.map((c) => (
+                  <MeterRow key={c.key} label={c.label} score={c.avg} fullLabel />
+                ))}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-sm italic text-slate-500">
+                Nessuna valutazione per la selezione corrente.
+              </p>
+            )}
           </div>
 
           {/* Confronto tra utenti */}
           <div className={`${cardCls} mb-6`}>
             <h2 className="text-sm font-semibold text-slate-300">Confronto tra utenti</h2>
             <p className="mb-4 text-xs text-slate-500">
-              Voto medio complessivo per utente, su tutte le valutazioni
+              Voto medio complessivo per utente, su tutte le valutazioni {MODE_SUFFIX[modeFilter]}
             </p>
-            <div className="flex flex-col gap-1.5">
-              {userAvgs.map((u) => (
-                <MeterRow
-                  key={u.userId}
-                  label={u.name}
-                  sub={`${u.count} ${u.count === 1 ? 'valutazione' : 'valutazioni'}`}
-                  score={u.avg}
-                  dimmed={selectedUserId !== '' && u.userId !== selectedUserId}
-                  highlighted={selectedUserId !== '' && u.userId === selectedUserId}
-                />
-              ))}
-            </div>
+            {userAvgs.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                {userAvgs.map((u) => (
+                  <MeterRow
+                    key={u.userId}
+                    label={u.name}
+                    sub={`${u.count} ${u.count === 1 ? 'valutazione' : 'valutazioni'}`}
+                    score={u.avg}
+                    dimmed={selectedUserId !== '' && u.userId !== selectedUserId}
+                    highlighted={selectedUserId !== '' && u.userId === selectedUserId}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-sm italic text-slate-500">
+                Nessuna valutazione per la selezione corrente.
+              </p>
+            )}
           </div>
 
           {/* Vista tabellare: tutti i valori raggiungibili senza hover */}
@@ -665,7 +787,7 @@ export default function DashboardPage() {
               { key: 'avatar', label: 'Avatar' },
               ...criteriaAvgs.map((c) => ({
                 key: c.key,
-                label: c.label.split(' ')[0],
+                label: shortCriterionLabel(c.key, c.label),
                 title: c.label,
                 align: 'center' as const,
                 compact: true,

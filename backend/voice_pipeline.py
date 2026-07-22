@@ -22,9 +22,12 @@ in flight cancels it — the VAD split one operator sentence into two
 commits, so the turn restarts with the fuller history.
 """
 
+import tls_setup  # noqa: F401  (TLS via OS store: must precede the websockets import)
+
 import asyncio
 import base64
 import json
+import time
 import uuid
 from datetime import datetime, timezone
 from uuid import UUID
@@ -36,7 +39,7 @@ from starlette.websockets import WebSocketDisconnect, WebSocketState
 from database import SessionLocal
 from models import ChatConversation, ChatMessage
 from voice_sessions import VoiceSession
-from openai_service import stream_avatar_response
+from openai_service import prewarm_roleplay, stream_avatar_response
 from elevenlabs_service import stt_ws_url, stt_headers
 from cartesia_service import (
     tts_ws_url,
@@ -44,6 +47,15 @@ from cartesia_service import (
     tts_chunk_message,
     tts_cancel_message,
     resolve_voice_id,
+)
+from turn_metrics import (
+    MARK_BROWSER_FIRST_AUDIO,
+    MARK_LLM_FIRST_TOKEN,
+    MARK_LLM_REQUEST,
+    MARK_TTS_FIRST_AUDIO,
+    MARK_TTS_FIRST_SEND,
+    CallMetrics,
+    TurnTimer,
 )
 
 _LLM_FALLBACK_LINE = "Mi dispiace, ho avuto un problema tecnico. Puoi ripetere?"
@@ -123,6 +135,16 @@ class VoicePipeline:
         # Text generated so far by the in-flight turn: lets a barge-in
         # deliver the truncated assistant bubble to the browser.
         self._turn_text = ""
+        # Latency instrumentation. _last_partial_at approximates when the
+        # operator stopped talking, so the wait the VAD adds before it
+        # commits the turn can be told apart from the pipeline's own cost.
+        self._metrics = CallMetrics()
+        self._turn_timer: TurnTimer | None = None
+        self._last_partial_at: float | None = None
+        # Turns are numbered rather than tagged at random: the first one of
+        # a call behaves differently from the rest (cold connection, cold
+        # prompt cache) and the logs have to make that visible.
+        self._turn_count = 0
 
     # ── Outbound helpers (single lock: JSON and audio frames must not interleave) ──
 
@@ -161,6 +183,15 @@ class VoicePipeline:
                 self.tts = tts
                 await self._send_json({"type": "ready"})
 
+                # The ring is dead time for the operator, so spend it on the
+                # handshake and the persona prefill the first turn would
+                # otherwise pay for. Deliberately kept out of the task list
+                # below: that one ends the call as soon as any member
+                # finishes, and this is meant to finish early.
+                prewarm = asyncio.create_task(
+                    prewarm_roleplay(self.session.avatar_profile), name="prewarm"
+                )
+
                 tasks = [
                     asyncio.create_task(self._browser_loop(), name="browser"),
                     asyncio.create_task(self._stt_loop(), name="stt"),
@@ -176,9 +207,10 @@ class VoicePipeline:
                         if exc and not isinstance(exc, (WebSocketDisconnect,)):
                             raise exc
                 finally:
+                    prewarm.cancel()
                     for t in tasks:
                         t.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                    await asyncio.gather(prewarm, *tasks, return_exceptions=True)
         except RuntimeError as e:
             await self._send_json({"type": "error", "message": str(e)})
         except Exception as e:
@@ -188,6 +220,9 @@ class VoicePipeline:
             )
         finally:
             await self._cancel_turn(notify=False)
+            # After the cancel, so a turn still in flight on hang-up is
+            # counted before the medians are computed.
+            self._metrics.report()
             # Awaited, not fire-and-forget like _persist, so the write is
             # never left pending when the handler returns. It is still no
             # synchronisation point: on a hang-up the browser closed this
@@ -236,6 +271,8 @@ class VoicePipeline:
                 text = (event.get("text") or "").strip()
                 if not text:
                     continue
+                # Last sign of speech before the silence the VAD is timing
+                self._last_partial_at = time.perf_counter()
                 await self._send_json({"type": "user_partial", "text": text})
 
             elif message_type in (
@@ -245,6 +282,17 @@ class VoicePipeline:
                 text = (event.get("text") or "").strip()
                 if not text:
                     continue
+                # Started here rather than in _start_turn so the cancel and
+                # the bookkeeping below are charged to the turn ("prep")
+                # instead of vanishing between the two.
+                vad_ms = (
+                    (time.perf_counter() - self._last_partial_at) * 1000
+                    if self._last_partial_at is not None
+                    else None
+                )
+                self._turn_count += 1
+                timer = TurnTimer(turn_id=f"#{self._turn_count}", vad_ms=vad_ms)
+                self._last_partial_at = None
                 # A commit while a turn is in flight means the VAD split the
                 # operator's sentence: restart with the fuller history. The
                 # cancel goes first so the browser's mic gate (armed by
@@ -253,6 +301,7 @@ class VoicePipeline:
                 await self._send_json({"type": "user_final", "text": text})
                 self.history.append({"role": "user", "content": text})
                 self._persist("user", text)
+                self._turn_timer = timer
                 self._start_turn()
 
             elif "error" in message_type or message_type in _FATAL_STT_ERRORS:
@@ -277,10 +326,24 @@ class VoicePipeline:
             if event_type == "chunk":
                 audio = base64.b64decode(event.get("data") or "")
                 if audio:
+                    # Only this turn's own timer: audio tagged with another
+                    # context belongs to a turn that was already cancelled.
+                    timer = self._turn_timer
+                    if timer is not None and timer.context_id == context_id:
+                        timer.mark(MARK_TTS_FIRST_AUDIO)
+                    else:
+                        timer = None
                     if not self._speaking:
                         self._speaking = True
                         await self._send_json({"type": "speaking_start"})
                     await self._send_audio(audio)
+                    if timer is not None:
+                        # The wait the operator perceives ends here. Logging
+                        # it drops the timer too, so a barge-in later in the
+                        # same turn won't book it as cancelled.
+                        timer.mark(MARK_BROWSER_FIRST_AUDIO)
+                        self._metrics.record(timer)
+                        self._turn_timer = None
             elif event_type == "done":
                 self._speaking = False
                 self._active_context = None
@@ -325,8 +388,17 @@ class VoicePipeline:
                     )
                 await self._send_json({"type": "interrupt"})
         self._turn_text = ""
+        # A timer still set here belongs to a turn that died before its
+        # first audio ever left (the TTS loop clears the ones that made it),
+        # so it is logged as cancelled and counted apart in the summary.
+        if self._turn_timer is not None:
+            self._metrics.record(self._turn_timer)
+            self._turn_timer = None
 
     async def _speak(self, context_id: str, text: str, more_coming: bool) -> None:
+        if self._turn_timer is not None:
+            self._turn_timer.mark(MARK_TTS_FIRST_SEND)
+            self._turn_timer.count_tts_send()
         await self.tts.send(
             tts_chunk_message(context_id, text, self.voice_id, more_coming)
         )
@@ -335,15 +407,22 @@ class VoicePipeline:
         """Stream one assistant turn: LLM tokens → browser text + TTS audio."""
         context_id = uuid.uuid4().hex
         self._active_context = context_id
+        timer = self._turn_timer
+        if timer is not None:
+            timer.context_id = context_id
         full_text = ""
         self._turn_text = ""
         try:
             word_buffer = ""
             try:
+                if timer is not None:
+                    timer.mark(MARK_LLM_REQUEST)
                 async for delta in stream_avatar_response(
                     messages_history=self.history,
                     avatar_profile=self.session.avatar_profile,
                 ):
+                    if timer is not None:
+                        timer.mark(MARK_LLM_FIRST_TOKEN)
                     full_text += delta
                     self._turn_text = full_text
                     await self._send_json({"type": "assistant_delta", "text": delta})

@@ -8,9 +8,7 @@ Usage:
 
 import sys
 
-import truststore
-
-truststore.inject_into_ssl()
+import tls_setup  # noqa: F401  (TLS via OS store: must precede the requests import)
 
 import requests
 

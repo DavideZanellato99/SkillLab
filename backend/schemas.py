@@ -128,7 +128,7 @@ class EvaluationCriterionResponse(BaseModel):
     label: str
     score: float
     comment: str
-    # Improvement suggestions, present only when score < 7
+    # Improvement suggestions, present only when score < 8
     suggestions: str | None = None
 
 

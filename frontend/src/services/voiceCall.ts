@@ -10,6 +10,11 @@ const CAPTURE_SAMPLE_RATE = 16000;
 /** Sample rate of the TTS audio the backend sends (Cartesia). */
 const PLAYBACK_SAMPLE_RATE = 24000;
 
+/* Head start given to the first scheduled chunk of a turn, in seconds.
+ * Too low and network jitter between chunks turns into audible gaps; too
+ * high and every avatar reply is delayed by that much. */
+const PLAYBACK_CUSHION_SECS = 0.04;
+
 /* Containers for the call recording, best first. Chrome and Firefox take
  * the Opus ones, Safari only records mp4/AAC. */
 const RECORDING_MIME_TYPES = [
@@ -112,7 +117,6 @@ export class VoiceCall {
   private recDest: MediaStreamAudioDestinationNode | null = null;
   private recorder: MediaRecorder | null = null;
   private recChunks: Blob[] = [];
-  private recMimeType = '';
   private recStartedAt = 0;
   private recordingReady: Promise<CallRecording | null>;
   private resolveRecording!: (value: CallRecording | null) => void;
@@ -322,8 +326,11 @@ export class VoiceCall {
     // instant it is actually heard, not when the chunk arrived.
     if (this.recDest) src.connect(this.recDest);
 
-    // Small initial cushion absorbs network jitter between chunks
-    const startAt = Math.max(this.playhead, this.ctx.currentTime + 0.08);
+    // Small initial cushion absorbs network jitter between chunks. Kept as
+    // low as the jitter tolerates: it is paid in full on the first chunk of
+    // every turn (the playhead is always in the past by then), so it lands
+    // straight on the delay the operator perceives before the avatar speaks.
+    const startAt = Math.max(this.playhead, this.ctx.currentTime + PLAYBACK_CUSHION_SECS);
     src.start(startAt);
     this.playhead = startAt + audioBuf.duration;
     this.scheduled.add(src);
@@ -367,7 +374,6 @@ export class VoiceCall {
       this.resolveRecording(null);
       return;
     }
-    this.recMimeType = mimeType;
     this.recDest = this.ctx.createMediaStreamDestination();
     // The mic goes in unconditionally, including while the half-duplex gate
     // is sending silence to the STT: the file keeps what the operator

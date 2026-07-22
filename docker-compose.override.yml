@@ -33,9 +33,11 @@ services:
       # itself — point the Vite proxy (vite.config.ts) at the backend
       # service by name instead.
       BACKEND_URL: http://backend:8000
-    # Vite listens on 5173 inside the container; !override (rather than the
-    # default concat merge) replaces docker-compose.yml's "3000:80" so the
-    # app stays on the same host port 3000 in both dev and prod mode.
+    # Vite is pinned to 3000 in vite.config.ts, so the mapping is 1:1 and the
+    # "Local: http://localhost:3000" line it prints inside the container is
+    # also the right URL from the host. !override (rather than the default
+    # concat merge) replaces docker-compose.yml's "3000:80" so the app stays
+    # on the same host port 3000 in both dev and prod mode.
     command: npm run dev -- --host 0.0.0.0
     ports: !override
-      - "3000:5173"
+      - "3000:3000"

@@ -64,7 +64,7 @@ export interface EvaluationCriterion {
   label: string;
   score: number;
   comment: string;
-  /** Improvement suggestions, present only when score < 7. */
+  /** Improvement suggestions, present only when score < 8. */
   suggestions: string | null;
 }
 

@@ -7,27 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models import (
-    User,
-    UserSelection,
-    Avatar,
-    Organization,
-    ChatConversation,
-    ChatMessage,
-    ConversationEvaluation,
-    ALL_ROLES,
-    ROLE_SUPER_ADMIN,
-    ALL_USER_STATUSES,
-    USER_STATUS_ACTIVE,
-    USER_STATUS_DISABLED,
-)
 from auth_dependency import (
-    get_current_super_admin,
+    MOCK_ADMIN_SUB,
     get_current_admin,
+    get_current_super_admin,
     get_role_by_name,
     resolve_admin_scope,
-    MOCK_ADMIN_SUB,
 )
 from cognito_service import (
     admin_create_user,
@@ -35,20 +20,35 @@ from cognito_service import (
     admin_resend_credentials,
     admin_set_user_enabled,
 )
-from schemas import (
-    CreateUserRequest,
-    UpdateUserRequest,
-    UpdateUserStatusRequest,
-    UserResponse,
-    MessageResponse,
-    ConversationReport,
-    UserActivityReport,
-    EvaluationCriterionScore,
-    EvaluationReportRow,
-    AdminConversationDetail,
-    ChatMessageResponse,
+from database import get_db
+from models import (
+    ALL_ROLES,
+    ALL_USER_STATUSES,
+    ROLE_SUPER_ADMIN,
+    USER_STATUS_ACTIVE,
+    USER_STATUS_DISABLED,
+    Avatar,
+    ChatConversation,
+    ChatMessage,
+    ConversationEvaluation,
+    Organization,
+    User,
+    UserSelection,
 )
 from routers.chat import _evaluation_response
+from schemas import (
+    AdminConversationDetail,
+    ChatMessageResponse,
+    ConversationReport,
+    CreateUserRequest,
+    EvaluationCriterionScore,
+    EvaluationReportRow,
+    MessageResponse,
+    UpdateUserRequest,
+    UpdateUserStatusRequest,
+    UserActivityReport,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

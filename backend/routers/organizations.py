@@ -17,26 +17,25 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from auth_dependency import MOCK_ADMIN_SUB, get_current_super_admin
+from cognito_service import admin_delete_user
 from database import get_db
 from models import (
-    User,
+    ALL_ORG_STATUSES,
     Avatar,
-    Organization,
-    UserSelection,
     ChatConversation,
     ChatMessage,
     ConversationEvaluation,
-    ALL_ORG_STATUSES,
-    ORG_STATUS_ACTIVE,
+    Organization,
+    User,
+    UserSelection,
 )
-from auth_dependency import get_current_super_admin, MOCK_ADMIN_SUB
-from cognito_service import admin_delete_user
 from schemas import (
-    OrganizationResponse,
     CreateOrganizationRequest,
+    MessageResponse,
+    OrganizationResponse,
     UpdateOrganizationRequest,
     UpdateOrganizationStatusRequest,
-    MessageResponse,
 )
 
 router = APIRouter(prefix="/api/admin/organizations", tags=["admin"])

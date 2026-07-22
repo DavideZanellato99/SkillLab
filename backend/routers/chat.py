@@ -10,33 +10,33 @@ A conversation runs on one of two channels, fixed when it is opened:
 Both start the same way, with the operator writing/speaking first.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
+from auth_dependency import get_current_user
+from conversation_titles import next_conversation_title
 from database import get_db
 from models import (
     CONVERSATION_MODE_TEXT,
     Avatar,
-    User,
     ChatConversation,
     ChatMessage,
     ConversationEvaluation,
+    User,
 )
-from auth_dependency import get_current_user
-from routers.avatars import _visible_avatars
-from conversation_titles import next_conversation_title
 from openai_service import evaluate_conversation, generate_avatar_reply
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
+from routers.avatars import _visible_avatars
 from schemas import (
+    ChatConversationResponse,
+    ChatConversationSummary,
     ChatMessageExchange,
     ChatMessageRequest,
     ChatMessageResponse,
-    ChatConversationResponse,
-    ChatConversationSummary,
     ConversationEvaluationResponse,
     ConversationRenameRequest,
 )
@@ -277,7 +277,7 @@ async def send_chat_message(
     # Explicit timestamps: the two messages are written in the same commit
     # and the transcript is read back ordered by created_at, so the reply
     # must be strictly after the message it answers.
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     user_message = ChatMessage(
         conversation_id=conversation.id,
         role="user",
@@ -334,7 +334,7 @@ def end_chat_conversation(
 
     # Idempotent: closing an already closed chat just returns it
     if conversation.ended_at is None:
-        conversation.ended_at = datetime.now(timezone.utc)
+        conversation.ended_at = datetime.now(UTC)
         db.commit()
         db.refresh(conversation)
 

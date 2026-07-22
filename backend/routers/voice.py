@@ -19,25 +19,25 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from sqlalchemy.orm import Session
 
+from auth_dependency import get_current_user
+from cartesia_service import CARTESIA_API_KEY
+from conversation_titles import next_conversation_title
 from database import get_db
+from elevenlabs_service import ELEVENLABS_API_KEY
 from models import (
     CONVERSATION_MODE_VOICE,
     ROLE_ORGANIZATION_ADMIN,
     ROLE_SUPER_ADMIN,
     Avatar,
-    User,
     ChatConversation,
     ChatMessage,
     ConversationRecording,
+    User,
 )
-from auth_dependency import get_current_user
 from routers.avatars import _visible_avatars
-from conversation_titles import next_conversation_title
 from schemas import VoiceRecordingInfo, VoiceSessionRequest, VoiceSessionResponse
-from voice_sessions import create_voice_session, get_voice_session
 from voice_pipeline import VoicePipeline
-from elevenlabs_service import ELEVENLABS_API_KEY
-from cartesia_service import CARTESIA_API_KEY
+from voice_sessions import create_voice_session, get_voice_session
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 

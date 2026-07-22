@@ -1,0 +1,22 @@
+# Runtime dependencies (unpinned, human-edited source).
+# The pinned lock lives in requirements.txt and is generated from this file
+# with pip-compile inside python:3.12-slim (the runtime image), so the lock
+# matches production exactly:
+#
+#   docker run --rm -v "$PWD":/w -w /w python:3.12-slim sh -c \
+#     "pip install pip-tools && pip-compile --generate-hashes requirements.in"
+#
+# Add or bump a dependency here, then re-run the command above.
+
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+python-dotenv
+pydantic
+openai
+boto3
+python-jose[cryptography]
+requests
+truststore
+websockets

@@ -8,13 +8,13 @@ latency-sensitive. The persona prompt building lives in persona_prompt
 (pure string templating, provider-agnostic).
 """
 
-import tls_setup  # noqa: F401  (TLS via OS store: must precede the openai import)
-
 import json
 import os
+
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
+import tls_setup  # noqa: F401  (TLS via OS store: must precede the openai import)
 from persona_prompt import (
     CHANNEL_TEXT,
     CHANNEL_VOICE,

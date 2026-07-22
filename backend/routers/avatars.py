@@ -3,17 +3,17 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from database import get_db
-from models import Avatar, User, UserSelection, ROLE_SUPER_ADMIN
 from auth_dependency import get_current_user
+from database import get_db
+from models import ROLE_SUPER_ADMIN, Avatar, User, UserSelection
 from schemas import (
     AvatarResponse,
+    MessageResponse,
     SelectionCreate,
     SelectionResponse,
-    MessageResponse,
 )
 
 router = APIRouter(prefix="/api/avatars", tags=["avatars"])

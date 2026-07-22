@@ -20,7 +20,7 @@ IP half of the binding can be spoofed (the User-Agent half still holds).
 Datetimes are naive UTC, consistent with token_denylist.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -51,13 +51,13 @@ def _user_agent(request: Request) -> str:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _jti_expiry(claims: dict, now: datetime) -> datetime:
     exp = claims.get("exp")
     if exp:
-        return datetime.fromtimestamp(exp, tz=timezone.utc).replace(tzinfo=None)
+        return datetime.fromtimestamp(exp, tz=UTC).replace(tzinfo=None)
     return now + timedelta(seconds=_ACCESS_LIFETIME_SECONDS)
 
 

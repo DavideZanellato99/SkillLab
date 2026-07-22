@@ -1,17 +1,15 @@
 """Service for communicating with AWS Cognito for authentication."""
 
-import tls_setup  # noqa: F401  (TLS via OS store: must precede the requests/boto3 imports)
-
 import os
-import json
 import time
-import uuid
-import requests as http_requests
-from jose import jwt, JWTError
+
 import boto3
-import botocore.exceptions
+import requests as http_requests
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
+from jose import JWTError, jwt
+
+import tls_setup  # noqa: F401  (TLS via OS store: must precede the requests/boto3 imports)
 
 load_dotenv()
 

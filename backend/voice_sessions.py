@@ -5,9 +5,9 @@ consumed by the voice WebSocket endpoint, which is reachable only with
 the unguessable session id issued here.
 """
 
-import time
 import secrets
 import threading
+import time
 from dataclasses import dataclass, field
 
 # Voice sessions expire after this many seconds without being opened

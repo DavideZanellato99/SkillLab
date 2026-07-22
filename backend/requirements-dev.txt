@@ -1,0 +1,9 @@
+# Development and CI tooling — not installed in the runtime Docker image.
+# Install with:  pip install -r requirements.txt -r requirements-dev.txt
+pytest
+pytest-cov
+httpx
+ruff
+mypy
+pip-audit
+pip-tools

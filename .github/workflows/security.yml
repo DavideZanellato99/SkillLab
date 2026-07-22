@@ -1,0 +1,80 @@
+name: Security
+
+# Dependency and code scanning (Trivy, pip-audit, npm audit, CodeQL). Kept
+# separate from ci.yml so a newly-disclosed CVE shows up on the weekly
+# schedule without waiting for a code change, and so these (sometimes noisy)
+# checks are not the ones gating every merge. Secret scanning (gitleaks) is
+# the exception: it lives in ci.yml because it IS a blocking gate.
+on:
+  pull_request:
+    branches: [stage, main]
+  push:
+    branches: [main]
+  schedule:
+    # Every Monday at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Secret scanning (gitleaks) lives in ci.yml instead: it is a blocking
+  # gate, so it belongs with the checks that must pass before a merge.
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit (backend)
+        # Reported, not gating: an unpatched transitive CVE shouldn't block
+        # every PR, but it must be visible.
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: npm audit (frontend)
+        continue-on-error: true
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+  filesystem:
+    name: Filesystem scan (trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

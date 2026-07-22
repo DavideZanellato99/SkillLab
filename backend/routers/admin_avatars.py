@@ -13,17 +13,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from auth_dependency import get_current_super_admin
 from database import get_db
 from models import (
-    User,
     Avatar,
-    Organization,
-    UserSelection,
     ChatConversation,
     ChatMessage,
     ConversationEvaluation,
+    Organization,
+    User,
+    UserSelection,
 )
-from auth_dependency import get_current_super_admin
 from schemas import AdminAvatarPayload, AdminAvatarResponse, MessageResponse
 
 router = APIRouter(prefix="/api/admin/avatars", tags=["admin"])

@@ -18,7 +18,7 @@ behave the same on TIMESTAMP columns regardless of session timezone.
 
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -32,7 +32,7 @@ _lock = threading.Lock()
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def revoke_jtis(db: Session, entries: list[tuple[str, datetime]]) -> None:

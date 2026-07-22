@@ -2,10 +2,10 @@
 
 from datetime import datetime
 from uuid import UUID
+
 from pydantic import BaseModel, Field, field_validator
 
 from models import CONVERSATION_MODE_VOICE
-
 
 # --- Avatar Schemas ---
 

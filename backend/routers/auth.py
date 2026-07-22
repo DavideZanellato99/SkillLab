@@ -6,47 +6,47 @@ attaches them automatically; the frontend only sees the user profile.
 """
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models import User
 from auth_dependency import (
+    ACCESS_TOKEN_COOKIE,
+    MOCK_ADMIN_SUB,
+    REFRESH_TOKEN_COOKIE,
     get_current_user,
     get_or_create_mock_admin,
-    ACCESS_TOKEN_COOKIE,
-    REFRESH_TOKEN_COOKIE,
-    MOCK_ADMIN_SUB,
 )
 from cognito_service import (
     authenticate,
-    respond_to_new_password_challenge,
+    change_own_password,
     refresh_tokens,
+    respond_to_new_password_challenge,
     revoke_refresh_token,
     verify_access_token,
-    change_own_password,
 )
-from token_denylist import revoke_jtis, is_jti_revoked
+from database import get_db
+from models import User
+from rate_limit import SlidingWindowLimiter
+from schemas import (
+    ChangePasswordRequest,
+    LoginRequest,
+    LoginResponse,
+    MessageResponse,
+    NewPasswordRequest,
+    NewPasswordRequiredResponse,
+    UpdateProfileRequest,
+    UserResponse,
+)
+from token_denylist import is_jti_revoked, revoke_jtis
 from token_sessions import (
     access_binding_matches,
     bind_access_token,
     client_ip,
     revocation_entries,
     session_anchor_matches,
-)
-from rate_limit import SlidingWindowLimiter
-from schemas import (
-    LoginRequest,
-    LoginResponse,
-    NewPasswordRequiredResponse,
-    NewPasswordRequest,
-    MessageResponse,
-    UserResponse,
-    UpdateProfileRequest,
-    ChangePasswordRequest,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -372,14 +372,14 @@ def _denylist_access_token(db: Session, access_token: str) -> None:
     same refresh token, so the whole session dies, not just this token.
     """
     claims = verify_access_token(access_token)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
 
     entries: list[tuple[str, datetime]] = []
     jti = claims.get("jti")
     exp = claims.get("exp")
     if jti:
         expires_at = (
-            datetime.fromtimestamp(exp, tz=timezone.utc).replace(tzinfo=None)
+            datetime.fromtimestamp(exp, tz=UTC).replace(tzinfo=None)
             if exp
             else now + timedelta(seconds=_ACCESS_COOKIE_MAX_AGE)
         )

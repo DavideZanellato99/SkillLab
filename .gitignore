@@ -1,11 +1,21 @@
 # Environment files — never commit secrets
 .env
 .env.*
+# ...but the placeholder template (no secrets) is tracked on purpose.
+!.env.example
 
 # Python
 __pycache__/
 *.pyc
 venv/
+
+# Test / lint / type-check artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage/
 
 # Node
 node_modules/

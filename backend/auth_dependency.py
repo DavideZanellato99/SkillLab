@@ -1,20 +1,20 @@
 """FastAPI dependency for extracting and verifying the current authenticated user."""
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from cognito_service import verify_access_token
 from database import get_db
 from models import (
-    User,
-    Role,
     ALL_ROLES,
-    ROLE_SUPER_ADMIN,
-    ROLE_ORGANIZATION_ADMIN,
-    USER_STATUS_ACTIVE,
     ORG_STATUS_ACTIVE,
+    ROLE_ORGANIZATION_ADMIN,
+    ROLE_SUPER_ADMIN,
+    USER_STATUS_ACTIVE,
+    Role,
+    User,
 )
-from cognito_service import verify_access_token
 from token_denylist import is_jti_revoked
 from token_sessions import enforce_session_binding
 

@@ -1,0 +1,101 @@
+# Tooling config for the SkillLab backend (ruff + mypy + pytest).
+# This is a config-only pyproject: dependencies stay in requirements*.txt,
+# there is no build backend and the package is not installed.
+
+[tool.ruff]
+# Match the line length the existing code was written to.
+line-length = 100
+target-version = "py312"
+# Generated / vendored dirs that must never be linted.
+extend-exclude = ["venv", "static", "__pycache__"]
+
+[tool.ruff.lint]
+# A pragmatic starting set: pyflakes (F), pycodestyle errors (E) and
+# warnings (W), isort (I), pyupgrade (UP), flake8-bugbear (B). Deliberately
+# not the full ruleset, so the first run doesn't drown the repo in noise.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    # Long lines are handled by the formatter, not flagged here.
+    "E501",
+    # raise-without-from inside except: good practice, but 40+ existing
+    # sites. Tracked as tech debt to fix incrementally, not a blocker now.
+    "B904",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection markers are meant to be called in argument
+# defaults (`db: Session = Depends(get_db)`), which is exactly what B008
+# flags. Whitelist them so the idiomatic pattern isn't reported as a bug.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Body",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Security",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# main.py deliberately imports mid-file: tls_setup must run first, and the
+# lightweight migrations run before the routers are imported. E402 is the
+# intended shape here, not a mistake.
+"main.py" = ["E402"]
+# Tests use assert and reuse fixture names as arguments.
+"tests/*" = ["B011"]
+
+[tool.ruff.format]
+# Match the double-quote style already used across the codebase.
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Gradual typing, scoped on purpose. The models use SQLAlchemy's classic
+# Column() style (not 2.0 Mapped[]), so mypy reads every model attribute as
+# Column[...] and floods the ORM-touching modules (routers, models) with
+# ~140 false positives. Rather than a big Mapped[] refactor now, the gate
+# is pointed only at the pure-logic modules that have no ORM attribute
+# access — there mypy is accurate, so we can hold them fully strict and
+# widen the `files` list one module at a time as annotations are added.
+files = [
+    "conversation_titles.py",
+    "persona_prompt.py",
+    "schemas.py",
+]
+# Follow imports for type info but stay silent on modules not listed above,
+# so the strict rules don't leak into the ORM modules these files import.
+follow_imports = "silent"
+check_untyped_defs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "venv/*",
+    "static/*",
+    # Voice pipeline / TTS-STT services are exercised over live WebSockets,
+    # not by this suite; excluding them keeps the ratio honest rather than
+    # padding it with unreachable-in-CI code.
+    "voice_pipeline.py",
+    "voice_sessions.py",
+    "cartesia_service.py",
+    "elevenlabs_service.py",
+    "tls_setup.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+# Starting floor — raise it as the suite grows. A high bar on day one would
+# just block every PR.
+fail_under = 40
+

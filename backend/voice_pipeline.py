@@ -22,32 +22,30 @@ in flight cancels it — the VAD split one operator sentence into two
 commits, so the turn restarts with the fuller history.
 """
 
-import tls_setup  # noqa: F401  (TLS via OS store: must precede the websockets import)
-
 import asyncio
 import base64
 import json
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 import websockets
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
-from database import SessionLocal
-from models import ChatConversation, ChatMessage
-from voice_sessions import VoiceSession
-from openai_service import prewarm_roleplay, stream_avatar_response
-from elevenlabs_service import stt_ws_url, stt_headers
+import tls_setup  # noqa: F401  (TLS via OS store: must precede the websockets import)
 from cartesia_service import (
-    tts_ws_url,
-    tts_headers,
-    tts_chunk_message,
-    tts_cancel_message,
     resolve_voice_id,
+    tts_cancel_message,
+    tts_chunk_message,
+    tts_headers,
+    tts_ws_url,
 )
+from database import SessionLocal
+from elevenlabs_service import stt_headers, stt_ws_url
+from models import ChatConversation, ChatMessage
+from openai_service import prewarm_roleplay, stream_avatar_response
 from turn_metrics import (
     MARK_BROWSER_FIRST_AUDIO,
     MARK_LLM_FIRST_TOKEN,
@@ -57,6 +55,7 @@ from turn_metrics import (
     CallMetrics,
     TurnTimer,
 )
+from voice_sessions import VoiceSession
 
 _LLM_FALLBACK_LINE = "Mi dispiace, ho avuto un problema tecnico. Puoi ripetere?"
 
@@ -87,7 +86,7 @@ def _persist_message(conversation_id: str, role: str, content: str) -> None:
             .first()
         )
         if conversation:
-            conversation.updated_at = datetime.now(timezone.utc)
+            conversation.updated_at = datetime.now(UTC)
         db.commit()
     except Exception as e:
         print(f"[ERROR] Persistenza messaggio vocale fallita: {e}")
@@ -109,7 +108,7 @@ def _mark_conversation_ended(conversation_id: str) -> None:
             .first()
         )
         if conversation and conversation.ended_at is None:
-            conversation.ended_at = datetime.now(timezone.utc)
+            conversation.ended_at = datetime.now(UTC)
             db.commit()
     except Exception as e:
         print(f"[ERROR] Chiusura conversazione fallita: {e}")

@@ -8,13 +8,12 @@ Usage:
 
 import sys
 
-import tls_setup  # noqa: F401  (TLS via OS store: must precede the requests import)
-
 import requests
 
+import tls_setup  # noqa: F401  (TLS via OS store: must precede the requests import)
+from cartesia_service import CARTESIA_API_KEY, CARTESIA_VERSION
 from database import SessionLocal
 from models import Avatar
-from cartesia_service import CARTESIA_API_KEY, CARTESIA_VERSION
 
 
 def list_voices():

@@ -3,22 +3,22 @@
 # TLS verification against the OS certificate store (see tls_setup).
 # Kept first so the injection happens before any HTTP client is imported,
 # even though the modules that need it import tls_setup themselves.
-import tls_setup  # noqa: F401
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 
-from database import engine, Base, SessionLocal
-from routers.avatars import router as avatars_router
-from routers.chat import router as chat_router
-from routers.auth import router as auth_router
+import tls_setup  # noqa: F401
+from auth_dependency import ensure_roles, get_or_create_mock_admin
+from database import Base, SessionLocal, engine
 from routers.admin import router as admin_router
 from routers.admin_avatars import router as admin_avatars_router
+from routers.auth import router as auth_router
+from routers.avatars import router as avatars_router
+from routers.chat import router as chat_router
 from routers.organizations import router as organizations_router
 from routers.voice import router as voice_router
-from auth_dependency import get_or_create_mock_admin, ensure_roles
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -74,9 +74,10 @@ with engine.begin() as _conn:
 # The title is mandatory: conversations created before it became so are
 # backfilled with the same "<Category> <n>" default used for new ones, then
 # the column is locked down (both steps are idempotent).
-from models import Avatar, ChatConversation, User
-from conversation_titles import next_conversation_title
 from sqlalchemy import or_
+
+from conversation_titles import next_conversation_title
+from models import Avatar, ChatConversation, User
 
 with SessionLocal() as _db:
     _untitled = (
@@ -106,7 +107,7 @@ with SessionLocal() as _db:
 # into it (idempotent: it only touches users still without an organization).
 # Existing avatars keep organization_id NULL on purpose — the old shared
 # library becomes the global one, visible to every tenant.
-from models import Organization, Role, ROLE_SUPER_ADMIN
+from models import ROLE_SUPER_ADMIN, Organization, Role
 
 with SessionLocal() as _db:
     _default_org = _db.query(Organization).filter(Organization.slug == "default").first()

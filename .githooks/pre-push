@@ -1,0 +1,101 @@
+#!/usr/bin/env sh
+#
+# Pre-push gate: runs the same checks the CI runs, locally, before anything
+# leaves your machine. If any check fails the push is aborted — fix it and
+# push again. To bypass on purpose (e.g. a throwaway WIP branch):
+#
+#     git push --no-verify
+#
+# Enabled via `git config core.hooksPath .githooks` (see CONTRIBUTING.md).
+
+set -u
+
+REPO="$(git rev-parse --show-toplevel)"
+cd "$REPO" || exit 1
+
+# --- helpers ---------------------------------------------------------------
+
+fail=0
+step() { printf '\n\033[1m▶ %s\033[0m\n' "$1"; }
+ok()   { printf '\033[32m✓ %s\033[0m\n' "$1"; }
+ko()   { printf '\033[31m✗ %s\033[0m\n' "$1"; fail=1; }
+
+# Pick the backend interpreter: prefer the project venv (Windows or POSIX
+# layout), fall back to whatever python is on PATH.
+if [ -x "backend/venv/Scripts/python.exe" ]; then
+  PY="backend/venv/Scripts/python.exe"
+elif [ -x "backend/venv/bin/python" ]; then
+  PY="backend/venv/bin/python"
+else
+  PY="$(command -v python3 || command -v python || echo python)"
+fi
+PY_ABS="$REPO/$PY"
+[ -x "$PY_ABS" ] || PY_ABS="$PY"  # PATH fallback isn't repo-relative
+
+docker_ready() { docker info >/dev/null 2>&1; }
+
+# --- 1. backend lint & types ----------------------------------------------
+
+step "Backend: ruff + mypy"
+( cd backend && "$PY_ABS" -m ruff check . ) && ok "ruff" || ko "ruff"
+( cd backend && "$PY_ABS" -m mypy ) && ok "mypy" || ko "mypy"
+
+# --- 2. backend tests (need the test Postgres) -----------------------------
+
+step "Backend: pytest"
+if ! docker_ready; then
+  ko "pytest (Docker non è in esecuzione: avvialo o usa 'git push --no-verify')"
+else
+  # Bring up the compose db if it isn't already running, then make sure the
+  # test database exists.
+  if ! docker compose -f docker-compose.yml exec -T db pg_isready -U postgres >/dev/null 2>&1; then
+    printf '  avvio del Postgres di test...\n'
+    docker compose -f docker-compose.yml up -d db >/dev/null 2>&1
+    for _ in $(seq 1 30); do
+      docker compose -f docker-compose.yml exec -T db pg_isready -U postgres >/dev/null 2>&1 && break
+      sleep 1
+    done
+  fi
+  docker compose -f docker-compose.yml exec -T db \
+    psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname='skilllab_test'" 2>/dev/null \
+    | grep -q 1 \
+    || docker compose -f docker-compose.yml exec -T db createdb -U postgres skilllab_test >/dev/null 2>&1
+
+  DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5433/skilllab_test" \
+    sh -c "cd backend && '$PY_ABS' -m pytest -q --cov" && ok "pytest" || ko "pytest"
+fi
+
+# --- 3. frontend lint, build & tests --------------------------------------
+
+step "Frontend: lint + build + vitest"
+( cd frontend && npm run lint ) && ok "oxlint" || ko "oxlint"
+( cd frontend && npm run build ) && ok "build (tsc+vite)" || ko "build"
+( cd frontend && npm run test ) && ok "vitest" || ko "vitest"
+
+# --- 4. secret scan (gitleaks via Docker) ---------------------------------
+
+step "Sicurezza: gitleaks"
+if ! docker_ready; then
+  ko "gitleaks (Docker non è in esecuzione)"
+else
+  # pwd -W yields a Windows-style path (C:/...) that Docker Desktop mounts;
+  # falls back to the POSIX path on Linux/macOS. MSYS_NO_PATHCONV=1 stops
+  # Git Bash from rewriting the container-side "/repo" into a host path
+  # (it otherwise becomes "C:/.../repo" and gitleaks can't find it); the
+  # var is harmless/ignored on Linux/macOS.
+  REPO_MOUNT="$(pwd -W 2>/dev/null || printf '%s' "$REPO")"
+  MSYS_NO_PATHCONV=1 docker run --rm -v "${REPO_MOUNT}:/repo" ghcr.io/gitleaks/gitleaks:latest \
+    detect --source=/repo --redact --no-banner \
+    && ok "gitleaks (nessun segreto)" || ko "gitleaks (possibili segreti trovati)"
+fi
+
+# --- verdict ---------------------------------------------------------------
+
+if [ "$fail" -ne 0 ]; then
+  printf '\n\033[31m✗ Push bloccato: uno o più gate sono falliti.\033[0m\n'
+  printf '  Correggi e rilancia il push, oppure forza con: git push --no-verify\n\n'
+  exit 1
+fi
+
+printf '\n\033[32m✓ Tutti i gate verdi: push in corso.\033[0m\n\n'
+exit 0

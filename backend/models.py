@@ -1,21 +1,23 @@
 """SQLAlchemy ORM models for the Avatar Selection app."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import (
+    JSON,
     Column,
-    String,
-    Text,
     DateTime,
     Float,
+    ForeignKey,
     Integer,
     LargeBinary,
-    ForeignKey,
+    String,
+    Text,
     Uuid,
-    JSON,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, deferred
+from sqlalchemy.orm import deferred, relationship
+
 from database import Base
 
 # Canonical role names (rows of the `roles` table)
@@ -66,11 +68,11 @@ class Organization(Base):
     # Free-form per-tenant settings (branding, limits...): reserved for the
     # future, not read by any enforcement today.
     settings = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     users = relationship("User", back_populates="organization")
@@ -87,7 +89,7 @@ class Role(Base):
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
     name = Column(String(50), unique=True, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     users = relationship("User", back_populates="role")
 
@@ -113,11 +115,11 @@ class User(Base):
         Uuid, ForeignKey("organizations.id"), nullable=True, index=True
     )
     status = Column(String(20), nullable=False, default=USER_STATUS_ACTIVE)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships
@@ -165,7 +167,7 @@ class Avatar(Base):
     # students must not see hidden objectives, secrets or the real cause of
     # the problem.
     profile = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     # Relationship to selections
     organization = relationship("Organization", back_populates="avatars")
@@ -192,7 +194,7 @@ class UserSelection(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
     avatar_id = Column(Uuid, ForeignKey("avatars.id"), nullable=False)
-    selected_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    selected_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     # Relationships
     user = relationship("User", back_populates="selections")
@@ -215,7 +217,7 @@ class RevokedJti(Base):
 
     jti = Column(String(64), primary_key=True)
     expires_at = Column(DateTime, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     def __repr__(self):
         return f"<RevokedJti(jti='{self.jti}', expires_at={self.expires_at})>"
@@ -239,7 +241,7 @@ class TokenSession(Base):
     client_ip = Column(String(64), nullable=False)
     user_agent = Column(String(400), nullable=False, default="")
     expires_at = Column(DateTime, nullable=False, index=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     def __repr__(self):
         return f"<TokenSession(jti='{self.jti}', client_ip='{self.client_ip}')>"
@@ -263,11 +265,11 @@ class ChatConversation(Base):
     # Set when the call hangs up: a closed conversation is a read-only
     # transcript, it can no longer be resumed (only renamed)
     ended_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships
@@ -319,11 +321,11 @@ class ConversationEvaluation(Base):
     # overall_score is the weighted average of the criteria (see
     # openai_service.EVALUATION_CRITERIA for keys and weights).
     result = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     conversation = relationship("ChatConversation", back_populates="evaluation")
@@ -359,7 +361,7 @@ class ConversationRecording(Base):
     duration_ms = Column(Integer, nullable=True)
     size_bytes = Column(Integer, nullable=False)
     audio = deferred(Column(LargeBinary, nullable=False))
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     conversation = relationship("ChatConversation", back_populates="recording")
 
@@ -378,7 +380,7 @@ class ChatMessage(Base):
     )
     role = Column(String(20), nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     # Relationships
     conversation = relationship("ChatConversation", back_populates="messages")

@@ -111,9 +111,7 @@ class User(Base):
     # The tenant this user belongs to. NULL only for the super admin (and
     # the mock admin), who stand above every organization. A plain user or
     # an organization_admin always has one.
-    organization_id = Column(
-        Uuid, ForeignKey("organizations.id"), nullable=True, index=True
-    )
+    organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=True, index=True)
     status = Column(String(20), nullable=False, default=USER_STATUS_ACTIVE)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
@@ -155,9 +153,7 @@ class Avatar(Base):
     # Owning tenant, or NULL for a global persona shared with every
     # organization. A plain user sees globals plus their own org's avatars;
     # only the super admin creates and assigns either kind.
-    organization_id = Column(
-        Uuid, ForeignKey("organizations.id"), nullable=True, index=True
-    )
+    organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=True, index=True)
     # Cartesia voice id used for the voice conversation mode (falls back
     # to CARTESIA_DEFAULT_VOICE_ID when null)
     voice_id = Column(String(100), nullable=True)
@@ -295,7 +291,9 @@ class ChatConversation(Base):
     )
 
     def __repr__(self):
-        return f"<ChatConversation(id={self.id}, user_id={self.user_id}, avatar_id={self.avatar_id})>"
+        return (
+            f"<ChatConversation(id={self.id}, user_id={self.user_id}, avatar_id={self.avatar_id})>"
+        )
 
 
 class ConversationEvaluation(Base):

@@ -44,9 +44,7 @@ def revoke_jtis(db: Session, entries: list[tuple[str, datetime]]) -> None:
     if not entries:
         return
 
-    db.query(RevokedJti).filter(RevokedJti.expires_at < _utcnow()).delete(
-        synchronize_session=False
-    )
+    db.query(RevokedJti).filter(RevokedJti.expires_at < _utcnow()).delete(synchronize_session=False)
     existing = {
         row[0]
         for row in db.query(RevokedJti.jti)

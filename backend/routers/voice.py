@@ -136,9 +136,7 @@ def start_voice_session(
     )
 
 
-def _readable_conversation(
-    conversation_id: UUID, user: User, db: Session
-) -> ChatConversation:
+def _readable_conversation(conversation_id: UUID, user: User, db: Session) -> ChatConversation:
     """Fetch a conversation the user is allowed to listen back to.
 
     The owner always is; the super admin is too; an organization_admin only
@@ -147,11 +145,7 @@ def _readable_conversation(
     rather than forbidden, so the endpoint never confirms that someone
     else's conversation exists.
     """
-    conversation = (
-        db.query(ChatConversation)
-        .filter(ChatConversation.id == conversation_id)
-        .first()
-    )
+    conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversazione non trovata.")
 

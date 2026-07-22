@@ -9,13 +9,14 @@ from models import CONVERSATION_MODE_VOICE
 
 # --- Avatar Schemas ---
 
+
 class AvatarBase(BaseModel):
     """Base schema for avatar data."""
+
     name: str
     image_url: str
     category: str
     description: str | None = None
-
 
 
 class AvatarResponse(AvatarBase):
@@ -25,6 +26,7 @@ class AvatarResponse(AvatarBase):
     students must not see secrets, hidden objectives or the real cause of
     the problem. Only the derived difficulty grade is safe to show.
     """
+
     id: UUID
     created_at: datetime
     selection_count: int = 0
@@ -35,13 +37,16 @@ class AvatarResponse(AvatarBase):
 
 # --- Selection Schemas ---
 
+
 class SelectionCreate(BaseModel):
     """Schema for creating a new avatar selection."""
+
     avatar_id: UUID
 
 
 class SelectionResponse(BaseModel):
     """Schema for selection API responses."""
+
     id: UUID
     avatar_id: UUID
     selected_at: datetime
@@ -52,8 +57,10 @@ class SelectionResponse(BaseModel):
 
 # --- Chat Schemas (voice conversation transcripts) ---
 
+
 class ChatMessageResponse(BaseModel):
     """Schema for a single chat message in API responses."""
+
     id: UUID
     role: str
     content: str
@@ -64,6 +71,7 @@ class ChatMessageResponse(BaseModel):
 
 class ChatConversationResponse(BaseModel):
     """Schema for conversation API responses."""
+
     id: UUID
     avatar_id: UUID
     title: str
@@ -84,6 +92,7 @@ class ConversationRenameRequest(BaseModel):
     The title is mandatory: a blank one is rejected, so a conversation is
     never left without a name.
     """
+
     title: str = Field(min_length=1, max_length=120)
 
     @field_validator("title")
@@ -101,6 +110,7 @@ class ChatMessageRequest(BaseModel):
     Without a conversation_id a new text conversation is opened; the
     operator always writes first, exactly as they speak first on a call.
     """
+
     avatar_id: UUID
     conversation_id: UUID | None = None
     content: str = Field(min_length=1, max_length=2000)
@@ -116,6 +126,7 @@ class ChatMessageRequest(BaseModel):
 
 class ChatMessageExchange(BaseModel):
     """One completed chat round trip: the operator's message and the reply."""
+
     conversation_id: UUID
     title: str
     user_message: ChatMessageResponse
@@ -124,6 +135,7 @@ class ChatMessageExchange(BaseModel):
 
 class EvaluationCriterionResponse(BaseModel):
     """Score and feedback for a single evaluation criterion."""
+
     key: str
     label: str
     score: float
@@ -134,6 +146,7 @@ class EvaluationCriterionResponse(BaseModel):
 
 class ConversationEvaluationResponse(BaseModel):
     """AI evaluation of the operator's performance in a conversation."""
+
     id: UUID
     conversation_id: UUID
     overall_score: float
@@ -145,6 +158,7 @@ class ConversationEvaluationResponse(BaseModel):
 
 class ChatConversationSummary(BaseModel):
     """Lightweight schema for listing conversations (without full messages)."""
+
     id: UUID
     avatar_id: UUID
     title: str
@@ -162,6 +176,7 @@ class ChatConversationSummary(BaseModel):
 
 # --- Voice Schemas ---
 
+
 class VoiceSessionRequest(BaseModel):
     """Schema for starting a voice session with an avatar.
 
@@ -169,12 +184,14 @@ class VoiceSessionRequest(BaseModel):
     the operator (the user) answers and speaks first, then the avatar
     states its problem.
     """
+
     avatar_id: UUID
     conversation_id: UUID | None = None
 
 
 class VoiceSessionResponse(BaseModel):
     """Schema returned to the client to open the voice WebSocket."""
+
     session_id: str
     conversation_id: UUID
 
@@ -185,6 +202,7 @@ class VoiceRecordingInfo(BaseModel):
     Lets the UI decide whether to show a player without pulling megabytes
     of audio it may never play.
     """
+
     conversation_id: UUID
     mime_type: str
     duration_ms: int | None
@@ -196,8 +214,10 @@ class VoiceRecordingInfo(BaseModel):
 
 # --- Auth Schemas ---
 
+
 class LoginRequest(BaseModel):
     """Schema for login request."""
+
     email: str
     password: str
 
@@ -208,11 +228,13 @@ class LoginResponse(BaseModel):
     The tokens are NOT in the body: they travel only as HttpOnly cookies
     set by the auth endpoints (XSS mitigation).
     """
+
     user: "UserResponse"
 
 
 class NewPasswordRequiredResponse(BaseModel):
     """Schema returned when Cognito requires a new password."""
+
     challenge: str = "NEW_PASSWORD_REQUIRED"
     session: str
     message: str = "È necessario impostare una nuova password."
@@ -220,6 +242,7 @@ class NewPasswordRequiredResponse(BaseModel):
 
 class NewPasswordRequest(BaseModel):
     """Schema for completing the new password challenge."""
+
     email: str
     new_password: str
     session: str
@@ -227,6 +250,7 @@ class NewPasswordRequest(BaseModel):
 
 class UserResponse(BaseModel):
     """Schema for user profile response."""
+
     id: UUID
     cognito_sub: str
     email: str
@@ -247,6 +271,7 @@ class UserResponse(BaseModel):
 class UpdateProfileRequest(BaseModel):
     """Schema for the authenticated user updating their own profile
     (self-service). Email and role are not editable here."""
+
     nome: str | None = None
     cognome: str | None = None
 
@@ -254,14 +279,17 @@ class UpdateProfileRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     """Schema for the authenticated user changing their own password
     (self-service): Cognito verifies current_password server-side."""
+
     current_password: str
     new_password: str
 
 
 # --- Organization Schemas (super admin only) ---
 
+
 class OrganizationResponse(BaseModel):
     """An organization/tenant with its aggregate counters."""
+
     id: UUID
     name: str
     slug: str
@@ -279,6 +307,7 @@ class CreateOrganizationRequest(BaseModel):
 
     The slug is optional: when omitted it is derived from the name.
     """
+
     name: str = Field(min_length=1, max_length=150)
     slug: str | None = Field(default=None, max_length=80)
 
@@ -293,19 +322,23 @@ class CreateOrganizationRequest(BaseModel):
 
 class UpdateOrganizationRequest(BaseModel):
     """Schema for renaming an organization; omitted fields stay unchanged."""
+
     name: str | None = Field(default=None, min_length=1, max_length=150)
     slug: str | None = Field(default=None, max_length=80)
 
 
 class UpdateOrganizationStatusRequest(BaseModel):
     """Schema for suspending or reactivating an organization."""
+
     status: str  # "active" | "suspended"
 
 
 # --- Admin Schemas ---
 
+
 class CreateUserRequest(BaseModel):
     """Schema for admin creating a new user."""
+
     email: str
     nome: str
     cognome: str
@@ -317,6 +350,7 @@ class CreateUserRequest(BaseModel):
 
 class UpdateUserRequest(BaseModel):
     """Schema for admin updating a user; omitted fields are left unchanged."""
+
     nome: str | None = None
     cognome: str | None = None
     ruolo: str | None = None
@@ -325,12 +359,14 @@ class UpdateUserRequest(BaseModel):
 
 class UpdateUserStatusRequest(BaseModel):
     """Schema for admin changing an account's state."""
+
     status: str  # "active" | "suspended" | "disabled"
 
 
 class AdminAvatarPayload(BaseModel):
     """Schema for creating/updating an avatar (training persona) from the
     admin page. The avatar name is derived from profile NOME + COGNOME."""
+
     category: str = "Clienti"
     description: str | None = None
     # Empty → the backend generates an initials placeholder image
@@ -344,6 +380,7 @@ class AdminAvatarPayload(BaseModel):
 
 class AdminAvatarResponse(BaseModel):
     """Avatar including the full persona sheet — super admin only."""
+
     id: UUID
     name: str
     image_url: str
@@ -360,6 +397,7 @@ class AdminAvatarResponse(BaseModel):
 
 class ConversationReport(BaseModel):
     """Read-only recap of a single conversation for the activity report."""
+
     id: UUID
     title: str
     # Channel it ran on: "voice" (call) or "text" (chat)
@@ -375,6 +413,7 @@ class ConversationReport(BaseModel):
 
 class UserActivityReport(BaseModel):
     """Read-only recap of a user with their conversations and durations."""
+
     id: UUID
     email: str
     nome: str
@@ -390,6 +429,7 @@ class UserActivityReport(BaseModel):
 
 class EvaluationCriterionScore(BaseModel):
     """Score of a single criterion inside the evaluations report."""
+
     key: str
     label: str
     score: float
@@ -397,6 +437,7 @@ class EvaluationCriterionScore(BaseModel):
 
 class EvaluationReportRow(BaseModel):
     """One evaluated conversation, flattened for the dashboard charts."""
+
     conversation_id: UUID
     conversation_title: str
     # Channel it ran on: "voice" (call) or "text" (chat)
@@ -417,6 +458,7 @@ class EvaluationReportRow(BaseModel):
 
 class AdminConversationDetail(BaseModel):
     """Full transcript + stored evaluation of a conversation, for the admin dashboard."""
+
     conversation_id: UUID
     messages: list[ChatMessageResponse]
     evaluation: ConversationEvaluationResponse | None = None
@@ -424,7 +466,9 @@ class AdminConversationDetail(BaseModel):
 
 # --- Generic Response ---
 
+
 class MessageResponse(BaseModel):
     """Generic message response."""
+
     message: str
     success: bool = True

@@ -175,9 +175,7 @@ def users_activity_report(
         s = stats.get(conv.id)
         message_count = s.message_count if s else 0
         duration = (
-            int((s.last_at - s.first_at).total_seconds())
-            if s and s.message_count >= 2
-            else 0
+            int((s.last_at - s.first_at).total_seconds()) if s and s.message_count >= 2 else 0
         )
         conversations_by_user[conv.user_id].append(
             ConversationReport(
@@ -279,16 +277,12 @@ def conversation_detail(
     Full transcript and stored evaluation of a single conversation (Super
     Admin + Organization Admin) — backs the dashboard detail modal.
     """
-    conversation = (
-        db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
-    )
+    conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
         )
-    _conversation_in_scope_or_404(
-        db, conversation, resolve_admin_scope(current_admin)
-    )
+    _conversation_in_scope_or_404(db, conversation, resolve_admin_scope(current_admin))
 
     messages = (
         db.query(ChatMessage)
@@ -319,16 +313,12 @@ def delete_conversation(
     (Super Admin + Organization Admin). Normal users cannot delete their own
     conversation history — there is no equivalent endpoint for role 'user'.
     """
-    conversation = (
-        db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
-    )
+    conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
         )
-    _conversation_in_scope_or_404(
-        db, conversation, resolve_admin_scope(current_admin)
-    )
+    _conversation_in_scope_or_404(db, conversation, resolve_admin_scope(current_admin))
 
     db.delete(conversation)
     db.commit()
@@ -355,9 +345,7 @@ def create_user(
         )
 
     role = _resolve_role_or_400(db, request.ruolo)
-    organization_id = _resolve_organization_for_role(
-        db, request.ruolo, request.organization_id
-    )
+    organization_id = _resolve_organization_for_role(db, request.ruolo, request.organization_id)
 
     # Create user in AWS Cognito
     try:
@@ -427,9 +415,7 @@ def update_user(
             target_org = request.organization_id
         else:
             target_org = user.organization_id
-        user.organization_id = _resolve_organization_for_role(
-            db, target_ruolo, target_org
-        )
+        user.organization_id = _resolve_organization_for_role(db, target_ruolo, target_org)
 
     db.commit()
     db.refresh(user)

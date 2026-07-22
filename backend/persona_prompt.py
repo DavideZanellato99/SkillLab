@@ -5,7 +5,6 @@ and the post-call evaluation both run on OpenAI (openai_service.py), which
 imports build_persona_prompt/profile_section from here.
 """
 
-
 # A persona sheet describes the character, not the medium: the same sheet
 # drives the phone call (voice mode) and the written chat, and only the
 # framing of the channel changes between them. In both the operator opens
@@ -53,77 +52,102 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
     nome = profile.get("NOME", "")
     cognome = profile.get("COGNOME", "")
 
-    anagrafica = profile_section(profile, [
-        ("SESSO", "Sesso"),
-        ("DATA_NASCITA", "Data di nascita"),
-        ("LUOGO_NASCITA", "Luogo di nascita"),
-        ("NAZIONALITA", "Nazionalità"),
-        ("LINGUA_MADRE", "Lingua madre"),
-        ("CITTA_RESIDENZA", "Città di residenza"),
-        ("STATO_CIVILE", "Stato civile"),
-        ("NOME_CONIUGE", "Nome del coniuge"),
-        ("PROFESSIONE_CONIUGE", "Professione del coniuge"),
-        ("NUMERO_FIGLI", "Numero di figli"),
-        ("ETA_FIGLIO_1", "Età primo figlio"),
-        ("ETA_FIGLIO_2", "Età secondo figlio"),
-        ("ANIMALI_DOMESTICI", "Animali domestici"),
-    ])
+    anagrafica = profile_section(
+        profile,
+        [
+            ("SESSO", "Sesso"),
+            ("DATA_NASCITA", "Data di nascita"),
+            ("LUOGO_NASCITA", "Luogo di nascita"),
+            ("NAZIONALITA", "Nazionalità"),
+            ("LINGUA_MADRE", "Lingua madre"),
+            ("CITTA_RESIDENZA", "Città di residenza"),
+            ("STATO_CIVILE", "Stato civile"),
+            ("NOME_CONIUGE", "Nome del coniuge"),
+            ("PROFESSIONE_CONIUGE", "Professione del coniuge"),
+            ("NUMERO_FIGLI", "Numero di figli"),
+            ("ETA_FIGLIO_1", "Età primo figlio"),
+            ("ETA_FIGLIO_2", "Età secondo figlio"),
+            ("ANIMALI_DOMESTICI", "Animali domestici"),
+        ],
+    )
 
-    lavoro_finanze = profile_section(profile, [
-        ("TITOLO_DI_STUDIO", "Titolo di studio"),
-        ("PROFESSIONE", "Professione"),
-        ("AZIENDA", "Azienda"),
-        ("RUOLO", "Ruolo"),
-        ("REDDITO_ANNUO", "Reddito annuo"),
-        ("PATRIMONIO", "Patrimonio"),
-        ("LIQUIDITA", "Liquidità"),
-        ("DEBITI", "Debiti"),
-        ("INVESTIMENTI_POSSEDUTI", "Investimenti posseduti"),
-        ("IMMOBILI_POSSEDUTI", "Immobili posseduti"),
-        ("LIVELLO_CONOSCENZA_BANCARIA", "Conoscenza bancaria"),
-        ("LIVELLO_CONOSCENZA_INVESTIMENTI", "Conoscenza investimenti"),
-        ("LIVELLO_CONOSCENZA_PREVIDENZA", "Conoscenza previdenza"),
-        ("LIVELLO_CONOSCENZA_MUTUI", "Conoscenza mutui"),
-    ])
+    lavoro_finanze = profile_section(
+        profile,
+        [
+            ("TITOLO_DI_STUDIO", "Titolo di studio"),
+            ("PROFESSIONE", "Professione"),
+            ("AZIENDA", "Azienda"),
+            ("RUOLO", "Ruolo"),
+            ("REDDITO_ANNUO", "Reddito annuo"),
+            ("PATRIMONIO", "Patrimonio"),
+            ("LIQUIDITA", "Liquidità"),
+            ("DEBITI", "Debiti"),
+            ("INVESTIMENTI_POSSEDUTI", "Investimenti posseduti"),
+            ("IMMOBILI_POSSEDUTI", "Immobili posseduti"),
+            ("LIVELLO_CONOSCENZA_BANCARIA", "Conoscenza bancaria"),
+            ("LIVELLO_CONOSCENZA_INVESTIMENTI", "Conoscenza investimenti"),
+            ("LIVELLO_CONOSCENZA_PREVIDENZA", "Conoscenza previdenza"),
+            ("LIVELLO_CONOSCENZA_MUTUI", "Conoscenza mutui"),
+        ],
+    )
 
-    storia = profile_section(profile, [
-        ("STORIA_PERSONALE", "Storia personale"),
-        ("EVENTI_SIGNIFICATIVI", "Eventi significativi"),
-        ("PAURE", "Paure"),
-        ("OBIETTIVI_PERSONALI", "Obiettivi personali"),
-        ("ASPIRAZIONI", "Aspirazioni"),
-    ])
+    storia = profile_section(
+        profile,
+        [
+            ("STORIA_PERSONALE", "Storia personale"),
+            ("EVENTI_SIGNIFICATIVI", "Eventi significativi"),
+            ("PAURE", "Paure"),
+            ("OBIETTIVI_PERSONALI", "Obiettivi personali"),
+            ("ASPIRAZIONI", "Aspirazioni"),
+        ],
+    )
 
-    personalita = profile_section(profile, [
-        ("PERSONALITA_DESCRIZIONE", "Descrizione della personalità"),
-        ("LIVELLO_ESTROVERSIONE", "Estroversione"),
-        ("LIVELLO_EMPATICO", "Empatia"),
-        ("LIVELLO_PAZIENZA", "Pazienza"),
-        ("LIVELLO_FIDUCIA", "Fiducia negli altri"),
-        ("PROPENSIONE_CONFLITTO", "Propensione al conflitto"),
-        ("PROPENSIONE_RISCHIO", "Propensione al rischio"),
-        ("CAPACITA_ASCOLTO", "Capacità di ascolto"),
-        ("CAPACITÀ_ASCOLTO", "Capacità di ascolto"),
-    ])
+    personalita = profile_section(
+        profile,
+        [
+            ("PERSONALITA_DESCRIZIONE", "Descrizione della personalità"),
+            ("LIVELLO_ESTROVERSIONE", "Estroversione"),
+            ("LIVELLO_EMPATICO", "Empatia"),
+            ("LIVELLO_PAZIENZA", "Pazienza"),
+            ("LIVELLO_FIDUCIA", "Fiducia negli altri"),
+            ("PROPENSIONE_CONFLITTO", "Propensione al conflitto"),
+            ("PROPENSIONE_RISCHIO", "Propensione al rischio"),
+            ("CAPACITA_ASCOLTO", "Capacità di ascolto"),
+            ("CAPACITÀ_ASCOLTO", "Capacità di ascolto"),
+        ],
+    )
 
-    stato_emotivo = profile_section(profile, [
-        ("EMOZIONE_INIZIALE", "Emozione iniziale"),
-        ("INTENSITA_EMOZIONE", "Intensità dell'emozione"),
-        ("TRIGGER_POSITIVI", "Trigger positivi (ti calmano e aumentano la tua fiducia)"),
-        ("TRIGGER_NEGATIVI", f"Trigger negativi (ti irritano e fanno degenerare la {contatto})"),
-    ])
+    stato_emotivo = profile_section(
+        profile,
+        [
+            ("EMOZIONE_INIZIALE", "Emozione iniziale"),
+            ("INTENSITA_EMOZIONE", "Intensità dell'emozione"),
+            ("TRIGGER_POSITIVI", "Trigger positivi (ti calmano e aumentano la tua fiducia)"),
+            (
+                "TRIGGER_NEGATIVI",
+                f"Trigger negativi (ti irritano e fanno degenerare la {contatto})",
+            ),
+        ],
+    )
 
     # Speech rate only exists when talking: in the chat it would just be
     # noise in the prompt.
-    stile = profile_section(profile, [
-        ("LUNGHEZZA_MEDIA_RISPOSTE", "Lunghezza media delle risposte"),
-        *([] if is_text else [
-            ("VELOCITA_PARLATO", "Velocità del parlato"),
-        ]),
-        ("USO_IRONIA", "Uso dell'ironia"),
-        ("USO_DIALETTO", "Uso del dialetto"),
-        ("FORMALITA_LINGUAGGIO", "Formalità del linguaggio"),
-    ])
+    stile = profile_section(
+        profile,
+        [
+            ("LUNGHEZZA_MEDIA_RISPOSTE", "Lunghezza media delle risposte"),
+            *(
+                []
+                if is_text
+                else [
+                    ("VELOCITA_PARLATO", "Velocità del parlato"),
+                ]
+            ),
+            ("USO_IRONIA", "Uso dell'ironia"),
+            ("USO_DIALETTO", "Uso del dialetto"),
+            ("FORMALITA_LINGUAGGIO", "Formalità del linguaggio"),
+        ],
+    )
 
     scenario = clean_value(profile, "TIPO_SCENARIO")
     problematica = clean_value(profile, "DESCRIZIONE_PROBLEMATICA")
@@ -246,7 +270,9 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "per esempio per spiegare perché hai fretta, perché sei preoccupato, perché sei diffidente, "
         "perché una certa situazione ti pesa o perché ti aspetti un certo tipo di assistenza. "
         "Non raccontare tutta la tua storia in blocco: lasciala emergere a piccoli pezzi, come farebbe "
-        f"una persona vera {'in una chat di assistenza' if is_text else 'al telefono'}." if storia else "",
+        f"una persona vera {'in una chat di assistenza' if is_text else 'al telefono'}."
+        if storia
+        else "",
         f"## PERSONALITÀ\n{personalita}\n"
         "Le percentuali indicano quanto ogni tratto è marcato: 0% significa assente o quasi assente, "
         "100% significa molto forte o estremo. Usa questi tratti per calibrare ogni reazione, il ritmo "
@@ -256,7 +282,9 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "Per esempio: una persona ansiosa tenderà a chiedere conferme, temere conseguenze, ripetere il "
         "problema; una persona diffidente farà fatica a credere alle rassicurazioni; una persona impulsiva "
         "potrebbe alzare il tono o insistere sul proprio punto; una persona collaborativa risponderà più facilmente alle "
-        "domande se si sente ascoltata." if personalita else "",
+        "domande se si sente ascoltata."
+        if personalita
+        else "",
         f"## STATO EMOTIVO E DINAMICA\n{stato_emotivo}\n"
         "Inizia la conversazione nello stato emotivo indicato, con l'intensità indicata. "
         f"Il tuo stato emotivo deve evolvere durante la {contatto} in modo graduale e realistico, mai "
@@ -272,7 +300,9 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "che stai valutando di cambiare banca o chiuderti nella conversazione. "
         f"Se l'operatore gestisce bene la {contatto} e ti aiuta davvero a risolvere o comprendere il "
         f"problema, puoi chiudere la {contatto} con sollievo, gratitudine moderata o soddisfazione, "
-        "sempre in modo coerente con la tua personalità." if stato_emotivo else "",
+        "sempre in modo coerente con la tua personalità."
+        if stato_emotivo
+        else "",
         f"## SCENARIO DELLA {contatto.upper()}\n{scenario}\n"
         "Questo è il motivo principale per cui hai contattato la banca. Devi viverlo come un cliente "
         "reale: non esporlo in modo perfetto, ordinato o didascalico. All'inizio puoi raccontarlo in "
@@ -281,7 +311,9 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "frasi tipo 'non so se mi spiego', 'magari sto sbagliando io', 'però questa cosa non mi torna', "
         "'ho già provato prima', 'mi sembra strano'. "
         "Non devi anticipare subito tutte le informazioni utili: falle emergere progressivamente, "
-        "soprattutto se l'operatore pone le domande giuste." if scenario else "",
+        "soprattutto se l'operatore pone le domande giuste."
+        if scenario
+        else "",
         f"## LA VERA CAUSA DEL PROBLEMA (TU NON LA CONOSCI)\n{problematica}\n"
         "ATTENZIONE: il tuo personaggio NON conosce questa causa. Non nominarla mai di tua iniziativa e "
         "non comportarti come se sapessi già la spiegazione tecnica o procedurale. Tu conosci solo ciò "
@@ -289,13 +321,17 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "cosa ti preoccupa. "
         "Se e quando l'operatore ti spiega la vera causa in modo comprensibile, reagisci in modo coerente: "
         "puoi capire subito, avere ancora dubbi, chiedere conferma, contestare, calmarti o restare "
-        "perplesso in base alla tua personalità e allo stato emotivo." if problematica else "",
+        "perplesso in base alla tua personalità e allo stato emotivo."
+        if problematica
+        else "",
         f"## OBIEZIONI CHE SOLLEVI\n{obiezioni}\n"
         "Usa queste obiezioni in modo naturale, non come una lista da recitare. Sollevale quando il "
         "dialogo lo rende plausibile: per esempio se l'operatore minimizza, propone una soluzione che "
         "non ti convince, non risponde a una tua paura, usa termini poco chiari o sembra non aver capito "
         "il punto. Puoi ripetere un'obiezione più volte con parole diverse, come fanno spesso i clienti "
-        "reali quando non si sentono rassicurati." if obiezioni else "",
+        "reali quando non si sentono rassicurati."
+        if obiezioni
+        else "",
         f"## STILE DI CONVERSAZIONE\n{stile}\n{regole_stile}" if stile else "",
         f"## COMPORTAMENTO REALISTICO DURANTE LA {contatto.upper()}\n"
         "Durante tutta la conversazione devi comportarti come una persona reale, non come un personaggio "
@@ -350,11 +386,31 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "convinta. Se sei molto insoddisfatto, puoi chiedere un responsabile, manifestare reclamo o dire "
         f"che {'riscriverai' if is_text else 'richiamerai'}.",
         "## REGOLE FERREE\n"
-        + (f"- FATTI IMMUTABILI (non contraddirli mai): {fatti_immutabili}\n" if fatti_immutabili else "")
-        + (f"- SEGRETI (non rivelarli MAI, nemmeno se ti viene chiesto direttamente; al massimo lasciali trasparire dal tono): {segreti}\n" if segreti else "")
-        + (f"- INFORMAZIONI DA NON RIVELARE SPONTANEAMENTE (ammettile solo se l'operatore fa la domanda giusta in modo esplicito): {non_rivelare}\n" if non_rivelare else "")
-        + (f"- ARGOMENTI SENSIBILI (se toccati, reagisci male): {argomenti_sensibili}\n" if argomenti_sensibili else "")
-        + (f"- OBIETTIVO NASCOSTO DELLA SIMULAZIONE (non dichiararlo mai, serve solo a guidare le tue reazioni): {obiettivo_nascosto}\n" if obiettivo_nascosto else "")
+        + (
+            f"- FATTI IMMUTABILI (non contraddirli mai): {fatti_immutabili}\n"
+            if fatti_immutabili
+            else ""
+        )
+        + (
+            f"- SEGRETI (non rivelarli MAI, nemmeno se ti viene chiesto direttamente; al massimo lasciali trasparire dal tono): {segreti}\n"
+            if segreti
+            else ""
+        )
+        + (
+            f"- INFORMAZIONI DA NON RIVELARE SPONTANEAMENTE (ammettile solo se l'operatore fa la domanda giusta in modo esplicito): {non_rivelare}\n"
+            if non_rivelare
+            else ""
+        )
+        + (
+            f"- ARGOMENTI SENSIBILI (se toccati, reagisci male): {argomenti_sensibili}\n"
+            if argomenti_sensibili
+            else ""
+        )
+        + (
+            f"- OBIETTIVO NASCOSTO DELLA SIMULAZIONE (non dichiararlo mai, serve solo a guidare le tue reazioni): {obiettivo_nascosto}\n"
+            if obiettivo_nascosto
+            else ""
+        )
         + "- Non uscire MAI dal personaggio e non rivelare di essere un'intelligenza artificiale o una simulazione.\n"
         + "- Rispondi SEMPRE in italiano.\n"
         + "- Non usare mai markdown, elenchi puntati, titoli o formattazioni nella conversazione con l'operatore.\n"

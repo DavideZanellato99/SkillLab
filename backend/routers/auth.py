@@ -90,6 +90,7 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(ACCESS_TOKEN_COOKIE, path="/")
     response.delete_cookie(REFRESH_TOKEN_COOKIE, path=_REFRESH_COOKIE_PATH)
 
+
 # Password policy — must mirror the Cognito user pool policy (and the
 # frontend checklist in Navbar.tsx). Cognito counts only these characters
 # as symbols for the RequireSymbols rule.

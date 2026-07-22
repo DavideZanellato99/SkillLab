@@ -35,14 +35,10 @@ if not OPENAI_EVAL_MODEL:
 # When the primary model is saturated or unavailable we retry the same
 # request on these, in order (comma-separated; empty = no fallback).
 OPENAI_FALLBACK_MODELS = [
-    m.strip()
-    for m in os.getenv("OPENAI_FALLBACK_MODELS", "").split(",")
-    if m.strip()
+    m.strip() for m in os.getenv("OPENAI_FALLBACK_MODELS", "").split(",") if m.strip()
 ]
 OPENAI_EVAL_FALLBACK_MODELS = [
-    m.strip()
-    for m in os.getenv("OPENAI_EVAL_FALLBACK_MODELS", "").split(",")
-    if m.strip()
+    m.strip() for m in os.getenv("OPENAI_EVAL_FALLBACK_MODELS", "").split(",") if m.strip()
 ]
 
 async_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -53,9 +49,7 @@ def _candidate_models() -> list[str]:
 
 
 def _eval_candidate_models() -> list[str]:
-    return [OPENAI_EVAL_MODEL] + [
-        m for m in OPENAI_EVAL_FALLBACK_MODELS if m != OPENAI_EVAL_MODEL
-    ]
+    return [OPENAI_EVAL_MODEL] + [m for m in OPENAI_EVAL_FALLBACK_MODELS if m != OPENAI_EVAL_MODEL]
 
 
 def _is_retryable(error: Exception) -> bool:
@@ -112,13 +106,10 @@ def _roleplay_messages(
     """Preflight the roleplay request and build its messages payload."""
     if not async_client:
         raise RuntimeError(
-            "OPENAI_API_KEY non configurata. "
-            "Aggiungi OPENAI_API_KEY al file .env del backend."
+            "OPENAI_API_KEY non configurata. Aggiungi OPENAI_API_KEY al file .env del backend."
         )
     if not avatar_profile:
-        raise RuntimeError(
-            "Avatar senza scheda persona: impossibile generare la risposta."
-        )
+        raise RuntimeError("Avatar senza scheda persona: impossibile generare la risposta.")
     return _build_messages(build_persona_prompt(avatar_profile, channel), messages_history)
 
 
@@ -140,9 +131,7 @@ async def prewarm_roleplay(avatar_profile: dict) -> None:
     try:
         await async_client.chat.completions.create(
             model=OPENAI_MODEL,
-            messages=_build_messages(
-                build_persona_prompt(avatar_profile, CHANNEL_VOICE), []
-            ),
+            messages=_build_messages(build_persona_prompt(avatar_profile, CHANNEL_VOICE), []),
             max_completion_tokens=1,
             **_completion_kwargs(OPENAI_MODEL),
         )
@@ -268,8 +257,8 @@ _CRITERIA_GUIDANCE = {
         "- apre il contatto in modo professionale;\n"
         "- comprende progressivamente la casistica del cliente;\n"
         "- gestisce il contatto in modo ordinato, senza perdere il controllo della conversazione;\n"
-        "- effettua il rilancio a fine chiamata, ad esempio chiedendo \"posso esserle utile in "
-        "altro?\" o formula equivalente;\n"
+        '- effettua il rilancio a fine chiamata, ad esempio chiedendo "posso esserle utile in '
+        'altro?" o formula equivalente;\n'
         "- conclude il contatto in maniera cordiale e professionale.\n"
         "Penalizza se:\n"
         "- manca la presentazione completa;\n"
@@ -310,7 +299,7 @@ _CRITERIA_GUIDANCE = {
         "- appare insicuro;\n"
         "- fornisce informazioni poco chiare o non motivate;\n"
         "- cambia versione senza spiegazione;\n"
-        "- usa formule eccessivamente vaghe come \"forse\", \"credo\", \"non saprei\" senza "
+        '- usa formule eccessivamente vaghe come "forse", "credo", "non saprei" senza '
         "gestire correttamente l'incertezza;\n"
         "- non riesce a guidare il cliente."
     ),
@@ -321,13 +310,13 @@ _CRITERIA_GUIDANCE = {
         "- mantiene un tono cortese e professionale;\n"
         "- trasmette competenza senza risultare eccessivamente tecnico;\n"
         "- adatta il linguaggio al cliente;\n"
-        "- utilizza sempre il \"Lei\" nei confronti del cliente, anche se il cliente usa il \"tu\";\n"
+        '- utilizza sempre il "Lei" nei confronti del cliente, anche se il cliente usa il "tu";\n'
         "- può usare lievi locuzioni informali solo se compatibili con il contesto e senza "
         "ridurre la professionalità.\n"
         "Penalizza se:\n"
         "- usa un linguaggio troppo tecnico e poco comprensibile;\n"
         "- usa un linguaggio troppo informale;\n"
-        "- dà del \"tu\" al cliente;\n"
+        '- dà del "tu" al cliente;\n'
         "- usa espressioni poco professionali;\n"
         "- risulta scortese, freddo, sbrigativo o poco chiaro;\n"
         "- non riesce a spiegare concetti complessi in modo semplice.\n"
@@ -398,20 +387,23 @@ def _evaluation_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
     cliente = f"{nome} {cognome}".strip() or "il cliente simulato"
     contatto = "chat" if channel == CHANNEL_TEXT else "telefonata"
 
-    contesto = profile_section(profile, [
-        ("TIPO_SCENARIO", "Scenario della chiamata"),
-        ("DESCRIZIONE_PROBLEMATICA", "Vera causa del problema (ignota al cliente)"),
-        ("OBIETTIVO_NASCOSTO", "Obiettivo nascosto della simulazione"),
-        ("EMOZIONE_INIZIALE", "Emozione iniziale del cliente"),
-        ("GRADO_DIFFICOLTA", "Grado di difficoltà"),
-    ])
+    contesto = profile_section(
+        profile,
+        [
+            ("TIPO_SCENARIO", "Scenario della chiamata"),
+            ("DESCRIZIONE_PROBLEMATICA", "Vera causa del problema (ignota al cliente)"),
+            ("OBIETTIVO_NASCOSTO", "Obiettivo nascosto della simulazione"),
+            ("EMOZIONE_INIZIALE", "Emozione iniziale del cliente"),
+            ("GRADO_DIFFICOLTA", "Grado di difficoltà"),
+        ],
+    )
     pesi = "\n".join(f"- {key}: {weight}%" for key, _, weight in EVALUATION_CRITERIA)
     # The criteria speak of a phone call: on the text channel the same phases
     # apply to the written contact, so the judge is told to read them that way
     # instead of penalizing what the medium itself makes impossible.
     nota_canale = (
         "\nATTENZIONE: questo contatto è avvenuto via CHAT TESTUALE, non al telefono. "
-        "Leggi ogni riferimento alla \"chiamata\" come riferito al contatto scritto e non "
+        'Leggi ogni riferimento alla "chiamata" come riferito al contatto scritto e non '
         "penalizzare l'operatore per elementi che il canale scritto non prevede, come il "
         "tono di voce.\n"
         if channel == CHANNEL_TEXT
@@ -470,15 +462,15 @@ def _evaluation_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "Il punteggio complessivo deve essere compreso tra 1 e 10, arrotondato a una cifra "
         "decimale.\n\n"
         "## ISTRUZIONI SUI CAMPI\n"
-        f"- \"score\" deve essere sempre un numero da {EVALUATION_MIN_SCORE:.0f} a "
+        f'- "score" deve essere sempre un numero da {EVALUATION_MIN_SCORE:.0f} a '
         f"{EVALUATION_MAX_SCORE:.0f}, con massimo una cifra decimale.\n"
-        "- \"comment\" deve spiegare in modo sintetico il motivo del punteggio, citando quando "
+        '- "comment" deve spiegare in modo sintetico il motivo del punteggio, citando quando '
         f"utile momenti specifici della {contatto}.\n"
-        "- \"suggestions\" deve contenere suggerimenti concreti e utili se il punteggio del "
+        '- "suggestions" deve contenere suggerimenti concreti e utili se il punteggio del '
         f"criterio è inferiore a {EVALUATION_SUGGESTION_THRESHOLD}.\n"
         f"- Se il punteggio del criterio è pari o superiore a {EVALUATION_SUGGESTION_THRESHOLD}, "
-        "\"suggestions\" può essere una stringa vuota.\n"
-        "- \"overall_feedback\" deve sintetizzare i principali punti di forza e le principali "
+        '"suggestions" può essere una stringa vuota.\n'
+        '- "overall_feedback" deve sintetizzare i principali punti di forza e le principali '
         "aree di miglioramento dell'operatore.\n"
         "- Scrivi tutto in italiano.\n\n"
         "## FORMATO DELLA RISPOSTA\n"
@@ -486,7 +478,7 @@ def _evaluation_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "questa struttura esatta:\n"
         '{"overall_score": 0.0, "overall_feedback": "", "criteria": '
         '{"<chiave criterio>": {"score": 0.0, "comment": "", "suggestions": ""}}}\n'
-        "L'oggetto \"criteria\" deve contenere tutte e sei le chiavi elencate sopra."
+        'L\'oggetto "criteria" deve contenere tutte e sei le chiavi elencate sopra.'
     )
 
 
@@ -511,19 +503,19 @@ def _normalize_evaluation(raw: dict) -> dict:
         suggestions = str(entry.get("suggestions") or "").strip() or None
         if score >= EVALUATION_SUGGESTION_THRESHOLD:
             suggestions = None
-        criteria.append({
-            "key": key,
-            "label": label,
-            "weight": weight,
-            "score": score,
-            "comment": str(entry.get("comment") or "").strip(),
-            "suggestions": suggestions,
-        })
+        criteria.append(
+            {
+                "key": key,
+                "label": label,
+                "weight": weight,
+                "score": score,
+                "comment": str(entry.get("comment") or "").strip(),
+                "suggestions": suggestions,
+            }
+        )
 
     total_weight = sum(weight for _, _, weight in EVALUATION_CRITERIA)
-    overall = round(
-        sum(c["score"] * c["weight"] for c in criteria) / total_weight, 1
-    )
+    overall = round(sum(c["score"] * c["weight"] for c in criteria) / total_weight, 1)
 
     return {
         "overall_score": overall,
@@ -555,8 +547,7 @@ async def evaluate_conversation(
     """
     if not async_client:
         raise RuntimeError(
-            "OPENAI_API_KEY non configurata. "
-            "Aggiungi OPENAI_API_KEY al file .env del backend."
+            "OPENAI_API_KEY non configurata. Aggiungi OPENAI_API_KEY al file .env del backend."
         )
 
     transcript = "\n".join(

@@ -41,10 +41,11 @@ il push se qualcosa è rosso**. Abilitalo una tantum (dopo il clone):
 git config core.hooksPath .githooks
 ```
 
-Cosa controlla, in ordine: `ruff` + `mypy` (backend), `pytest --cov`
-(backend, avvia da solo il Postgres di test via Docker se non è già su),
-`oxlint` + build + `vitest` (frontend), e `gitleaks` (scan segreti, via
-Docker). Serve Docker attivo per i test backend e per gitleaks.
+Cosa controlla, in ordine: `ruff check` + `ruff format --check` + `mypy`
+(backend), `pytest --cov` (backend, avvia da solo il Postgres di test via
+Docker se non è già su), `oxlint` + build + `vitest` (frontend), e
+`gitleaks` (scan segreti, via Docker). Serve Docker attivo per i test
+backend e per gitleaks.
 
 Per forzare un push saltando i gate (es. un branch di lavoro usa-e-getta):
 
@@ -65,9 +66,10 @@ python -m venv venv
 venv/Scripts/pip install -r requirements.txt -r requirements-dev.txt   # Windows
 # source venv/bin/activate && pip install -r requirements.txt -r requirements-dev.txt  # Linux/macOS
 
-ruff check .        # lint
-mypy                # type check (moduli puri, config in pyproject.toml)
-pytest --cov        # test + soglia di coverage
+ruff check .            # lint
+ruff format --check .   # formattazione (usa `ruff format .` per applicarla)
+mypy                    # type check (moduli puri, config in pyproject.toml)
+pytest --cov            # test + soglia di coverage
 ```
 
 I test hanno bisogno di un Postgres reale (l'app esegue SQL specifico di

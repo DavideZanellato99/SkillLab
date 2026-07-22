@@ -37,7 +37,8 @@ docker_ready() { docker info >/dev/null 2>&1; }
 # --- 1. backend lint & types ----------------------------------------------
 
 step "Backend: ruff + mypy"
-( cd backend && "$PY_ABS" -m ruff check . ) && ok "ruff" || ko "ruff"
+( cd backend && "$PY_ABS" -m ruff check . ) && ok "ruff (lint)" || ko "ruff (lint)"
+( cd backend && "$PY_ABS" -m ruff format --check . ) && ok "ruff (format)" || ko "ruff (format)"
 ( cd backend && "$PY_ABS" -m mypy ) && ok "mypy" || ko "mypy"
 
 # --- 2. backend tests (need the test Postgres) -----------------------------

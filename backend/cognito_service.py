@@ -109,9 +109,7 @@ def authenticate(email: str, password: str) -> dict:
     }
 
 
-def respond_to_new_password_challenge(
-    email: str, new_password: str, session: str
-) -> dict:
+def respond_to_new_password_challenge(email: str, new_password: str, session: str) -> dict:
     """
     Complete the NEW_PASSWORD_REQUIRED challenge.
 
@@ -349,20 +347,14 @@ def admin_set_user_enabled(email: str, enabled: bool) -> None:
     """
     try:
         if enabled:
-            _cognito_client.admin_enable_user(
-                UserPoolId=COGNITO_USER_POOL_ID, Username=email
-            )
+            _cognito_client.admin_enable_user(UserPoolId=COGNITO_USER_POOL_ID, Username=email)
         else:
-            _cognito_client.admin_disable_user(
-                UserPoolId=COGNITO_USER_POOL_ID, Username=email
-            )
+            _cognito_client.admin_disable_user(UserPoolId=COGNITO_USER_POOL_ID, Username=email)
     except ClientError as e:
         if e.response["Error"]["Code"] == "UserNotFoundException":
             return
         action = "riattivazione" if enabled else "sospensione"
-        raise RuntimeError(
-            f"Errore nella {action} su Cognito: {e.response['Error']['Message']}"
-        )
+        raise RuntimeError(f"Errore nella {action} su Cognito: {e.response['Error']['Message']}")
     except Exception as e:
         raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
 
@@ -411,9 +403,7 @@ def admin_resend_credentials(email: str) -> str:
                 DesiredDeliveryMediums=["EMAIL"],
             )
         except ClientError as e:
-            raise RuntimeError(
-                f"Errore nel rinvio dell'invito: {e.response['Error']['Message']}"
-            )
+            raise RuntimeError(f"Errore nel rinvio dell'invito: {e.response['Error']['Message']}")
         except Exception as e:
             raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
 
@@ -444,9 +434,6 @@ def admin_delete_user(email: str) -> None:
     except ClientError as e:
         if e.response["Error"]["Code"] == "UserNotFoundException":
             return
-        raise RuntimeError(
-            f"Errore nell'eliminazione da Cognito: {e.response['Error']['Message']}"
-        )
+        raise RuntimeError(f"Errore nell'eliminazione da Cognito: {e.response['Error']['Message']}")
     except Exception as e:
         raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
-

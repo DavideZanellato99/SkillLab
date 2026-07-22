@@ -203,4 +203,3 @@ def resolve_admin_scope(admin: User, organization_id=None):
     if admin.ruolo == ROLE_SUPER_ADMIN:
         return organization_id
     return admin.organization_id
-

@@ -29,8 +29,7 @@ def _visible_avatars(query, user: User):
     if user.ruolo == ROLE_SUPER_ADMIN:
         return query
     return query.filter(
-        (Avatar.organization_id.is_(None))
-        | (Avatar.organization_id == user.organization_id)
+        (Avatar.organization_id.is_(None)) | (Avatar.organization_id == user.organization_id)
     )
 
 
@@ -89,18 +88,12 @@ def get_avatar(
     db: Session = Depends(get_db),
 ):
     """Get a specific avatar by ID."""
-    avatar = (
-        _visible_avatars(db.query(Avatar), current_user)
-        .filter(Avatar.id == avatar_id)
-        .first()
-    )
+    avatar = _visible_avatars(db.query(Avatar), current_user).filter(Avatar.id == avatar_id).first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
     count = (
-        db.query(func.count(UserSelection.id))
-        .filter(UserSelection.avatar_id == avatar.id)
-        .scalar()
+        db.query(func.count(UserSelection.id)).filter(UserSelection.avatar_id == avatar.id).scalar()
     )
 
     return AvatarResponse(
@@ -149,12 +142,7 @@ def get_selections(
     db: Session = Depends(get_db),
 ):
     """Get all avatar selections."""
-    selections = (
-        db.query(UserSelection)
-        .order_by(UserSelection.selected_at.desc())
-        .limit(50)
-        .all()
-    )
+    selections = db.query(UserSelection).order_by(UserSelection.selected_at.desc()).limit(50).all()
 
     result = []
     for sel in selections:

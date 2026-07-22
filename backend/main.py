@@ -65,10 +65,14 @@ with engine.begin() as _conn:
     # create_all above). Nullable on both: NULL means "super admin" on users
     # and "global persona" on avatars.
     _conn.execute(
-        text("ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id)")
+        text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id)"
+        )
     )
     _conn.execute(
-        text("ALTER TABLE avatars ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id)")
+        text(
+            "ALTER TABLE avatars ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id)"
+        )
     )
 
 # The title is mandatory: conversations created before it became so are
@@ -93,9 +97,7 @@ with SessionLocal() as _db:
     _db.commit()
 
 with engine.begin() as _conn:
-    _conn.execute(
-        text("ALTER TABLE chat_conversations ALTER COLUMN title SET NOT NULL")
-    )
+    _conn.execute(text("ALTER TABLE chat_conversations ALTER COLUMN title SET NOT NULL"))
 
 # Ensure system roles and the mock super admin exist on startup
 with SessionLocal() as _db:

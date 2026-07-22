@@ -81,9 +81,7 @@ def _persist_message(conversation_id: str, role: str, content: str) -> None:
             )
         )
         conversation = (
-            db.query(ChatConversation)
-            .filter(ChatConversation.id == UUID(conversation_id))
-            .first()
+            db.query(ChatConversation).filter(ChatConversation.id == UUID(conversation_id)).first()
         )
         if conversation:
             conversation.updated_at = datetime.now(UTC)
@@ -103,9 +101,7 @@ def _mark_conversation_ended(conversation_id: str) -> None:
     db = SessionLocal()
     try:
         conversation = (
-            db.query(ChatConversation)
-            .filter(ChatConversation.id == UUID(conversation_id))
-            .first()
+            db.query(ChatConversation).filter(ChatConversation.id == UUID(conversation_id)).first()
         )
         if conversation and conversation.ended_at is None:
             conversation.ended_at = datetime.now(UTC)
@@ -169,15 +165,18 @@ class VoicePipeline:
 
     async def run(self) -> None:
         try:
-            async with websockets.connect(
-                stt_ws_url(),
-                additional_headers=stt_headers(),
-                max_size=16 * 1024 * 1024,
-            ) as stt, websockets.connect(
-                tts_ws_url(),
-                additional_headers=tts_headers(),
-                max_size=16 * 1024 * 1024,
-            ) as tts:
+            async with (
+                websockets.connect(
+                    stt_ws_url(),
+                    additional_headers=stt_headers(),
+                    max_size=16 * 1024 * 1024,
+                ) as stt,
+                websockets.connect(
+                    tts_ws_url(),
+                    additional_headers=tts_headers(),
+                    max_size=16 * 1024 * 1024,
+                ) as tts,
+            ):
                 self.stt = stt
                 self.tts = tts
                 await self._send_json({"type": "ready"})
@@ -197,9 +196,7 @@ class VoicePipeline:
                     asyncio.create_task(self._tts_loop(), name="tts"),
                 ]
                 try:
-                    done, pending = await asyncio.wait(
-                        tasks, return_when=asyncio.FIRST_COMPLETED
-                    )
+                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                     # Surface unexpected crashes of whichever loop ended first
                     for t in done:
                         exc = t.exception()
@@ -308,7 +305,10 @@ class VoicePipeline:
                 print(f"[ERROR] ElevenLabs STT: {message_type}: {detail}")
                 if message_type in _FATAL_STT_ERRORS:
                     await self._send_json(
-                        {"type": "error", "message": f"Riconoscimento vocale non disponibile ({message_type})."}
+                        {
+                            "type": "error",
+                            "message": f"Riconoscimento vocale non disponibile ({message_type}).",
+                        }
                     )
                     return
 
@@ -382,9 +382,7 @@ class VoicePipeline:
             if notify:
                 # Deliver the truncated turn as a bubble before the flush
                 if task_cancelled and self._turn_text:
-                    await self._send_json(
-                        {"type": "assistant_end", "text": self._turn_text}
-                    )
+                    await self._send_json({"type": "assistant_end", "text": self._turn_text})
                 await self._send_json({"type": "interrupt"})
         self._turn_text = ""
         # A timer still set here belongs to a turn that died before its
@@ -398,9 +396,7 @@ class VoicePipeline:
         if self._turn_timer is not None:
             self._turn_timer.mark(MARK_TTS_FIRST_SEND)
             self._turn_timer.count_tts_send()
-        await self.tts.send(
-            tts_chunk_message(context_id, text, self.voice_id, more_coming)
-        )
+        await self.tts.send(tts_chunk_message(context_id, text, self.voice_id, more_coming))
 
     async def _run_turn(self) -> None:
         """Stream one assistant turn: LLM tokens → browser text + TTS audio."""
@@ -437,9 +433,7 @@ class VoicePipeline:
                 if not full_text:
                     full_text = _LLM_FALLBACK_LINE
                     self._turn_text = full_text
-                    await self._send_json(
-                        {"type": "assistant_delta", "text": _LLM_FALLBACK_LINE}
-                    )
+                    await self._send_json({"type": "assistant_delta", "text": _LLM_FALLBACK_LINE})
                     word_buffer = _LLM_FALLBACK_LINE + " "
             if word_buffer.strip():
                 await self._speak(context_id, word_buffer, more_coming=True)

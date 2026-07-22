@@ -60,9 +60,7 @@ def _evaluation_response(evaluation: ConversationEvaluation) -> ConversationEval
 def _conversation_summary(db: Session, conv: ChatConversation) -> ChatConversationSummary:
     """Build the list entry for a conversation: counter plus last message preview."""
     msg_count = (
-        db.query(func.count(ChatMessage.id))
-        .filter(ChatMessage.conversation_id == conv.id)
-        .scalar()
+        db.query(func.count(ChatMessage.id)).filter(ChatMessage.conversation_id == conv.id).scalar()
     )
     last_msg = (
         db.query(ChatMessage)
@@ -95,11 +93,7 @@ def list_conversations(
 ):
     """List all conversations for a given avatar belonging to the current user."""
     # Verify the avatar exists and is visible to this user
-    avatar = (
-        _visible_avatars(db.query(Avatar), current_user)
-        .filter(Avatar.id == avatar_id)
-        .first()
-    )
+    avatar = _visible_avatars(db.query(Avatar), current_user).filter(Avatar.id == avatar_id).first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
@@ -385,9 +379,7 @@ async def create_conversation_evaluation(
     channel = CHANNEL_TEXT if conversation.mode == CONVERSATION_MODE_TEXT else CHANNEL_VOICE
 
     try:
-        result = await evaluate_conversation(
-            history, avatar.profile if avatar else {}, channel
-        )
+        result = await evaluate_conversation(history, avatar.profile if avatar else {}, channel)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

@@ -88,9 +88,7 @@ def bind_access_token(db: Session, claims: dict, request: Request, user_id=None)
         return
 
     now = _utcnow()
-    db.query(TokenSession).filter(TokenSession.expires_at < now).delete(
-        synchronize_session=False
-    )
+    db.query(TokenSession).filter(TokenSession.expires_at < now).delete(synchronize_session=False)
 
     ip = client_ip(request)
     ua = _user_agent(request)

@@ -20,12 +20,16 @@ if not ELEVENLABS_STT_MODEL:
 # ISO 639-1; the whole product is Italian-first
 ELEVENLABS_STT_LANGUAGE = os.getenv("ELEVENLABS_STT_LANGUAGE")
 if not ELEVENLABS_STT_LANGUAGE:
-    raise RuntimeError("ELEVENLABS_STT_LANGUAGE non configurato. Aggiungilo al file .env del backend.")
+    raise RuntimeError(
+        "ELEVENLABS_STT_LANGUAGE non configurato. Aggiungilo al file .env del backend."
+    )
 # Seconds of silence after speech before the turn is committed. Lower =
 # snappier replies but more risk of cutting the operator off mid-sentence.
 _vad_silence_secs = os.getenv("ELEVENLABS_VAD_SILENCE_SECS")
 if not _vad_silence_secs:
-    raise RuntimeError("ELEVENLABS_VAD_SILENCE_SECS non configurato. Aggiungilo al file .env del backend.")
+    raise RuntimeError(
+        "ELEVENLABS_VAD_SILENCE_SECS non configurato. Aggiungilo al file .env del backend."
+    )
 ELEVENLABS_VAD_SILENCE_SECS = float(_vad_silence_secs)
 
 # Speech-probability threshold (0.1–0.9): how loud a frame must be to count
@@ -36,14 +40,18 @@ ELEVENLABS_VAD_SILENCE_SECS = float(_vad_silence_secs)
 # being cut where the voice trails off.
 _vad_threshold = os.getenv("ELEVENLABS_VAD_THRESHOLD")
 if not _vad_threshold:
-    raise RuntimeError("ELEVENLABS_VAD_THRESHOLD non configurato. Aggiungilo al file .env del backend.")
+    raise RuntimeError(
+        "ELEVENLABS_VAD_THRESHOLD non configurato. Aggiungilo al file .env del backend."
+    )
 ELEVENLABS_VAD_THRESHOLD = float(_vad_threshold)
 if not 0.1 <= ELEVENLABS_VAD_THRESHOLD <= 0.9:
     raise RuntimeError("ELEVENLABS_VAD_THRESHOLD deve essere tra 0.1 e 0.9.")
 
 _STT_WS_BASE = os.getenv("ELEVENLABS_STT_WS_URL")
 if not _STT_WS_BASE:
-    raise RuntimeError("ELEVENLABS_STT_WS_URL non configurato. Aggiungilo al file .env del backend.")
+    raise RuntimeError(
+        "ELEVENLABS_STT_WS_URL non configurato. Aggiungilo al file .env del backend."
+    )
 
 # Audio format the browser capture worklet produces
 STT_SAMPLE_RATE = 16000

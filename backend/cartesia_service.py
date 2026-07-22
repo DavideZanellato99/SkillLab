@@ -41,9 +41,7 @@ def tts_ws_url() -> str:
 def tts_headers() -> dict:
     """Auth headers for the server-side TTS connection."""
     if not CARTESIA_API_KEY:
-        raise RuntimeError(
-            "CARTESIA_API_KEY non configurata. Aggiungila al file .env del backend."
-        )
+        raise RuntimeError("CARTESIA_API_KEY non configurata. Aggiungila al file .env del backend.")
     return {"X-API-Key": CARTESIA_API_KEY, "Cartesia-Version": CARTESIA_VERSION}
 
 

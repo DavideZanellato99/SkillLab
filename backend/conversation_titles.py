@@ -16,7 +16,7 @@ MAX_TITLE_LENGTH = 120
 
 
 def category_label(category: str) -> str:
-    """"sci-fi" -> "Sci-fi"; a blank category falls back to "Conversazione"."""
+    """ "sci-fi" -> "Sci-fi"; a blank category falls back to "Conversazione"."""
     label = (category or "").strip()
     if not label:
         return "Conversazione"
@@ -24,7 +24,7 @@ def category_label(category: str) -> str:
 
 
 def next_conversation_title(db: Session, user_id: UUID, category: str) -> str:
-    """"Clienti 3": the category followed by the first number this user has free."""
+    """ "Clienti 3": the category followed by the first number this user has free."""
     label = category_label(category)
     pattern = re.compile(rf"^{re.escape(label)} (\d+)$", re.IGNORECASE)
 

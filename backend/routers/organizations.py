@@ -77,12 +77,8 @@ def _get_org_or_404(db: Session, organization_id: UUID) -> Organization:
 
 
 def _to_response(db: Session, org: Organization) -> OrganizationResponse:
-    user_count = (
-        db.query(func.count(User.id)).filter(User.organization_id == org.id).scalar()
-    )
-    avatar_count = (
-        db.query(func.count(Avatar.id)).filter(Avatar.organization_id == org.id).scalar()
-    )
+    user_count = db.query(func.count(User.id)).filter(User.organization_id == org.id).scalar()
+    avatar_count = db.query(func.count(Avatar.id)).filter(Avatar.organization_id == org.id).scalar()
     return OrganizationResponse(
         id=org.id,
         name=org.name,
@@ -214,8 +210,7 @@ def delete_organization(
 
     user_ids = [u.id for u in users]
     avatar_ids = [
-        row[0]
-        for row in db.query(Avatar.id).filter(Avatar.organization_id == org.id).all()
+        row[0] for row in db.query(Avatar.id).filter(Avatar.organization_id == org.id).all()
     ]
 
     # Remove the users from Cognito first: if any fails the local data is
@@ -238,20 +233,17 @@ def delete_organization(
     if conv_filter:
         from sqlalchemy import or_
 
-        conv_ids = [
-            row[0]
-            for row in db.query(ChatConversation.id).filter(or_(*conv_filter)).all()
-        ]
+        conv_ids = [row[0] for row in db.query(ChatConversation.id).filter(or_(*conv_filter)).all()]
         if conv_ids:
-            db.query(ChatMessage).filter(
-                ChatMessage.conversation_id.in_(conv_ids)
-            ).delete(synchronize_session=False)
+            db.query(ChatMessage).filter(ChatMessage.conversation_id.in_(conv_ids)).delete(
+                synchronize_session=False
+            )
             db.query(ConversationEvaluation).filter(
                 ConversationEvaluation.conversation_id.in_(conv_ids)
             ).delete(synchronize_session=False)
-            db.query(ChatConversation).filter(
-                ChatConversation.id.in_(conv_ids)
-            ).delete(synchronize_session=False)
+            db.query(ChatConversation).filter(ChatConversation.id.in_(conv_ids)).delete(
+                synchronize_session=False
+            )
 
     # Selections referencing the org's users or private avatars
     sel_filter = []
@@ -262,17 +254,13 @@ def delete_organization(
     if sel_filter:
         from sqlalchemy import or_
 
-        db.query(UserSelection).filter(or_(*sel_filter)).delete(
-            synchronize_session=False
-        )
+        db.query(UserSelection).filter(or_(*sel_filter)).delete(synchronize_session=False)
 
     # Delete the users and the private avatars, then the organization itself
     if user_ids:
         db.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
     if avatar_ids:
-        db.query(Avatar).filter(Avatar.id.in_(avatar_ids)).delete(
-            synchronize_session=False
-        )
+        db.query(Avatar).filter(Avatar.id.in_(avatar_ids)).delete(synchronize_session=False)
     name = org.name
     db.delete(org)
     db.commit()

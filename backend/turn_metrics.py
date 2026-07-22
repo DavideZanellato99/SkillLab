@@ -161,9 +161,7 @@ class CallMetrics:
 
         done = len(self._turns)
         completati = "1 turno completato" if done == 1 else f"{done} turni completati"
-        annullati = (
-            "1 annullato" if self._cancelled == 1 else f"{self._cancelled} annullati"
-        )
+        annullati = "1 annullato" if self._cancelled == 1 else f"{self._cancelled} annullati"
         lines = [f"[LATENCY] Riepilogo chiamata: {completati}, {annullati}"]
         vads = [t.vad_ms for t in self._turns if t.vad_ms is not None]
         if vads:

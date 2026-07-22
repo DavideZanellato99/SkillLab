@@ -17,6 +17,7 @@ from database import get_db
 from models import (
     User,
     Avatar,
+    Organization,
     UserSelection,
     ChatConversation,
     ChatMessage,
@@ -74,6 +75,20 @@ def _generate_avatar_image(name: str, avatar_id: UUID) -> str:
     return _generated_image_url(avatar_id)
 
 
+def _resolve_avatar_org_or_400(db: Session, organization_id) -> UUID | None:
+    """Validate the avatar's owning tenant: None means a global persona,
+    otherwise the organization must exist."""
+    if organization_id is None:
+        return None
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organizzazione non trovata.",
+        )
+    return org.id
+
+
 def _validated_name_or_400(profile: dict) -> str:
     if not isinstance(profile, dict) or not profile:
         raise HTTPException(
@@ -98,6 +113,8 @@ def _to_response(avatar: Avatar, conversation_count: int = 0) -> AdminAvatarResp
         description=avatar.description,
         voice_id=avatar.voice_id,
         difficulty=avatar.difficulty,
+        organization_id=avatar.organization_id,
+        organization_name=avatar.organization.name if avatar.organization else None,
         profile=avatar.profile or {},
         created_at=avatar.created_at,
         conversation_count=conversation_count,
@@ -125,8 +142,13 @@ def create_avatar(
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
-    """Create a new avatar/persona (Super Admin only)."""
+    """Create a new avatar/persona (Super Admin only).
+
+    organization_id null makes it a global persona shared with every tenant;
+    otherwise it is private to that organization.
+    """
     name = _validated_name_or_400(payload.profile)
+    organization_id = _resolve_avatar_org_or_400(db, payload.organization_id)
 
     avatar = Avatar(
         name=name,
@@ -134,6 +156,7 @@ def create_avatar(
         description=payload.description,
         voice_id=(payload.voice_id or "").strip() or None,
         image_url=(payload.image_url or "").strip(),
+        organization_id=organization_id,
         profile=payload.profile,
     )
     db.add(avatar)
@@ -162,6 +185,7 @@ def update_avatar(
     avatar.category = (payload.category or "Clienti").strip() or "Clienti"
     avatar.description = payload.description
     avatar.voice_id = (payload.voice_id or "").strip() or None
+    avatar.organization_id = _resolve_avatar_org_or_400(db, payload.organization_id)
     avatar.profile = payload.profile
 
     # Explicit URL wins; an emptied field keeps the current image, unless

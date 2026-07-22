@@ -27,6 +27,7 @@ from models import (
     ConversationEvaluation,
 )
 from auth_dependency import get_current_user
+from routers.avatars import _visible_avatars
 from conversation_titles import next_conversation_title
 from openai_service import evaluate_conversation, generate_avatar_reply
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
@@ -93,8 +94,12 @@ def list_conversations(
     db: Session = Depends(get_db),
 ):
     """List all conversations for a given avatar belonging to the current user."""
-    # Verify avatar exists
-    avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
+    # Verify the avatar exists and is visible to this user
+    avatar = (
+        _visible_avatars(db.query(Avatar), current_user)
+        .filter(Avatar.id == avatar_id)
+        .first()
+    )
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
@@ -209,7 +214,11 @@ async def send_chat_message(
     before anything is persisted: a failed generation leaves no half
     exchange in the transcript and the operator can simply send again.
     """
-    avatar = db.query(Avatar).filter(Avatar.id == payload.avatar_id).first()
+    avatar = (
+        _visible_avatars(db.query(Avatar), current_user)
+        .filter(Avatar.id == payload.avatar_id)
+        .first()
+    )
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
 

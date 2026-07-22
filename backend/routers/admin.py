@@ -12,6 +12,7 @@ from models import (
     User,
     UserSelection,
     Avatar,
+    Organization,
     ChatConversation,
     ChatMessage,
     ConversationEvaluation,
@@ -25,6 +26,7 @@ from auth_dependency import (
     get_current_super_admin,
     get_current_admin,
     get_role_by_name,
+    resolve_admin_scope,
     MOCK_ADMIN_SUB,
 )
 from cognito_service import (
@@ -73,26 +75,83 @@ def _resolve_role_or_400(db: Session, ruolo: str):
     return role
 
 
+def _resolve_organization_for_role(
+    db: Session, ruolo: str, organization_id: UUID | None
+) -> UUID | None:
+    """Validate the tenant assignment against the role and return it.
+
+    A super_admin stands above tenants, so it must carry NO organization; an
+    organization_admin or a plain user must belong to exactly one existing,
+    non-suspended-blocking organization.
+    """
+    if ruolo == ROLE_SUPER_ADMIN:
+        if organization_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Un super admin non appartiene ad alcuna organizzazione.",
+            )
+        return None
+
+    if organization_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Un utente o un admin di organizzazione deve avere un'organizzazione.",
+        )
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organizzazione non trovata.",
+        )
+    return org.id
+
+
+def _conversation_in_scope_or_404(
+    db: Session, conversation: ChatConversation, scope_org_id: UUID | None
+) -> None:
+    """Reject (as 404) a conversation outside the admin's organization scope.
+
+    scope_org_id None means "all organizations" (super admin, no filter).
+    Otherwise the conversation's owner must belong to that organization.
+    """
+    if scope_org_id is None:
+        return
+    owner = db.query(User).filter(User.id == conversation.user_id).first()
+    if not owner or owner.organization_id != scope_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
+        )
+
+
 @router.get("/users", response_model=list[UserResponse])
 def list_users(
+    organization_id: UUID | None = None,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
-    """List all registered users in the database (Super Admin only)."""
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    """List all registered users (Super Admin only), optionally filtered by
+    organization."""
+    query = db.query(User)
+    if organization_id is not None:
+        query = query.filter(User.organization_id == organization_id)
+    users = query.order_by(User.created_at.desc()).all()
     return [UserResponse.model_validate(u) for u in users]
 
 
 @router.get("/users-report", response_model=list[UserActivityReport])
 def users_activity_report(
+    organization_id: UUID | None = None,
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     """
-    Read-only activity recap (Super Admin + Organization Admin): every user
-    with their conversations per avatar, the duration of each conversation
-    (first-to-last message span) and the total duration.
+    Read-only activity recap: every user with their conversations per avatar,
+    the duration of each conversation (first-to-last message span) and the
+    total duration. A Super Admin sees every organization (optionally
+    filtered by `organization_id`); an Organization Admin only its own.
     """
+    scope_org_id = resolve_admin_scope(current_admin, organization_id)
+
     # Message stats aggregated per conversation in a single query
     stats = {
         row.conversation_id: row
@@ -134,7 +193,10 @@ def users_activity_report(
             )
         )
 
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    users_query = db.query(User)
+    if scope_org_id is not None:
+        users_query = users_query.filter(User.organization_id == scope_org_id)
+    users = users_query.order_by(User.created_at.desc()).all()
     return [
         UserActivityReport(
             id=u.id,
@@ -142,6 +204,8 @@ def users_activity_report(
             nome=u.nome,
             cognome=u.cognome,
             ruolo=u.ruolo,
+            organization_id=u.organization_id,
+            organization_name=u.organization_name,
             created_at=u.created_at,
             conversation_count=len(conversations_by_user.get(u.id, [])),
             total_duration_seconds=sum(
@@ -155,22 +219,27 @@ def users_activity_report(
 
 @router.get("/evaluations-report", response_model=list[EvaluationReportRow])
 def evaluations_report(
+    organization_id: UUID | None = None,
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     """
-    Read-only recap of every evaluated conversation (Super Admin +
-    Organization Admin): user, avatar, dates and the evaluation scores —
-    the data source for the dashboard charts.
+    Read-only recap of every evaluated conversation: user, avatar, dates and
+    the evaluation scores, the data source for the dashboard charts. A Super
+    Admin sees every organization (optionally filtered by `organization_id`);
+    an Organization Admin only its own.
     """
-    rows = (
+    scope_org_id = resolve_admin_scope(current_admin, organization_id)
+
+    query = (
         db.query(ConversationEvaluation, ChatConversation, User, Avatar.name)
         .join(ChatConversation, ChatConversation.id == ConversationEvaluation.conversation_id)
         .join(User, User.id == ChatConversation.user_id)
         .join(Avatar, Avatar.id == ChatConversation.avatar_id)
-        .order_by(ChatConversation.created_at.asc())
-        .all()
     )
+    if scope_org_id is not None:
+        query = query.filter(User.organization_id == scope_org_id)
+    rows = query.order_by(ChatConversation.created_at.asc()).all()
     return [
         EvaluationReportRow(
             conversation_id=conv.id,
@@ -180,6 +249,8 @@ def evaluations_report(
             user_email=user.email,
             user_nome=user.nome,
             user_cognome=user.cognome,
+            organization_id=user.organization_id,
+            organization_name=user.organization_name,
             avatar_id=conv.avatar_id,
             avatar_name=avatar_name,
             conversation_at=conv.created_at,
@@ -215,6 +286,9 @@ def conversation_detail(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
         )
+    _conversation_in_scope_or_404(
+        db, conversation, resolve_admin_scope(current_admin)
+    )
 
     messages = (
         db.query(ChatMessage)
@@ -252,6 +326,9 @@ def delete_conversation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
         )
+    _conversation_in_scope_or_404(
+        db, conversation, resolve_admin_scope(current_admin)
+    )
 
     db.delete(conversation)
     db.commit()
@@ -278,6 +355,9 @@ def create_user(
         )
 
     role = _resolve_role_or_400(db, request.ruolo)
+    organization_id = _resolve_organization_for_role(
+        db, request.ruolo, request.organization_id
+    )
 
     # Create user in AWS Cognito
     try:
@@ -295,6 +375,7 @@ def create_user(
         nome=request.nome,
         cognome=request.cognome,
         role_id=role.id,
+        organization_id=organization_id,
     )
     db.add(new_user)
     db.commit()
@@ -310,7 +391,8 @@ def update_user(
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
-    """Update a user's profile fields and/or role (Super Admin only)."""
+    """Update a user's profile fields, role and/or organization (Super Admin
+    only)."""
     user = _get_user_or_404(db, user_id)
 
     if request.nome is not None:
@@ -318,7 +400,8 @@ def update_user(
     if request.cognome is not None:
         user.cognome = request.cognome
 
-    if request.ruolo is not None and request.ruolo != user.ruolo:
+    role_changing = request.ruolo is not None and request.ruolo != user.ruolo
+    if role_changing:
         if user.id == current_admin.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -331,6 +414,22 @@ def update_user(
             )
         role = _resolve_role_or_400(db, request.ruolo)
         user.role_id = role.id
+
+    # Keep role and organization consistent: a super_admin never has one, a
+    # user/organization_admin always does. Re-validate whenever either the
+    # role or the organization changes.
+    target_ruolo = request.ruolo if request.ruolo is not None else user.ruolo
+    org_explicit = "organization_id" in request.model_fields_set
+    if role_changing or org_explicit:
+        if target_ruolo == ROLE_SUPER_ADMIN:
+            target_org = None
+        elif org_explicit:
+            target_org = request.organization_id
+        else:
+            target_org = user.organization_id
+        user.organization_id = _resolve_organization_for_role(
+            db, target_ruolo, target_org
+        )
 
     db.commit()
     db.refresh(user)

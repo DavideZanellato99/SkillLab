@@ -2,8 +2,11 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchEvaluationsReport } from '../services/admin';
 import type { EvaluationReportRow } from '../services/admin';
-import { isAdmin } from '../services/auth';
+import { fetchOrganizations } from '../services/organizations';
+import type { Organization } from '../services/organizations';
+import { isAdmin, isSuperAdmin } from '../services/auth';
 import SearchSelect from './SearchSelect';
+import Select from './Select';
 import ConversationModeBadge, { conversationModeLabel } from './ConversationModeBadge';
 import type { ConversationMode } from '../services/api';
 import DataTable, { Td, Tr } from './DataTable';
@@ -407,13 +410,21 @@ function KpiCard({ label, children }: { label: string; children: React.ReactNode
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const showOrgFilter = isSuperAdmin(user);
   const [rows, setRows] = useState<EvaluationReportRow[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [orgFilter, setOrgFilter] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [modeFilter, setModeFilter] = useState<ModeFilter>('voice');
   const [search, setSearch] = useState('');
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null);
+
+  const orgFilterOptions = [
+    { value: '', label: 'Tutte le organizzazioni' },
+    ...organizations.map((o) => ({ value: o.id, label: o.name })),
+  ];
 
   useEffect(() => {
     if (!isAdmin(user)) return;
@@ -422,7 +433,7 @@ export default function DashboardPage() {
       setIsLoading(true);
       setError('');
       try {
-        const data = await fetchEvaluationsReport();
+        const data = await fetchEvaluationsReport(orgFilter || undefined);
         if (!cancelled) setRows(data);
       } catch (err) {
         if (!cancelled) {
@@ -435,6 +446,14 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
+  }, [user, orgFilter]);
+
+  useEffect(() => {
+    if (isSuperAdmin(user)) {
+      fetchOrganizations()
+        .then(setOrganizations)
+        .catch(() => setOrganizations([]));
+    }
   }, [user]);
 
   /* Il selettore di canale sta a monte di tutto il resto: ogni conteggio,
@@ -630,6 +649,23 @@ export default function DashboardPage() {
         <>
           {/* Riga filtri: scopa tutto ciò che sta sotto */}
           <div className="mb-6 flex items-center gap-3 max-lg:flex-wrap">
+            {showOrgFilter && (
+              <>
+                <label htmlFor="dashboard-org-filter" className="text-xs font-medium tracking-wide text-slate-400">
+                  Organizzazione
+                </label>
+                <Select
+                  id="dashboard-org-filter"
+                  className="min-w-[220px]"
+                  value={orgFilter}
+                  onChange={(value) => {
+                    setOrgFilter(value);
+                    setSelectedUserId('');
+                  }}
+                  options={orgFilterOptions}
+                />
+              </>
+            )}
             <label htmlFor="dashboard-user-filter" className="text-xs font-medium tracking-wide text-slate-400">
               Utente
             </label>

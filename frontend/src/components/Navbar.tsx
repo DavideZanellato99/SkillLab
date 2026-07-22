@@ -306,6 +306,23 @@ export default function Navbar() {
                         )}
                         {isSuperAdmin(user) && (
                           <Link
+                            to="/admin/organizations"
+                            className={menuItemCls}
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 21h18" />
+                              <path d="M5 21V7l8-4v18" />
+                              <path d="M19 21V11l-6-4" />
+                              <line x1="9" y1="9" x2="9" y2="9.01" />
+                              <line x1="9" y1="12" x2="9" y2="12.01" />
+                              <line x1="9" y1="15" x2="9" y2="15.01" />
+                            </svg>
+                            Gestione Organizzazioni
+                          </Link>
+                        )}
+                        {isSuperAdmin(user) && (
+                          <Link
                             to="/admin/avatars"
                             className={menuItemCls}
                             onClick={() => setShowUserMenu(false)}

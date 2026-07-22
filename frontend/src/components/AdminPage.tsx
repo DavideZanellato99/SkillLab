@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchAllUsers, createNewUser, updateUser, deleteUser, resendUserCredentials, setUserStatus } from '../services/admin';
+import { fetchOrganizations } from '../services/organizations';
+import type { Organization } from '../services/organizations';
 import { isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../services/auth';
 import type { AuthUser, RoleName, UserStatus } from '../services/auth';
 import Select from './Select';
@@ -160,6 +162,7 @@ const STATUS_ACTIONS: Record<UserStatus, StatusAction> = {
 const USER_COLUMNS: DataTableColumn[] = [
   { key: 'utente', label: 'Utente' },
   { key: 'email', label: 'Email' },
+  { key: 'organizzazione', label: 'Organizzazione' },
   { key: 'ruolo', label: 'Ruolo' },
   { key: 'stato', label: 'Stato' },
   { key: 'creazione', label: 'Data Creazione' },
@@ -182,6 +185,7 @@ function ErrorBox({ message }: { message: string }) {
 export default function AdminPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<AuthUser[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -192,10 +196,14 @@ export default function AdminPage() {
       search,
       `${u.nome ?? ''} ${u.cognome ?? ''}`,
       u.email,
+      u.organization_name ?? '',
       ROLE_LABELS[u.ruolo] ?? u.ruolo,
       STATUS_LABELS[u.status] ?? u.status,
     ),
   );
+
+  // Options for the organization pickers (a user/org admin must have one)
+  const orgOptions = organizations.map((o) => ({ value: o.id, label: o.name }));
 
   // Create form states
   const [showModal, setShowModal] = useState(false);
@@ -203,6 +211,7 @@ export default function AdminPage() {
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
   const [ruolo, setRuolo] = useState<RoleName>('user');
+  const [orgId, setOrgId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -211,6 +220,7 @@ export default function AdminPage() {
   const [editNome, setEditNome] = useState('');
   const [editCognome, setEditCognome] = useState('');
   const [editRuolo, setEditRuolo] = useState<RoleName>('user');
+  const [editOrgId, setEditOrgId] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
 
@@ -250,12 +260,21 @@ export default function AdminPage() {
   useEffect(() => {
     if (isSuperAdmin(user)) {
       loadUsers();
+      fetchOrganizations()
+        .then(setOrganizations)
+        .catch(() => setOrganizations([]));
     }
   }, [user, loadUsers]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+
+    // A user/organization_admin must belong to an organization
+    if (ruolo !== 'super_admin' && !orgId) {
+      setFormError("Seleziona l'organizzazione dell'utente.");
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -264,6 +283,7 @@ export default function AdminPage() {
         nome,
         cognome,
         ruolo,
+        organization_id: ruolo === 'super_admin' ? null : orgId,
       });
       setUsers((prev) => [created, ...prev]);
       setShowModal(false);
@@ -271,6 +291,7 @@ export default function AdminPage() {
       setNome('');
       setCognome('');
       setRuolo('user');
+      setOrgId('');
       flashSuccess(`Utente ${created.email} creato con successo! Un'email con la password temporanea è stata inviata via Cognito.`);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Errore durante la creazione dell'utente.");
@@ -284,6 +305,7 @@ export default function AdminPage() {
     setEditNome(u.nome);
     setEditCognome(u.cognome);
     setEditRuolo(u.ruolo as RoleName);
+    setEditOrgId(u.organization_id ?? '');
     setEditError('');
   };
 
@@ -291,6 +313,11 @@ export default function AdminPage() {
     e.preventDefault();
     if (!editingUser) return;
     setEditError('');
+
+    if (editRuolo !== 'super_admin' && !editOrgId) {
+      setEditError("Seleziona l'organizzazione dell'utente.");
+      return;
+    }
     setIsSavingEdit(true);
 
     try {
@@ -298,6 +325,7 @@ export default function AdminPage() {
         nome: editNome,
         cognome: editCognome,
         ruolo: editRuolo,
+        organization_id: editRuolo === 'super_admin' ? null : editOrgId,
       });
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       setEditingUser(null);
@@ -507,6 +535,13 @@ export default function AdminPage() {
                 </Td>
                 <Td><span className="text-slate-400">{u.email}</span></Td>
                 <Td>
+                  {u.organization_name ? (
+                    <span className="text-[0.85rem] text-slate-300">{u.organization_name}</span>
+                  ) : (
+                    <span className="text-[0.75rem] italic text-slate-500">Nessuna (super admin)</span>
+                  )}
+                </Td>
+                <Td>
                   <span className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[u.ruolo] ?? ''}`}>
                     {ROLE_LABELS[u.ruolo] ?? u.ruolo}
                   </span>
@@ -665,6 +700,24 @@ export default function AdminPage() {
                 />
               </div>
 
+              {ruolo !== 'super_admin' && (
+                <div className={fieldCls}>
+                  <label className={labelCls} htmlFor="admin-org">Organizzazione</label>
+                  <Select
+                    id="admin-org"
+                    value={orgId}
+                    onChange={setOrgId}
+                    options={orgOptions}
+                    disabled={isSubmitting}
+                  />
+                  {orgOptions.length === 0 && (
+                    <p className="text-[0.7rem] text-amber-400">
+                      Nessuna organizzazione disponibile: creane una prima di aggiungere utenti.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <button type="submit" className={submitBtnCls} disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
@@ -755,6 +808,19 @@ export default function AdminPage() {
                   </p>
                 )}
               </div>
+
+              {editRuolo !== 'super_admin' && (
+                <div className={fieldCls}>
+                  <label className={labelCls} htmlFor="edit-org">Organizzazione</label>
+                  <Select
+                    id="edit-org"
+                    value={editOrgId}
+                    onChange={setEditOrgId}
+                    options={orgOptions}
+                    disabled={isSavingEdit || editingUser.cognito_sub.startsWith('mock-')}
+                  />
+                </div>
+              )}
 
               <button type="submit" className={submitBtnCls} disabled={isSavingEdit}>
                 {isSavingEdit ? (

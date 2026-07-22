@@ -32,10 +32,52 @@ USER_STATUS_SUSPENDED = "suspended"
 USER_STATUS_DISABLED = "disabled"
 ALL_USER_STATUSES = [USER_STATUS_ACTIVE, USER_STATUS_SUSPENDED, USER_STATUS_DISABLED]
 
+# Organization states: suspending an organization blocks login for ALL its
+# users and kills their open sessions (checked on every request, exactly
+# like the per-user status). There is no "disabled": an organization is
+# either active/suspended or hard-deleted with all its data.
+ORG_STATUS_ACTIVE = "active"
+ORG_STATUS_SUSPENDED = "suspended"
+ALL_ORG_STATUSES = [ORG_STATUS_ACTIVE, ORG_STATUS_SUSPENDED]
+
 # Channel a conversation runs on: a simulated phone call (STT + LLM + TTS)
 # or a written chat with the same avatar (LLM only)
 CONVERSATION_MODE_VOICE = "voice"
 CONVERSATION_MODE_TEXT = "text"
+
+
+class Organization(Base):
+    """A tenant of the platform: an organization whose users, conversations
+    and private avatars are isolated from every other organization.
+
+    Only the super admin (who belongs to no organization, organization_id
+    NULL) sees across tenants; an organization_admin is confined to its own
+    organization, a plain user never leaves it. Avatars with a NULL
+    organization_id are the shared global library, visible to everyone.
+    """
+
+    __tablename__ = "organizations"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    name = Column(String(150), unique=True, nullable=False, index=True)
+    # URL-safe identifier, unique across the platform
+    slug = Column(String(80), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default=ORG_STATUS_ACTIVE)
+    # Free-form per-tenant settings (branding, limits...): reserved for the
+    # future, not read by any enforcement today.
+    settings = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    users = relationship("User", back_populates="organization")
+    avatars = relationship("Avatar", back_populates="organization")
+
+    def __repr__(self):
+        return f"<Organization(id={self.id}, name='{self.name}', status='{self.status}')>"
 
 
 class Role(Base):
@@ -64,6 +106,12 @@ class User(Base):
     nome = Column(String(100), nullable=False, default="")
     cognome = Column(String(100), nullable=False, default="")
     role_id = Column(Uuid, ForeignKey("roles.id"), nullable=False, index=True)
+    # The tenant this user belongs to. NULL only for the super admin (and
+    # the mock admin), who stand above every organization. A plain user or
+    # an organization_admin always has one.
+    organization_id = Column(
+        Uuid, ForeignKey("organizations.id"), nullable=True, index=True
+    )
     status = Column(String(20), nullable=False, default=USER_STATUS_ACTIVE)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
@@ -74,8 +122,14 @@ class User(Base):
 
     # Relationships
     role = relationship("Role", back_populates="users", lazy="joined")
+    organization = relationship("Organization", back_populates="users", lazy="joined")
     selections = relationship("UserSelection", back_populates="user")
     conversations = relationship("ChatConversation", back_populates="user")
+
+    @property
+    def organization_name(self) -> str | None:
+        """Organization name exposed to the API, None for the super admin."""
+        return self.organization.name if self.organization else None
 
     @property
     def ruolo(self) -> str:
@@ -96,6 +150,12 @@ class Avatar(Base):
     image_url = Column(String(500), nullable=False)
     category = Column(String(50), nullable=False, index=True)
     description = Column(Text, nullable=True)
+    # Owning tenant, or NULL for a global persona shared with every
+    # organization. A plain user sees globals plus their own org's avatars;
+    # only the super admin creates and assigns either kind.
+    organization_id = Column(
+        Uuid, ForeignKey("organizations.id"), nullable=True, index=True
+    )
     # Cartesia voice id used for the voice conversation mode (falls back
     # to CARTESIA_DEFAULT_VOICE_ID when null)
     voice_id = Column(String(100), nullable=True)
@@ -108,6 +168,7 @@ class Avatar(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship to selections
+    organization = relationship("Organization", back_populates="avatars")
     selections = relationship("UserSelection", back_populates="avatar")
     conversations = relationship("ChatConversation", back_populates="avatar")
 

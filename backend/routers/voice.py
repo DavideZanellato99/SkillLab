@@ -31,6 +31,7 @@ from models import (
     ConversationRecording,
 )
 from auth_dependency import get_current_user
+from routers.avatars import _visible_avatars
 from conversation_titles import next_conversation_title
 from schemas import VoiceRecordingInfo, VoiceSessionRequest, VoiceSessionResponse
 from voice_sessions import create_voice_session, get_voice_session
@@ -62,7 +63,11 @@ def start_voice_session(
             detail="ELEVENLABS_API_KEY / CARTESIA_API_KEY non configurate nel .env del backend.",
         )
 
-    avatar = db.query(Avatar).filter(Avatar.id == request.avatar_id).first()
+    avatar = (
+        _visible_avatars(db.query(Avatar), current_user)
+        .filter(Avatar.id == request.avatar_id)
+        .first()
+    )
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
@@ -136,20 +141,29 @@ def _readable_conversation(
 ) -> ChatConversation:
     """Fetch a conversation the user is allowed to listen back to.
 
-    The owner always is; admins are too, matching the read-only admin views
-    over the same transcripts. A conversation the caller may not see is
-    reported as missing rather than forbidden, so the endpoint never
-    confirms that someone else's conversation exists.
+    The owner always is; the super admin is too; an organization_admin only
+    for conversations held by a user of its own organization — never across
+    tenants. A conversation the caller may not see is reported as missing
+    rather than forbidden, so the endpoint never confirms that someone
+    else's conversation exists.
     """
     conversation = (
         db.query(ChatConversation)
         .filter(ChatConversation.id == conversation_id)
         .first()
     )
-    is_admin = user.ruolo in (ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN)
-    if not conversation or (conversation.user_id != user.id and not is_admin):
+    if not conversation:
         raise HTTPException(status_code=404, detail="Conversazione non trovata.")
-    return conversation
+
+    if conversation.user_id == user.id or user.ruolo == ROLE_SUPER_ADMIN:
+        return conversation
+
+    if user.ruolo == ROLE_ORGANIZATION_ADMIN:
+        owner = db.query(User).filter(User.id == conversation.user_id).first()
+        if owner and owner.organization_id == user.organization_id:
+            return conversation
+
+    raise HTTPException(status_code=404, detail="Conversazione non trovata.")
 
 
 @router.post("/recording/{conversation_id}", response_model=VoiceRecordingInfo)

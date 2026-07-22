@@ -16,6 +16,7 @@ from routers.chat import router as chat_router
 from routers.auth import router as auth_router
 from routers.admin import router as admin_router
 from routers.admin_avatars import router as admin_avatars_router
+from routers.organizations import router as organizations_router
 from routers.voice import router as voice_router
 from auth_dependency import get_or_create_mock_admin, ensure_roles
 
@@ -60,11 +61,20 @@ with engine.begin() as _conn:
     _conn.execute(
         text("ALTER TABLE conversation_recordings ALTER COLUMN audio SET STORAGE EXTERNAL")
     )
+    # Multi-tenant columns (the organizations table itself is created by
+    # create_all above). Nullable on both: NULL means "super admin" on users
+    # and "global persona" on avatars.
+    _conn.execute(
+        text("ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id)")
+    )
+    _conn.execute(
+        text("ALTER TABLE avatars ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id)")
+    )
 
 # The title is mandatory: conversations created before it became so are
 # backfilled with the same "<Category> <n>" default used for new ones, then
 # the column is locked down (both steps are idempotent).
-from models import Avatar, ChatConversation
+from models import Avatar, ChatConversation, User
 from conversation_titles import next_conversation_title
 from sqlalchemy import or_
 
@@ -90,6 +100,35 @@ with engine.begin() as _conn:
 with SessionLocal() as _db:
     ensure_roles(_db)
     get_or_create_mock_admin(_db)
+
+# Multi-tenant backfill: every pre-existing non-super-admin user must belong
+# to an organization. Create a default tenant once and adopt the orphans
+# into it (idempotent: it only touches users still without an organization).
+# Existing avatars keep organization_id NULL on purpose — the old shared
+# library becomes the global one, visible to every tenant.
+from models import Organization, Role, ROLE_SUPER_ADMIN
+
+with SessionLocal() as _db:
+    _default_org = _db.query(Organization).filter(Organization.slug == "default").first()
+    _orphans = (
+        _db.query(User)
+        .join(Role, Role.id == User.role_id)
+        .filter(User.organization_id.is_(None), Role.name != ROLE_SUPER_ADMIN)
+        .count()
+    )
+    if _orphans and not _default_org:
+        _default_org = Organization(name="Organizzazione predefinita", slug="default")
+        _db.add(_default_org)
+        _db.commit()
+        _db.refresh(_default_org)
+    if _default_org:
+        _super_admin_role = _db.query(Role).filter(Role.name == ROLE_SUPER_ADMIN).first()
+        (
+            _db.query(User)
+            .filter(User.organization_id.is_(None), User.role_id != _super_admin_role.id)
+            .update({User.organization_id: _default_org.id}, synchronize_session=False)
+        )
+        _db.commit()
 
 app = FastAPI(
     title="SkillLab — Avatar Selection API",
@@ -118,6 +157,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_avatars_router)
+app.include_router(organizations_router)
 app.include_router(avatars_router)
 app.include_router(chat_router)
 app.include_router(voice_router)

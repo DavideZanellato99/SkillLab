@@ -8,18 +8,23 @@ export interface CreateUserPayload {
   nome: string;
   cognome: string;
   ruolo: RoleName;
+  /** Required for user/organization_admin, null for super_admin. */
+  organization_id?: string | null;
 }
 
 /**
- * Fetch all registered users in the system (Admin only).
+ * Fetch all registered users in the system (Super Admin only), optionally
+ * filtered by organization.
  */
-export const fetchAllUsers = () =>
-  apiFetch<AuthUser[]>('/api/admin/users');
+export const fetchAllUsers = (organizationId?: string) =>
+  apiFetch<AuthUser[]>('/api/admin/users', {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  });
 
 /**
  * Create a new user in Cognito and local DB (Super Admin only).
  */
-export const createNewUser = (payload: { email: string; nome: string; cognome: string; ruolo: string }) =>
+export const createNewUser = (payload: CreateUserPayload) =>
   apiFetch<AuthUser>('/api/admin/users', {
     method: 'POST',
     body: payload,
@@ -29,6 +34,7 @@ export interface UpdateUserPayload {
   nome?: string;
   cognome?: string;
   ruolo?: RoleName;
+  organization_id?: string | null;
 }
 
 /**
@@ -79,6 +85,9 @@ export interface AdminAvatar {
   description: string | null;
   voice_id: string | null;
   difficulty: string | null;
+  /** Owning tenant, or null for a global persona shared with every org. */
+  organization_id: string | null;
+  organization_name: string | null;
   profile: Record<string, string>;
   created_at: string;
   conversation_count: number;
@@ -89,6 +98,8 @@ export interface AdminAvatarPayload {
   description: string | null;
   image_url: string | null;
   voice_id: string | null;
+  /** null makes it a global persona; a tenant id makes it private. */
+  organization_id: string | null;
   profile: Record<string, string>;
 }
 
@@ -137,6 +148,8 @@ export interface UserActivityReport {
   nome: string;
   cognome: string;
   ruolo: string;
+  organization_id: string | null;
+  organization_name: string | null;
   created_at: string;
   conversation_count: number;
   total_duration_seconds: number;
@@ -145,10 +158,13 @@ export interface UserActivityReport {
 
 /**
  * Fetch the read-only users activity recap: conversations per avatar and
- * durations (Super Admin + Organization Admin).
+ * durations (Super Admin + Organization Admin). The Super Admin may filter
+ * by organization; the Organization Admin is always scoped to its own.
  */
-export const fetchUsersReport = () =>
-  apiFetch<UserActivityReport[]>('/api/admin/users-report');
+export const fetchUsersReport = (organizationId?: string) =>
+  apiFetch<UserActivityReport[]>('/api/admin/users-report', {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  });
 
 // ── Evaluations dashboard (read-only) ────────────────
 
@@ -167,6 +183,8 @@ export interface EvaluationReportRow {
   user_email: string;
   user_nome: string;
   user_cognome: string;
+  organization_id: string | null;
+  organization_name: string | null;
   avatar_id: string;
   avatar_name: string;
   conversation_at: string;
@@ -202,5 +220,7 @@ export const deleteAdminConversation = (conversationId: string) =>
     method: 'DELETE',
   });
 
-export const fetchEvaluationsReport = () =>
-  apiFetch<EvaluationReportRow[]>('/api/admin/evaluations-report');
+export const fetchEvaluationsReport = (organizationId?: string) =>
+  apiFetch<EvaluationReportRow[]>('/api/admin/evaluations-report', {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  });

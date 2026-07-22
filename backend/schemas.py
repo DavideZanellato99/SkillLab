@@ -235,6 +235,9 @@ class UserResponse(BaseModel):
     role_id: UUID
     ruolo: str  # role name, resolved from the roles table
     status: str  # "active" | "suspended" | "disabled"
+    # Tenant the user belongs to; both null for the super admin
+    organization_id: UUID | None = None
+    organization_name: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -255,6 +258,50 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+# --- Organization Schemas (super admin only) ---
+
+class OrganizationResponse(BaseModel):
+    """An organization/tenant with its aggregate counters."""
+    id: UUID
+    name: str
+    slug: str
+    status: str  # "active" | "suspended"
+    created_at: datetime
+    updated_at: datetime
+    user_count: int = 0
+    avatar_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class CreateOrganizationRequest(BaseModel):
+    """Schema for the super admin creating a new organization.
+
+    The slug is optional: when omitted it is derived from the name.
+    """
+    name: str = Field(min_length=1, max_length=150)
+    slug: str | None = Field(default=None, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Il nome dell'organizzazione non può essere vuoto.")
+        return v
+
+
+class UpdateOrganizationRequest(BaseModel):
+    """Schema for renaming an organization; omitted fields stay unchanged."""
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    slug: str | None = Field(default=None, max_length=80)
+
+
+class UpdateOrganizationStatusRequest(BaseModel):
+    """Schema for suspending or reactivating an organization."""
+    status: str  # "active" | "suspended"
+
+
 # --- Admin Schemas ---
 
 class CreateUserRequest(BaseModel):
@@ -263,6 +310,9 @@ class CreateUserRequest(BaseModel):
     nome: str
     cognome: str
     ruolo: str = "user"  # "super_admin" | "organization_admin" | "user"
+    # Required for organization_admin/user, must be null for super_admin
+    # (validated server-side).
+    organization_id: UUID | None = None
 
 
 class UpdateUserRequest(BaseModel):
@@ -270,6 +320,7 @@ class UpdateUserRequest(BaseModel):
     nome: str | None = None
     cognome: str | None = None
     ruolo: str | None = None
+    organization_id: UUID | None = None
 
 
 class UpdateUserStatusRequest(BaseModel):
@@ -285,6 +336,9 @@ class AdminAvatarPayload(BaseModel):
     # Empty → the backend generates an initials placeholder image
     image_url: str | None = None
     voice_id: str | None = None
+    # Owning tenant, or null for a global persona shared with every
+    # organization. Only the super admin sets this.
+    organization_id: UUID | None = None
     profile: dict
 
 
@@ -297,6 +351,8 @@ class AdminAvatarResponse(BaseModel):
     description: str | None = None
     voice_id: str | None = None
     difficulty: str | None = None
+    organization_id: UUID | None = None
+    organization_name: str | None = None
     profile: dict
     created_at: datetime
     conversation_count: int = 0
@@ -324,6 +380,8 @@ class UserActivityReport(BaseModel):
     nome: str
     cognome: str
     ruolo: str
+    organization_id: UUID | None = None
+    organization_name: str | None = None
     created_at: datetime
     conversation_count: int
     total_duration_seconds: int
@@ -347,6 +405,8 @@ class EvaluationReportRow(BaseModel):
     user_email: str
     user_nome: str
     user_cognome: str
+    organization_id: UUID | None = None
+    organization_name: str | None = None
     avatar_id: UUID
     avatar_name: str
     conversation_at: datetime

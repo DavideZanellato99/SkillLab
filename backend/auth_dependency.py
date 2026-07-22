@@ -12,6 +12,7 @@ from models import (
     ROLE_SUPER_ADMIN,
     ROLE_ORGANIZATION_ADMIN,
     USER_STATUS_ACTIVE,
+    ORG_STATUS_ACTIVE,
 )
 from cognito_service import verify_access_token
 from token_denylist import is_jti_revoked
@@ -145,6 +146,16 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Suspending the whole organization locks out every one of its users the
+    # same way, on every request. The super admin has no organization, so it
+    # is never caught by this.
+    if user.organization is not None and user.organization.status != ORG_STATUS_ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="L'organizzazione è stata sospesa. Contatta l'amministratore.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 
@@ -176,4 +187,20 @@ def get_current_admin(
             detail="Accesso riservato agli amministratori.",
         )
     return current_user
+
+
+def resolve_admin_scope(admin: User, organization_id=None):
+    """Organization an admin endpoint must be confined to, or None for "all".
+
+    - super_admin: free to see across tenants. Returns the optional
+      `organization_id` query filter as-is (None means every organization).
+    - organization_admin: always locked to its own organization; any
+      `organization_id` the caller tried to pass is ignored.
+
+    Row filters throughout the admin API are derived from this single point,
+    so an org admin can never read another tenant's data.
+    """
+    if admin.ruolo == ROLE_SUPER_ADMIN:
+        return organization_id
+    return admin.organization_id
 

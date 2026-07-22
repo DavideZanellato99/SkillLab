@@ -18,6 +18,9 @@ export interface AuthUser {
   role_id: string;
   ruolo: string; // role name: 'super_admin' | 'organization_admin' | 'user'
   status: UserStatus;
+  /** Tenant the user belongs to; both null for the super admin. */
+  organization_id: string | null;
+  organization_name: string | null;
   created_at: string;
   updated_at: string;
 }

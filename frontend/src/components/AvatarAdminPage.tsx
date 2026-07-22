@@ -7,6 +7,8 @@ import {
   deleteAvatar,
 } from '../services/admin';
 import type { AdminAvatar, AdminAvatarPayload } from '../services/admin';
+import { fetchOrganizations } from '../services/organizations';
+import type { Organization } from '../services/organizations';
 import { isSuperAdmin } from '../services/auth';
 import { getAvatarImageUrl } from '../services/api';
 import { categoryBadgeClasses } from './categoryStyles';
@@ -41,6 +43,7 @@ const sectionTitleCls =
 
 const AVATAR_COLUMNS: DataTableColumn[] = [
   { key: 'avatar', label: 'Avatar' },
+  { key: 'ambito', label: 'Ambito' },
   { key: 'categoria', label: 'Categoria' },
   { key: 'difficolta', label: 'Difficoltà' },
   { key: 'voce', label: 'Voce' },
@@ -180,11 +183,13 @@ interface FormState {
   description: string;
   imageUrl: string;
   voiceId: string;
+  /** '' means a global persona; otherwise the owning organization id. */
+  organizationId: string;
   profile: Record<string, string>;
 }
 
 function emptyForm(): FormState {
-  return { category: 'Clienti', description: '', imageUrl: '', voiceId: '', profile: emptyProfile() };
+  return { category: 'Clienti', description: '', imageUrl: '', voiceId: '', organizationId: '', profile: emptyProfile() };
 }
 
 function formFromAvatar(a: AdminAvatar): FormState {
@@ -193,6 +198,7 @@ function formFromAvatar(a: AdminAvatar): FormState {
     description: a.description ?? '',
     imageUrl: a.image_url,
     voiceId: a.voice_id ?? '',
+    organizationId: a.organization_id ?? '',
     profile: { ...emptyProfile(), ...a.profile },
   };
 }
@@ -213,10 +219,17 @@ function ErrorBox({ message }: { message: string }) {
 export default function AvatarAdminPage() {
   const { user } = useAuth();
   const [avatars, setAvatars] = useState<AdminAvatar[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [search, setSearch] = useState('');
+
+  // Scope options: a global persona (no org) plus one entry per organization
+  const orgScopeOptions = [
+    { value: '', label: 'Globale (tutte le organizzazioni)' },
+    ...organizations.map((o) => ({ value: o.id, label: o.name })),
+  ];
 
   const visibleAvatars = avatars.filter((a) =>
     matchesSearch(search, a.name, a.description, a.category, a.difficulty),
@@ -253,6 +266,9 @@ export default function AvatarAdminPage() {
   useEffect(() => {
     if (isSuperAdmin(user)) {
       loadAvatars();
+      fetchOrganizations()
+        .then(setOrganizations)
+        .catch(() => setOrganizations([]));
     }
   }, [user, loadAvatars]);
 
@@ -286,6 +302,7 @@ export default function AvatarAdminPage() {
       description: form.description.trim() || null,
       image_url: form.imageUrl.trim() || null,
       voice_id: form.voiceId.trim() || null,
+      organization_id: form.organizationId || null,
       profile: form.profile,
     };
 
@@ -403,6 +420,17 @@ export default function AvatarAdminPage() {
                 </div>
               </Td>
               <Td>
+                {a.organization_id ? (
+                  <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2 py-0.5 text-[0.65rem] font-semibold text-cyan-400">
+                    {a.organization_name ?? 'Organizzazione'}
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-violet-600/25 bg-violet-600/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-violet-400">
+                    Globale
+                  </span>
+                )}
+              </Td>
+              <Td>
                 <span className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${categoryBadgeClasses(a.category)}`}>
                   {a.category}
                 </span>
@@ -501,6 +529,19 @@ export default function AvatarAdminPage() {
                   onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                   disabled={isSaving}
                 />
+              </div>
+              <div className={fieldCls}>
+                <label className={labelCls} htmlFor="av-org">Ambito (organizzazione proprietaria)</label>
+                <Select
+                  id="av-org"
+                  value={form.organizationId}
+                  onChange={(value) => setForm((p) => ({ ...p, organizationId: value }))}
+                  options={orgScopeOptions}
+                  disabled={isSaving}
+                />
+                <p className="text-[0.7rem] text-slate-500">
+                  «Globale» rende la persona visibile a ogni organizzazione; altrimenti resta privata di quella scelta.
+                </p>
               </div>
               <div className="grid grid-cols-3 gap-3 max-[600px]:grid-cols-1">
                 <div className={fieldCls}>

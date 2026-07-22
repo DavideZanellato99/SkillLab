@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models import Avatar, User, UserSelection
+from models import Avatar, User, UserSelection, ROLE_SUPER_ADMIN
 from auth_dependency import get_current_user
 from schemas import (
     AvatarResponse,
@@ -19,6 +19,21 @@ from schemas import (
 router = APIRouter(prefix="/api/avatars", tags=["avatars"])
 
 
+def _visible_avatars(query, user: User):
+    """Restrict an avatar query to what `user` may see.
+
+    A plain user or an organization_admin sees the global personas
+    (organization_id NULL) plus the ones owned by their own organization.
+    The super admin stands above tenants and sees every avatar.
+    """
+    if user.ruolo == ROLE_SUPER_ADMIN:
+        return query
+    return query.filter(
+        (Avatar.organization_id.is_(None))
+        | (Avatar.organization_id == user.organization_id)
+    )
+
+
 @router.get("", response_model=list[AvatarResponse])
 def get_avatars(
     category: str | None = None,
@@ -26,7 +41,7 @@ def get_avatars(
     db: Session = Depends(get_db),
 ):
     """Get all avatars, optionally filtered by category."""
-    query = db.query(Avatar)
+    query = _visible_avatars(db.query(Avatar), current_user)
 
     if category:
         query = query.filter(Avatar.category == category)
@@ -62,7 +77,8 @@ def get_categories(
     db: Session = Depends(get_db),
 ):
     """Get all distinct avatar categories."""
-    categories = db.query(Avatar.category).distinct().order_by(Avatar.category).all()
+    query = _visible_avatars(db.query(Avatar.category), current_user)
+    categories = query.distinct().order_by(Avatar.category).all()
     return [c[0] for c in categories]
 
 
@@ -73,7 +89,11 @@ def get_avatar(
     db: Session = Depends(get_db),
 ):
     """Get a specific avatar by ID."""
-    avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
+    avatar = (
+        _visible_avatars(db.query(Avatar), current_user)
+        .filter(Avatar.id == avatar_id)
+        .first()
+    )
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
@@ -102,8 +122,13 @@ def select_avatar(
     db: Session = Depends(get_db),
 ):
     """Save a user's avatar selection."""
-    # Check that the avatar exists
-    avatar = db.query(Avatar).filter(Avatar.id == selection.avatar_id).first()
+    # Check that the avatar exists and is visible to this user (a user must
+    # not select a persona owned by another organization)
+    avatar = (
+        _visible_avatars(db.query(Avatar), current_user)
+        .filter(Avatar.id == selection.avatar_id)
+        .first()
+    )
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
 

@@ -2,10 +2,13 @@ import { Fragment, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchUsersReport, deleteAdminConversation } from '../services/admin';
 import type { UserActivityReport, ConversationReport } from '../services/admin';
-import { isAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../services/auth';
+import { fetchOrganizations } from '../services/organizations';
+import type { Organization } from '../services/organizations';
+import { isAdmin, isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../services/auth';
 import { categoryBadgeClasses } from './categoryStyles';
 import ConversationModeBadge from './ConversationModeBadge';
 import DataTable, { Td, Tr } from './DataTable';
+import Select from './Select';
 import { matchesSearch } from './tableSearch';
 import type { DataTableColumn } from './DataTable';
 
@@ -24,14 +27,19 @@ interface DeletingConversation {
   conversation: ConversationReport;
 }
 
-const REPORT_COLUMNS: DataTableColumn[] = [
-  { key: 'utente', label: 'Utente' },
-  { key: 'email', label: 'Email' },
-  { key: 'ruolo', label: 'Ruolo' },
-  { key: 'conversazioni', label: 'Conversazioni', align: 'center' },
-  { key: 'durata', label: 'Durata Totale', align: 'right' },
-  { key: 'dettaglio', ariaLabel: 'Dettaglio' },
-];
+/** Columns depend on the role: the super admin also sees the organization,
+ * an org admin already knows it (its own), so the column is dropped. */
+function reportColumns(showOrg: boolean): DataTableColumn[] {
+  return [
+    { key: 'utente', label: 'Utente' },
+    { key: 'email', label: 'Email' },
+    ...(showOrg ? [{ key: 'organizzazione', label: 'Organizzazione' } as DataTableColumn] : []),
+    { key: 'ruolo', label: 'Ruolo' },
+    { key: 'conversazioni', label: 'Conversazioni', align: 'center' },
+    { key: 'durata', label: 'Durata Totale', align: 'right' },
+    { key: 'dettaglio', ariaLabel: 'Dettaglio' },
+  ];
+}
 
 /** "1 h 05 min", "12 min 34 s", "45 s" — "—" for zero/unknown durations */
 function formatDuration(totalSeconds: number): string {
@@ -56,7 +64,11 @@ function formatDateTime(dateStr: string): string {
 
 export default function UserReportPage() {
   const { user } = useAuth();
+  const showOrg = isSuperAdmin(user);
+  const columns = reportColumns(showOrg);
   const [report, setReport] = useState<UserActivityReport[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [orgFilter, setOrgFilter] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
@@ -66,14 +78,19 @@ export default function UserReportPage() {
   const [deleteError, setDeleteError] = useState('');
 
   const visibleReport = report.filter((u) =>
-    matchesSearch(search, `${u.nome} ${u.cognome}`, u.email, ROLE_LABELS[u.ruolo] ?? u.ruolo),
+    matchesSearch(search, `${u.nome} ${u.cognome}`, u.email, u.organization_name ?? '', ROLE_LABELS[u.ruolo] ?? u.ruolo),
   );
 
-  const loadReport = useCallback(async () => {
+  const orgFilterOptions = [
+    { value: '', label: 'Tutte le organizzazioni' },
+    ...organizations.map((o) => ({ value: o.id, label: o.name })),
+  ];
+
+  const loadReport = useCallback(async (organizationId?: string) => {
     setIsLoading(true);
     setError('');
     try {
-      const data = await fetchUsersReport();
+      const data = await fetchUsersReport(organizationId || undefined);
       setReport(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossibile caricare il report.');
@@ -84,9 +101,17 @@ export default function UserReportPage() {
 
   useEffect(() => {
     if (isAdmin(user)) {
-      loadReport();
+      loadReport(orgFilter);
     }
-  }, [user, loadReport]);
+  }, [user, loadReport, orgFilter]);
+
+  useEffect(() => {
+    if (isSuperAdmin(user)) {
+      fetchOrganizations()
+        .then(setOrganizations)
+        .catch(() => setOrganizations([]));
+    }
+  }, [user]);
 
   const handleConfirmDeleteConversation = async () => {
     if (!deletingConversation) return;
@@ -134,11 +159,25 @@ export default function UserReportPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-      <header className="mb-12">
-        <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Report Attività</h1>
-        <p className="text-[0.95rem] text-slate-500">
-          Recap in sola lettura degli utenti, delle loro conversazioni con gli avatar e delle durate.
-        </p>
+      <header className="mb-12 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Report Attività</h1>
+          <p className="text-[0.95rem] text-slate-500">
+            Recap in sola lettura degli utenti, delle loro conversazioni con gli avatar e delle durate.
+          </p>
+        </div>
+        {showOrg && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium tracking-wide text-slate-400" htmlFor="report-org-filter">Organizzazione</label>
+            <Select
+              id="report-org-filter"
+              className="min-w-[240px]"
+              value={orgFilter}
+              onChange={setOrgFilter}
+              options={orgFilterOptions}
+            />
+          </div>
+        )}
       </header>
 
       {error && (
@@ -159,10 +198,10 @@ export default function UserReportPage() {
         </div>
       ) : (
         <DataTable
-          columns={REPORT_COLUMNS}
+          columns={columns}
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Cerca per nome, email o ruolo..."
+          searchPlaceholder="Cerca per nome, email, organizzazione o ruolo..."
           isEmpty={visibleReport.length === 0}
           emptyMessage={search ? 'Nessun utente corrisponde alla ricerca.' : 'Nessun utente trovato.'}
         >
@@ -186,6 +225,15 @@ export default function UserReportPage() {
                     </div>
                   </Td>
                   <Td><span className="text-slate-400">{u.email}</span></Td>
+                  {showOrg && (
+                    <Td>
+                      {u.organization_name ? (
+                        <span className="text-[0.85rem] text-slate-300">{u.organization_name}</span>
+                      ) : (
+                        <span className="text-[0.75rem] italic text-slate-500">—</span>
+                      )}
+                    </Td>
+                  )}
                   <Td>
                     <span className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[u.ruolo] ?? ''}`}>
                       {ROLE_LABELS[u.ruolo] ?? u.ruolo}
@@ -218,7 +266,7 @@ export default function UserReportPage() {
 
                 {isExpanded && (
                   <tr>
-                    <Td colSpan={6} className="bg-gray-950/40">
+                    <Td colSpan={columns.length} className="bg-gray-950/40">
                       {u.conversations.length === 0 ? (
                         <p className="py-4 text-center text-[0.85rem] italic text-slate-500">
                           Nessuna conversazione registrata per questo utente.

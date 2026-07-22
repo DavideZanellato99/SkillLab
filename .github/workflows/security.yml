@@ -48,6 +48,10 @@ jobs:
   filesystem:
     name: Filesystem scan (trivy)
     runs-on: ubuntu-latest
+    permissions:
+      # Needed to publish the SARIF results under the repo's Security tab.
+      security-events: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Trivy filesystem scan
@@ -55,9 +59,62 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
+          # misconfig added so Dockerfile/compose hardening issues (e.g. a
+          # container left running as root) are caught, not just CVEs/secrets.
+          scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          # SARIF so the findings land in the Security tab, not just the log.
+          # exit-code 1 still fails the job on a fixable HIGH/CRITICAL, which
+          # keeps this a gate; the upload below runs even on that failure.
+          format: sarif
+          output: trivy-fs.sarif
           exit-code: "1"
+      - name: Upload filesystem results to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  images:
+    name: Image scan (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            context: ./backend
+          - name: frontend
+            context: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+      # The filesystem scan above covers the source tree; this scans the
+      # *built* image, so OS-level CVEs in the base images (python-slim,
+      # nginx-alpine) are caught too. docker-smoke in ci.yml already builds
+      # these, but rebuilding here keeps security scans self-contained.
+      - name: Build ${{ matrix.name }} image
+        run: docker build -t skilllab-${{ matrix.name }}:scan ${{ matrix.context }}
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: skilllab-${{ matrix.name }}:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-image-${{ matrix.name }}.sarif
+          exit-code: "1"
+      - name: Upload ${{ matrix.name }} image results to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image-${{ matrix.name }}.sarif
+          category: trivy-image-${{ matrix.name }}
 
   codeql:
     name: CodeQL (${{ matrix.language }})

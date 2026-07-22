@@ -20,11 +20,24 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine AS runtime
+# Unprivileged nginx: runs as the non-root "nginx" user (uid 101) and
+# listens on 8080 out of the box, so no root and no cap_net_bind needed.
+FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
+
+# Patch OS packages whose fixes are newer than the base image snapshot
+# (curl, openssl, libxml2, ... CVEs). apk needs root, so switch up and drop
+# back to the unprivileged user afterwards.
+USER root
+RUN apk upgrade --no-cache
+USER nginx
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
+
+# Base image already switches to this user; stated explicitly so it is
+# visible here and satisfies the image/Dockerfile scanners.
+USER nginx
 
 CMD ["nginx", "-g", "daemon off;"]

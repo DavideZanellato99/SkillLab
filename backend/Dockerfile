@@ -23,6 +23,13 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
+# Run as a non-root user (container hardening). /app is chowned so the
+# static upload dir stays writable — the named volume mounted at
+# /app/static inherits this ownership when Docker first creates it.
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -46,9 +46,7 @@ const AVATAR_COLUMNS: DataTableColumn[] = [
   { key: 'ambito', label: 'Ambito' },
   { key: 'categoria', label: 'Categoria' },
   { key: 'difficolta', label: 'Difficoltà' },
-  { key: 'voce', label: 'Voce' },
   { key: 'conversazioni', label: 'Conversazioni', align: 'center' },
-  { key: 'creato', label: 'Creato' },
   { key: 'azioni', label: 'Azioni', align: 'right' },
 ];
 
@@ -438,21 +436,9 @@ export default function AvatarAdminPage() {
               <Td>
                 <span className="text-[0.85rem] text-orange-400">{a.difficulty ?? '—'}</span>
               </Td>
-              <Td>
-                {a.voice_id ? (
-                  <code className="rounded-lg bg-white/5 px-2 py-1 text-xs text-violet-400">{a.voice_id.slice(0, 12)}...</code>
-                ) : (
-                  <span className="text-xs text-slate-500">default</span>
-                )}
-              </Td>
               <Td align="center">
                 <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
                   {a.conversation_count}
-                </span>
-              </Td>
-              <Td>
-                <span className="text-[0.85rem] text-slate-500">
-                  {new Date(a.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </span>
               </Td>
               <Td>

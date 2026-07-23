@@ -47,7 +47,6 @@ def get_role_by_name(db: Session, name: str) -> Role | None:
     return db.query(Role).filter(Role.name == name).first()
 
 
-
 def get_or_create_mock_admin(db: Session) -> User:
     """Ensure the mock super admin user exists in the local database and return it."""
     user = db.query(User).filter(User.cognito_sub == MOCK_ADMIN_SUB).first()

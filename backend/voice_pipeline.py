@@ -76,6 +76,7 @@ def _looks_complete(text: str) -> bool:
     lands on a word or comma instead and is held for the grace window."""
     return text.rstrip().endswith((".", "!", "?", "…"))
 
+
 # STT error types that make the whole call unusable
 _FATAL_STT_ERRORS = {
     "auth_error",
@@ -306,7 +307,7 @@ class VoicePipeline:
             _txt = (event.get("text") or "").strip()
             print(
                 f"[STT-RAW] {message_type} | dal_last_partial={_gap} | "
-                f"len={len(_txt)} | \"{_txt[-60:]}\"",
+                f'len={len(_txt)} | "{_txt[-60:]}"',
                 flush=True,
             )
 

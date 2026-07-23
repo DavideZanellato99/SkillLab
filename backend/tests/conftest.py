@@ -48,7 +48,13 @@ from sqlalchemy.orm import Session  # noqa: E402
 import main  # noqa: E402  (importing runs create_all + migrations on the test DB)
 from auth_dependency import ensure_roles, get_current_user  # noqa: E402
 from database import engine, get_db  # noqa: E402
-from models import ROLE_SUPER_ADMIN, ROLE_USER, Avatar, User  # noqa: E402
+from models import (  # noqa: E402
+    ROLE_SUPER_ADMIN,
+    ROLE_USER,
+    Avatar,
+    Organization,
+    User,
+)
 
 app = main.app
 
@@ -88,7 +94,7 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 
-def _make_user(db_session, role_name: str) -> User:
+def _make_user(db_session, role_name: str, organization_id=None) -> User:
     roles = ensure_roles(db_session)
     user = User(
         cognito_sub=f"test-{uuid.uuid4()}",
@@ -96,6 +102,7 @@ def _make_user(db_session, role_name: str) -> User:
         nome="Test",
         cognome="User",
         role_id=roles[role_name].id,
+        organization_id=organization_id,
     )
     db_session.add(user)
     db_session.flush()
@@ -103,12 +110,23 @@ def _make_user(db_session, role_name: str) -> User:
 
 
 @pytest.fixture
-def standard_user(db_session) -> User:
-    return _make_user(db_session, ROLE_USER)
+def organization(db_session) -> Organization:
+    """The tenant that owns the standard user and the test avatars."""
+    org = Organization(name="Org di test", slug="org-di-test")
+    db_session.add(org)
+    db_session.flush()
+    return org
+
+
+@pytest.fixture
+def standard_user(db_session, organization) -> User:
+    # A plain user always belongs to an organization.
+    return _make_user(db_session, ROLE_USER, organization_id=organization.id)
 
 
 @pytest.fixture
 def super_admin_user(db_session) -> User:
+    # The super admin stands above every tenant: organization_id stays NULL.
     return _make_user(db_session, ROLE_SUPER_ADMIN)
 
 
@@ -129,10 +147,17 @@ def admin_client(client, super_admin_user):
 
 
 @pytest.fixture
-def make_avatar(db_session):
-    """Factory that inserts an avatar (a valid persona sheet is required)."""
+def make_avatar(db_session, organization):
+    """Factory that inserts an avatar (a valid persona sheet is required).
 
-    def _factory(*, name="Mario Rossi", category="clienti", **profile_extra) -> Avatar:
+    The avatar is owned by the same organization as the standard user, so
+    the two share a tenant and the avatar is visible to that user. Pass
+    `organization_id` explicitly to place it in a different tenant.
+    """
+
+    def _factory(
+        *, name="Mario Rossi", category="clienti", organization_id=None, **profile_extra
+    ) -> Avatar:
         profile = {"NOME": name, "GRADO_DIFFICOLTA": "5/10", **profile_extra}
         avatar = Avatar(
             name=name,
@@ -140,6 +165,7 @@ def make_avatar(db_session):
             category=category,
             description="Persona di test",
             profile=profile,
+            organization_id=organization_id or organization.id,
         )
         db_session.add(avatar)
         db_session.flush()

@@ -22,15 +22,13 @@ router = APIRouter(prefix="/api/avatars", tags=["avatars"])
 def _visible_avatars(query, user: User):
     """Restrict an avatar query to what `user` may see.
 
-    A plain user or an organization_admin sees the global personas
-    (organization_id NULL) plus the ones owned by their own organization.
-    The super admin stands above tenants and sees every avatar.
+    A plain user or an organization_admin sees only the avatars owned by their
+    own organization. The super admin stands above tenants and sees every
+    avatar.
     """
     if user.ruolo == ROLE_SUPER_ADMIN:
         return query
-    return query.filter(
-        (Avatar.organization_id.is_(None)) | (Avatar.organization_id == user.organization_id)
-    )
+    return query.filter(Avatar.organization_id == user.organization_id)
 
 
 @router.get("", response_model=list[AvatarResponse])

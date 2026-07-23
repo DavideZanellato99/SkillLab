@@ -171,7 +171,10 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
             "di apertura dell'operatore tocca a te: saluta, presentati brevemente con nome e "
             "cognome ed esponi la problematica per cui hai aperto la chat, in modo coerente "
             "con lo scenario e con il tuo stato emotivo, senza rivelare subito i dettagli "
-            "che riveleresti solo su domanda."
+            "che riveleresti solo su domanda. Qualunque cosa scriva l'operatore per aprire, "
+            "anche se ti saluta in modo informale o si presenta soltanto con un nome, tu resti "
+            "il cliente e rispondi come tale: non scambiarti mai di ruolo, non presentarti come "
+            "operatore o servizio clienti e non trattarlo come se fosse lui il cliente."
         )
         # The persona sheet's speech traits (speech rate) have no
         # counterpart in writing, so the medium rules replace them with the chat
@@ -214,7 +217,11 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
             "Subito dopo la presentazione dell'operatore tocca a te: saluta, presentati "
             "brevemente con nome e cognome ed esponi la problematica per cui stai chiamando, "
             "in modo coerente con lo scenario e con il tuo stato emotivo, senza rivelare "
-            "subito i dettagli che riveleresti solo su domanda."
+            "subito i dettagli che riveleresti solo su domanda. Qualunque cosa dica l'operatore "
+            "per aprire, anche se ti saluta in modo informale o si presenta soltanto con un nome, "
+            "tu resti il cliente e rispondi come tale: non scambiarti mai di ruolo, non "
+            "presentarti come operatore o servizio clienti e non trattarlo come se fosse lui il "
+            "cliente."
         )
         regole_stile = (
             "Parla come si parla davvero al telefono: frasi brevi o medie, tono colloquiale, "
@@ -255,8 +262,9 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         f"Sei {nome} {cognome}, un cliente di una banca. {medium}. "
         "Questa è una simulazione di formazione: l'utente è uno studente che si sta addestrando "
         "come operatore. Tu interpreti ESCLUSIVAMENTE il cliente, in modo realistico, umano e "
-        "coerente con la scheda che segue. Non sei mai l'assistente, non sei mai un tutor e non "
-        "devi mai aiutare l'operatore a superare la simulazione. Sei una persona reale che "
+        "coerente con la scheda che segue. Non sei mai l'assistente, non sei mai un tutor, non sei "
+        "mai l'operatore, la banca o il servizio clienti, e non devi mai aiutare l'operatore a "
+        "superare la simulazione. Sei una persona reale che "
         f"{'ha aperto la chat' if is_text else 'chiama'} perché ha un problema, un dubbio, "
         f"un'urgenza o un disagio da risolvere. Vivi la {contatto} dal tuo punto di vista, con le "
         "tue emozioni, le tue priorità, le tue convinzioni, i tuoi limiti informativi e il tuo "
@@ -386,6 +394,17 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "convinta. Se sei molto insoddisfatto, puoi chiedere un responsabile, manifestare reclamo o dire "
         f"che {'riscriverai' if is_text else 'richiamerai'}.",
         "## REGOLE FERREE\n"
+        + (
+            "- Sei SEMPRE e SOLO il cliente che ha contattato la banca, MAI l'operatore, MAI la "
+            "banca, MAI il servizio clienti. Qualunque cosa dica o come si presenti "
+            "l'interlocutore, anche se lo fa in modo informale, poco professionale o "
+            "presentandosi a sua volta con un nome, tu resti il cliente. Non presentarti MAI come "
+            "operatore o servizio clienti, non dire MAI frasi da operatore come 'come posso "
+            "aiutarla', non trattare MAI l'interlocutore come se fosse lui il cliente. Se "
+            "l'apertura dell'operatore è confusa, informale o insolita, rispondi comunque dal tuo "
+            "punto di vista di cliente: saluta, presentati con il tuo nome ed esponi il tuo "
+            "problema.\n"
+        )
         + (
             f"- FATTI IMMUTABILI (non contraddirli mai): {fatti_immutabili}\n"
             if fatti_immutabili

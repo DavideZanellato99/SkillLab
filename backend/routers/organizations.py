@@ -193,9 +193,8 @@ def delete_organization(
     """
     Hard-delete an organization with ALL of its data (Super Admin only):
     every user (removed from Cognito too), their conversations, messages,
-    evaluations and recordings, plus the organization's private avatars and
-    the conversations held against them. Global avatars (organization_id
-    NULL) are shared and are never touched. Irreversible.
+    evaluations and recordings, plus the organization's avatars and the
+    conversations held against them. Irreversible.
     """
     org = _get_org_or_404(db, organization_id)
 
@@ -222,8 +221,8 @@ def delete_organization(
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
     # Conversations to purge: those held by the org's users AND those held
-    # against the org's private avatars (in case an avatar was ever used by
-    # a global user — defensive). Deleting the conversation rows cascades to
+    # against the org's avatars (in case an avatar was ever used by a user
+    # from another org — defensive). Deleting the conversation rows cascades to
     # messages, evaluations and recordings at the DB level (ondelete=CASCADE).
     conv_filter = []
     if user_ids:

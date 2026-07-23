@@ -75,11 +75,14 @@ def _generate_avatar_image(name: str, avatar_id: UUID) -> str:
     return _generated_image_url(avatar_id)
 
 
-def _resolve_avatar_org_or_400(db: Session, organization_id) -> UUID | None:
-    """Validate the avatar's owning tenant: None means a global persona,
-    otherwise the organization must exist."""
+def _resolve_avatar_org_or_400(db: Session, organization_id) -> UUID:
+    """Validate the avatar's owning tenant: it is required and the
+    organization must exist."""
     if organization_id is None:
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'organizzazione proprietaria è obbligatoria.",
+        )
     org = db.query(Organization).filter(Organization.id == organization_id).first()
     if not org:
         raise HTTPException(
@@ -114,7 +117,7 @@ def _to_response(avatar: Avatar, conversation_count: int = 0) -> AdminAvatarResp
         voice_id=avatar.voice_id,
         difficulty=avatar.difficulty,
         organization_id=avatar.organization_id,
-        organization_name=avatar.organization.name if avatar.organization else None,
+        organization_name=avatar.organization.name,
         profile=avatar.profile or {},
         created_at=avatar.created_at,
         conversation_count=conversation_count,
@@ -144,8 +147,7 @@ def create_avatar(
 ):
     """Create a new avatar/persona (Super Admin only).
 
-    organization_id null makes it a global persona shared with every tenant;
-    otherwise it is private to that organization.
+    organization_id is required: the avatar is private to that organization.
     """
     name = _validated_name_or_400(payload.profile)
     organization_id = _resolve_avatar_org_or_400(db, payload.organization_id)

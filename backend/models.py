@@ -54,8 +54,8 @@ class Organization(Base):
 
     Only the super admin (who belongs to no organization, organization_id
     NULL) sees across tenants; an organization_admin is confined to its own
-    organization, a plain user never leaves it. Avatars with a NULL
-    organization_id are the shared global library, visible to everyone.
+    organization, a plain user never leaves it. Every avatar belongs to
+    exactly one organization and is visible only within it.
     """
 
     __tablename__ = "organizations"
@@ -150,10 +150,10 @@ class Avatar(Base):
     image_url = Column(String(500), nullable=False)
     category = Column(String(50), nullable=False, index=True)
     description = Column(Text, nullable=True)
-    # Owning tenant, or NULL for a global persona shared with every
-    # organization. A plain user sees globals plus their own org's avatars;
-    # only the super admin creates and assigns either kind.
-    organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=True, index=True)
+    # Owning tenant: every avatar belongs to exactly one organization and is
+    # visible only within it. Only the super admin creates avatars and assigns
+    # the owning organization.
+    organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=False, index=True)
     # Cartesia voice id used for the voice conversation mode (falls back
     # to CARTESIA_DEFAULT_VOICE_ID when null)
     voice_id = Column(String(100), nullable=True)

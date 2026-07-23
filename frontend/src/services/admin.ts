@@ -85,9 +85,9 @@ export interface AdminAvatar {
   description: string | null;
   voice_id: string | null;
   difficulty: string | null;
-  /** Owning tenant, or null for a global persona shared with every org. */
-  organization_id: string | null;
-  organization_name: string | null;
+  /** Owning tenant: every avatar belongs to exactly one organization. */
+  organization_id: string;
+  organization_name: string;
   profile: Record<string, string>;
   created_at: string;
   conversation_count: number;
@@ -98,8 +98,8 @@ export interface AdminAvatarPayload {
   description: string | null;
   image_url: string | null;
   voice_id: string | null;
-  /** null makes it a global persona; a tenant id makes it private. */
-  organization_id: string | null;
+  /** Required owning tenant: the avatar is private to that organization. */
+  organization_id: string;
   profile: Record<string, string>;
 }
 

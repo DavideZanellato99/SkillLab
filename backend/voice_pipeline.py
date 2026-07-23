@@ -25,6 +25,7 @@ commits, so the turn restarts with the fuller history.
 import asyncio
 import base64
 import json
+import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -58,6 +59,22 @@ from turn_metrics import (
 from voice_sessions import VoiceSession
 
 _LLM_FALLBACK_LINE = "Mi dispiace, ho avuto un problema tecnico. Puoi ripetere?"
+
+# Grace window (ms) after a committed transcript before the assistant turn
+# fires. ElevenLabs force-commits long utterances mid-sentence regardless of
+# the VAD silence threshold, splitting one spoken turn across several commits.
+# A commit that does not end a sentence is held this long so a continuation
+# can arrive and be merged, instead of answering half a sentence and then
+# restarting. Commits that end a sentence fire immediately, so ordinary turns
+# pay nothing. 0 disables the aggregation (fire every commit at once).
+VOICE_SETTLE_MS = int(os.getenv("VOICE_SETTLE_MS", "700"))
+
+
+def _looks_complete(text: str) -> bool:
+    """True when the transcript ends like a finished sentence, so the turn can
+    fire without waiting for a continuation. A mid-utterance forced commit
+    lands on a word or comma instead and is held for the grace window."""
+    return text.rstrip().endswith((".", "!", "?", "…"))
 
 # STT error types that make the whole call unusable
 _FATAL_STT_ERRORS = {
@@ -136,6 +153,14 @@ class VoicePipeline:
         self._metrics = CallMetrics()
         self._turn_timer: TurnTimer | None = None
         self._last_partial_at: float | None = None
+        # Commit aggregation: ElevenLabs may split one spoken turn into several
+        # commits, so a non-final commit is buffered here and the turn only
+        # fires once the grace window (VOICE_SETTLE_MS) passes without a
+        # continuation. _pending_timer anchors the turn's latency to the first
+        # commit of the group, so commit->audio includes the grace wait.
+        self._pending_text = ""
+        self._pending_timer: TurnTimer | None = None
+        self._settle_task: asyncio.Task | None = None
         # Turns are numbered rather than tagged at random: the first one of
         # a call behaves differently from the rest (cold connection, cold
         # prompt cache) and the logs have to make that visible.
@@ -164,6 +189,8 @@ class VoicePipeline:
     # ── Main loop ─────────────────────────────────────
 
     async def run(self) -> None:
+        # TEMP diagnostica: conferma che i parametri VAD partano nell'URL. Rimuovere.
+        print(f"[STT-URL] {stt_ws_url()}", flush=True)
         try:
             async with (
                 websockets.connect(
@@ -215,6 +242,10 @@ class VoicePipeline:
                 {"type": "error", "message": "La chiamata si è interrotta per un errore tecnico."}
             )
         finally:
+            # Drop any commit still waiting out its grace window, so it can't
+            # fire a turn onto a socket that is being torn down.
+            if self._settle_task and not self._settle_task.done():
+                self._settle_task.cancel()
             await self._cancel_turn(notify=False)
             # After the cancel, so a turn still in flight on hang-up is
             # counted before the medians are computed.
@@ -263,13 +294,37 @@ class VoicePipeline:
             event = json.loads(raw)
             message_type = event.get("message_type", "")
 
+            # TEMP diagnostica split: ogni evento grezzo STT con tempo dal
+            # commit precedente e testo troncato, per vedere se un commit
+            # arriva mentre l'operatore sta ancora parlando. Da rimuovere.
+            _now = time.perf_counter()
+            _gap = (
+                f"{(_now - self._last_partial_at) * 1000:.0f}ms"
+                if self._last_partial_at is not None
+                else "n/d"
+            )
+            _txt = (event.get("text") or "").strip()
+            print(
+                f"[STT-RAW] {message_type} | dal_last_partial={_gap} | "
+                f"len={len(_txt)} | \"{_txt[-60:]}\"",
+                flush=True,
+            )
+
             if message_type == "partial_transcript":
                 text = (event.get("text") or "").strip()
                 if not text:
                     continue
                 # Last sign of speech before the silence the VAD is timing
                 self._last_partial_at = time.perf_counter()
-                await self._send_json({"type": "user_partial", "text": text})
+                # More speech after a held commit means the turn is not over:
+                # push the grace window back until the operator actually stops.
+                if self._pending_timer is not None:
+                    self._schedule_settle()
+                    await self._send_json(
+                        {"type": "user_partial", "text": f"{self._pending_text} {text}".strip()}
+                    )
+                else:
+                    await self._send_json({"type": "user_partial", "text": text})
 
             elif message_type in (
                 "committed_transcript",
@@ -278,27 +333,35 @@ class VoicePipeline:
                 text = (event.get("text") or "").strip()
                 if not text:
                     continue
-                # Started here rather than in _start_turn so the cancel and
-                # the bookkeeping below are charged to the turn ("prep")
-                # instead of vanishing between the two.
-                vad_ms = (
-                    (time.perf_counter() - self._last_partial_at) * 1000
-                    if self._last_partial_at is not None
-                    else None
-                )
-                self._turn_count += 1
-                timer = TurnTimer(turn_id=f"#{self._turn_count}", vad_ms=vad_ms)
+                # A commit while a real turn is already streaming is a
+                # barge-in/correction: drop that turn before taking the new
+                # speech. Aggregated (held) commits never have a turn in flight
+                # here, since those fire only after the grace window closes.
+                if self._turn_task and not self._turn_task.done():
+                    await self._cancel_turn(notify=True)
+                # Anchor the timer on the first commit of a group so its
+                # commit->audio spans the whole wait, grace window included.
+                if self._pending_timer is None:
+                    vad_ms = (
+                        (time.perf_counter() - self._last_partial_at) * 1000
+                        if self._last_partial_at is not None
+                        else None
+                    )
+                    self._turn_count += 1
+                    self._pending_timer = TurnTimer(turn_id=f"#{self._turn_count}", vad_ms=vad_ms)
                 self._last_partial_at = None
-                # A commit while a turn is in flight means the VAD split the
-                # operator's sentence: restart with the fuller history. The
-                # cancel goes first so the browser's mic gate (armed by
-                # user_final) stays closed through the regeneration.
-                await self._cancel_turn(notify=True)
-                await self._send_json({"type": "user_final", "text": text})
-                self.history.append({"role": "user", "content": text})
-                self._persist("user", text)
-                self._turn_timer = timer
-                self._start_turn()
+                self._pending_text = (
+                    f"{self._pending_text} {text}".strip() if self._pending_text else text
+                )
+                # Provisional bubble: the words so far, not yet the final turn
+                await self._send_json({"type": "user_partial", "text": self._pending_text})
+                # A commit that ends a sentence is the operator done; one that
+                # ends mid-word/clause is ElevenLabs splitting a long turn, so
+                # wait for the continuation instead of answering half of it.
+                if VOICE_SETTLE_MS <= 0 or _looks_complete(text):
+                    await self._fire_pending()
+                else:
+                    self._schedule_settle()
 
             elif "error" in message_type or message_type in _FATAL_STT_ERRORS:
                 detail = event.get("error") or message_type
@@ -354,6 +417,43 @@ class VoicePipeline:
                 await self._send_json({"type": "speaking_end"})
 
     # ── Assistant turns ───────────────────────────────
+
+    def _schedule_settle(self) -> None:
+        """(Re)start the grace-window countdown for the buffered commit."""
+        if self._settle_task and not self._settle_task.done():
+            self._settle_task.cancel()
+        self._settle_task = asyncio.create_task(self._settle_then_fire())
+
+    async def _settle_then_fire(self) -> None:
+        """Fire the buffered turn once the grace window passes untouched."""
+        try:
+            await asyncio.sleep(VOICE_SETTLE_MS / 1000)
+        except asyncio.CancelledError:
+            return
+        # Detach first so _fire_pending never cancels this very task
+        if self._settle_task is asyncio.current_task():
+            self._settle_task = None
+        await self._fire_pending()
+
+    async def _fire_pending(self) -> None:
+        """Deliver the buffered turn and start the assistant reply."""
+        if self._settle_task and not self._settle_task.done():
+            self._settle_task.cancel()
+        self._settle_task = None
+        text = self._pending_text
+        timer = self._pending_timer
+        self._pending_text = ""
+        self._pending_timer = None
+        if not text or timer is None:
+            return
+        # A late continuation after the window closed can find a turn already
+        # streaming: cancel it so the fuller turn replaces it (barge-in).
+        await self._cancel_turn(notify=True)
+        await self._send_json({"type": "user_final", "text": text})
+        self.history.append({"role": "user", "content": text})
+        self._persist("user", text)
+        self._turn_timer = timer
+        self._start_turn()
 
     def _start_turn(self) -> None:
         self._turn_task = asyncio.create_task(self._run_turn())

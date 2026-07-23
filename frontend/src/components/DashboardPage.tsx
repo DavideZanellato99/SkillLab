@@ -609,12 +609,28 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-      <header className="mb-8">
-        <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Dashboard</h1>
-        <p className="text-[0.95rem] text-slate-500">
-          Riepilogo dei punteggi delle valutazioni delle conversazioni, per canale e globale o per
-          singolo utente.
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4 max-sm:flex-col">
+        <div>
+          <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Dashboard</h1>
+          <p className="text-[0.95rem] text-slate-500">
+            Riepilogo dei punteggi delle valutazioni delle conversazioni, per canale e globale o per
+            singolo utente.
+          </p>
+        </div>
+        {showOrgFilter && (
+          <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
+            <Select
+              id="dashboard-org-filter"
+              className="min-w-[220px] max-sm:flex-1"
+              value={orgFilter}
+              onChange={(value) => {
+                setOrgFilter(value);
+                setSelectedUserId('');
+              }}
+              options={orgFilterOptions}
+            />
+          </div>
+        )}
       </header>
 
       {error && (
@@ -649,23 +665,6 @@ export default function DashboardPage() {
         <>
           {/* Riga filtri: scopa tutto ciò che sta sotto */}
           <div className="mb-6 flex items-center gap-3 max-lg:flex-wrap">
-            {showOrgFilter && (
-              <>
-                <label htmlFor="dashboard-org-filter" className="text-xs font-medium tracking-wide text-slate-400">
-                  Organizzazione
-                </label>
-                <Select
-                  id="dashboard-org-filter"
-                  className="min-w-[220px]"
-                  value={orgFilter}
-                  onChange={(value) => {
-                    setOrgFilter(value);
-                    setSelectedUserId('');
-                  }}
-                  options={orgFilterOptions}
-                />
-              </>
-            )}
             <label htmlFor="dashboard-user-filter" className="text-xs font-medium tracking-wide text-slate-400">
               Utente
             </label>

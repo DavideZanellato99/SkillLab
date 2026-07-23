@@ -372,9 +372,9 @@ class AdminAvatarPayload(BaseModel):
     # Empty → the backend generates an initials placeholder image
     image_url: str | None = None
     voice_id: str | None = None
-    # Owning tenant, or null for a global persona shared with every
-    # organization. Only the super admin sets this.
-    organization_id: UUID | None = None
+    # Owning tenant: every avatar belongs to exactly one organization.
+    # Required — only the super admin sets this.
+    organization_id: UUID
     profile: dict
 
 
@@ -388,8 +388,8 @@ class AdminAvatarResponse(BaseModel):
     description: str | None = None
     voice_id: str | None = None
     difficulty: str | None = None
-    organization_id: UUID | None = None
-    organization_name: str | None = None
+    organization_id: UUID
+    organization_name: str
     profile: dict
     created_at: datetime
     conversation_count: int = 0

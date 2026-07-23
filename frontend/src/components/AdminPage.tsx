@@ -161,7 +161,6 @@ const STATUS_ACTIONS: Record<UserStatus, StatusAction> = {
 
 const USER_COLUMNS: DataTableColumn[] = [
   { key: 'utente', label: 'Utente' },
-  { key: 'email', label: 'Email' },
   { key: 'organizzazione', label: 'Organizzazione' },
   { key: 'ruolo', label: 'Ruolo' },
   { key: 'stato', label: 'Stato' },
@@ -528,12 +527,14 @@ export default function AdminPage() {
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
                       {getInitials(u.nome, u.cognome, u.email)}
                     </div>
-                    <span className="font-semibold text-slate-100">
-                      {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-100">
+                        {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}
+                      </span>
+                      <span className="text-[0.75rem] text-slate-500">{u.email}</span>
+                    </div>
                   </div>
                 </Td>
-                <Td><span className="text-slate-400">{u.email}</span></Td>
                 <Td>
                   {u.organization_name ? (
                     <span className="text-[0.85rem] text-slate-300">{u.organization_name}</span>

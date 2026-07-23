@@ -16,6 +16,8 @@ interface SelectProps {
   onChange: (value: string) => void;
   options: SelectOption[];
   disabled?: boolean;
+  /** Testo mostrato sul pulsante quando nulla è selezionato (non è un'opzione della lista) */
+  placeholder?: string;
   /** Classi extra sul wrapper (es. larghezza) */
   className?: string;
 }
@@ -26,6 +28,7 @@ export default function Select({
   onChange,
   options,
   disabled = false,
+  placeholder,
   className = '',
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -130,7 +133,9 @@ export default function Select({
             : 'border-white/6 hover:border-white/12'
         }`}
       >
-        <span className="truncate">{selected?.label ?? '—'}</span>
+        <span className={`truncate ${selected ? '' : 'text-slate-500'}`}>
+          {selected?.label ?? placeholder ?? '—'}
+        </span>
         <svg
           width="14"
           height="14"

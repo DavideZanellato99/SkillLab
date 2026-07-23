@@ -62,8 +62,9 @@ with engine.begin() as _conn:
         text("ALTER TABLE conversation_recordings ALTER COLUMN audio SET STORAGE EXTERNAL")
     )
     # Multi-tenant columns (the organizations table itself is created by
-    # create_all above). Nullable on both: NULL means "super admin" on users
-    # and "global persona" on avatars.
+    # create_all above). Added nullable here; avatars.organization_id is
+    # locked down to NOT NULL further below after any legacy rows are adopted.
+    # On users NULL still means "super admin".
     _conn.execute(
         text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id)"
@@ -107,8 +108,6 @@ with SessionLocal() as _db:
 # Multi-tenant backfill: every pre-existing non-super-admin user must belong
 # to an organization. Create a default tenant once and adopt the orphans
 # into it (idempotent: it only touches users still without an organization).
-# Existing avatars keep organization_id NULL on purpose — the old shared
-# library becomes the global one, visible to every tenant.
 from models import ROLE_SUPER_ADMIN, Organization, Role
 
 with SessionLocal() as _db:
@@ -132,6 +131,28 @@ with SessionLocal() as _db:
             .update({User.organization_id: _default_org.id}, synchronize_session=False)
         )
         _db.commit()
+
+# Global avatars are no longer supported: every avatar must belong to exactly
+# one organization. Adopt any legacy avatar with organization_id NULL into the
+# sole existing organization, then lock the column down to NOT NULL. Idempotent
+# and defensive: it only assigns when exactly one organization exists, and only
+# sets NOT NULL once no orphan avatar rows remain.
+with SessionLocal() as _db:
+    _orphan_avatars = _db.query(Avatar).filter(Avatar.organization_id.is_(None)).count()
+    if _orphan_avatars:
+        _orgs = _db.query(Organization).all()
+        if len(_orgs) == 1:
+            (
+                _db.query(Avatar)
+                .filter(Avatar.organization_id.is_(None))
+                .update({Avatar.organization_id: _orgs[0].id}, synchronize_session=False)
+            )
+            _db.commit()
+    _remaining = _db.query(Avatar).filter(Avatar.organization_id.is_(None)).count()
+
+if _remaining == 0:
+    with engine.begin() as _conn:
+        _conn.execute(text("ALTER TABLE avatars ALTER COLUMN organization_id SET NOT NULL"))
 
 app = FastAPI(
     title="SkillLab — Avatar Selection API",

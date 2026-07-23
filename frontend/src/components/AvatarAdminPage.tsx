@@ -43,7 +43,7 @@ const sectionTitleCls =
 
 const AVATAR_COLUMNS: DataTableColumn[] = [
   { key: 'avatar', label: 'Avatar' },
-  { key: 'ambito', label: 'Ambito' },
+  { key: 'organizzazione', label: 'Organizzazione' },
   { key: 'categoria', label: 'Categoria' },
   { key: 'difficolta', label: 'Difficoltà' },
   { key: 'conversazioni', label: 'Conversazioni', align: 'center' },
@@ -181,7 +181,7 @@ interface FormState {
   description: string;
   imageUrl: string;
   voiceId: string;
-  /** '' means a global persona; otherwise the owning organization id. */
+  /** Required owning organization id. */
   organizationId: string;
   profile: Record<string, string>;
 }
@@ -196,7 +196,7 @@ function formFromAvatar(a: AdminAvatar): FormState {
     description: a.description ?? '',
     imageUrl: a.image_url,
     voiceId: a.voice_id ?? '',
-    organizationId: a.organization_id ?? '',
+    organizationId: a.organization_id,
     profile: { ...emptyProfile(), ...a.profile },
   };
 }
@@ -223,11 +223,8 @@ export default function AvatarAdminPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [search, setSearch] = useState('');
 
-  // Scope options: a global persona (no org) plus one entry per organization
-  const orgScopeOptions = [
-    { value: '', label: 'Globale (tutte le organizzazioni)' },
-    ...organizations.map((o) => ({ value: o.id, label: o.name })),
-  ];
+  // Owning organization options: every avatar belongs to exactly one
+  const orgScopeOptions = organizations.map((o) => ({ value: o.id, label: o.name }));
 
   const visibleAvatars = avatars.filter((a) =>
     matchesSearch(search, a.name, a.description, a.category, a.difficulty),
@@ -292,6 +289,10 @@ export default function AvatarAdminPage() {
       setFormError('La scheda deve contenere almeno il nome o il cognome del cliente.');
       return;
     }
+    if (!form.organizationId) {
+      setFormError('Seleziona l\'organizzazione proprietaria dell\'avatar.');
+      return;
+    }
     setFormError('');
     setIsSaving(true);
 
@@ -300,7 +301,7 @@ export default function AvatarAdminPage() {
       description: form.description.trim() || null,
       image_url: form.imageUrl.trim() || null,
       voice_id: form.voiceId.trim() || null,
-      organization_id: form.organizationId || null,
+      organization_id: form.organizationId,
       profile: form.profile,
     };
 
@@ -418,15 +419,9 @@ export default function AvatarAdminPage() {
                 </div>
               </Td>
               <Td>
-                {a.organization_id ? (
-                  <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2 py-0.5 text-[0.65rem] font-semibold text-cyan-400">
-                    {a.organization_name ?? 'Organizzazione'}
-                  </span>
-                ) : (
-                  <span className="rounded-full border border-violet-600/25 bg-violet-600/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-violet-400">
-                    Globale
-                  </span>
-                )}
+                <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2 py-0.5 text-[0.65rem] font-semibold text-cyan-400">
+                  {a.organization_name}
+                </span>
               </Td>
               <Td>
                 <span className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${categoryBadgeClasses(a.category)}`}>
@@ -517,16 +512,17 @@ export default function AvatarAdminPage() {
                 />
               </div>
               <div className={fieldCls}>
-                <label className={labelCls} htmlFor="av-org">Ambito (organizzazione proprietaria)</label>
+                <label className={labelCls} htmlFor="av-org">Organizzazione proprietaria</label>
                 <Select
                   id="av-org"
                   value={form.organizationId}
                   onChange={(value) => setForm((p) => ({ ...p, organizationId: value }))}
                   options={orgScopeOptions}
+                  placeholder="Seleziona organizzazione…"
                   disabled={isSaving}
                 />
                 <p className="text-[0.7rem] text-slate-500">
-                  «Globale» rende la persona visibile a ogni organizzazione; altrimenti resta privata di quella scelta.
+                  L'avatar è privato dell'organizzazione scelta e visibile solo ai suoi utenti.
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-3 max-[600px]:grid-cols-1">

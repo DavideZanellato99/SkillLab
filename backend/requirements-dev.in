@@ -1,0 +1,29 @@
+# Development and CI tooling — not installed in the runtime Docker image.
+# Human-edited source; the pinned, hashed lock lives in requirements-dev.txt.
+#
+# The runtime lock (requirements.txt) is generated with --generate-hashes, so
+# `pip install -r requirements.txt -r requirements-dev.txt` runs in pip's
+# --require-hashes mode: EVERY package, dev tools included, must be pinned and
+# hashed. That is why this file is compiled too.
+#
+# `-c requirements.txt` constrains shared transitive deps (httpx, certifi...)
+# to the exact versions in the runtime lock, so the two files never disagree.
+#
+# Regenerate from inside the runtime image after any change here:
+#
+#   docker run --rm -v "$PWD":/w -w /w python:3.12-slim sh -c \
+#     "pip install pip-tools && \
+#      pip-compile --generate-hashes --allow-unsafe requirements-dev.in"
+#
+# --allow-unsafe pins setuptools/pip too: pip-tools pulls in setuptools, and
+# under --require-hashes even that has to be pinned and hashed.
+#
+-c requirements.txt
+
+pytest
+pytest-cov
+httpx
+ruff
+mypy
+pip-audit
+pip-tools

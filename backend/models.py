@@ -367,6 +367,42 @@ class ConversationRecording(Base):
         return f"<ConversationRecording(conversation_id={self.conversation_id}, size_bytes={self.size_bytes})>"
 
 
+class TrainingAssignment(Base):
+    """A training goal assigned to a user: reach target_score with one
+    avatar, optionally within a deadline.
+
+    Completion is never stored: it is derived at read time from the
+    evaluations of the conversations the user opened AFTER the assignment
+    was created (see routers/training.py), so re-judging or deleting a
+    conversation can never leave a stale completion flag behind. The DB
+    cascades take the assignment away with its user or its avatar.
+    """
+
+    __tablename__ = "training_assignments"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    avatar_id = Column(
+        Uuid, ForeignKey("avatars.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Admin who handed out the goal (informational)
+    assigned_by_id = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    target_score = Column(Float, nullable=False)
+    due_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+
+    user = relationship("User", foreign_keys=[user_id])
+    avatar = relationship("Avatar")
+
+    def __repr__(self):
+        return (
+            f"<TrainingAssignment(id={self.id}, user_id={self.user_id}, "
+            f"avatar_id={self.avatar_id}, target_score={self.target_score})>"
+        )
+
+
 class ChatMessage(Base):
     """Stores a single message in a chat conversation."""
 

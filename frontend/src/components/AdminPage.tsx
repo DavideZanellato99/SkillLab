@@ -7,6 +7,7 @@ import { isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../s
 import type { AuthUser, RoleName, UserStatus } from '../services/auth';
 import Select from './Select';
 import DataTable, { Td, Tr } from './DataTable';
+import DetailModal, { DetailField } from './DetailModal';
 import Tooltip from './Tooltip';
 import KebabMenu from './KebabMenu';
 import { matchesSearch } from './tableSearch';
@@ -213,6 +214,9 @@ export default function AdminPage() {
   const [orgId, setOrgId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Detail view (clic sulla riga): utente in sola lettura
+  const [viewingUser, setViewingUser] = useState<AuthUser | null>(null);
 
   // Edit form states
   const [editingUser, setEditingUser] = useState<AuthUser | null>(null);
@@ -521,7 +525,11 @@ export default function AdminPage() {
             });
 
             return (
-              <Tr key={u.id} className={isActive ? '' : 'opacity-60'}>
+              <Tr
+                key={u.id}
+                className={`cursor-pointer ${isActive ? '' : 'opacity-60'}`}
+                onClick={() => setViewingUser(u)}
+              >
                 <Td>
                   <div className="flex items-center gap-4">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
@@ -561,7 +569,7 @@ export default function AdminPage() {
                     })}
                   </span>
                 </Td>
-                <Td>
+                <Td onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-2">
                     <Tooltip content="Modifica utente">
                       <button
@@ -609,6 +617,63 @@ export default function AdminPage() {
             );
           })}
         </DataTable>
+      )}
+
+      {/* Dettaglio Utente (clic sulla riga) */}
+      {viewingUser && (
+        <DetailModal
+          onClose={() => setViewingUser(null)}
+          title={
+            viewingUser.nome && viewingUser.cognome
+              ? `${viewingUser.nome} ${viewingUser.cognome}`
+              : viewingUser.email
+          }
+          subtitle={viewingUser.email}
+          header={
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-sm font-bold text-white">
+              {getInitials(viewingUser.nome, viewingUser.cognome, viewingUser.email)}
+            </div>
+          }
+        >
+          <DetailField label="Nome">{viewingUser.nome || '—'}</DetailField>
+          <DetailField label="Cognome">{viewingUser.cognome || '—'}</DetailField>
+          <DetailField label="Email">{viewingUser.email}</DetailField>
+          <DetailField label="Organizzazione">
+            {viewingUser.organization_name ?? (
+              <span className="italic text-slate-500">Nessuna (super admin)</span>
+            )}
+          </DetailField>
+          <DetailField label="Ruolo">
+            <span className={`inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[viewingUser.ruolo] ?? ''}`}>
+              {ROLE_LABELS[viewingUser.ruolo] ?? viewingUser.ruolo}
+            </span>
+          </DetailField>
+          <DetailField label="Stato">
+            <span className={`inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[viewingUser.status] ?? ''}`}>
+              {STATUS_LABELS[viewingUser.status] ?? viewingUser.status}
+            </span>
+          </DetailField>
+          <DetailField label="Data creazione">
+            {new Date(viewingUser.created_at).toLocaleString('it-IT', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </DetailField>
+          <DetailField label="Ultimo aggiornamento">
+            {new Date(viewingUser.updated_at).toLocaleString('it-IT', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </DetailField>
+          <DetailField label="ID utente" mono>{viewingUser.id}</DetailField>
+          <DetailField label="Cognito Sub" mono>{viewingUser.cognito_sub}</DetailField>
+        </DetailModal>
       )}
 
       {/* Modal Creazione Utente */}

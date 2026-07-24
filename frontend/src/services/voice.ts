@@ -55,3 +55,26 @@ export const fetchRecordingInfo = (conversationId: string) =>
 /** The audio itself, for an <audio> element via URL.createObjectURL. */
 export const fetchRecordingBlob = (conversationId: string) =>
   apiFetchBlob(`/api/voice/recording/${conversationId}`);
+
+/* Come the citation chips of the evaluation, a cited call message must be
+ * heard, not only read. The recording has no per-message markers, so the
+ * moment is estimated from the timestamps: the recording ends when its row
+ * is written (upload happens on hang-up), so it starts about created_at
+ * minus duration. A message's created_at lands near the END of the spoken
+ * turn (STT commit for the operator, LLM completion for the avatar), so a
+ * fixed rewind puts the start of the cited utterance back into earshot. */
+const CITATION_REWIND_MS = 8000;
+
+/**
+ * Estimated position (ms) in the recording where the cited message can be
+ * heard, or null when the recording carries no measured duration.
+ */
+export function estimateCitationSeekMs(
+  info: VoiceRecordingInfo,
+  messageCreatedAt: string,
+): number | null {
+  if (info.duration_ms === null) return null;
+  const recordingStart = new Date(info.created_at).getTime() - info.duration_ms;
+  const offset = new Date(messageCreatedAt).getTime() - recordingStart;
+  return Math.max(0, Math.min(offset - CITATION_REWIND_MS, info.duration_ms));
+}

@@ -1,8 +1,12 @@
-import type { ConversationEvaluation } from '../services/api';
+import type { ConversationEvaluation, EvaluationCitation } from '../services/api';
 
 /* Corpo della valutazione AI: punteggio complessivo, punteggi per criterio e
  * spunti di miglioramento. Usato sia dalla EvaluationModal post-chiamata sia
- * dal dettaglio conversazione della dashboard admin. */
+ * dal dettaglio conversazione della dashboard admin.
+ *
+ * Ogni criterio può citare i messaggi su cui il giudizio si fonda: le chip
+ * compaiono solo se chi ospita il report passa onCitationClick, perché senza
+ * una trascrizione da raggiungere il numero da solo non dice nulla. */
 
 function scoreTextColor(score: number): string {
   if (score >= 7) return 'text-emerald-400';
@@ -20,7 +24,48 @@ function formatScore(score: number): string {
   return score.toLocaleString('it-IT', { maximumFractionDigits: 1 });
 }
 
-export default function EvaluationReport({ evaluation }: { evaluation: ConversationEvaluation }) {
+/* Variazione rispetto al tentativo precedente sullo stesso scenario: verde
+ * se in miglioramento, rossa se in peggioramento, neutra se invariata. */
+function DeltaBadge({ delta }: { delta: number }) {
+  const rounded = Math.round(delta * 10) / 10;
+  const cls =
+    rounded > 0
+      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+      : rounded < 0
+        ? 'border-red-500/30 bg-red-500/10 text-red-400'
+        : 'border-white/10 bg-white/5 text-slate-500';
+  const label =
+    rounded > 0
+      ? `▲ +${formatScore(rounded)}`
+      : rounded < 0
+        ? `▼ −${formatScore(Math.abs(rounded))}`
+        : '=';
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-px text-[0.68rem] font-semibold ${cls}`}
+      title="Variazione rispetto al tentativo precedente"
+    >
+      {label}
+    </span>
+  );
+}
+
+interface EvaluationReportProps {
+  evaluation: ConversationEvaluation;
+  /** Porta la trascrizione sul messaggio citato; abilita le chip. */
+  onCitationClick?: (citation: EvaluationCitation) => void;
+  /** Fa ripartire la registrazione dal momento citato; aggiunge il tasto
+   *  di ascolto alle chip (solo chiamate con registrazione). */
+  onCitationPlay?: (citation: EvaluationCitation) => void;
+}
+
+export default function EvaluationReport({
+  evaluation,
+  onCitationClick,
+  onCitationPlay,
+}: EvaluationReportProps) {
+  const previous = evaluation.previous ?? null;
+
   return (
     <>
       {/* Overall score */}
@@ -34,6 +79,19 @@ export default function EvaluationReport({ evaluation }: { evaluation: Conversat
           </span>
           <span className="text-lg text-slate-500">/ 10</span>
         </div>
+        {previous && (
+          <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5 px-6 text-xs text-slate-500">
+            <DeltaBadge delta={evaluation.overall_score - previous.overall_score} />
+            <span>
+              rispetto a «{previous.title}» del{' '}
+              {new Date(previous.conversation_at).toLocaleDateString('it-IT', {
+                day: '2-digit',
+                month: 'short',
+              })}{' '}
+              ({formatScore(previous.overall_score)} / 10)
+            </span>
+          </div>
+        )}
         {evaluation.summary && (
           <p className="mt-2 max-w-[480px] px-6 text-center text-[0.85rem] leading-relaxed text-slate-400">
             {evaluation.summary}
@@ -43,12 +101,19 @@ export default function EvaluationReport({ evaluation }: { evaluation: Conversat
 
       {/* Per-criterion scores */}
       <div className="flex flex-col gap-4">
-        {evaluation.criteria.map((criterion) => (
+        {evaluation.criteria.map((criterion) => {
+          const previousScore = previous?.criteria_scores[criterion.key];
+          return (
           <div key={criterion.key} className="rounded-2xl border border-white/6 bg-slate-800/40 p-4">
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className="text-sm font-semibold text-slate-100">{criterion.label}</span>
-              <span className={`shrink-0 text-sm font-bold ${scoreTextColor(criterion.score)}`}>
-                {formatScore(criterion.score)} / 10
+              <span className="flex shrink-0 items-center gap-1.5">
+                {previousScore !== undefined && (
+                  <DeltaBadge delta={criterion.score - previousScore} />
+                )}
+                <span className={`text-sm font-bold ${scoreTextColor(criterion.score)}`}>
+                  {formatScore(criterion.score)} / 10
+                </span>
               </span>
             </div>
             <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-white/6">
@@ -59,6 +124,39 @@ export default function EvaluationReport({ evaluation }: { evaluation: Conversat
             </div>
             {criterion.comment && (
               <p className="text-[0.82rem] leading-relaxed text-slate-400">{criterion.comment}</p>
+            )}
+            {onCitationClick && criterion.citations && criterion.citations.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-slate-500">
+                  Momenti citati
+                </span>
+                {criterion.citations.map((citation) => (
+                  <span
+                    key={citation.index}
+                    className="inline-flex items-center overflow-hidden rounded-full border border-violet-500/30 bg-violet-500/10 text-[0.72rem] font-medium text-violet-300"
+                  >
+                    <button
+                      className="cursor-pointer border-none bg-transparent px-2.5 py-0.5 text-inherit transition hover:bg-violet-500/20"
+                      onClick={() => onCitationClick(citation)}
+                      title="Vai al messaggio nella trascrizione"
+                    >
+                      Messaggio {citation.index}
+                    </button>
+                    {onCitationPlay && (
+                      <button
+                        className="cursor-pointer border-y-0 border-l border-r-0 border-solid border-violet-500/30 bg-transparent py-0.5 pl-1.5 pr-2 text-inherit transition hover:bg-violet-500/20"
+                        onClick={() => onCitationPlay(citation)}
+                        aria-label={`Ascolta il messaggio ${citation.index} nella registrazione`}
+                        title="Ascolta questo momento nella registrazione"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
             )}
             {criterion.suggestions && (
               <div className="mt-3 rounded-xl border border-cyan-500/25 bg-cyan-500/8 px-4 py-3">
@@ -74,7 +172,8 @@ export default function EvaluationReport({ evaluation }: { evaluation: Conversat
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <p className="mt-6 text-center text-[0.7rem] text-slate-500">

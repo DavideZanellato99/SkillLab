@@ -133,6 +133,18 @@ class ChatMessageExchange(BaseModel):
     assistant_message: ChatMessageResponse
 
 
+class EvaluationCitation(BaseModel):
+    """One transcript message cited by the AI judge as evidence for a criterion.
+
+    `index` is the 1-based position in the evaluated transcript;
+    `message_id` anchors it to the stored message when one exists (live
+    voice bubbles cited before the DB sync may only have the index).
+    """
+
+    index: int
+    message_id: UUID | None = None
+
+
 class EvaluationCriterionResponse(BaseModel):
     """Score and feedback for a single evaluation criterion."""
 
@@ -142,6 +154,26 @@ class EvaluationCriterionResponse(BaseModel):
     comment: str
     # Improvement suggestions, present only when score < 8
     suggestions: str | None = None
+    # Transcript messages the judgment rests on (empty for evaluations
+    # stored before citations existed)
+    citations: list[EvaluationCitation] = []
+
+
+class PreviousAttempt(BaseModel):
+    """The user's previous evaluated attempt at the same scenario.
+
+    Same user, same avatar, closest earlier conversation that has an
+    evaluation: the baseline the current one is compared against, so the
+    operator sees progress per criterion instead of an isolated verdict.
+    """
+
+    conversation_id: UUID
+    title: str
+    mode: str
+    conversation_at: datetime
+    overall_score: float
+    # Criterion key -> score of the previous attempt (the UI computes deltas)
+    criteria_scores: dict[str, float]
 
 
 class ConversationEvaluationResponse(BaseModel):
@@ -152,8 +184,53 @@ class ConversationEvaluationResponse(BaseModel):
     overall_score: float
     summary: str
     criteria: list[EvaluationCriterionResponse]
+    # None on the first evaluated attempt at this scenario
+    previous: PreviousAttempt | None = None
     created_at: datetime
     updated_at: datetime
+
+
+# Derived state of a training assignment (see routers/training.py)
+ASSIGNMENT_STATUS_ACTIVE = "active"
+ASSIGNMENT_STATUS_OVERDUE = "overdue"
+ASSIGNMENT_STATUS_COMPLETED = "completed"
+ASSIGNMENT_STATUS_COMPLETED_LATE = "completed_late"
+
+
+class TrainingAssignmentCreate(BaseModel):
+    """Super admin request: assign one avatar as a goal to one or more users."""
+
+    avatar_id: UUID
+    user_ids: list[UUID] = Field(min_length=1)
+    target_score: float = Field(ge=1, le=10)
+    due_at: datetime | None = None
+
+
+class TrainingAssignmentResponse(BaseModel):
+    """One assigned goal with its progress, derived from the evaluations.
+
+    status: "active" (still open), "overdue" (deadline passed without
+    reaching the target), "completed", or "completed_late" (target reached
+    after the deadline). Only conversations opened after the assignment
+    count: attempts, best_score and achieved_at all follow that rule.
+    """
+
+    id: UUID
+    user_id: UUID
+    user_name: str
+    user_email: str
+    organization_id: UUID | None = None
+    organization_name: str | None = None
+    avatar_id: UUID
+    avatar_name: str
+    avatar_category: str
+    target_score: float
+    due_at: datetime | None = None
+    created_at: datetime
+    status: str
+    attempts: int
+    best_score: float | None = None
+    achieved_at: datetime | None = None
 
 
 class ChatConversationSummary(BaseModel):

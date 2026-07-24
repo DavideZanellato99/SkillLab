@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdmin } from '../services/auth';
-import type { ChatMessage, ChatConversationSummary } from '../services/api';
+import type { ChatMessage, ChatConversationSummary, EvaluationCitation } from '../services/api';
 import { getAvatarImageUrl } from '../services/api';
+import { fetchRecordingInfo, estimateCitationSeekMs } from '../services/voice';
 import {
   useAvatar,
   useConversations,
@@ -18,6 +19,7 @@ import {
 } from '../hooks/useApi';
 import VoiceButton from './VoiceButton';
 import CallRecordingPlayer from './CallRecordingPlayer';
+import type { CallRecordingPlayerHandle } from './CallRecordingPlayer';
 import EvaluationModal from './EvaluationModal';
 import ConversationModeBadge from './ConversationModeBadge';
 import MessageEmotions, { splitEmotionTag } from './MessageEmotions';
@@ -82,6 +84,9 @@ export default function ChatPage() {
   const [chatStarted, setChatStarted] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  // Id of the avatar bubble growing with the streamed reply; null before
+  // the first fragment (the typing dots cover that wait) and at rest
+  const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
 
   // ── Local state ───────────────────────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -102,6 +107,20 @@ export default function ChatPage() {
   const renameCancelled = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ── Evaluation citations → transcript and recording ──
+  // The "Messaggio n" chips of the evaluation close the modal and land
+  // here, on the cited message; for calls also on the audio.
+  const messageNodes = useRef(new Map<string, HTMLDivElement>());
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingPlayerRef = useRef<CallRecordingPlayerHandle>(null);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    };
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -187,28 +206,57 @@ export default function ChatPage() {
       chatInputRef.current.focus();
     }
 
-    // Show the operator's message straight away; the reply joins it when
-    // the LLM answers. The placeholder id is swapped for the stored one.
+    // Show the operator's message straight away; the reply streams into a
+    // bubble of its own from the first fragment on. Both placeholder ids
+    // are swapped for the stored messages when the exchange is persisted.
     const pendingId = `chat-${crypto.randomUUID()}`;
+    const streamId = `stream-${crypto.randomUUID()}`;
+    let streamStarted = false;
     setMessages((prev) => [
       ...prev,
       { id: pendingId, role: 'user', content, created_at: new Date().toISOString() },
     ]);
 
     sendMessageMutation.mutate(
-      { avatarId, conversationId: currentConversationId, content },
+      {
+        avatarId,
+        conversationId: currentConversationId,
+        content,
+        onDelta: (text) => {
+          if (!streamStarted) {
+            streamStarted = true;
+            setStreamingReplyId(streamId);
+            setMessages((prev) => [
+              ...prev,
+              { id: streamId, role: 'assistant', content: text, created_at: new Date().toISOString() },
+            ]);
+          } else {
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === streamId ? { ...msg, content: msg.content + text } : msg)),
+            );
+          }
+        },
+      },
       {
         onSuccess: (exchange) => {
-          setMessages((prev) => [
-            ...prev.map((msg) => (msg.id === pendingId ? exchange.user_message : msg)),
-            exchange.assistant_message,
-          ]);
+          setStreamingReplyId(null);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === pendingId
+                ? exchange.user_message
+                : msg.id === streamId
+                  ? exchange.assistant_message
+                  : msg,
+            ),
+          );
           setCurrentConversationId((prev) => prev ?? exchange.conversation_id);
         },
         onError: (err) => {
-          // Nothing was written server-side: take the message back out of
-          // the transcript and return it to the composer to retry
-          setMessages((prev) => prev.filter((msg) => msg.id !== pendingId));
+          // Nothing was written server-side: take the message (and the
+          // half-streamed reply) back out and return the text to the
+          // composer to retry
+          setStreamingReplyId(null);
+          setMessages((prev) => prev.filter((msg) => msg.id !== pendingId && msg.id !== streamId));
           setChatInput(content);
           setError(
             err instanceof Error
@@ -394,6 +442,74 @@ export default function ChatPage() {
   // After a session the modal offers to replace the automatic name. Without
   // an id there is nothing to save a new name to, so the field is hidden.
   const renamableTitle = isPostSession && currentConversationId ? currentTitle : null;
+
+  // Same query (and same cache) as the dock player: used to estimate the
+  // point of the recording a cited message falls at.
+  const { data: recordingInfo } = useQuery({
+    queryKey: ['recording-info', currentConversationId],
+    queryFn: () => fetchRecordingInfo(currentConversationId!),
+    enabled: currentConversationId !== null && currentMode === 'voice' && isConversationClosed,
+  });
+
+  // A citation's index is its 1-based position in the evaluated
+  // transcript, which matches the stored message order: the id is the
+  // primary anchor, the index the fallback (bubbles of a call that just
+  // ended can still carry local ids).
+  const resolveCitation = useCallback(
+    (citation: EvaluationCitation): ChatMessage | null =>
+      messages.find((m) => m.id === citation.message_id) ?? messages[citation.index - 1] ?? null,
+    [messages],
+  );
+
+  const flashMessage = useCallback((message: ChatMessage) => {
+    messageNodes.current.get(message.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMessageId(message.id);
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightedMessageId(null), 2500);
+  }, []);
+
+  // The chip closes the modal: the transcript to reach sits underneath
+  const handleCitationClick = useCallback(
+    (citation: EvaluationCitation) => {
+      const message = resolveCitation(citation);
+      if (!message) return;
+      setShowEvaluation(false);
+      flashMessage(message);
+    },
+    [resolveCitation, flashMessage],
+  );
+
+  const canPlayCitations =
+    currentMode === 'voice' &&
+    isConversationClosed &&
+    recordingInfo != null &&
+    recordingInfo.duration_ms !== null;
+
+  const handleCitationPlay = useCallback(
+    (citation: EvaluationCitation) => {
+      const message = resolveCitation(citation);
+      if (!message || !recordingInfo) return;
+      setShowEvaluation(false);
+      flashMessage(message);
+      const seekMs = estimateCitationSeekMs(recordingInfo, message.created_at);
+      if (seekMs !== null) recordingPlayerRef.current?.seekToMs(seekMs);
+    },
+    [resolveCitation, recordingInfo, flashMessage],
+  );
+
+  // Restart the same scenario at once: fresh conversation with the same
+  // avatar, and for a chat the composer opens ready to type (a call still
+  // waits for the Chiama press, the mic must not start from a modal). The
+  // next evaluation will carry the deltas against the one just read.
+  const handleRetryScenario = () => {
+    const wasText = currentMode === 'text';
+    setShowEvaluation(false);
+    setIsPostSession(false);
+    evaluateMutation.reset();
+    renameConversationMutation.reset();
+    handleNewConversation();
+    if (wasText) handleStartChat();
+  };
 
   // ── Render guards ─────────────────────────────────
 
@@ -681,6 +797,10 @@ export default function ChatPage() {
             return (
               <div
                 key={msg.id}
+                ref={(node) => {
+                  if (node) messageNodes.current.set(msg.id, node);
+                  else messageNodes.current.delete(msg.id);
+                }}
                 className={`flex max-w-[75%] animate-message-in gap-2 max-[900px]:max-w-[90%] ${
                   msg.role === 'user' ? 'flex-row-reverse self-end' : 'self-start'
                 }`}
@@ -692,10 +812,14 @@ export default function ChatPage() {
                   </div>
                 )}
                 <div
-                  className={`relative rounded-2xl px-6 py-4 leading-relaxed ${
+                  className={`relative rounded-2xl px-6 py-4 leading-relaxed transition-shadow duration-300 ${
                     msg.role === 'user'
                       ? 'rounded-br-[4px] bg-gradient-to-br from-violet-600 to-violet-700 text-white'
                       : 'rounded-bl-[4px] border border-white/6 bg-slate-800/70 text-slate-100 backdrop-blur-md'
+                  } ${
+                    msg.id === highlightedMessageId
+                      ? 'shadow-[0_0_0_2px_rgba(34,211,238,0.7),0_0_24px_rgba(34,211,238,0.35)]'
+                      : ''
                   }`}
                 >
                   <p className="whitespace-pre-wrap break-words text-sm">{text}</p>
@@ -708,8 +832,9 @@ export default function ChatPage() {
             );
           })}
 
-          {/* The avatar composing its written reply */}
-          {sendMessageMutation.isPending && (
+          {/* The avatar composing its written reply: only until the first
+              streamed fragment arrives, then the growing bubble takes over */}
+          {sendMessageMutation.isPending && streamingReplyId === null && (
             <div className="flex max-w-[75%] animate-message-in gap-2 self-start">
               <div className="mt-1 h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-white/6">
                 <img className="h-full w-full object-cover" src={getAvatarImageUrl(avatar.image_url)} alt={avatar.name} />
@@ -752,7 +877,7 @@ export default function ChatPage() {
               </p>
               {/* Calls leave an audio recording behind; chats do not */}
               {currentMode === 'voice' && currentConversationId && (
-                <CallRecordingPlayer conversationId={currentConversationId} />
+                <CallRecordingPlayer ref={recordingPlayerRef} conversationId={currentConversationId} />
               )}
               <button
                 className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400"
@@ -885,6 +1010,9 @@ export default function ChatPage() {
             onRetry={() => currentConversationId && runEvaluation(currentConversationId)}
             currentTitle={renamableTitle}
             onSubmitTitle={handleSubmitTitle}
+            onCitationClick={handleCitationClick}
+            onCitationPlay={canPlayCitations ? handleCitationPlay : undefined}
+            onRetryScenario={handleRetryScenario}
             isSavingTitle={renameConversationMutation.isPending}
             titleError={
               renameConversationMutation.error instanceof Error

@@ -59,6 +59,16 @@ export interface ChatConversation {
   messages: ChatMessage[];
 }
 
+/**
+ * One transcript message cited by the AI judge as evidence for a criterion.
+ * `index` is the 1-based position in the evaluated transcript; `message_id`
+ * anchors it to the stored message when one exists.
+ */
+export interface EvaluationCitation {
+  index: number;
+  message_id: string | null;
+}
+
 export interface EvaluationCriterion {
   key: string;
   label: string;
@@ -66,6 +76,23 @@ export interface EvaluationCriterion {
   comment: string;
   /** Improvement suggestions, present only when score < 8. */
   suggestions: string | null;
+  /** Messages the judgment rests on; empty for evaluations stored before citations existed. */
+  citations?: EvaluationCitation[];
+}
+
+/**
+ * The user's previous evaluated attempt at the same scenario (same avatar,
+ * closest earlier conversation with an evaluation): the baseline the
+ * current evaluation is compared against.
+ */
+export interface PreviousAttempt {
+  conversation_id: string;
+  title: string;
+  mode: ConversationMode;
+  conversation_at: string;
+  overall_score: number;
+  /** Criterion key -> score of the previous attempt. */
+  criteria_scores: Record<string, number>;
 }
 
 export interface ConversationEvaluation {
@@ -74,6 +101,8 @@ export interface ConversationEvaluation {
   overall_score: number;
   summary: string;
   criteria: EvaluationCriterion[];
+  /** Null on the first evaluated attempt at this scenario. */
+  previous?: PreviousAttempt | null;
   created_at: string;
   updated_at: string;
 }
@@ -231,19 +260,74 @@ export const renameConversation = (conversationId: string, title: string) =>
   });
 
 /**
- * Send one operator message in a text chat and get the avatar's reply.
- * Without a conversationId a new text conversation is opened, so the
- * operator writes first just as they speak first on a call.
+ * Send one operator message in a text chat and stream the avatar's reply.
+ *
+ * The endpoint answers in Server-Sent Events over the POST response (an
+ * EventSource cannot POST, so the stream is read by hand): `onDelta`
+ * receives each text fragment as the model produces it, and the promise
+ * resolves with the persisted exchange once the backend has stored both
+ * sides. Errors mid-stream reject the promise and nothing was persisted,
+ * so resending is always safe. Without a conversationId a new text
+ * conversation is opened, so the operator writes first just as they speak
+ * first on a call.
  */
-export const sendChatMessage = (
+export async function sendChatMessage(
   avatarId: string,
   conversationId: string | null,
   content: string,
-) =>
-  apiFetch<ChatMessageExchange>('/api/chat/message', {
+  onDelta: (text: string) => void,
+): Promise<ChatMessageExchange> {
+  const response = await apiRequest('/api/chat/message', {
     method: 'POST',
     body: { avatar_id: avatarId, conversation_id: conversationId, content },
   });
+  if (!response.body) {
+    throw new Error('Questo browser non supporta le risposte in streaming.');
+  }
+
+  let exchange: ChatMessageExchange | null = null;
+
+  // One "event: <name>\ndata: <json>" block per event, blank-line separated
+  const handleEventBlock = (block: string) => {
+    let event = 'message';
+    const dataLines: string[] = [];
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+    }
+    if (dataLines.length === 0) return;
+    const data: unknown = JSON.parse(dataLines.join('\n'));
+    if (event === 'delta') {
+      onDelta((data as { text: string }).text);
+    } else if (event === 'done') {
+      exchange = data as ChatMessageExchange;
+    } else if (event === 'error') {
+      throw new Error((data as { detail?: string }).detail ?? "Errore nella risposta dell'avatar.");
+    }
+  };
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let separator;
+    while ((separator = buffer.indexOf('\n\n')) !== -1) {
+      const block = buffer.slice(0, separator);
+      buffer = buffer.slice(separator + 2);
+      if (block.trim()) handleEventBlock(block);
+    }
+  }
+
+  // Connection dropped before the done event: the server persisted
+  // nothing, so resending the message is safe
+  if (!exchange) {
+    throw new Error('Risposta interrotta: invia di nuovo il messaggio.');
+  }
+  return exchange;
+}
 
 /** Close a text chat: the transcript becomes final, like hanging up a call. */
 export const endChatConversation = (conversationId: string) =>
@@ -263,6 +347,20 @@ export const evaluateConversation = (conversationId: string) =>
 /** Fetch the stored evaluation for a conversation; null if none exists yet. */
 export const fetchConversationEvaluation = (conversationId: string) =>
   apiFetch<ConversationEvaluation | null>(`/api/chat/conversation/${conversationId}/evaluation`);
+
+/** The stored evaluation as a PDF to hand to the trainer (owner only). */
+export const fetchEvaluationPdf = (conversationId: string) =>
+  apiFetchBlob(`/api/chat/conversation/${conversationId}/evaluation/pdf`);
+
+/** Hand a fetched file to the browser as a download. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 // =====================================================
 //  UTILS

@@ -120,7 +120,9 @@ export function useEvaluateConversation() {
 }
 
 /**
- * Send one operator message in a text chat and receive the avatar's reply.
+ * Send one operator message in a text chat and stream the avatar's reply:
+ * `onDelta` receives the text fragments as they arrive, the mutation
+ * resolves with the persisted exchange when the stream is over.
  *
  * The conversation list is invalidated on success: the exchange bumps the
  * message count and the preview, and the very first message also creates
@@ -134,11 +136,13 @@ export function useSendChatMessage() {
       avatarId,
       conversationId,
       content,
+      onDelta,
     }: {
       avatarId: string;
       conversationId: string | null;
       content: string;
-    }) => sendChatMessage(avatarId, conversationId, content),
+      onDelta: (text: string) => void;
+    }) => sendChatMessage(avatarId, conversationId, content, onDelta),
 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });

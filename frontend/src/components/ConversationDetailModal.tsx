@@ -1,14 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { fetchAdminConversation } from '../services/admin';
 import type { AdminConversationDetail, EvaluationReportRow } from '../services/admin';
+import type { ChatMessage, EvaluationCitation } from '../services/api';
+import { fetchRecordingInfo, estimateCitationSeekMs } from '../services/voice';
 import CallRecordingPlayer from './CallRecordingPlayer';
+import type { CallRecordingPlayerHandle } from './CallRecordingPlayer';
 import ConversationModeBadge from './ConversationModeBadge';
 import EvaluationReport from './EvaluationReport';
 import MessageEmotions, { splitEmotionTag } from './MessageEmotions';
 
 /* Dettaglio di una conversazione valutata, aperto dalla tabella della
  * dashboard admin: trascrizione completa a sinistra e valutazione AI (la
- * stessa mostrata all'utente a fine chiamata) a destra. */
+ * stessa mostrata all'utente a fine chiamata) a destra.
+ *
+ * I momenti citati dalla valutazione sono cliccabili: portano la
+ * trascrizione sul messaggio citato e, per le chiamate con registrazione,
+ * fanno ripartire l'audio dal punto stimato di quel momento. */
+
+/** Quanto resta acceso l'alone sul messaggio raggiunto da una citazione. */
+const CITATION_HIGHLIGHT_MS = 2500;
 
 const overlayCls =
   'fixed inset-0 z-[200] flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-lg [animation-duration:0.2s]';
@@ -40,6 +51,70 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+
+  // ── Citazioni della valutazione → trascrizione e registrazione ──
+  const messageNodes = useRef(new Map<string, HTMLDivElement>());
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playerRef = useRef<CallRecordingPlayerHandle>(null);
+
+  // Stessa query (e stessa cache) del player: serve qui per stimare il
+  // punto della registrazione in cui cade un messaggio citato.
+  const { data: recordingInfo } = useQuery({
+    queryKey: ['recording-info', row.conversation_id],
+    queryFn: () => fetchRecordingInfo(row.conversation_id),
+    enabled: row.mode === 'voice',
+  });
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    };
+  }, []);
+
+  // L'indice della citazione è la posizione (1-based) nella trascrizione
+  // valutata, che coincide con l'ordine dei messaggi salvati: l'id resta
+  // l'ancora primaria, l'indice il ripiego.
+  const resolveCitation = useCallback(
+    (citation: EvaluationCitation): ChatMessage | null => {
+      if (!detail) return null;
+      return (
+        detail.messages.find((m) => m.id === citation.message_id) ??
+        detail.messages[citation.index - 1] ??
+        null
+      );
+    },
+    [detail],
+  );
+
+  const flashMessage = useCallback((message: ChatMessage) => {
+    messageNodes.current.get(message.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMessageId(message.id);
+    if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightedMessageId(null), CITATION_HIGHLIGHT_MS);
+  }, []);
+
+  const handleCitationClick = useCallback(
+    (citation: EvaluationCitation) => {
+      const message = resolveCitation(citation);
+      if (message) flashMessage(message);
+    },
+    [resolveCitation, flashMessage],
+  );
+
+  const canPlayCitations =
+    row.mode === 'voice' && recordingInfo != null && recordingInfo.duration_ms !== null;
+
+  const handleCitationPlay = useCallback(
+    (citation: EvaluationCitation) => {
+      const message = resolveCitation(citation);
+      if (!message || !recordingInfo) return;
+      flashMessage(message);
+      const seekMs = estimateCitationSeekMs(recordingInfo, message.created_at);
+      if (seekMs !== null) playerRef.current?.seekToMs(seekMs);
+    },
+    [resolveCitation, recordingInfo, flashMessage],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +168,11 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
           </div>
           {/* Calls leave an audio recording behind; chats do not */}
           {row.mode === 'voice' && (
-            <CallRecordingPlayer conversationId={row.conversation_id} variant="inline" />
+            <CallRecordingPlayer
+              ref={playerRef}
+              conversationId={row.conversation_id}
+              variant="inline"
+            />
           )}
         </header>
 
@@ -137,13 +216,21 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
                     return (
                       <div
                         key={msg.id}
+                        ref={(node) => {
+                          if (node) messageNodes.current.set(msg.id, node);
+                          else messageNodes.current.delete(msg.id);
+                        }}
                         className={`flex max-w-[85%] ${msg.role === 'user' ? 'self-end' : 'self-start'}`}
                       >
                         <div
-                          className={`rounded-2xl px-4 py-3 leading-relaxed ${
+                          className={`rounded-2xl px-4 py-3 leading-relaxed transition-shadow duration-300 ${
                             msg.role === 'user'
                               ? 'rounded-br-[4px] bg-gradient-to-br from-violet-600 to-violet-700 text-white'
                               : 'rounded-bl-[4px] border border-white/6 bg-slate-800/70 text-slate-100'
+                          } ${
+                            msg.id === highlightedMessageId
+                              ? 'shadow-[0_0_0_2px_rgba(34,211,238,0.7),0_0_24px_rgba(34,211,238,0.35)]'
+                              : ''
                           }`}
                         >
                           <span
@@ -174,7 +261,11 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
               <h3 className={sectionTitleCls}>Valutazione</h3>
               <div className="max-h-[62vh] overflow-y-auto pr-1">
                 {detail.evaluation ? (
-                  <EvaluationReport evaluation={detail.evaluation} />
+                  <EvaluationReport
+                    evaluation={detail.evaluation}
+                    onCitationClick={handleCitationClick}
+                    onCitationPlay={canPlayCitations ? handleCitationPlay : undefined}
+                  />
                 ) : (
                   <p className="py-8 text-center text-sm text-slate-500">
                     Nessuna valutazione disponibile per questa conversazione.

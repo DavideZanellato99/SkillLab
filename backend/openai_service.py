@@ -142,14 +142,17 @@ async def prewarm_roleplay(avatar_profile: dict) -> None:
 async def stream_avatar_response(
     messages_history: list[dict],
     avatar_profile: dict,
+    channel: str = CHANNEL_VOICE,
 ):
     """
-    Stream a roleplay response as text chunks (async, used by the voice
-    pipeline). Every avatar is a training persona: avatar_profile is its
-    sheet (required). The last entry of messages_history must be the new
-    user message. Yields text fragments as soon as OpenAI produces them.
+    Stream a roleplay response as text chunks (async): the voice pipeline
+    reads it turn by turn, the text chat endpoint relays it as SSE. Every
+    avatar is a training persona: avatar_profile is its sheet (required).
+    The channel picks the persona prompt variant (call vs written chat).
+    The last entry of messages_history must be the new user message.
+    Yields text fragments as soon as OpenAI produces them.
     """
-    messages = _roleplay_messages(messages_history, avatar_profile, CHANNEL_VOICE)
+    messages = _roleplay_messages(messages_history, avatar_profile, channel)
 
     last_error: Exception | None = None
     for model in _candidate_models():
@@ -180,49 +183,6 @@ async def stream_avatar_response(
     raise RuntimeError(f"Errore nella comunicazione con OpenAI: {str(last_error)}")
 
 
-async def generate_avatar_reply(
-    messages_history: list[dict],
-    avatar_profile: dict,
-) -> str:
-    """
-    Generate one roleplay reply as a whole string (text chat mode).
-
-    Same persona and same fallback chain as the voice mode, but the reply
-    is not streamed: the chat endpoint answers a single HTTP request, so
-    there is nothing to stream it into. The last entry of messages_history
-    must be the new operator message. Raises RuntimeError on failure.
-    """
-    messages = _roleplay_messages(messages_history, avatar_profile, CHANNEL_TEXT)
-
-    last_error: Exception | None = None
-    for model in _candidate_models():
-        try:
-            response = await async_client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_completion_tokens=1024,
-                **_completion_kwargs(model),
-            )
-        except Exception as e:
-            if not _is_retryable(e):
-                print(f"[ERROR] OpenAI chat call failed ({model}): {e}")
-                raise RuntimeError(f"Errore nella comunicazione con OpenAI: {str(e)}")
-            print(f"[WARN] Modello {model} non disponibile, provo il successivo: {str(e)[:120]}")
-            last_error = e
-            continue
-
-        reply = (response.choices[0].message.content or "").strip() if response.choices else ""
-        if reply:
-            return reply
-        # An empty reply leaves the operator with nothing to answer to:
-        # treat it like an unavailable model and try the next one.
-        print(f"[WARN] Risposta vuota da {model}, provo il successivo")
-        last_error = RuntimeError("risposta vuota")
-
-    print(f"[ERROR] Tutti i modelli OpenAI non disponibili: {last_error}")
-    raise RuntimeError(f"Errore nella comunicazione con OpenAI: {str(last_error)}")
-
-
 # ── Post-call evaluation (operator coaching) ──────────
 
 # (key, label, weight%). The weights drive the overall score and must add
@@ -239,6 +199,9 @@ EVALUATION_CRITERIA = [
 
 # Below this score a criterion comes with improvement suggestions
 EVALUATION_SUGGESTION_THRESHOLD = 8
+
+# Most messages the judge can cite as evidence for one criterion
+EVALUATION_MAX_CITATIONS = 3
 
 # Scores live on a 1..10 scale: 0 is not a valid judgement, the floor is a
 # gravely insufficient performance, not the absence of one.
@@ -423,6 +386,9 @@ def _evaluation_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "l'operatore per comportamenti non osservabili.\n\n"
         f"La trascrizione è quella di una {contatto} di formazione tra un operatore in "
         f"addestramento e {cliente}, un cliente simulato.\n"
+        "Ogni messaggio della trascrizione è preceduto dal suo numero progressivo tra "
+        "parentesi quadre, ad esempio [3]: usa questi numeri per citare i momenti su cui "
+        "fondi il giudizio.\n"
         + nota_canale
         + "\n"
         # The scenario sheet is the trainer's answer key: it says what the case
@@ -470,6 +436,11 @@ def _evaluation_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         f"criterio è inferiore a {EVALUATION_SUGGESTION_THRESHOLD}.\n"
         f"- Se il punteggio del criterio è pari o superiore a {EVALUATION_SUGGESTION_THRESHOLD}, "
         '"suggestions" può essere una stringa vuota.\n'
+        f'- "citations" deve elencare da 1 a {EVALUATION_MAX_CITATIONS} numeri di messaggi '
+        "della trascrizione (i numeri tra parentesi quadre) che costituiscono l'evidenza più "
+        "chiara del punteggio assegnato al criterio, preferendo i messaggi dell'OPERATORE. "
+        "Scegli i momenti decisivi, nel bene o nel male. Può essere una lista vuota solo se "
+        "nessun messaggio specifico è rilevante per il criterio.\n"
         '- "overall_feedback" deve sintetizzare i principali punti di forza e le principali '
         "aree di miglioramento dell'operatore.\n"
         "- Scrivi tutto in italiano.\n\n"
@@ -477,7 +448,8 @@ def _evaluation_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "Restituisci esclusivamente un JSON valido, senza testo aggiuntivo prima o dopo, con "
         "questa struttura esatta:\n"
         '{"overall_score": 0.0, "overall_feedback": "", "criteria": '
-        '{"<chiave criterio>": {"score": 0.0, "comment": "", "suggestions": ""}}}\n'
+        '{"<chiave criterio>": {"score": 0.0, "comment": "", "suggestions": "", '
+        '"citations": [0]}}}\n'
         'L\'oggetto "criteria" deve contenere tutte e sei le chiavi elencate sopra.'
     )
 
@@ -487,7 +459,43 @@ def _clamp_score(value) -> float:
     return max(EVALUATION_MIN_SCORE, min(EVALUATION_MAX_SCORE, round(score, 1)))
 
 
-def _normalize_evaluation(raw: dict) -> dict:
+def _transcript_entries(messages_history: list[dict]) -> list[tuple[str | None, str, str]]:
+    """Non-empty messages in order, as (message id or None, role, content).
+
+    The position in this list (1-based) is the number each message carries
+    in the transcript shown to the judge, so citations can be mapped back.
+    """
+    return [
+        (str(m["id"]) if m.get("id") else None, m["role"], str(m.get("content", "")).strip())
+        for m in messages_history
+        if str(m.get("content", "")).strip()
+    ]
+
+
+def _normalize_citations(raw_citations, message_ids: list[str | None]) -> list[dict]:
+    """Keep only valid, unique transcript numbers and anchor them to stored ids.
+
+    The judge cites messages by the [n] numbers of the transcript; anything
+    that is not a number in range is dropped rather than retried, since the
+    citations garnish the evaluation instead of carrying it.
+    """
+    citations = []
+    seen: set[int] = set()
+    for value in raw_citations if isinstance(raw_citations, list) else []:
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            continue
+        if not 1 <= index <= len(message_ids) or index in seen:
+            continue
+        seen.add(index)
+        citations.append({"index": index, "message_id": message_ids[index - 1]})
+        if len(citations) == EVALUATION_MAX_CITATIONS:
+            break
+    return citations
+
+
+def _normalize_evaluation(raw: dict, message_ids: list[str | None]) -> dict:
     """Validate/normalize the model's JSON into the stored result shape.
 
     The model is asked for an overall score too, but the stored one is
@@ -511,6 +519,7 @@ def _normalize_evaluation(raw: dict) -> dict:
                 "score": score,
                 "comment": str(entry.get("comment") or "").strip(),
                 "suggestions": suggestions,
+                "citations": _normalize_citations(entry.get("citations"), message_ids),
             }
         )
 
@@ -540,8 +549,11 @@ async def evaluate_conversation(
     right one.
 
     Returns {"overall_score": float, "summary": str, "criteria": [...]}
-    where each criterion carries score, weight, comment and (only when the
-    score is below EVALUATION_SUGGESTION_THRESHOLD) improvement suggestions.
+    where each criterion carries score, weight, comment, (only when the
+    score is below EVALUATION_SUGGESTION_THRESHOLD) improvement suggestions,
+    and the citations of the transcript messages the judgment rests on.
+    History entries may carry an "id": citations then anchor to it, so the
+    UI can point back at the stored message.
     The overall score is the weighted average of the criteria, recomputed
     here rather than taken from the model. Raises RuntimeError on failure.
     """
@@ -550,13 +562,16 @@ async def evaluate_conversation(
             "OPENAI_API_KEY non configurata. Aggiungi OPENAI_API_KEY al file .env del backend."
         )
 
+    # Each line carries its [n] number so the judge can cite the messages
+    # its scores rest on; entries keep the ids the citations map back to.
+    entries = _transcript_entries(messages_history)
     transcript = "\n".join(
-        f"{'OPERATORE' if m['role'] == 'user' else 'CLIENTE'}: {m['content']}"
-        for m in messages_history
-        if str(m.get("content", "")).strip()
+        f"[{i}] {'OPERATORE' if role == 'user' else 'CLIENTE'}: {content}"
+        for i, (_, role, content) in enumerate(entries, start=1)
     )
     if not transcript:
         raise RuntimeError("Conversazione vuota: impossibile generare la valutazione.")
+    message_ids = [message_id for message_id, _, _ in entries]
 
     contatto = "CHAT" if channel == CHANNEL_TEXT else "CHIAMATA"
     messages = [
@@ -586,7 +601,9 @@ async def evaluate_conversation(
             last_error = e
             continue
         try:
-            return _normalize_evaluation(json.loads(response.choices[0].message.content or ""))
+            return _normalize_evaluation(
+                json.loads(response.choices[0].message.content or ""), message_ids
+            )
         except (json.JSONDecodeError, TypeError, ValueError, IndexError) as e:
             # Malformed/incomplete JSON: try the next model
             print(f"[WARN] Valutazione non valida da {model}, provo il successivo: {e}")

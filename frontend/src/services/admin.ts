@@ -1,5 +1,5 @@
 /* Admin API service for managing users */
-import { apiFetch } from './api';
+import { apiFetch, apiFetchBlob } from './api';
 import type { ChatMessage, ConversationEvaluation, ConversationMode } from './api';
 import type { AuthUser, RoleName, UserStatus } from './auth';
 
@@ -218,6 +218,15 @@ export const fetchAdminConversation = (conversationId: string) =>
 export const deleteAdminConversation = (conversationId: string) =>
   apiFetch<{ message: string; success: boolean }>(`/api/admin/conversations/${conversationId}`, {
     method: 'DELETE',
+  });
+
+/**
+ * The evaluations report as a formatted .xlsx file, same admin scope rules
+ * as fetchEvaluationsReport.
+ */
+export const fetchEvaluationsReportXlsx = (organizationId?: string) =>
+  apiFetchBlob('/api/admin/evaluations-report/export', {
+    params: organizationId ? { organization_id: organizationId } : undefined,
   });
 
 export const fetchEvaluationsReport = (organizationId?: string) =>

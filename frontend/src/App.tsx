@@ -10,6 +10,8 @@ import DashboardPage from './components/DashboardPage';
 import UserReportPage from './components/UserReportPage';
 import AvatarAdminPage from './components/AvatarAdminPage';
 import OrganizationsPage from './components/OrganizationsPage';
+import TrainingPage from './components/TrainingPage';
+import TrainingGoals from './components/TrainingGoals';
 import ProfilePage from './components/ProfilePage';
 import LandingPage from './components/LandingPage';
 import './index.css';
@@ -27,6 +29,7 @@ function HomePage() {
     <>
       <Header totalAvatars={totalAvatars} totalCategories={totalCategories} />
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 pb-12 max-md:p-4">
+        <TrainingGoals />
         <AvatarGallery onStatsUpdate={handleStatsUpdate} />
       </main>
     </>
@@ -60,6 +63,7 @@ function App() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/organizations" element={<OrganizationsPage />} />
             <Route path="/admin/dashboard" element={<DashboardPage />} />
+            <Route path="/admin/training" element={<TrainingPage />} />
             <Route path="/admin/report" element={<UserReportPage />} />
             <Route path="/admin/avatars" element={<AvatarAdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

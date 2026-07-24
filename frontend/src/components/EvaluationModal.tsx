@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ConversationEvaluation } from '../services/api';
+import type { ConversationEvaluation, EvaluationCitation } from '../services/api';
+import { fetchEvaluationPdf, saveBlob } from '../services/api';
 import EvaluationReport from './EvaluationReport';
 
 /* Post-call evaluation modal: overall score, per-criterion scores and
@@ -25,6 +26,13 @@ interface EvaluationModalProps {
   onSubmitTitle?: (title: string) => void;
   isSavingTitle?: boolean;
   titleError?: string | null;
+  /** Chip dei momenti citati dalla valutazione: chi le riceve chiude la
+   *  modale e porta la trascrizione (e l'audio) sul messaggio citato. */
+  onCitationClick?: (citation: EvaluationCitation) => void;
+  onCitationPlay?: (citation: EvaluationCitation) => void;
+  /** Riparte subito con un nuovo tentativo sullo stesso scenario: la
+   *  prossima valutazione mostrerà i delta rispetto a questa. */
+  onRetryScenario?: () => void;
 }
 
 const overlayCls =
@@ -43,9 +51,31 @@ export default function EvaluationModal({
   onSubmitTitle,
   isSavingTitle = false,
   titleError = null,
+  onCitationClick,
+  onCitationPlay,
+  onRetryScenario,
 }: EvaluationModalProps) {
   const [title, setTitle] = useState(currentTitle ?? '');
   const isTouched = useRef(false);
+
+  // Download del PDF della valutazione (da consegnare al formatore)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const downloadPdf = async () => {
+    if (!evaluation || isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    setPdfError(null);
+    try {
+      const blob = await fetchEvaluationPdf(evaluation.conversation_id);
+      const slug = avatarName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      saveBlob(blob, `valutazione-${slug || 'conversazione'}.pdf`);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'Download del PDF non riuscito.');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   // The conversation created by the call can still be loading when the modal
   // opens: its automatic name fills the field as soon as it lands, unless the
@@ -127,7 +157,52 @@ export default function EvaluationModal({
             Nessuna valutazione disponibile per questa conversazione.
           </p>
         ) : (
-          <EvaluationReport evaluation={evaluation} />
+          <>
+            <EvaluationReport
+              evaluation={evaluation}
+              onCitationClick={onCitationClick}
+              onCitationPlay={onCitationPlay}
+            />
+            <div className="mt-6 flex flex-col items-center gap-1.5">
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-5 py-2 text-sm font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                  onClick={downloadPdf}
+                  disabled={isDownloadingPdf}
+                >
+                  {isDownloadingPdf ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-600/25 border-t-violet-600" />
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  )}
+                  Scarica PDF
+                </button>
+                {onRetryScenario && (
+                  <button
+                    className="flex cursor-pointer items-center gap-2 rounded-xl border border-violet-600/40 bg-violet-600/12 px-5 py-2 text-sm font-semibold text-violet-300 transition hover:-translate-y-px hover:bg-violet-600/25 hover:text-violet-200"
+                    onClick={onRetryScenario}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1 4 1 10 7 10" />
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                    </svg>
+                    Riprova questo scenario
+                  </button>
+                )}
+              </div>
+              {pdfError && <p className="text-center text-[0.75rem] text-red-400">{pdfError}</p>}
+              {onRetryScenario && (
+                <p className="text-center text-[0.72rem] text-slate-500">
+                  Nuovo tentativo con {avatarName}, la prossima valutazione mostrerà i progressi
+                  rispetto a questa.
+                </p>
+              )}
+            </div>
+          </>
         )}
 
         {currentTitle !== null && (

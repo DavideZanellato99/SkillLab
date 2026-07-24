@@ -1,9 +1,11 @@
 """Admin API endpoints for managing users (super admin only)."""
 
 from collections import defaultdict
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -21,6 +23,7 @@ from cognito_service import (
     admin_set_user_enabled,
 )
 from database import get_db
+from exports import evaluations_report_xlsx
 from models import (
     ALL_ROLES,
     ALL_USER_STATUSES,
@@ -228,7 +231,11 @@ def evaluations_report(
     an Organization Admin only its own.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
+    return _evaluation_report_rows(db, scope_org_id)
 
+
+def _evaluation_report_rows(db: Session, scope_org_id) -> list[EvaluationReportRow]:
+    """Every evaluated conversation in scope, oldest first (chart order)."""
     query = (
         db.query(ConversationEvaluation, ChatConversation, User, Avatar.name)
         .join(ChatConversation, ChatConversation.id == ConversationEvaluation.conversation_id)
@@ -267,6 +274,29 @@ def evaluations_report(
     ]
 
 
+@router.get("/evaluations-report/export")
+def export_evaluations_report(
+    organization_id: UUID | None = None,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """The evaluations report as a formatted .xlsx download.
+
+    Same scope rules as /evaluations-report: a Super Admin exports every
+    organization (optionally one via `organization_id`), an Organization
+    Admin only its own. Finer slicing (user, channel, dates) is what the
+    spreadsheet's own autofilter is for.
+    """
+    scope_org_id = resolve_admin_scope(current_admin, organization_id)
+    content = evaluations_report_xlsx(_evaluation_report_rows(db, scope_org_id))
+    filename = f"report-valutazioni-{datetime.now(UTC).strftime('%Y-%m-%d')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/conversations/{conversation_id}", response_model=AdminConversationDetail)
 def conversation_detail(
     conversation_id: UUID,
@@ -298,7 +328,7 @@ def conversation_detail(
     return AdminConversationDetail(
         conversation_id=conversation.id,
         messages=[ChatMessageResponse.model_validate(m) for m in messages],
-        evaluation=_evaluation_response(evaluation) if evaluation else None,
+        evaluation=_evaluation_response(db, conversation, evaluation) if evaluation else None,
     )
 
 

@@ -20,3 +20,5 @@ python-jose[cryptography]
 requests
 truststore
 websockets
+fpdf2
+openpyxl

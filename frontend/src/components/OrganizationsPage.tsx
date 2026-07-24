@@ -10,6 +10,7 @@ import {
 import type { Organization, OrgStatus } from '../services/organizations';
 import { isSuperAdmin } from '../services/auth';
 import DataTable, { Td, Tr } from './DataTable';
+import DetailModal, { DetailField } from './DetailModal';
 import Tooltip from './Tooltip';
 import KebabMenu from './KebabMenu';
 import { matchesSearch } from './tableSearch';
@@ -95,6 +96,9 @@ export default function OrganizationsPage() {
   const visibleOrgs = orgs.filter((o) =>
     matchesSearch(search, o.name, o.slug, STATUS_LABELS[o.status] ?? o.status),
   );
+
+  // Detail view (clic sulla riga): organizzazione in sola lettura
+  const [viewingOrg, setViewingOrg] = useState<Organization | null>(null);
 
   // Create/edit modal: 'new' = create, Organization = edit, null = closed
   const [editing, setEditing] = useState<Organization | 'new' | null>(null);
@@ -286,7 +290,11 @@ export default function OrganizationsPage() {
               },
             ];
             return (
-              <Tr key={o.id} className={o.status === 'active' ? '' : 'opacity-60'}>
+              <Tr
+                key={o.id}
+                className={`cursor-pointer ${o.status === 'active' ? '' : 'opacity-60'}`}
+                onClick={() => setViewingOrg(o)}
+              >
                 <Td><span className="font-semibold text-slate-100">{o.name}</span></Td>
                 <Td><code className="rounded-lg bg-white/5 px-2 py-1 text-xs text-violet-400">{o.slug}</code></Td>
                 <Td align="center">
@@ -305,7 +313,7 @@ export default function OrganizationsPage() {
                     {new Date(o.created_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </span>
                 </Td>
-                <Td>
+                <Td onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-2">
                     <Tooltip content="Modifica organizzazione">
                       <button
@@ -343,6 +351,53 @@ export default function OrganizationsPage() {
             );
           })}
         </DataTable>
+      )}
+
+      {/* Dettaglio Organizzazione (clic sulla riga) */}
+      {viewingOrg && (
+        <DetailModal
+          onClose={() => setViewingOrg(null)}
+          title={viewingOrg.name}
+          subtitle={<code className="text-violet-400">{viewingOrg.slug}</code>}
+          header={
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
+              </svg>
+            </div>
+          }
+        >
+          <DetailField label="Nome">{viewingOrg.name}</DetailField>
+          <DetailField label="Slug">
+            <code className="rounded-lg bg-white/5 px-2 py-1 text-xs text-violet-400">{viewingOrg.slug}</code>
+          </DetailField>
+          <DetailField label="Stato">
+            <span className={`inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[viewingOrg.status] ?? ''}`}>
+              {STATUS_LABELS[viewingOrg.status] ?? viewingOrg.status}
+            </span>
+          </DetailField>
+          <DetailField label="Utenti">{viewingOrg.user_count}</DetailField>
+          <DetailField label="Avatar">{viewingOrg.avatar_count}</DetailField>
+          <DetailField label="Data creazione">
+            {new Date(viewingOrg.created_at).toLocaleString('it-IT', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </DetailField>
+          <DetailField label="Ultimo aggiornamento">
+            {new Date(viewingOrg.updated_at).toLocaleString('it-IT', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </DetailField>
+          <DetailField label="ID organizzazione" mono>{viewingOrg.id}</DetailField>
+        </DetailModal>
       )}
 
       {/* Modal Crea/Modifica Organizzazione */}

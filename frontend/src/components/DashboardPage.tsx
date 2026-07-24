@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchEvaluationsReport } from '../services/admin';
+import { fetchEvaluationsReport, fetchEvaluationsReportXlsx } from '../services/admin';
 import type { EvaluationReportRow } from '../services/admin';
+import { saveBlob } from '../services/api';
 import { fetchOrganizations } from '../services/organizations';
 import type { Organization } from '../services/organizations';
 import { isAdmin, isSuperAdmin } from '../services/auth';
@@ -420,6 +421,22 @@ export default function DashboardPage() {
   const [modeFilter, setModeFilter] = useState<ModeFilter>('voice');
   const [search, setSearch] = useState('');
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  /* Excel del report: stesse righe della dashboard (stesso scope server
+   * per organizzazione), i filtri più fini li offre il foglio stesso */
+  const handleExportXlsx = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const blob = await fetchEvaluationsReportXlsx(orgFilter || undefined);
+      saveBlob(blob, `report-valutazioni-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Esportazione non riuscita.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const orgFilterOptions = [
     { value: '', label: 'Tutte le organizzazioni' },
@@ -617,8 +634,8 @@ export default function DashboardPage() {
             singolo utente.
           </p>
         </div>
-        {showOrgFilter && (
-          <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
+        <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
+          {showOrgFilter && (
             <Select
               id="dashboard-org-filter"
               className="min-w-[220px] max-sm:flex-1"
@@ -629,8 +646,25 @@ export default function DashboardPage() {
               }}
               options={orgFilterOptions}
             />
-          </div>
-        )}
+          )}
+          <button
+            className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            onClick={handleExportXlsx}
+            disabled={isExporting || isLoading || rows.length === 0}
+            title="Scarica il report delle valutazioni in Excel"
+          >
+            {isExporting ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-600/25 border-t-violet-600" />
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            )}
+            Esporta Excel
+          </button>
+        </div>
       </header>
 
       {error && (

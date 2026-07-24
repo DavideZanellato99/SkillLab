@@ -10,16 +10,21 @@ A conversation runs on one of two channels, fixed when it is opened:
 Both start the same way, with the operator writing/speaking first.
 """
 
+import asyncio
+import json
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth_dependency import get_current_user
 from conversation_titles import next_conversation_title
 from database import get_db
+from exports import evaluation_pdf
 from models import (
     CONVERSATION_MODE_TEXT,
     Avatar,
@@ -28,7 +33,7 @@ from models import (
     ConversationEvaluation,
     User,
 )
-from openai_service import evaluate_conversation, generate_avatar_reply
+from openai_service import evaluate_conversation, stream_avatar_response
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
 from routers.avatars import _visible_avatars
 from schemas import (
@@ -39,12 +44,53 @@ from schemas import (
     ChatMessageResponse,
     ConversationEvaluationResponse,
     ConversationRenameRequest,
+    PreviousAttempt,
 )
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
-def _evaluation_response(evaluation: ConversationEvaluation) -> ConversationEvaluationResponse:
+def _previous_attempt(db: Session, conversation: ChatConversation) -> PreviousAttempt | None:
+    """The user's closest earlier evaluated conversation with the same avatar.
+
+    Attempts are ordered by when the conversation was opened, not by when
+    it was judged: evaluating an old transcript later must not make it the
+    "previous attempt" of everything in between.
+    """
+    row = (
+        db.query(ChatConversation, ConversationEvaluation)
+        .join(
+            ConversationEvaluation,
+            ConversationEvaluation.conversation_id == ChatConversation.id,
+        )
+        .filter(
+            ChatConversation.user_id == conversation.user_id,
+            ChatConversation.avatar_id == conversation.avatar_id,
+            ChatConversation.created_at < conversation.created_at,
+        )
+        .order_by(ChatConversation.created_at.desc())
+        .first()
+    )
+    if not row:
+        return None
+    prev_conv, prev_eval = row
+    return PreviousAttempt(
+        conversation_id=prev_conv.id,
+        title=prev_conv.title,
+        mode=prev_conv.mode,
+        conversation_at=prev_conv.created_at,
+        overall_score=prev_eval.overall_score,
+        criteria_scores={
+            str(c["key"]): float(c.get("score", 0) or 0)
+            for c in ((prev_eval.result or {}).get("criteria") or [])
+            if c.get("key")
+        },
+    )
+
+
+def _evaluation_response(
+    db: Session, conversation: ChatConversation, evaluation: ConversationEvaluation
+) -> ConversationEvaluationResponse:
     data = evaluation.result or {}
     return ConversationEvaluationResponse(
         id=evaluation.id,
@@ -52,6 +98,7 @@ def _evaluation_response(evaluation: ConversationEvaluation) -> ConversationEval
         overall_score=evaluation.overall_score,
         summary=data.get("summary", ""),
         criteria=data.get("criteria", []),
+        previous=_previous_attempt(db, conversation),
         created_at=evaluation.created_at,
         updated_at=evaluation.updated_at,
     )
@@ -195,18 +242,90 @@ def rename_conversation(
     return _conversation_summary(db, conversation)
 
 
-@router.post("/message", response_model=ChatMessageExchange)
+def _sse_event(event: str, data: str) -> str:
+    return f"event: {event}\ndata: {data}\n\n"
+
+
+def _persist_exchange(
+    db: Session,
+    user_id: UUID,
+    avatar_id: UUID,
+    avatar_category: str,
+    conversation_id: UUID | None,
+    content: str,
+    reply: str,
+) -> ChatMessageExchange:
+    """Blocking write of one completed exchange (run via asyncio.to_thread).
+
+    The request-scoped session is still open here: FastAPI tears yielded
+    dependencies down only after the response has fully streamed out.
+    Explicit timestamps: the two messages land in the same commit and the
+    transcript is read back ordered by created_at, so the reply must be
+    strictly after the message it answers.
+    """
+    if conversation_id is None:
+        conversation = ChatConversation(
+            avatar_id=avatar_id,
+            user_id=user_id,
+            title=next_conversation_title(db, user_id, avatar_category),
+            mode=CONVERSATION_MODE_TEXT,
+        )
+        db.add(conversation)
+        db.flush()
+    else:
+        conversation = (
+            db.query(ChatConversation).filter(ChatConversation.id == conversation_id).one()
+        )
+
+    now = datetime.now(UTC)
+    user_message = ChatMessage(
+        conversation_id=conversation.id,
+        role="user",
+        content=content,
+        created_at=now,
+    )
+    assistant_message = ChatMessage(
+        conversation_id=conversation.id,
+        role="assistant",
+        content=reply,
+        created_at=now + timedelta(milliseconds=1),
+    )
+    db.add_all([user_message, assistant_message])
+    conversation.updated_at = now
+    db.commit()
+    db.refresh(user_message)
+    db.refresh(assistant_message)
+    db.refresh(conversation)
+
+    return ChatMessageExchange(
+        conversation_id=conversation.id,
+        title=conversation.title,
+        user_message=ChatMessageResponse.model_validate(user_message),
+        assistant_message=ChatMessageResponse.model_validate(assistant_message),
+    )
+
+
+@router.post("/message")
 async def send_chat_message(
     payload: ChatMessageRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Send one operator message in a text chat and return the avatar's reply.
+    """Send one operator message in a text chat and stream the avatar's reply.
 
+    The response is Server-Sent Events, so the first words reach the
+    operator at the model's first token instead of at the end:
+
+    - "delta"  {"text": ...} — one fragment as OpenAI produces it
+    - "done"   the persisted exchange (ChatMessageExchange), stream over
+    - "error"  {"detail": ...} — nothing was persisted, simply resend
+
+    Validation problems (unknown avatar, closed conversation...) are raised
+    before the stream opens and still travel as ordinary HTTP errors.
     Without a conversation_id a new text conversation is opened, so the
-    operator writes first just as they speak first on a call. The LLM runs
-    before anything is persisted: a failed generation leaves no half
-    exchange in the transcript and the operator can simply send again.
+    operator writes first just as they speak first on a call. Nothing is
+    persisted until the reply has fully streamed: a failed generation
+    leaves no half exchange in the transcript.
     """
     avatar = (
         _visible_avatars(db.query(Avatar), current_user)
@@ -253,49 +372,49 @@ async def send_chat_message(
 
     history.append({"role": "user", "content": payload.content})
 
-    try:
-        reply = await generate_avatar_reply(history, avatar.profile)
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    # Captured as plain values: the generator runs after this handler
+    # returns, when lazy loads on the ORM objects are no longer welcome.
+    avatar_profile = avatar.profile
+    avatar_id = avatar.id
+    avatar_category = avatar.category
+    conversation_id = conversation.id if conversation else None
+    user_id = current_user.id
 
-    if conversation is None:
-        conversation = ChatConversation(
-            avatar_id=avatar.id,
-            user_id=current_user.id,
-            title=next_conversation_title(db, current_user.id, avatar.category),
-            mode=CONVERSATION_MODE_TEXT,
-        )
-        db.add(conversation)
-        db.flush()
+    async def event_stream():
+        parts: list[str] = []
+        try:
+            async for delta in stream_avatar_response(history, avatar_profile, CHANNEL_TEXT):
+                parts.append(delta)
+                yield _sse_event("delta", json.dumps({"text": delta}))
+            reply = "".join(parts).strip()
+            # An empty reply leaves the operator with nothing to answer to
+            if not reply:
+                raise RuntimeError("L'avatar non ha prodotto nessuna risposta: riprova.")
+            exchange = await asyncio.to_thread(
+                _persist_exchange,
+                db,
+                user_id,
+                avatar_id,
+                avatar_category,
+                conversation_id,
+                payload.content,
+                reply,
+            )
+            yield _sse_event("done", exchange.model_dump_json())
+        except Exception as e:
+            print(f"[ERROR] Streaming chat fallito: {e}")
+            detail = str(e) if isinstance(e, RuntimeError) else "Errore nella risposta dell'avatar."
+            yield _sse_event("error", json.dumps({"detail": detail}))
 
-    # Explicit timestamps: the two messages are written in the same commit
-    # and the transcript is read back ordered by created_at, so the reply
-    # must be strictly after the message it answers.
-    now = datetime.now(UTC)
-    user_message = ChatMessage(
-        conversation_id=conversation.id,
-        role="user",
-        content=payload.content,
-        created_at=now,
-    )
-    assistant_message = ChatMessage(
-        conversation_id=conversation.id,
-        role="assistant",
-        content=reply,
-        created_at=now + timedelta(milliseconds=1),
-    )
-    db.add_all([user_message, assistant_message])
-    conversation.updated_at = now
-    db.commit()
-    db.refresh(user_message)
-    db.refresh(assistant_message)
-    db.refresh(conversation)
-
-    return ChatMessageExchange(
-        conversation_id=conversation.id,
-        title=conversation.title,
-        user_message=ChatMessageResponse.model_validate(user_message),
-        assistant_message=ChatMessageResponse.model_validate(assistant_message),
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # nginx buffers proxied responses by default, which would turn
+            # the stream back into one final block
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -373,7 +492,8 @@ async def create_conversation_evaluation(
         )
 
     avatar = db.query(Avatar).filter(Avatar.id == conversation.avatar_id).first()
-    history = [{"role": m.role, "content": m.content} for m in messages]
+    # The ids anchor the judge's citations back to the stored messages
+    history = [{"id": str(m.id), "role": m.role, "content": m.content} for m in messages]
     # Same criteria either way: the channel only tells the trainer whether
     # it is reading a call or a chat.
     channel = CHANNEL_TEXT if conversation.mode == CONVERSATION_MODE_TEXT else CHANNEL_VOICE
@@ -401,7 +521,7 @@ async def create_conversation_evaluation(
     db.commit()
     db.refresh(evaluation)
 
-    return _evaluation_response(evaluation)
+    return _evaluation_response(db, conversation, evaluation)
 
 
 @router.get(
@@ -430,4 +550,62 @@ def get_conversation_evaluation(
         .filter(ConversationEvaluation.conversation_id == conversation_id)
         .first()
     )
-    return _evaluation_response(evaluation) if evaluation else None
+    return _evaluation_response(db, conversation, evaluation) if evaluation else None
+
+
+@router.get("/conversation/{conversation_id}/evaluation/pdf")
+def download_evaluation_pdf(
+    conversation_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The stored evaluation as a PDF the operator can hand to the trainer.
+
+    Owner only, like every other read of the conversation. The document
+    carries the same content as the on-screen report: overall score and
+    summary, per-criterion scores with comments and suggestions, and the
+    comparison with the previous attempt when there is one.
+    """
+    conversation = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+
+    evaluation = (
+        db.query(ConversationEvaluation)
+        .filter(ConversationEvaluation.conversation_id == conversation_id)
+        .first()
+    )
+    if not evaluation:
+        raise HTTPException(
+            status_code=404, detail="Questa conversazione non ha ancora una valutazione."
+        )
+
+    avatar = db.query(Avatar).filter(Avatar.id == conversation.avatar_id).first()
+    data = evaluation.result or {}
+    pdf = evaluation_pdf(
+        operator_name=f"{current_user.nome} {current_user.cognome}".strip() or current_user.email,
+        avatar_name=avatar.name if avatar else "",
+        conversation_title=conversation.title,
+        mode=conversation.mode,
+        conversation_at=conversation.created_at,
+        evaluated_at=evaluation.updated_at,
+        overall_score=evaluation.overall_score,
+        summary=data.get("summary", ""),
+        criteria=data.get("criteria") or [],
+        previous=_previous_attempt(db, conversation),
+    )
+
+    # ASCII-only filename derived from the conversation title
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", conversation.title).strip("-").lower() or "conversazione"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="valutazione-{slug}.pdf"'},
+    )

@@ -64,6 +64,7 @@ warn_redundant_casts = true
 # widen the `files` list one module at a time as annotations are added.
 files = [
     "conversation_titles.py",
+    "exports.py",
     "persona_prompt.py",
     "schemas.py",
 ]

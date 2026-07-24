@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchRecordingInfo, fetchRecordingBlob } from '../services/voice';
 
@@ -7,7 +7,16 @@ import { fetchRecordingInfo, fetchRecordingBlob } from '../services/voice';
  *
  * The audio is fetched only when the user asks for it. The metadata query
  * is cheap (the blob column is deferred server-side), so the component can
- * decide whether there is anything to offer without moving any audio. */
+ * decide whether there is anything to offer without moving any audio.
+ *
+ * The imperative handle lets the evaluation's citation chips jump the
+ * playback to a cited moment: if the audio is not loaded yet, the seek is
+ * remembered and applied as soon as it is. */
+
+export interface CallRecordingPlayerHandle {
+  /** Load the audio if needed, then play from the given position. */
+  seekToMs: (ms: number) => void;
+}
 
 interface CallRecordingPlayerProps {
   conversationId: string;
@@ -38,14 +47,15 @@ function extensionFor(mimeType: string): string {
   return 'webm';
 }
 
-export default function CallRecordingPlayer({
-  conversationId,
-  variant = 'dock',
-}: CallRecordingPlayerProps) {
+export default forwardRef<CallRecordingPlayerHandle, CallRecordingPlayerProps>(
+  function CallRecordingPlayer({ conversationId, variant = 'dock' }, ref) {
   const isInline = variant === 'inline';
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Seek asked for before the audio was loaded, in ms; applied on metadata
+  const pendingSeekMs = useRef<number | null>(null);
 
   const { data: info } = useQuery({
     queryKey: ['recording-info', conversationId],
@@ -73,6 +83,7 @@ export default function CallRecordingPlayer({
       const blob = await fetchRecordingBlob(conversationId);
       setAudioUrl(URL.createObjectURL(blob));
     } catch (err) {
+      pendingSeekMs.current = null;
       setError(
         err instanceof Error ? err.message : 'Impossibile caricare la registrazione.',
       );
@@ -80,6 +91,22 @@ export default function CallRecordingPlayer({
       setIsLoading(false);
     }
   };
+
+  const applySeek = (audio: HTMLAudioElement, ms: number) => {
+    audio.currentTime = ms / 1000;
+    void audio.play().catch(() => {});
+  };
+
+  useImperativeHandle(ref, () => ({
+    seekToMs(ms: number) {
+      if (audioRef.current) {
+        applySeek(audioRef.current, ms);
+      } else {
+        pendingSeekMs.current = ms;
+        if (!isLoading) void handleLoad();
+      }
+    },
+  }));
 
   // Nothing recorded: calls from before this feature, or a browser that
   // could not record. The rest of the conversation view is unaffected.
@@ -101,11 +128,18 @@ export default function CallRecordingPlayer({
       {audioUrl ? (
         <>
           <audio
+            ref={audioRef}
             className={isInline ? 'h-8 w-[260px] max-w-full' : 'w-full'}
             controls
             autoPlay
             src={audioUrl}
             aria-label="Registrazione della chiamata"
+            onLoadedMetadata={(e) => {
+              if (pendingSeekMs.current !== null) {
+                applySeek(e.currentTarget, pendingSeekMs.current);
+                pendingSeekMs.current = null;
+              }
+            }}
           />
           <a
             className="flex items-center gap-1.5 text-[0.72rem] text-slate-500 transition hover:text-violet-400"
@@ -150,4 +184,4 @@ export default function CallRecordingPlayer({
       )}
     </div>
   );
-}
+});

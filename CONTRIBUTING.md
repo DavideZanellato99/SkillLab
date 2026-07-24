@@ -31,11 +31,11 @@ garanzia che `main` resti funzionante è procedurale (si mergia solo a
 `stage` verde). Se in futuro si passa a un flusso con feature branch e PR
 verso `stage`, allora ha senso proteggere `stage` con i check richiesti.
 
-## Gate automatici prima del push (hook pre-push)
+## Gate automatici prima del commit (hook pre-commit)
 
-Il repo include un hook `pre-push` in [.githooks/pre-push](.githooks/pre-push)
-che, a ogni `git push`, esegue in locale gli stessi gate della CI e **blocca
-il push se qualcosa è rosso**. Abilitalo una tantum (dopo il clone):
+Il repo include un hook `pre-commit` in [.githooks/pre-commit](.githooks/pre-commit)
+che, a ogni `git commit`, esegue in locale gli stessi gate della CI e **blocca
+il commit se qualcosa è rosso**. Abilitalo una tantum (dopo il clone):
 
 ```bash
 git config core.hooksPath .githooks
@@ -45,12 +45,14 @@ Cosa controlla, in ordine: `ruff check` + `ruff format --check` + `mypy`
 (backend), `pytest --cov` (backend, avvia da solo il Postgres di test via
 Docker se non è già su), `oxlint` + build + `vitest` (frontend), e
 `gitleaks` (scan segreti, via Docker). Serve Docker attivo per i test
-backend e per gitleaks.
+backend e per gitleaks. Se `ruff format --check` trova file da sistemare,
+il hook li riformatta da solo: basta rifare `git add` e rilanciare il
+commit.
 
-Per forzare un push saltando i gate (es. un branch di lavoro usa-e-getta):
+Per forzare un commit saltando i gate (es. un commit di lavoro usa-e-getta):
 
 ```bash
-git push --no-verify
+git commit --no-verify
 ```
 
 ## Far girare i controlli a mano (gli stessi della CI)

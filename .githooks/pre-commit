@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 #
-# Pre-push gate: runs the same checks the CI runs, locally, before anything
-# leaves your machine. If any check fails the push is aborted — fix it and
-# push again. To bypass on purpose (e.g. a throwaway WIP branch):
+# Pre-commit gate: runs the same checks the CI runs, locally, before the
+# commit is created. If any check fails the commit is aborted — fix it and
+# commit again. To bypass on purpose (e.g. a throwaway WIP commit):
 #
-#     git push --no-verify
+#     git commit --no-verify
 #
 # Enabled via `git config core.hooksPath .githooks` (see CONTRIBUTING.md).
 
@@ -38,14 +38,20 @@ docker_ready() { docker info >/dev/null 2>&1; }
 
 step "Backend: ruff + mypy"
 ( cd backend && "$PY_ABS" -m ruff check . ) && ok "ruff (lint)" || ko "ruff (lint)"
-( cd backend && "$PY_ABS" -m ruff format --check . ) && ok "ruff (format)" || ko "ruff (format)"
+if ( cd backend && "$PY_ABS" -m ruff format --check . ); then
+  ok "ruff (format)"
+else
+  # Riformatta subito i file, così basta un git add e rilanciare il commit.
+  ( cd backend && "$PY_ABS" -m ruff format . )
+  ko "ruff (format) — file riformattati automaticamente: aggiungili con git add e rilancia il commit"
+fi
 ( cd backend && "$PY_ABS" -m mypy ) && ok "mypy" || ko "mypy"
 
 # --- 2. backend tests (need the test Postgres) -----------------------------
 
 step "Backend: pytest"
 if ! docker_ready; then
-  ko "pytest (Docker non è in esecuzione: avvialo o usa 'git push --no-verify')"
+  ko "pytest (Docker non è in esecuzione: avvialo o usa 'git commit --no-verify')"
 else
   # Bring up the compose db if it isn't already running, then make sure the
   # test database exists.
@@ -93,10 +99,10 @@ fi
 # --- verdict ---------------------------------------------------------------
 
 if [ "$fail" -ne 0 ]; then
-  printf '\n\033[31m✗ Push bloccato: uno o più gate sono falliti.\033[0m\n'
-  printf '  Correggi e rilancia il push, oppure forza con: git push --no-verify\n\n'
+  printf '\n\033[31m✗ Commit bloccato: uno o più gate sono falliti.\033[0m\n'
+  printf '  Correggi e rilancia il commit, oppure forza con: git commit --no-verify\n\n'
   exit 1
 fi
 
-printf '\n\033[32m✓ Tutti i gate verdi: push in corso.\033[0m\n\n'
+printf '\n\033[32m✓ Tutti i gate verdi: commit in corso.\033[0m\n\n'
 exit 0

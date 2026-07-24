@@ -381,9 +381,7 @@ class TrainingAssignment(Base):
     __tablename__ = "training_assignments"
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id = Column(
-        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     avatar_id = Column(
         Uuid, ForeignKey("avatars.id", ondelete="CASCADE"), nullable=False, index=True
     )

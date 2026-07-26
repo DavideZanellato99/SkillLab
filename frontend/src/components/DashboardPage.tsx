@@ -643,8 +643,8 @@ export default function DashboardPage() {
             singolo utente.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
-          {showOrgFilter && (
+        {showOrgFilter && (
+          <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
             <Select
               id="dashboard-org-filter"
               className="min-w-[220px] max-sm:flex-1"
@@ -655,34 +655,8 @@ export default function DashboardPage() {
               }}
               options={orgFilterOptions}
             />
-          )}
-          <button
-            className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-            onClick={handleExportXlsx}
-            disabled={isExporting || isLoading || rows.length === 0}
-            title="Scarica il report delle valutazioni in Excel"
-          >
-            {isExporting ? (
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-600/25 border-t-violet-600" />
-            ) : (
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            )}
-            Esporta Excel
-          </button>
-        </div>
+          </div>
+        )}
       </header>
 
       {error && (
@@ -916,6 +890,34 @@ export default function DashboardPage() {
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder="Cerca per conversazione, utente o avatar..."
+            searchActions={
+              <button
+                className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                onClick={handleExportXlsx}
+                disabled={isExporting || isLoading || rows.length === 0}
+                title="Scarica il report delle valutazioni in Excel"
+              >
+                {isExporting ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-600/25 border-t-violet-600" />
+                ) : (
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                )}
+                Esporta Excel
+              </button>
+            }
             isEmpty={searchedRows.length === 0}
             emptyMessage={
               search

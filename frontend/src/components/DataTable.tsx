@@ -38,6 +38,8 @@ interface DataTableProps {
   searchValue?: string
   onSearchChange?: (value: string) => void
   searchPlaceholder?: string
+  /** Contenuto opzionale allineato a destra sulla stessa riga della ricerca (es. un bottone azione) */
+  searchActions?: ReactNode
   /** Disattiva la paginazione, mostrando tutte le righe senza footer (default: attiva) */
   paginate?: boolean
   /** Opzioni proposte dal selettore "righe per pagina" (default [10, 25, 50, 100]) */
@@ -53,6 +55,7 @@ export default function DataTable({
   searchValue = '',
   onSearchChange,
   searchPlaceholder = 'Cerca...',
+  searchActions,
   paginate = true,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   children,
@@ -81,52 +84,55 @@ export default function DataTable({
        * scroll orizzontale e gli angoli arrotondati); il footer sta fuori così la tendina delle
        * righe per pagina, che si apre verso l'alto, non viene tagliata. */}
       <div className={`overflow-hidden ${showFooter ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
-        {onSearchChange && (
-          <div className="border-b border-white/6 bg-gray-900/80 px-4 py-3">
-            <div className="flex max-w-[340px] items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="shrink-0 text-slate-500"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                type="text"
-                value={searchValue}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="w-full border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500"
-              />
-              {searchValue && (
-                <button
-                  onClick={() => onSearchChange('')}
-                  aria-label="Cancella ricerca"
-                  className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 transition hover:text-slate-100"
+        {(onSearchChange || searchActions) && (
+          <div className="flex items-center gap-3 border-b border-white/6 bg-gray-900/80 px-4 py-3">
+            {onSearchChange && (
+              <div className="flex max-w-[340px] flex-1 items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="shrink-0 text-slate-500"
                 >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="w-full border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                />
+                {searchValue && (
+                  <button
+                    onClick={() => onSearchChange('')}
+                    aria-label="Cancella ricerca"
+                    className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 transition hover:text-slate-100"
                   >
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
-              )}
-            </div>
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )}
+            {searchActions && <div className="ml-auto shrink-0">{searchActions}</div>}
           </div>
         )}
         <div className="overflow-x-auto">

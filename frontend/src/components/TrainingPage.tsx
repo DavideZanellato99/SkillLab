@@ -11,6 +11,7 @@ import type { TrainingAssignment, AssignmentStatus } from '../services/training'
 import DataTable, { Td, Tr } from './DataTable'
 import SearchSelect from './SearchSelect'
 import Select from './Select'
+import Spinner from './Spinner'
 import Tooltip from './Tooltip'
 import { matchesSearch } from './tableSearch'
 
@@ -345,9 +346,7 @@ export default function TrainingPage() {
               onClick={handleCreate}
               disabled={!canSubmit}
             >
-              {isSaving && (
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              )}
+              {isSaving && <Spinner variant="button" />}
               Assegna
             </button>
           </div>
@@ -418,7 +417,7 @@ export default function TrainingPage() {
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-violet-600/15 border-t-violet-600" />
+          <Spinner />
           <p>Caricamento percorsi...</p>
         </div>
       ) : (

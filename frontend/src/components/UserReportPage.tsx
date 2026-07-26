@@ -15,6 +15,7 @@ import { categoryBadgeClasses } from './categoryStyles'
 import ConversationModeBadge from './ConversationModeBadge'
 import DataTable, { Td, Tr } from './DataTable'
 import Select from './Select'
+import Spinner from './Spinner'
 import { matchesSearch } from './tableSearch'
 import type { DataTableColumn } from './DataTable'
 
@@ -26,7 +27,6 @@ const modalCloseCls =
   'absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100'
 const formErrorCls =
   'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]'
-const spinnerCls = 'h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white'
 
 interface DeletingConversation {
   userId: string
@@ -237,7 +237,7 @@ export default function UserReportPage() {
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-violet-600/15 border-t-violet-600" />
+          <Spinner />
           <p>Caricamento report attività...</p>
         </div>
       ) : (
@@ -461,7 +461,7 @@ export default function UserReportPage() {
               >
                 {isDeleting ? (
                   <>
-                    <span className={spinnerCls} />
+                    <Spinner variant="button" />
                     Eliminazione...
                   </>
                 ) : (

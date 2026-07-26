@@ -13,6 +13,7 @@ import {
   getUnmetPasswordRules,
   getInitials,
 } from '../services/auth'
+import Spinner from './Spinner'
 
 type AuthStep = 'login' | 'new-password'
 
@@ -734,7 +735,7 @@ export default function Navbar() {
                 >
                   {isSubmitting ? (
                     <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                      <Spinner variant="button" />
                       Accesso in corso...
                     </>
                   ) : (
@@ -844,7 +845,7 @@ export default function Navbar() {
                 >
                   {isSubmitting ? (
                     <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                      <Spinner variant="button" />
                       Aggiornamento...
                     </>
                   ) : (

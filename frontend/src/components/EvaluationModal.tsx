@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConversationEvaluation, EvaluationCitation } from '../services/api'
 import { fetchEvaluationPdf, saveBlob } from '../services/api'
 import EvaluationReport from './EvaluationReport'
+import Spinner from './Spinner'
 
 /* Post-call evaluation modal: overall score, per-criterion scores and
  * improvement suggestions (present only where the score is below 8).
@@ -153,7 +154,7 @@ export default function EvaluationModal({
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center gap-4 py-12 text-slate-500">
-            <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-violet-600/15 border-t-violet-600" />
+            <Spinner />
             <p className="text-sm">Valutazione della conversazione in corso...</p>
           </div>
         ) : error ? (
@@ -202,7 +203,7 @@ export default function EvaluationModal({
                   disabled={isDownloadingPdf}
                 >
                   {isDownloadingPdf ? (
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-600/25 border-t-violet-600" />
+                    <Spinner variant="small" />
                   ) : (
                     <svg
                       width="15"
@@ -291,9 +292,7 @@ export default function EvaluationModal({
                 onClick={saveTitle}
                 disabled={!canSaveTitle}
               >
-                {isSavingTitle && (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                )}
+                {isSavingTitle && <Spinner variant="button" />}
                 Salva e chiudi
               </button>
             </div>

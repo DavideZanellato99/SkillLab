@@ -9,6 +9,7 @@ import {
   getUnmetPasswordRules,
   getInitials,
 } from '../services/auth'
+import Spinner from './Spinner'
 
 /* Shared form styles (same look as the other admin/auth forms) */
 const fieldCls = 'flex flex-col gap-1.5'
@@ -23,7 +24,6 @@ const formErrorCls =
   'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]'
 const formSuccessCls =
   'mb-4 flex animate-fade-in-up items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[0.82rem] text-emerald-400 [animation-duration:0.2s]'
-const spinnerCls = 'h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white'
 const sectionCls = 'mb-8 rounded-3xl border border-white/6 bg-gray-900/60 p-8 max-[480px]:p-6'
 
 function ErrorBox({ message }: { message: string }) {
@@ -263,7 +263,7 @@ export default function ProfilePage() {
           >
             {isSavingProfile ? (
               <>
-                <span className={spinnerCls} />
+                <Spinner variant="button" />
                 Salvataggio...
               </>
             ) : (
@@ -413,7 +413,7 @@ export default function ProfilePage() {
               <button type="submit" className={submitBtnCls} disabled={isChangingPassword}>
                 {isChangingPassword ? (
                   <>
-                    <span className={spinnerCls} />
+                    <Spinner variant="button" />
                     Aggiornamento...
                   </>
                 ) : (

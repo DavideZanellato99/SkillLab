@@ -9,6 +9,7 @@ import type { CallRecordingPlayerHandle } from './CallRecordingPlayer'
 import ConversationModeBadge from './ConversationModeBadge'
 import EvaluationReport from './EvaluationReport'
 import MessageEmotions, { splitEmotionTag } from './MessageEmotions'
+import Spinner from './Spinner'
 
 /* Dettaglio di una conversazione valutata, aperto dalla tabella della
  * dashboard admin: trascrizione completa a sinistra e valutazione AI (la
@@ -191,7 +192,7 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center gap-4 py-12 text-slate-500">
-            <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-violet-600/15 border-t-violet-600" />
+            <Spinner />
             <p className="text-sm">Caricamento conversazione...</p>
           </div>
         ) : error ? (

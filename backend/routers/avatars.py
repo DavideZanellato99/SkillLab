@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from auth_dependency import get_current_user
 from database import get_db
@@ -31,6 +31,36 @@ def _visible_avatars(query, user: User):
     return query.filter(Avatar.organization_id == user.organization_id)
 
 
+def _selection_counts(db: Session, avatar_ids: list[UUID]) -> dict[UUID, int]:
+    """How many times each avatar was selected, in one grouped query.
+
+    Avatars never selected are simply absent from the map (callers default
+    to 0), so no N+1 COUNT per avatar.
+    """
+    if not avatar_ids:
+        return {}
+    return dict(
+        db.query(UserSelection.avatar_id, func.count(UserSelection.id))
+        .filter(UserSelection.avatar_id.in_(avatar_ids))
+        .group_by(UserSelection.avatar_id)
+        .all()
+    )
+
+
+def _avatar_response(avatar: Avatar, selection_count: int) -> AvatarResponse:
+    """Serialize one avatar with its (already computed) selection count."""
+    return AvatarResponse(
+        id=avatar.id,
+        name=avatar.name,
+        image_url=avatar.image_url,
+        category=avatar.category,
+        description=avatar.description,
+        created_at=avatar.created_at,
+        selection_count=selection_count,
+        difficulty=avatar.difficulty,
+    )
+
+
 @router.get("", response_model=list[AvatarResponse])
 def get_avatars(
     category: str | None = None,
@@ -45,27 +75,8 @@ def get_avatars(
 
     avatars = query.order_by(Avatar.id).all()
 
-    # Compute selection counts
-    result = []
-    for avatar in avatars:
-        count = (
-            db.query(func.count(UserSelection.id))
-            .filter(UserSelection.avatar_id == avatar.id)
-            .scalar()
-        )
-        avatar_data = AvatarResponse(
-            id=avatar.id,
-            name=avatar.name,
-            image_url=avatar.image_url,
-            category=avatar.category,
-            description=avatar.description,
-            created_at=avatar.created_at,
-            selection_count=count or 0,
-            difficulty=avatar.difficulty,
-        )
-        result.append(avatar_data)
-
-    return result
+    counts = _selection_counts(db, [a.id for a in avatars])
+    return [_avatar_response(a, counts.get(a.id, 0)) for a in avatars]
 
 
 @router.get("/categories", response_model=list[str])
@@ -94,16 +105,7 @@ def get_avatar(
         db.query(func.count(UserSelection.id)).filter(UserSelection.avatar_id == avatar.id).scalar()
     )
 
-    return AvatarResponse(
-        id=avatar.id,
-        name=avatar.name,
-        image_url=avatar.image_url,
-        category=avatar.category,
-        description=avatar.description,
-        created_at=avatar.created_at,
-        selection_count=count or 0,
-        difficulty=avatar.difficulty,
-    )
+    return _avatar_response(avatar, count or 0)
 
 
 @router.post("/select", response_model=MessageResponse)
@@ -140,32 +142,23 @@ def get_selections(
     db: Session = Depends(get_db),
 ):
     """Get all avatar selections."""
-    selections = db.query(UserSelection).order_by(UserSelection.selected_at.desc()).limit(50).all()
+    # joinedload pulls each selection's avatar in the same query instead of
+    # one lookup per row, and the counts come from a single grouped query.
+    selections = (
+        db.query(UserSelection)
+        .options(joinedload(UserSelection.avatar))
+        .order_by(UserSelection.selected_at.desc())
+        .limit(50)
+        .all()
+    )
 
-    result = []
-    for sel in selections:
-        avatar = db.query(Avatar).filter(Avatar.id == sel.avatar_id).first()
-        count = (
-            db.query(func.count(UserSelection.id))
-            .filter(UserSelection.avatar_id == avatar.id)
-            .scalar()
+    counts = _selection_counts(db, [sel.avatar_id for sel in selections])
+    return [
+        SelectionResponse(
+            id=sel.id,
+            avatar_id=sel.avatar_id,
+            selected_at=sel.selected_at,
+            avatar=_avatar_response(sel.avatar, counts.get(sel.avatar_id, 0)),
         )
-        result.append(
-            SelectionResponse(
-                id=sel.id,
-                avatar_id=sel.avatar_id,
-                selected_at=sel.selected_at,
-                avatar=AvatarResponse(
-                    id=avatar.id,
-                    name=avatar.name,
-                    image_url=avatar.image_url,
-                    category=avatar.category,
-                    description=avatar.description,
-                    created_at=avatar.created_at,
-                    selection_count=count or 0,
-                    difficulty=avatar.difficulty,
-                ),
-            )
-        )
-
-    return result
+        for sel in selections
+    ]

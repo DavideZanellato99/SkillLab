@@ -14,6 +14,7 @@ import DataTable, { Td, Tr } from './DataTable'
 import Tooltip from './Tooltip'
 import { matchesSearch } from './tableSearch'
 import ConversationDetailModal from './ConversationDetailModal'
+import Spinner from './Spinner'
 
 /* Dashboard admin: grafici di riepilogo sui punteggi delle valutazioni,
  * globali o filtrati per singolo utente tramite la ricerca in alto. */
@@ -681,7 +682,7 @@ export default function DashboardPage() {
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-violet-600/15 border-t-violet-600" />
+          <Spinner />
           <p>Caricamento dashboard...</p>
         </div>
       ) : rows.length === 0 ? (
@@ -898,7 +899,7 @@ export default function DashboardPage() {
                 title="Scarica il report delle valutazioni in Excel"
               >
                 {isExporting ? (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-600/25 border-t-violet-600" />
+                  <Spinner variant="small" />
                 ) : (
                   <svg
                     width="15"

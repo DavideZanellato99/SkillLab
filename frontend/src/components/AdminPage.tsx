@@ -17,6 +17,7 @@ import DataTable, { Td, Tr } from './DataTable'
 import DetailModal, { DetailField } from './DetailModal'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
+import Spinner from './Spinner'
 import { matchesSearch } from './tableSearch'
 import type { ReactNode } from 'react'
 import type { DataTableColumn } from './DataTable'
@@ -39,7 +40,6 @@ const modalCloseCls =
   'absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100'
 const formErrorCls =
   'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]'
-const spinnerCls = 'h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white'
 const actionBtnCls =
   'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40'
 
@@ -593,7 +593,7 @@ export default function AdminPage() {
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-violet-600/15 border-t-violet-600" />
+          <Spinner />
           <p>Caricamento utenti del sistema...</p>
         </div>
       ) : (
@@ -996,7 +996,7 @@ export default function AdminPage() {
               <button type="submit" className={submitBtnCls} disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
-                    <span className={spinnerCls} />
+                    <Spinner variant="button" />
                     Creazione su Cognito...
                   </>
                 ) : (
@@ -1136,7 +1136,7 @@ export default function AdminPage() {
               <button type="submit" className={submitBtnCls} disabled={isSavingEdit}>
                 {isSavingEdit ? (
                   <>
-                    <span className={spinnerCls} />
+                    <Spinner variant="button" />
                     Salvataggio...
                   </>
                 ) : (
@@ -1203,7 +1203,7 @@ export default function AdminPage() {
               >
                 {isSavingStatus ? (
                   <>
-                    <span className={spinnerCls} />
+                    <Spinner variant="button" />
                     {statusCfg.pendingLabel}
                   </>
                 ) : (
@@ -1281,7 +1281,7 @@ export default function AdminPage() {
               >
                 {isResending ? (
                   <>
-                    <span className={spinnerCls} />
+                    <Spinner variant="button" />
                     Invio in corso...
                   </>
                 ) : (
@@ -1360,7 +1360,7 @@ export default function AdminPage() {
               >
                 {isDeleting ? (
                   <>
-                    <span className={spinnerCls} />
+                    <Spinner variant="button" />
                     Eliminazione...
                   </>
                 ) : (

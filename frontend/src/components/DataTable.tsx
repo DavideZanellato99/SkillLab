@@ -42,7 +42,7 @@ interface DataTableProps {
   searchActions?: ReactNode
   /** Disattiva la paginazione, mostrando tutte le righe senza footer (default: attiva) */
   paginate?: boolean
-  /** Opzioni proposte dal selettore "righe per pagina" (default [10, 25, 50, 100]) */
+  /** Opzioni proposte dal selettore "righe per pagina" (default [10, 20, 30, 50]) */
   pageSizeOptions?: number[]
   /** Righe del corpo: <Tr> con celle <Td>, una per elemento (un <Tr> = una riga di dati) */
   children?: ReactNode

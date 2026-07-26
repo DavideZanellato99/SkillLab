@@ -14,6 +14,7 @@ import TrainingPage from './components/TrainingPage'
 import TrainingGoals from './components/TrainingGoals'
 import ProfilePage from './components/ProfilePage'
 import LandingPage from './components/LandingPage'
+import Spinner from './components/Spinner'
 import './index.css'
 
 function HomePage() {
@@ -44,7 +45,7 @@ function App() {
     return (
       <div className="flex min-h-screen flex-col pt-16" id="app">
         <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center gap-6">
-          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-violet-600/15 border-t-violet-600" />
+          <Spinner />
           <p className="text-sm text-slate-500">Caricamento...</p>
         </div>
       </div>

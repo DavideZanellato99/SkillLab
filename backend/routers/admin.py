@@ -155,23 +155,35 @@ def users_activity_report(
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
 
-    # Message stats aggregated per conversation in a single query
-    stats = {
-        row.conversation_id: row
-        for row in db.query(
-            ChatMessage.conversation_id.label("conversation_id"),
-            func.count(ChatMessage.id).label("message_count"),
-            func.min(ChatMessage.created_at).label("first_at"),
-            func.max(ChatMessage.created_at).label("last_at"),
-        ).group_by(ChatMessage.conversation_id)
-    }
+    # Resolve the users in scope first so both the conversations and their
+    # message stats can be restricted to them: an organization admin must not
+    # scan every tenant's data. A super admin (scope_org_id None) sees all.
+    users_query = db.query(User)
+    if scope_org_id is not None:
+        users_query = users_query.filter(User.organization_id == scope_org_id)
+    users = users_query.order_by(User.created_at.desc()).all()
 
-    rows = (
-        db.query(ChatConversation, Avatar.name, Avatar.category)
-        .join(Avatar, Avatar.id == ChatConversation.avatar_id)
-        .order_by(ChatConversation.created_at.desc())
-        .all()
+    conv_query = db.query(ChatConversation, Avatar.name, Avatar.category).join(
+        Avatar, Avatar.id == ChatConversation.avatar_id
     )
+    if scope_org_id is not None:
+        conv_query = conv_query.filter(ChatConversation.user_id.in_([u.id for u in users]))
+    rows = conv_query.order_by(ChatConversation.created_at.desc()).all()
+
+    # Message stats aggregated per conversation in a single query, restricted
+    # to the conversations in scope (unbounded only for the super admin, who
+    # legitimately wants every conversation).
+    stats_query = db.query(
+        ChatMessage.conversation_id.label("conversation_id"),
+        func.count(ChatMessage.id).label("message_count"),
+        func.min(ChatMessage.created_at).label("first_at"),
+        func.max(ChatMessage.created_at).label("last_at"),
+    )
+    if scope_org_id is not None:
+        stats_query = stats_query.filter(
+            ChatMessage.conversation_id.in_([conv.id for conv, _, _ in rows])
+        )
+    stats = {row.conversation_id: row for row in stats_query.group_by(ChatMessage.conversation_id)}
 
     conversations_by_user: dict[UUID, list[ConversationReport]] = defaultdict(list)
     for conv, avatar_name, avatar_category in rows:
@@ -194,10 +206,6 @@ def users_activity_report(
             )
         )
 
-    users_query = db.query(User)
-    if scope_org_id is not None:
-        users_query = users_query.filter(User.organization_id == scope_org_id)
-    users = users_query.order_by(User.created_at.desc()).all()
     return [
         UserActivityReport(
             id=u.id,

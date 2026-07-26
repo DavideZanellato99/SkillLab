@@ -12,6 +12,7 @@ Both start the same way, with the operator writing/speaking first.
 
 import asyncio
 import json
+import logging
 import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -48,6 +49,27 @@ from schemas import (
 )
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+logger = logging.getLogger(__name__)
+
+
+def _owned_conversation_or_404(db: Session, conversation_id: UUID, user: User) -> ChatConversation:
+    """Fetch a conversation owned by `user`, or raise 404.
+
+    Every read/write of a conversation goes through here: a conversation that
+    belongs to another user is indistinguishable from one that doesn't exist.
+    """
+    conversation = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.user_id == user.id,
+        )
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+    return conversation
 
 
 def _previous_attempt(db: Session, conversation: ChatConversation) -> PreviousAttempt | None:
@@ -104,8 +126,32 @@ def _evaluation_response(
     )
 
 
+def _preview(content: str | None) -> str | None:
+    """Trim a message to the fixed-length list preview (None when empty)."""
+    if not content:
+        return None
+    return content[:100] + ("..." if len(content) > 100 else "")
+
+
+def _build_summary(
+    conv: ChatConversation, message_count: int, last_content: str | None
+) -> ChatConversationSummary:
+    """Assemble a summary from a conversation and its already-computed stats."""
+    return ChatConversationSummary(
+        id=conv.id,
+        avatar_id=conv.avatar_id,
+        title=conv.title,
+        mode=conv.mode,
+        ended_at=conv.ended_at,
+        created_at=conv.created_at,
+        updated_at=conv.updated_at,
+        message_count=message_count,
+        last_message_preview=_preview(last_content),
+    )
+
+
 def _conversation_summary(db: Session, conv: ChatConversation) -> ChatConversationSummary:
-    """Build the list entry for a conversation: counter plus last message preview."""
+    """Build the list entry for a single conversation (counter + last preview)."""
     msg_count = (
         db.query(func.count(ChatMessage.id)).filter(ChatMessage.conversation_id == conv.id).scalar()
     )
@@ -115,21 +161,38 @@ def _conversation_summary(db: Session, conv: ChatConversation) -> ChatConversati
         .order_by(ChatMessage.created_at.desc())
         .first()
     )
-    preview = None
-    if last_msg:
-        preview = last_msg.content[:100] + ("..." if len(last_msg.content) > 100 else "")
+    return _build_summary(conv, msg_count or 0, last_msg.content if last_msg else None)
 
-    return ChatConversationSummary(
-        id=conv.id,
-        avatar_id=conv.avatar_id,
-        title=conv.title,
-        mode=conv.mode,
-        ended_at=conv.ended_at,
-        created_at=conv.created_at,
-        updated_at=conv.updated_at,
-        message_count=msg_count or 0,
-        last_message_preview=preview,
+
+def _conversation_summaries(
+    db: Session, conversations: list[ChatConversation]
+) -> list[ChatConversationSummary]:
+    """Summaries for a list of conversations in two queries total, not 2 per row.
+
+    One grouped COUNT for the message counters, one DISTINCT ON for the last
+    message of each conversation; both keyed by conversation id.
+    """
+    if not conversations:
+        return []
+    conv_ids = [conv.id for conv in conversations]
+
+    counts = dict(
+        db.query(ChatMessage.conversation_id, func.count(ChatMessage.id))
+        .filter(ChatMessage.conversation_id.in_(conv_ids))
+        .group_by(ChatMessage.conversation_id)
+        .all()
     )
+    last_contents = dict(
+        db.query(ChatMessage.conversation_id, ChatMessage.content)
+        .filter(ChatMessage.conversation_id.in_(conv_ids))
+        .order_by(ChatMessage.conversation_id, ChatMessage.created_at.desc())
+        .distinct(ChatMessage.conversation_id)
+        .all()
+    )
+    return [
+        _build_summary(conv, counts.get(conv.id, 0), last_contents.get(conv.id))
+        for conv in conversations
+    ]
 
 
 @router.get("/avatar/{avatar_id}/conversations", response_model=list[ChatConversationSummary])
@@ -154,7 +217,7 @@ def list_conversations(
         .all()
     )
 
-    return [_conversation_summary(db, conv) for conv in conversations]
+    return _conversation_summaries(db, conversations)
 
 
 @router.get("/conversation/{conversation_id}", response_model=ChatConversationResponse)
@@ -164,16 +227,7 @@ def get_conversation(
     db: Session = Depends(get_db),
 ):
     """Get a conversation with all its messages (only if it belongs to the current user)."""
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.user_id == current_user.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
 
     messages = (
         db.query(ChatMessage)
@@ -215,16 +269,7 @@ def rename_conversation(
     schema. Every user can rename their own conversations: no admin role
     required.
     """
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.user_id == current_user.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
 
     # Renaming is not activity: updated_at orders the sidebar and dates each
     # call, so it is written explicitly with its current value — otherwise the
@@ -402,7 +447,7 @@ async def send_chat_message(
             )
             yield _sse_event("done", exchange.model_dump_json())
         except Exception as e:
-            print(f"[ERROR] Streaming chat fallito: {e}")
+            logger.exception("Streaming chat fallito")
             detail = str(e) if isinstance(e, RuntimeError) else "Errore nella risposta dell'avatar."
             yield _sse_event("error", json.dumps({"detail": detail}))
 
@@ -429,16 +474,7 @@ def end_chat_conversation(
     Calls are closed by the voice pipeline when the socket drops, so this
     endpoint only serves the text channel.
     """
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.user_id == current_user.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
     if conversation.mode != CONVERSATION_MODE_TEXT:
         raise HTTPException(
             status_code=409,
@@ -468,16 +504,7 @@ async def create_conversation_evaluation(
     model, see openai_service.evaluate_conversation) and store the result.
     Re-running the judgement replaces the previous evaluation.
     """
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.user_id == current_user.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
 
     messages = (
         db.query(ChatMessage)
@@ -534,16 +561,7 @@ def get_conversation_evaluation(
     db: Session = Depends(get_db),
 ):
     """Return the stored evaluation for a conversation, or null if absent."""
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.user_id == current_user.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
 
     evaluation = (
         db.query(ConversationEvaluation)
@@ -566,16 +584,7 @@ def download_evaluation_pdf(
     summary, per-criterion scores with comments and suggestions, and the
     comparison with the previous attempt when there is one.
     """
-    conversation = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.id == conversation_id,
-            ChatConversation.user_id == current_user.id,
-        )
-        .first()
-    )
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversazione non trovata.")
+    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
 
     evaluation = (
         db.query(ConversationEvaluation)

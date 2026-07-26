@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useId } from 'react';
+import { useState, useEffect, useRef, useId } from 'react'
 
 /* Dropdown custom riutilizzabile, in linea con lo stile del sito: pulsante
  * con lo stile degli input e tendina scura stilizzata (come il menu utente
@@ -6,20 +6,20 @@ import { useState, useEffect, useRef, useId } from 'react';
  * esterna, associata tramite l'id del pulsante. */
 
 export interface SelectOption {
-  value: string;
-  label: string;
+  value: string
+  label: string
 }
 
 interface SelectProps {
-  id?: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: SelectOption[];
-  disabled?: boolean;
+  id?: string
+  value: string
+  onChange: (value: string) => void
+  options: SelectOption[]
+  disabled?: boolean
   /** Testo mostrato sul pulsante quando nulla è selezionato (non è un'opzione della lista) */
-  placeholder?: string;
+  placeholder?: string
   /** Classi extra sul wrapper (es. larghezza) */
-  className?: string;
+  className?: string
 }
 
 export default function Select({
@@ -31,86 +31,86 @@ export default function Select({
   placeholder,
   className = '',
 }: SelectProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const listRef = useRef<HTMLUListElement | null>(null);
-  const listboxId = useId();
+  const [isOpen, setIsOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const listRef = useRef<HTMLUListElement | null>(null)
+  const listboxId = useId()
 
-  const selectedIndex = options.findIndex((o) => o.value === value);
-  const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  const selectedIndex = options.findIndex((o) => o.value === value)
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined
 
   // Chiudi al click fuori dal componente
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return
     const onPointerDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
+        setIsOpen(false)
       }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [isOpen]);
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [isOpen])
 
   // Tieni visibile l'opzione attiva mentre si naviga con la tastiera
   useEffect(() => {
-    if (!isOpen || activeIndex < 0) return;
-    listRef.current?.children[activeIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [isOpen, activeIndex]);
+    if (!isOpen || activeIndex < 0) return
+    listRef.current?.children[activeIndex]?.scrollIntoView({ block: 'nearest' })
+  }, [isOpen, activeIndex])
 
   const open = () => {
-    if (disabled) return;
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
-    setIsOpen(true);
-  };
+    if (disabled) return
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0)
+    setIsOpen(true)
+  }
 
   const pick = (opt: SelectOption) => {
-    onChange(opt.value);
-    setIsOpen(false);
-  };
+    onChange(opt.value)
+    setIsOpen(false)
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (disabled) return;
+    if (disabled) return
     switch (e.key) {
       case 'Enter':
       case ' ':
-        e.preventDefault();
-        if (!isOpen) open();
-        else if (activeIndex >= 0) pick(options[activeIndex]);
-        break;
+        e.preventDefault()
+        if (!isOpen) open()
+        else if (activeIndex >= 0) pick(options[activeIndex])
+        break
       case 'ArrowDown':
-        e.preventDefault();
-        if (!isOpen) open();
-        else setActiveIndex((i) => Math.min(options.length - 1, i + 1));
-        break;
+        e.preventDefault()
+        if (!isOpen) open()
+        else setActiveIndex((i) => Math.min(options.length - 1, i + 1))
+        break
       case 'ArrowUp':
-        e.preventDefault();
-        if (!isOpen) open();
-        else setActiveIndex((i) => Math.max(0, i - 1));
-        break;
+        e.preventDefault()
+        if (!isOpen) open()
+        else setActiveIndex((i) => Math.max(0, i - 1))
+        break
       case 'Home':
         if (isOpen) {
-          e.preventDefault();
-          setActiveIndex(0);
+          e.preventDefault()
+          setActiveIndex(0)
         }
-        break;
+        break
       case 'End':
         if (isOpen) {
-          e.preventDefault();
-          setActiveIndex(options.length - 1);
+          e.preventDefault()
+          setActiveIndex(options.length - 1)
         }
-        break;
+        break
       case 'Escape':
         if (isOpen) {
-          e.preventDefault();
-          setIsOpen(false);
+          e.preventDefault()
+          setIsOpen(false)
         }
-        break;
+        break
       case 'Tab':
-        setIsOpen(false);
-        break;
+        setIsOpen(false)
+        break
     }
-  };
+  }
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
@@ -161,7 +161,7 @@ export default function Select({
           className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-60 animate-menu-in overflow-y-auto rounded-xl border border-white/6 bg-gray-900/95 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
         >
           {options.map((opt, i) => {
-            const isSelected = opt.value === value;
+            const isSelected = opt.value === value
             return (
               <li
                 key={opt.value}
@@ -191,10 +191,10 @@ export default function Select({
                   </svg>
                 )}
               </li>
-            );
+            )
           })}
         </ul>
       )}
     </div>
-  );
+  )
 }

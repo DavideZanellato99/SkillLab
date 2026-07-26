@@ -16,7 +16,7 @@ scrive con una persona simulata (STT + LLM + TTS) e riceve una valutazione.
 ## Avvio rapido
 
 ```bash
-cp backend/.env.example backend/.env   # poi inserisci le chiavi reali
+# crea backend/.env con le tue chiavi (DATABASE_URL, COGNITO_*, OPENAI_*, CARTESIA_*, ELEVENLABS_*)
 docker compose up --build              # hot-reload (override di sviluppo)
 ```
 

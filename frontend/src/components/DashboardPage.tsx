@@ -1,44 +1,44 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { fetchEvaluationsReport, fetchEvaluationsReportXlsx } from '../services/admin';
-import type { EvaluationReportRow } from '../services/admin';
-import { saveBlob } from '../services/api';
-import { fetchOrganizations } from '../services/organizations';
-import type { Organization } from '../services/organizations';
-import { isAdmin, isSuperAdmin } from '../services/auth';
-import SearchSelect from './SearchSelect';
-import Select from './Select';
-import ConversationModeBadge, { conversationModeLabel } from './ConversationModeBadge';
-import type { ConversationMode } from '../services/api';
-import DataTable, { Td, Tr } from './DataTable';
-import Tooltip from './Tooltip';
-import { matchesSearch } from './tableSearch';
-import ConversationDetailModal from './ConversationDetailModal';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { fetchEvaluationsReport, fetchEvaluationsReportXlsx } from '../services/admin'
+import type { EvaluationReportRow } from '../services/admin'
+import { saveBlob } from '../services/api'
+import { fetchOrganizations } from '../services/organizations'
+import type { Organization } from '../services/organizations'
+import { isAdmin, isSuperAdmin } from '../services/auth'
+import SearchSelect from './SearchSelect'
+import Select from './Select'
+import ConversationModeBadge, { conversationModeLabel } from './ConversationModeBadge'
+import type { ConversationMode } from '../services/api'
+import DataTable, { Td, Tr } from './DataTable'
+import Tooltip from './Tooltip'
+import { matchesSearch } from './tableSearch'
+import ConversationDetailModal from './ConversationDetailModal'
 
 /* Dashboard admin: grafici di riepilogo sui punteggi delle valutazioni,
  * globali o filtrati per singolo utente tramite la ricerca in alto. */
 
-const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md';
+const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
 
 /* Stessa convenzione colori dell'EvaluationModal: ≥7 verde, ≥5 arancio, <5 rosso */
 function scoreTextColor(score: number): string {
-  if (score >= 7) return 'text-emerald-400';
-  if (score >= 5) return 'text-orange-400';
-  return 'text-red-400';
+  if (score >= 7) return 'text-emerald-400'
+  if (score >= 5) return 'text-orange-400'
+  return 'text-red-400'
 }
 
 function scoreBarColor(score: number): string {
-  if (score >= 7) return 'bg-emerald-500';
-  if (score >= 5) return 'bg-orange-500';
-  return 'bg-red-500';
+  if (score >= 7) return 'bg-emerald-500'
+  if (score >= 5) return 'bg-orange-500'
+  return 'bg-red-500'
 }
 
 function formatScore(score: number): string {
-  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 })
 }
 
 function formatDay(date: Date): string {
-  return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+  return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
 }
 
 function formatDateTime(dateStr: string): string {
@@ -47,25 +47,23 @@ function formatDateTime(dateStr: string): string {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-  });
+  })
 }
 
 function displayName(row: EvaluationReportRow): string {
-  return row.user_nome && row.user_cognome
-    ? `${row.user_nome} ${row.user_cognome}`
-    : row.user_email;
+  return row.user_nome && row.user_cognome ? `${row.user_nome} ${row.user_cognome}` : row.user_email
 }
 
 interface DayPoint {
-  date: Date;
-  avg: number;
-  count: number;
+  date: Date
+  avg: number
+  count: number
 }
 
 interface CriterionAvg {
-  key: string;
-  label: string;
-  avg: number;
+  key: string
+  label: string
+  avg: number
 }
 
 /* Intestazioni brevi per le colonne dei criteri nella tabella. La prima parola
@@ -79,18 +77,18 @@ const CRITERION_SHORT_LABELS: Record<string, string> = {
   appropriatezza_linguaggio: 'Linguaggio',
   identificazione_cliente: 'Identificazione',
   comprensione_casistica: 'Casistica',
-};
+}
 
 function shortCriterionLabel(key: string, label: string): string {
-  return CRITERION_SHORT_LABELS[key] ?? label.split(' ')[0].replace(/[,;:]$/, '');
+  return CRITERION_SHORT_LABELS[key] ?? label.split(' ')[0].replace(/[,;:]$/, '')
 }
 
 interface UserAvg {
-  userId: string;
-  name: string;
-  email: string;
-  avg: number;
-  count: number;
+  userId: string
+  name: string
+  email: string
+  avg: number
+  count: number
 }
 
 /* ── Selettore di canale: scopa l'intera dashboard ──
@@ -100,27 +98,27 @@ interface UserAvg {
  * di default la dashboard mostra le sole chiamate e i due canali si mescolano
  * solo se lo si chiede esplicitamente. */
 
-type ModeFilter = ConversationMode | 'all';
+type ModeFilter = ConversationMode | 'all'
 
 const MODE_FILTERS: { value: ModeFilter; label: string }[] = [
   { value: 'voice', label: 'Chiamate' },
   { value: 'text', label: 'Chat' },
   { value: 'all', label: 'Entrambe' },
-];
+]
 
 /* Come si legge il canale attivo dentro le descrizioni delle sezioni */
 const MODE_SUFFIX: Record<ModeFilter, string> = {
   voice: 'sulle chiamate',
   text: 'sulle chat',
   all: 'su chiamate e chat',
-};
+}
 
 function ModeFilterTabs({
   value,
   onChange,
 }: {
-  value: ModeFilter;
-  onChange: (value: ModeFilter) => void;
+  value: ModeFilter
+  onChange: (value: ModeFilter) => void
 }) {
   return (
     <div
@@ -129,7 +127,7 @@ function ModeFilterTabs({
       className="flex shrink-0 gap-1 rounded-xl border border-white/6 bg-slate-800/50 p-1"
     >
       {MODE_FILTERS.map((opt) => {
-        const isActive = opt.value === value;
+        const isActive = opt.value === value
         return (
           <button
             key={opt.value}
@@ -145,66 +143,68 @@ function ModeFilterTabs({
           >
             {opt.label}
           </button>
-        );
+        )
       })}
     </div>
-  );
+  )
 }
 
 /* ── Grafico a linee: media giornaliera del voto complessivo ── */
 
 function TrendChart({ points }: { points: DayPoint[] }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(0);
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [width, setWidth] = useState(0)
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
-  const H = 240;
-  const M = { left: 34, right: 24, top: 18, bottom: 28 };
-  const plotW = Math.max(0, width - M.left - M.right);
-  const plotH = H - M.top - M.bottom;
+  const H = 240
+  const M = { left: 34, right: 24, top: 18, bottom: 28 }
+  const plotW = Math.max(0, width - M.left - M.right)
+  const plotH = H - M.top - M.bottom
 
-  const minT = points.length ? points[0].date.getTime() : 0;
-  const maxT = points.length ? points[points.length - 1].date.getTime() : 0;
+  const minT = points.length ? points[0].date.getTime() : 0
+  const maxT = points.length ? points[points.length - 1].date.getTime() : 0
   const x = useCallback(
     (t: number) =>
       maxT === minT ? M.left + plotW / 2 : M.left + ((t - minT) / (maxT - minT)) * plotW,
     [minT, maxT, M.left, plotW],
-  );
-  const y = (v: number) => M.top + (1 - v / 10) * plotH;
+  )
+  const y = (v: number) => M.top + (1 - v / 10) * plotH
 
   const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!points.length) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    let nearest = 0;
-    let best = Infinity;
+    if (!points.length) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = e.clientX - rect.left
+    let nearest = 0
+    let best = Infinity
     points.forEach((p, i) => {
-      const d = Math.abs(px - x(p.date.getTime()));
+      const d = Math.abs(px - x(p.date.getTime()))
       if (d < best) {
-        best = d;
-        nearest = i;
+        best = d
+        nearest = i
       }
-    });
-    setHoverIdx(nearest);
-  };
+    })
+    setHoverIdx(nearest)
+  }
 
   // Etichette X: tutte se poche, altrimenti un sottoinsieme uniforme
-  const labelStep = points.length > 8 ? Math.ceil(points.length / 6) : 1;
+  const labelStep = points.length > 8 ? Math.ceil(points.length / 6) : 1
 
   const path = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.date.getTime()).toFixed(1)} ${y(p.avg).toFixed(1)}`)
-    .join(' ');
+    .map(
+      (p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.date.getTime()).toFixed(1)} ${y(p.avg).toFixed(1)}`,
+    )
+    .join(' ')
 
-  const hover = hoverIdx !== null ? points[hoverIdx] : null;
-  const last = points[points.length - 1];
+  const hover = hoverIdx !== null ? points[hoverIdx] : null
+  const last = points[points.length - 1]
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -226,13 +226,7 @@ function TrendChart({ points }: { points: DayPoint[] }) {
                 stroke={v === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)'}
                 strokeWidth="1"
               />
-              <text
-                x={M.left - 8}
-                y={y(v) + 3.5}
-                textAnchor="end"
-                fontSize="10"
-                fill="#64748b"
-              >
+              <text x={M.left - 8} y={y(v) + 3.5} textAnchor="end" fontSize="10" fill="#64748b">
                 {v}
               </text>
             </g>
@@ -328,7 +322,7 @@ function TrendChart({ points }: { points: DayPoint[] }) {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 /* ── Riga a barra (meter): riempimento = punteggio/10, colore per fascia ── */
@@ -341,14 +335,14 @@ function MeterRow({
   highlighted = false,
   fullLabel = false,
 }: {
-  label: string;
-  sub?: string;
-  score: number;
-  dimmed?: boolean;
-  highlighted?: boolean;
+  label: string
+  sub?: string
+  score: number
+  dimmed?: boolean
+  highlighted?: boolean
   /* Etichetta sempre per intero su una riga (mai troncata): la mette sopra
    * la barra invece che affiancata, così non deve condividere spazio con nulla. */
-  fullLabel?: boolean;
+  fullLabel?: boolean
 }) {
   if (fullLabel) {
     return (
@@ -370,7 +364,7 @@ function MeterRow({
           />
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -395,7 +389,7 @@ function MeterRow({
         {formatScore(score)}
       </span>
     </div>
-  );
+  )
 }
 
 /* ── Card KPI ── */
@@ -406,99 +400,99 @@ function KpiCard({ label, children }: { label: string; children: React.ReactNode
       <p className="mb-2 text-xs font-medium tracking-wide text-slate-500">{label}</p>
       {children}
     </div>
-  );
+  )
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const showOrgFilter = isSuperAdmin(user);
-  const [rows, setRows] = useState<EvaluationReportRow[]>([]);
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [orgFilter, setOrgFilter] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('voice');
-  const [search, setSearch] = useState('');
-  const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const { user } = useAuth()
+  const showOrgFilter = isSuperAdmin(user)
+  const [rows, setRows] = useState<EvaluationReportRow[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [orgFilter, setOrgFilter] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [modeFilter, setModeFilter] = useState<ModeFilter>('voice')
+  const [search, setSearch] = useState('')
+  const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
 
   /* Excel del report: stesse righe della dashboard (stesso scope server
    * per organizzazione), i filtri più fini li offre il foglio stesso */
   const handleExportXlsx = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
+    if (isExporting) return
+    setIsExporting(true)
     try {
-      const blob = await fetchEvaluationsReportXlsx(orgFilter || undefined);
-      saveBlob(blob, `report-valutazioni-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const blob = await fetchEvaluationsReportXlsx(orgFilter || undefined)
+      saveBlob(blob, `report-valutazioni-${new Date().toISOString().slice(0, 10)}.xlsx`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Esportazione non riuscita.');
+      setError(err instanceof Error ? err.message : 'Esportazione non riuscita.')
     } finally {
-      setIsExporting(false);
+      setIsExporting(false)
     }
-  };
+  }
 
   const orgFilterOptions = [
     { value: '', label: 'Tutte le organizzazioni' },
     ...organizations.map((o) => ({ value: o.id, label: o.name })),
-  ];
+  ]
 
   useEffect(() => {
-    if (!isAdmin(user)) return;
-    let cancelled = false;
-    (async () => {
-      setIsLoading(true);
-      setError('');
+    if (!isAdmin(user)) return
+    let cancelled = false
+    ;(async () => {
+      setIsLoading(true)
+      setError('')
       try {
-        const data = await fetchEvaluationsReport(orgFilter || undefined);
-        if (!cancelled) setRows(data);
+        const data = await fetchEvaluationsReport(orgFilter || undefined)
+        if (!cancelled) setRows(data)
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Impossibile caricare la dashboard.');
+          setError(err instanceof Error ? err.message : 'Impossibile caricare la dashboard.')
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsLoading(false)
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, [user, orgFilter]);
+      cancelled = true
+    }
+  }, [user, orgFilter])
 
   useEffect(() => {
     if (isSuperAdmin(user)) {
       fetchOrganizations()
         .then(setOrganizations)
-        .catch(() => setOrganizations([]));
+        .catch(() => setOrganizations([]))
     }
-  }, [user]);
+  }, [user])
 
   /* Il selettore di canale sta a monte di tutto il resto: ogni conteggio,
    * media e grafico qui sotto parte da queste righe, non da rows. */
   const scopedRows = useMemo(
     () => (modeFilter === 'all' ? rows : rows.filter((r) => r.mode === modeFilter)),
     [rows, modeFilter],
-  );
+  )
 
   /* Utenti presenti nelle valutazioni (per la ricerca utente).
    * Volutamente su tutte le righe e non su scopedRows: se l'elenco si
    * restringesse col canale, l'utente selezionato potrebbe sparire dalle
    * opzioni e la sua chip svanirebbe pur restando il filtro attivo. */
   const usersInData = useMemo(() => {
-    const map = new Map<string, { name: string; email: string }>();
+    const map = new Map<string, { name: string; email: string }>()
     for (const r of rows) {
-      if (!map.has(r.user_id)) map.set(r.user_id, { name: displayName(r), email: r.user_email });
+      if (!map.has(r.user_id)) map.set(r.user_id, { name: displayName(r), email: r.user_email })
     }
     return Array.from(map, ([id, u]) => ({ id, ...u })).sort((a, b) =>
       a.name.localeCompare(b.name, 'it'),
-    );
-  }, [rows]);
+    )
+  }, [rows])
 
   /* Il filtro utente scopa KPI, andamento e criteri */
   const filtered = useMemo(
     () => (selectedUserId ? scopedRows.filter((r) => r.user_id === selectedUserId) : scopedRows),
     [scopedRows, selectedUserId],
-  );
+  )
 
   const overallAvg = useMemo(
     () =>
@@ -506,80 +500,85 @@ export default function DashboardPage() {
         ? filtered.reduce((sum, r) => sum + r.overall_score, 0) / filtered.length
         : null,
     [filtered],
-  );
+  )
 
   /* Media per giorno (asse temporale del grafico a linee) */
   const trendPoints = useMemo<DayPoint[]>(() => {
-    const byDay = new Map<string, { sum: number; count: number; date: Date }>();
+    const byDay = new Map<string, { sum: number; count: number; date: Date }>()
     for (const r of filtered) {
-      const d = new Date(r.conversation_at);
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const d = new Date(r.conversation_at)
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
       const entry = byDay.get(key) ?? {
         sum: 0,
         count: 0,
         date: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
-      };
-      entry.sum += r.overall_score;
-      entry.count += 1;
-      byDay.set(key, entry);
+      }
+      entry.sum += r.overall_score
+      entry.count += 1
+      byDay.set(key, entry)
     }
     return Array.from(byDay.values())
       .map((e) => ({ date: e.date, avg: e.sum / e.count, count: e.count }))
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [filtered]);
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+  }, [filtered])
 
   /* Media per criterio, nell'ordine in cui i criteri arrivano dal backend */
   const criteriaAvgs = useMemo<CriterionAvg[]>(() => {
-    const acc = new Map<string, { label: string; sum: number; count: number }>();
-    const order: string[] = [];
+    const acc = new Map<string, { label: string; sum: number; count: number }>()
+    const order: string[] = []
     for (const r of filtered) {
       for (const c of r.criteria) {
         if (!acc.has(c.key)) {
-          acc.set(c.key, { label: c.label, sum: 0, count: 0 });
-          order.push(c.key);
+          acc.set(c.key, { label: c.label, sum: 0, count: 0 })
+          order.push(c.key)
         }
-        const entry = acc.get(c.key)!;
-        entry.sum += c.score;
-        entry.count += 1;
+        const entry = acc.get(c.key)!
+        entry.sum += c.score
+        entry.count += 1
       }
     }
     return order.map((key) => {
-      const e = acc.get(key)!;
-      return { key, label: e.label, avg: e.sum / e.count };
-    });
-  }, [filtered]);
+      const e = acc.get(key)!
+      return { key, label: e.label, avg: e.sum / e.count }
+    })
+  }, [filtered])
 
   const bestCriterion = useMemo(
-    () =>
-      criteriaAvgs.length
-        ? criteriaAvgs.reduce((a, b) => (b.avg > a.avg ? b : a))
-        : null,
+    () => (criteriaAvgs.length ? criteriaAvgs.reduce((a, b) => (b.avg > a.avg ? b : a)) : null),
     [criteriaAvgs],
-  );
+  )
   const worstCriterion = useMemo(
-    () =>
-      criteriaAvgs.length
-        ? criteriaAvgs.reduce((a, b) => (b.avg < a.avg ? b : a))
-        : null,
+    () => (criteriaAvgs.length ? criteriaAvgs.reduce((a, b) => (b.avg < a.avg ? b : a)) : null),
     [criteriaAvgs],
-  );
+  )
 
   /* Confronto tra utenti: sempre su tutti gli utenti del canale attivo,
    * il filtro utente evidenzia soltanto */
   const userAvgs = useMemo<UserAvg[]>(() => {
-    const acc = new Map<string, UserAvg & { sum: number }>();
+    const acc = new Map<string, UserAvg & { sum: number }>()
     for (const r of scopedRows) {
-      const entry =
-        acc.get(r.user_id) ??
-        { userId: r.user_id, name: displayName(r), email: r.user_email, avg: 0, count: 0, sum: 0 };
-      entry.sum += r.overall_score;
-      entry.count += 1;
-      acc.set(r.user_id, entry);
+      const entry = acc.get(r.user_id) ?? {
+        userId: r.user_id,
+        name: displayName(r),
+        email: r.user_email,
+        avg: 0,
+        count: 0,
+        sum: 0,
+      }
+      entry.sum += r.overall_score
+      entry.count += 1
+      acc.set(r.user_id, entry)
     }
     return Array.from(acc.values())
-      .map((e) => ({ userId: e.userId, name: e.name, email: e.email, avg: e.sum / e.count, count: e.count }))
-      .sort((a, b) => b.avg - a.avg);
-  }, [scopedRows]);
+      .map((e) => ({
+        userId: e.userId,
+        name: e.name,
+        email: e.email,
+        avg: e.sum / e.count,
+        count: e.count,
+      }))
+      .sort((a, b) => b.avg - a.avg)
+  }, [scopedRows])
 
   const detailRows = useMemo(
     () =>
@@ -587,7 +586,7 @@ export default function DashboardPage() {
         (a, b) => new Date(b.conversation_at).getTime() - new Date(a.conversation_at).getTime(),
       ),
     [filtered],
-  );
+  )
 
   const searchedRows = useMemo(
     () =>
@@ -604,24 +603,34 @@ export default function DashboardPage() {
         ),
       ),
     [detailRows, search],
-  );
+  )
 
   if (!isAdmin(user)) {
     return (
       <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
         <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-white/6 bg-gray-900/60 p-16 text-center text-red-300">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-red-500"
+          >
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
           <h2 className="font-heading text-2xl text-slate-100">Accesso Negato</h2>
           <p className="max-w-[400px] text-slate-400">
-            Solo gli utenti con ruolo <strong>Super Admin</strong> o <strong>Organization Admin</strong> possono
-            visualizzare la dashboard.
+            Solo gli utenti con ruolo <strong>Super Admin</strong> o{' '}
+            <strong>Organization Admin</strong> possono visualizzare la dashboard.
           </p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -641,8 +650,8 @@ export default function DashboardPage() {
               className="min-w-[220px] max-sm:flex-1"
               value={orgFilter}
               onChange={(value) => {
-                setOrgFilter(value);
-                setSelectedUserId('');
+                setOrgFilter(value)
+                setSelectedUserId('')
               }}
               options={orgFilterOptions}
             />
@@ -656,7 +665,16 @@ export default function DashboardPage() {
             {isExporting ? (
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-600/25 border-t-violet-600" />
             ) : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
@@ -669,7 +687,16 @@ export default function DashboardPage() {
 
       {error && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -685,7 +712,17 @@ export default function DashboardPage() {
         </div>
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-white/6 bg-gray-900/60 p-16 text-center">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-600">
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-slate-600"
+          >
             <line x1="18" y1="20" x2="18" y2="10" />
             <line x1="12" y1="20" x2="12" y2="4" />
             <line x1="6" y1="20" x2="6" y2="14" />
@@ -699,7 +736,10 @@ export default function DashboardPage() {
         <>
           {/* Riga filtri: scopa tutto ciò che sta sotto */}
           <div className="mb-6 flex items-center gap-3 max-lg:flex-wrap">
-            <label htmlFor="dashboard-user-filter" className="text-xs font-medium tracking-wide text-slate-400">
+            <label
+              htmlFor="dashboard-user-filter"
+              className="text-xs font-medium tracking-wide text-slate-400"
+            >
               Utente
             </label>
             <SearchSelect
@@ -718,10 +758,20 @@ export default function DashboardPage() {
           </div>
 
           {/* Il canale può non avere nessuna conversazione: senza questo avviso
-            * i KPI a zero si leggerebbero come un errore di caricamento. */}
+           * i KPI a zero si leggerebbero come un errore di caricamento. */}
           {scopedRows.length === 0 && (
             <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-slate-500">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0 text-slate-500"
+              >
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="16" x2="12" y2="12" />
                 <line x1="12" y1="8" x2="12.01" y2="8" />
@@ -874,38 +924,49 @@ export default function DashboardPage() {
             }
           >
             {searchedRows.map((r) => (
-              <Tooltip key={r.conversation_id} content="Vedi conversazione e valutazione" anchor="cursor">
-                <Tr
-                  className="cursor-pointer"
-                  onClick={() => setDetailRow(r)}
-                >
-                <Td>
-                  <div className="flex items-center gap-2">
-                    <ConversationModeBadge mode={r.mode} iconOnly />
-                    <span className="text-[0.85rem] font-medium text-slate-100">{r.conversation_title}</span>
-                  </div>
-                </Td>
-                <Td className="text-[0.82rem] text-slate-400">{formatDateTime(r.conversation_at)}</Td>
-                <Td>
-                  <span className="text-[0.85rem] font-medium text-slate-100">{displayName(r)}</span>
-                </Td>
-                <Td className="text-[0.82rem] text-slate-400">{r.avatar_name}</Td>
-                {criteriaAvgs.map((c) => {
-                  const crit = r.criteria.find((rc) => rc.key === c.key);
-                  return (
-                    <Td key={c.key} align="center" compact>
-                      {crit ? (
-                        <span className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(crit.score)}`}>
-                          {formatScore(crit.score)}
-                        </span>
-                      ) : (
-                        <span className="text-slate-600">—</span>
-                      )}
-                    </Td>
-                  );
-                })}
+              <Tooltip
+                key={r.conversation_id}
+                content="Vedi conversazione e valutazione"
+                anchor="cursor"
+              >
+                <Tr className="cursor-pointer" onClick={() => setDetailRow(r)}>
+                  <Td>
+                    <div className="flex items-center gap-2">
+                      <ConversationModeBadge mode={r.mode} iconOnly />
+                      <span className="text-[0.85rem] font-medium text-slate-100">
+                        {r.conversation_title}
+                      </span>
+                    </div>
+                  </Td>
+                  <Td className="text-[0.82rem] text-slate-400">
+                    {formatDateTime(r.conversation_at)}
+                  </Td>
+                  <Td>
+                    <span className="text-[0.85rem] font-medium text-slate-100">
+                      {displayName(r)}
+                    </span>
+                  </Td>
+                  <Td className="text-[0.82rem] text-slate-400">{r.avatar_name}</Td>
+                  {criteriaAvgs.map((c) => {
+                    const crit = r.criteria.find((rc) => rc.key === c.key)
+                    return (
+                      <Td key={c.key} align="center" compact>
+                        {crit ? (
+                          <span
+                            className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(crit.score)}`}
+                          >
+                            {formatScore(crit.score)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </Td>
+                    )
+                  })}
                   <Td align="right">
-                    <span className={`text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}>
+                    <span
+                      className={`text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}
+                    >
                       {formatScore(r.overall_score)}/10
                     </span>
                   </Td>
@@ -916,10 +977,7 @@ export default function DashboardPage() {
         </>
       )}
 
-      {detailRow && (
-        <ConversationDetailModal row={detailRow} onClose={() => setDetailRow(null)} />
-      )}
+      {detailRow && <ConversationDetailModal row={detailRow} onClose={() => setDetailRow(null)} />}
     </div>
-  );
+  )
 }
-

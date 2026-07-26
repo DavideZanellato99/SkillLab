@@ -31,6 +31,15 @@ garanzia che `main` resti funzionante è procedurale (si mergia solo a
 `stage` verde). Se in futuro si passa a un flusso con feature branch e PR
 verso `stage`, allora ha senso proteggere `stage` con i check richiesti.
 
+Oltre ai gate del hook, la CI esegue anche il lint dell'infrastruttura
+(`hadolint` sui Dockerfile, `actionlint` sui workflow, `shellcheck` sugli
+script in `.githooks`) e uno smoke test Docker del compose di produzione.
+Un workflow separato ([security-audit.yml](.github/workflows/security-audit.yml))
+fa girare ogni lunedì `pip-audit` sui lock del backend e `npm audit
+--audit-level=high` sul frontend: è fuori dal gate dei push di proposito,
+così un CVE appena pubblicato non blocca lavoro che non c'entra; si può
+lanciare a mano dalla tab Actions.
+
 ## Gate automatici prima del commit (hook pre-commit)
 
 Il repo include un hook `pre-commit` in [.githooks/pre-commit](.githooks/pre-commit)
@@ -41,13 +50,16 @@ il commit se qualcosa è rosso**. Abilitalo una tantum (dopo il clone):
 git config core.hooksPath .githooks
 ```
 
-Cosa controlla, in ordine: `ruff check` + `ruff format --check` + `mypy`
-(backend), `pytest --cov` (backend, avvia da solo il Postgres di test via
-Docker se non è già su), `oxlint` + build + `vitest` (frontend), e
-`gitleaks` (scan segreti, via Docker). Serve Docker attivo per i test
-backend e per gitleaks. Se `ruff format --check` trova file da sistemare,
-il hook li riformatta da solo: basta rifare `git add` e rilanciare il
-commit.
+Cosa controlla, in ordine: igiene del commit (marker di conflitto e file
+oltre 5MB nello staging), `ruff check` + `ruff format --check` + `mypy` +
+coerenza tra `requirements*.in` e i lock compilati (backend), `pytest --cov`
+(backend, avvia da solo il Postgres di test via Docker se non è già su),
+`prettier --check` + `oxlint` + build + `vitest` con soglia di coverage
+(frontend), e `gitleaks protect --staged` (scan segreti sullo staging, via
+Docker; la scansione dell'intera history resta alla CI). Serve Docker
+attivo per i test backend e per gitleaks. Se `ruff format --check` o
+`prettier --check` trovano file da sistemare, il hook li riformatta da
+solo: basta rifare `git add` e rilanciare il commit.
 
 Per forzare un commit saltando i gate (es. un commit di lavoro usa-e-getta):
 
@@ -77,7 +89,7 @@ pytest --cov            # test + soglia di coverage
 I test hanno bisogno di un Postgres reale (l'app esegue SQL specifico di
 Postgres all'avvio): usa il database `skilllab_test` sul Postgres di
 `docker compose`. Impostalo con
-`DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5433/skilllab_test`
+`DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_test`
 (il `conftest.py` usa questo valore di default).
 
 ### Frontend (dalla cartella `frontend/`)
@@ -92,7 +104,7 @@ npm run test        # vitest
 ### Verifica dello stack completo
 
 ```bash
-cp backend/.env.example backend/.env
+# assicurati che backend/.env esista con le tue chiavi
 docker compose -f docker-compose.yml up --build
 curl http://localhost:8000/     # deve rispondere {"status":"ok",...}
 ```

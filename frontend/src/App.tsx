@@ -1,29 +1,29 @@
-import { useState, useCallback } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
-import Navbar from './components/Navbar';
-import Header from './components/Header';
-import AvatarGallery from './components/AvatarGallery';
-import ChatPage from './components/ChatPage';
-import AdminPage from './components/AdminPage';
-import DashboardPage from './components/DashboardPage';
-import UserReportPage from './components/UserReportPage';
-import AvatarAdminPage from './components/AvatarAdminPage';
-import OrganizationsPage from './components/OrganizationsPage';
-import TrainingPage from './components/TrainingPage';
-import TrainingGoals from './components/TrainingGoals';
-import ProfilePage from './components/ProfilePage';
-import LandingPage from './components/LandingPage';
-import './index.css';
+import { useState, useCallback } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useAuth } from './contexts/AuthContext'
+import Navbar from './components/Navbar'
+import Header from './components/Header'
+import AvatarGallery from './components/AvatarGallery'
+import ChatPage from './components/ChatPage'
+import AdminPage from './components/AdminPage'
+import DashboardPage from './components/DashboardPage'
+import UserReportPage from './components/UserReportPage'
+import AvatarAdminPage from './components/AvatarAdminPage'
+import OrganizationsPage from './components/OrganizationsPage'
+import TrainingPage from './components/TrainingPage'
+import TrainingGoals from './components/TrainingGoals'
+import ProfilePage from './components/ProfilePage'
+import LandingPage from './components/LandingPage'
+import './index.css'
 
 function HomePage() {
-  const [totalAvatars, setTotalAvatars] = useState(0);
-  const [totalCategories, setTotalCategories] = useState(0);
+  const [totalAvatars, setTotalAvatars] = useState(0)
+  const [totalCategories, setTotalCategories] = useState(0)
 
   const handleStatsUpdate = useCallback((avatars: number, categories: number) => {
-    setTotalAvatars(avatars);
-    setTotalCategories(categories);
-  }, []);
+    setTotalAvatars(avatars)
+    setTotalCategories(categories)
+  }, [])
 
   return (
     <>
@@ -33,11 +33,11 @@ function HomePage() {
         <AvatarGallery onStatsUpdate={handleStatsUpdate} />
       </main>
     </>
-  );
+  )
 }
 
 function App() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth()
 
   // Show loading screen while auth state is initializing
   if (isLoading) {
@@ -48,7 +48,7 @@ function App() {
           <p className="text-sm text-slate-500">Caricamento...</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -74,7 +74,7 @@ function App() {
         )}
       </Routes>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App

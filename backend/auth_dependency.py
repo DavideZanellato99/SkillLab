@@ -20,8 +20,8 @@ from token_sessions import enforce_session_binding
 
 # Tokens travel in HttpOnly cookies (XSS mitigation: JS can never read them).
 # The Authorization header is kept as a fallback for API tools/tests.
-ACCESS_TOKEN_COOKIE = "skilllab_access_token"
-REFRESH_TOKEN_COOKIE = "skilllab_refresh_token"
+ACCESS_TOKEN_COOKIE = "skilllab_access_token"  # noqa: S105 (cookie name, not a secret)
+REFRESH_TOKEN_COOKIE = "skilllab_refresh_token"  # noqa: S105 (cookie name, not a secret)
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 

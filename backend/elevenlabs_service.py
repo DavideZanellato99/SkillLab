@@ -32,7 +32,7 @@ if not _vad_silence_secs:
     )
 ELEVENLABS_VAD_SILENCE_SECS = float(_vad_silence_secs)
 
-# Speech-probability threshold (0.1–0.9): how loud a frame must be to count
+# Speech-probability threshold (0.1 to 0.9): how loud a frame must be to count
 # as speech rather than silence. Lower = softer speech still counts, so the
 # VAD is less likely to read a quiet stretch mid-sentence as a pause and
 # commit early. Left unset it falls back to ElevenLabs' own default, which

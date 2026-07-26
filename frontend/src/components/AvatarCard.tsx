@@ -1,32 +1,32 @@
-import { useNavigate } from 'react-router-dom';
-import type { Avatar } from '../services/api';
-import { getAvatarImageUrl } from '../services/api';
-import { categoryBadgeClasses } from './categoryStyles';
-import Tooltip from './Tooltip';
+import { useNavigate } from 'react-router-dom'
+import type { Avatar } from '../services/api'
+import { getAvatarImageUrl } from '../services/api'
+import { categoryBadgeClasses } from './categoryStyles'
+import Tooltip from './Tooltip'
 
 interface AvatarCardProps {
-  avatar: Avatar;
-  index: number;
+  avatar: Avatar
+  index: number
 }
 
 export default function AvatarCard({ avatar, index }: AvatarCardProps) {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     // Create ripple effect
-    const card = e.currentTarget;
-    const rect = card.getBoundingClientRect();
-    const ripple = document.createElement('span');
-    ripple.className = 'ripple';
-    ripple.style.left = `${e.clientX - rect.left}px`;
-    ripple.style.top = `${e.clientY - rect.top}px`;
-    ripple.style.width = '50px';
-    ripple.style.height = '50px';
-    card.appendChild(ripple);
-    setTimeout(() => ripple.remove(), 600);
+    const card = e.currentTarget
+    const rect = card.getBoundingClientRect()
+    const ripple = document.createElement('span')
+    ripple.className = 'ripple'
+    ripple.style.left = `${e.clientX - rect.left}px`
+    ripple.style.top = `${e.clientY - rect.top}px`
+    ripple.style.width = '50px'
+    ripple.style.height = '50px'
+    card.appendChild(ripple)
+    setTimeout(() => ripple.remove(), 600)
 
-    navigate(`/chat/${avatar.id}`);
-  };
+    navigate(`/chat/${avatar.id}`)
+  }
 
   return (
     <div
@@ -39,8 +39,8 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
       aria-label={`Parla con ${avatar.name}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          navigate(`/chat/${avatar.id}`);
+          e.preventDefault()
+          navigate(`/chat/${avatar.id}`)
         }
       }}
     >
@@ -55,7 +55,9 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
 
       <div className="relative p-6">
         <div className="mb-2 flex items-center gap-2">
-          <span className={`inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(avatar.category)}`}>
+          <span
+            className={`inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(avatar.category)}`}
+          >
             {avatar.category}
           </span>
           {avatar.difficulty && (
@@ -70,12 +72,23 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
           )}
         </div>
         <h3 className="mb-1 font-heading text-lg font-bold text-slate-100">{avatar.name}</h3>
-        <p className="line-clamp-2 text-[0.82rem] leading-normal text-slate-500">{avatar.description}</p>
+        <p className="line-clamp-2 text-[0.82rem] leading-normal text-slate-500">
+          {avatar.description}
+        </p>
       </div>
 
       <div className="flex items-center justify-end px-6 pb-6 pt-2">
         <span className="flex items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1 text-[0.8rem] font-medium text-slate-500 transition group-hover:scale-105 group-hover:border-violet-600 group-hover:bg-violet-600/15 group-hover:text-violet-400">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
             <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
             <line x1="12" y1="19" x2="12" y2="23" />
@@ -85,5 +98,5 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
         </span>
       </div>
     </div>
-  );
+  )
 }

@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+# The `cmd && ok || ko` pattern is intended: ok/ko are printf and never fail.
+# shellcheck disable=SC2015
 #
 # Pre-commit gate: runs the same checks the CI runs, locally, before the
 # commit is created. If any check fails the commit is aborted — fix it and
@@ -34,6 +36,30 @@ PY_ABS="$REPO/$PY"
 
 docker_ready() { docker info >/dev/null 2>&1; }
 
+# --- 0. commit hygiene: conflict markers & huge files ----------------------
+# Checks the STAGED content (what is actually about to be committed), not the
+# working tree.
+
+step "Igiene del commit: marker di conflitto e file grossi"
+MAX_FILE_BYTES=5242880  # 5 MB: sopra questa soglia è quasi sempre un asset finito in staging per errore
+hygiene_out="$(
+  git diff --cached --name-only --diff-filter=ACM | while IFS= read -r f; do
+    if git show ":$f" 2>/dev/null | grep -qIE '^(<<<<<<<|>>>>>>>)( |$)'; then
+      printf '  marker di conflitto in: %s\n' "$f"
+    fi
+    size="$(git cat-file -s ":$f" 2>/dev/null || echo 0)"
+    if [ "$size" -gt "$MAX_FILE_BYTES" ]; then
+      printf '  file oltre 5MB in staging: %s (%s byte)\n' "$f" "$size"
+    fi
+  done
+)"
+if [ -n "$hygiene_out" ]; then
+  printf '%s\n' "$hygiene_out"
+  ko "igiene del commit"
+else
+  ok "igiene del commit (nessun marker, nessun file enorme)"
+fi
+
 # --- 1. backend lint & types ----------------------------------------------
 
 step "Backend: ruff + mypy"
@@ -46,6 +72,8 @@ else
   ko "ruff (format) — file riformattati automaticamente: aggiungili con git add e rilancia il commit"
 fi
 ( cd backend && "$PY_ABS" -m mypy ) && ok "mypy" || ko "mypy"
+"$PY_ABS" .githooks/check-requirements-sync.py backend \
+  && ok "requirements (.in e lock coerenti)" || ko "requirements (lock non rigenerato)"
 
 # --- 2. backend tests (need the test Postgres) -----------------------------
 
@@ -68,16 +96,23 @@ else
     | grep -q 1 \
     || docker compose -f docker-compose.yml exec -T db createdb -U postgres skilllab_test >/dev/null 2>&1
 
-  DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5433/skilllab_test" \
+  DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_test" \
     sh -c "cd backend && '$PY_ABS' -m pytest -q --cov" && ok "pytest" || ko "pytest"
 fi
 
 # --- 3. frontend lint, build & tests --------------------------------------
 
-step "Frontend: lint + build + vitest"
+step "Frontend: format + lint + build + vitest"
+if ( cd frontend && npm run format:check >/dev/null 2>&1 ); then
+  ok "prettier (format)"
+else
+  # Riformatta subito i file, così basta un git add e rilanciare il commit.
+  ( cd frontend && npm run format >/dev/null 2>&1 )
+  ko "prettier (format) — file riformattati automaticamente: aggiungili con git add e rilancia il commit"
+fi
 ( cd frontend && npm run lint ) && ok "oxlint" || ko "oxlint"
 ( cd frontend && npm run build ) && ok "build (tsc+vite)" || ko "build"
-( cd frontend && npm run test ) && ok "vitest" || ko "vitest"
+( cd frontend && npm run test:coverage ) && ok "vitest (con soglia coverage)" || ko "vitest"
 
 # --- 4. secret scan (gitleaks via Docker) ---------------------------------
 
@@ -90,10 +125,12 @@ else
   # Git Bash from rewriting the container-side "/repo" into a host path
   # (it otherwise becomes "C:/.../repo" and gitleaks can't find it); the
   # var is harmless/ignored on Linux/macOS.
+  # `protect --staged` scansiona solo ciò che sta per essere committato:
+  # molto più veloce del `detect` sull'intera history, che resta alla CI.
   REPO_MOUNT="$(pwd -W 2>/dev/null || printf '%s' "$REPO")"
   MSYS_NO_PATHCONV=1 docker run --rm -v "${REPO_MOUNT}:/repo" ghcr.io/gitleaks/gitleaks:latest \
-    detect --source=/repo --redact --no-banner \
-    && ok "gitleaks (nessun segreto)" || ko "gitleaks (possibili segreti trovati)"
+    protect --source=/repo --staged --redact --no-banner \
+    && ok "gitleaks (nessun segreto in staging)" || ko "gitleaks (possibili segreti trovati)"
 fi
 
 # --- verdict ---------------------------------------------------------------

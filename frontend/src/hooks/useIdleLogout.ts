@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react'
 
 /**
  * Auto-logout after a period of user inactivity, synchronized across tabs.
@@ -12,14 +12,14 @@ import { useEffect, useRef } from 'react';
  * session state without repeating the API call.
  */
 
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-const CHECK_INTERVAL_MS = 30 * 1000;
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000
+const CHECK_INTERVAL_MS = 30 * 1000
 /* Cross-tab writes are throttled: sub-5s precision is irrelevant on a
  * 30-minute timeout and this keeps mousemove handlers cheap */
-const ACTIVITY_WRITE_THROTTLE_MS = 5 * 1000;
+const ACTIVITY_WRITE_THROTTLE_MS = 5 * 1000
 
-const ACTIVITY_KEY = 'skilllab_last_activity';
-const LOGOUT_KEY = 'skilllab_idle_logout';
+const ACTIVITY_KEY = 'skilllab_last_activity'
+const LOGOUT_KEY = 'skilllab_idle_logout'
 
 const ACTIVITY_EVENTS = [
   'mousemove',
@@ -30,96 +30,96 @@ const ACTIVITY_EVENTS = [
   'scroll',
   'touchstart',
   'touchmove',
-] as const;
+] as const
 
 interface UseIdleLogoutOptions {
   /** Track and enforce only while a session exists. */
-  enabled: boolean;
+  enabled: boolean
   /** This tab hit the timeout: perform the real logout (API + state). */
-  onIdle: () => void;
+  onIdle: () => void
   /** Another tab already logged the session out: just drop local state. */
-  onRemoteLogout: () => void;
+  onRemoteLogout: () => void
 }
 
 export function useIdleLogout({ enabled, onIdle, onRemoteLogout }: UseIdleLogoutOptions): void {
   // Refs keep the effect independent from callback identities
-  const onIdleRef = useRef(onIdle);
-  const onRemoteLogoutRef = useRef(onRemoteLogout);
-  onIdleRef.current = onIdle;
-  onRemoteLogoutRef.current = onRemoteLogout;
+  const onIdleRef = useRef(onIdle)
+  const onRemoteLogoutRef = useRef(onRemoteLogout)
+  onIdleRef.current = onIdle
+  onRemoteLogoutRef.current = onRemoteLogout
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) return
 
-    let lastActivity = Date.now();
-    let lastWrite = 0;
-    let fired = false;
+    let lastActivity = Date.now()
+    let lastWrite = 0
+    let fired = false
 
     // Opening/logging into a tab counts as activity for every tab
     try {
-      localStorage.setItem(ACTIVITY_KEY, String(lastActivity));
+      localStorage.setItem(ACTIVITY_KEY, String(lastActivity))
     } catch {
       // Storage unavailable (private mode quota...): local tracking still works
     }
 
     const recordActivity = () => {
-      lastActivity = Date.now();
+      lastActivity = Date.now()
       if (lastActivity - lastWrite >= ACTIVITY_WRITE_THROTTLE_MS) {
-        lastWrite = lastActivity;
+        lastWrite = lastActivity
         try {
-          localStorage.setItem(ACTIVITY_KEY, String(lastActivity));
+          localStorage.setItem(ACTIVITY_KEY, String(lastActivity))
         } catch {
           // ignore
         }
       }
-    };
+    }
 
     const checkIdle = () => {
-      if (fired || Date.now() - lastActivity < IDLE_TIMEOUT_MS) return;
-      fired = true;
+      if (fired || Date.now() - lastActivity < IDLE_TIMEOUT_MS) return
+      fired = true
       // Tell the other tabs first, then log out for real
       try {
-        localStorage.setItem(LOGOUT_KEY, String(Date.now()));
+        localStorage.setItem(LOGOUT_KEY, String(Date.now()))
       } catch {
         // ignore
       }
-      onIdleRef.current();
-    };
+      onIdleRef.current()
+    }
 
     // storage events only fire in the OTHER tabs — exactly what we need
     const handleStorage = (e: StorageEvent) => {
       if (e.key === ACTIVITY_KEY && e.newValue) {
-        const ts = Number(e.newValue);
+        const ts = Number(e.newValue)
         if (Number.isFinite(ts) && ts > lastActivity) {
-          lastActivity = ts;
+          lastActivity = ts
         }
       } else if (e.key === LOGOUT_KEY && e.newValue && !fired) {
-        fired = true;
-        onRemoteLogoutRef.current();
+        fired = true
+        onRemoteLogoutRef.current()
       }
-    };
+    }
 
     // Re-check as soon as the tab comes back to the foreground: interval
     // timers are throttled (or frozen) in background tabs
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') checkIdle();
-    };
+      if (document.visibilityState === 'visible') checkIdle()
+    }
 
     for (const evt of ACTIVITY_EVENTS) {
       // capture: nested-container scrolls don't bubble to window
-      window.addEventListener(evt, recordActivity, { passive: true, capture: true });
+      window.addEventListener(evt, recordActivity, { passive: true, capture: true })
     }
-    window.addEventListener('storage', handleStorage);
-    document.addEventListener('visibilitychange', handleVisibility);
-    const interval = window.setInterval(checkIdle, CHECK_INTERVAL_MS);
+    window.addEventListener('storage', handleStorage)
+    document.addEventListener('visibilitychange', handleVisibility)
+    const interval = window.setInterval(checkIdle, CHECK_INTERVAL_MS)
 
     return () => {
       for (const evt of ACTIVITY_EVENTS) {
-        window.removeEventListener(evt, recordActivity, { capture: true });
+        window.removeEventListener(evt, recordActivity, { capture: true })
       }
-      window.removeEventListener('storage', handleStorage);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.clearInterval(interval);
-    };
-  }, [enabled]);
+      window.removeEventListener('storage', handleStorage)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.clearInterval(interval)
+    }
+  }, [enabled])
 }

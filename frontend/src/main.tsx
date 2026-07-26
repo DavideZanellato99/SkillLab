@@ -9,7 +9,7 @@ import App from './App.tsx'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60,      // 1 minute
+      staleTime: 1000 * 60, // 1 minute
       retry: 1,
       refetchOnWindowFocus: false,
     },
@@ -27,4 +27,3 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 )
-

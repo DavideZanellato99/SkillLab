@@ -5,8 +5,8 @@
  * standardised caching, refetching, and mutation + invalidation logic.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ChatConversation, ChatConversationSummary } from '../services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { ChatConversation, ChatConversationSummary } from '../services/api'
 import {
   fetchAvatars,
   fetchAvatar,
@@ -18,8 +18,8 @@ import {
   endChatConversation,
   evaluateConversation,
   fetchConversationEvaluation,
-} from '../services/api';
-import { deleteAdminConversation } from '../services/admin';
+} from '../services/api'
+import { deleteAdminConversation } from '../services/admin'
 
 // =====================================================
 //  QUERY KEY FACTORY — single source of truth for keys
@@ -40,7 +40,7 @@ export const queryKeys = {
     byConversation: (conversationId: string) =>
       ['evaluations', 'conversation', conversationId] as const,
   },
-} as const;
+} as const
 
 // =====================================================
 //  AVATAR QUERIES
@@ -51,7 +51,7 @@ export function useAvatars(category?: string | null) {
   return useQuery({
     queryKey: queryKeys.avatars.list(category ?? undefined),
     queryFn: () => fetchAvatars(category ?? undefined),
-  });
+  })
 }
 
 /** Fetch a single avatar by ID. */
@@ -60,7 +60,7 @@ export function useAvatar(avatarId: string | undefined) {
     queryKey: queryKeys.avatars.detail(avatarId!),
     queryFn: () => fetchAvatar(avatarId!),
     enabled: avatarId !== undefined,
-  });
+  })
 }
 
 /** Fetch all distinct avatar categories. */
@@ -68,7 +68,7 @@ export function useCategories() {
   return useQuery({
     queryKey: queryKeys.categories,
     queryFn: fetchCategories,
-  });
+  })
 }
 
 // =====================================================
@@ -81,7 +81,7 @@ export function useConversations(avatarId: string | undefined) {
     queryKey: queryKeys.conversations.byAvatar(avatarId!),
     queryFn: () => fetchConversations(avatarId!),
     enabled: avatarId !== undefined,
-  });
+  })
 }
 
 /** Fetch a single conversation with all its messages. */
@@ -90,7 +90,7 @@ export function useConversation(conversationId: string | null) {
     queryKey: queryKeys.conversations.detail(conversationId!),
     queryFn: () => fetchConversation(conversationId!),
     enabled: conversationId !== null,
-  });
+  })
 }
 
 /** Fetch the stored AI evaluation of a conversation (null when none exists). */
@@ -99,7 +99,7 @@ export function useConversationEvaluation(conversationId: string | null) {
     queryKey: queryKeys.evaluations.byConversation(conversationId!),
     queryFn: () => fetchConversationEvaluation(conversationId!),
     enabled: conversationId !== null,
-  });
+  })
 }
 
 // =====================================================
@@ -108,15 +108,15 @@ export function useConversationEvaluation(conversationId: string | null) {
 
 /** Run the AI evaluation of a conversation and cache the result. */
 export function useEvaluateConversation() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (conversationId: string) => evaluateConversation(conversationId),
 
     onSuccess: (data, conversationId) => {
-      queryClient.setQueryData(queryKeys.evaluations.byConversation(conversationId), data);
+      queryClient.setQueryData(queryKeys.evaluations.byConversation(conversationId), data)
     },
-  });
+  })
 }
 
 /**
@@ -129,7 +129,7 @@ export function useEvaluateConversation() {
  * the conversation the list does not know about yet.
  */
 export function useSendChatMessage() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: ({
@@ -138,21 +138,21 @@ export function useSendChatMessage() {
       content,
       onDelta,
     }: {
-      avatarId: string;
-      conversationId: string | null;
-      content: string;
-      onDelta: (text: string) => void;
+      avatarId: string
+      conversationId: string | null
+      content: string
+      onDelta: (text: string) => void
     }) => sendChatMessage(avatarId, conversationId, content, onDelta),
 
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
     },
-  });
+  })
 }
 
 /** Close a text chat: the transcript becomes final and cannot be resumed. */
 export function useEndChatConversation() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (conversationId: string) => endChatConversation(conversationId),
@@ -163,18 +163,18 @@ export function useEndChatConversation() {
       queryClient.setQueryData<ChatConversationSummary[]>(
         queryKeys.conversations.byAvatar(updated.avatar_id),
         (list) => list?.map((conv) => (conv.id === updated.id ? { ...conv, ...updated } : conv)),
-      );
+      )
       queryClient.setQueryData<ChatConversation>(
         queryKeys.conversations.detail(updated.id),
         (conv) => (conv ? { ...conv, ended_at: updated.ended_at } : conv),
-      );
+      )
     },
-  });
+  })
 }
 
 /** Rename a conversation; the title is mandatory, a blank one is rejected. */
 export function useRenameConversation() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
@@ -187,27 +187,26 @@ export function useRenameConversation() {
       queryClient.setQueryData<ChatConversationSummary[]>(
         queryKeys.conversations.byAvatar(updated.avatar_id),
         (list) => list?.map((conv) => (conv.id === updated.id ? { ...conv, ...updated } : conv)),
-      );
+      )
       queryClient.setQueryData<ChatConversation>(
         queryKeys.conversations.detail(updated.id),
-        (conv) =>
-          conv ? { ...conv, title: updated.title, ended_at: updated.ended_at } : conv,
-      );
+        (conv) => (conv ? { ...conv, title: updated.title, ended_at: updated.ended_at } : conv),
+      )
     },
-  });
+  })
 }
 
 /** Delete a conversation. Admin-only: the backend has no endpoint for a
  *  normal user to delete their own history. */
 export function useDeleteConversation() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (conversationId: string) => deleteAdminConversation(conversationId),
 
     onSuccess: () => {
       // Invalidate all conversation lists
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
     },
-  });
+  })
 }

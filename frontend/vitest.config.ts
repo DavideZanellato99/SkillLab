@@ -23,6 +23,14 @@ export default defineConfig({
         'src/services/voiceCall.ts',
         'src/services/voice.ts',
       ],
+      // Ratchet floor, not a target: today the suite covers ~2% of src, the
+      // gate only stops regressions. Raise these as real tests get written.
+      thresholds: {
+        statements: 2,
+        branches: 1.8,
+        functions: 1.3,
+        lines: 2,
+      },
     },
   },
 })

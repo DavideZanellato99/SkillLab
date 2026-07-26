@@ -1,0 +1,5 @@
+dist/
+coverage/
+static/
+public/
+package-lock.json

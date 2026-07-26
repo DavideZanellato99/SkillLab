@@ -6,6 +6,7 @@ NOME + COGNOME. The profile is only ever exposed through these endpoints —
 the student-facing API strips it.
 """
 
+import contextlib
 import os
 from uuid import UUID
 
@@ -249,9 +250,7 @@ def delete_avatar(
     db.commit()
 
     if had_generated_image:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(os.path.join(_AVATARS_DIR, f"avatar_{avatar_id}.svg"))
-        except OSError:
-            pass
 
     return MessageResponse(message=f"Avatar '{name}' eliminato con successo.", success=True)

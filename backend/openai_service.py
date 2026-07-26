@@ -175,12 +175,12 @@ async def stream_avatar_response(
             # Once text has been emitted we can't switch model mid-response
             if started or not _is_retryable(e):
                 print(f"[ERROR] OpenAI streaming call failed ({model}): {e}")
-                raise RuntimeError(f"Errore nella comunicazione con OpenAI: {str(e)}")
+                raise RuntimeError(f"Errore nella comunicazione con OpenAI: {e!s}")
             print(f"[WARN] Modello {model} non disponibile, provo il successivo: {str(e)[:120]}")
             last_error = e
 
     print(f"[ERROR] Tutti i modelli OpenAI non disponibili: {last_error}")
-    raise RuntimeError(f"Errore nella comunicazione con OpenAI: {str(last_error)}")
+    raise RuntimeError(f"Errore nella comunicazione con OpenAI: {last_error!s}")
 
 
 # ── Post-call evaluation (operator coaching) ──────────
@@ -596,7 +596,7 @@ async def evaluate_conversation(
         except Exception as e:
             if not _is_retryable(e):
                 print(f"[ERROR] OpenAI evaluation failed ({model}): {e}")
-                raise RuntimeError(f"Errore nella generazione della valutazione: {str(e)}")
+                raise RuntimeError(f"Errore nella generazione della valutazione: {e!s}")
             print(f"[WARN] Modello {model} non disponibile per la valutazione: {str(e)[:120]}")
             last_error = e
             continue
@@ -610,4 +610,4 @@ async def evaluate_conversation(
             last_error = e
 
     print(f"[ERROR] Valutazione fallita su tutti i modelli OpenAI: {last_error}")
-    raise RuntimeError(f"Errore nella generazione della valutazione: {str(last_error)}")
+    raise RuntimeError(f"Errore nella generazione della valutazione: {last_error!s}")

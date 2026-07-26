@@ -1,22 +1,18 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { isAdmin, isSuperAdmin } from '../services/auth';
-import type { AuthUser } from '../services/auth';
-import { fetchAllUsers, fetchAdminAvatars } from '../services/admin';
-import type { AdminAvatar } from '../services/admin';
-import { fetchOrganizations } from '../services/organizations';
-import type { Organization } from '../services/organizations';
-import {
-  fetchAssignments,
-  createAssignments,
-  deleteAssignment,
-} from '../services/training';
-import type { TrainingAssignment, AssignmentStatus } from '../services/training';
-import DataTable, { Td, Tr } from './DataTable';
-import SearchSelect from './SearchSelect';
-import Select from './Select';
-import Tooltip from './Tooltip';
-import { matchesSearch } from './tableSearch';
+import { useState, useEffect, useMemo } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { isAdmin, isSuperAdmin } from '../services/auth'
+import type { AuthUser } from '../services/auth'
+import { fetchAllUsers, fetchAdminAvatars } from '../services/admin'
+import type { AdminAvatar } from '../services/admin'
+import { fetchOrganizations } from '../services/organizations'
+import type { Organization } from '../services/organizations'
+import { fetchAssignments, createAssignments, deleteAssignment } from '../services/training'
+import type { TrainingAssignment, AssignmentStatus } from '../services/training'
+import DataTable, { Td, Tr } from './DataTable'
+import SearchSelect from './SearchSelect'
+import Select from './Select'
+import Tooltip from './Tooltip'
+import { matchesSearch } from './tableSearch'
 
 /* Percorsi di training assegnati: il super admin affida a uno o più utenti
  * un obiettivo su un avatar (punteggio target, scadenza opzionale) e da qui
@@ -24,9 +20,9 @@ import { matchesSearch } from './tableSearch';
  * valutazioni. L'organization admin vede solo la propria organizzazione e
  * non crea né elimina. */
 
-const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md';
+const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
 const inputCls =
-  'rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-600 focus:bg-violet-600/8';
+  'rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-600 focus:bg-violet-600/8'
 
 export const STATUS_META: Record<AssignmentStatus, { label: string; cls: string }> = {
   active: { label: 'In corso', cls: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' },
@@ -39,21 +35,21 @@ export const STATUS_META: Record<AssignmentStatus, { label: string; cls: string 
     label: 'Completato in ritardo',
     cls: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
   },
-};
+}
 
 export function AssignmentStatusBadge({ status }: { status: AssignmentStatus }) {
-  const meta = STATUS_META[status];
+  const meta = STATUS_META[status]
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[0.72rem] font-semibold ${meta.cls}`}
     >
       {meta.label}
     </span>
-  );
+  )
 }
 
 function formatScore(score: number): string {
-  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 })
 }
 
 function formatDate(dateStr: string): string {
@@ -61,67 +57,73 @@ function formatDate(dateStr: string): string {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-  });
+  })
 }
 
 export default function TrainingPage() {
-  const { user } = useAuth();
-  const canManage = isSuperAdmin(user);
+  const { user } = useAuth()
+  const canManage = isSuperAdmin(user)
 
-  const [assignments, setAssignments] = useState<TrainingAssignment[]>([]);
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [orgFilter, setOrgFilter] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [reloadKey, setReloadKey] = useState(0);
+  const [assignments, setAssignments] = useState<TrainingAssignment[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [orgFilter, setOrgFilter] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [search, setSearch] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   // ── Form di assegnazione (solo super admin) ────────
-  const [avatars, setAvatars] = useState<AdminAvatar[]>([]);
-  const [users, setUsers] = useState<AuthUser[]>([]);
-  const [avatarId, setAvatarId] = useState('');
-  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
-  const [targetScore, setTargetScore] = useState('7');
-  const [dueDate, setDueDate] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [formSuccess, setFormSuccess] = useState('');
+  const [avatars, setAvatars] = useState<AdminAvatar[]>([])
+  const [users, setUsers] = useState<AuthUser[]>([])
+  const [avatarId, setAvatarId] = useState('')
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
+  const [targetScore, setTargetScore] = useState('7')
+  const [dueDate, setDueDate] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [formSuccess, setFormSuccess] = useState('')
 
   useEffect(() => {
-    if (!isAdmin(user)) return;
-    let cancelled = false;
-    (async () => {
-      setIsLoading(true);
-      setError('');
+    if (!isAdmin(user)) return
+    let cancelled = false
+    ;(async () => {
+      setIsLoading(true)
+      setError('')
       try {
-        const data = await fetchAssignments(orgFilter || undefined);
-        if (!cancelled) setAssignments(data);
+        const data = await fetchAssignments(orgFilter || undefined)
+        if (!cancelled) setAssignments(data)
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Impossibile caricare i percorsi.');
+          setError(err instanceof Error ? err.message : 'Impossibile caricare i percorsi.')
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsLoading(false)
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, [user, orgFilter, reloadKey]);
+      cancelled = true
+    }
+  }, [user, orgFilter, reloadKey])
 
   useEffect(() => {
-    if (!canManage) return;
-    fetchAdminAvatars().then(setAvatars).catch(() => setAvatars([]));
-    fetchAllUsers().then(setUsers).catch(() => setUsers([]));
-    fetchOrganizations().then(setOrganizations).catch(() => setOrganizations([]));
-  }, [canManage]);
+    if (!canManage) return
+    fetchAdminAvatars()
+      .then(setAvatars)
+      .catch(() => setAvatars([]))
+    fetchAllUsers()
+      .then(setUsers)
+      .catch(() => setUsers([]))
+    fetchOrganizations()
+      .then(setOrganizations)
+      .catch(() => setOrganizations([]))
+  }, [canManage])
 
-  const selectedAvatar = avatars.find((a) => a.id === avatarId) ?? null;
+  const selectedAvatar = avatars.find((a) => a.id === avatarId) ?? null
 
   // Solo gli utenti attivi dell'organizzazione dell'avatar possono
   // riceverlo come obiettivo: l'avatar è privato del suo tenant
   const assignableUsers = useMemo(() => {
-    if (!selectedAvatar) return [];
+    if (!selectedAvatar) return []
     return users
       .filter(
         (u) =>
@@ -129,32 +131,32 @@ export default function TrainingPage() {
           u.ruolo !== 'super_admin' &&
           u.status === 'active',
       )
-      .sort((a, b) => `${a.nome} ${a.cognome}`.localeCompare(`${b.nome} ${b.cognome}`, 'it'));
-  }, [users, selectedAvatar]);
+      .sort((a, b) => `${a.nome} ${a.cognome}`.localeCompare(`${b.nome} ${b.cognome}`, 'it'))
+  }, [users, selectedAvatar])
 
   const toggleUser = (id: string) => {
     setSelectedUserIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
-  const parsedTarget = Number(targetScore.replace(',', '.'));
+  const parsedTarget = Number(targetScore.replace(',', '.'))
   const canSubmit =
     !isSaving &&
     avatarId !== '' &&
     selectedUserIds.size > 0 &&
     Number.isFinite(parsedTarget) &&
     parsedTarget >= 1 &&
-    parsedTarget <= 10;
+    parsedTarget <= 10
 
   const handleCreate = async () => {
-    if (!canSubmit) return;
-    setIsSaving(true);
-    setFormError('');
-    setFormSuccess('');
+    if (!canSubmit) return
+    setIsSaving(true)
+    setFormError('')
+    setFormSuccess('')
     try {
       const created = await createAssignments({
         avatar_id: avatarId,
@@ -162,29 +164,29 @@ export default function TrainingPage() {
         target_score: parsedTarget,
         // Fine giornata: una scadenza vale per tutto il giorno indicato
         due_at: dueDate ? `${dueDate}T23:59:59` : null,
-      });
+      })
       setFormSuccess(
         created.length === 1
           ? 'Percorso assegnato a 1 utente.'
           : `Percorso assegnato a ${created.length} utenti.`,
-      );
-      setSelectedUserIds(new Set());
-      setReloadKey((k) => k + 1);
+      )
+      setSelectedUserIds(new Set())
+      setReloadKey((k) => k + 1)
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Assegnazione non riuscita.');
+      setFormError(err instanceof Error ? err.message : 'Assegnazione non riuscita.')
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  };
+  }
 
   const handleDelete = async (assignment: TrainingAssignment) => {
     try {
-      await deleteAssignment(assignment.id);
-      setAssignments((prev) => prev.filter((a) => a.id !== assignment.id));
+      await deleteAssignment(assignment.id)
+      setAssignments((prev) => prev.filter((a) => a.id !== assignment.id))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Eliminazione non riuscita.');
+      setError(err instanceof Error ? err.message : 'Eliminazione non riuscita.')
     }
-  };
+  }
 
   const searchedRows = useMemo(
     () =>
@@ -199,13 +201,23 @@ export default function TrainingPage() {
         ),
       ),
     [assignments, search],
-  );
+  )
 
   if (!isAdmin(user)) {
     return (
       <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
         <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-white/6 bg-gray-900/60 p-16 text-center text-red-300">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-red-500"
+          >
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
@@ -216,7 +228,7 @@ export default function TrainingPage() {
           </p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -247,7 +259,16 @@ export default function TrainingPage() {
 
       {error && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -264,16 +285,19 @@ export default function TrainingPage() {
           </p>
           <div className="flex flex-wrap items-end gap-4">
             <div className="min-w-[240px] flex-1">
-              <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="training-avatar">
+              <label
+                className="mb-1 block text-xs font-medium text-slate-400"
+                htmlFor="training-avatar"
+              >
                 Avatar / scenario
               </label>
               <SearchSelect
                 id="training-avatar"
                 value={avatarId}
                 onChange={(value) => {
-                  setAvatarId(value);
-                  setSelectedUserIds(new Set());
-                  setFormSuccess('');
+                  setAvatarId(value)
+                  setSelectedUserIds(new Set())
+                  setFormSuccess('')
                 }}
                 options={avatars.map((a) => ({
                   value: a.id,
@@ -284,7 +308,10 @@ export default function TrainingPage() {
               />
             </div>
             <div className="w-[130px]">
-              <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="training-target">
+              <label
+                className="mb-1 block text-xs font-medium text-slate-400"
+                htmlFor="training-target"
+              >
                 Obiettivo (1-10)
               </label>
               <input
@@ -299,7 +326,10 @@ export default function TrainingPage() {
               />
             </div>
             <div className="w-[170px]">
-              <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="training-due">
+              <label
+                className="mb-1 block text-xs font-medium text-slate-400"
+                htmlFor="training-due"
+              >
                 Scadenza (opzionale)
               </label>
               <input
@@ -460,7 +490,16 @@ export default function TrainingPage() {
                       onClick={() => handleDelete(a)}
                       aria-label={`Elimina il percorso di ${a.user_name} su ${a.avatar_name}`}
                     >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
@@ -473,5 +512,5 @@ export default function TrainingPage() {
         </DataTable>
       )}
     </div>
-  );
+  )
 }

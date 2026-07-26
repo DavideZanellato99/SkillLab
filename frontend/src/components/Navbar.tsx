@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { OPEN_LOGIN_EVENT } from './LandingPage';
+import { useState, useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { OPEN_LOGIN_EVENT } from './LandingPage'
 import {
   isNewPasswordRequired,
   isSuperAdmin,
@@ -12,132 +12,132 @@ import {
   PASSWORD_RULES,
   getUnmetPasswordRules,
   getInitials,
-} from '../services/auth';
+} from '../services/auth'
 
-type AuthStep = 'login' | 'new-password';
+type AuthStep = 'login' | 'new-password'
 
 /* Shared form styles (auth modal) */
-const fieldCls = 'flex flex-col gap-1.5';
-const labelCls = 'text-xs font-medium tracking-wide text-slate-400';
+const fieldCls = 'flex flex-col gap-1.5'
+const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
 const inputWrapperCls =
-  'group flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]';
-const inputIconCls = 'shrink-0 text-slate-500 transition-colors group-focus-within:text-violet-400';
+  'group flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'
+const inputIconCls = 'shrink-0 text-slate-500 transition-colors group-focus-within:text-violet-400'
 const inputCls =
-  'flex-1 border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50';
+  'flex-1 border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50'
 const submitBtnCls =
-  'mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60';
+  'mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60'
 const menuItemCls =
-  'flex w-full cursor-pointer items-center gap-2 rounded-lg border-none bg-transparent p-2 text-left text-[0.82rem] font-medium text-slate-400 no-underline transition hover:bg-white/8 hover:text-slate-100';
+  'flex w-full cursor-pointer items-center gap-2 rounded-lg border-none bg-transparent p-2 text-left text-[0.82rem] font-medium text-slate-400 no-underline transition hover:bg-white/8 hover:text-slate-100'
 
 export default function Navbar() {
-  const location = useLocation();
-  const isHome = location.pathname === '/';
-  const isDashboardPage = location.pathname === '/admin/dashboard';
-  const isTrainingPage = location.pathname === '/admin/training';
-  const isReportPage = location.pathname === '/admin/report';
-  const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth();
+  const location = useLocation()
+  const isHome = location.pathname === '/'
+  const isDashboardPage = location.pathname === '/admin/dashboard'
+  const isTrainingPage = location.pathname === '/admin/training'
+  const isReportPage = location.pathname === '/admin/report'
+  const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth()
 
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authStep, setAuthStep] = useState<AuthStep>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [cognitoSession, setCognitoSession] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authStep, setAuthStep] = useState<AuthStep>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [cognitoSession, setCognitoSession] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [showUserMenu, setShowUserMenu] = useState(false)
 
   const resetForm = () => {
-    setEmail('');
-    setPassword('');
-    setNewPassword('');
-    setConfirmNewPassword('');
-    setCognitoSession('');
-    setAuthStep('login');
-    setErrorMessage('');
-    setIsSubmitting(false);
-  };
+    setEmail('')
+    setPassword('')
+    setNewPassword('')
+    setConfirmNewPassword('')
+    setCognitoSession('')
+    setAuthStep('login')
+    setErrorMessage('')
+    setIsSubmitting(false)
+  }
 
   // The landing page CTAs ask to open the login modal via this event
   useEffect(() => {
     const openLogin = () => {
-      setEmail('');
-      setPassword('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-      setCognitoSession('');
-      setAuthStep('login');
-      setErrorMessage('');
-      setIsSubmitting(false);
-      setShowAuthModal(true);
-    };
-    window.addEventListener(OPEN_LOGIN_EVENT, openLogin);
-    return () => window.removeEventListener(OPEN_LOGIN_EVENT, openLogin);
-  }, []);
+      setEmail('')
+      setPassword('')
+      setNewPassword('')
+      setConfirmNewPassword('')
+      setCognitoSession('')
+      setAuthStep('login')
+      setErrorMessage('')
+      setIsSubmitting(false)
+      setShowAuthModal(true)
+    }
+    window.addEventListener(OPEN_LOGIN_EVENT, openLogin)
+    return () => window.removeEventListener(OPEN_LOGIN_EVENT, openLogin)
+  }, [])
 
   const closeModal = () => {
-    setShowAuthModal(false);
-    resetForm();
-  };
+    setShowAuthModal(false)
+    resetForm()
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-    setIsSubmitting(true);
+    e.preventDefault()
+    setErrorMessage('')
+    setIsSubmitting(true)
 
     try {
-      const result = await login(email, password);
+      const result = await login(email, password)
 
       if (isNewPasswordRequired(result)) {
         // Cognito requires password change
-        setCognitoSession(result.session);
-        setAuthStep('new-password');
-        setPassword('');
+        setCognitoSession(result.session)
+        setAuthStep('new-password')
+        setPassword('')
       } else {
         // Login successful
-        closeModal();
+        closeModal()
       }
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Errore durante il login.');
+      setErrorMessage(err instanceof Error ? err.message : 'Errore durante il login.')
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   const handleNewPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
+    e.preventDefault()
+    setErrorMessage('')
 
     if (newPassword !== confirmNewPassword) {
-      setErrorMessage('Le password non coincidono.');
-      return;
+      setErrorMessage('Le password non coincidono.')
+      return
     }
 
-    const unmetRules = getUnmetPasswordRules(newPassword);
+    const unmetRules = getUnmetPasswordRules(newPassword)
     if (unmetRules.length > 0) {
       setErrorMessage(
         `La password non soddisfa i requisiti: ${unmetRules.join(', ').toLowerCase()}.`,
-      );
-      return;
+      )
+      return
     }
 
-    setIsSubmitting(true);
+    setIsSubmitting(true)
 
     try {
-      await completeNewPassword(email, newPassword, cognitoSession);
-      closeModal();
+      await completeNewPassword(email, newPassword, cognitoSession)
+      closeModal()
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Errore durante il cambio password.');
+      setErrorMessage(err instanceof Error ? err.message : 'Errore durante il cambio password.')
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   const handleLogout = () => {
-    logout();
-    setShowUserMenu(false);
-  };
+    logout()
+    setShowUserMenu(false)
+  }
 
   return (
     <>
@@ -187,7 +187,16 @@ export default function Navbar() {
                   : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
               }`}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <rect x="3" y="3" width="7" height="7" rx="1" />
                 <rect x="14" y="3" width="7" height="7" rx="1" />
                 <rect x="14" y="14" width="7" height="7" rx="1" />
@@ -204,7 +213,16 @@ export default function Navbar() {
                     : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
                 }`}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <rect x="3" y="3" width="7" height="9" rx="1" />
                   <rect x="14" y="3" width="7" height="5" rx="1" />
                   <rect x="14" y="12" width="7" height="9" rx="1" />
@@ -222,7 +240,16 @@ export default function Navbar() {
                     : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
                 }`}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <circle cx="12" cy="12" r="6" />
                   <circle cx="12" cy="12" r="2" />
@@ -239,7 +266,16 @@ export default function Navbar() {
                     : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
                 }`}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <line x1="18" y1="20" x2="18" y2="10" />
                   <line x1="12" y1="20" x2="12" y2="4" />
                   <line x1="6" y1="20" x2="6" y2="14" />
@@ -263,11 +299,19 @@ export default function Navbar() {
                     {getInitials(user.nome, user.cognome, user.email)}
                   </div>
                   <span className="max-w-[120px] truncate max-[480px]:hidden">
-                    {user.nome && user.cognome
-                      ? `${user.nome} ${user.cognome}`
-                      : user.email}
+                    {user.nome && user.cognome ? `${user.nome} ${user.cognome}` : user.email}
                   </span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 opacity-50 transition-transform ${showUserMenu ? 'rotate-180' : ''}`}>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`shrink-0 opacity-50 transition-transform ${showUserMenu ? 'rotate-180' : ''}`}
+                  >
                     <path d="m6 9 6 6 6-6" />
                   </svg>
                 </button>
@@ -283,12 +327,12 @@ export default function Navbar() {
                       </div>
                       <div className="flex min-w-0 flex-col">
                         <span className="truncate text-[0.85rem] font-semibold text-slate-100">
-                          {user.nome && user.cognome
-                            ? `${user.nome} ${user.cognome}`
-                            : user.email}
+                          {user.nome && user.cognome ? `${user.nome} ${user.cognome}` : user.email}
                         </span>
                         <span className="truncate text-xs text-slate-500">{user.email}</span>
-                        <span className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[user.ruolo] ?? ''}`}>
+                        <span
+                          className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[user.ruolo] ?? ''}`}
+                        >
                           {ROLE_LABELS[user.ruolo] ?? user.ruolo}
                         </span>
                       </div>
@@ -299,7 +343,16 @@ export default function Navbar() {
                       className={menuItemCls}
                       onClick={() => setShowUserMenu(false)}
                     >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <circle cx="12" cy="8" r="4" />
                         <path d="M4 20c0-4 3.58-6 8-6s8 2 8 6" />
                       </svg>
@@ -313,7 +366,16 @@ export default function Navbar() {
                             className={menuItemCls}
                             onClick={() => setShowUserMenu(false)}
                           >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
                               <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                               <circle cx="8.5" cy="7" r="4" />
                               <line x1="20" y1="8" x2="20" y2="14" />
@@ -328,7 +390,16 @@ export default function Navbar() {
                             className={menuItemCls}
                             onClick={() => setShowUserMenu(false)}
                           >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
                               <path d="M3 21h18" />
                               <path d="M5 21V7l8-4v18" />
                               <path d="M19 21V11l-6-4" />
@@ -345,7 +416,16 @@ export default function Navbar() {
                             className={menuItemCls}
                             onClick={() => setShowUserMenu(false)}
                           >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
                               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                               <circle cx="9" cy="7" r="4" />
                               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -359,7 +439,16 @@ export default function Navbar() {
                           className={menuItemCls}
                           onClick={() => setShowUserMenu(false)}
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <rect x="3" y="3" width="7" height="9" rx="1" />
                             <rect x="14" y="3" width="7" height="5" rx="1" />
                             <rect x="14" y="12" width="7" height="9" rx="1" />
@@ -372,7 +461,16 @@ export default function Navbar() {
                           className={menuItemCls}
                           onClick={() => setShowUserMenu(false)}
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <circle cx="12" cy="12" r="10" />
                             <circle cx="12" cy="12" r="6" />
                             <circle cx="12" cy="12" r="2" />
@@ -384,7 +482,16 @@ export default function Navbar() {
                           className={menuItemCls}
                           onClick={() => setShowUserMenu(false)}
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <line x1="18" y1="20" x2="18" y2="10" />
                             <line x1="12" y1="20" x2="12" y2="4" />
                             <line x1="6" y1="20" x2="6" y2="14" />
@@ -394,8 +501,20 @@ export default function Navbar() {
                       </>
                     )}
                     <div className="my-1 h-px bg-white/6" />
-                    <button className={`${menuItemCls} hover:bg-red-500/10 hover:text-red-300`} onClick={handleLogout}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <button
+                      className={`${menuItemCls} hover:bg-red-500/10 hover:text-red-300`}
+                      onClick={handleLogout}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                         <polyline points="16 17 21 12 16 7" />
                         <line x1="21" y1="12" x2="9" y2="12" />
@@ -409,10 +528,22 @@ export default function Navbar() {
               /* Not authenticated — show login button */
               <button
                 className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1.5 text-[0.82rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 hover:shadow-[0_4px_12px_rgba(124,58,237,0.15)]"
-                onClick={() => { resetForm(); setShowAuthModal(true); }}
+                onClick={() => {
+                  resetForm()
+                  setShowAuthModal(true)
+                }}
                 id="auth-trigger-btn"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
@@ -446,7 +577,16 @@ export default function Navbar() {
               onClick={closeModal}
               aria-label="Chiudi"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -474,12 +614,16 @@ export default function Navbar() {
 
               {authStep === 'login' ? (
                 <>
-                  <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">Bentornato!</h2>
+                  <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
+                    Bentornato!
+                  </h2>
                   <p className="text-[0.85rem] text-slate-500">Accedi per continuare su SkillLab</p>
                 </>
               ) : (
                 <>
-                  <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">Imposta nuova password</h2>
+                  <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
+                    Imposta nuova password
+                  </h2>
                   <p className="text-[0.85rem] text-slate-500">
                     La tua password temporanea è scaduta. Scegline una nuova per continuare.
                   </p>
@@ -489,8 +633,21 @@ export default function Navbar() {
 
             {/* Error message */}
             {errorMessage && (
-              <div className="mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]" id="auth-error">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-px shrink-0 text-red-500">
+              <div
+                className="mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]"
+                id="auth-error"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="mt-px shrink-0 text-red-500"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -503,9 +660,21 @@ export default function Navbar() {
             {authStep === 'login' && (
               <form className="flex flex-col gap-4" onSubmit={handleLogin} id="auth-form">
                 <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-email">Email</label>
+                  <label className={labelCls} htmlFor="auth-email">
+                    Email
+                  </label>
                   <div className={inputWrapperCls}>
-                    <svg className={inputIconCls} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      className={inputIconCls}
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <rect x="2" y="4" width="20" height="16" rx="2" />
                       <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                     </svg>
@@ -524,9 +693,21 @@ export default function Navbar() {
                 </div>
 
                 <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-password">Password</label>
+                  <label className={labelCls} htmlFor="auth-password">
+                    Password
+                  </label>
                   <div className={inputWrapperCls}>
-                    <svg className={inputIconCls} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      className={inputIconCls}
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
@@ -565,11 +746,27 @@ export default function Navbar() {
 
             {/* New Password Form */}
             {authStep === 'new-password' && (
-              <form className="flex flex-col gap-4" onSubmit={handleNewPassword} id="auth-new-password-form">
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={handleNewPassword}
+                id="auth-new-password-form"
+              >
                 <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-new-password">Nuova Password</label>
+                  <label className={labelCls} htmlFor="auth-new-password">
+                    Nuova Password
+                  </label>
                   <div className={inputWrapperCls}>
-                    <svg className={inputIconCls} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      className={inputIconCls}
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
@@ -589,9 +786,21 @@ export default function Navbar() {
                 </div>
 
                 <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-confirm-new-password">Conferma Nuova Password</label>
+                  <label className={labelCls} htmlFor="auth-confirm-new-password">
+                    Conferma Nuova Password
+                  </label>
                   <div className={inputWrapperCls}>
-                    <svg className={inputIconCls} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      className={inputIconCls}
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
                     <input
@@ -613,13 +822,16 @@ export default function Navbar() {
                   <p className="mb-1 text-xs font-semibold text-slate-400">Requisiti password:</p>
                   <ul className="flex list-none flex-col gap-1">
                     {PASSWORD_RULES.map((rule) => {
-                      const met = rule.test(newPassword);
+                      const met = rule.test(newPassword)
                       return (
-                        <li key={rule.label} className={`text-xs transition-colors ${met ? 'text-emerald-500' : 'text-slate-500'}`}>
+                        <li
+                          key={rule.label}
+                          className={`text-xs transition-colors ${met ? 'text-emerald-500' : 'text-slate-500'}`}
+                        >
                           <span className="mr-2">{met ? '●' : '○'}</span>
                           {rule.label}
                         </li>
-                      );
+                      )
                     })}
                   </ul>
                 </div>
@@ -645,5 +857,5 @@ export default function Navbar() {
         </div>
       )}
     </>
-  );
+  )
 }

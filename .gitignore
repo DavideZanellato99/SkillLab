@@ -1,8 +1,6 @@
 # Environment files — never commit secrets
 .env
 .env.*
-# ...but the placeholder template (no secrets) is tracked on purpose.
-!.env.example
 
 # Python
 __pycache__/

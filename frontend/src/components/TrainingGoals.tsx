@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { fetchMyAssignments } from '../services/training';
-import type { TrainingAssignment } from '../services/training';
-import { AssignmentStatusBadge } from './TrainingPage';
-import { categoryBadgeClasses } from './categoryStyles';
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { fetchMyAssignments } from '../services/training'
+import type { TrainingAssignment } from '../services/training'
+import { AssignmentStatusBadge } from './TrainingPage'
+import { categoryBadgeClasses } from './categoryStyles'
 
 /* Striscia "I tuoi percorsi" in cima alla home: gli obiettivi assegnati
  * all'utente, con il progresso verso il punteggio target. Ogni card apre
@@ -11,46 +11,41 @@ import { categoryBadgeClasses } from './categoryStyles';
  * sezione non esiste. */
 
 function formatScore(score: number): string {
-  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 })
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+  return new Date(dateStr).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
 }
 
 export default function TrainingGoals() {
-  const [assignments, setAssignments] = useState<TrainingAssignment[]>([]);
+  const [assignments, setAssignments] = useState<TrainingAssignment[]>([])
 
   useEffect(() => {
     fetchMyAssignments()
       .then(setAssignments)
-      .catch(() => setAssignments([]));
-  }, []);
+      .catch(() => setAssignments([]))
+  }, [])
 
-  if (assignments.length === 0) return null;
+  if (assignments.length === 0) return null
 
   // Prima quelli ancora da chiudere, i completati in coda e attenuati
   const sorted = [...assignments].sort((a, b) => {
-    const openA = a.status === 'active' || a.status === 'overdue' ? 0 : 1;
-    const openB = b.status === 'active' || b.status === 'overdue' ? 0 : 1;
-    return openA - openB;
-  });
+    const openA = a.status === 'active' || a.status === 'overdue' ? 0 : 1
+    const openB = b.status === 'active' || b.status === 'overdue' ? 0 : 1
+    return openA - openB
+  })
 
   return (
     <section className="mb-8" aria-label="I tuoi percorsi di training">
       <div className="mb-3 flex items-baseline gap-2">
         <h2 className="font-heading text-lg font-bold text-slate-100">I tuoi percorsi</h2>
-        <span className="text-xs text-slate-500">
-          Obiettivi assegnati dal tuo formatore
-        </span>
+        <span className="text-xs text-slate-500">Obiettivi assegnati dal tuo formatore</span>
       </div>
       <div className="grid grid-cols-3 gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
         {sorted.map((a) => {
-          const isOpen = a.status === 'active' || a.status === 'overdue';
-          const progress = Math.max(
-            0,
-            Math.min(1, (a.best_score ?? 0) / a.target_score),
-          );
+          const isOpen = a.status === 'active' || a.status === 'overdue'
+          const progress = Math.max(0, Math.min(1, (a.best_score ?? 0) / a.target_score))
           return (
             <Link
               key={a.id}
@@ -79,7 +74,9 @@ export default function TrainingGoals() {
                     <strong className="font-bold text-slate-100">
                       {formatScore(a.target_score)}/10
                     </strong>
-                    {a.due_at && <span className="text-slate-500"> entro il {formatDate(a.due_at)}</span>}
+                    {a.due_at && (
+                      <span className="text-slate-500"> entro il {formatDate(a.due_at)}</span>
+                    )}
                   </span>
                   <span className="tabular-nums text-slate-400">
                     {a.best_score !== null ? (
@@ -101,16 +98,18 @@ export default function TrainingGoals() {
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/6">
                   <div
                     className={`h-full rounded-full transition-all ${
-                      progress >= 1 ? 'bg-emerald-500' : 'bg-gradient-to-r from-violet-600 to-cyan-500'
+                      progress >= 1
+                        ? 'bg-emerald-500'
+                        : 'bg-gradient-to-r from-violet-600 to-cyan-500'
                     }`}
                     style={{ width: `${progress * 100}%` }}
                   />
                 </div>
               </div>
             </Link>
-          );
+          )
         })}
       </div>
     </section>
-  );
+  )
 }

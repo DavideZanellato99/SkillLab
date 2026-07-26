@@ -14,7 +14,9 @@ describe('Toast', () => {
 
   it('calls onClose when the close button is clicked', async () => {
     const onClose = vi.fn()
-    render(<Toast title="Errore" message="Qualcosa è andato storto" type="error" onClose={onClose} />)
+    render(
+      <Toast title="Errore" message="Qualcosa è andato storto" type="error" onClose={onClose} />,
+    )
 
     await userEvent.click(screen.getByRole('button', { name: 'Chiudi notifica' }))
     expect(onClose).toHaveBeenCalledOnce()

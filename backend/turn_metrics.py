@@ -37,7 +37,7 @@ LATENCY_LOG_ENABLED = os.getenv("VOICE_LATENCY_LOG", "1").strip().lower() not in
 
 # Marks, in the order the pipeline reaches them
 MARK_LLM_REQUEST = "llm_request"
-MARK_LLM_FIRST_TOKEN = "llm_first_token"
+MARK_LLM_FIRST_TOKEN = "llm_first_token"  # noqa: S105 (metric mark name, not a secret)
 MARK_TTS_FIRST_SEND = "tts_first_send"
 MARK_TTS_FIRST_AUDIO = "tts_first_audio"
 MARK_BROWSER_FIRST_AUDIO = "browser_first_audio"
@@ -55,7 +55,7 @@ _SEGMENTS = [
 class TurnTimer:
     """Stopwatch for one assistant turn, started when the STT commits."""
 
-    __slots__ = ("turn_id", "context_id", "vad_ms", "tts_sends", "_start", "_marks")
+    __slots__ = ("_marks", "_start", "context_id", "tts_sends", "turn_id", "vad_ms")
 
     def __init__(self, turn_id: str, vad_ms: float | None):
         self.turn_id = turn_id

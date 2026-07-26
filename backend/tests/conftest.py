@@ -10,7 +10,7 @@ module (loaded by pytest before any test) is where they happen:
    overridden per test).
 2. DATABASE_URL is pointed at a *test* database. `setdefault` means CI can
    override it (its Postgres service container sets the real value); locally
-   it falls back to the compose Postgres on 5433, database `skilllab_test`.
+   it falls back to the compose Postgres on 5432, database `skilllab_test`.
 
 The app runs Postgres-specific DDL at import (JSONB, STORAGE EXTERNAL,
 ADD COLUMN IF NOT EXISTS), so the suite needs a real Postgres — SQLite is
@@ -22,7 +22,7 @@ import os
 
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+psycopg://postgres:postgres@localhost:5433/skilllab_test",
+    "postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_test",
 )
 os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:3000")
 os.environ.setdefault("COGNITO_REGION", "eu-west-1")
@@ -39,16 +39,16 @@ os.environ.setdefault("ELEVENLABS_VAD_THRESHOLD", "0.5")
 os.environ.setdefault("ELEVENLABS_STT_WS_URL", "wss://example.invalid/stt")
 os.environ.setdefault("VOICE_LATENCY_LOG", "0")
 
-import uuid  # noqa: E402  (must follow the env setup above)
+import uuid
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
-import main  # noqa: E402  (importing runs create_all + migrations on the test DB)
-from auth_dependency import ensure_roles, get_current_user  # noqa: E402
-from database import engine, get_db  # noqa: E402
-from models import (  # noqa: E402
+import main
+from auth_dependency import ensure_roles, get_current_user
+from database import engine, get_db
+from models import (
     ROLE_SUPER_ADMIN,
     ROLE_USER,
     Avatar,

@@ -7,6 +7,8 @@ WORKDIR /app
 # trusted, so that one fetch goes over http (apk verifies package
 # signatures independently of TLS); everything after uses https again.
 COPY avast-root.cr[t] /usr/local/share/ca-certificates/avast-root.crt
+# ca-certificates deliberately unpinned: apk drops old versions from the repo.
+# hadolint ignore=DL3018
 RUN sed -i 's/https:/http:/' /etc/apk/repositories \
     && apk add --no-cache ca-certificates \
     && sed -i 's/http:/https:/' /etc/apk/repositories \

@@ -56,7 +56,7 @@ def authenticate(email: str, password: str) -> dict:
 
     Raises RuntimeError on failure.
     """
-    if email in ("admin", "admin@admin.com", "admin@skilllab.local") and password == "admin":
+    if email in ("admin", "admin@admin.com", "admin@skilllab.local") and password == "admin":  # noqa: S105
         return {
             "access_token": "mock-admin-access-token",
             "refresh_token": "mock-admin-refresh-token",
@@ -169,7 +169,7 @@ def change_own_password(access_token: str, previous_password: str, new_password:
         else:
             raise RuntimeError(f"Errore nel cambio password: {e.response['Error']['Message']}")
     except Exception as e:
-        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")
 
 
 def refresh_tokens(refresh_token: str) -> dict:
@@ -179,7 +179,7 @@ def refresh_tokens(refresh_token: str) -> dict:
     Returns new access token.
     Raises RuntimeError on failure.
     """
-    if refresh_token == "mock-admin-refresh-token":
+    if refresh_token == "mock-admin-refresh-token":  # noqa: S105
         return {
             "access_token": "mock-admin-access-token",
         }
@@ -212,7 +212,7 @@ def revoke_refresh_token(refresh_token: str) -> None:
 
     Raises RuntimeError on failure.
     """
-    if refresh_token == "mock-admin-refresh-token":
+    if refresh_token == "mock-admin-refresh-token":  # noqa: S105
         return
 
     try:
@@ -225,7 +225,7 @@ def revoke_refresh_token(refresh_token: str) -> None:
             f"Errore nella revoca del refresh token: {e.response['Error']['Message']}"
         )
     except Exception as e:
-        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")
 
 
 def verify_access_token(token: str, verify_exp: bool = True) -> dict:
@@ -240,7 +240,7 @@ def verify_access_token(token: str, verify_exp: bool = True) -> dict:
     the OLD access token (jti) for the session-binding pre-check — the
     identifier matters there, not the validity.
     """
-    if token == "mock-admin-access-token":
+    if token == "mock-admin-access-token":  # noqa: S105
         return {
             "sub": "mock-admin-sub-0000-0000-0000",
             "username": "admin",
@@ -284,7 +284,7 @@ def verify_access_token(token: str, verify_exp: bool = True) -> dict:
         return claims
 
     except JWTError as e:
-        raise RuntimeError(f"Token non valido o scaduto: {str(e)}")
+        raise RuntimeError(f"Token non valido o scaduto: {e!s}")
 
 
 def get_cognito_sub_from_token(token: str) -> str:
@@ -321,7 +321,7 @@ def admin_create_user(email: str) -> str:
         else:
             raise RuntimeError(f"Errore nella creazione utente: {e.response['Error']['Message']}")
     except Exception as e:
-        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")
 
     # Extract the sub from the user attributes
     cognito_sub = None
@@ -356,7 +356,7 @@ def admin_set_user_enabled(email: str, enabled: bool) -> None:
         action = "riattivazione" if enabled else "sospensione"
         raise RuntimeError(f"Errore nella {action} su Cognito: {e.response['Error']['Message']}")
     except Exception as e:
-        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")
 
 
 def admin_resend_credentials(email: str) -> str:
@@ -392,7 +392,7 @@ def admin_resend_credentials(email: str) -> str:
             f"Errore nella lettura dell'utente da Cognito: {e.response['Error']['Message']}"
         )
     except Exception as e:
-        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")
 
     if cognito_user.get("UserStatus") == "FORCE_CHANGE_PASSWORD":
         try:
@@ -405,7 +405,7 @@ def admin_resend_credentials(email: str) -> str:
         except ClientError as e:
             raise RuntimeError(f"Errore nel rinvio dell'invito: {e.response['Error']['Message']}")
         except Exception as e:
-            raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+            raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")
 
         for attr in cognito_user.get("UserAttributes", []):
             if attr["Name"] == "sub":
@@ -436,4 +436,4 @@ def admin_delete_user(email: str) -> None:
             return
         raise RuntimeError(f"Errore nell'eliminazione da Cognito: {e.response['Error']['Message']}")
     except Exception as e:
-        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {str(e)}")
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")

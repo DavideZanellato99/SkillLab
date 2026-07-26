@@ -37,6 +37,8 @@ jobs:
         run: ruff format --check .
       - name: Mypy (types)
         run: mypy
+      - name: Requirements lock in sync with .in
+        run: python ../.githooks/check-requirements-sync.py .
 
   backend-tests:
     name: Backend tests
@@ -91,12 +93,14 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: npm ci
+      - name: Format (prettier)
+        run: npm run format:check
       - name: Lint (oxlint)
         run: npm run lint
       - name: Build (tsc + vite)
         run: npm run build
-      - name: Tests (vitest)
-        run: npm run test
+      - name: Tests (vitest, with coverage gate)
+        run: npm run test:coverage
 
   secrets:
     name: Secret scan (gitleaks)
@@ -117,10 +121,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create backend .env from the template
+      - name: Create backend .env with placeholder values
         # Placeholder values are enough to boot; the smoke test only hits the
-        # unauthenticated health endpoint, never the external APIs.
-        run: cp backend/.env.example backend/.env
+        # unauthenticated health endpoint, never the external APIs. In compose
+        # DATABASE_URL is overridden to point at the "db" service.
+        run: |
+          cat > backend/.env <<'EOF'
+          DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_db
+          ALLOWED_ORIGINS=http://localhost:3000
+          COGNITO_REGION=eu-west-1
+          COGNITO_USER_POOL_ID=
+          COGNITO_APP_CLIENT_ID=
+          OPENAI_API_KEY=
+          OPENAI_MODEL=gpt-4o
+          OPENAI_EVAL_MODEL=gpt-4o
+          OPENAI_FALLBACK_MODELS=
+          OPENAI_EVAL_FALLBACK_MODELS=
+          CARTESIA_API_KEY=
+          CARTESIA_MODEL=sonic-2
+          CARTESIA_VERSION=2024-11-13
+          CARTESIA_LANGUAGE=it
+          CARTESIA_DEFAULT_VOICE_ID=
+          CARTESIA_TTS_WS_URL=wss://api.cartesia.ai/tts/websocket
+          ELEVENLABS_API_KEY=
+          ELEVENLABS_STT_MODEL=scribe_v1
+          ELEVENLABS_STT_LANGUAGE=it
+          ELEVENLABS_VAD_SILENCE_SECS=0.8
+          ELEVENLABS_VAD_THRESHOLD=0.5
+          ELEVENLABS_STT_WS_URL=wss://api.elevenlabs.io/v1/speech-to-text/stream
+          VOICE_LATENCY_LOG=1
+          EOF
       - name: Build images and start the stack (production compose)
         # docker-compose.yml alone (without the dev override) is the real
         # production build: backend on uvicorn, frontend static behind nginx.
@@ -143,12 +173,26 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.yml down -v
 
+  infra-lint:
+    name: Infra lint (hadolint, actionlint, shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: hadolint (backend Dockerfile)
+        run: docker run --rm -i hadolint/hadolint < backend/Dockerfile
+      - name: hadolint (frontend Dockerfile)
+        run: docker run --rm -i hadolint/hadolint < frontend/Dockerfile
+      - name: actionlint (workflow files)
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
+      - name: shellcheck (.githooks)
+        run: docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable .githooks/pre-commit
+
   # Single check to require in branch settings: green only if every job above
   # succeeded.
   ci-success:
     name: CI success
     runs-on: ubuntu-latest
-    needs: [backend-quality, backend-tests, frontend, secrets, docker-smoke]
+    needs: [backend-quality, backend-tests, frontend, secrets, docker-smoke, infra-lint]
     if: always()
     steps:
       - name: Fail if any job failed

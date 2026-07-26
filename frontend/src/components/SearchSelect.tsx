@@ -1,5 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { matchesSearch } from './tableSearch';
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { matchesSearch } from './tableSearch'
 
 /* Selezione tramite ricerca, per elenchi lunghi (es. filtro utente della
  * dashboard): campo di testo con suggerimenti filtrati mentre si digita;
@@ -8,23 +8,23 @@ import { matchesSearch } from './tableSearch';
  * stile in linea con Select. */
 
 export interface SearchSelectOption {
-  value: string;
-  label: string;
+  value: string
+  label: string
   /** Riga secondaria nei suggerimenti, inclusa nel match (es. email) */
-  sub?: string;
+  sub?: string
 }
 
 interface SearchSelectProps {
-  id?: string;
+  id?: string
   /** Valore selezionato; stringa vuota = nessuna selezione */
-  value: string;
-  onChange: (value: string) => void;
-  options: SearchSelectOption[];
-  placeholder?: string;
+  value: string
+  onChange: (value: string) => void
+  options: SearchSelectOption[]
+  placeholder?: string
   /** Testo muto mostrato accanto al campo quando non c'è selezione */
-  emptyHint?: string;
+  emptyHint?: string
   /** Classi extra sul wrapper (es. larghezza) */
-  className?: string;
+  className?: string
 }
 
 export default function SearchSelect({
@@ -36,85 +36,85 @@ export default function SearchSelect({
   emptyHint,
   className = '',
 }: SearchSelectProps) {
-  const [query, setQuery] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const listRef = useRef<HTMLUListElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const listboxId = useId();
+  const [query, setQuery] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const listRef = useRef<HTMLUListElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const listboxId = useId()
 
-  const selected = options.find((o) => o.value === value);
+  const selected = options.find((o) => o.value === value)
   const visible = useMemo(
     () => options.filter((o) => matchesSearch(query, o.label, o.sub)),
     [options, query],
-  );
+  )
 
   // Chiudi al click fuori dal componente
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return
     const onPointerDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
+        setIsOpen(false)
       }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [isOpen]);
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [isOpen])
 
   // Tieni visibile l'opzione attiva mentre si naviga con la tastiera
   useEffect(() => {
-    if (!isOpen || activeIndex < 0) return;
-    listRef.current?.children[activeIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [isOpen, activeIndex]);
+    if (!isOpen || activeIndex < 0) return
+    listRef.current?.children[activeIndex]?.scrollIntoView({ block: 'nearest' })
+  }, [isOpen, activeIndex])
 
   const pick = (opt: SearchSelectOption) => {
-    onChange(opt.value);
-    setQuery('');
-    setIsOpen(false);
-  };
+    onChange(opt.value)
+    setQuery('')
+    setIsOpen(false)
+  }
 
   const clear = () => {
-    onChange('');
-    inputRef.current?.focus();
-  };
+    onChange('')
+    inputRef.current?.focus()
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     switch (e.key) {
       case 'ArrowDown':
-        e.preventDefault();
+        e.preventDefault()
         if (!isOpen) {
-          setIsOpen(true);
-          setActiveIndex(0);
+          setIsOpen(true)
+          setActiveIndex(0)
         } else {
-          setActiveIndex((i) => Math.min(visible.length - 1, i + 1));
+          setActiveIndex((i) => Math.min(visible.length - 1, i + 1))
         }
-        break;
+        break
       case 'ArrowUp':
-        e.preventDefault();
-        if (isOpen) setActiveIndex((i) => Math.max(0, i - 1));
-        break;
+        e.preventDefault()
+        if (isOpen) setActiveIndex((i) => Math.max(0, i - 1))
+        break
       case 'Enter':
         if (isOpen && activeIndex >= 0 && visible[activeIndex]) {
-          e.preventDefault();
-          pick(visible[activeIndex]);
+          e.preventDefault()
+          pick(visible[activeIndex])
         }
-        break;
+        break
       case 'Escape':
         if (isOpen) {
-          e.preventDefault();
-          setIsOpen(false);
+          e.preventDefault()
+          setIsOpen(false)
         }
-        break;
+        break
       case 'Backspace':
         // Campo vuoto: cancella la selezione corrente (come le chip dei tag input)
-        if (query === '' && value !== '') clear();
-        break;
+        if (query === '' && value !== '') clear()
+        break
       case 'Tab':
-        setIsOpen(false);
-        break;
+        setIsOpen(false)
+        break
     }
-  };
+  }
 
   return (
     <div ref={rootRef} className={`relative flex items-center gap-2 ${className}`}>
@@ -150,9 +150,9 @@ export default function SearchSelect({
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => {
-            setQuery(e.target.value);
-            setIsOpen(true);
-            setActiveIndex(0);
+            setQuery(e.target.value)
+            setIsOpen(true)
+            setActiveIndex(0)
           }}
           onFocus={() => setIsOpen(true)}
           onClick={() => setIsOpen(true)}
@@ -171,7 +171,7 @@ export default function SearchSelect({
               <li className="px-3 py-2 text-[0.85rem] italic text-slate-500">Nessun risultato</li>
             ) : (
               visible.map((opt, i) => {
-                const isSelected = opt.value === value;
+                const isSelected = opt.value === value
                 return (
                   <li
                     key={opt.value}
@@ -189,7 +189,7 @@ export default function SearchSelect({
                       <span className="truncate text-xs font-normal text-slate-500">{opt.sub}</span>
                     )}
                   </li>
-                );
+                )
               })
             )}
           </ul>
@@ -224,5 +224,5 @@ export default function SearchSelect({
         emptyHint && <span className="shrink-0 text-xs text-slate-500">{emptyHint}</span>
       )}
     </div>
-  );
+  )
 }

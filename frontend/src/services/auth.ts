@@ -1,63 +1,63 @@
 /* Auth service for communicating with the backend auth endpoints */
 
 // Same-origin: the Vite dev server proxies /api to the backend (vite.config.ts).
-const API_BASE_URL = '';
+const API_BASE_URL = ''
 
 // =====================================================
 //  TYPES
 // =====================================================
 
-export type UserStatus = 'active' | 'suspended' | 'disabled';
+export type UserStatus = 'active' | 'suspended' | 'disabled'
 
 export interface AuthUser {
-  id: string;
-  cognito_sub: string;
-  email: string;
-  nome: string;
-  cognome: string;
-  role_id: string;
-  ruolo: string; // role name: 'super_admin' | 'organization_admin' | 'user'
-  status: UserStatus;
+  id: string
+  cognito_sub: string
+  email: string
+  nome: string
+  cognome: string
+  role_id: string
+  ruolo: string // role name: 'super_admin' | 'organization_admin' | 'user'
+  status: UserStatus
   /** Tenant the user belongs to; both null for the super admin. */
-  organization_id: string | null;
-  organization_name: string | null;
-  created_at: string;
-  updated_at: string;
+  organization_id: string | null
+  organization_name: string | null
+  created_at: string
+  updated_at: string
 }
 
 // =====================================================
 //  ROLES
 // =====================================================
 
-export type RoleName = 'super_admin' | 'organization_admin' | 'user';
+export type RoleName = 'super_admin' | 'organization_admin' | 'user'
 
 export const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
   organization_admin: 'Org Admin',
   user: 'User',
-};
+}
 
 /** Tailwind classes for the role badge pill, per role name. */
 export const ROLE_BADGE_CLASSES: Record<string, string> = {
   super_admin: 'border border-pink-500/30 bg-pink-500/15 text-pink-500',
   organization_admin: 'border border-violet-600/30 bg-violet-600/15 text-violet-400',
   user: 'border border-cyan-500/25 bg-cyan-500/10 text-cyan-400',
-};
+}
 
 /** True if the user is a super admin — the only role allowed to manage users. */
 export function isSuperAdmin(user: AuthUser | null): boolean {
-  return user?.ruolo === 'super_admin';
+  return user?.ruolo === 'super_admin'
 }
 
 /** True for super admin or organization admin — roles that can view the activity report. */
 export function isAdmin(user: AuthUser | null): boolean {
-  return user?.ruolo === 'super_admin' || user?.ruolo === 'organization_admin';
+  return user?.ruolo === 'super_admin' || user?.ruolo === 'organization_admin'
 }
 
 /** Two-letter initials for an avatar badge (first name + last name); falls back to the email's first letter. */
 export function getInitials(nome: string, cognome: string, email: string): string {
-  const initials = `${nome?.trim()?.[0] ?? ''}${cognome?.trim()?.[0] ?? ''}`.toUpperCase();
-  return initials || email[0]?.toUpperCase() || '?';
+  const initials = `${nome?.trim()?.[0] ?? ''}${cognome?.trim()?.[0] ?? ''}`.toUpperCase()
+  return initials || email[0]?.toUpperCase() || '?'
 }
 
 // =====================================================
@@ -66,13 +66,13 @@ export function getInitials(nome: string, cognome: string, email: string): strin
 
 // Must mirror the Cognito user pool policy and the backend validation
 // (backend/routers/auth.py). Cognito counts only these characters as symbols.
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 12
 
-const COGNITO_SYMBOLS = new Set("^$*.[]{}()?-\"!@#%&/\\,><':;|_~`+=");
+const COGNITO_SYMBOLS = new Set('^$*.[]{}()?-"!@#%&/\\,><\':;|_~`+=')
 
 export interface PasswordRule {
-  label: string;
-  test: (password: string) => boolean;
+  label: string
+  test: (password: string) => boolean
 }
 
 export const PASSWORD_RULES: PasswordRule[] = [
@@ -87,25 +87,25 @@ export const PASSWORD_RULES: PasswordRule[] = [
     label: 'Un simbolo (es. !@#$%)',
     test: (pw) => [...pw].some((ch) => COGNITO_SYMBOLS.has(ch)),
   },
-];
+]
 
 /** Labels of the password policy rules that `password` does not meet. */
 export function getUnmetPasswordRules(password: string): string[] {
-  return PASSWORD_RULES.filter((rule) => !rule.test(password)).map((rule) => rule.label);
+  return PASSWORD_RULES.filter((rule) => !rule.test(password)).map((rule) => rule.label)
 }
 
 export interface LoginResponse {
   /** The tokens are NOT here: they live in HttpOnly cookies (XSS mitigation). */
-  user: AuthUser;
+  user: AuthUser
 }
 
 export interface NewPasswordRequiredResponse {
-  challenge: 'NEW_PASSWORD_REQUIRED';
-  session: string;
-  message: string;
+  challenge: 'NEW_PASSWORD_REQUIRED'
+  session: string
+  message: string
 }
 
-export type AuthResult = LoginResponse | NewPasswordRequiredResponse;
+export type AuthResult = LoginResponse | NewPasswordRequiredResponse
 
 // =====================================================
 //  AUTH API CALLS
@@ -116,10 +116,10 @@ export type AuthResult = LoginResponse | NewPasswordRequiredResponse;
 // =====================================================
 
 function isNewPasswordRequired(result: AuthResult): result is NewPasswordRequiredResponse {
-  return 'challenge' in result && result.challenge === 'NEW_PASSWORD_REQUIRED';
+  return 'challenge' in result && result.challenge === 'NEW_PASSWORD_REQUIRED'
 }
 
-export { isNewPasswordRequired };
+export { isNewPasswordRequired }
 
 async function authFetch<T>(endpoint: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -127,15 +127,15 @@ async function authFetch<T>(endpoint: string, body?: unknown): Promise<T> {
     credentials: 'include',
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  })
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
-    const message = errorBody?.detail ?? errorBody?.message ?? response.statusText;
-    throw new Error(message);
+    const errorBody = await response.json().catch(() => null)
+    const message = errorBody?.detail ?? errorBody?.message ?? response.statusText
+    throw new Error(message)
   }
 
-  return response.json() as Promise<T>;
+  return response.json() as Promise<T>
 }
 
 /**
@@ -144,7 +144,7 @@ async function authFetch<T>(endpoint: string, body?: unknown): Promise<T> {
  * Returns NewPasswordRequiredResponse if a password change is needed.
  */
 export async function login(email: string, password: string): Promise<AuthResult> {
-  return authFetch<AuthResult>('/api/auth/login', { email, password });
+  return authFetch<AuthResult>('/api/auth/login', { email, password })
 }
 
 /**
@@ -159,7 +159,7 @@ export async function completeNewPassword(
     email,
     new_password: newPassword,
     session,
-  });
+  })
 }
 
 /**
@@ -168,10 +168,10 @@ export async function completeNewPassword(
  */
 export async function refreshSession(): Promise<boolean> {
   try {
-    await authFetch('/api/auth/refresh');
-    return true;
+    await authFetch('/api/auth/refresh')
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -180,22 +180,21 @@ export async function refreshSession(): Promise<boolean> {
  * after a token refresh. Throws when there is no valid session.
  */
 export async function fetchCurrentUser(): Promise<AuthUser> {
-  const getMe = () =>
-    fetch(`${API_BASE_URL}/api/auth/me`, { credentials: 'include' });
+  const getMe = () => fetch(`${API_BASE_URL}/api/auth/me`, { credentials: 'include' })
 
-  let response = await getMe();
+  let response = await getMe()
   if (response.status === 401 && (await refreshSession())) {
-    response = await getMe();
+    response = await getMe()
   }
 
   if (!response.ok) {
     if (response.status === 401) {
-      throw new Error('Sessione scaduta. Effettua nuovamente il login.');
+      throw new Error('Sessione scaduta. Effettua nuovamente il login.')
     }
-    throw new Error('Errore nel recupero del profilo utente.');
+    throw new Error('Errore nel recupero del profilo utente.')
   }
 
-  return response.json() as Promise<AuthUser>;
+  return response.json() as Promise<AuthUser>
 }
 
 /**
@@ -203,7 +202,7 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
  */
 export async function logout(): Promise<void> {
   try {
-    await authFetch('/api/auth/logout');
+    await authFetch('/api/auth/logout')
   } catch {
     // Even if the request fails the UI resets; cookies expire on their own
   }

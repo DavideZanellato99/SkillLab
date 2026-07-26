@@ -11,6 +11,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # needed at runtime too). The glob copy is a no-op when the file doesn't
 # exist, so this stays harmless on machines without one.
 COPY avast-root.cr[t] /usr/local/share/ca-certificates/avast-root.crt
+# ca-certificates deliberately unpinned: apt drops old versions from the repo.
+# hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && update-ca-certificates \

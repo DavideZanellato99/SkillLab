@@ -24,6 +24,7 @@ commits, so the turn restarts with the fuller history.
 
 import asyncio
 import base64
+import contextlib
 import json
 import os
 import time
@@ -141,6 +142,10 @@ class VoicePipeline:
         self.tts = None
         self._send_lock = asyncio.Lock()
         self._turn_task: asyncio.Task | None = None
+        # Keeps fire-and-forget persist tasks referenced until they finish:
+        # the event loop only holds weak refs, so an unreferenced task can be
+        # garbage-collected mid-flight and the DB write silently lost.
+        self._bg_tasks: set[asyncio.Task] = set()
         # Cartesia context currently allowed to reach the browser; audio
         # from any other context (cancelled turn) is dropped.
         self._active_context: str | None = None
@@ -183,9 +188,11 @@ class VoicePipeline:
 
     def _persist(self, role: str, content: str) -> None:
         """Fire-and-forget DB write: never blocks the audio hot path."""
-        asyncio.create_task(
+        task = asyncio.create_task(
             asyncio.to_thread(_persist_message, self.session.conversation_id, role, content)
         )
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
 
     # ── Main loop ─────────────────────────────────────
 
@@ -224,7 +231,7 @@ class VoicePipeline:
                     asyncio.create_task(self._tts_loop(), name="tts"),
                 ]
                 try:
-                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                     # Surface unexpected crashes of whichever loop ended first
                     for t in done:
                         exc = t.exception()
@@ -465,17 +472,13 @@ class VoicePipeline:
         task_cancelled = False
         if self._turn_task and not self._turn_task.done():
             self._turn_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._turn_task
-            except (asyncio.CancelledError, Exception):
-                pass
             interrupted = True
             task_cancelled = True
         if self._active_context:
-            try:
+            with contextlib.suppress(Exception):
                 await self.tts.send(tts_cancel_message(self._active_context))
-            except Exception:
-                pass
             self._active_context = None
             interrupted = True
         if interrupted:

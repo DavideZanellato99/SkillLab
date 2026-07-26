@@ -8,9 +8,9 @@ services:
     volumes:
       - db_data:/var/lib/postgresql
     ports:
-      # Host 5432 is already taken by the native Windows Postgres, so the
-      # containerized one is exposed on 5433 (user: postgres / pw: postgres).
-      - "5433:5432"
+      # Exposed on the standard host port 5432 (user: postgres / pw: postgres).
+      # The native Windows Postgres has been disabled to free this port.
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s

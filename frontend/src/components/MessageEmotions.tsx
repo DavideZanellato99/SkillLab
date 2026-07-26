@@ -1,4 +1,4 @@
-import Tooltip from './Tooltip';
+import Tooltip from './Tooltip'
 
 /* Hume EVI accoda ai messaggi utente un tag con le emozioni rilevate dalla
  * prosodia vocale, es. "{somewhat focused, slightly determined}". Qui il tag
@@ -7,13 +7,13 @@ import Tooltip from './Tooltip';
 
 export interface ParsedEmotion {
   /** Nome dell'emozione in italiano (es. "Concentrazione") */
-  label: string;
+  label: string
   /** Avverbio di intensità in italiano (es. "leggermente") */
-  intensityLabel: string;
+  intensityLabel: string
   /** Intensità su scala 1-3, usata per i pallini del badge */
-  level: 1 | 2 | 3;
+  level: 1 | 2 | 3
   /** Testo originale inglese, mostrato nel tooltip */
-  raw: string;
+  raw: string
 }
 
 /** Avverbi di intensità usati da Hume, dal più lungo al più corto
@@ -28,7 +28,7 @@ const INTENSITIES: Array<{ prefix: string; label: string; level: 1 | 2 | 3 }> = 
   { prefix: 'extremely', label: 'estremamente', level: 3 },
   { prefix: 'intensely', label: 'intensamente', level: 3 },
   { prefix: 'very', label: 'molto', level: 3 },
-];
+]
 
 /** Le 48 emozioni prosodiche di Hume, in forma aggettivale (come compaiono
  * nel tag) e nominale (per robustezza), tradotte in italiano */
@@ -134,29 +134,29 @@ const EMOTION_LABELS: Record<string, string> = {
   tiredness: 'Stanchezza',
   triumphant: 'Trionfo',
   triumph: 'Trionfo',
-};
+}
 
 function parseEntry(entry: string): ParsedEmotion | null {
-  const raw = entry.trim();
-  if (!raw) return null;
+  const raw = entry.trim()
+  if (!raw) return null
 
-  const lower = raw.toLowerCase();
-  let intensityLabel = '';
-  let level: 1 | 2 | 3 = 2;
-  let term = lower;
+  const lower = raw.toLowerCase()
+  let intensityLabel = ''
+  let level: 1 | 2 | 3 = 2
+  let term = lower
 
   for (const { prefix, label, level: lvl } of INTENSITIES) {
     if (lower.startsWith(`${prefix} `)) {
-      intensityLabel = label;
-      level = lvl;
-      term = lower.slice(prefix.length + 1).trim();
-      break;
+      intensityLabel = label
+      level = lvl
+      term = lower.slice(prefix.length + 1).trim()
+      break
     }
   }
 
   // Emozione non in mappa: mostra comunque il termine originale capitalizzato
-  const label = EMOTION_LABELS[term] ?? term.charAt(0).toUpperCase() + term.slice(1);
-  return { label, intensityLabel, level, raw };
+  const label = EMOTION_LABELS[term] ?? term.charAt(0).toUpperCase() + term.slice(1)
+  return { label, intensityLabel, level, raw }
 }
 
 /**
@@ -164,24 +164,24 @@ function parseEntry(entry: string): ParsedEmotion | null {
  * Se il tag non c'è, restituisce il testo invariato ed emozioni vuote.
  */
 export function splitEmotionTag(content: string): { text: string; emotions: ParsedEmotion[] } {
-  const match = content.match(/\s*\{([^{}]+)\}\s*$/);
-  if (!match) return { text: content, emotions: [] };
+  const match = content.match(/\s*\{([^{}]+)\}\s*$/)
+  if (!match) return { text: content, emotions: [] }
 
   const emotions = match[1]
     .split(',')
     .map(parseEntry)
-    .filter((e): e is ParsedEmotion => e !== null);
+    .filter((e): e is ParsedEmotion => e !== null)
 
   // Graffe finali che non descrivono emozioni: lascia il testo com'è
-  if (emotions.length === 0) return { text: content, emotions: [] };
+  if (emotions.length === 0) return { text: content, emotions: [] }
 
-  return { text: content.slice(0, match.index).trimEnd(), emotions };
+  return { text: content.slice(0, match.index).trimEnd(), emotions }
 }
 
 /** Riga compatta "Tono di voce" da mostrare dentro la bolla del messaggio
  * utente (sfondo viola, testo bianco) */
 export default function MessageEmotions({ emotions }: { emotions: ParsedEmotion[] }) {
-  if (emotions.length === 0) return null;
+  if (emotions.length === 0) return null
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-white/10 pt-1.5 text-[0.6rem] leading-tight">
@@ -207,5 +207,5 @@ export default function MessageEmotions({ emotions }: { emotions: ParsedEmotion[
         </Tooltip>
       ))}
     </div>
-  );
+  )
 }

@@ -1,15 +1,18 @@
 interface HeaderProps {
-  totalAvatars: number;
-  totalCategories: number;
+  totalAvatars: number
+  totalCategories: number
 }
 
 const statValueCls =
-  'font-heading text-3xl font-extrabold bg-gradient-to-br from-violet-600 to-cyan-500 bg-clip-text text-transparent max-md:text-2xl';
-const statLabelCls = 'mt-0.5 text-xs uppercase tracking-widest text-slate-500';
+  'font-heading text-3xl font-extrabold bg-gradient-to-br from-violet-600 to-cyan-500 bg-clip-text text-transparent max-md:text-2xl'
+const statLabelCls = 'mt-0.5 text-xs uppercase tracking-widest text-slate-500'
 
 export default function Header({ totalAvatars, totalCategories }: HeaderProps) {
   return (
-    <section className="relative overflow-hidden px-8 pb-12 pt-16 text-center max-md:px-4 max-md:pb-8 max-md:pt-12" id="hero">
+    <section
+      className="relative overflow-hidden px-8 pb-12 pt-16 text-center max-md:px-4 max-md:pb-8 max-md:pt-12"
+      id="hero"
+    >
       {/* Radial glow behind the hero */}
       <div
         className="pointer-events-none absolute -top-1/2 left-1/2 z-0 h-[800px] w-[800px] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,rgba(124,58,237,0.12)_0%,rgba(6,182,212,0.06)_30%,transparent_60%)]"
@@ -41,5 +44,5 @@ export default function Header({ totalAvatars, totalCategories }: HeaderProps) {
         </div>
       </div>
     </section>
-  );
+  )
 }

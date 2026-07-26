@@ -8,6 +8,7 @@ users on the next request (see auth_dependency); deleting one is
 irreversible.
 """
 
+import contextlib
 import os
 import re
 import unicodedata
@@ -266,10 +267,8 @@ def delete_organization(
 
     # Best-effort cleanup of the private avatars' generated placeholder files
     for aid in avatar_ids:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(os.path.join(_AVATARS_DIR, f"avatar_{aid}.svg"))
-        except OSError:
-            pass
 
     return MessageResponse(
         message=f"Organizzazione '{name}' eliminata con tutti i suoi dati.",

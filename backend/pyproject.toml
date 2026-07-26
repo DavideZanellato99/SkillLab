@@ -11,9 +11,12 @@ extend-exclude = ["venv", "static", "__pycache__"]
 
 [tool.ruff.lint]
 # A pragmatic starting set: pyflakes (F), pycodestyle errors (E) and
-# warnings (W), isort (I), pyupgrade (UP), flake8-bugbear (B). Deliberately
-# not the full ruleset, so the first run doesn't drown the repo in noise.
-select = ["E", "F", "W", "I", "UP", "B"]
+# warnings (W), isort (I), pyupgrade (UP), flake8-bugbear (B), plus
+# flake8-bandit (S) for security smells, flake8-simplify (SIM),
+# flake8-comprehensions (C4), ruff-specific rules (RUF) and flake8-print
+# (T20) to keep stray prints out of the codebase. Deliberately not the
+# full ruleset, so the first run doesn't drown the repo in noise.
+select = ["E", "F", "W", "I", "UP", "B", "S", "SIM", "C4", "RUF", "T20"]
 ignore = [
     # Long lines are handled by the formatter, not flagged here.
     "E501",
@@ -44,7 +47,17 @@ extend-immutable-calls = [
 # intended shape here, not a mistake.
 "main.py" = ["E402"]
 # Tests use assert and reuse fixture names as arguments.
-"tests/*" = ["B011"]
+"tests/*" = ["B011", "S101"]
+# assign_voices is a CLI script: print IS its user interface.
+"assign_voices.py" = ["T201"]
+# Modules that still use print() as their logging. Tracked as tech debt
+# (migrate to the logging module), whitelisted so T20 can guard every new
+# file without forcing that refactor now.
+"openai_service.py" = ["T201"]
+"routers/auth.py" = ["T201"]
+"routers/chat.py" = ["T201"]
+"turn_metrics.py" = ["T201"]
+"voice_pipeline.py" = ["T201"]
 
 [tool.ruff.format]
 # Match the double-quote style already used across the codebase.

@@ -1,6 +1,6 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 /* Menu "kebab" (⋮) per le azioni secondarie di una riga: il pulsante resta
  * nella cella, la tendina è renderizzata in un portal con position:fixed così
@@ -10,142 +10,143 @@ import { createPortal } from 'react-dom';
  * sul pulsante e la voce attiva è indicata da aria-activedescendant. */
 
 export interface KebabMenuItem {
-  key: string;
-  label: string;
+  key: string
+  label: string
   /** Icona 14x14, con `stroke="currentColor"` per ereditare il colore della voce */
-  icon: ReactNode;
-  onSelect: () => void;
-  disabled?: boolean;
+  icon: ReactNode
+  onSelect: () => void
+  disabled?: boolean
   /** Perché la voce è bloccata: mostrato sotto la label quando `disabled` */
-  disabledReason?: string;
+  disabledReason?: string
   /** Azione distruttiva: accento rosso */
-  danger?: boolean;
+  danger?: boolean
 }
 
 interface KebabMenuProps {
-  items: KebabMenuItem[];
+  items: KebabMenuItem[]
   /** Nome accessibile del pulsante */
-  label: string;
+  label: string
   /** Classi del pulsante, per allinearlo agli altri della riga */
-  buttonClassName?: string;
+  buttonClassName?: string
 }
 
-const MENU_WIDTH = 248;
-const GAP = 6;
-const EDGE_PAD = 8;
+const MENU_WIDTH = 248
+const GAP = 6
+const EDGE_PAD = 8
 
 const itemCls = (item: KebabMenuItem, isActive: boolean) => {
-  if (item.disabled) return 'cursor-not-allowed text-slate-500';
-  if (item.danger) return `cursor-pointer text-red-400 ${isActive ? 'bg-red-500/12' : ''}`;
-  return `cursor-pointer ${isActive ? 'bg-white/8 text-slate-100' : 'text-slate-300'}`;
-};
+  if (item.disabled) return 'cursor-not-allowed text-slate-500'
+  if (item.danger) return `cursor-pointer text-red-400 ${isActive ? 'bg-red-500/12' : ''}`
+  return `cursor-pointer ${isActive ? 'bg-white/8 text-slate-100' : 'text-slate-300'}`
+}
 
 export default function KebabMenu({ items, label, buttonClassName = '' }: KebabMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const menuId = useId();
+  const [isOpen, setIsOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const menuId = useId()
 
   const open = () => {
-    if (items.length === 0) return;
-    setActiveIndex(items.findIndex((i) => !i.disabled));
-    setIsOpen(true);
-  };
+    if (items.length === 0) return
+    setActiveIndex(items.findIndex((i) => !i.disabled))
+    setIsOpen(true)
+  }
 
   const close = (refocus = false) => {
-    setIsOpen(false);
-    setPos(null);
-    setActiveIndex(-1);
-    if (refocus) btnRef.current?.focus();
-  };
+    setIsOpen(false)
+    setPos(null)
+    setActiveIndex(-1)
+    if (refocus) btnRef.current?.focus()
+  }
 
   const pick = (item: KebabMenuItem) => {
-    if (item.disabled) return;
-    close();
-    item.onSelect();
-  };
+    if (item.disabled) return
+    close()
+    item.onSelect()
+  }
 
   // Ancora la tendina al pulsante, allineata a destra; si ribalta verso l'alto
   // se sotto non c'è spazio. Misurabile solo dopo il primo render: fino ad
   // allora il menu è reso invisibile per evitare lo sfarfallio.
   useLayoutEffect(() => {
-    if (!isOpen) return;
-    const rect = btnRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const height = menuRef.current?.offsetHeight ?? 0;
+    if (!isOpen) return
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const height = menuRef.current?.offsetHeight ?? 0
     const openUp =
-      rect.bottom + GAP + height > window.innerHeight - EDGE_PAD && rect.top - GAP - height > EDGE_PAD;
+      rect.bottom + GAP + height > window.innerHeight - EDGE_PAD &&
+      rect.top - GAP - height > EDGE_PAD
     setPos({
       top: openUp ? rect.top - GAP - height : rect.bottom + GAP,
       left: Math.min(
         Math.max(EDGE_PAD, rect.right - MENU_WIDTH),
         window.innerWidth - MENU_WIDTH - EDGE_PAD,
       ),
-    });
-  }, [isOpen]);
+    })
+  }, [isOpen])
 
   // Chiudi al click fuori; allo scroll o al resize l'ancora si sposta ma la
   // tendina (fixed) no, quindi la si chiude invece di inseguirla.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return
     const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node;
-      if (!menuRef.current?.contains(target) && !btnRef.current?.contains(target)) close();
-    };
-    const onReflow = () => close();
-    document.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('scroll', onReflow, true);
-    window.addEventListener('resize', onReflow);
+      const target = e.target as Node
+      if (!menuRef.current?.contains(target) && !btnRef.current?.contains(target)) close()
+    }
+    const onReflow = () => close()
+    document.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('scroll', onReflow, true)
+    window.addEventListener('resize', onReflow)
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('scroll', onReflow, true);
-      window.removeEventListener('resize', onReflow);
-    };
-  }, [isOpen]);
+      document.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('scroll', onReflow, true)
+      window.removeEventListener('resize', onReflow)
+    }
+  }, [isOpen])
 
   // Salta le voci disabilitate, avvolgendosi agli estremi
   const move = (dir: 1 | -1) => {
     setActiveIndex((cur) => {
-      const n = items.length;
+      const n = items.length
       for (let step = 1; step <= n; step++) {
-        const next = (cur + dir * step + n * n) % n;
-        if (!items[next].disabled) return next;
+        const next = (cur + dir * step + n * n) % n
+        if (!items[next].disabled) return next
       }
-      return cur;
-    });
-  };
+      return cur
+    })
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     switch (e.key) {
       case 'Enter':
       case ' ':
-        e.preventDefault();
-        if (!isOpen) open();
-        else if (activeIndex >= 0) pick(items[activeIndex]);
-        break;
+        e.preventDefault()
+        if (!isOpen) open()
+        else if (activeIndex >= 0) pick(items[activeIndex])
+        break
       case 'ArrowDown':
-        e.preventDefault();
-        if (!isOpen) open();
-        else move(1);
-        break;
+        e.preventDefault()
+        if (!isOpen) open()
+        else move(1)
+        break
       case 'ArrowUp':
-        e.preventDefault();
-        if (!isOpen) open();
-        else move(-1);
-        break;
+        e.preventDefault()
+        if (!isOpen) open()
+        else move(-1)
+        break
       case 'Escape':
         if (isOpen) {
-          e.preventDefault();
-          close(true);
+          e.preventDefault()
+          close(true)
         }
-        break;
+        break
       case 'Tab':
-        if (isOpen) close();
-        break;
+        if (isOpen) close()
+        break
     }
-  };
+  }
 
   return (
     <>
@@ -212,5 +213,5 @@ export default function KebabMenu({ items, label, buttonClassName = '' }: KebabM
           document.body,
         )}
     </>
-  );
+  )
 }

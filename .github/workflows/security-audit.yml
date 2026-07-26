@@ -1,0 +1,45 @@
+name: Security audit
+
+# Audit settimanale delle dipendenze, volutamente FUORI dal gate ci.yml: un
+# CVE pubblicato stanotte non deve bloccare push che non c'entrano nulla.
+# Gira ogni lunedì mattina e a richiesta dalla tab Actions.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  backend-deps:
+    name: pip-audit (backend locks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Audit runtime lock
+        # PYSEC-2026-1325 (ecdsa, arriva via python-jose): timing attack senza
+        # release corretta disponibile. Esclusa così il job resta un segnale
+        # utile sulle trovate NUOVE; da ricontrollare quando ecdsa pubblica un
+        # fix, o rimuovere migrando python-jose -> PyJWT.
+        run: pip-audit --require-hashes -r backend/requirements.txt --ignore-vuln PYSEC-2026-1325
+      - name: Audit dev lock
+        run: pip-audit --require-hashes -r backend/requirements-dev.txt
+
+  frontend-deps:
+    name: npm audit (frontend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      # npm audit lavora sul package-lock.json contro il registry: non serve
+      # installare le dipendenze.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Audit (solo high e critical)
+        run: npm audit --audit-level=high

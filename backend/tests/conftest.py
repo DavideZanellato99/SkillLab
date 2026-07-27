@@ -38,6 +38,7 @@ os.environ.setdefault("ELEVENLABS_VAD_SILENCE_SECS", "0.8")
 os.environ.setdefault("ELEVENLABS_VAD_THRESHOLD", "0.5")
 os.environ.setdefault("ELEVENLABS_STT_WS_URL", "wss://example.invalid/stt")
 os.environ.setdefault("VOICE_LATENCY_LOG", "0")
+os.environ.setdefault("AUDIT_LOG_RETENTION_DAYS", "180")
 
 import uuid
 

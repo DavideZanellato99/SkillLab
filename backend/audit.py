@@ -39,8 +39,16 @@ logger = logging.getLogger(__name__)
 
 # How long a log row lives. Rows carry IP and User-Agent, so they are
 # personal data: they expire instead of piling up for ever (the purge runs
-# at startup, see startup_migrations).
-RETENTION_DAYS = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "180"))
+# at startup, see startup_migrations). Required, with no fallback in code:
+# how long personal data is kept is a decision that belongs in the
+# configuration, where it is visible, not in a default nobody ever reads.
+_RETENTION_DAYS_RAW = (os.getenv("AUDIT_LOG_RETENTION_DAYS") or "").strip()
+if not _RETENTION_DAYS_RAW.isdigit() or int(_RETENTION_DAYS_RAW) < 1:
+    raise RuntimeError(
+        "AUDIT_LOG_RETENTION_DAYS non configurato o non valido (giorni di "
+        "conservazione dei log, intero positivo). Aggiungilo al file .env del backend."
+    )
+RETENTION_DAYS = int(_RETENTION_DAYS_RAW)
 
 # Session factory used by the writer. A module attribute rather than a
 # direct SessionLocal call so the test suite can point it at its own

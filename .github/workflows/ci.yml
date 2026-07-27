@@ -150,6 +150,7 @@ jobs:
           ELEVENLABS_VAD_THRESHOLD=0.5
           ELEVENLABS_STT_WS_URL=wss://api.elevenlabs.io/v1/speech-to-text/stream
           VOICE_LATENCY_LOG=1
+          AUDIT_LOG_RETENTION_DAYS=180
           EOF
       - name: Build images and start the stack (production compose)
         # docker-compose.yml alone (without the dev override) is the real

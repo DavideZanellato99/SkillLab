@@ -10,9 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 import tls_setup  # noqa: F401
+from audit import AuditMiddleware
 from database import Base, engine
 from routers.admin import router as admin_router
 from routers.admin_avatars import router as admin_avatars_router
+from routers.audit_logs import router as audit_logs_router
 from routers.auth import router as auth_router
 from routers.avatars import router as avatars_router
 from routers.chat import router as chat_router
@@ -48,6 +50,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Audit trail: records every request that changes something, whoever makes
+# it. Added after CORS so it sits *inside* it (middlewares run in reverse
+# order of registration): preflight OPTIONS never reach it, and a rejected
+# cross-origin call is not logged as an action.
+app.add_middleware(AuditMiddleware)
+
 # Serve static avatar images
 os.makedirs("static/avatars", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -56,6 +64,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_avatars_router)
+app.include_router(audit_logs_router)
 app.include_router(organizations_router)
 app.include_router(avatars_router)
 app.include_router(chat_router)

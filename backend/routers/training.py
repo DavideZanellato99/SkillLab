@@ -18,9 +18,10 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+import audit
 from auth_dependency import (
     get_current_admin,
     get_current_super_admin,
@@ -183,6 +184,7 @@ def list_assignments(
 )
 def create_assignments(
     payload: TrainingAssignmentCreate,
+    http_request: Request,
     current_super_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -221,6 +223,14 @@ def create_assignments(
     db.commit()
     for assignment in assignments:
         db.refresh(assignment)
+    # One call assigns the same goal to several users: the audit row names
+    # them all rather than losing everything but the count.
+    audit.describe(
+        http_request,
+        avatar=avatar.name,
+        target=round(payload.target_score, 1),
+        utenti=[u.email for u in users],
+    )
     return _responses(db, assignments)
 
 

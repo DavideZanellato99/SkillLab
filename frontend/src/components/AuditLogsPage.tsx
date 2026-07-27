@@ -1,0 +1,429 @@
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { fetchAuditActions, fetchAuditLogs } from '../services/auditLogs'
+import type { AuditActionOption, AuditLog } from '../services/auditLogs'
+import { fetchOrganizations } from '../services/organizations'
+import type { Organization } from '../services/organizations'
+import { isSuperAdmin, ROLE_BADGE_CLASSES, ROLE_LABELS } from '../services/auth'
+import DataTable, { Td, Tr } from './DataTable'
+import Select from './Select'
+import Spinner from './Spinner'
+import type { DataTableColumn } from './DataTable'
+
+/* Registro delle attività: ogni azione che modifica qualcosa, di qualunque
+ * utente e di qualunque ruolo. Pagina riservata al super admin, il backend
+ * risponde 403 a chiunque altro. In sola lettura: il registro non si
+ * modifica e non si cancella, scade e basta. */
+
+/** Righe caricate per volta: il registro cresce senza limite, quindi la
+ * pagina ne tiene una finestra e la estende su richiesta. */
+const WINDOW_SIZE = 200
+
+const COLUMNS: DataTableColumn[] = [
+  { key: 'quando', label: 'Data e ora' },
+  { key: 'utente', label: 'Utente' },
+  { key: 'organizzazione', label: 'Organizzazione' },
+  { key: 'azione', label: 'Azione' },
+  { key: 'oggetto', label: 'Oggetto' },
+  { key: 'esito', label: 'Esito', align: 'center', compact: true },
+  { key: 'dettaglio', ariaLabel: 'Dettaglio' },
+]
+
+const fieldCls = 'flex flex-col gap-1.5'
+const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
+const dateInputCls =
+  'rounded-xl border border-white/6 bg-slate-800/50 px-4 py-2 text-sm text-slate-100 outline-none transition [color-scheme:dark] focus:border-violet-600 focus:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+/** Verde se è andata a buon fine, ambra se è stata rifiutata, rosso se il
+ * server è andato in errore. */
+function statusClasses(status: number): string {
+  if (status < 300) return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
+  if (status < 500) return 'border-amber-500/25 bg-amber-500/10 text-amber-400'
+  return 'border-red-500/25 bg-red-500/10 text-red-300'
+}
+
+/** Riassunto di una riga in una frase: quello che l'endpoint ha allegato,
+ * altrimenti l'id della risorsa toccata. */
+function summarize(log: AuditLog): string {
+  if (log.details) {
+    const parts = Object.entries(log.details)
+      .filter(([, value]) => value !== null && value !== '')
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
+    if (parts.length) return parts.join(' · ')
+  }
+  return log.resource_id ?? '—'
+}
+
+export default function AuditLogsPage() {
+  const { user } = useAuth()
+  const [logs, setLogs] = useState<AuditLog[]>([])
+  const [total, setTotal] = useState(0)
+  const [actions, setActions] = useState<AuditActionOption[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [actionFilter, setActionFilter] = useState('')
+  const [orgFilter, setOrgFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [search, setSearch] = useState('')
+  // La ricerca interroga il server, non solo le righe già caricate: senza
+  // il rinvio partirebbe una richiesta per ogni tasto premuto.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [error, setError] = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  const filters = useCallback(
+    (offset: number) => ({
+      action: actionFilter,
+      organizationId: orgFilter,
+      dateFrom,
+      dateTo,
+      search: debouncedSearch,
+      limit: WINDOW_SIZE,
+      offset,
+    }),
+    [actionFilter, orgFilter, dateFrom, dateTo, debouncedSearch],
+  )
+
+  useEffect(() => {
+    if (!isSuperAdmin(user)) return
+    let cancelled = false
+    setIsLoading(true)
+    setError('')
+    fetchAuditLogs(filters(0))
+      .then((page) => {
+        if (cancelled) return
+        setLogs(page.items)
+        setTotal(page.total)
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : 'Impossibile caricare il registro.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user, filters])
+
+  useEffect(() => {
+    if (!isSuperAdmin(user)) return
+    fetchAuditActions()
+      .then(setActions)
+      .catch(() => setActions([]))
+    fetchOrganizations()
+      .then(setOrganizations)
+      .catch(() => setOrganizations([]))
+  }, [user])
+
+  const handleLoadMore = async () => {
+    setIsLoadingMore(true)
+    try {
+      const page = await fetchAuditLogs(filters(logs.length))
+      setLogs((prev) => [...prev, ...page.items])
+      setTotal(page.total)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossibile caricare altre righe.')
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }
+
+  if (!isSuperAdmin(user)) {
+    return (
+      <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
+        <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-white/6 bg-gray-900/60 p-16 text-center text-red-300">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-red-500"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <h2 className="font-heading text-2xl text-slate-100">Accesso Negato</h2>
+          <p className="max-w-[400px] text-slate-400">
+            Il registro delle attività è riservato al <strong>Super Admin</strong>.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-[1400px] px-6 py-12">
+      <header className="mb-8">
+        <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Registro Attività</h1>
+        <p className="text-[0.95rem] text-slate-500">
+          Tutte le azioni compiute sulla piattaforma, da qualunque utente e con qualunque ruolo. Il
+          registro è in sola lettura, le righe scadono automaticamente e non possono essere
+          eliminate.
+        </p>
+      </header>
+
+      <div className="mb-8 flex flex-wrap items-end gap-4">
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="audit-action-filter">
+            Azione
+          </label>
+          <Select
+            id="audit-action-filter"
+            className="min-w-[240px]"
+            value={actionFilter}
+            onChange={setActionFilter}
+            options={[
+              { value: '', label: 'Tutte le azioni' },
+              ...actions.map((a) => ({ value: a.key, label: a.label })),
+            ]}
+          />
+        </div>
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="audit-org-filter">
+            Organizzazione
+          </label>
+          <Select
+            id="audit-org-filter"
+            className="min-w-[220px]"
+            value={orgFilter}
+            onChange={setOrgFilter}
+            options={[
+              { value: '', label: 'Tutte le organizzazioni' },
+              ...organizations.map((o) => ({ value: o.id, label: o.name })),
+            ]}
+          />
+        </div>
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="audit-date-from">
+            Dal
+          </label>
+          <input
+            id="audit-date-from"
+            type="date"
+            className={dateInputCls}
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+        </div>
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="audit-date-to">
+            Al
+          </label>
+          <input
+            id="audit-date-to"
+            type="date"
+            className={dateInputCls}
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+        </div>
+        {(actionFilter || orgFilter || dateFrom || dateTo) && (
+          <button
+            type="button"
+            className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
+            onClick={() => {
+              setActionFilter('')
+              setOrgFilter('')
+              setDateFrom('')
+              setDateTo('')
+            }}
+          >
+            Azzera filtri
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
+          <Spinner />
+          <p>Caricamento registro...</p>
+        </div>
+      ) : (
+        <>
+          <DataTable
+            columns={COLUMNS}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Cerca per email, organizzazione, percorso o id..."
+            pageSizeOptions={[20, 30, 50, 100]}
+            isEmpty={logs.length === 0}
+            emptyMessage={
+              search || actionFilter || orgFilter || dateFrom || dateTo
+                ? 'Nessuna azione corrisponde ai filtri.'
+                : 'Nessuna azione registrata.'
+            }
+          >
+            {logs.map((log) => {
+              const isExpanded = expandedId === log.id
+              return (
+                <Fragment key={log.id}>
+                  <Tr
+                    hover={!isExpanded}
+                    className={`cursor-pointer ${isExpanded ? '[&>td]:bg-violet-600/6' : ''}`}
+                    onClick={() => setExpandedId(isExpanded ? null : log.id)}
+                  >
+                    <Td>
+                      <span className="whitespace-nowrap text-[0.85rem] tabular-nums text-slate-400">
+                        {formatDateTime(log.created_at)}
+                      </span>
+                    </Td>
+                    <Td>
+                      <div className="flex flex-col">
+                        <span className="text-[0.85rem] font-semibold text-slate-100">
+                          {log.user_email || '—'}
+                        </span>
+                        {log.user_role && (
+                          <span
+                            className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[log.user_role] ?? ''}`}
+                          >
+                            {ROLE_LABELS[log.user_role] ?? log.user_role}
+                          </span>
+                        )}
+                      </div>
+                    </Td>
+                    <Td>
+                      <span className="text-[0.85rem] text-slate-300">
+                        {log.organization_name ?? '—'}
+                      </span>
+                    </Td>
+                    <Td>
+                      <span className="text-[0.85rem] font-medium text-slate-100">
+                        {log.action_label}
+                      </span>
+                    </Td>
+                    <Td>
+                      <span className="line-clamp-1 max-w-[320px] text-[0.8rem] text-slate-400">
+                        {summarize(log)}
+                      </span>
+                    </Td>
+                    <Td align="center" compact>
+                      <span
+                        className={`inline-block rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold tabular-nums ${statusClasses(log.status_code)}`}
+                      >
+                        {log.status_code}
+                      </span>
+                    </Td>
+                    <Td align="right">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`inline-block text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </Td>
+                  </Tr>
+
+                  {isExpanded && (
+                    <tr>
+                      <Td colSpan={COLUMNS.length} className="bg-gray-950/40">
+                        <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-[0.8rem]">
+                          <dt className="text-slate-500">Richiesta</dt>
+                          <dd className="break-all font-mono text-slate-300">
+                            {log.method} {log.path}
+                          </dd>
+                          <dt className="text-slate-500">Risorsa</dt>
+                          <dd className="break-all font-mono text-slate-300">
+                            {log.resource_type ? `${log.resource_type} ` : ''}
+                            {log.resource_id ?? '—'}
+                          </dd>
+                          <dt className="text-slate-500">Indirizzo IP</dt>
+                          <dd className="font-mono text-slate-300">{log.client_ip || '—'}</dd>
+                          <dt className="text-slate-500">Browser</dt>
+                          <dd className="break-all text-slate-400">{log.user_agent || '—'}</dd>
+                          {log.details && (
+                            <>
+                              <dt className="text-slate-500">Dettagli</dt>
+                              <dd className="whitespace-pre-wrap break-all font-mono text-slate-300">
+                                {JSON.stringify(log.details, null, 2)}
+                              </dd>
+                            </>
+                          )}
+                        </dl>
+                      </Td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+          </DataTable>
+
+          <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-500">
+            <span className="tabular-nums">
+              {logs.length} di {total} azioni registrate
+            </span>
+            {logs.length < total && (
+              <button
+                type="button"
+                className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? (
+                  <>
+                    <Spinner variant="button" />
+                    Caricamento...
+                  </>
+                ) : (
+                  `Carica altre ${Math.min(WINDOW_SIZE, total - logs.length)}`
+                )}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

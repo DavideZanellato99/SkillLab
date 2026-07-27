@@ -9,6 +9,7 @@ import AdminPage from './components/AdminPage'
 import DashboardPage from './components/DashboardPage'
 import UserReportPage from './components/UserReportPage'
 import AvatarAdminPage from './components/AvatarAdminPage'
+import AuditLogsPage from './components/AuditLogsPage'
 import OrganizationsPage from './components/OrganizationsPage'
 import TrainingPage from './components/TrainingPage'
 import TrainingGoals from './components/TrainingGoals'
@@ -67,6 +68,7 @@ function App() {
             <Route path="/admin/training" element={<TrainingPage />} />
             <Route path="/admin/report" element={<UserReportPage />} />
             <Route path="/admin/avatars" element={<AvatarAdminPage />} />
+            <Route path="/admin/logs" element={<AuditLogsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         ) : (

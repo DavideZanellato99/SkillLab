@@ -14,10 +14,11 @@ import re
 import unicodedata
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import audit
 from auth_dependency import MOCK_ADMIN_SUB, get_current_super_admin
 from cognito_service import admin_delete_user
 from database import get_db
@@ -105,6 +106,7 @@ def list_organizations(
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(
     request: CreateOrganizationRequest,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -121,6 +123,7 @@ def create_organization(
     db.add(org)
     db.commit()
     db.refresh(org)
+    audit.describe(http_request, target_id=str(org.id), nome=org.name)
     return _to_response(db, org)
 
 
@@ -188,6 +191,7 @@ def set_organization_status(
 @router.delete("/{organization_id}", response_model=MessageResponse)
 def delete_organization(
     organization_id: UUID,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -207,6 +211,10 @@ def delete_organization(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="L'organizzazione contiene l'account di sistema e non può essere eliminata.",
             )
+
+    # Deleting a tenant takes its users with it, so their own audit rows
+    # lose the FK: the count keeps the scale of the operation on record.
+    audit.describe(http_request, nome=org.name, utenti_eliminati=len(users))
 
     user_ids = [u.id for u in users]
     avatar_ids = [

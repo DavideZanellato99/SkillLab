@@ -4,11 +4,12 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import audit
 from auth_dependency import (
     MOCK_ADMIN_SUB,
     get_current_admin,
@@ -367,6 +368,7 @@ def delete_conversation(
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     request: CreateUserRequest,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -406,6 +408,12 @@ def create_user(
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    # The created user's id is not in the path: without this the audit row
+    # would say "utente creato" without saying which one.
+    audit.describe(
+        http_request, target_id=str(new_user.id), email=new_user.email, ruolo=request.ruolo
+    )
 
     return UserResponse.model_validate(new_user)
 
@@ -464,6 +472,7 @@ def update_user(
 def set_user_status(
     user_id: UUID,
     request: UpdateUserStatusRequest,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -495,6 +504,8 @@ def set_user_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="L'account è disabilitato definitivamente e non può cambiare stato.",
         )
+
+    audit.describe(http_request, email=user.email, da=user.status, a=request.status)
 
     if request.status != user.status:
         try:
@@ -571,6 +582,7 @@ def resend_credentials(
 @router.delete("/users/{user_id}", response_model=MessageResponse)
 def delete_user(
     user_id: UUID,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -590,6 +602,10 @@ def delete_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Non è possibile eliminare l'account di sistema.",
         )
+
+    # The audit row outlives the user it names, and its user_id is nulled
+    # by the FK: the email is the only thing that keeps it readable.
+    audit.describe(http_request, email=user.email, ruolo=user.ruolo)
 
     # Remove from Cognito first: if this fails the local data stays intact
     # and the operation can be retried (a user already missing on Cognito

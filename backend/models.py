@@ -401,6 +401,59 @@ class TrainingAssignment(Base):
         )
 
 
+class AuditLog(Base):
+    """One action performed by a user, whatever their role.
+
+    The registry of who did what: every request that CHANGES something is
+    written here by the audit middleware (see ``audit``), plus the
+    authentication events, which have no authenticated user to hang off.
+    Read-only GETs are deliberately absent — they would bury the real
+    actions under navigation noise.
+
+    Visible to the super admin only, and to no one else: an organization
+    admin does not read the log of its own tenant either. Nothing deletes
+    a row except the retention purge at startup, so the trail cannot be
+    tidied up after the fact by whoever it incriminates.
+
+    The actor is stored twice on purpose: the foreign keys (nulled when the
+    user or the organization is deleted) and a text snapshot of email, role
+    and organization name taken at write time, which keeps the row readable
+    for ever.
+    """
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_email = Column(String(255), nullable=False, default="")
+    user_role = Column(String(50), nullable=False, default="")
+    organization_id = Column(
+        Uuid, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    organization_name = Column(String(150), nullable=True)
+    # Stable identifier of the action ("user.create", "auth.login"...): the
+    # Italian label shown in the UI is derived from it at read time, so
+    # rewording a label never rewrites history (see audit.ACTION_LABELS).
+    action = Column(String(80), nullable=False, index=True)
+    resource_type = Column(String(50), nullable=True)
+    resource_id = Column(String(64), nullable=True)
+    method = Column(String(10), nullable=False)
+    path = Column(String(300), nullable=False)
+    status_code = Column(Integer, nullable=False)
+    client_ip = Column(String(64), nullable=False, default="")
+    user_agent = Column(String(400), nullable=False, default="")
+    # Whitelisted extras only (target email, avatar name...): never the raw
+    # request body — passwords, tokens and conversation content stay out.
+    details = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), index=True)
+
+    def __repr__(self):
+        return (
+            f"<AuditLog(id={self.id}, action='{self.action}', "
+            f"user_email='{self.user_email}', created_at={self.created_at})>"
+        )
+
+
 class ChatMessage(Base):
     """Stores a single message in a chat conversation."""
 

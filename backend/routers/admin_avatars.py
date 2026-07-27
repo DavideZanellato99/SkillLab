@@ -10,10 +10,11 @@ import contextlib
 import os
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import audit
 from auth_dependency import get_current_super_admin
 from database import get_db
 from models import (
@@ -143,6 +144,7 @@ def list_avatars_admin(
 @router.post("", response_model=AdminAvatarResponse, status_code=status.HTTP_201_CREATED)
 def create_avatar(
     payload: AdminAvatarPayload,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -168,6 +170,7 @@ def create_avatar(
         avatar.image_url = _generate_avatar_image(name, avatar.id)
     db.commit()
     db.refresh(avatar)
+    audit.describe(http_request, target_id=str(avatar.id), nome=avatar.name)
     return _to_response(avatar)
 
 
@@ -213,6 +216,7 @@ def update_avatar(
 @router.delete("/{avatar_id}", response_model=MessageResponse)
 def delete_avatar(
     avatar_id: UUID,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -226,6 +230,7 @@ def delete_avatar(
 
     name = avatar.name
     had_generated_image = avatar.image_url == _generated_image_url(avatar.id)
+    audit.describe(http_request, nome=name)
 
     conv_ids = [
         row[0]

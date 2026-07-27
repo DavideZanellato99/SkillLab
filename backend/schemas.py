@@ -541,6 +541,46 @@ class AdminConversationDetail(BaseModel):
     evaluation: ConversationEvaluationResponse | None = None
 
 
+# --- Audit log (super admin only) ---
+
+
+class AuditLogResponse(BaseModel):
+    """One recorded action, as the super admin's registry shows it."""
+
+    id: UUID
+    created_at: datetime
+    user_id: UUID | None = None
+    user_email: str
+    user_role: str
+    organization_id: UUID | None = None
+    organization_name: str | None = None
+    action: str
+    # Italian wording of `action`, resolved at read time from the catalogue
+    action_label: str
+    resource_type: str | None = None
+    resource_id: str | None = None
+    method: str
+    path: str
+    status_code: int
+    client_ip: str
+    user_agent: str
+    details: dict | None = None
+
+
+class AuditLogPage(BaseModel):
+    """A window over the registry: the rows plus how many matched in all."""
+
+    total: int
+    items: list[AuditLogResponse]
+
+
+class AuditActionOption(BaseModel):
+    """An action the registry can contain, for the filter dropdown."""
+
+    key: str
+    label: str
+
+
 # --- Generic Response ---
 
 

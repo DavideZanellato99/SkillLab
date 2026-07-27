@@ -42,13 +42,16 @@ os.environ.setdefault("VOICE_LATENCY_LOG", "0")
 import uuid
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+import audit
 import main
 from auth_dependency import ensure_roles, get_current_user
-from database import engine, get_db
+from database import SessionLocal, engine, get_db
 from models import (
+    ROLE_ORGANIZATION_ADMIN,
     ROLE_SUPER_ADMIN,
     ROLE_USER,
     Avatar,
@@ -72,9 +75,17 @@ def db_session():
     transaction = connection.begin()
     session = Session(bind=connection, join_transaction_mode="create_savepoint")
     ensure_roles(session)
+    # The audit writer deliberately uses a session of its own (a log row
+    # must survive the failure of the request it describes), so it would
+    # otherwise write outside the test transaction and leak between tests.
+    # Bound to the same connection here, its rows roll back with everything else.
+    audit.session_factory = lambda: Session(
+        bind=connection, join_transaction_mode="create_savepoint"
+    )
     try:
         yield session
     finally:
+        audit.session_factory = SessionLocal
         session.close()
         transaction.rollback()
         connection.close()
@@ -125,15 +136,60 @@ def standard_user(db_session, organization) -> User:
 
 
 @pytest.fixture
+def org_admin_user(db_session, organization) -> User:
+    # An organization admin is confined to its own tenant.
+    return _make_user(db_session, ROLE_ORGANIZATION_ADMIN, organization_id=organization.id)
+
+
+@pytest.fixture
 def super_admin_user(db_session) -> User:
     # The super admin stands above every tenant: organization_id stays NULL.
     return _make_user(db_session, ROLE_SUPER_ADMIN)
 
 
+def _authenticated_as(user: User):
+    """Stand-in for get_current_user that keeps its side effect.
+
+    The real dependency also publishes the caller on the request, which is
+    how the audit middleware learns who acted: an override that only
+    returned the user would silently switch the whole trail off under test.
+    """
+
+    def _override(request: Request) -> User:
+        request.state.audit_user = user
+        return user
+
+    return _override
+
+
 @pytest.fixture
 def user_client(client, standard_user):
     """TestClient authenticated as a plain user."""
-    app.dependency_overrides[get_current_user] = lambda: standard_user
+    app.dependency_overrides[get_current_user] = _authenticated_as(standard_user)
+    yield client
+    app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture
+def act_as(client):
+    """Switch who the shared TestClient is authenticated as, mid-test.
+
+    The overrides live on the app, so two authenticated client fixtures in
+    one test would fight over the same key: a test that needs several
+    actors takes one client and switches identity with this instead.
+    """
+
+    def _switch(user: User) -> None:
+        app.dependency_overrides[get_current_user] = _authenticated_as(user)
+
+    yield _switch
+    app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture
+def org_admin_client(client, org_admin_user):
+    """TestClient authenticated as an organization admin."""
+    app.dependency_overrides[get_current_user] = _authenticated_as(org_admin_user)
     yield client
     app.dependency_overrides.pop(get_current_user, None)
 
@@ -141,7 +197,7 @@ def user_client(client, standard_user):
 @pytest.fixture
 def admin_client(client, super_admin_user):
     """TestClient authenticated as the super admin."""
-    app.dependency_overrides[get_current_user] = lambda: super_admin_user
+    app.dependency_overrides[get_current_user] = _authenticated_as(super_admin_user)
     yield client
     app.dependency_overrides.pop(get_current_user, None)
 

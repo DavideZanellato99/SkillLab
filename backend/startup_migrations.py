@@ -15,6 +15,7 @@ the constraints down once no offending rows remain.
 
 from sqlalchemy import or_, text
 
+import audit
 from auth_dependency import ensure_roles, get_or_create_mock_admin
 from conversation_titles import next_conversation_title
 from database import SessionLocal, engine
@@ -167,6 +168,33 @@ def _backfill_avatar_organizations() -> None:
             conn.execute(text("ALTER TABLE avatars ALTER COLUMN organization_id SET NOT NULL"))
 
 
+def _prepare_audit_logs() -> None:
+    """Index the audit trail the way it is read, then drop what expired.
+
+    The registry is always read newest-first, filtered by user or by
+    action, so both indexes are composite and descending on created_at.
+    The purge is the ONLY thing that removes a log row: no endpoint
+    deletes one, not even for the super admin (see routers/audit_logs).
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_audit_logs_user_created "
+                "ON audit_logs (user_id, created_at DESC)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_audit_logs_action_created "
+                "ON audit_logs (action, created_at DESC)"
+            )
+        )
+        conn.execute(
+            text("DELETE FROM audit_logs WHERE created_at < :cutoff"),
+            {"cutoff": audit.purge_cutoff()},
+        )
+
+
 def run_startup_migrations() -> None:
     """Run every idempotent startup migration, in dependency order."""
     _add_columns()
@@ -174,3 +202,4 @@ def run_startup_migrations() -> None:
     _seed_roles_and_admin()
     _backfill_user_organizations()
     _backfill_avatar_organizations()
+    _prepare_audit_logs()

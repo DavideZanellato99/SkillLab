@@ -67,6 +67,16 @@ def get_or_create_mock_admin(db: Session) -> User:
     return user
 
 
+def _identified(request: Request, user: User) -> User:
+    """Publish the authenticated caller on the request, then return it.
+
+    The audit middleware runs outside the dependency graph, so this is how
+    it learns who acted: every path that returns a user goes through here.
+    """
+    request.state.audit_user = user
+    return user
+
+
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
@@ -125,7 +135,7 @@ def get_current_user(
         )
 
     if cognito_sub == MOCK_ADMIN_SUB:
-        return get_or_create_mock_admin(db)
+        return _identified(request, get_or_create_mock_admin(db))
 
     # Look up user in DB
     user = db.query(User).filter(User.cognito_sub == cognito_sub).first()
@@ -156,7 +166,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return user
+    return _identified(request, user)
 
 
 def get_current_super_admin(

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+import audit
 from auth_dependency import (
     ACCESS_TOKEN_COOKIE,
     MOCK_ADMIN_SUB,
@@ -182,6 +183,14 @@ def login(
         _email_limiter.record_failure(email_key)
         _ip_limiter.record_failure(ip_key)
         print(f"[WARN] Login fallito per '{email_key}': {e}")
+        # Only the attempted email is recorded, never why it failed: the
+        # reason is what would let the registry enumerate valid accounts.
+        audit.log_action(
+            audit.LOGIN_FAILED,
+            http_request,
+            user_email=email_key,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=_GENERIC_LOGIN_ERROR,
@@ -204,6 +213,12 @@ def login(
         # Auth passed but the user has no DB row: same generic 401 — a
         # dedicated message would confirm the credentials were correct
         print(f"[WARN] Login: utente Cognito senza riga nel DB: '{email_key}'")
+        audit.log_action(
+            audit.LOGIN_FAILED,
+            http_request,
+            user_email=email_key,
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=_GENERIC_LOGIN_ERROR,
@@ -212,6 +227,7 @@ def login(
     _bind_fresh_token(db, result["access_token"], http_request, user.id)
     _set_access_cookie(response, result["access_token"])
     _set_refresh_cookie(response, result["refresh_token"])
+    audit.log_action(audit.LOGIN, http_request, user=user)
     return LoginResponse(user=UserResponse.model_validate(user))
 
 
@@ -257,6 +273,7 @@ def complete_new_password(
     _bind_fresh_token(db, result["access_token"], http_request, user.id)
     _set_access_cookie(response, result["access_token"])
     _set_refresh_cookie(response, result["refresh_token"])
+    audit.log_action(audit.PASSWORD_SET, http_request, user=user)
     return LoginResponse(user=UserResponse.model_validate(user))
 
 
@@ -366,11 +383,14 @@ def refresh_access_token(request: Request, response: Response, db: Session = Dep
     return MessageResponse(message="Token aggiornato.", success=True)
 
 
-def _denylist_access_token(db: Session, access_token: str) -> None:
+def _denylist_access_token(db: Session, access_token: str) -> dict:
     """
     Push the access token's jti and origin_jti into the server-side
     denylist. origin_jti is shared by every access token minted from the
     same refresh token, so the whole session dies, not just this token.
+
+    Returns the verified claims, which is how the logout identifies who is
+    leaving (there is no get_current_user on that endpoint).
     """
     claims = verify_access_token(access_token)
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -393,6 +413,7 @@ def _denylist_access_token(db: Session, access_token: str) -> None:
         entries.append((origin_jti, now + timedelta(seconds=_ACCESS_COOKIE_MAX_AGE)))
 
     revoke_jtis(db, entries)
+    return claims
 
 
 @router.post("/logout", response_model=MessageResponse)
@@ -416,14 +437,23 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
             print(f"[ERROR] Logout: revoca del refresh token fallita: {e}")
 
     access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    claims: dict | None = None
     if access_token:
         try:
-            _denylist_access_token(db, access_token)
+            claims = _denylist_access_token(db, access_token)
         except RuntimeError:
             # Invalid/expired access token: already unusable, nothing to deny
             pass
         except Exception as e:
             print(f"[ERROR] Logout: denylist del jti fallita: {e}")
+
+    # Only a logout with a still-readable token names its author. With an
+    # expired one nobody can be identified, and a row with no actor would
+    # say nothing: the session was already dead anyway.
+    if claims and claims.get("sub"):
+        user = db.query(User).filter(User.cognito_sub == claims["sub"]).first()
+        if user:
+            audit.log_action(audit.LOGOUT, request, user=user)
 
     _clear_auth_cookies(response)
     return MessageResponse(message="Logout effettuato.", success=True)

@@ -18,10 +18,21 @@ import DetailModal, { DetailField } from './DetailModal'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
 import Spinner from './Spinner'
+import FormError from './FormError'
+import ConfirmModal from './ConfirmModal'
 import { matchesSearch } from './tableSearch'
-import type { ReactNode } from 'react'
-import type { DataTableColumn } from './DataTable'
 import type { KebabMenuItem } from './KebabMenu'
+import {
+  ROLE_OPTIONS,
+  STATUS_LABELS,
+  STATUS_BADGE_CLASSES,
+  USER_COLUMNS,
+  STATUS_ACTIONS,
+  suspendIcon,
+  reactivateIcon,
+  disableIcon,
+  resendIcon,
+} from './adminUsersConfig'
 
 /* Shared form styles (modals, same look as the auth modal) */
 const fieldCls = 'flex flex-col gap-1.5'
@@ -38,232 +49,8 @@ const modalCls =
   'relative m-auto max-h-[90vh] w-full max-w-[420px] animate-modal-in overflow-y-auto overflow-x-hidden rounded-3xl border border-white/6 bg-gray-900/95 p-12 shadow-[0_24px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(124,58,237,0.08)] backdrop-blur-2xl max-[480px]:rounded-2xl max-[480px]:p-8'
 const modalCloseCls =
   'absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100'
-const formErrorCls =
-  'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]'
 const actionBtnCls =
   'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40'
-
-const ROLE_OPTIONS: { value: RoleName; label: string }[] = [
-  { value: 'user', label: 'User' },
-  { value: 'organization_admin', label: 'Organization Admin' },
-  { value: 'super_admin', label: 'Super Admin' },
-]
-
-const STATUS_LABELS: Record<UserStatus, string> = {
-  active: 'Attivo',
-  suspended: 'Sospeso',
-  disabled: 'Disabilitato',
-}
-
-const STATUS_BADGE_CLASSES: Record<UserStatus, string> = {
-  active: 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-  suspended: 'border border-amber-500/30 bg-amber-500/10 text-amber-400',
-  disabled: 'border border-red-500/30 bg-red-500/10 text-red-400',
-}
-
-/* Icone 14x14 delle voci del menu kebab */
-const suspendIcon = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="10" y1="15" x2="10" y2="9" />
-    <line x1="14" y1="15" x2="14" y2="9" />
-  </svg>
-)
-const reactivateIcon = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="9 12 11 14 15 10" />
-  </svg>
-)
-const disableIcon = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-  </svg>
-)
-const resendIcon = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-  </svg>
-)
-
-/* Sospensione, riattivazione e disabilitazione sono azioni distinte: ognuna
- * ha la propria voce di menu e la propria modale di conferma, con copy e
- * accento dedicati. La chiave è lo stato verso cui si sta passando. */
-interface StatusAction {
-  title: string
-  iconWrapperCls: string
-  icon: ReactNode
-  description: (email: string) => ReactNode
-  confirmLabel: string
-  pendingLabel: string
-  confirmCls: string
-  /** Participio usato nel messaggio di conferma in cima alla pagina */
-  successVerb: string
-}
-
-const STATUS_ACTIONS: Record<UserStatus, StatusAction> = {
-  active: {
-    title: 'Riattiva Account',
-    iconWrapperCls: 'border border-emerald-500/25 bg-emerald-500/10',
-    icon: (
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="#10b981"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="9 12 11 14 15 10" />
-      </svg>
-    ),
-    description: (email) => (
-      <>
-        L'account di <strong className="text-slate-100">{email}</strong> torna attivo: l'utente
-        potrà accedere di nuovo con le credenziali che possiede già.
-      </>
-    ),
-    confirmLabel: 'Riattiva Account',
-    pendingLabel: 'Riattivazione...',
-    confirmCls:
-      'border border-emerald-500/35 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20',
-    successVerb: 'riattivato',
-  },
-  suspended: {
-    title: 'Sospendi Account',
-    iconWrapperCls: 'border border-amber-500/25 bg-amber-500/10',
-    icon: (
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="#f59e0b"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="10" y1="15" x2="10" y2="9" />
-        <line x1="14" y1="15" x2="14" y2="9" />
-      </svg>
-    ),
-    description: (email) => (
-      <>
-        Blocchi temporaneamente l'accesso di <strong className="text-slate-100">{email}</strong>: il
-        login viene impedito e le sessioni aperte chiuse subito. La sospensione è reversibile, puoi
-        riattivare l'account quando vuoi.
-      </>
-    ),
-    confirmLabel: 'Sospendi Account',
-    pendingLabel: 'Sospensione...',
-    confirmCls: 'border border-amber-500/35 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
-    successVerb: 'sospeso',
-  },
-  disabled: {
-    title: 'Disabilita Account',
-    iconWrapperCls: 'border border-red-500/25 bg-red-500/10',
-    icon: (
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="#ef4444"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-      </svg>
-    ),
-    description: (email) => (
-      <>
-        Disabiliti in modo definitivo <strong className="text-slate-100">{email}</strong>: il login
-        viene bloccato, le sessioni aperte chiuse subito e l'account non potrà più essere
-        riattivato.
-      </>
-    ),
-    confirmLabel: 'Disabilita Definitivamente',
-    pendingLabel: 'Disabilitazione...',
-    confirmCls:
-      'border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]',
-    successVerb: 'disabilitato definitivamente',
-  },
-}
-
-const USER_COLUMNS: DataTableColumn[] = [
-  { key: 'utente', label: 'Utente' },
-  { key: 'organizzazione', label: 'Organizzazione' },
-  { key: 'ruolo', label: 'Ruolo' },
-  { key: 'stato', label: 'Stato' },
-  { key: 'creazione', label: 'Data Creazione' },
-  { key: 'azioni', label: 'Azioni', align: 'right' },
-]
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className={formErrorCls}>
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="mt-px shrink-0 text-red-500"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
-      </svg>
-      <span>{message}</span>
-    </div>
-  )
-}
 
 export default function AdminPage() {
   const { user } = useAuth()
@@ -901,7 +688,7 @@ export default function AdminPage() {
               </p>
             </div>
 
-            {formError && <ErrorBox message={formError} />}
+            {formError && <FormError message={formError} />}
 
             <form className="flex flex-col gap-4" onSubmit={handleCreateUser}>
               <div className={fieldCls}>
@@ -1053,7 +840,7 @@ export default function AdminPage() {
               <p className="text-[0.85rem] text-slate-500">{editingUser.email}</p>
             </div>
 
-            {editError && <ErrorBox message={editError} />}
+            {editError && <FormError message={editError} />}
 
             <form className="flex flex-col gap-4" onSubmit={handleSaveEdit}>
               <div className="grid grid-cols-2 gap-3">
@@ -1150,226 +937,91 @@ export default function AdminPage() {
 
       {/* Modal Conferma Cambio Stato (sospendi / riattiva / disabilita) */}
       {statusAction && statusCfg && (
-        <div className={overlayCls} onClick={() => !isSavingStatus && setStatusAction(null)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button
-              className={modalCloseCls}
-              onClick={() => setStatusAction(null)}
-              disabled={isSavingStatus}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-6 text-center">
-              <div
-                className={`mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl ${statusCfg.iconWrapperCls}`}
-              >
-                {statusCfg.icon}
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                {statusCfg.title}
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                {statusCfg.description(statusAction.user.email)}
-              </p>
-            </div>
-
-            {statusError && <ErrorBox message={statusError} />}
-
-            <div className="flex gap-3">
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => setStatusAction(null)}
-                disabled={isSavingStatus}
-              >
-                Annulla
-              </button>
-              <button
-                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${statusCfg.confirmCls}`}
-                onClick={handleConfirmStatus}
-                disabled={isSavingStatus}
-              >
-                {isSavingStatus ? (
-                  <>
-                    <Spinner variant="button" />
-                    {statusCfg.pendingLabel}
-                  </>
-                ) : (
-                  statusCfg.confirmLabel
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          icon={statusCfg.icon}
+          iconWrapperCls={statusCfg.iconWrapperCls}
+          title={statusCfg.title}
+          description={statusCfg.description(statusAction.user.email)}
+          error={statusError || undefined}
+          confirmLabel={statusCfg.confirmLabel}
+          pendingLabel={statusCfg.pendingLabel}
+          confirmClassName={statusCfg.confirmCls}
+          isPending={isSavingStatus}
+          onConfirm={handleConfirmStatus}
+          onClose={() => setStatusAction(null)}
+        />
       )}
 
       {/* Modal Conferma Rinvio Credenziali */}
       {resendingUser && (
-        <div className={overlayCls} onClick={() => !isResending && setResendingUser(null)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button
-              className={modalCloseCls}
-              onClick={() => setResendingUser(null)}
-              disabled={isResending}
+        <ConfirmModal
+          icon={
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#06b6d4"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-cyan-500/25 bg-cyan-500/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#06b6d4"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                Rinvia Credenziali
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                Cognito invierà a <strong className="text-slate-100">{resendingUser.email}</strong>{' '}
-                una nuova password temporanea via email. Le credenziali attuali smetteranno subito
-                di funzionare e al prossimo accesso l'utente dovrà impostare una nuova password.
-              </p>
-            </div>
-
-            {resendError && <ErrorBox message={resendError} />}
-
-            <div className="flex gap-3">
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => setResendingUser(null)}
-                disabled={isResending}
-              >
-                Annulla
-              </button>
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleConfirmResend}
-                disabled={isResending}
-              >
-                {isResending ? (
-                  <>
-                    <Spinner variant="button" />
-                    Invio in corso...
-                  </>
-                ) : (
-                  'Invia Nuova Password'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+            </svg>
+          }
+          iconWrapperCls="border border-cyan-500/25 bg-cyan-500/10"
+          title="Rinvia Credenziali"
+          description={
+            <>
+              Cognito invierà a <strong className="text-slate-100">{resendingUser.email}</strong>{' '}
+              una nuova password temporanea via email. Le credenziali attuali smetteranno subito di
+              funzionare e al prossimo accesso l'utente dovrà impostare una nuova password.
+            </>
+          }
+          error={resendError || undefined}
+          confirmLabel="Invia Nuova Password"
+          pendingLabel="Invio in corso..."
+          confirmClassName="border-none bg-gradient-to-br from-violet-600 to-cyan-500 text-white hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0"
+          isPending={isResending}
+          onConfirm={handleConfirmResend}
+          onClose={() => setResendingUser(null)}
+        />
       )}
 
       {/* Modal Conferma Eliminazione */}
       {deletingUser && (
-        <div className={overlayCls} onClick={() => !isDeleting && setDeletingUser(null)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button
-              className={modalCloseCls}
-              onClick={() => setDeletingUser(null)}
-              disabled={isDeleting}
+        <ConfirmModal
+          icon={
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-red-500/25 bg-red-500/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                Elimina Utente
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                Stai per eliminare <strong className="text-slate-100">{deletingUser.email}</strong>{' '}
-                da Cognito e dal database, incluse le sue conversazioni. L'operazione non è
-                reversibile.
-              </p>
-            </div>
-
-            {deleteError && <ErrorBox message={deleteError} />}
-
-            <div className="flex gap-3">
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => setDeletingUser(null)}
-                disabled={isDeleting}
-              >
-                Annulla
-              </button>
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? (
-                  <>
-                    <Spinner variant="button" />
-                    Eliminazione...
-                  </>
-                ) : (
-                  'Elimina Definitivamente'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          }
+          iconWrapperCls="border border-red-500/25 bg-red-500/10"
+          title="Elimina Utente"
+          description={
+            <>
+              Stai per eliminare <strong className="text-slate-100">{deletingUser.email}</strong> da
+              Cognito e dal database, incluse le sue conversazioni. L'operazione non è reversibile.
+            </>
+          }
+          error={deleteError || undefined}
+          confirmLabel="Elimina Definitivamente"
+          pendingLabel="Eliminazione..."
+          confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
+          isPending={isDeleting}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeletingUser(null)}
+        />
       )}
     </div>
   )

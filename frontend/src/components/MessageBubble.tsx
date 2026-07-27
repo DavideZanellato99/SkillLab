@@ -1,0 +1,70 @@
+/* Una bolla della trascrizione: messaggio dell'operatore (a destra) o
+ * dell'avatar (a sinistra, con la sua foto). Le emotion tag dei messaggi
+ * dell'operatore sono staccate dal testo e mostrate come chip.
+ *
+ * `registerNode` consegna al genitore il nodo DOM della bolla: gli serve per
+ * scorrere fino al messaggio citato da una valutazione ed evidenziarlo. */
+
+import type { ChatMessage } from '../services/api'
+import MessageEmotions, { splitEmotionTag } from './MessageEmotions'
+import { formatTime } from './chatFormat'
+
+interface MessageBubbleProps {
+  message: ChatMessage
+  /** Posizione nella lista: alimenta lo sfalsamento dell'animazione d'entrata. */
+  index: number
+  avatarImageUrl: string
+  avatarName: string
+  /** Evidenziata (bordo ciano) quando è il messaggio citato appena raggiunto. */
+  isHighlighted: boolean
+  registerNode: (id: string, node: HTMLDivElement | null) => void
+}
+
+export default function MessageBubble({
+  message,
+  index,
+  avatarImageUrl,
+  avatarName,
+  isHighlighted,
+  registerNode,
+}: MessageBubbleProps) {
+  const isUser = message.role === 'user'
+  const { text, emotions } = isUser
+    ? splitEmotionTag(message.content)
+    : { text: message.content, emotions: [] }
+
+  return (
+    <div
+      ref={(node) => registerNode(message.id, node)}
+      className={`flex max-w-[75%] animate-message-in gap-2 max-[900px]:max-w-[90%] ${
+        isUser ? 'flex-row-reverse self-end' : 'self-start'
+      }`}
+      style={{ animationDelay: `${index * 0.05}s` }}
+    >
+      {!isUser && (
+        <div className="mt-1 h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-white/6">
+          <img className="h-full w-full object-cover" src={avatarImageUrl} alt={avatarName} />
+        </div>
+      )}
+      <div
+        className={`relative rounded-2xl px-6 py-4 leading-relaxed transition-shadow duration-300 ${
+          isUser
+            ? 'rounded-br-[4px] bg-gradient-to-br from-violet-600 to-violet-700 text-white'
+            : 'rounded-bl-[4px] border border-white/6 bg-slate-800/70 text-slate-100 backdrop-blur-md'
+        } ${
+          isHighlighted
+            ? 'shadow-[0_0_0_2px_rgba(34,211,238,0.7),0_0_24px_rgba(34,211,238,0.35)]'
+            : ''
+        }`}
+      >
+        <p className="whitespace-pre-wrap break-words text-sm">{text}</p>
+        <MessageEmotions emotions={emotions} />
+        <span
+          className={`mt-1 block text-[0.65rem] opacity-60 ${isUser ? 'text-right text-white/70' : 'text-slate-500'}`}
+        >
+          {formatTime(message.created_at)}
+        </span>
+      </div>
+    </div>
+  )
+}

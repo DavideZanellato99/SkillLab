@@ -276,34 +276,6 @@ export default function AdminPage() {
 
   const statusCfg = statusAction ? STATUS_ACTIONS[statusAction.target] : null
 
-  if (!isSuperAdmin(user)) {
-    return (
-      <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-        <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-white/6 bg-gray-900/60 p-16 text-center text-red-300">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-red-500"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-          <h2 className="font-heading text-2xl text-slate-100">Accesso Negato</h2>
-          <p className="max-w-[400px] text-slate-400">
-            Solo gli utenti con ruolo <strong>Super Admin</strong> possono accedere alla gestione
-            utenti.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
       <header className="mb-12 flex flex-wrap items-center justify-between gap-4">

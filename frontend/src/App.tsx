@@ -15,6 +15,7 @@ import TrainingPage from './components/TrainingPage'
 import TrainingGoals from './components/TrainingGoals'
 import ProfilePage from './components/ProfilePage'
 import LandingPage from './components/LandingPage'
+import RequireRole from './components/RequireRole'
 import Spinner from './components/Spinner'
 import './index.css'
 
@@ -59,16 +60,89 @@ function App() {
       <Routes>
         {isAuthenticated ? (
           <>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/chat/:avatarId" element={<ChatPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/admin/organizations" element={<OrganizationsPage />} />
-            <Route path="/admin/dashboard" element={<DashboardPage />} />
-            <Route path="/admin/training" element={<TrainingPage />} />
-            <Route path="/admin/report" element={<UserReportPage />} />
-            <Route path="/admin/avatars" element={<AvatarAdminPage />} />
-            <Route path="/admin/logs" element={<AuditLogsPage />} />
+            {/* Every route states the role it needs: RequireRole is the single
+                place where access is decided, and its `access` prop is
+                mandatory, so a new route can't be added without one. */}
+            <Route
+              path="/"
+              element={
+                <RequireRole access="authenticated">
+                  <HomePage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/chat/:avatarId"
+              element={
+                <RequireRole access="authenticated">
+                  <ChatPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <RequireRole access="authenticated">
+                  <ProfilePage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <RequireRole access="super_admin">
+                  <AdminPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/organizations"
+              element={
+                <RequireRole access="super_admin">
+                  <OrganizationsPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <RequireRole access="admin">
+                  <DashboardPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/training"
+              element={
+                <RequireRole access="admin">
+                  <TrainingPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/report"
+              element={
+                <RequireRole access="admin">
+                  <UserReportPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/avatars"
+              element={
+                <RequireRole access="super_admin">
+                  <AvatarAdminPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/logs"
+              element={
+                <RequireRole access="super_admin">
+                  <AuditLogsPage />
+                </RequireRole>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         ) : (

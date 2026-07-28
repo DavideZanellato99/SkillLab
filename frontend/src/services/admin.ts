@@ -12,13 +12,43 @@ export interface CreateUserPayload {
   organization_id?: string | null
 }
 
+/** Una finestra sugli utenti: `total` conta tutti quelli che soddisfano i
+ * filtri, non quelli restituiti. */
+export interface UserPage {
+  total: number
+  items: AuthUser[]
+}
+
+export interface UserFilters {
+  organizationId?: string
+  ruolo?: RoleName
+  status?: UserStatus
+  /** true elenca solo gli inviti mai accettati, false solo chi ha già acceduto. */
+  neverLoggedIn?: boolean
+  search?: string
+  limit?: number
+  offset?: number
+}
+
 /**
- * Fetch all registered users in the system (Super Admin only), optionally
- * filtered by organization.
+ * Legge una finestra dell'elenco utenti (solo Super Admin), più recenti
+ * prima. Ricerca e filtri girano sul server: applicarli qui filtrerebbe solo
+ * le righe già caricate, cioè risponderebbe «nessun utente» su qualcuno che
+ * esiste ma sta oltre la finestra.
  */
-export const fetchAllUsers = (organizationId?: string) =>
-  apiFetch<AuthUser[]>('/api/admin/users', {
-    params: organizationId ? { organization_id: organizationId } : undefined,
+export const fetchUsers = (filters: UserFilters = {}) =>
+  apiFetch<UserPage>('/api/admin/users', {
+    params: {
+      ...(filters.organizationId ? { organization_id: filters.organizationId } : {}),
+      ...(filters.ruolo ? { ruolo: filters.ruolo } : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.neverLoggedIn !== undefined
+        ? { never_logged_in: String(filters.neverLoggedIn) }
+        : {}),
+      ...(filters.search ? { q: filters.search } : {}),
+      ...(filters.limit !== undefined ? { limit: String(filters.limit) } : {}),
+      ...(filters.offset !== undefined ? { offset: String(filters.offset) } : {}),
+    },
   })
 
 /**

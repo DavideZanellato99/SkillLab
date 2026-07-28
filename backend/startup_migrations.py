@@ -81,6 +81,7 @@ def _add_columns() -> None:
                 "organization_id UUID REFERENCES organizations(id)"
             )
         )
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP"))
 
 
 def _backfill_conversation_titles() -> None:
@@ -168,6 +169,33 @@ def _backfill_avatar_organizations() -> None:
             conn.execute(text("ALTER TABLE avatars ALTER COLUMN organization_id SET NOT NULL"))
 
 
+def _backfill_last_login() -> None:
+    """Seed the last-access column from the audit trail.
+
+    The column is new, so on the first boot every pre-existing account would
+    read as "never accessed" while plenty of them sign in daily. The registry
+    already records every successful authentication, so the most recent one
+    per user is the honest starting value. Accounts whose last login fell
+    outside the audit retention window stay NULL, which is the truthful
+    answer there: we genuinely do not know.
+
+    Idempotent, and it runs before the retention purge so it can still see
+    the oldest rows: only users still NULL are touched, so a real login
+    always wins over the backfill.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE users SET last_login_at = latest.last_login FROM ("
+                "  SELECT user_id, MAX(created_at) AS last_login FROM audit_logs"
+                "  WHERE action IN ('auth.login', 'auth.password_set') AND user_id IS NOT NULL"
+                "  GROUP BY user_id"
+                ") AS latest "
+                "WHERE users.id = latest.user_id AND users.last_login_at IS NULL"
+            )
+        )
+
+
 def _prepare_audit_logs() -> None:
     """Index the audit trail the way it is read, then drop what expired.
 
@@ -202,4 +230,5 @@ def run_startup_migrations() -> None:
     _seed_roles_and_admin()
     _backfill_user_organizations()
     _backfill_avatar_organizations()
+    _backfill_last_login()
     _prepare_audit_logs()

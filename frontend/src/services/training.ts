@@ -3,6 +3,7 @@
  * derivato dal backend a ogni lettura, mai memorizzato. */
 
 import { apiFetch } from './api'
+import type { AuthUser } from './auth'
 
 /**
  * "active": ancora aperto. "overdue": scadenza passata senza obiettivo.
@@ -46,6 +47,19 @@ export const fetchMyAssignments = () =>
 export const fetchAssignments = (organizationId?: string) =>
   apiFetch<TrainingAssignment[]>('/api/training/assignments', {
     params: organizationId ? { organization_id: organizationId } : undefined,
+  })
+
+/**
+ * Gli utenti a cui un avatar di quell'organizzazione può essere assegnato
+ * (solo Super Admin): attivi, del tenant dell'avatar, super admin esclusi.
+ *
+ * La regola vive sul server, accanto alla validazione che rifiuta
+ * l'assegnazione: filtrare qui una lista completa di utenti significherebbe
+ * tenerne una copia libera di divergere da quella.
+ */
+export const fetchAssignableUsers = (organizationId: string) =>
+  apiFetch<AuthUser[]>('/api/training/assignable-users', {
+    params: { organization_id: organizationId },
   })
 
 /** Assegna un avatar come obiettivo a uno o più utenti (solo Super Admin). */

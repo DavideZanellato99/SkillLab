@@ -264,7 +264,6 @@ export default function AuditLogsPage() {
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder="Cerca per email, organizzazione, percorso o id..."
-            pageSizeOptions={[20, 30, 50, 100]}
             isEmpty={logs.length === 0}
             emptyMessage={
               search || actionFilter || orgFilter || dateFrom || dateTo

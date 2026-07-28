@@ -25,11 +25,18 @@ export const STATUS_BADGE_CLASSES: Record<UserStatus, string> = {
   disabled: 'border border-red-500/30 bg-red-500/10 text-red-400',
 }
 
+/* Un account mai usato non è "vecchio", è un invito rimasto in sospeso: ha
+ * un badge suo invece di una data, con lo stesso ambra delle sospensioni
+ * perché è anch'esso qualcosa che richiede un intervento dell'admin. */
+export const NEVER_ACCESSED_BADGE_CLASSES =
+  'border border-amber-500/30 bg-amber-500/10 text-amber-400'
+
 export const USER_COLUMNS: DataTableColumn[] = [
   { key: 'utente', label: 'Utente' },
   { key: 'organizzazione', label: 'Organizzazione' },
   { key: 'ruolo', label: 'Ruolo' },
   { key: 'stato', label: 'Stato' },
+  { key: 'ultimo_accesso', label: 'Ultimo Accesso' },
   { key: 'creazione', label: 'Data Creazione' },
   { key: 'azioni', label: 'Azioni', align: 'right' },
 ]

@@ -339,6 +339,9 @@ class UserResponse(BaseModel):
     # Tenant the user belongs to; both null for the super admin
     organization_id: UUID | None = None
     organization_name: str | None = None
+    # Last successful authentication; null means the account has never been
+    # used (an invitation that was never accepted).
+    last_login_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -438,6 +441,17 @@ class UpdateUserStatusRequest(BaseModel):
     """Schema for admin changing an account's state."""
 
     status: str  # "active" | "suspended" | "disabled"
+
+
+class UserPage(BaseModel):
+    """A window over the users: the rows plus how many matched in all.
+
+    `total` counts every user the filters select, not the ones in `items`:
+    it is what tells the client how much is still behind the window.
+    """
+
+    total: int
+    items: list[UserResponse]
 
 
 class AdminAvatarPayload(BaseModel):

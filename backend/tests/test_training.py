@@ -8,7 +8,7 @@ means overdue.
 
 from datetime import UTC, datetime, timedelta
 
-from models import ChatConversation, ConversationEvaluation, TrainingAssignment
+from models import ChatConversation, ConversationEvaluation, Organization, TrainingAssignment
 
 
 def _seed_evaluated_conversation(db_session, user, avatar, score, opened_at=None):
@@ -149,3 +149,70 @@ def test_delete_assignment(admin_client, db_session, standard_user, make_avatar)
     response = admin_client.delete(f"/api/training/assignments/{created['id']}")
     assert response.status_code == 200
     assert db_session.query(TrainingAssignment).count() == 0
+
+
+# ── Chi può ricevere un obiettivo ─────────────────────
+#
+# L'endpoint che alimenta il selettore vive accanto alla validazione che
+# rifiuta l'assegnazione: questi test tengono le due definizioni allineate.
+
+
+def test_assignable_users_are_the_active_ones_of_the_tenant(
+    admin_client, db_session, standard_user, organization
+):
+    response = admin_client.get(
+        "/api/training/assignable-users", params={"organization_id": str(organization.id)}
+    )
+
+    assert response.status_code == 200
+    assert [u["id"] for u in response.json()] == [str(standard_user.id)]
+
+
+def test_a_suspended_account_cannot_receive_a_goal(
+    admin_client, db_session, standard_user, organization
+):
+    """Non potrebbe nemmeno accedere per lavorarci."""
+    standard_user.status = "suspended"
+    db_session.flush()
+
+    response = admin_client.get(
+        "/api/training/assignable-users", params={"organization_id": str(organization.id)}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_the_super_admin_is_never_assignable(
+    admin_client, super_admin_user, standard_user, organization
+):
+    """Sta sopra i tenant, quindi non appartiene a quello dell'avatar: è la
+    stessa ragione per cui create_assignments lo rifiuta."""
+    response = admin_client.get(
+        "/api/training/assignable-users", params={"organization_id": str(organization.id)}
+    )
+
+    assert str(super_admin_user.id) not in [u["id"] for u in response.json()]
+
+
+def test_assignable_users_of_another_tenant_are_not_listed(
+    admin_client, db_session, standard_user, organization
+):
+    other = Organization(name="Tenant vicino", slug="tenant-vicino")
+    db_session.add(other)
+    db_session.flush()
+
+    response = admin_client.get(
+        "/api/training/assignable-users", params={"organization_id": str(other.id)}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_assignable_users_is_super_admin_only(user_client, organization):
+    response = user_client.get(
+        "/api/training/assignable-users", params={"organization_id": str(organization.id)}
+    )
+
+    assert response.status_code == 403

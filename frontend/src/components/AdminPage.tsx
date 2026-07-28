@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  fetchAllUsers,
+  fetchUsers,
   createNewUser,
   updateUser,
   deleteUser,
   resendUserCredentials,
   setUserStatus,
 } from '../services/admin'
+import type { UserFilters } from '../services/admin'
 import { fetchOrganizations } from '../services/organizations'
 import type { Organization } from '../services/organizations'
 import { isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../services/auth'
@@ -20,12 +21,13 @@ import KebabMenu from './KebabMenu'
 import Spinner from './Spinner'
 import FormError from './FormError'
 import ConfirmModal from './ConfirmModal'
-import { matchesSearch } from './tableSearch'
+import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
 import type { KebabMenuItem } from './KebabMenu'
 import {
   ROLE_OPTIONS,
   STATUS_LABELS,
   STATUS_BADGE_CLASSES,
+  NEVER_ACCESSED_BADGE_CLASSES,
   USER_COLUMNS,
   STATUS_ACTIONS,
   suspendIcon,
@@ -33,6 +35,19 @@ import {
   disableIcon,
   resendIcon,
 } from './adminUsersConfig'
+
+/** Righe caricate per volta: l'elenco cresce con ogni organizzazione, quindi
+ * la pagina ne tiene una finestra e la estende su richiesta. */
+const WINDOW_SIZE = 200
+/** Tetto imposto dall'endpoint, che la rilettura dopo una modifica non deve
+ * superare quando la finestra è già stata estesa parecchie volte. */
+const MAX_WINDOW = 1000
+
+const ACCESS_OPTIONS = [
+  { value: '', label: 'Qualsiasi accesso' },
+  { value: 'never', label: 'Mai acceduto' },
+  { value: 'done', label: 'Ha già acceduto' },
+]
 
 /* Shared form styles (modals, same look as the auth modal) */
 const fieldCls = 'flex flex-col gap-1.5'
@@ -55,22 +70,27 @@ const actionBtnCls =
 export default function AdminPage() {
   const { user } = useAuth()
   const [users, setUsers] = useState<AuthUser[]>([])
+  const [total, setTotal] = useState(0)
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
-  const [search, setSearch] = useState('')
 
-  const visibleUsers = users.filter((u) =>
-    matchesSearch(
-      search,
-      `${u.nome ?? ''} ${u.cognome ?? ''}`,
-      u.email,
-      u.organization_name ?? '',
-      ROLE_LABELS[u.ruolo] ?? u.ruolo,
-      STATUS_LABELS[u.status] ?? u.status,
-    ),
-  )
+  // Filtri e ricerca: girano tutti sul server, quindi coprono l'intero
+  // elenco e non solo la finestra già caricata.
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [orgFilter, setOrgFilter] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [accessFilter, setAccessFilter] = useState('')
+  const hasFilters = Boolean(search || orgFilter || roleFilter || statusFilter || accessFilter)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400)
+    return () => clearTimeout(timer)
+  }, [search])
 
   // Options for the organization pickers (a user/org admin must have one)
   const orgOptions = organizations.map((o) => ({ value: o.id, label: o.name }))
@@ -119,27 +139,74 @@ export default function AdminPage() {
     setTimeout(() => setSuccessMsg(''), 6000)
   }
 
-  const loadUsers = useCallback(async () => {
+  const filters = useCallback(
+    (offset: number, limit: number = WINDOW_SIZE): UserFilters => ({
+      organizationId: orgFilter,
+      ruolo: (roleFilter || undefined) as RoleName | undefined,
+      status: (statusFilter || undefined) as UserStatus | undefined,
+      neverLoggedIn: accessFilter === '' ? undefined : accessFilter === 'never',
+      search: debouncedSearch,
+      limit,
+      offset,
+    }),
+    [orgFilter, roleFilter, statusFilter, accessFilter, debouncedSearch],
+  )
+
+  // Prima finestra: rifatta da capo a ogni cambio di filtro o di ricerca.
+  useEffect(() => {
+    if (!isSuperAdmin(user)) return
+    let cancelled = false
     setIsLoading(true)
     setError('')
-    try {
-      const data = await fetchAllUsers()
-      setUsers(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossibile caricare gli utenti.')
-    } finally {
-      setIsLoading(false)
+    fetchUsers(filters(0))
+      .then((page) => {
+        if (cancelled) return
+        setUsers(page.items)
+        setTotal(page.total)
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : 'Impossibile caricare gli utenti.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-  }, [])
+  }, [user, filters])
 
   useEffect(() => {
-    if (isSuperAdmin(user)) {
-      loadUsers()
-      fetchOrganizations()
-        .then(setOrganizations)
-        .catch(() => setOrganizations([]))
+    if (!isSuperAdmin(user)) return
+    fetchOrganizations()
+      .then(setOrganizations)
+      .catch(() => setOrganizations([]))
+  }, [user])
+
+  const handleLoadMore = async () => {
+    setIsLoadingMore(true)
+    try {
+      const page = await fetchUsers(filters(users.length))
+      setUsers((prev) => [...prev, ...page.items])
+      setTotal(page.total)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossibile caricare altri utenti.')
+    } finally {
+      setIsLoadingMore(false)
     }
-  }, [user, loadUsers])
+  }
+
+  /* Dopo una modifica la finestra si rilegge invece di essere ritoccata a
+   * mano: una riga aggiornata può non soddisfare più i filtri attivi (si
+   * sospende un utente mentre si filtra per «attivi») e una appena creata
+   * potrebbe non rientrarci affatto. Rilegge esattamente quanto era già
+   * caricato, così non si perde il punto in cui si era arrivati. */
+  const reloadWindow = useCallback(async () => {
+    const size = Math.min(MAX_WINDOW, Math.max(WINDOW_SIZE, users.length))
+    const page = await fetchUsers(filters(0, size))
+    setUsers(page.items)
+    setTotal(page.total)
+  }, [filters, users.length])
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -160,7 +227,7 @@ export default function AdminPage() {
         ruolo,
         organization_id: ruolo === 'super_admin' ? null : orgId,
       })
-      setUsers((prev) => [created, ...prev])
+      await reloadWindow()
       setShowModal(false)
       setEmail('')
       setNome('')
@@ -204,7 +271,7 @@ export default function AdminPage() {
         ruolo: editRuolo,
         organization_id: editRuolo === 'super_admin' ? null : editOrgId,
       })
-      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)))
+      await reloadWindow()
       setEditingUser(null)
       flashSuccess(`Utente ${updated.email} aggiornato con successo.`)
     } catch (err) {
@@ -223,7 +290,7 @@ export default function AdminPage() {
 
     try {
       const result = await deleteUser(deletingUser.id)
-      setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id))
+      await reloadWindow()
       setDeletingUser(null)
       flashSuccess(result.message)
     } catch (err) {
@@ -242,10 +309,10 @@ export default function AdminPage() {
 
     try {
       const result = await resendUserCredentials(resendingUser.id)
+      // The cognito_sub may have changed (re-invited account): refresh the list
+      await reloadWindow()
       setResendingUser(null)
       flashSuccess(result.message)
-      // The cognito_sub may have changed (re-invited account): refresh the list
-      loadUsers()
     } catch (err) {
       setResendError(
         err instanceof Error ? err.message : 'Errore durante il rinvio delle credenziali.',
@@ -262,7 +329,7 @@ export default function AdminPage() {
 
     try {
       const updated = await setUserStatus(statusAction.user.id, statusAction.target)
-      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)))
+      await reloadWindow()
       setStatusAction(null)
       flashSuccess(`Utente ${updated.email} ${STATUS_ACTIONS[statusAction.target].successVerb}.`)
     } catch (err) {
@@ -311,6 +378,77 @@ export default function AdminPage() {
         </button>
       </header>
 
+      <div className="mb-8 flex flex-wrap items-end gap-4">
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="users-org-filter">
+            Organizzazione
+          </label>
+          <Select
+            id="users-org-filter"
+            className="min-w-[220px]"
+            value={orgFilter}
+            onChange={setOrgFilter}
+            options={[{ value: '', label: 'Tutte le organizzazioni' }, ...orgOptions]}
+          />
+        </div>
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="users-role-filter">
+            Ruolo
+          </label>
+          <Select
+            id="users-role-filter"
+            className="min-w-[180px]"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={[{ value: '', label: 'Tutti i ruoli' }, ...ROLE_OPTIONS]}
+          />
+        </div>
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="users-status-filter">
+            Stato
+          </label>
+          <Select
+            id="users-status-filter"
+            className="min-w-[160px]"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: '', label: 'Tutti gli stati' },
+              ...(Object.keys(STATUS_LABELS) as UserStatus[]).map((s) => ({
+                value: s,
+                label: STATUS_LABELS[s],
+              })),
+            ]}
+          />
+        </div>
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="users-access-filter">
+            Accesso
+          </label>
+          <Select
+            id="users-access-filter"
+            className="min-w-[180px]"
+            value={accessFilter}
+            onChange={setAccessFilter}
+            options={ACCESS_OPTIONS}
+          />
+        </div>
+        {(orgFilter || roleFilter || statusFilter || accessFilter) && (
+          <button
+            type="button"
+            className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
+            onClick={() => {
+              setOrgFilter('')
+              setRoleFilter('')
+              setStatusFilter('')
+              setAccessFilter('')
+            }}
+          >
+            Azzera filtri
+          </button>
+        )}
+      </div>
+
       {successMsg && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 py-4 text-sm text-emerald-400 [animation-duration:0.2s]">
           <svg
@@ -356,192 +494,235 @@ export default function AdminPage() {
           <p>Caricamento utenti del sistema...</p>
         </div>
       ) : (
-        <DataTable
-          columns={USER_COLUMNS}
-          searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Cerca per nome, email, ruolo o stato..."
-          isEmpty={visibleUsers.length === 0}
-          emptyMessage={
-            search ? 'Nessun utente corrisponde alla ricerca.' : 'Nessun utente trovato.'
-          }
-        >
-          {visibleUsers.map((u) => {
-            const isSelf = u.id === user?.id
-            const isSystemAccount = u.cognito_sub.startsWith('mock-')
-            const deleteDisabled = isSelf || isSystemAccount
-            const isActive = u.status === 'active'
-
-            // Azioni secondarie: restano nel kebab, con il motivo dell'eventuale blocco
-            const statusBlockedReason = isSelf
-              ? 'Non puoi modificare lo stato del tuo stesso account'
-              : "Non è possibile modificare lo stato dell'account di sistema"
-            const openStatusModal = (target: UserStatus) => {
-              setStatusError('')
-              setStatusAction({ user: u, target })
+        <>
+          <DataTable
+            columns={USER_COLUMNS}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Cerca per nome, email o organizzazione..."
+            isEmpty={users.length === 0}
+            emptyMessage={
+              hasFilters ? 'Nessun utente corrisponde ai filtri.' : 'Nessun utente trovato.'
             }
+          >
+            {users.map((u) => {
+              const isSelf = u.id === user?.id
+              const isSystemAccount = u.cognito_sub.startsWith('mock-')
+              const deleteDisabled = isSelf || isSystemAccount
+              const isActive = u.status === 'active'
 
-            const menuItems: KebabMenuItem[] = []
-            // La disabilitazione è definitiva: su un account già disabilitato
-            // non resta alcuna transizione di stato possibile.
-            if (u.status !== 'disabled') {
-              const toggleTarget: UserStatus = u.status === 'suspended' ? 'active' : 'suspended'
-              menuItems.push({
-                key: 'toggle',
-                label: toggleTarget === 'active' ? 'Riattiva account' : 'Sospendi account',
-                icon: toggleTarget === 'active' ? reactivateIcon : suspendIcon,
-                disabled: deleteDisabled,
-                disabledReason: statusBlockedReason,
-                onSelect: () => openStatusModal(toggleTarget),
-              })
-              menuItems.push({
-                key: 'disable',
-                label: 'Disabilita account',
-                icon: disableIcon,
-                danger: true,
-                disabled: deleteDisabled,
-                disabledReason: statusBlockedReason,
-                onSelect: () => openStatusModal('disabled'),
-              })
-            }
-            menuItems.push({
-              key: 'resend',
-              label: 'Rinvia credenziali',
-              icon: resendIcon,
-              disabled: deleteDisabled || !isActive,
-              disabledReason: isSelf
-                ? 'Non puoi rinviare le credenziali del tuo stesso account'
-                : isSystemAccount
-                  ? "Non è possibile rinviare le credenziali dell'account di sistema"
-                  : u.status === 'disabled'
-                    ? "L'account è disabilitato definitivamente"
-                    : "L'account è sospeso: riattivalo prima di rinviare le credenziali",
-              onSelect: () => {
-                setResendError('')
-                setResendingUser(u)
-              },
-            })
+              // Azioni secondarie: restano nel kebab, con il motivo dell'eventuale blocco
+              const statusBlockedReason = isSelf
+                ? 'Non puoi modificare lo stato del tuo stesso account'
+                : "Non è possibile modificare lo stato dell'account di sistema"
+              const openStatusModal = (target: UserStatus) => {
+                setStatusError('')
+                setStatusAction({ user: u, target })
+              }
 
-            return (
-              <Tr
-                key={u.id}
-                className={`cursor-pointer ${isActive ? '' : 'opacity-60'}`}
-                onClick={() => setViewingUser(u)}
-              >
-                <Td>
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
-                      {getInitials(u.nome, u.cognome, u.email)}
+              const menuItems: KebabMenuItem[] = []
+              // La disabilitazione è definitiva: su un account già disabilitato
+              // non resta alcuna transizione di stato possibile.
+              if (u.status !== 'disabled') {
+                const toggleTarget: UserStatus = u.status === 'suspended' ? 'active' : 'suspended'
+                menuItems.push({
+                  key: 'toggle',
+                  label: toggleTarget === 'active' ? 'Riattiva account' : 'Sospendi account',
+                  icon: toggleTarget === 'active' ? reactivateIcon : suspendIcon,
+                  disabled: deleteDisabled,
+                  disabledReason: statusBlockedReason,
+                  onSelect: () => openStatusModal(toggleTarget),
+                })
+                menuItems.push({
+                  key: 'disable',
+                  label: 'Disabilita account',
+                  icon: disableIcon,
+                  danger: true,
+                  disabled: deleteDisabled,
+                  disabledReason: statusBlockedReason,
+                  onSelect: () => openStatusModal('disabled'),
+                })
+              }
+              menuItems.push({
+                key: 'resend',
+                label: 'Rinvia credenziali',
+                icon: resendIcon,
+                disabled: deleteDisabled || !isActive,
+                disabledReason: isSelf
+                  ? 'Non puoi rinviare le credenziali del tuo stesso account'
+                  : isSystemAccount
+                    ? "Non è possibile rinviare le credenziali dell'account di sistema"
+                    : u.status === 'disabled'
+                      ? "L'account è disabilitato definitivamente"
+                      : "L'account è sospeso: riattivalo prima di rinviare le credenziali",
+                onSelect: () => {
+                  setResendError('')
+                  setResendingUser(u)
+                },
+              })
+
+              return (
+                <Tr
+                  key={u.id}
+                  className={`cursor-pointer ${isActive ? '' : 'opacity-60'}`}
+                  onClick={() => setViewingUser(u)}
+                >
+                  <Td>
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
+                        {getInitials(u.nome, u.cognome, u.email)}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-100">
+                          {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}
+                        </span>
+                        <span className="text-[0.75rem] text-slate-500">{u.email}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-slate-100">
-                        {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}
+                  </Td>
+                  <Td>
+                    {u.organization_name ? (
+                      <span className="text-[0.85rem] text-slate-300">{u.organization_name}</span>
+                    ) : (
+                      <span className="text-[0.75rem] italic text-slate-500">
+                        Nessuna (super admin)
                       </span>
-                      <span className="text-[0.75rem] text-slate-500">{u.email}</span>
-                    </div>
-                  </div>
-                </Td>
-                <Td>
-                  {u.organization_name ? (
-                    <span className="text-[0.85rem] text-slate-300">{u.organization_name}</span>
-                  ) : (
-                    <span className="text-[0.75rem] italic text-slate-500">
-                      Nessuna (super admin)
-                    </span>
-                  )}
-                </Td>
-                <Td>
-                  <span
-                    className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[u.ruolo] ?? ''}`}
-                  >
-                    {ROLE_LABELS[u.ruolo] ?? u.ruolo}
-                  </span>
-                </Td>
-                <Td>
-                  <span
-                    className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[u.status] ?? ''}`}
-                  >
-                    {STATUS_LABELS[u.status] ?? u.status}
-                  </span>
-                </Td>
-                <Td>
-                  <span className="text-[0.85rem] text-slate-500">
-                    {new Date(u.created_at).toLocaleDateString('it-IT', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </span>
-                </Td>
-                <Td onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center justify-end gap-2">
-                    <Tooltip content="Modifica utente">
-                      <button
-                        className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
-                        onClick={() => openEditModal(u)}
-                        aria-label={`Modifica ${u.email}`}
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                        </svg>
-                      </button>
-                    </Tooltip>
-                    <Tooltip
-                      wrap
-                      content={
-                        isSelf
-                          ? 'Non puoi eliminare il tuo stesso account'
-                          : isSystemAccount
-                            ? "Non è possibile eliminare l'account di sistema"
-                            : 'Elimina utente'
-                      }
+                    )}
+                  </Td>
+                  <Td>
+                    <span
+                      className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[u.ruolo] ?? ''}`}
                     >
-                      <button
-                        className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
-                        onClick={() => {
-                          setDeleteError('')
-                          setDeletingUser(u)
-                        }}
-                        disabled={deleteDisabled}
-                        aria-label={`Elimina ${u.email}`}
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                      {ROLE_LABELS[u.ruolo] ?? u.ruolo}
+                    </span>
+                  </Td>
+                  <Td>
+                    <span
+                      className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[u.status] ?? ''}`}
+                    >
+                      {STATUS_LABELS[u.status] ?? u.status}
+                    </span>
+                  </Td>
+                  <Td>
+                    {u.last_login_at ? (
+                      <Tooltip content={formatDateTime(u.last_login_at)}>
+                        <span className="text-[0.85rem] text-slate-400">
+                          {formatRelativeDay(u.last_login_at)}
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip content="L'invito è stato inviato ma l'utente non ha mai effettuato l'accesso.">
+                        <span
+                          className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${NEVER_ACCESSED_BADGE_CLASSES}`}
                         >
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
-                      </button>
-                    </Tooltip>
-                    <Tooltip wrap content="Altre azioni">
-                      <KebabMenu
-                        label={`Altre azioni per ${u.email}`}
-                        items={menuItems}
-                        buttonClassName={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
-                      />
-                    </Tooltip>
-                  </div>
-                </Td>
-              </Tr>
-            )
-          })}
-        </DataTable>
+                          {NEVER_ACCESSED_LABEL}
+                        </span>
+                      </Tooltip>
+                    )}
+                  </Td>
+                  <Td>
+                    <span className="text-[0.85rem] text-slate-500">
+                      {new Date(u.created_at).toLocaleDateString('it-IT', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </span>
+                  </Td>
+                  <Td onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-2">
+                      <Tooltip content="Modifica utente">
+                        <button
+                          className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
+                          onClick={() => openEditModal(u)}
+                          aria-label={`Modifica ${u.email}`}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                          </svg>
+                        </button>
+                      </Tooltip>
+                      <Tooltip
+                        wrap
+                        content={
+                          isSelf
+                            ? 'Non puoi eliminare il tuo stesso account'
+                            : isSystemAccount
+                              ? "Non è possibile eliminare l'account di sistema"
+                              : 'Elimina utente'
+                        }
+                      >
+                        <button
+                          className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
+                          onClick={() => {
+                            setDeleteError('')
+                            setDeletingUser(u)
+                          }}
+                          disabled={deleteDisabled}
+                          aria-label={`Elimina ${u.email}`}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </Tooltip>
+                      <Tooltip wrap content="Altre azioni">
+                        <KebabMenu
+                          label={`Altre azioni per ${u.email}`}
+                          items={menuItems}
+                          buttonClassName={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
+                        />
+                      </Tooltip>
+                    </div>
+                  </Td>
+                </Tr>
+              )
+            })}
+          </DataTable>
+
+          <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-500">
+            <span className="tabular-nums">
+              {users.length} di {total} utenti
+              {hasFilters ? ' che corrispondono ai filtri' : ''}
+            </span>
+            {users.length < total && (
+              <button
+                type="button"
+                className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? (
+                  <>
+                    <Spinner variant="button" />
+                    Caricamento...
+                  </>
+                ) : (
+                  `Carica altri ${Math.min(WINDOW_SIZE, total - users.length)}`
+                )}
+              </button>
+            )}
+          </div>
+        </>
       )}
 
       {/* Dettaglio Utente (clic sulla riga) */}
@@ -582,23 +763,20 @@ export default function AdminPage() {
               {STATUS_LABELS[viewingUser.status] ?? viewingUser.status}
             </span>
           </DetailField>
-          <DetailField label="Data creazione">
-            {new Date(viewingUser.created_at).toLocaleString('it-IT', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+          <DetailField label="Ultimo accesso">
+            {viewingUser.last_login_at ? (
+              `${formatDateTime(viewingUser.last_login_at)} (${formatRelativeDay(viewingUser.last_login_at)})`
+            ) : (
+              <span
+                className={`inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${NEVER_ACCESSED_BADGE_CLASSES}`}
+              >
+                {NEVER_ACCESSED_LABEL}
+              </span>
+            )}
           </DetailField>
+          <DetailField label="Data creazione">{formatDateTime(viewingUser.created_at)}</DetailField>
           <DetailField label="Ultimo aggiornamento">
-            {new Date(viewingUser.updated_at).toLocaleString('it-IT', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+            {formatDateTime(viewingUser.updated_at)}
           </DetailField>
           <DetailField label="ID utente" mono>
             {viewingUser.id}

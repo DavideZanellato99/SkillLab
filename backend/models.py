@@ -113,6 +113,13 @@ class User(Base):
     # an organization_admin always has one.
     organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=True, index=True)
     status = Column(String(20), nullable=False, default=USER_STATUS_ACTIVE)
+    # Last successful authentication, written only by the login endpoints.
+    # NULL means the account has never been used: an invitation sent and
+    # never accepted, which is a different problem from a dormant account
+    # and is surfaced as such in the admin table. A token refresh
+    # deliberately does NOT touch this — it would turn the column into
+    # "last activity" and hide exactly what it exists to show.
+    last_login_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,

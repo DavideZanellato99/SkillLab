@@ -30,9 +30,12 @@ from auth_dependency import (
 )
 from database import get_db
 from models import (
+    ROLE_SUPER_ADMIN,
+    USER_STATUS_ACTIVE,
     Avatar,
     ChatConversation,
     ConversationEvaluation,
+    Role,
     TrainingAssignment,
     User,
 )
@@ -44,6 +47,7 @@ from schemas import (
     MessageResponse,
     TrainingAssignmentCreate,
     TrainingAssignmentResponse,
+    UserResponse,
 )
 
 router = APIRouter(prefix="/api/training", tags=["training"])
@@ -175,6 +179,35 @@ def list_assignments(
         query = query.filter(User.organization_id == scope_org_id)
     assignments = query.order_by(TrainingAssignment.created_at.desc()).all()
     return _responses(db, assignments)
+
+
+@router.get("/assignable-users", response_model=list[UserResponse])
+def assignable_users(
+    organization_id: UUID,
+    current_super_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db),
+):
+    """The users an avatar of `organization_id` can be handed to as a goal.
+
+    It lives next to create_assignments so the picker and the check that
+    rejects a bad request share one definition of who is assignable, rather
+    than the frontend keeping a copy of the rule that can drift from it: an
+    avatar is private to its tenant, so a goal on one the user cannot even
+    see would be impossible, and a suspended account could never work on
+    it. The super admin is left out because it belongs to no tenant.
+    """
+    users = (
+        db.query(User)
+        .join(Role, Role.id == User.role_id)
+        .filter(
+            User.organization_id == organization_id,
+            User.status == USER_STATUS_ACTIVE,
+            Role.name != ROLE_SUPER_ADMIN,
+        )
+        .order_by(User.cognome.asc(), User.nome.asc())
+        .all()
+    )
+    return [UserResponse.model_validate(u) for u in users]
 
 
 @router.post(

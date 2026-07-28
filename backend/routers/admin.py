@@ -1,12 +1,13 @@
 """Admin API endpoints for managing users (super admin only)."""
 
+import logging
 from collections import defaultdict
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import audit
@@ -28,6 +29,7 @@ from exports import evaluations_report_xlsx
 from models import (
     ALL_ROLES,
     ALL_USER_STATUSES,
+    ORG_STATUS_ACTIVE,
     ROLE_SUPER_ADMIN,
     USER_STATUS_ACTIVE,
     USER_STATUS_DISABLED,
@@ -36,6 +38,7 @@ from models import (
     ChatMessage,
     ConversationEvaluation,
     Organization,
+    Role,
     User,
     UserSelection,
 )
@@ -51,10 +54,14 @@ from schemas import (
     UpdateUserRequest,
     UpdateUserStatusRequest,
     UserActivityReport,
+    UserPage,
     UserResponse,
 )
+from user_fields import clean_email_or_400, clean_name_or_400, find_user_by_email
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+logger = logging.getLogger(__name__)
 
 
 def _get_user_or_404(db: Session, user_id: UUID) -> User:
@@ -80,13 +87,22 @@ def _resolve_role_or_400(db: Session, ruolo: str):
 
 
 def _resolve_organization_for_role(
-    db: Session, ruolo: str, organization_id: UUID | None
+    db: Session,
+    ruolo: str,
+    organization_id: UUID | None,
+    *,
+    current_organization_id: UUID | None = None,
 ) -> UUID | None:
     """Validate the tenant assignment against the role and return it.
 
     A super_admin stands above tenants, so it must carry NO organization; an
-    organization_admin or a plain user must belong to exactly one existing,
-    non-suspended-blocking organization.
+    organization_admin or a plain user must belong to exactly one existing
+    organization that is not suspended.
+
+    `current_organization_id` is where the user already is, and it is exempt
+    from the suspension check: landing a user in a suspended tenant must be
+    refused, but an admin still has to be able to fix the name of someone
+    who is already inside one.
     """
     if ruolo == ROLE_SUPER_ADMIN:
         if organization_id is not None:
@@ -106,6 +122,17 @@ def _resolve_organization_for_role(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Organizzazione non trovata.",
+        )
+    # A suspended organization locks out every one of its users on every
+    # request: putting someone there would send out an invitation email for
+    # an account that cannot log in even once.
+    if org.status != ORG_STATUS_ACTIVE and org.id != current_organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"L'organizzazione «{org.name}» è sospesa: riattivala prima di "
+                "assegnarle degli utenti."
+            ),
         )
     return org.id
 
@@ -127,19 +154,80 @@ def _conversation_in_scope_or_404(
         )
 
 
-@router.get("/users", response_model=list[UserResponse])
+@router.get("/users", response_model=UserPage)
 def list_users(
     organization_id: UUID | None = None,
+    ruolo: str | None = None,
+    # `status` is the fastapi module in this file: the parameter takes
+    # another name and keeps the query string it exposes.
+    account_status: str | None = Query(None, alias="status"),
+    never_logged_in: bool | None = None,
+    q: str | None = None,
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
-    """List all registered users (Super Admin only), optionally filtered by
-    organization."""
-    query = db.query(User)
+    """A window of the registered users, newest first (Super Admin only).
+
+    `total` counts the rows matching the filters, not the ones returned:
+    the list grows with every tenant, so the client reads a window of it
+    (`limit`/`offset`) and uses the count to know what is left behind.
+
+    Every filter is applied here rather than in the browser. That is the
+    point of the endpoint: a search that ran on the client would only ever
+    look at the window already loaded, and would quietly answer "nessun
+    utente" about someone who exists.
+    """
+    if ruolo is not None and ruolo not in ALL_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Il ruolo deve essere uno tra: {', '.join(ALL_ROLES)}.",
+        )
+    if account_status is not None and account_status not in ALL_USER_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Lo stato deve essere uno tra: {', '.join(ALL_USER_STATUSES)}.",
+        )
+
+    # Both joins exist for the filters below, not to load the relationships:
+    # role and organization are already eager-loaded by the model. The
+    # organization join is an OUTER one because a super admin has none.
+    query = (
+        db.query(User)
+        .join(Role, Role.id == User.role_id)
+        .outerjoin(Organization, Organization.id == User.organization_id)
+    )
+
     if organization_id is not None:
         query = query.filter(User.organization_id == organization_id)
-    users = query.order_by(User.created_at.desc()).all()
-    return [UserResponse.model_validate(u) for u in users]
+    if ruolo is not None:
+        query = query.filter(Role.name == ruolo)
+    if account_status is not None:
+        query = query.filter(User.status == account_status)
+    if never_logged_in is not None:
+        query = query.filter(
+            User.last_login_at.is_(None) if never_logged_in else User.last_login_at.isnot(None)
+        )
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                User.email.ilike(pattern),
+                User.nome.ilike(pattern),
+                User.cognome.ilike(pattern),
+                # So that "mario rossi" matches, not just either half
+                (User.nome + " " + User.cognome).ilike(pattern),
+                Organization.name.ilike(pattern),
+            )
+        )
+
+    total = query.count()
+    # The id breaks ties on created_at: two users created in the same
+    # instant would otherwise be free to swap places between two requests,
+    # and an offset window would skip one of them and repeat the other.
+    users = query.order_by(User.created_at.desc(), User.id.desc()).offset(offset).limit(limit).all()
+    return UserPage(total=total, items=[UserResponse.model_validate(u) for u in users])
 
 
 @router.get("/users-report", response_model=list[UserActivityReport])
@@ -376,9 +464,13 @@ def create_user(
     Create a new user both in AWS Cognito and in the local database (Super Admin only).
     Cognito sends a temporary password to the user's email.
     """
-    # Check if email already exists locally
-    existing_user = db.query(User).filter(User.email == request.email).first()
-    if existing_user:
+    email = clean_email_or_400(request.email)
+    nome = clean_name_or_400(request.nome, "nome")
+    cognome = clean_name_or_400(request.cognome, "cognome")
+
+    # Case-insensitively: Cognito resolves both spellings of an address to
+    # the same account, so two local rows for one identity must never exist.
+    if find_user_by_email(db, email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Un utente con questa email è già registrato nel sistema locale.",
@@ -389,7 +481,7 @@ def create_user(
 
     # Create user in AWS Cognito
     try:
-        cognito_sub = admin_create_user(request.email)
+        cognito_sub = admin_create_user(email)
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -399,15 +491,30 @@ def create_user(
     # Create user in local database
     new_user = User(
         cognito_sub=cognito_sub,
-        email=request.email,
-        nome=request.nome,
-        cognome=request.cognome,
+        email=email,
+        nome=nome,
+        cognome=cognome,
         role_id=role.id,
         organization_id=organization_id,
     )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    except Exception:
+        # The Cognito account already exists at this point. Left behind it
+        # would be an orphan nobody can clear from the UI, and it would also
+        # make every retry fail: the email is taken on Cognito while still
+        # free locally. Undo it so the operation is simply repeatable.
+        db.rollback()
+        try:
+            admin_delete_user(email)
+        except RuntimeError:
+            logger.exception("Utente Cognito orfano non rimosso: %s", email)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Errore nel salvataggio dell'utente. Riprova.",
+        )
 
     # The created user's id is not in the path: without this the audit row
     # would say "utente creato" without saying which one.
@@ -422,6 +529,7 @@ def create_user(
 def update_user(
     user_id: UUID,
     request: UpdateUserRequest,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -430,9 +538,15 @@ def update_user(
     user = _get_user_or_404(db, user_id)
 
     if request.nome is not None:
-        user.nome = request.nome
+        user.nome = clean_name_or_400(request.nome, "nome")
     if request.cognome is not None:
-        user.cognome = request.cognome
+        user.cognome = clean_name_or_400(request.cognome, "cognome")
+
+    # What the audit row carries beyond the target's email. The path only
+    # identifies WHICH user was touched: without this the trail would say
+    # "utente modificato" without saying that someone became a super admin.
+    changes: dict[str, str] = {}
+    previous_org_name = user.organization_name
 
     role_changing = request.ruolo is not None and request.ruolo != user.ruolo
     if role_changing:
@@ -447,6 +561,8 @@ def update_user(
                 detail="Non è possibile cambiare il ruolo dell'account di sistema.",
             )
         role = _resolve_role_or_400(db, request.ruolo)
+        changes["ruolo_da"] = user.ruolo
+        changes["ruolo_a"] = request.ruolo
         user.role_id = role.id
 
     # Keep role and organization consistent: a super_admin never has one, a
@@ -461,10 +577,20 @@ def update_user(
             target_org = request.organization_id
         else:
             target_org = user.organization_id
-        user.organization_id = _resolve_organization_for_role(db, target_ruolo, target_org)
+        user.organization_id = _resolve_organization_for_role(
+            db, target_ruolo, target_org, current_organization_id=user.organization_id
+        )
 
     db.commit()
     db.refresh(user)
+
+    # Read after the refresh: the tenant is compared by name, which is what
+    # stays readable in the log once the organization itself is gone.
+    if user.organization_name != previous_org_name:
+        changes["organizzazione_da"] = previous_org_name or "nessuna"
+        changes["organizzazione_a"] = user.organization_name or "nessuna"
+    audit.describe(http_request, email=user.email, **changes)
+
     return UserResponse.model_validate(user)
 
 

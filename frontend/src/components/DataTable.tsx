@@ -6,7 +6,15 @@ import Select from './Select'
 /* Tabella condivisa dell'app: contenitore, header, righe e celle hanno un
  * unico stile definito qui — le pagine descrivono solo colonne e contenuto. */
 
-const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 30, 50]
+/* Righe per pagina: identiche in ogni tabella dell'app, non configurabili
+ * dalla pagina. Sono impostate qui perché il footer sia lo stesso ovunque,
+ * e restano tutte a due cifre: il selettore ha una larghezza fissa, e un
+ * valore a tre cifre ci starebbe stretto fino a essere troncato. */
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50]
+
+/* Larghezza del selettore, tarata su quei valori. Vive qui e non nelle
+ * pagine così che nessuna tabella possa averlo di una misura diversa. */
+const pageSizeSelectCls = 'w-[77px]'
 
 const paginationBtnCls =
   'flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/6 disabled:hover:bg-white/4 disabled:hover:text-slate-400'
@@ -42,8 +50,6 @@ interface DataTableProps {
   searchActions?: ReactNode
   /** Disattiva la paginazione, mostrando tutte le righe senza footer (default: attiva) */
   paginate?: boolean
-  /** Opzioni proposte dal selettore "righe per pagina" (default [10, 20, 30, 50]) */
-  pageSizeOptions?: number[]
   /** Righe del corpo: <Tr> con celle <Td>, una per elemento (un <Tr> = una riga di dati) */
   children?: ReactNode
 }
@@ -57,12 +63,11 @@ export default function DataTable({
   searchPlaceholder = 'Cerca...',
   searchActions,
   paginate = true,
-  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   children,
 }: DataTableProps) {
   const rows = Children.toArray(children)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(pageSizeOptions[0])
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
 
   const totalRows = rows.length
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize))
@@ -180,8 +185,8 @@ export default function DataTable({
                 setPageSize(Number(value))
                 setPage(1)
               }}
-              options={pageSizeOptions.map((n) => ({ value: String(n), label: String(n) }))}
-              className="w-[77px]"
+              options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+              className={pageSizeSelectCls}
             />
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">

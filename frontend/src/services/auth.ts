@@ -21,6 +21,8 @@ export interface AuthUser {
   /** Tenant the user belongs to; both null for the super admin. */
   organization_id: string | null
   organization_name: string | null
+  /** Ultimo accesso riuscito; null se l'account non è mai stato usato. */
+  last_login_at: string | null
   created_at: string
   updated_at: string
 }

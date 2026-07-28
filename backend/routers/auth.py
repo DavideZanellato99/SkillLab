@@ -49,6 +49,7 @@ from token_sessions import (
     revocation_entries,
     session_anchor_matches,
 )
+from user_fields import clean_name_or_400, find_user_by_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -135,6 +136,19 @@ def _bind_fresh_token(db: Session, access_token: str, http_request: Request, use
         print(f"[ERROR] Session binding non registrato: {e}")
 
 
+def _record_login(db: Session, user: User) -> None:
+    """Stamp the account's last successful authentication.
+
+    Called from the two endpoints that actually hand out a fresh session,
+    the login and the first-login password challenge. /refresh is left out
+    on purpose: rotating a token is not an access, and counting it would
+    keep an abandoned browser tab looking like an active user for as long
+    as its refresh token lives.
+    """
+    user.last_login_at = datetime.now(UTC)
+    db.commit()
+
+
 def validate_password_strength(password: str) -> list[str]:
     """Return the password policy requirements that `password` does not meet."""
     unmet: list[str] = []
@@ -208,7 +222,10 @@ def login(
     if result.get("access_token") == "mock-admin-access-token":
         user = get_or_create_mock_admin(db)
     else:
-        user = db.query(User).filter(User.email == request.email).first()
+        # Case-insensitive on purpose: Cognito has just authenticated the
+        # address however the user spelled it, so an exact match here would
+        # reject a valid login with a generic 401 nobody can diagnose.
+        user = find_user_by_email(db, request.email)
     if not user:
         # Auth passed but the user has no DB row: same generic 401 — a
         # dedicated message would confirm the credentials were correct
@@ -225,6 +242,7 @@ def login(
         )
 
     _bind_fresh_token(db, result["access_token"], http_request, user.id)
+    _record_login(db, user)
     _set_access_cookie(response, result["access_token"])
     _set_refresh_cookie(response, result["refresh_token"])
     audit.log_action(audit.LOGIN, http_request, user=user)
@@ -262,8 +280,8 @@ def complete_new_password(
             detail=str(e),
         )
 
-    # Find user in DB
-    user = db.query(User).filter(User.email == request.email).first()
+    # Find user in DB (same case-insensitive match as the login)
+    user = find_user_by_email(db, request.email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -271,6 +289,7 @@ def complete_new_password(
         )
 
     _bind_fresh_token(db, result["access_token"], http_request, user.id)
+    _record_login(db, user)
     _set_access_cookie(response, result["access_token"])
     _set_refresh_cookie(response, result["refresh_token"])
     audit.log_action(audit.PASSWORD_SET, http_request, user=user)
@@ -477,22 +496,9 @@ def update_my_profile(
     change those, via /api/admin/users/{id}.
     """
     if request.nome is not None:
-        nome = request.nome.strip()
-        if not nome:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Il nome non può essere vuoto.",
-            )
-        current_user.nome = nome
-
+        current_user.nome = clean_name_or_400(request.nome, "nome")
     if request.cognome is not None:
-        cognome = request.cognome.strip()
-        if not cognome:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Il cognome non può essere vuoto.",
-            )
-        current_user.cognome = cognome
+        current_user.cognome = clean_name_or_400(request.cognome, "cognome")
 
     db.commit()
     db.refresh(current_user)

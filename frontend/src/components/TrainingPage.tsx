@@ -2,11 +2,16 @@ import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { isAdmin, isSuperAdmin } from '../services/auth'
 import type { AuthUser } from '../services/auth'
-import { fetchAllUsers, fetchAdminAvatars } from '../services/admin'
+import { fetchAdminAvatars } from '../services/admin'
 import type { AdminAvatar } from '../services/admin'
 import { fetchOrganizations } from '../services/organizations'
 import type { Organization } from '../services/organizations'
-import { fetchAssignments, createAssignments, deleteAssignment } from '../services/training'
+import {
+  fetchAssignableUsers,
+  fetchAssignments,
+  createAssignments,
+  deleteAssignment,
+} from '../services/training'
 import type { TrainingAssignment, AssignmentStatus } from '../services/training'
 import DataTable, { Td, Tr } from './DataTable'
 import SearchSelect from './SearchSelect'
@@ -75,7 +80,10 @@ export default function TrainingPage() {
 
   // ── Form di assegnazione (solo super admin) ────────
   const [avatars, setAvatars] = useState<AdminAvatar[]>([])
-  const [users, setUsers] = useState<AuthUser[]>([])
+  /* Chi può ricevere l'avatar selezionato come obiettivo. Lo decide il
+   * server, che applica la stessa regola con cui poi rifiuta o accetta
+   * l'assegnazione, quindi qui non si filtra nulla. */
+  const [assignableUsers, setAssignableUsers] = useState<AuthUser[]>([])
   const [avatarId, setAvatarId] = useState('')
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [targetScore, setTargetScore] = useState('7')
@@ -111,29 +119,33 @@ export default function TrainingPage() {
     fetchAdminAvatars()
       .then(setAvatars)
       .catch(() => setAvatars([]))
-    fetchAllUsers()
-      .then(setUsers)
-      .catch(() => setUsers([]))
     fetchOrganizations()
       .then(setOrganizations)
       .catch(() => setOrganizations([]))
   }, [canManage])
 
   const selectedAvatar = avatars.find((a) => a.id === avatarId) ?? null
+  const selectedAvatarOrgId = selectedAvatar?.organization_id ?? null
 
-  // Solo gli utenti attivi dell'organizzazione dell'avatar possono
-  // riceverlo come obiettivo: l'avatar è privato del suo tenant
-  const assignableUsers = useMemo(() => {
-    if (!selectedAvatar) return []
-    return users
-      .filter(
-        (u) =>
-          u.organization_id === selectedAvatar.organization_id &&
-          u.ruolo !== 'super_admin' &&
-          u.status === 'active',
-      )
-      .sort((a, b) => `${a.nome} ${a.cognome}`.localeCompare(`${b.nome} ${b.cognome}`, 'it'))
-  }, [users, selectedAvatar])
+  // Gli assegnabili si chiedono al server a ogni cambio di avatar: sono gli
+  // utenti attivi del tenant dell'avatar, che è privato del suo.
+  useEffect(() => {
+    if (!canManage || !selectedAvatarOrgId) {
+      setAssignableUsers([])
+      return
+    }
+    let cancelled = false
+    fetchAssignableUsers(selectedAvatarOrgId)
+      .then((data) => {
+        if (!cancelled) setAssignableUsers(data)
+      })
+      .catch(() => {
+        if (!cancelled) setAssignableUsers([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [canManage, selectedAvatarOrgId])
 
   const toggleUser = (id: string) => {
     setSelectedUserIds((prev) => {

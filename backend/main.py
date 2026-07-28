@@ -14,6 +14,7 @@ from audit import AuditMiddleware
 from database import Base, engine
 from routers.admin import router as admin_router
 from routers.admin_avatars import router as admin_avatars_router
+from routers.admin_voices import router as admin_voices_router
 from routers.audit_logs import router as audit_logs_router
 from routers.auth import router as auth_router
 from routers.avatars import router as avatars_router
@@ -64,6 +65,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_avatars_router)
+app.include_router(admin_voices_router)
 app.include_router(audit_logs_router)
 app.include_router(organizations_router)
 app.include_router(avatars_router)

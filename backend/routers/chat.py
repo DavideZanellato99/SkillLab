@@ -36,7 +36,7 @@ from models import (
 )
 from openai_service import evaluate_conversation, stream_avatar_response
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
-from routers.avatars import _visible_avatars
+from routers.avatars import _visible_avatars, ensure_trainable
 from schemas import (
     ChatConversationResponse,
     ChatConversationSummary,
@@ -414,6 +414,10 @@ async def send_chat_message(
             .all()
         )
         history = [{"role": m.role, "content": m.content} for m in prior_messages]
+    else:
+        # Only a brand new chat is blocked on an archived avatar: a chat
+        # already open when it was archived is allowed to be finished.
+        ensure_trainable(avatar)
 
     history.append({"role": "user", "content": payload.content})
 

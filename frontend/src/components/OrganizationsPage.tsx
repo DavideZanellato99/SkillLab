@@ -1,20 +1,24 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchOrganizations,
+  fetchOrganization,
   createOrganization,
   updateOrganization,
   setOrganizationStatus,
   deleteOrganization,
 } from '../services/organizations'
-import type { Organization, OrgStatus } from '../services/organizations'
+import type { Organization, OrganizationDetail, OrgStatus } from '../services/organizations'
 import { isSuperAdmin } from '../services/auth'
 import DataTable, { Td, Tr } from './DataTable'
 import DetailModal, { DetailField } from './DetailModal'
+import Select from './Select'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
 import Spinner from './Spinner'
 import { matchesSearch } from './tableSearch'
+import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
 import type { DataTableColumn } from './DataTable'
 import type { KebabMenuItem } from './KebabMenu'
 
@@ -42,6 +46,26 @@ const STATUS_LABELS: Record<OrgStatus, string> = {
   active: 'Attiva',
   suspended: 'Sospesa',
 }
+
+/* Finestra su cui il backend conta le conversazioni recenti
+ * (_ACTIVITY_WINDOW_DAYS in routers/organizations.py): serve solo a
+ * etichettare il campo, il conteggio arriva già fatto. */
+const ACTIVITY_WINDOW_DAYS = 30
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'Tutti gli stati' },
+  ...(Object.keys(STATUS_LABELS) as OrgStatus[]).map((s) => ({
+    value: s,
+    label: STATUS_LABELS[s],
+  })),
+]
+
+/* Righe del dettaglio che il modale carica a parte: link alle altre pagine
+ * admin già filtrate su questa organizzazione. Le due tabelle accettano
+ * ?organization_id, quindi il salto arriva sul sottoinsieme giusto invece
+ * che su un elenco da rifiltrare a mano. */
+const detailLinkCls =
+  'inline-flex items-center gap-1.5 rounded-lg border border-violet-600/25 bg-violet-600/10 px-3 py-1 text-[0.78rem] font-medium text-violet-300 transition hover:border-violet-600 hover:bg-violet-600/20 hover:text-violet-200'
 
 const STATUS_BADGE_CLASSES: Record<OrgStatus, string> = {
   active: 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
@@ -120,13 +144,22 @@ export default function OrganizationsPage() {
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
-  const visibleOrgs = orgs.filter((o) =>
-    matchesSearch(search, o.name, o.slug, STATUS_LABELS[o.status] ?? o.status),
+  const visibleOrgs = orgs.filter(
+    (o) =>
+      (!statusFilter || o.status === statusFilter) &&
+      matchesSearch(search, o.name, o.slug, STATUS_LABELS[o.status] ?? o.status),
   )
 
-  // Detail view (clic sulla riga): organizzazione in sola lettura
+  // Detail view (clic sulla riga): organizzazione in sola lettura. La riga
+  // già in tabella si mostra subito, le statistiche di utilizzo arrivano
+  // dopo perché costano una scansione delle conversazioni del tenant.
   const [viewingOrg, setViewingOrg] = useState<Organization | null>(null)
+  const [detail, setDetail] = useState<OrganizationDetail | null>(null)
+  const [detailError, setDetailError] = useState('')
+  /** Organizzazione di cui è in volo la richiesta di dettaglio. */
+  const detailRequestRef = useRef<string | null>(null)
 
   // Create/edit modal: 'new' = create, Organization = edit, null = closed
   const [editing, setEditing] = useState<Organization | 'new' | null>(null)
@@ -145,6 +178,7 @@ export default function OrganizationsPage() {
   const [statusAction, setStatusAction] = useState<{ org: Organization; target: OrgStatus } | null>(
     null,
   )
+  const [statusReason, setStatusReason] = useState('')
   const [isSavingStatus, setIsSavingStatus] = useState(false)
   const [statusError, setStatusError] = useState('')
 
@@ -171,6 +205,39 @@ export default function OrganizationsPage() {
       loadOrgs()
     }
   }, [user, loadOrgs])
+
+  /* Statistiche del tenant: si leggono all'apertura del dettaglio e non con
+   * l'elenco, così la tabella (e i menu a tendina che usano lo stesso
+   * endpoint altrove) non pagano una scansione delle conversazioni. */
+  const openDetail = async (org: Organization) => {
+    setViewingOrg(org)
+    setDetail(null)
+    setDetailError('')
+    detailRequestRef.current = org.id
+    try {
+      const data = await fetchOrganization(org.id)
+      // Una risposta in ritardo non deve comparire in un dettaglio che nel
+      // frattempo è stato chiuso, o aperto su un'altra organizzazione.
+      if (detailRequestRef.current === org.id) setDetail(data)
+    } catch (err) {
+      if (detailRequestRef.current === org.id) {
+        setDetailError(err instanceof Error ? err.message : 'Statistiche non disponibili.')
+      }
+    }
+  }
+
+  const closeDetail = () => {
+    detailRequestRef.current = null
+    setViewingOrg(null)
+    setDetail(null)
+    setDetailError('')
+  }
+
+  const openStatusChange = (org: Organization, target: OrgStatus) => {
+    setStatusError('')
+    setStatusReason('')
+    setStatusAction({ org, target })
+  }
 
   const openCreate = () => {
     setName('')
@@ -216,9 +283,14 @@ export default function OrganizationsPage() {
     setStatusError('')
     setIsSavingStatus(true)
     try {
-      const updated = await setOrganizationStatus(statusAction.org.id, statusAction.target)
+      const updated = await setOrganizationStatus(
+        statusAction.org.id,
+        statusAction.target,
+        statusReason,
+      )
       setOrgs((prev) => prev.map((o) => (o.id === updated.id ? updated : o)))
       setStatusAction(null)
+      setStatusReason('')
       flashSuccess(
         `Organizzazione ${updated.name} ${statusAction.target === 'active' ? 'riattivata' : 'sospesa'}.`,
       )
@@ -278,6 +350,30 @@ export default function OrganizationsPage() {
         </button>
       </header>
 
+      <div className="mb-8 flex flex-wrap items-end gap-4">
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="orgs-status-filter">
+            Stato
+          </label>
+          <Select
+            id="orgs-status-filter"
+            className="min-w-[180px]"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={STATUS_OPTIONS}
+          />
+        </div>
+        {statusFilter && (
+          <button
+            type="button"
+            className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
+            onClick={() => setStatusFilter('')}
+          >
+            Azzera filtri
+          </button>
+        )}
+      </div>
+
       {successMsg && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 py-4 text-sm text-emerald-400 [animation-duration:0.2s]">
           <svg
@@ -312,8 +408,8 @@ export default function OrganizationsPage() {
           searchPlaceholder="Cerca per nome, slug o stato..."
           isEmpty={visibleOrgs.length === 0}
           emptyMessage={
-            search
-              ? 'Nessuna organizzazione corrisponde alla ricerca.'
+            search || statusFilter
+              ? 'Nessuna organizzazione corrisponde ai filtri.'
               : 'Nessuna organizzazione presente. Crea la prima con "Nuova Organizzazione".'
           }
         >
@@ -324,20 +420,15 @@ export default function OrganizationsPage() {
                 label:
                   o.status === 'suspended' ? 'Riattiva organizzazione' : 'Sospendi organizzazione',
                 icon: o.status === 'suspended' ? reactivateIcon : suspendIcon,
-                onSelect: () => {
-                  setStatusError('')
-                  setStatusAction({
-                    org: o,
-                    target: o.status === 'suspended' ? 'active' : 'suspended',
-                  })
-                },
+                onSelect: () =>
+                  openStatusChange(o, o.status === 'suspended' ? 'active' : 'suspended'),
               },
             ]
             return (
               <Tr
                 key={o.id}
                 className={`cursor-pointer ${o.status === 'active' ? '' : 'opacity-60'}`}
-                onClick={() => setViewingOrg(o)}
+                onClick={() => openDetail(o)}
               >
                 <Td>
                   <span className="font-semibold text-slate-100">{o.name}</span>
@@ -358,11 +449,22 @@ export default function OrganizationsPage() {
                   </span>
                 </Td>
                 <Td>
-                  <span
-                    className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[o.status] ?? ''}`}
-                  >
-                    {STATUS_LABELS[o.status] ?? o.status}
-                  </span>
+                  <div className="flex flex-col items-start gap-1">
+                    <span
+                      className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[o.status] ?? ''}`}
+                    >
+                      {STATUS_LABELS[o.status] ?? o.status}
+                    </span>
+                    {/* Il motivo sta accanto allo stato che spiega: cercarlo
+                        nel dettaglio vorrebbe dire aprire riga per riga. */}
+                    {o.status === 'suspended' && o.suspension_reason && (
+                      <Tooltip truncateOnly content={o.suspension_reason}>
+                        <span className="block max-w-[180px] truncate text-[0.72rem] text-slate-500">
+                          {o.suspension_reason}
+                        </span>
+                      </Tooltip>
+                    )}
+                  </div>
                 </Td>
                 <Td>
                   <span className="text-[0.85rem] text-slate-500">
@@ -438,7 +540,7 @@ export default function OrganizationsPage() {
       {/* Dettaglio Organizzazione (clic sulla riga) */}
       {viewingOrg && (
         <DetailModal
-          onClose={() => setViewingOrg(null)}
+          onClose={closeDetail}
           title={viewingOrg.name}
           subtitle={<code className="text-violet-400">{viewingOrg.slug}</code>}
           header={
@@ -471,8 +573,82 @@ export default function OrganizationsPage() {
               {STATUS_LABELS[viewingOrg.status] ?? viewingOrg.status}
             </span>
           </DetailField>
-          <DetailField label="Utenti">{viewingOrg.user_count}</DetailField>
-          <DetailField label="Avatar">{viewingOrg.avatar_count}</DetailField>
+          {viewingOrg.status === 'suspended' && viewingOrg.suspension_reason && (
+            <DetailField label="Motivo sospensione">{viewingOrg.suspension_reason}</DetailField>
+          )}
+          <DetailField label="Utenti">
+            <div className="flex items-center justify-end gap-3">
+              <span>{viewingOrg.user_count}</span>
+              <Link
+                to={`/admin?organization_id=${viewingOrg.id}`}
+                onClick={closeDetail}
+                className={detailLinkCls}
+              >
+                Apri elenco
+              </Link>
+            </div>
+          </DetailField>
+          <DetailField label="Avatar">
+            <div className="flex items-center justify-end gap-3">
+              <span>{viewingOrg.avatar_count}</span>
+              <Link
+                to={`/admin/avatars?organization_id=${viewingOrg.id}`}
+                onClick={closeDetail}
+                className={detailLinkCls}
+              >
+                Apri elenco
+              </Link>
+            </div>
+          </DetailField>
+          {/* Utilizzo: arriva dopo il resto, quindi finché non c'è la modale
+              mostra comunque i dati che la tabella aveva già. */}
+          <DetailField label={`Conversazioni (${ACTIVITY_WINDOW_DAYS} gg)`}>
+            {detailError ? (
+              <span className="text-slate-500">—</span>
+            ) : detail ? (
+              <>
+                {detail.conversations_last_30_days}
+                <span className="text-slate-500"> su {detail.conversations_total} totali</span>
+              </>
+            ) : (
+              <Spinner variant="button" />
+            )}
+          </DetailField>
+          <DetailField label="Punteggio medio">
+            {detailError ? (
+              <span className="text-slate-500">—</span>
+            ) : detail ? (
+              detail.average_score === null ? (
+                <span className="text-slate-500">Nessuna valutazione</span>
+              ) : (
+                <>
+                  {detail.average_score.toFixed(1)}
+                  <span className="text-slate-500">
+                    {' '}
+                    su {detail.evaluated_count}{' '}
+                    {detail.evaluated_count === 1 ? 'conversazione' : 'conversazioni'}
+                  </span>
+                </>
+              )
+            ) : (
+              <Spinner variant="button" />
+            )}
+          </DetailField>
+          <DetailField label="Ultimo accesso">
+            {detailError ? (
+              <span className="text-slate-500">—</span>
+            ) : detail ? (
+              detail.last_login_at ? (
+                <Tooltip content={formatDateTime(detail.last_login_at)}>
+                  <span>{formatRelativeDay(detail.last_login_at)}</span>
+                </Tooltip>
+              ) : (
+                <span className="text-slate-500">{NEVER_ACCESSED_LABEL}</span>
+              )
+            ) : (
+              <Spinner variant="button" />
+            )}
+          </DetailField>
           <DetailField label="Data creazione">
             {new Date(viewingOrg.created_at).toLocaleString('it-IT', {
               day: '2-digit',
@@ -645,6 +821,29 @@ export default function OrganizationsPage() {
                 )}
               </p>
             </div>
+
+            {/* Il motivo lo leggono gli utenti bloccati al posto del muro
+                generico, quindi si scrive qui, nel momento in cui la
+                decisione viene presa. */}
+            {statusAction.target === 'suspended' && (
+              <div className={`${fieldCls} mb-4`}>
+                <label className={labelCls} htmlFor="org-suspension-reason">
+                  Motivo (opzionale, visibile agli utenti)
+                </label>
+                <div className={inputWrapperCls}>
+                  <textarea
+                    id="org-suspension-reason"
+                    className={`${inputCls} resize-none`}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Es. Contratto scaduto, contatta il tuo referente."
+                    value={statusReason}
+                    onChange={(e) => setStatusReason(e.target.value)}
+                    disabled={isSavingStatus}
+                  />
+                </div>
+              </div>
+            )}
 
             {statusError && <ErrorBox message={statusError} />}
 

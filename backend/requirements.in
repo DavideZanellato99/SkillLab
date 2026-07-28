@@ -9,6 +9,9 @@
 # Add or bump a dependency here, then re-run the command above.
 
 fastapi
+# Parsing multipart/form-data: FastAPI lo richiede a import time per gli
+# endpoint che accettano un UploadFile (il caricamento del ritratto avatar).
+python-multipart
 uvicorn[standard]
 sqlalchemy
 psycopg[binary]

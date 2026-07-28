@@ -125,7 +125,13 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
         "avatar.update", "Avatar modificato", "avatar", "avatar_id"
     ),
     ("DELETE", "/api/admin/avatars/{avatar_id}"): AuditAction(
-        "avatar.delete", "Avatar eliminato", "avatar", "avatar_id"
+        "avatar.delete", "Avatar archiviato", "avatar", "avatar_id"
+    ),
+    ("POST", "/api/admin/avatars/{avatar_id}/restore"): AuditAction(
+        "avatar.restore", "Avatar ripristinato", "avatar", "avatar_id"
+    ),
+    ("POST", "/api/admin/avatars/image"): AuditAction(
+        "avatar.image_upload", "Immagine avatar caricata", "avatar"
     ),
     ("POST", "/api/avatars/select"): AuditAction("avatar.select", "Avatar selezionato", "avatar"),
     # Conversazioni

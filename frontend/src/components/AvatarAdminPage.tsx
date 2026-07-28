@@ -1,7 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchAdminAvatars, createAvatar, updateAvatar, deleteAvatar } from '../services/admin'
-import type { AdminAvatar, AdminAvatarPayload } from '../services/admin'
+import {
+  fetchAdminAvatars,
+  createAvatar,
+  updateAvatar,
+  deleteAvatar,
+  restoreAvatar,
+  uploadAvatarImage,
+  fetchVoices,
+  fetchVoicePreview,
+} from '../services/admin'
+import type { AdminAvatar, AdminAvatarPayload, VoiceOption } from '../services/admin'
 import { fetchOrganizations } from '../services/organizations'
 import type { Organization } from '../services/organizations'
 import { isSuperAdmin } from '../services/auth'
@@ -11,8 +21,19 @@ import Select from './Select'
 import DataTable, { Td, Tr } from './DataTable'
 import Spinner from './Spinner'
 import Tooltip from './Tooltip'
+import PersonaPromptPreview from './PersonaPromptPreview'
 import { matchesSearch } from './tableSearch'
 import type { DataTableColumn } from './DataTable'
+import {
+  ALL_PROFILE_KEYS,
+  PROFILE_SECTIONS,
+  countFilled,
+  emptyProfile,
+  inputToPercent,
+  missingEssentials,
+  percentToInput,
+} from './avatarProfileConfig'
+import type { ProfileField } from './avatarProfileConfig'
 
 /* Shared styles (same look as the users admin page) */
 const fieldCls = 'flex flex-col gap-1.5'
@@ -41,174 +62,37 @@ const AVATAR_COLUMNS: DataTableColumn[] = [
   { key: 'organizzazione', label: 'Organizzazione' },
   { key: 'categoria', label: 'Categoria' },
   { key: 'difficolta', label: 'Difficoltà' },
+  {
+    key: 'scheda',
+    label: 'Scheda',
+    align: 'center',
+    compact: true,
+    title: 'Quanto è compilata la scheda persona',
+  },
   { key: 'conversazioni', label: 'Conversazioni', align: 'center' },
   { key: 'azioni', label: 'Azioni', align: 'right' },
 ]
 
-/* ── Persona sheet form definition ─────────────────────
- * Every avatar is a training persona: the form is generated from this
- * config. `textarea` marks long fields rendered full-width; `options`
- * renders a select (the first option is the default). */
-interface ProfileField {
-  key: string
-  label: string
-  textarea?: boolean
-  placeholder?: string
-  options?: string[]
-}
+/* Sotto questa soglia la scheda è una bozza: un cliente con pochi campi
+ * compilati non regge una simulazione, e chi apre la tabella deve accorgersene
+ * senza dover aprire il form. */
+const DRAFT_THRESHOLD = 0.35
 
-interface ProfileSection {
-  title: string
-  fields: ProfileField[]
-}
+/* L'eliminazione di un avatar è logica: l'avatar esce dal catalogo degli
+ * studenti ma conversazioni, valutazioni e scheda persona restano intatte,
+ * quindi la pagina mostra il catalogo per default e tiene l'archivio a
+ * portata di filtro, da cui ogni avatar può tornare indietro. */
+const STATUS_ACTIVE = 'active'
+const STATUS_ARCHIVED = 'archived'
 
-const PROFILE_SECTIONS: ProfileSection[] = [
-  {
-    title: 'Anagrafica',
-    fields: [
-      { key: 'NOME', label: 'Nome *', placeholder: 'Giovanni' },
-      { key: 'COGNOME', label: 'Cognome *', placeholder: 'Salemmi' },
-      { key: 'SESSO', label: 'Sesso' },
-      { key: 'DATA_NASCITA', label: 'Data di nascita', placeholder: '09/12/1999' },
-      { key: 'LUOGO_NASCITA', label: 'Luogo di nascita' },
-      { key: 'NAZIONALITA', label: 'Nazionalità' },
-      { key: 'LINGUA_MADRE', label: 'Lingua madre' },
-      { key: 'CITTA_RESIDENZA', label: 'Città di residenza' },
-      { key: 'STATO_CIVILE', label: 'Stato civile' },
-      { key: 'NOME_CONIUGE', label: 'Nome del coniuge' },
-      { key: 'PROFESSIONE_CONIUGE', label: 'Professione del coniuge' },
-      { key: 'NUMERO_FIGLI', label: 'Numero di figli' },
-      { key: 'ETA_FIGLIO_1', label: 'Età primo figlio' },
-      { key: 'ETA_FIGLIO_2', label: 'Età secondo figlio' },
-      { key: 'ANIMALI_DOMESTICI', label: 'Animali domestici' },
-    ],
-  },
-  {
-    title: 'Lavoro e finanze',
-    fields: [
-      { key: 'TITOLO_DI_STUDIO', label: 'Titolo di studio' },
-      { key: 'PROFESSIONE', label: 'Professione' },
-      { key: 'AZIENDA', label: 'Azienda' },
-      { key: 'RUOLO', label: 'Ruolo' },
-      { key: 'REDDITO_ANNUO', label: 'Reddito annuo', placeholder: '35.000,00 euro' },
-      { key: 'PATRIMONIO', label: 'Patrimonio' },
-      { key: 'LIQUIDITA', label: 'Liquidità' },
-      { key: 'DEBITI', label: 'Debiti' },
-      { key: 'INVESTIMENTI_POSSEDUTI', label: 'Investimenti posseduti' },
-      { key: 'IMMOBILI_POSSEDUTI', label: 'Immobili posseduti' },
-      {
-        key: 'LIVELLO_CONOSCENZA_BANCARIA',
-        label: 'Conoscenza bancaria',
-        placeholder: 'Bassa / Media / Alta',
-      },
-      { key: 'LIVELLO_CONOSCENZA_INVESTIMENTI', label: 'Conoscenza investimenti' },
-      { key: 'LIVELLO_CONOSCENZA_PREVIDENZA', label: 'Conoscenza previdenza' },
-      { key: 'LIVELLO_CONOSCENZA_MUTUI', label: 'Conoscenza mutui' },
-    ],
-  },
-  {
-    title: 'Storia e vita personale',
-    fields: [
-      { key: 'STORIA_PERSONALE', label: 'Storia personale', textarea: true },
-      { key: 'EVENTI_SIGNIFICATIVI', label: 'Eventi significativi', textarea: true },
-      { key: 'PAURE', label: 'Paure', textarea: true },
-      { key: 'OBIETTIVI_PERSONALI', label: 'Obiettivi personali', textarea: true },
-      { key: 'ASPIRAZIONI', label: 'Aspirazioni', textarea: true },
-    ],
-  },
-  {
-    title: 'Personalità',
-    fields: [
-      { key: 'PERSONALITA_DESCRIZIONE', label: 'Descrizione della personalità', textarea: true },
-      { key: 'LIVELLO_ESTROVERSIONE', label: 'Estroversione', placeholder: '60%' },
-      { key: 'LIVELLO_EMPATICO', label: 'Empatia', placeholder: '40%' },
-      { key: 'LIVELLO_PAZIENZA', label: 'Pazienza', placeholder: '30%' },
-      { key: 'LIVELLO_FIDUCIA', label: 'Fiducia negli altri', placeholder: '30%' },
-      { key: 'PROPENSIONE_CONFLITTO', label: 'Propensione al conflitto', placeholder: '60%' },
-      { key: 'PROPENSIONE_RISCHIO', label: 'Propensione al rischio', placeholder: '40%' },
-      { key: 'CAPACITA_ASCOLTO', label: 'Capacità di ascolto', placeholder: '50%' },
-    ],
-  },
-  {
-    title: 'Stato emotivo',
-    fields: [
-      { key: 'EMOZIONE_INIZIALE', label: 'Emozione iniziale', placeholder: 'Arrabbiato' },
-      { key: 'INTENSITA_EMOZIONE', label: 'Intensità emozione', placeholder: 'Alta' },
-      {
-        key: 'TRIGGER_POSITIVI',
-        label: 'Trigger positivi',
-        textarea: true,
-        placeholder: 'Empatia, rassicurazione, competenza',
-      },
-      {
-        key: 'TRIGGER_NEGATIVI',
-        label: 'Trigger negativi',
-        textarea: true,
-        placeholder: 'Fretta, incompetenza, lunghe attese',
-      },
-    ],
-  },
-  {
-    title: 'Stile di conversazione',
-    fields: [
-      {
-        key: 'LUNGHEZZA_MEDIA_RISPOSTE',
-        label: 'Lunghezza media risposte',
-        placeholder: 'Breve / Media / Lunga',
-      },
-      {
-        key: 'VELOCITA_PARLATO',
-        label: 'Velocità del parlato',
-        placeholder: 'Bassa / Media / Alta',
-      },
-      { key: 'USO_IRONIA', label: 'Uso dell’ironia', placeholder: 'Si, moderato / No' },
-      { key: 'USO_DIALETTO', label: 'Uso del dialetto', placeholder: 'Si / No' },
-      {
-        key: 'FORMALITA_LINGUAGGIO',
-        label: 'Formalità del linguaggio',
-        placeholder: 'Formale / Informale',
-      },
-    ],
-  },
-  {
-    title: 'Scenario della chiamata',
-    fields: [
-      {
-        key: 'TIPO_SCENARIO',
-        label: 'Tipo di scenario',
-        textarea: true,
-        placeholder: 'Cosa è successo e perché il cliente è coinvolto...',
-      },
-      {
-        key: 'DESCRIZIONE_PROBLEMATICA',
-        label: 'Vera causa del problema (il cliente NON la conosce)',
-        textarea: true,
-      },
-      { key: 'OBIEZIONI_PREVISTE', label: 'Obiezioni previste', textarea: true },
-      { key: 'OBIETTIVO_NASCOSTO', label: 'Obiettivo nascosto della simulazione', textarea: true },
-      { key: 'GRADO_DIFFICOLTA', label: 'Grado di difficoltà', placeholder: '8/10' },
-    ],
-  },
-  {
-    title: 'Regole e segreti',
-    fields: [
-      { key: 'FATTI_IMMUTABILI', label: 'Fatti immutabili', textarea: true },
-      { key: 'SEGRETI', label: 'Segreti (mai rivelati)', textarea: true },
-      {
-        key: 'INFORMAZIONI_DA_NON_RIVELARE_SPONTANEAMENTE',
-        label: 'Informazioni da non rivelare spontaneamente',
-        textarea: true,
-      },
-      { key: 'ARGOMENTI_SENSIBILI', label: 'Argomenti sensibili', textarea: true },
-    ],
-  },
+const STATUS_OPTIONS = [
+  { value: STATUS_ACTIVE, label: 'In catalogo' },
+  { value: STATUS_ARCHIVED, label: 'Archiviati' },
+  { value: '', label: 'Tutti' },
 ]
 
-const ALL_PROFILE_KEYS = PROFILE_SECTIONS.flatMap((s) => s.fields.map((f) => f.key))
-
-function emptyProfile(): Record<string, string> {
-  return Object.fromEntries(ALL_PROFILE_KEYS.map((k) => [k, '']))
-}
+const archivedDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
 interface FormState {
   category: string
@@ -240,6 +124,144 @@ function formFromAvatar(a: AdminAvatar): FormState {
     organizationId: a.organization_id,
     profile: { ...emptyProfile(), ...a.profile },
   }
+}
+
+/* Quanto è compilata una scheda, in una cella di tabella: una barra e la
+ * frazione. Non è un voto di qualità, è un promemoria di quanto materiale ha
+ * l'avatar per restare in personaggio. */
+function SheetCompleteness({ profile }: { profile: Record<string, string> }) {
+  const filled = countFilled(profile)
+  const total = ALL_PROFILE_KEYS.length
+  const ratio = total === 0 ? 0 : filled / total
+  const isDraft = ratio < DRAFT_THRESHOLD
+
+  return (
+    <Tooltip
+      content={`${filled} campi compilati su ${total}${isDraft ? ' — scheda da completare' : ''}`}
+    >
+      <div className="mx-auto flex w-16 flex-col items-center gap-1">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/8">
+          <div
+            className={`h-full rounded-full transition-[width] ${
+              isDraft ? 'bg-amber-500' : 'bg-gradient-to-r from-violet-600 to-cyan-500'
+            }`}
+            style={{ width: `${Math.round(ratio * 100)}%` }}
+          />
+        </div>
+        <span className={`text-[0.7rem] ${isDraft ? 'text-amber-400' : 'text-slate-500'}`}>
+          {filled}/{total}
+        </span>
+      </div>
+    </Tooltip>
+  )
+}
+
+/* Un campo della scheda, disegnato secondo il suo tipo.
+ *
+ * Vale per tutti la stessa regola: si può sempre tornare a vuoto. Il prompt
+ * legge le percentuali come intensità di un tratto, quindi uno 0% scritto al
+ * posto di un campo lasciato in bianco non è la stessa cosa, dice al modello
+ * che quel tratto è assente invece di non dirgli niente. */
+function ProfileFieldInput({
+  field,
+  value,
+  onChange,
+  disabled,
+}: {
+  field: ProfileField
+  value: string
+  onChange: (value: string) => void
+  disabled: boolean
+}) {
+  const id = `pf-${field.key}`
+  const label = (
+    <label className={labelCls} htmlFor={id}>
+      {field.label}
+    </label>
+  )
+  const hint = field.hint && <p className="text-[0.7rem] text-slate-500">{field.hint}</p>
+
+  if (field.kind === 'textarea') {
+    return (
+      <div className={`${fieldCls} col-span-2 max-[600px]:col-span-1`}>
+        {label}
+        <textarea
+          id={id}
+          className={textareaCls}
+          rows={2}
+          placeholder={field.placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        />
+        {hint}
+      </div>
+    )
+  }
+
+  if (field.kind === 'choice') {
+    const options = field.options ?? []
+    // Un valore salvato fuori elenco resta selezionabile: le schede vecchie
+    // non devono perdere un dato solo perché oggi proponiamo altre parole.
+    const extra = value && !options.includes(value) ? [value] : []
+    return (
+      <div className={fieldCls}>
+        {label}
+        <Select
+          id={id}
+          value={value}
+          onChange={onChange}
+          options={[
+            { value: '', label: 'Non applicabile' },
+            ...[...options, ...extra].map((o) => ({ value: o, label: o })),
+          ]}
+          placeholder="Non applicabile"
+          disabled={disabled}
+        />
+        {hint}
+      </div>
+    )
+  }
+
+  if (field.kind === 'percent') {
+    return (
+      <div className={fieldCls}>
+        {label}
+        <div className={inputWrapperCls}>
+          <input
+            type="text"
+            inputMode="numeric"
+            id={id}
+            className={inputCls}
+            placeholder="es. 60"
+            value={percentToInput(value)}
+            onChange={(e) => onChange(inputToPercent(e.target.value))}
+            disabled={disabled}
+          />
+          <span className="shrink-0 text-sm text-slate-500">%</span>
+        </div>
+        {hint}
+      </div>
+    )
+  }
+
+  return (
+    <div className={fieldCls}>
+      {label}
+      <div className={inputWrapperCls}>
+        <input
+          type="text"
+          id={id}
+          className={inputCls}
+          placeholder={field.placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        />
+      </div>
+      {hint}
+    </div>
+  )
 }
 
 function ErrorBox({ message }: { message: string }) {
@@ -274,12 +296,43 @@ export default function AvatarAdminPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [search, setSearch] = useState('')
 
+  /* Filtro organizzazione, tenuto anche nell'URL (?organization_id=...): il
+   * dettaglio di un'organizzazione linka qui per i suoi avatar, e un
+   * ricaricamento o un link condiviso riaprono la pagina già filtrata. */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [orgFilter, setOrgFilterValue] = useState(() => searchParams.get('organization_id') ?? '')
+  const setOrgFilter = useCallback(
+    (value: string) => {
+      setOrgFilterValue(value)
+      setSearchParams(
+        (params) => {
+          if (value) params.set('organization_id', value)
+          else params.delete('organization_id')
+          return params
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  const [statusFilter, setStatusFilter] = useState<string>(STATUS_ACTIVE)
+
   // Owning organization options: every avatar belongs to exactly one
   const orgScopeOptions = organizations.map((o) => ({ value: o.id, label: o.name }))
 
-  const visibleAvatars = avatars.filter((a) =>
-    matchesSearch(search, a.name, a.description, a.category, a.difficulty),
+  const matchesStatus = (a: AdminAvatar) =>
+    statusFilter === '' ||
+    (statusFilter === STATUS_ARCHIVED ? a.deleted_at !== null : a.deleted_at === null)
+
+  const visibleAvatars = avatars.filter(
+    (a) =>
+      (!orgFilter || a.organization_id === orgFilter) &&
+      matchesStatus(a) &&
+      matchesSearch(search, a.name, a.description, a.category, a.difficulty),
   )
+
+  const archivedCount = avatars.filter((a) => a.deleted_at !== null).length
 
   // Modal state: 'new' = create, AdminAvatar = edit, null = closed
   const [editing, setEditing] = useState<AdminAvatar | 'new' | null>(null)
@@ -290,6 +343,46 @@ export default function AvatarAdminPage() {
   const [deleting, setDeleting] = useState<AdminAvatar | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+
+  /* Strumenti del form. Le voci Cartesia si caricano una volta sola quando il
+   * form si apre per la prima volta: sono un catalogo remoto, non cambiano
+   * durante una sessione di lavoro, e se Cartesia non risponde il campo torna
+   * a essere un id da incollare a mano invece di bloccare il salvataggio. */
+  const [voices, setVoices] = useState<VoiceOption[]>([])
+  const [voicesError, setVoicesError] = useState('')
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [showPromptPreview, setShowPromptPreview] = useState(false)
+
+  /* Le sezioni della scheda sono otto: aperte tutte insieme sono uno scroll
+   * di parecchi schermi, quindi si apre solo quella su cui si sta lavorando.
+   * L'anagrafica parte aperta perché è da lì che si comincia sempre. */
+  const [openSections, setOpenSections] = useState<string[]>([PROFILE_SECTIONS[0].title])
+  const toggleSection = (title: string) =>
+    setOpenSections((prev) =>
+      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title],
+    )
+
+  /* Categorie già in uso, per non inventarne una nuova con un refuso: sono
+   * suggerimenti, non un elenco chiuso, perché una categoria nuova deve
+   * restare possibile senza passare da qui. */
+  const knownCategories = Array.from(new Set(avatars.map((a) => a.category).filter(Boolean))).sort()
+
+  /* Voci selezionabili. La prima opzione è "nessuna voce", che il backend
+   * risolve nella voce predefinita del .env. Se l'avatar porta un id che il
+   * catalogo non contiene più, quell'id resta in elenco: modificare la
+   * categoria di un avatar non deve cancellargli la voce di nascosto. */
+  const voiceOptions = [
+    { value: '', label: 'Voce predefinita' },
+    ...voices.map((v) => ({
+      value: v.id,
+      label: v.language ? `${v.name} (${v.language})` : v.name,
+    })),
+    ...(form.voiceId && !voices.some((v) => v.id === form.voiceId)
+      ? [{ value: form.voiceId, label: `${form.voiceId} (non nel catalogo)` }]
+      : []),
+  ]
 
   const flashSuccess = (msg: string) => {
     setSuccessMsg(msg)
@@ -300,7 +393,8 @@ export default function AvatarAdminPage() {
     setIsLoading(true)
     setError('')
     try {
-      const data = await fetchAdminAvatars()
+      // Anche gli archiviati: sono una vista di questa stessa tabella.
+      const data = await fetchAdminAvatars(true)
       setAvatars(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossibile caricare gli avatar.')
@@ -318,20 +412,72 @@ export default function AvatarAdminPage() {
     }
   }, [user, loadAvatars])
 
+  /* Catalogo voci: caricato pigramente alla prima apertura del form, così chi
+   * non tocca mai gli avatar non paga una chiamata a Cartesia. */
+  const ensureVoicesLoaded = useCallback(() => {
+    if (voices.length > 0 || voicesError) return
+    fetchVoices()
+      .then(setVoices)
+      .catch((err) =>
+        setVoicesError(err instanceof Error ? err.message : 'Catalogo voci non disponibile.'),
+      )
+  }, [voices.length, voicesError])
+
   const openCreate = () => {
     setForm(emptyForm())
     setFormError('')
+    setOpenSections([PROFILE_SECTIONS[0].title])
+    ensureVoicesLoaded()
     setEditing('new')
   }
 
   const openEdit = (a: AdminAvatar) => {
     setForm(formFromAvatar(a))
     setFormError('')
+    setOpenSections([PROFILE_SECTIONS[0].title])
+    ensureVoicesLoaded()
     setEditing(a)
   }
 
   const setProfileField = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, profile: { ...prev.profile, [key]: value } }))
+  }
+
+  const handleImageUpload = async (file: File | undefined) => {
+    if (!file) return
+    setIsUploading(true)
+    setFormError('')
+    try {
+      const { image_url } = await uploadAvatarImage(file)
+      setForm((prev) => ({ ...prev, imageUrl: image_url }))
+    } catch (err) {
+      setFormError(
+        err instanceof Error ? err.message : "Errore durante il caricamento dell'immagine.",
+      )
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  /* Ascolta una voce prima di assegnarla. L'audio viene riprodotto e poi
+   * buttato: è un confronto fra voci, non un file da tenere. */
+  const playVoicePreview = async (voiceId: string) => {
+    if (!voiceId) return
+    setPlayingVoiceId(voiceId)
+    setFormError('')
+    try {
+      const blob = await fetchVoicePreview(voiceId)
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onended = () => URL.revokeObjectURL(url)
+      await audio.play()
+    } catch (err) {
+      setFormError(
+        err instanceof Error ? err.message : "Impossibile riprodurre l'anteprima vocale.",
+      )
+    } finally {
+      setPlayingVoiceId(null)
+    }
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -360,6 +506,9 @@ export default function AvatarAdminPage() {
       if (editing === 'new') {
         const created = await createAvatar(payload)
         setAvatars((prev) => [...prev, created])
+        // Un avatar nuovo nasce in catalogo: se la tabella sta mostrando
+        // l'archivio, torna sul catalogo così l'admin lo vede comparire.
+        if (statusFilter === STATUS_ARCHIVED) setStatusFilter(STATUS_ACTIVE)
         flashSuccess(`Avatar ${created.name} creato con successo.`)
       } else if (editing) {
         const updated = await updateAvatar(editing.id, payload)
@@ -380,13 +529,32 @@ export default function AvatarAdminPage() {
     setIsDeleting(true)
     try {
       const result = await deleteAvatar(deleting.id)
-      setAvatars((prev) => prev.filter((a) => a.id !== deleting.id))
+      // L'avatar non sparisce, passa in archivio: la riga resta nei dati e
+      // il filtro di stato decide se mostrarla.
+      const archivedAt = new Date().toISOString()
+      setAvatars((prev) =>
+        prev.map((a) => (a.id === deleting.id ? { ...a, deleted_at: archivedAt } : a)),
+      )
       setDeleting(null)
       flashSuccess(result.message)
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Errore durante l'eliminazione.")
+      setDeleteError(err instanceof Error ? err.message : "Errore durante l'archiviazione.")
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  const handleRestore = async (avatar: AdminAvatar) => {
+    setRestoringId(avatar.id)
+    setError('')
+    try {
+      const restored = await restoreAvatar(avatar.id)
+      setAvatars((prev) => prev.map((a) => (a.id === restored.id ? restored : a)))
+      flashSuccess(`Avatar ${restored.name} ripristinato: è di nuovo in catalogo.`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Errore durante il ripristino.')
+    } finally {
+      setRestoringId(null)
     }
   }
 
@@ -419,6 +587,49 @@ export default function AvatarAdminPage() {
           Nuovo Avatar
         </button>
       </header>
+
+      <div className="mb-8 flex flex-wrap items-end gap-4">
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="avatars-org-filter">
+            Organizzazione
+          </label>
+          <Select
+            id="avatars-org-filter"
+            className="min-w-[220px]"
+            value={orgFilter}
+            onChange={setOrgFilter}
+            options={[{ value: '', label: 'Tutte le organizzazioni' }, ...orgScopeOptions]}
+          />
+        </div>
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="avatars-status-filter">
+            Stato
+          </label>
+          <Select
+            id="avatars-status-filter"
+            className="min-w-[160px]"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={STATUS_OPTIONS.map((o) =>
+              o.value === STATUS_ARCHIVED && archivedCount
+                ? { ...o, label: `${o.label} (${archivedCount})` }
+                : o,
+            )}
+          />
+        </div>
+        {(orgFilter || statusFilter !== STATUS_ACTIVE) && (
+          <button
+            type="button"
+            className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
+            onClick={() => {
+              setOrgFilter('')
+              setStatusFilter(STATUS_ACTIVE)
+            }}
+          >
+            Azzera filtri
+          </button>
+        )}
+      </div>
 
       {successMsg && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-6 py-4 text-sm text-emerald-400 [animation-duration:0.2s]">
@@ -454,9 +665,11 @@ export default function AvatarAdminPage() {
           searchPlaceholder="Cerca per nome, categoria o difficoltà..."
           isEmpty={visibleAvatars.length === 0}
           emptyMessage={
-            search
-              ? 'Nessun avatar corrisponde alla ricerca.'
-              : 'Nessun avatar presente. Crea il primo con "Nuovo Avatar".'
+            statusFilter === STATUS_ARCHIVED && !search && !orgFilter
+              ? 'Nessun avatar archiviato. Gli avatar che elimini finiscono qui, con tutte le loro conversazioni.'
+              : search || orgFilter || statusFilter !== STATUS_ACTIVE
+                ? 'Nessun avatar corrisponde ai filtri.'
+                : 'Nessun avatar presente. Crea il primo con "Nuovo Avatar".'
           }
         >
           {visibleAvatars.map((a) => (
@@ -471,11 +684,24 @@ export default function AvatarAdminPage() {
                     />
                   </div>
                   <div className="flex min-w-0 flex-col">
-                    <span className="truncate font-semibold text-slate-100">{a.name}</span>
-                    {a.description && (
-                      <span className="max-w-[320px] truncate text-xs text-slate-500">
-                        {a.description}
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-semibold text-slate-100">{a.name}</span>
+                      {a.deleted_at && (
+                        <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-amber-400">
+                          Archiviato
+                        </span>
+                      )}
+                    </div>
+                    {a.deleted_at ? (
+                      <span className="text-xs text-slate-500">
+                        Archiviato il {archivedDate(a.deleted_at)}
                       </span>
+                    ) : (
+                      a.description && (
+                        <span className="max-w-[320px] truncate text-xs text-slate-500">
+                          {a.description}
+                        </span>
+                      )
                     )}
                   </div>
                 </div>
@@ -495,57 +721,94 @@ export default function AvatarAdminPage() {
               <Td>
                 <span className="text-[0.85rem] text-orange-400">{a.difficulty ?? '—'}</span>
               </Td>
+              <Td align="center" compact>
+                <SheetCompleteness profile={a.profile} />
+              </Td>
               <Td align="center">
                 <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
                   {a.conversation_count}
                 </span>
               </Td>
               <Td>
+                {/* Un avatar archiviato ha una sola azione, tornare in
+                    catalogo: la sua scheda è il documento di ciò su cui gli
+                    studenti si sono allenati e resta in sola lettura. */}
                 <div className="flex items-center justify-end gap-2">
-                  <Tooltip content="Modifica avatar">
-                    <button
-                      className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
-                      onClick={() => openEdit(a)}
-                      aria-label={`Modifica ${a.name}`}
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                  {a.deleted_at ? (
+                    <Tooltip content="Ripristina avatar">
+                      <button
+                        className={`${actionBtnCls} hover:border-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-400`}
+                        onClick={() => handleRestore(a)}
+                        disabled={restoringId === a.id}
+                        aria-label={`Ripristina ${a.name}`}
                       >
-                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                      </svg>
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="Elimina avatar">
-                    <button
-                      className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
-                      onClick={() => {
-                        setDeleteError('')
-                        setDeleting(a)
-                      }}
-                      aria-label={`Elimina ${a.name}`}
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
-                  </Tooltip>
+                        {restoringId === a.id ? (
+                          <Spinner variant="button" />
+                        ) : (
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                            <polyline points="3 3 3 8 8 8" />
+                          </svg>
+                        )}
+                      </button>
+                    </Tooltip>
+                  ) : (
+                    <>
+                      <Tooltip content="Modifica avatar">
+                        <button
+                          className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
+                          onClick={() => openEdit(a)}
+                          aria-label={`Modifica ${a.name}`}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                          </svg>
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Elimina avatar">
+                        <button
+                          className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
+                          onClick={() => {
+                            setDeleteError('')
+                            setDeleting(a)
+                          }}
+                          aria-label={`Elimina ${a.name}`}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </Tooltip>
+                    </>
+                  )}
                 </div>
               </Td>
             </Tr>
@@ -595,9 +858,47 @@ export default function AvatarAdminPage() {
               <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
                 {editing === 'new' ? 'Crea Nuovo Avatar' : `Modifica ${editing.name}`}
               </h2>
+              <p className="text-[0.8rem] text-slate-500">
+                Scheda compilata al{' '}
+                <strong className="text-slate-300">
+                  {Math.round((countFilled(form.profile) / ALL_PROFILE_KEYS.length) * 100)}%
+                </strong>{' '}
+                ({countFilled(form.profile)} campi su {ALL_PROFILE_KEYS.length})
+              </p>
+              <button
+                type="button"
+                className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100"
+                onClick={() => setShowPromptPreview(true)}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Anteprima del prompt
+              </button>
             </div>
 
             {formError && <ErrorBox message={formError} />}
+
+            {/* I campi senza cui la simulazione non regge. Un avviso, non un
+                blocco: il salvataggio resta possibile perché una scheda si
+                costruisce in più riprese. */}
+            {missingEssentials(form.profile).length > 0 && (
+              <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-[0.8rem] text-amber-300">
+                <strong className="font-semibold">Campi chiave ancora vuoti:</strong>{' '}
+                {missingEssentials(form.profile).join(', ')}. Senza questi l'avatar ha poco su cui
+                reggere il personaggio.
+              </div>
+            )}
 
             <form className="flex flex-col gap-4" onSubmit={handleSave}>
               {/* ── Dati base ── */}
@@ -632,118 +933,225 @@ export default function AvatarAdminPage() {
                   L'avatar è privato dell'organizzazione scelta e visibile solo ai suoi utenti.
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-3 max-[600px]:grid-cols-1">
+              <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
                 <div className={fieldCls}>
                   <label className={labelCls} htmlFor="av-category">
                     Categoria
                   </label>
+                  {/* Testo libero con i valori già in uso come suggerimenti:
+                      una categoria nuova resta possibile, un refuso su una
+                      esistente diventa improbabile. */}
                   <div className={inputWrapperCls}>
                     <input
                       type="text"
                       id="av-category"
+                      list="av-category-options"
                       className={inputCls}
                       value={form.category}
                       onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
                       disabled={isSaving}
                     />
                   </div>
+                  <datalist id="av-category-options">
+                    {knownCategories.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
                 </div>
+
                 <div className={fieldCls}>
                   <label className={labelCls} htmlFor="av-voice">
-                    Voice ID Cartesia
+                    Voce Cartesia
                   </label>
-                  <div className={inputWrapperCls}>
-                    <input
-                      type="text"
-                      id="av-voice"
-                      className={inputCls}
-                      placeholder="es. b34ba556-..."
-                      value={form.voiceId}
-                      onChange={(e) => setForm((p) => ({ ...p, voiceId: e.target.value }))}
-                      disabled={isSaving}
-                    />
-                  </div>
-                </div>
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="av-image">
-                    URL immagine
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <input
-                      type="text"
-                      id="av-image"
-                      className={inputCls}
-                      placeholder="/static/avatars/..."
-                      value={form.imageUrl}
-                      onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
-                      disabled={isSaving}
-                    />
-                  </div>
+                  {voices.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <Select
+                        id="av-voice"
+                        className="flex-1"
+                        value={form.voiceId}
+                        onChange={(value) => setForm((p) => ({ ...p, voiceId: value }))}
+                        options={voiceOptions}
+                        placeholder="Voce predefinita"
+                        disabled={isSaving}
+                      />
+                      <Tooltip content="Ascolta questa voce">
+                        <button
+                          type="button"
+                          className={`${actionBtnCls} shrink-0 hover:border-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400`}
+                          onClick={() => playVoicePreview(form.voiceId)}
+                          disabled={!form.voiceId || playingVoiceId !== null || isSaving}
+                          aria-label="Ascolta anteprima della voce"
+                        >
+                          {playingVoiceId ? (
+                            <Spinner variant="button" />
+                          ) : (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                          )}
+                        </button>
+                      </Tooltip>
+                    </div>
+                  ) : (
+                    /* Catalogo non disponibile: si torna all'id da incollare,
+                       perché una voce mancante non deve impedire di salvare. */
+                    <div className={inputWrapperCls}>
+                      <input
+                        type="text"
+                        id="av-voice"
+                        className={inputCls}
+                        placeholder="es. b34ba556-..."
+                        value={form.voiceId}
+                        onChange={(e) => setForm((p) => ({ ...p, voiceId: e.target.value }))}
+                        disabled={isSaving}
+                      />
+                    </div>
+                  )}
+                  {voicesError && <p className="text-[0.7rem] text-amber-400">{voicesError}</p>}
                 </div>
               </div>
 
-              {/* ── Scheda persona ── */}
-              {PROFILE_SECTIONS.map((section) => (
-                <div key={section.title}>
-                  <h3 className={sectionTitleCls}>{section.title}</h3>
-                  <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
-                    {section.fields.map((field) =>
-                      field.textarea ? (
-                        <div
-                          key={field.key}
-                          className={`${fieldCls} col-span-2 max-[600px]:col-span-1`}
-                        >
-                          <label className={labelCls} htmlFor={`pf-${field.key}`}>
-                            {field.label}
-                          </label>
-                          <textarea
-                            id={`pf-${field.key}`}
-                            className={textareaCls}
-                            rows={2}
-                            placeholder={field.placeholder}
-                            value={form.profile[field.key] ?? ''}
-                            onChange={(e) => setProfileField(field.key, e.target.value)}
-                            disabled={isSaving}
-                          />
-                        </div>
-                      ) : field.options ? (
-                        <div key={field.key} className={fieldCls}>
-                          <label className={labelCls} htmlFor={`pf-${field.key}`}>
-                            {field.label}
-                          </label>
-                          <Select
-                            id={`pf-${field.key}`}
-                            value={form.profile[field.key] || field.options[0]}
-                            onChange={(value) => setProfileField(field.key, value)}
-                            options={field.options.map((option) => ({
-                              value: option,
-                              label: option,
-                            }))}
-                            disabled={isSaving}
-                          />
-                        </div>
-                      ) : (
-                        <div key={field.key} className={fieldCls}>
-                          <label className={labelCls} htmlFor={`pf-${field.key}`}>
-                            {field.label}
-                          </label>
-                          <div className={inputWrapperCls}>
-                            <input
-                              type="text"
-                              id={`pf-${field.key}`}
-                              className={inputCls}
-                              placeholder={field.placeholder}
-                              value={form.profile[field.key] ?? ''}
-                              onChange={(e) => setProfileField(field.key, e.target.value)}
-                              disabled={isSaving}
-                            />
-                          </div>
-                        </div>
-                      ),
+              <div className={fieldCls}>
+                {/* Un <span>, non una <label>: il gruppo contiene due controlli
+                    (il file e l'URL), nessuno dei due è "il" campo immagine. */}
+                <span className={labelCls}>Immagine</span>
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/6 bg-slate-800/50">
+                    {form.imageUrl ? (
+                      <img
+                        className="h-full w-full object-cover"
+                        src={getAvatarImageUrl(form.imageUrl)}
+                        alt="Anteprima immagine avatar"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[0.65rem] text-slate-600">
+                        auto
+                      </div>
                     )}
                   </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label
+                        className={`cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100 ${
+                          isUploading || isSaving ? 'pointer-events-none opacity-50' : ''
+                        }`}
+                      >
+                        {isUploading ? 'Caricamento...' : 'Carica immagine'}
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/png,image/jpeg,image/webp"
+                          disabled={isUploading || isSaving}
+                          onChange={(e) => {
+                            handleImageUpload(e.target.files?.[0])
+                            // Permette di ricaricare lo stesso file dopo un errore
+                            e.target.value = ''
+                          }}
+                        />
+                      </label>
+                      {form.imageUrl && (
+                        <button
+                          type="button"
+                          className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
+                          onClick={() => setForm((p) => ({ ...p, imageUrl: '' }))}
+                          disabled={isSaving}
+                        >
+                          Rimuovi
+                        </button>
+                      )}
+                    </div>
+                    <div className={inputWrapperCls}>
+                      <input
+                        type="text"
+                        id="av-image"
+                        className={inputCls}
+                        placeholder="oppure incolla un URL"
+                        value={form.imageUrl}
+                        onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
+                        disabled={isSaving}
+                      />
+                    </div>
+                  </div>
                 </div>
-              ))}
+                <p className="text-[0.7rem] text-slate-500">
+                  PNG, JPEG o WebP fino a 2 MB. Lasciando il campo vuoto viene generata un'immagine
+                  con le iniziali.
+                </p>
+              </div>
+
+              {/* ── Scheda persona ──
+                  Una sezione alla volta: il conteggio sull'intestazione dice
+                  cosa manca senza costringere ad aprirla. */}
+              <div className="mt-2 flex flex-col gap-2">
+                {PROFILE_SECTIONS.map((section) => {
+                  const keys = section.fields.map((f) => f.key)
+                  const filled = countFilled(form.profile, keys)
+                  const isOpen = openSections.includes(section.title)
+                  return (
+                    <div
+                      key={section.title}
+                      className="overflow-hidden rounded-2xl border border-white/6 bg-white/2"
+                    >
+                      <button
+                        type="button"
+                        className="flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent px-4 py-3 text-left transition hover:bg-white/4"
+                        onClick={() => toggleSection(section.title)}
+                        aria-expanded={isOpen}
+                      >
+                        <span className="text-[0.72rem] font-semibold uppercase tracking-widest text-violet-400">
+                          {section.title}
+                        </span>
+                        <span className="flex items-center gap-3">
+                          <span
+                            className={`text-[0.7rem] ${
+                              filled === 0 ? 'text-slate-600' : 'text-slate-400'
+                            }`}
+                          >
+                            {filled}/{keys.length}
+                          </span>
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className={`shrink-0 transition-transform ${
+                              isOpen ? 'rotate-180 text-violet-400' : 'text-slate-500'
+                            }`}
+                          >
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="grid grid-cols-2 gap-3 border-t border-white/6 p-4 max-[600px]:grid-cols-1">
+                          {section.fields.map((field) => (
+                            <ProfileFieldInput
+                              key={field.key}
+                              field={field}
+                              value={form.profile[field.key] ?? ''}
+                              onChange={(value) => setProfileField(field.key, value)}
+                              disabled={isSaving}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
 
               <button type="submit" className={submitBtnCls} disabled={isSaving}>
                 {isSaving ? (
@@ -760,6 +1168,11 @@ export default function AvatarAdminPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Anteprima del prompt: legge la scheda in corso, anche non salvata */}
+      {showPromptPreview && (
+        <PersonaPromptPreview profile={form.profile} onClose={() => setShowPromptPreview(false)} />
       )}
 
       {/* Modal Conferma Eliminazione */}
@@ -809,17 +1222,23 @@ export default function AvatarAdminPage() {
                 Elimina Avatar
               </h2>
               <p className="text-[0.85rem] text-slate-500">
-                Stai per eliminare <strong className="text-slate-100">{deleting.name}</strong>
-                {deleting.conversation_count > 0 && (
+                <strong className="text-slate-100">{deleting.name}</strong> esce dalla galleria
+                degli studenti e non sarà più possibile iniziare nuove sessioni con lui.
+              </p>
+              <p className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-left text-[0.8rem] text-emerald-300">
+                {deleting.conversation_count > 0 ? (
                   <>
-                    {' '}
-                    e le sue{' '}
-                    <strong className="text-slate-100">
+                    Le{' '}
+                    <strong className="text-emerald-200">
                       {deleting.conversation_count} conversazioni
-                    </strong>
+                    </strong>{' '}
+                    già svolte, con le loro valutazioni, restano intatte e continuano a comparire
+                    nei report.
                   </>
-                )}
-                . L'operazione non è reversibile.
+                ) : (
+                  <>Nessun dato viene cancellato.</>
+                )}{' '}
+                Puoi ripristinare l'avatar in qualsiasi momento dal filtro "Archiviati".
               </p>
             </div>
 
@@ -844,7 +1263,7 @@ export default function AvatarAdminPage() {
                     Eliminazione...
                   </>
                 ) : (
-                  'Elimina Definitivamente'
+                  'Elimina Avatar'
                 )}
               </button>
             </div>

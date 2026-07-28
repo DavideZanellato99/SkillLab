@@ -157,9 +157,11 @@ async function apiRequest(endpoint: string, options: ApiFetchOptions = {}): Prom
     if (qs) url += `?${qs}`
   }
 
-  // A Blob body travels as-is (audio uploads): fetch derives its
-  // Content-Type from blob.type, so serializing it would corrupt it.
-  const isRawBody = body instanceof Blob
+  // A Blob (audio upload) or a FormData (avatar portrait) travels as-is:
+  // fetch derives the Content-Type from the body itself, blob.type for the
+  // former and the multipart boundary for the latter, so both serializing
+  // it and setting the header by hand would corrupt the request.
+  const isRawBody = body instanceof Blob || body instanceof FormData
   const requestHeaders: Record<string, string> = { ...(headers as Record<string, string>) }
   if (body !== undefined && !isRawBody) {
     requestHeaders['Content-Type'] = 'application/json'
@@ -170,7 +172,12 @@ async function apiRequest(endpoint: string, options: ApiFetchOptions = {}): Prom
       ...rest,
       credentials: 'include',
       headers: requestHeaders,
-      body: body === undefined ? undefined : isRawBody ? (body as Blob) : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : isRawBody
+            ? (body as Blob | FormData)
+            : JSON.stringify(body),
     })
 
   let response = await doFetch()

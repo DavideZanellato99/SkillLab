@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from models import CONVERSATION_MODE_VOICE
+from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
 
 # --- Avatar Schemas ---
 
@@ -374,12 +375,38 @@ class OrganizationResponse(BaseModel):
     name: str
     slug: str
     status: str  # "active" | "suspended"
+    # Only set while the organization is suspended: the admin's own wording
+    # of why, shown in the admin table and to the locked-out users.
+    suspension_reason: str | None = None
     created_at: datetime
     updated_at: datetime
     user_count: int = 0
     avatar_count: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class OrganizationDetailResponse(OrganizationResponse):
+    """One organization plus how much its users actually train.
+
+    Read when the detail modal opens, not with the list: these figures cost
+    a scan of the tenant's conversations and nobody needs them to pick a
+    name out of a dropdown.
+    """
+
+    # Conversations opened by the tenant's users in the last 30 days: the
+    # counter that says whether the platform is being used *now*, which the
+    # lifetime total cannot.
+    conversations_last_30_days: int = 0
+    conversations_total: int = 0
+    # Average of the evaluated conversations' overall scores, over the
+    # tenant's whole history. None when nothing has been evaluated yet: a
+    # zero would read as "they score terribly" instead of "no data".
+    average_score: float | None = None
+    evaluated_count: int = 0
+    # Most recent successful login among the tenant's users. None means
+    # nobody has ever signed in: invitations sent and never accepted.
+    last_login_at: datetime | None = None
 
 
 class CreateOrganizationRequest(BaseModel):
@@ -408,9 +435,15 @@ class UpdateOrganizationRequest(BaseModel):
 
 
 class UpdateOrganizationStatusRequest(BaseModel):
-    """Schema for suspending or reactivating an organization."""
+    """Schema for suspending or reactivating an organization.
+
+    `reason` is what the locked-out users will read, so it travels with the
+    suspension itself rather than living only in the audit trail. Ignored
+    when reactivating: the reason describes a suspension that is over.
+    """
 
     status: str  # "active" | "suspended"
+    reason: str | None = Field(default=None, max_length=500)
 
 
 # --- Admin Schemas ---
@@ -483,7 +516,60 @@ class AdminAvatarResponse(BaseModel):
     organization_name: str
     profile: dict
     created_at: datetime
+    # When the avatar was archived (logical deletion); None while active.
+    deleted_at: datetime | None = None
     conversation_count: int = 0
+
+
+class AvatarImageResponse(BaseModel):
+    """Public URL of an image just uploaded for an avatar."""
+
+    image_url: str
+
+
+class AvatarPromptPreviewRequest(BaseModel):
+    """Render the roleplay prompt of a sheet that may not be saved yet."""
+
+    profile: dict
+    # "voice" (call) or "text" (chat): the same persona, a different medium
+    channel: str = CHANNEL_VOICE
+
+    @field_validator("channel")
+    @classmethod
+    def _known_channel(cls, value: str) -> str:
+        if value not in (CHANNEL_VOICE, CHANNEL_TEXT):
+            raise ValueError(f"Canale non valido: usa '{CHANNEL_VOICE}' o '{CHANNEL_TEXT}'.")
+        return value
+
+
+class AvatarPromptPreviewResponse(BaseModel):
+    """The system prompt a sheet produces, plus what it left out.
+
+    `ignored_fields` are the sheet keys that carry a value the prompt builder
+    drops (the "not applicable" markers), which is exactly what an author
+    needs to see: a field they believe they filled in and the avatar will
+    never know about.
+    """
+
+    prompt: str
+    channel: str
+    ignored_fields: list[str] = []
+
+
+class VoiceOption(BaseModel):
+    """One selectable Cartesia voice."""
+
+    id: str
+    name: str
+    language: str = ""
+    description: str | None = None
+
+
+class VoicePreviewRequest(BaseModel):
+    """Ask for one spoken line, to compare voices before saving."""
+
+    voice_id: str = Field(min_length=1)
+    text: str | None = None
 
 
 class ConversationReport(BaseModel):

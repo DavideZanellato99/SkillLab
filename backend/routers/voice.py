@@ -34,7 +34,7 @@ from models import (
     ConversationRecording,
     User,
 )
-from routers.avatars import _visible_avatars
+from routers.avatars import _visible_avatars, ensure_trainable
 from schemas import VoiceRecordingInfo, VoiceSessionRequest, VoiceSessionResponse
 from voice_pipeline import VoicePipeline
 from voice_sessions import create_voice_session, get_voice_session
@@ -98,6 +98,9 @@ def start_voice_session(
                 detail="Questa conversazione è terminata: avviane una nuova per parlare ancora con l'avatar.",
             )
     else:
+        # Only a brand new call is blocked on an archived avatar: a call
+        # already open when it was archived is allowed to be finished.
+        ensure_trainable(avatar)
         conversation = ChatConversation(
             avatar_id=request.avatar_id,
             user_id=current_user.id,

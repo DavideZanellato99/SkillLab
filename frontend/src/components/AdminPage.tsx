@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchUsers,
@@ -81,7 +82,25 @@ export default function AdminPage() {
   // elenco e non solo la finestra già caricata.
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [orgFilter, setOrgFilter] = useState('')
+  /* Il filtro organizzazione vive anche nell'URL (?organization_id=...): è
+   * così che il dettaglio di un'organizzazione può linkare "i suoi utenti",
+   * e un ricaricamento o un link condiviso riaprono la pagina già filtrata. */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [orgFilter, setOrgFilterValue] = useState(() => searchParams.get('organization_id') ?? '')
+  const setOrgFilter = useCallback(
+    (value: string) => {
+      setOrgFilterValue(value)
+      setSearchParams(
+        (params) => {
+          if (value) params.set('organization_id', value)
+          else params.delete('organization_id')
+          return params
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
   const [roleFilter, setRoleFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [accessFilter, setAccessFilter] = useState('')

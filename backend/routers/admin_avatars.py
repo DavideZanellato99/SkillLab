@@ -4,13 +4,19 @@ Every avatar IS a training persona: the payload always carries the full
 persona sheet (profile) and the avatar name is derived from its
 NOME + COGNOME. The profile is only ever exposed through these endpoints —
 the student-facing API strips it.
+
+Deletion here is logical (see Avatar.deleted_at): archiving an avatar takes
+it out of the students' gallery but keeps every conversation, message and
+evaluation ever produced against it, and stays reversible through
+``restore``.
 """
 
-import contextlib
 import os
+import uuid
+from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -20,19 +26,38 @@ from database import get_db
 from models import (
     Avatar,
     ChatConversation,
-    ChatMessage,
-    ConversationEvaluation,
     Organization,
     User,
-    UserSelection,
 )
-from schemas import AdminAvatarPayload, AdminAvatarResponse, MessageResponse
+from persona_prompt import build_persona_prompt, clean_value
+from schemas import (
+    AdminAvatarPayload,
+    AdminAvatarResponse,
+    AvatarImageResponse,
+    AvatarPromptPreviewRequest,
+    AvatarPromptPreviewResponse,
+    MessageResponse,
+)
 
 router = APIRouter(prefix="/api/admin/avatars", tags=["admin"])
 
 _AVATARS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "avatars"
 )
+
+# Uploaded portraits are matched by their magic bytes, not by the name or the
+# content-type the browser claims: the file ends up served from /static, so
+# what must be excluded is anything a browser could execute (SVG carries
+# script, HTML sniffs as a page). Only these three raster formats get in, and
+# the extension we store is the one the signature proves, never the one the
+# upload asked for.
+_IMAGE_SIGNATURES: list[tuple[bytes, str]] = [
+    (b"\x89PNG\r\n\x1a\n", "png"),
+    (b"\xff\xd8\xff", "jpg"),
+    (b"RIFF", "webp"),  # confirmed below: bytes 8..12 must read "WEBP"
+]
+
+_MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
 _PLACEHOLDER_PALETTES = [
     ("#7c3aed", "#06b6d4"),
@@ -77,6 +102,17 @@ def _generate_avatar_image(name: str, avatar_id: UUID) -> str:
     return _generated_image_url(avatar_id)
 
 
+def _image_extension(data: bytes) -> str | None:
+    """The extension proven by the file's own signature, or None if unknown."""
+    for signature, extension in _IMAGE_SIGNATURES:
+        if not data.startswith(signature):
+            continue
+        if extension == "webp" and data[8:12] != b"WEBP":
+            continue
+        return extension
+    return None
+
+
 def _resolve_avatar_org_or_400(db: Session, organization_id) -> UUID:
     """Validate the avatar's owning tenant: it is required and the
     organization must exist."""
@@ -109,6 +145,22 @@ def _validated_name_or_400(profile: dict) -> str:
     return name
 
 
+def _conversation_count(db: Session, avatar_id: UUID) -> int:
+    """How many conversations were held with this avatar, archived or not."""
+    return (
+        db.query(func.count(ChatConversation.id))
+        .filter(ChatConversation.avatar_id == avatar_id)
+        .scalar()
+    ) or 0
+
+
+def _get_avatar_or_404(db: Session, avatar_id: UUID) -> Avatar:
+    avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
+    if not avatar:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar non trovato.")
+    return avatar
+
+
 def _to_response(avatar: Avatar, conversation_count: int = 0) -> AdminAvatarResponse:
     return AdminAvatarResponse(
         id=avatar.id,
@@ -122,22 +174,32 @@ def _to_response(avatar: Avatar, conversation_count: int = 0) -> AdminAvatarResp
         organization_name=avatar.organization.name,
         profile=avatar.profile or {},
         created_at=avatar.created_at,
+        deleted_at=avatar.deleted_at,
         conversation_count=conversation_count,
     )
 
 
 @router.get("", response_model=list[AdminAvatarResponse])
 def list_avatars_admin(
+    include_deleted: bool = False,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
-    """List all avatars with their full persona sheet (Super Admin only)."""
+    """List all avatars with their full persona sheet (Super Admin only).
+
+    Archived avatars are left out unless `include_deleted` is set: the admin
+    page asks for them so it can offer the archive, everything else wants
+    the catalogue as the students see it.
+    """
     counts = dict(
         db.query(ChatConversation.avatar_id, func.count(ChatConversation.id))
         .group_by(ChatConversation.avatar_id)
         .all()
     )
-    avatars = db.query(Avatar).order_by(Avatar.created_at.asc()).all()
+    query = db.query(Avatar)
+    if not include_deleted:
+        query = query.filter(Avatar.deleted_at.is_(None))
+    avatars = query.order_by(Avatar.created_at.asc()).all()
     return [_to_response(a, counts.get(a.id, 0)) for a in avatars]
 
 
@@ -178,13 +240,21 @@ def create_avatar(
 def update_avatar(
     avatar_id: UUID,
     payload: AdminAvatarPayload,
+    http_request: Request,
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
-    """Update an avatar/persona (Super Admin only)."""
-    avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
-    if not avatar:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar non trovato.")
+    """Update an avatar/persona (Super Admin only).
+
+    An archived avatar is read-only: its sheet is the record of what the
+    students were trained against, so it is restored first and edited after.
+    """
+    avatar = _get_avatar_or_404(db, avatar_id)
+    if avatar.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="L'avatar è archiviato: ripristinalo prima di modificarlo.",
+        )
 
     name = _validated_name_or_400(payload.profile)
     avatar.name = name
@@ -204,13 +274,9 @@ def update_avatar(
 
     db.commit()
     db.refresh(avatar)
+    audit.describe(http_request, nome=avatar.name)
 
-    count = (
-        db.query(func.count(ChatConversation.id))
-        .filter(ChatConversation.avatar_id == avatar.id)
-        .scalar()
-    )
-    return _to_response(avatar, count or 0)
+    return _to_response(avatar, _conversation_count(db, avatar.id))
 
 
 @router.delete("/{avatar_id}", response_model=MessageResponse)
@@ -220,42 +286,123 @@ def delete_avatar(
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
-    """
-    Delete an avatar/persona together with its conversations (and messages)
-    and selections (Super Admin only).
-    """
-    avatar = db.query(Avatar).filter(Avatar.id == avatar_id).first()
-    if not avatar:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar non trovato.")
+    """Archive an avatar/persona (Super Admin only).
 
-    name = avatar.name
-    had_generated_image = avatar.image_url == _generated_image_url(avatar.id)
-    audit.describe(http_request, nome=name)
+    The deletion is logical and destroys nothing: the avatar leaves the
+    students' gallery and no new session can start on it, while its
+    conversations, messages and evaluations stay exactly where they are and
+    keep feeding the reports. The persona sheet survives with it, so an old
+    transcript can still be re-evaluated against the character it was played
+    on, and `restore` puts the avatar back in the catalogue.
 
-    conv_ids = [
-        row[0]
-        for row in db.query(ChatConversation.id)
-        .filter(ChatConversation.avatar_id == avatar.id)
-        .all()
-    ]
-    if conv_ids:
-        db.query(ChatMessage).filter(ChatMessage.conversation_id.in_(conv_ids)).delete(
-            synchronize_session=False
+    The generated placeholder image is deliberately left on disk: the past
+    conversations still show the avatar's face.
+    """
+    avatar = _get_avatar_or_404(db, avatar_id)
+    audit.describe(http_request, nome=avatar.name)
+    if avatar.is_deleted:
+        return MessageResponse(
+            message=f"Avatar '{avatar.name}' già archiviato.",
+            success=True,
         )
-        db.query(ConversationEvaluation).filter(
-            ConversationEvaluation.conversation_id.in_(conv_ids)
-        ).delete(synchronize_session=False)
-        db.query(ChatConversation).filter(ChatConversation.id.in_(conv_ids)).delete(
-            synchronize_session=False
-        )
-    db.query(UserSelection).filter(UserSelection.avatar_id == avatar.id).delete(
-        synchronize_session=False
-    )
-    db.delete(avatar)
+
+    avatar.deleted_at = datetime.now(UTC)
     db.commit()
 
-    if had_generated_image:
-        with contextlib.suppress(OSError):
-            os.remove(os.path.join(_AVATARS_DIR, f"avatar_{avatar_id}.svg"))
+    return MessageResponse(
+        message=f"Avatar '{avatar.name}' archiviato. Le conversazioni e le valutazioni "
+        "già svolte restano disponibili nei report.",
+        success=True,
+    )
 
-    return MessageResponse(message=f"Avatar '{name}' eliminato con successo.", success=True)
+
+@router.post("/{avatar_id}/restore", response_model=AdminAvatarResponse)
+def restore_avatar(
+    avatar_id: UUID,
+    http_request: Request,
+    current_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db),
+):
+    """Put an archived avatar back into the catalogue (Super Admin only).
+
+    Idempotent: restoring an active avatar simply returns it unchanged.
+    """
+    avatar = _get_avatar_or_404(db, avatar_id)
+    audit.describe(http_request, nome=avatar.name)
+    if avatar.is_deleted:
+        avatar.deleted_at = None
+        db.commit()
+        db.refresh(avatar)
+
+    return _to_response(avatar, _conversation_count(db, avatar.id))
+
+
+# ── What the admin form needs while it is being filled in ─────────────
+# Neither of these touches an avatar row: they serve the editor, which works
+# on a sheet that may not exist in the database yet.
+
+
+@router.post("/image", response_model=AvatarImageResponse)
+async def upload_avatar_image(
+    http_request: Request,
+    file: UploadFile = File(...),
+    current_admin: User = Depends(get_current_super_admin),
+):
+    """Store a portrait and return the URL to put in the avatar's image field.
+
+    The upload happens while the form is open, so the file is named after a
+    fresh uuid rather than after an avatar that may never be saved. An
+    abandoned form therefore leaves an unreferenced file behind, which is the
+    price of letting the admin see the portrait before committing to it.
+    """
+    data = await file.read(_MAX_IMAGE_BYTES + 1)
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Il file caricato è vuoto."
+        )
+    if len(data) > _MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"L'immagine non può superare {_MAX_IMAGE_BYTES // (1024 * 1024)} MB.",
+        )
+
+    extension = _image_extension(data)
+    if not extension:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato non supportato: carica un'immagine PNG, JPEG o WebP.",
+        )
+
+    os.makedirs(_AVATARS_DIR, exist_ok=True)
+    filename = f"upload_{uuid.uuid4()}.{extension}"
+    with open(os.path.join(_AVATARS_DIR, filename), "wb") as f:
+        f.write(data)
+
+    audit.describe(http_request, file=filename, bytes=len(data))
+    return AvatarImageResponse(image_url=f"/static/avatars/{filename}")
+
+
+@router.post("/prompt-preview", response_model=AvatarPromptPreviewResponse)
+def preview_persona_prompt(
+    payload: AvatarPromptPreviewRequest,
+    current_admin: User = Depends(get_current_super_admin),
+):
+    """Render the roleplay prompt a persona sheet produces, before saving it.
+
+    This is the sheet as the avatar will actually receive it, which is not
+    the same thing as the form: empty fields and "not applicable" markers
+    drop out entirely, and the channel changes the framing. `ignored_fields`
+    names the keys that were written but dropped, so a value the author
+    thought they had given the character does not go unnoticed.
+    """
+    profile = payload.profile or {}
+    ignored = [
+        key
+        for key, value in profile.items()
+        if str(value or "").strip() and not clean_value(profile, key)
+    ]
+    return AvatarPromptPreviewResponse(
+        prompt=build_persona_prompt(profile, payload.channel),
+        channel=payload.channel,
+        ignored_fields=sorted(ignored),
+    )

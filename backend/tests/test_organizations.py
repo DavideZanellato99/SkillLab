@@ -13,6 +13,7 @@ in different files.
 
 import uuid
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import event
@@ -146,6 +147,88 @@ def test_list_costs_the_same_whatever_the_number_of_tenants(
     assert len(five_tenants) == 3
 
 
+# ── Dettaglio ─────────────────────────────────────────
+
+
+def test_detail_measures_how_much_the_tenant_trains(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """Recent activity, average score and last access: the three figures that
+    say whether a tenant is actually using the platform."""
+    avatar = make_avatar()
+    recent = ChatConversation(
+        user_id=standard_user.id, avatar_id=avatar.id, title="Clienti 1", mode="voice"
+    )
+    old = ChatConversation(
+        user_id=standard_user.id,
+        avatar_id=avatar.id,
+        title="Clienti 2",
+        mode="text",
+        created_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(days=45),
+    )
+    db_session.add_all([recent, old])
+    db_session.flush()
+    db_session.add(
+        ConversationEvaluation(
+            conversation_id=recent.id, overall_score=8.0, result={"summary": "", "criteria": []}
+        )
+    )
+    db_session.add(
+        ConversationEvaluation(
+            conversation_id=old.id, overall_score=7.0, result={"summary": "", "criteria": []}
+        )
+    )
+    standard_user.last_login_at = datetime(2026, 7, 20, 9, 30)
+    db_session.flush()
+
+    response = admin_client.get(f"{BASE}/{organization.id}")
+    assert response.status_code == 200
+
+    body = response.json()
+    assert body["conversations_total"] == 2
+    assert body["conversations_last_30_days"] == 1
+    assert body["average_score"] == 7.5
+    assert body["evaluated_count"] == 2
+    assert body["last_login_at"].startswith("2026-07-20T09:30")
+    assert body["user_count"] == 1
+    assert body["avatar_count"] == 1
+
+
+def test_detail_counts_nothing_from_another_tenant(
+    admin_client, db_session, organization, standard_user, make_avatar, make_org, make_member
+):
+    other = make_org("Altro tenant")
+    other_member = make_member(other)
+    other_avatar = make_avatar(organization_id=other.id)
+    db_session.add(
+        ChatConversation(
+            user_id=other_member.id, avatar_id=other_avatar.id, title="Clienti 1", mode="voice"
+        )
+    )
+    db_session.flush()
+
+    body = admin_client.get(f"{BASE}/{organization.id}").json()
+
+    assert body["conversations_total"] == 0
+    assert body["user_count"] == 1
+
+
+def test_detail_reports_no_average_when_nothing_was_evaluated(
+    admin_client, organization, standard_user
+):
+    """None, not zero: a zero would read as "they score terribly" instead of
+    "there is nothing to average yet"."""
+    body = admin_client.get(f"{BASE}/{organization.id}").json()
+
+    assert body["average_score"] is None
+    assert body["evaluated_count"] == 0
+    assert body["last_login_at"] is None
+
+
+def test_detail_404s_on_an_unknown_organization(admin_client):
+    assert admin_client.get(f"{BASE}/{uuid.uuid4()}").status_code == 404
+
+
 # ── Creazione ─────────────────────────────────────────
 
 
@@ -272,6 +355,49 @@ def test_status_rejects_an_unknown_value(admin_client, organization):
     response = admin_client.put(f"{BASE}/{organization.id}/status", json={"status": "archiviata"})
 
     assert response.status_code == 400
+
+
+def test_the_suspension_reason_travels_with_the_suspension(admin_client, db_session, organization):
+    """It is shown to the locked-out users, so it is stored with the state
+    rather than left in the audit trail alone."""
+    response = admin_client.put(
+        f"{BASE}/{organization.id}/status",
+        json={"status": ORG_STATUS_SUSPENDED, "reason": "  Contratto scaduto il 30/06  "},
+    )
+    assert response.status_code == 200
+    assert response.json()["suspension_reason"] == "Contratto scaduto il 30/06"
+
+    db_session.refresh(organization)
+    assert organization.suspension_reason == "Contratto scaduto il 30/06"
+    assert _audit_row(db_session, "organization.status").details["motivo"] == (
+        "Contratto scaduto il 30/06"
+    )
+
+
+def test_reactivating_clears_the_reason(admin_client, db_session, organization):
+    """It describes the suspension in force, not a history: the trail keeps
+    the record of why it happened."""
+    organization.status = ORG_STATUS_SUSPENDED
+    organization.suspension_reason = "Contratto scaduto"
+    db_session.flush()
+
+    response = admin_client.put(
+        f"{BASE}/{organization.id}/status", json={"status": ORG_STATUS_ACTIVE}
+    )
+    assert response.status_code == 200
+    assert response.json()["suspension_reason"] is None
+
+    db_session.refresh(organization)
+    assert organization.suspension_reason is None
+
+
+def test_a_suspension_without_a_reason_stays_empty(admin_client, organization):
+    response = admin_client.put(
+        f"{BASE}/{organization.id}/status", json={"status": ORG_STATUS_SUSPENDED, "reason": "   "}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["suspension_reason"] is None
 
 
 # ── Eliminazione ──────────────────────────────────────
@@ -426,6 +552,7 @@ def test_deleted_tenant_stays_named_in_the_audit_trail(
     "method, path, body",
     [
         ("get", BASE, None),
+        ("get", f"{BASE}/{uuid.uuid4()}", None),
         ("post", BASE, {"name": "Tenant abusivo"}),
         ("put", f"{BASE}/{uuid.uuid4()}", {"name": "Rinominata"}),
         ("put", f"{BASE}/{uuid.uuid4()}/status", {"status": ORG_STATUS_SUSPENDED}),
@@ -476,6 +603,24 @@ def test_login_is_refused_while_the_organization_is_suspended(
     assert (
         _audit_row(db_session, "auth.login_failed").details["motivo"] == response.json()["detail"]
     )
+
+
+def test_the_locked_out_user_reads_the_reason_the_admin_wrote(
+    client, db_session, monkeypatch, organization, standard_user
+):
+    """Which is the whole point of storing it: a generic wall tells the user
+    nothing they can act on."""
+    _cognito_signs_in(monkeypatch)
+    organization.status = ORG_STATUS_SUSPENDED
+    organization.suspension_reason = "Contratto scaduto, contatta il tuo referente"
+    db_session.flush()
+
+    response = client.post(
+        "/api/auth/login", json={"email": standard_user.email, "password": "irrilevante"}
+    )
+
+    assert response.status_code == 403
+    assert "Contratto scaduto, contatta il tuo referente" in response.json()["detail"]
 
 
 def test_login_is_refused_while_the_account_is_suspended(

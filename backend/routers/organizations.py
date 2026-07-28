@@ -12,10 +12,11 @@ import contextlib
 import os
 import re
 import unicodedata
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 import audit
@@ -24,6 +25,7 @@ from cognito_service import admin_delete_user
 from database import get_db
 from models import (
     ALL_ORG_STATUSES,
+    ORG_STATUS_SUSPENDED,
     Avatar,
     ChatConversation,
     ChatMessage,
@@ -35,12 +37,18 @@ from models import (
 from schemas import (
     CreateOrganizationRequest,
     MessageResponse,
+    OrganizationDetailResponse,
     OrganizationResponse,
     UpdateOrganizationRequest,
     UpdateOrganizationStatusRequest,
 )
 
 router = APIRouter(prefix="/api/admin/organizations", tags=["admin"])
+
+# Window the "is this tenant being used?" counter looks at. A lifetime
+# total cannot answer that question: an organization that trained hard for
+# a month and then stopped looks identical to one still working every day.
+_ACTIVITY_WINDOW_DAYS = 30
 
 _AVATARS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "avatars"
@@ -97,6 +105,7 @@ def _response(org: Organization, user_count: int, avatar_count: int) -> Organiza
         name=org.name,
         slug=org.slug,
         status=org.status,
+        suspension_reason=org.suspension_reason,
         created_at=org.created_at,
         updated_at=org.updated_at,
         user_count=user_count,
@@ -108,7 +117,12 @@ def _to_response(db: Session, org: Organization) -> OrganizationResponse:
     """One organization with its counters, for the endpoints that touch a
     single tenant. The list has its own path: see list_organizations."""
     user_count = db.query(func.count(User.id)).filter(User.organization_id == org.id).scalar()
-    avatar_count = db.query(func.count(Avatar.id)).filter(Avatar.organization_id == org.id).scalar()
+    # Active avatars only, like the list endpoint: see list_organizations.
+    avatar_count = (
+        db.query(func.count(Avatar.id))
+        .filter(Avatar.organization_id == org.id, Avatar.deleted_at.is_(None))
+        .scalar()
+    )
     return _response(org, user_count or 0, avatar_count or 0)
 
 
@@ -128,12 +142,67 @@ def list_organizations(
     users_by_org = dict(
         db.query(User.organization_id, func.count(User.id)).group_by(User.organization_id).all()
     )
+    # Archived avatars are out of the catalogue, so they are out of the count
+    # too: the figure answers "how many personas can this tenant train on".
     avatars_by_org = dict(
         db.query(Avatar.organization_id, func.count(Avatar.id))
+        .filter(Avatar.deleted_at.is_(None))
         .group_by(Avatar.organization_id)
         .all()
     )
     return [_response(o, users_by_org.get(o.id, 0), avatars_by_org.get(o.id, 0)) for o in orgs]
+
+
+@router.get("/{organization_id}", response_model=OrganizationDetailResponse)
+def get_organization(
+    organization_id: UUID,
+    current_admin: User = Depends(get_current_super_admin),
+    db: Session = Depends(get_db),
+):
+    """One organization with how much its users actually train (Super Admin).
+
+    Read when the detail view opens: the figures below cost a scan of the
+    tenant's conversations, which the list (and the dropdowns it feeds)
+    has no use for.
+    """
+    org = _get_org_or_404(db, organization_id)
+    base = _to_response(db, org)
+
+    # Every counter is scoped to the tenant's members through this one
+    # subquery, so no other organization's conversations can leak into the
+    # figures.
+    members = db.query(User.id).filter(User.organization_id == org.id).scalar_subquery()
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=_ACTIVITY_WINDOW_DAYS)
+
+    conversations_total, conversations_recent = (
+        db.query(
+            func.count(ChatConversation.id),
+            func.count(case((ChatConversation.created_at >= since, 1))),
+        )
+        .filter(ChatConversation.user_id.in_(members))
+        .one()
+    )
+    average_score, evaluated_count = (
+        db.query(
+            func.avg(ConversationEvaluation.overall_score),
+            func.count(ConversationEvaluation.conversation_id),
+        )
+        .join(ChatConversation, ChatConversation.id == ConversationEvaluation.conversation_id)
+        .filter(ChatConversation.user_id.in_(members))
+        .one()
+    )
+    last_login_at = (
+        db.query(func.max(User.last_login_at)).filter(User.organization_id == org.id).scalar()
+    )
+
+    return OrganizationDetailResponse(
+        **base.model_dump(),
+        conversations_total=conversations_total or 0,
+        conversations_last_30_days=conversations_recent or 0,
+        average_score=round(float(average_score), 1) if average_score is not None else None,
+        evaluated_count=evaluated_count or 0,
+        last_login_at=last_login_at,
+    )
 
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
@@ -218,6 +287,10 @@ def set_organization_status(
     blocks every one of its users on their next login and on their next
     request, killing the sessions already open; reactivating restores
     access.
+
+    The optional `reason` is stored with the suspension and shown to the
+    locked-out users themselves, so they read why instead of a generic
+    wall. Reactivating clears it: it describes a suspension that is over.
     """
     org = _get_org_or_404(db, organization_id)
     if request.status not in ALL_ORG_STATUSES:
@@ -225,10 +298,15 @@ def set_organization_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Lo stato deve essere uno tra: {', '.join(ALL_ORG_STATUSES)}.",
         )
+    reason = (request.reason or "").strip() or None
     # Cutting off a whole tenant is the kind of action the trail has to
     # name: "stato modificato" without the direction would be unreadable.
     audit.describe(http_request, nome=org.name, da=org.status, a=request.status)
+    if request.status == ORG_STATUS_SUSPENDED and reason:
+        audit.describe(http_request, motivo=reason)
+
     org.status = request.status
+    org.suspension_reason = reason if request.status == ORG_STATUS_SUSPENDED else None
     db.commit()
     db.refresh(org)
     return _to_response(db, org)
@@ -263,6 +341,9 @@ def delete_organization(
     audit.describe(http_request, nome=org.name, utenti_eliminati=len(users))
 
     user_ids = [u.id for u in users]
+    # Archived avatars go too: this is the one place where an avatar is
+    # really removed from the database, and it is only because the tenant
+    # that owned it, its users and their whole history are going with it.
     avatar_ids = [
         row[0] for row in db.query(Avatar.id).filter(Avatar.organization_id == org.id).all()
     ]

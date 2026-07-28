@@ -82,6 +82,22 @@ def _add_columns() -> None:
             )
         )
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP"))
+        # Avatars are deleted logically: pre-existing rows are all active, so
+        # NULL (the column default) is already the right value for them and no
+        # backfill is needed. The partial index serves the only query shape
+        # there is, "the active avatars of a tenant".
+        conn.execute(text("ALTER TABLE avatars ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP"))
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_avatars_active_org "
+                "ON avatars (organization_id) WHERE deleted_at IS NULL"
+            )
+        )
+        # Why a tenant is suspended, written by the admin who suspended it.
+        # Nullable by nature: an active organization has no reason to carry.
+        conn.execute(
+            text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS suspension_reason TEXT")
+        )
 
 
 def _backfill_conversation_titles() -> None:

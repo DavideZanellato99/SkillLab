@@ -65,6 +65,12 @@ class Organization(Base):
     # URL-safe identifier, unique across the platform
     slug = Column(String(80), unique=True, nullable=False, index=True)
     status = Column(String(20), nullable=False, default=ORG_STATUS_ACTIVE)
+    # Why the tenant was suspended, in the admin's own words. Shown in the
+    # admin table and to the locked-out users themselves, so they read the
+    # actual reason instead of a generic wall. Cleared on reactivation: it
+    # describes the current suspension, it is not a history (the audit
+    # trail is).
+    suspension_reason = Column(Text, nullable=True)
     # Free-form per-tenant settings (branding, limits...): reserved for the
     # future, not read by any enforcement today.
     settings = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
@@ -171,11 +177,25 @@ class Avatar(Base):
     # the problem.
     profile = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    # Deletion is logical: the row survives so that every conversation,
+    # message and evaluation produced against this persona keeps its avatar,
+    # and so that an old transcript can still be re-evaluated against the
+    # sheet it was played on. An archived avatar leaves the students' gallery
+    # and cannot start new training, but stays in the admin archive and in
+    # the reports. NULL means active; the timestamp records when it was
+    # archived. Nothing in the app hard-deletes an avatar except the deletion
+    # of its owning organization, where the whole tenant goes away with it.
+    deleted_at = Column(DateTime, nullable=True, index=True)
 
     # Relationship to selections
     organization = relationship("Organization", back_populates="avatars")
     selections = relationship("UserSelection", back_populates="avatar")
     conversations = relationship("ChatConversation", back_populates="avatar")
+
+    @property
+    def is_deleted(self) -> bool:
+        """True once the avatar has been archived (logically deleted)."""
+        return self.deleted_at is not None
 
     @property
     def difficulty(self) -> str | None:

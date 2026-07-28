@@ -25,10 +25,41 @@ def _visible_avatars(query, user: User):
     A plain user or an organization_admin sees only the avatars owned by their
     own organization. The super admin stands above tenants and sees every
     avatar.
+
+    Tenant scoping only: archived avatars are still *visible* here on purpose,
+    so a student keeps reaching the transcripts and evaluations of the
+    training they already did. What archiving forbids is starting anything
+    new, which is `active_avatars` / `ensure_trainable` below.
     """
     if user.ruolo == ROLE_SUPER_ADMIN:
         return query
     return query.filter(Avatar.organization_id == user.organization_id)
+
+
+def active_avatars(query):
+    """Restrict an avatar query to the ones that are not archived.
+
+    Used wherever the catalogue is offered for training (the gallery, its
+    category filter, the selection): an archived persona must not be
+    proposed to anyone, in any tenant.
+    """
+    return query.filter(Avatar.deleted_at.is_(None))
+
+
+def ensure_trainable(avatar: Avatar) -> None:
+    """Refuse to open new training on an archived avatar.
+
+    Conflict rather than not-found: the avatar exists and its history is
+    still there to read, it just cannot be trained on any more.
+    """
+    if avatar.is_deleted:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"L'avatar '{avatar.name}' è archiviato: non è più possibile "
+                "iniziare nuove sessioni con questo cliente."
+            ),
+        )
 
 
 def _selection_counts(db: Session, avatar_ids: list[UUID]) -> dict[UUID, int]:
@@ -68,7 +99,7 @@ def get_avatars(
     db: Session = Depends(get_db),
 ):
     """Get all avatars, optionally filtered by category."""
-    query = _visible_avatars(db.query(Avatar), current_user)
+    query = active_avatars(_visible_avatars(db.query(Avatar), current_user))
 
     if category:
         query = query.filter(Avatar.category == category)
@@ -85,7 +116,7 @@ def get_categories(
     db: Session = Depends(get_db),
 ):
     """Get all distinct avatar categories."""
-    query = _visible_avatars(db.query(Avatar.category), current_user)
+    query = active_avatars(_visible_avatars(db.query(Avatar.category), current_user))
     categories = query.distinct().order_by(Avatar.category).all()
     return [c[0] for c in categories]
 
@@ -96,7 +127,11 @@ def get_avatar(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get a specific avatar by ID."""
+    """Get a specific avatar by ID.
+
+    Archived avatars are served too: this is what the conversation screen
+    reads to put a name and a face on a past session.
+    """
     avatar = _visible_avatars(db.query(Avatar), current_user).filter(Avatar.id == avatar_id).first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
@@ -124,6 +159,7 @@ def select_avatar(
     )
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
+    ensure_trainable(avatar)
 
     # Create selection record linked to the user
     db_selection = UserSelection(avatar_id=selection.avatar_id, user_id=current_user.id)

@@ -120,6 +120,8 @@ export interface AdminAvatar {
   organization_name: string
   profile: Record<string, string>
   created_at: string
+  /** Quando l'avatar è stato archiviato; null se è ancora in catalogo. */
+  deleted_at: string | null
   conversation_count: number
 }
 
@@ -133,8 +135,10 @@ export interface AdminAvatarPayload {
   profile: Record<string, string>
 }
 
-/** List all avatars with their full persona sheet (Super Admin only). */
-export const fetchAdminAvatars = () => apiFetch<AdminAvatar[]>('/api/admin/avatars')
+/** List all avatars with their full persona sheet (Super Admin only).
+ *  Con `includeDeleted` la lista comprende anche gli avatar archiviati. */
+export const fetchAdminAvatars = (includeDeleted = false) =>
+  apiFetch<AdminAvatar[]>(`/api/admin/avatars${includeDeleted ? '?include_deleted=true' : ''}`)
 
 /** Create a new avatar/persona (Super Admin only). */
 export const createAvatar = (payload: AdminAvatarPayload) =>
@@ -150,10 +154,64 @@ export const updateAvatar = (avatarId: string, payload: AdminAvatarPayload) =>
     body: payload,
   })
 
-/** Delete an avatar with its conversations and selections (Super Admin only). */
+/** Archivia un avatar (Super Admin only): eliminazione logica, conversazioni
+ *  e valutazioni già svolte restano intatte. */
 export const deleteAvatar = (avatarId: string) =>
   apiFetch<{ message: string; success: boolean }>(`/api/admin/avatars/${avatarId}`, {
     method: 'DELETE',
+  })
+
+/** Riporta in catalogo un avatar archiviato (Super Admin only). */
+export const restoreAvatar = (avatarId: string) =>
+  apiFetch<AdminAvatar>(`/api/admin/avatars/${avatarId}/restore`, {
+    method: 'POST',
+  })
+
+// ── Strumenti del form avatar ────────────────────────
+// Non toccano nessun avatar salvato: servono la scheda mentre la si compila.
+
+/** Carica un ritratto e restituisce l'URL da mettere nel campo immagine. */
+export const uploadAvatarImage = (file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return apiFetch<{ image_url: string }>('/api/admin/avatars/image', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+/** Canale su cui l'avatar interpreta la scheda: chiamata o chat scritta. */
+export type PersonaChannel = 'voice' | 'text'
+
+export interface PersonaPromptPreview {
+  prompt: string
+  channel: PersonaChannel
+  /** Campi compilati che il prompt scarta perché contengono un marcatore vuoto. */
+  ignored_fields: string[]
+}
+
+/** Il prompt di roleplay che la scheda produce, anche se non è ancora salvata. */
+export const previewPersonaPrompt = (profile: Record<string, string>, channel: PersonaChannel) =>
+  apiFetch<PersonaPromptPreview>('/api/admin/avatars/prompt-preview', {
+    method: 'POST',
+    body: { profile, channel },
+  })
+
+export interface VoiceOption {
+  id: string
+  name: string
+  language: string
+  description: string | null
+}
+
+/** Catalogo voci Cartesia, quelle nella lingua dell'app per prime. */
+export const fetchVoices = () => apiFetch<VoiceOption[]>('/api/admin/voices')
+
+/** Una battuta pronunciata con una voce, per confrontarle prima di salvare. */
+export const fetchVoicePreview = (voiceId: string, text?: string) =>
+  apiFetchBlob('/api/admin/voices/preview', {
+    method: 'POST',
+    body: { voice_id: voiceId, text: text ?? null },
   })
 
 // ── Activity report (read-only) ──────────────────────

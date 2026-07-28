@@ -91,6 +91,11 @@ def access_denied_reason(user: User) -> str | None:
     if user.status != USER_STATUS_ACTIVE:
         return ACCOUNT_BLOCKED_MESSAGE
     if user.organization is not None and user.organization.status != ORG_STATUS_ACTIVE:
+        # The admin's own wording when there is one: someone locked out of
+        # their training deserves the actual reason, not a generic wall.
+        reason = (user.organization.suspension_reason or "").strip()
+        if reason:
+            return f"L'organizzazione è stata sospesa: {reason}"
         return ORGANIZATION_BLOCKED_MESSAGE
     return None
 

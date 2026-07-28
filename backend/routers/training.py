@@ -39,6 +39,7 @@ from models import (
     TrainingAssignment,
     User,
 )
+from routers.avatars import ensure_trainable
 from schemas import (
     ASSIGNMENT_STATUS_ACTIVE,
     ASSIGNMENT_STATUS_COMPLETED,
@@ -230,6 +231,9 @@ def create_assignments(
     avatar = db.query(Avatar).filter(Avatar.id == payload.avatar_id).first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
+    # An archived avatar has left the students' gallery: a goal on it would
+    # be one nobody could ever start.
+    ensure_trainable(avatar)
 
     unique_ids = set(payload.user_ids)
     users = db.query(User).filter(User.id.in_(unique_ids)).all()

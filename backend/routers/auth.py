@@ -17,6 +17,7 @@ from auth_dependency import (
     ACCESS_TOKEN_COOKIE,
     MOCK_ADMIN_SUB,
     REFRESH_TOKEN_COOKIE,
+    access_denied_reason,
     get_current_user,
     get_or_create_mock_admin,
 )
@@ -136,6 +137,30 @@ def _bind_fresh_token(db: Session, access_token: str, http_request: Request, use
         print(f"[ERROR] Session binding non registrato: {e}")
 
 
+def _refuse_locked_out(user: User, http_request: Request) -> None:
+    """Stop a valid authentication that the platform still refuses.
+
+    Cognito has just checked the credentials, but a suspended account (or
+    one inside a suspended organization) must not get a session: without
+    this the login would set the cookies, stamp last_login_at and record an
+    "Accesso effettuato" for someone every following request rejects with a
+    401 nobody can read. 403 rather than 401: the credentials were right,
+    it is the account that is closed — and the message says which of the
+    two it is, since whoever got this far already knows the password.
+    """
+    denied = access_denied_reason(user)
+    if not denied:
+        return
+    audit.log_action(
+        audit.LOGIN_FAILED,
+        http_request,
+        user=user,
+        status_code=status.HTTP_403_FORBIDDEN,
+        motivo=denied,
+    )
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=denied)
+
+
 def _record_login(db: Session, user: User) -> None:
     """Stamp the account's last successful authentication.
 
@@ -241,6 +266,8 @@ def login(
             detail=_GENERIC_LOGIN_ERROR,
         )
 
+    _refuse_locked_out(user, http_request)
+
     _bind_fresh_token(db, result["access_token"], http_request, user.id)
     _record_login(db, user)
     _set_access_cookie(response, result["access_token"])
@@ -287,6 +314,11 @@ def complete_new_password(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Utente non trovato nel database. Contatta l'amministratore.",
         )
+
+    # The challenge hands out a session exactly like the login, so it is
+    # held by the same rule: the password was just set, but a locked-out
+    # account still gets no cookies.
+    _refuse_locked_out(user, http_request)
 
     _bind_fresh_token(db, result["access_token"], http_request, user.id)
     _record_login(db, user)

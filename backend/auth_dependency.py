@@ -28,6 +28,12 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 # Cognito sub of the local mock super admin (dev account, not on Cognito)
 MOCK_ADMIN_SUB = "mock-admin-sub-0000-0000-0000"
 
+# Why an account is locked out, in the wording the user reads. Both the
+# login and every authenticated request answer with these same two
+# sentences: see access_denied_reason below.
+ACCOUNT_BLOCKED_MESSAGE = "L'account è stato sospeso o disabilitato. Contatta l'amministratore."
+ORGANIZATION_BLOCKED_MESSAGE = "L'organizzazione è stata sospesa. Contatta l'amministratore."
+
 
 def ensure_roles(db: Session) -> dict[str, Role]:
     """Ensure all system roles exist; returns them keyed by name."""
@@ -65,6 +71,28 @@ def get_or_create_mock_admin(db: Session) -> User:
         db.commit()
         db.refresh(user)
     return user
+
+
+def access_denied_reason(user: User) -> str | None:
+    """Why `user` cannot use the platform, None when the account is free to.
+
+    Suspended or disabled accounts die immediately: the check runs on every
+    request, so tokens already issued stop working the moment the admin
+    flips the status (Cognito alone would let them live until exp).
+    Suspending the whole organization locks out every one of its users the
+    same way. The super admin has no organization, so it is never caught by
+    the second rule.
+
+    The login calls this too, before handing out any cookie: a check on the
+    request path alone would let a locked-out user sign in successfully and
+    be thrown out by the very next call, with an access recorded in the
+    audit trail and last_login_at stamped for a session that never was.
+    """
+    if user.status != USER_STATUS_ACTIVE:
+        return ACCOUNT_BLOCKED_MESSAGE
+    if user.organization is not None and user.organization.status != ORG_STATUS_ACTIVE:
+        return ORGANIZATION_BLOCKED_MESSAGE
+    return None
 
 
 def _identified(request: Request, user: User) -> User:
@@ -146,23 +174,13 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Suspended/disabled accounts die immediately: the check runs on every
-    # request, so tokens already issued stop working the moment the admin
-    # flips the status (Cognito alone would let them live until exp).
-    if user.status != USER_STATUS_ACTIVE:
+    # A suspended account, or one whose whole organization is suspended, is
+    # rejected here on every single request (see access_denied_reason).
+    denied = access_denied_reason(user)
+    if denied:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="L'account è stato sospeso o disabilitato. Contatta l'amministratore.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Suspending the whole organization locks out every one of its users the
-    # same way, on every request. The super admin has no organization, so it
-    # is never caught by this.
-    if user.organization is not None and user.organization.status != ORG_STATUS_ACTIVE:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="L'organizzazione è stata sospesa. Contatta l'amministratore.",
+            detail=denied,
             headers={"WWW-Authenticate": "Bearer"},
         )
 

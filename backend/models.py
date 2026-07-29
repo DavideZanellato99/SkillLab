@@ -657,3 +657,20 @@ class ChatMessage(Base):
 
     def __repr__(self):
         return f"<ChatMessage(id={self.id}, role='{self.role}')>"
+
+
+# Everything that hangs off a conversation, keyed by conversation_id. Held
+# here, next to the tables themselves, because two different features have
+# to delete a conversation completely — the retention sweep (``retention``)
+# and the erasure of a user or a tenant (``erasure``) — and a child table
+# added later must not be able to be forgotten by one of them.
+#
+# Declared in delete order: the annotations before the messages they are
+# pinned to, everything before the conversation itself.
+CONVERSATION_CHILDREN = (
+    MessageAnnotation,
+    ConversationReview,
+    ConversationEvaluation,
+    ConversationRecording,
+    ChatMessage,
+)

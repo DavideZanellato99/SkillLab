@@ -26,6 +26,7 @@ from cognito_service import (
     admin_set_user_enabled,
 )
 from database import get_db
+from erasure import erase_users
 from exports import evaluations_report_xlsx
 from models import (
     ALL_ROLES,
@@ -42,7 +43,6 @@ from models import (
     Organization,
     Role,
     User,
-    UserSelection,
 )
 from routers.chat import _evaluation_response
 from schemas import (
@@ -752,37 +752,29 @@ def delete_user(
             detail="Non è possibile eliminare l'account di sistema.",
         )
 
+    # Read before the erasure: afterwards there is no row left to reload
+    # these from, and the response still has to name who was deleted.
+    target_id, email = user.id, user.email
+
     # The audit row outlives the user it names, and its user_id is nulled
     # by the FK: the email is the only thing that keeps it readable.
-    audit.describe(http_request, email=user.email, ruolo=user.ruolo)
+    audit.describe(http_request, email=email, ruolo=user.ruolo)
 
     # Remove from Cognito first: if this fails the local data stays intact
     # and the operation can be retried (a user already missing on Cognito
     # is tolerated by admin_delete_user).
     try:
-        admin_delete_user(user.email)
+        admin_delete_user(email)
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(e),
         )
 
-    # Local cleanup: selections, conversations (with messages), then the user
-    conv_ids = [
-        row[0]
-        for row in db.query(ChatConversation.id).filter(ChatConversation.user_id == user.id).all()
-    ]
-    if conv_ids:
-        db.query(ChatMessage).filter(ChatMessage.conversation_id.in_(conv_ids)).delete(
-            synchronize_session=False
-        )
-        db.query(ChatConversation).filter(ChatConversation.id.in_(conv_ids)).delete(
-            synchronize_session=False
-        )
-    db.query(UserSelection).filter(UserSelection.user_id == user.id).delete(
-        synchronize_session=False
-    )
-    db.delete(user)
+    # Local cleanup: conversations, sessions, selections, goals, then the
+    # account. What exactly a user is made of lives in `erasure`, shared
+    # with the tenant deletion, so neither path can forget a table.
+    erase_users(db, [target_id])
     db.commit()
 
-    return MessageResponse(message=f"Utente {user.email} eliminato con successo.", success=True)
+    return MessageResponse(message=f"Utente {email} eliminato con successo.", success=True)

@@ -33,12 +33,15 @@ import asyncio
 import logging
 import os
 from contextlib import suppress
+from datetime import UTC, datetime
 
+from sqlalchemy import delete
 from sqlalchemy.engine import Connection
 
 import audit
 import retention
 from database import engine
+from models import RevokedJti, TokenSession
 
 logger = logging.getLogger(__name__)
 
@@ -72,22 +75,41 @@ INTERVAL_SECONDS = _interval_hours() * 3600
 _task: asyncio.Task | None = None
 
 
+def _purge_expired_sessions(conn: Connection) -> int:
+    """Drop session bindings and denylisted tokens that have expired.
+
+    Both tables clean themselves up as a side effect of a login or a
+    logout, which is enough on a busy deployment and nothing at all on a
+    quiet one. The rows matter: ``token_session`` holds the client IP and
+    User-Agent of every session it describes, so on an install where
+    nobody signs in for a month they should not sit there for a month.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    sessions = conn.execute(delete(TokenSession).where(TokenSession.expires_at < now)).rowcount
+    conn.execute(delete(RevokedJti).where(RevokedJti.expires_at < now))
+    return sessions
+
+
 def purge_now(conn: Connection | None = None) -> None:
     """Apply every retention window once, in one transaction.
 
-    Both purges together because they are the same promise: the trail's
-    rows carry IP and User-Agent, the conversations carry the recorded
-    voice and the score. Either both windows hold or neither does.
+    All of them together because they are the same promise: the trail's
+    rows carry IP and User-Agent, the sessions carry the same, the
+    conversations carry the recorded voice and the score. Either the
+    windows hold or they do not.
     """
     if conn is None:
         with engine.begin() as owned:
             return purge_now(owned)
 
     logs = audit.purge_expired(conn)
+    sessions = _purge_expired_sessions(conn)
     removed = retention.purge_expired(conn)
     logger.info(
-        "Housekeeping: %d righe di audit, %d conversazioni, %d registrazioni audio eliminate.",
+        "Housekeeping: %d righe di audit, %d sessioni scadute, %d conversazioni, "
+        "%d registrazioni audio eliminate.",
         logs,
+        sessions,
         removed.conversations,
         removed.recordings,
     )

@@ -23,12 +23,12 @@ import audit
 from auth_dependency import MOCK_ADMIN_SUB, get_current_super_admin
 from cognito_service import admin_delete_user
 from database import get_db
+from erasure import erase_conversations, erase_users
 from models import (
     ALL_ORG_STATUSES,
     ORG_STATUS_SUSPENDED,
     Avatar,
     ChatConversation,
-    ChatMessage,
     ConversationEvaluation,
     Organization,
     User,
@@ -375,44 +375,32 @@ def delete_organization(
                 ),
             )
 
-    # Conversations to purge: those held by the org's users AND those held
-    # against the org's avatars (in case an avatar was ever used by a user
-    # from another org — defensive). Deleting the conversation rows cascades to
-    # messages, evaluations and recordings at the DB level (ondelete=CASCADE).
-    conv_filter = []
-    if user_ids:
-        conv_filter.append(ChatConversation.user_id.in_(user_ids))
+    # Conversations held against the org's avatars by someone outside it
+    # (defensive: an avatar is only visible in its own tenant). The users'
+    # own conversations are not listed here, erase_users takes those.
     if avatar_ids:
-        conv_filter.append(ChatConversation.avatar_id.in_(avatar_ids))
-    if conv_filter:
-        from sqlalchemy import or_
+        erase_conversations(
+            db,
+            [
+                row[0]
+                for row in db.query(ChatConversation.id)
+                .filter(ChatConversation.avatar_id.in_(avatar_ids))
+                .all()
+            ],
+        )
 
-        conv_ids = [row[0] for row in db.query(ChatConversation.id).filter(or_(*conv_filter)).all()]
-        if conv_ids:
-            db.query(ChatMessage).filter(ChatMessage.conversation_id.in_(conv_ids)).delete(
-                synchronize_session=False
-            )
-            db.query(ConversationEvaluation).filter(
-                ConversationEvaluation.conversation_id.in_(conv_ids)
-            ).delete(synchronize_session=False)
-            db.query(ChatConversation).filter(ChatConversation.id.in_(conv_ids)).delete(
-                synchronize_session=False
-            )
+    # The users with everything about them: conversations, sessions,
+    # selections and goals (see `erasure`, shared with the single-account
+    # deletion so neither path can forget a table).
+    erase_users(db, user_ids)
 
-    # Selections referencing the org's users or private avatars
-    sel_filter = []
-    if user_ids:
-        sel_filter.append(UserSelection.user_id.in_(user_ids))
+    # Selections other tenants' users may hold on the private avatars
     if avatar_ids:
-        sel_filter.append(UserSelection.avatar_id.in_(avatar_ids))
-    if sel_filter:
-        from sqlalchemy import or_
+        db.query(UserSelection).filter(UserSelection.avatar_id.in_(avatar_ids)).delete(
+            synchronize_session=False
+        )
 
-        db.query(UserSelection).filter(or_(*sel_filter)).delete(synchronize_session=False)
-
-    # Delete the users and the private avatars, then the organization itself
-    if user_ids:
-        db.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
+    # Then the private avatars and the organization itself
     if avatar_ids:
         db.query(Avatar).filter(Avatar.id.in_(avatar_ids)).delete(synchronize_session=False)
     name = org.name

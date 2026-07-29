@@ -7,12 +7,14 @@ the process, which is the one failure nobody would ever notice.
 """
 
 import asyncio
+import uuid
 from contextlib import suppress
+from datetime import UTC, datetime, timedelta
 
 import audit
 import housekeeping
 import retention
-from models import AuditLog, ChatConversation
+from models import AuditLog, ChatConversation, TokenSession
 from tests.test_retention import _days_ago, _seed_conversation
 
 
@@ -68,6 +70,35 @@ def test_a_sweep_applies_every_retention_window(db_session, standard_user, make_
         db_session.query(ChatConversation).filter(ChatConversation.id == conversation_id).count()
         == 0
     )
+
+
+def test_a_sweep_drops_the_session_bindings_that_expired(db_session, standard_user):
+    """token_session holds an IP and a User-Agent per open session, and
+    only cleans itself up when somebody happens to sign in."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    stale = TokenSession(
+        jti=f"jti-{uuid.uuid4()}",
+        user_id=standard_user.id,
+        client_ip="203.0.113.7",
+        user_agent="Mozilla/5.0",
+        expires_at=now - timedelta(hours=1),
+    )
+    live = TokenSession(
+        jti=f"jti-{uuid.uuid4()}",
+        user_id=standard_user.id,
+        client_ip="203.0.113.8",
+        user_agent="Mozilla/5.0",
+        expires_at=now + timedelta(hours=1),
+    )
+    db_session.add_all([stale, live])
+    db_session.flush()
+    stale_jti, live_jti = stale.jti, live.jti
+
+    housekeeping.purge_now(db_session.connection())
+    db_session.expunge_all()
+
+    assert db_session.query(TokenSession).filter(TokenSession.jti == stale_jti).count() == 0
+    assert db_session.query(TokenSession).filter(TokenSession.jti == live_jti).count() == 1
 
 
 def test_a_sweep_leaves_data_inside_its_window_alone(db_session, standard_user, make_avatar):

@@ -38,14 +38,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.engine import Connection
 
 from database import engine
-from models import (
-    ChatConversation,
-    ChatMessage,
-    ConversationEvaluation,
-    ConversationRecording,
-    ConversationReview,
-    MessageAnnotation,
-)
+from models import CONVERSATION_CHILDREN, ChatConversation, ConversationRecording
 
 logger = logging.getLogger(__name__)
 
@@ -77,18 +70,11 @@ _last_used_at = func.coalesce(
     ChatConversation.ended_at, ChatConversation.updated_at, ChatConversation.created_at
 )
 
-# Children of a conversation, deleted before it. The FK cascades would cover
-# most of these, but the schema is built by create_all with no migration
-# tool, so a table created before its ondelete was declared can still be
-# carrying a plain constraint in Postgres. Deleting explicitly costs one
-# statement each and does not depend on what the live schema happens to say.
-_CHILD_MODELS = (
-    MessageAnnotation,
-    ConversationReview,
-    ConversationEvaluation,
-    ConversationRecording,
-    ChatMessage,
-)
+# The children (see models.CONVERSATION_CHILDREN) are deleted explicitly
+# rather than left to the FK cascades: the schema is built by create_all
+# with no migration tool, so a table created before its ondelete was
+# declared can still be carrying a plain constraint in Postgres. One
+# statement each, and no dependence on what the live schema happens to say.
 
 
 class PurgeResult(NamedTuple):
@@ -136,7 +122,7 @@ def _purge(conn: Connection) -> PurgeResult:
     conv_cutoff = conversation_cutoff()
     expired = _older_than(conv_cutoff)
 
-    for model in _CHILD_MODELS:
+    for model in CONVERSATION_CHILDREN:
         conn.execute(delete(model).where(model.conversation_id.in_(expired)))
     conversations = conn.execute(
         delete(ChatConversation).where(_last_used_at < conv_cutoff)

@@ -37,7 +37,6 @@ export default function Navbar() {
   const isDashboardPage = location.pathname === '/admin/dashboard'
   const isTrainingPage = location.pathname === '/admin/training'
   const isComparisonPage = location.pathname === '/confronto'
-  const isReportPage = location.pathname === '/admin/report'
   const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth()
 
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -207,6 +206,32 @@ export default function Navbar() {
               </svg>
               Gallery
             </Link>
+            {isAuthenticated && isAdmin(user) && (
+              <Link
+                to="/admin/training"
+                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
+                  isTrainingPage
+                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
+                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
+                }`}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+                Percorsi
+              </Link>
+            )}
             {/* Per tutti: lo studente confronta i propri tentativi, un
                 admin quelli delle persone del proprio tenant. */}
             {isAuthenticated && (
@@ -260,58 +285,6 @@ export default function Navbar() {
                   <rect x="3" y="16" width="7" height="5" rx="1" />
                 </svg>
                 Dashboard
-              </Link>
-            )}
-            {isAuthenticated && isAdmin(user) && (
-              <Link
-                to="/admin/training"
-                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isTrainingPage
-                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="12" r="6" />
-                  <circle cx="12" cy="12" r="2" />
-                </svg>
-                Percorsi
-              </Link>
-            )}
-            {isAuthenticated && isAdmin(user) && (
-              <Link
-                to="/admin/report"
-                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isReportPage
-                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="20" x2="18" y2="10" />
-                  <line x1="12" y1="20" x2="12" y2="4" />
-                  <line x1="6" y1="20" x2="6" y2="14" />
-                </svg>
-                Report Attività
               </Link>
             )}
           </div>
@@ -469,6 +442,27 @@ export default function Navbar() {
                               Gestione Avatar
                             </Link>
                           )}
+                          <Link
+                            to="/admin/report"
+                            className={menuItemCls}
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <line x1="18" y1="20" x2="18" y2="10" />
+                              <line x1="12" y1="20" x2="12" y2="4" />
+                              <line x1="6" y1="20" x2="6" y2="14" />
+                            </svg>
+                            Report Attività
+                          </Link>
                           {isSuperAdmin(user) && (
                             <Link
                               to="/admin/logs"
@@ -493,70 +487,6 @@ export default function Navbar() {
                               Registro Attività
                             </Link>
                           )}
-                          <Link
-                            to="/admin/dashboard"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <rect x="3" y="3" width="7" height="9" rx="1" />
-                              <rect x="14" y="3" width="7" height="5" rx="1" />
-                              <rect x="14" y="12" width="7" height="9" rx="1" />
-                              <rect x="3" y="16" width="7" height="5" rx="1" />
-                            </svg>
-                            Dashboard
-                          </Link>
-                          <Link
-                            to="/admin/training"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <circle cx="12" cy="12" r="6" />
-                              <circle cx="12" cy="12" r="2" />
-                            </svg>
-                            Percorsi di Training
-                          </Link>
-                          <Link
-                            to="/admin/report"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <line x1="18" y1="20" x2="18" y2="10" />
-                              <line x1="12" y1="20" x2="12" y2="4" />
-                              <line x1="6" y1="20" x2="6" y2="14" />
-                            </svg>
-                            Report Attività
-                          </Link>
                         </>
                       )}
                       <div className="my-1 h-px bg-white/6" />

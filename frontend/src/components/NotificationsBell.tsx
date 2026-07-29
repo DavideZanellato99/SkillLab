@@ -175,7 +175,7 @@ export default function NotificationsBell() {
 
             {items.length === 0 ? (
               <p className="px-2 py-8 text-center text-[0.82rem] text-slate-500">
-                Nessuna notifica.
+                Nessuna notifica
               </p>
             ) : (
               <div className="flex max-h-[60vh] flex-col overflow-y-auto">

@@ -761,6 +761,52 @@ class AdminConversationDetail(BaseModel):
     review: ConversationReviewResponse | None = None
 
 
+# --- Confronto fra i tentativi di una persona ---
+
+
+class AttemptResponse(BaseModel):
+    """One evaluated conversation, as the comparison screen reads it.
+
+    Everything needed to render one side of the comparison travels here:
+    the scores, the criteria behind them and the trainer's words. The list
+    is per person and never long enough to be worth splitting into a second
+    round trip for the two the user ends up picking.
+    """
+
+    conversation_id: UUID
+    title: str
+    mode: str = CONVERSATION_MODE_VOICE
+    avatar_id: UUID
+    avatar_name: str
+    conversation_at: datetime
+    evaluated_at: datetime
+    # The machine's own score and the one that counts: they differ exactly
+    # when a trainer corrected it (see reviews.final_score)
+    ai_score: float
+    final_score: float
+    has_override: bool = False
+    summary: str = ""
+    # The trainer's words, when a review was written
+    reviewer_name: str | None = None
+    review_note: str | None = None
+    review_reason: str | None = None
+    criteria: list[EvaluationCriterionScore] = []
+
+
+class ComparableUserResponse(BaseModel):
+    """Someone whose attempts an admin can open, with how many there are.
+
+    Only people with something to compare are listed: offering a name that
+    opens an empty screen is a dead end the picker can spare the trainer.
+    """
+
+    id: UUID
+    nome: str
+    cognome: str
+    email: str
+    attempts: int
+
+
 # --- Notifiche (derivate, mai memorizzate: vedi notifications.py) ---
 
 

@@ -36,6 +36,7 @@ export default function Navbar() {
   const isHome = location.pathname === '/'
   const isDashboardPage = location.pathname === '/admin/dashboard'
   const isTrainingPage = location.pathname === '/admin/training'
+  const isComparisonPage = location.pathname === '/confronto'
   const isReportPage = location.pathname === '/admin/report'
   const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth()
 
@@ -206,6 +207,34 @@ export default function Navbar() {
               </svg>
               Gallery
             </Link>
+            {/* Per tutti: lo studente confronta i propri tentativi, un
+                admin quelli delle persone del proprio tenant. */}
+            {isAuthenticated && (
+              <Link
+                to="/confronto"
+                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
+                  isComparisonPage
+                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
+                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
+                }`}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <rect x="4" y="9" width="5" height="11" rx="1" />
+                  <rect x="15" y="5" width="5" height="15" rx="1" />
+                </svg>
+                Confronto
+              </Link>
+            )}
             {isAuthenticated && isAdmin(user) && (
               <Link
                 to="/admin/dashboard"

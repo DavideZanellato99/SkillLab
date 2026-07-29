@@ -5,6 +5,7 @@ import Navbar from './components/Navbar'
 import Header from './components/Header'
 import AvatarGallery from './components/AvatarGallery'
 import ChatPage from './components/ChatPage'
+import ComparisonPage from './components/ComparisonPage'
 import AdminPage from './components/AdminPage'
 import DashboardPage from './components/DashboardPage'
 import UserReportPage from './components/UserReportPage'
@@ -84,6 +85,17 @@ function App() {
               element={
                 <RequireRole access="authenticated">
                   <ProfilePage />
+                </RequireRole>
+              }
+            />
+            {/* Ogni ruolo entra dalla stessa porta: lo studente ci trova i
+                propri tentativi, un admin il selettore delle persone del
+                proprio tenant. È il server a decidere di chi sono. */}
+            <Route
+              path="/confronto"
+              element={
+                <RequireRole access="authenticated">
+                  <ComparisonPage />
                 </RequireRole>
               }
             />

@@ -140,21 +140,39 @@ def test_voice_catalogue_says_so_when_cartesia_is_unreachable(admin_client, monk
     assert "Cartesia" in response.json()["detail"]
 
 
-def test_voice_catalogue_puts_the_app_language_first(admin_client, monkeypatch):
+def test_voice_catalogue_keeps_only_the_app_language(admin_client, monkeypatch):
+    """Le voci di altre lingue non compaiono, e le italiane sono in ordine."""
     monkeypatch.setattr(
         cartesia_service,
         "list_voices",
         lambda: [
             {"id": "en-1", "name": "Zoe", "language": "en", "description": None},
             {"id": "it-2", "name": "Marco", "language": "it", "description": "Voce maschile"},
-            {"id": "it-1", "name": "Anna", "language": "it", "description": None},
+            {"id": "it-1", "name": "Anna", "language": "it-IT", "description": None},
         ],
     )
     monkeypatch.setattr(cartesia_service, "CARTESIA_LANGUAGE", "it")
 
     response = admin_client.get("/api/admin/voices")
     assert response.status_code == 200
-    assert [v["id"] for v in response.json()] == ["it-1", "it-2", "en-1"]
+    assert [v["id"] for v in response.json()] == ["it-1", "it-2"]
+
+
+def test_voice_catalogue_falls_back_when_the_language_has_no_voices(admin_client, monkeypatch):
+    """Nessuna voce nella lingua dell'app: meglio l'elenco intero del vuoto."""
+    monkeypatch.setattr(
+        cartesia_service,
+        "list_voices",
+        lambda: [
+            {"id": "en-1", "name": "Zoe", "language": "en", "description": None},
+            {"id": "fr-1", "name": "Amelie", "language": "fr", "description": None},
+        ],
+    )
+    monkeypatch.setattr(cartesia_service, "CARTESIA_LANGUAGE", "it")
+
+    response = admin_client.get("/api/admin/voices")
+    assert response.status_code == 200
+    assert [v["id"] for v in response.json()] == ["fr-1", "en-1"]
 
 
 def test_voice_preview_returns_audio(admin_client, monkeypatch):

@@ -22,6 +22,28 @@ interface SelectProps {
   className?: string
 }
 
+/* Distanza fra pulsante e tendina, e respiro minimo dal bordo che ritaglia */
+const GAP = 6
+const EDGE = 8
+const MAX_LIST_HEIGHT = 240
+const MIN_LIST_HEIGHT = 120
+
+/* Il rettangolo oltre il quale la tendina verrebbe ritagliata: il primo
+ * antenato che non ha overflow visibile (un modale scrollabile, un box con
+ * overflow-hidden), altrimenti il viewport. */
+function clipBounds(el: HTMLElement) {
+  let top = 0
+  let bottom = window.innerHeight
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const { overflowY, overflowX } = getComputedStyle(node)
+    if (overflowY === 'visible' && overflowX === 'visible') continue
+    const rect = node.getBoundingClientRect()
+    top = Math.max(top, rect.top)
+    bottom = Math.min(bottom, rect.bottom)
+  }
+  return { top, bottom }
+}
+
 export default function Select({
   id,
   value,
@@ -33,6 +55,8 @@ export default function Select({
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
+  /* Sopra o sotto il pulsante, e quanto alta: deciso sullo spazio reale */
+  const [placement, setPlacement] = useState({ up: false, maxHeight: MAX_LIST_HEIGHT })
   const rootRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
   const listboxId = useId()
@@ -50,6 +74,32 @@ export default function Select({
     }
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [isOpen])
+
+  /* La tendina deve restare sempre in sovrimpressione e per intero: se sotto
+   * non c'è spazio si ribalta sopra, e in ogni caso si accorcia allo spazio
+   * disponibile invece di finire tagliata. Ricalcolato anche a ogni scroll o
+   * resize, perché il contenitore può muoversi mentre è aperta. */
+  useEffect(() => {
+    if (!isOpen) return
+    const measure = () => {
+      const root = rootRef.current
+      if (!root) return
+      const rect = root.getBoundingClientRect()
+      const bounds = clipBounds(root)
+      const below = bounds.bottom - rect.bottom - GAP - EDGE
+      const above = rect.top - bounds.top - GAP - EDGE
+      const up = below < MIN_LIST_HEIGHT && above > below
+      const space = up ? above : below
+      setPlacement({ up, maxHeight: Math.max(MIN_LIST_HEIGHT, Math.min(MAX_LIST_HEIGHT, space)) })
+    }
+    measure()
+    window.addEventListener('scroll', measure, true)
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('scroll', measure, true)
+      window.removeEventListener('resize', measure)
+    }
   }, [isOpen])
 
   // Tieni visibile l'opzione attiva mentre si naviga con la tastiera
@@ -158,7 +208,10 @@ export default function Select({
           ref={listRef}
           id={listboxId}
           role="listbox"
-          className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-60 animate-menu-in overflow-y-auto rounded-xl border border-white/6 bg-gray-900/95 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
+          style={{ maxHeight: placement.maxHeight }}
+          className={`absolute left-0 right-0 z-50 animate-menu-in overflow-y-auto rounded-xl border border-white/6 bg-gray-900/95 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl ${
+            placement.up ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
+          }`}
         >
           {options.map((opt, i) => {
             const isSelected = opt.value === value

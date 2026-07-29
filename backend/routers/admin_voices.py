@@ -29,6 +29,11 @@ _DEFAULT_PREVIEW_TEXT = (
 _MAX_PREVIEW_CHARS = 300
 
 
+def _base_language(code: str) -> str:
+    """`it-IT`, `IT`, `it` are the same language as far as this filter cares."""
+    return (code or "").strip().lower().replace("_", "-").split("-")[0]
+
+
 def _unavailable(exc: Exception) -> HTTPException:
     """Cartesia unreachable or misconfigured, told as a 503 the page can show."""
     return HTTPException(
@@ -41,19 +46,26 @@ def _unavailable(exc: Exception) -> HTTPException:
 def list_voices(
     current_admin: User = Depends(get_current_super_admin),
 ):
-    """The Cartesia voices, the ones in the configured language first.
+    """Only the Cartesia voices in the configured language, by name.
 
-    The app speaks one language (CARTESIA_LANGUAGE), so those voices are the
-    only realistic choice and are floated to the top; the rest stay listed
-    rather than hidden, since a persona may legitimately be a foreigner.
+    The synthesis always speaks CARTESIA_LANGUAGE: a voice built for another
+    language would just read Italian with the wrong accent, so those voices
+    are filtered out instead of merely sorted down. A voice already saved on
+    an avatar survives the filter anyway, the form keeps showing it and flags
+    it as fuori catalogo.
+
+    Fallback: if the account exposes nothing in that language the whole
+    catalogue comes back, because an empty picker is worse than a wide one.
     """
     try:
         voices = cartesia_service.list_voices()
     except Exception as exc:  # network, auth, malformed payload
         raise _unavailable(exc) from exc
 
-    language = cartesia_service.CARTESIA_LANGUAGE
-    voices.sort(key=lambda v: (v["language"] != language, v["name"].lower()))
+    language = _base_language(cartesia_service.CARTESIA_LANGUAGE)
+    in_language = [v for v in voices if _base_language(v["language"]) == language]
+    voices = in_language or voices
+    voices.sort(key=lambda v: v["name"].lower())
     return [VoiceOption(**v) for v in voices]
 
 

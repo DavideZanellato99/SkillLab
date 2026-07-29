@@ -330,13 +330,12 @@ export default function AvatarAdminPage() {
   /* Voci selezionabili. La prima opzione è "nessuna voce", che il backend
    * risolve nella voce predefinita del .env. Se l'avatar porta un id che il
    * catalogo non contiene più, quell'id resta in elenco: modificare la
-   * categoria di un avatar non deve cancellargli la voce di nascosto. */
+   * categoria di un avatar non deve cancellargli la voce di nascosto.
+   * Il catalogo arriva già filtrato sulla lingua dell'app, quindi il nome
+   * basta: ripetere la lingua su ogni riga sarebbe solo rumore. */
   const voiceOptions = [
     { value: '', label: 'Voce predefinita' },
-    ...voices.map((v) => ({
-      value: v.id,
-      label: v.language ? `${v.name} (${v.language})` : v.name,
-    })),
+    ...voices.map((v) => ({ value: v.id, label: v.name })),
     ...(form.voiceId && !voices.some((v) => v.id === form.voiceId)
       ? [{ value: form.voiceId, label: `${form.voiceId} (non nel catalogo)` }]
       : []),
@@ -1054,11 +1053,16 @@ export default function AvatarAdminPage() {
                   return (
                     <div
                       key={section.title}
-                      className="overflow-hidden rounded-2xl border border-white/6 bg-white/2"
+                      /* Niente overflow-hidden: ritaglierebbe le tendine dei
+                         Select interni. Gli angoli li arrotonda direttamente
+                         l'intestazione, che è l'unico figlio a sfondo pieno. */
+                      className="rounded-2xl border border-white/6 bg-white/2"
                     >
                       <button
                         type="button"
-                        className="flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent px-4 py-3 text-left transition hover:bg-white/4"
+                        className={`flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent px-4 py-3 text-left transition hover:bg-white/4 ${
+                          isOpen ? 'rounded-t-2xl' : 'rounded-2xl'
+                        }`}
                         onClick={() => toggleSection(section.title)}
                         aria-expanded={isOpen}
                       >

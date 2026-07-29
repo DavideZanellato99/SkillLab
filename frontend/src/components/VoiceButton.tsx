@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import { startVoiceSession, uploadRecording } from '../services/voice'
 import { VoiceCall } from '../services/voiceCall'
 import { startRingback, type Ringback } from '../services/ringtone'
+import { hasSeenRecordingNotice, rememberRecordingNotice } from '../services/recordingNotice'
 import type { ChatMessage } from '../services/api'
+import RecordingNoticeModal from './RecordingNoticeModal'
 import Tooltip from './Tooltip'
 
 type VoiceUiState = 'idle' | 'ringing' | 'listening' | 'processing' | 'speaking'
@@ -55,10 +58,12 @@ export default function VoiceButton({
   onSessionEnd,
   onActiveChange,
 }: VoiceButtonProps) {
+  const { user } = useAuth()
   const [isRinging, setIsRinging] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [showRecordingNotice, setShowRecordingNotice] = useState(false)
 
   const callRef = useRef<VoiceCall | null>(null)
   const ringbackRef = useRef<Ringback | null>(null)
@@ -149,6 +154,27 @@ export default function VoiceButton({
       return
     }
 
+    /* Prima di tutto il resto: chi non ha ancora letto l'avviso lo legge
+     * ora, mentre il microfono è ancora chiuso. Il "dopo" non esiste, una
+     * voce registrata non si può disinformare (art. 13). */
+    if (user && !hasSeenRecordingNotice(user.id)) {
+      setShowRecordingNotice(true)
+      return
+    }
+
+    await startCall()
+  }
+
+  /* Confermato l'avviso, la chiamata parte dal click sul bottone della
+   * modale: resta un gesto dell'utente, che è quello che serve sia al
+   * permesso del microfono sia all'autoplay dell'audio di squillo. */
+  const handleAcceptRecordingNotice = async () => {
+    if (user) rememberRecordingNotice(user.id)
+    setShowRecordingNotice(false)
+    await startCall()
+  }
+
+  const startCall = async () => {
     // ── Start the outgoing call ─────────────────────
     callCancelledRef.current = false
     setIsRinging(true)
@@ -216,6 +242,13 @@ export default function VoiceButton({
 
   return (
     <div className="flex shrink-0 flex-col items-center gap-2">
+      {showRecordingNotice && (
+        <RecordingNoticeModal
+          onAccept={handleAcceptRecordingNotice}
+          onClose={() => setShowRecordingNotice(false)}
+        />
+      )}
+
       {label && (
         <span
           className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[0.72rem] font-medium ${STATUS_CLASSES[uiState]}`}
@@ -272,6 +305,18 @@ export default function VoiceButton({
           )}
         </button>
       </Tooltip>
+
+      {/* Solo da chiamata connessa in poi: durante lo squillo il microfono
+       * è aperto ma il MediaRecorder non è ancora partito (vedi
+       * VoiceCall.start), e un REC che mente non informa nessuno. A riposo
+       * la stessa cosa la dice il dock (vedi ChatPage), dove non sbilancia
+       * l'allineamento dei due pulsanti. */}
+      {isConnected && (
+        <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-wider text-red-400">
+          <span className="h-[7px] w-[7px] animate-voice-blink rounded-full bg-current" />
+          Registrazione in corso
+        </span>
+      )}
     </div>
   )
 }

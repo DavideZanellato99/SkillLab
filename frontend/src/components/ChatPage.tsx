@@ -1182,6 +1182,15 @@ export default function ChatPage() {
                   <>📞 Premi Chiama per telefonare a {avatar.name}</>
                 )}
               </p>
+              {/* Trasparenza continua (art. 13): l'avviso completo si legge
+               * una volta sola, questa riga sta sempre sotto il pulsante.
+               * Durante la chiamata sparisce perché al suo posto lampeggia
+               * il REC del VoiceButton. */}
+              {!voiceActive && (
+                <p className="text-center text-[0.7rem] text-slate-600">
+                  Le chiamate vengono registrate, trascritte e valutate automaticamente.
+                </p>
+              )}
             </>
           )}
         </div>

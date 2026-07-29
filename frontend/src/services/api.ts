@@ -57,6 +57,9 @@ export interface ChatConversation {
   created_at: string
   updated_at: string
   messages: ChatMessage[]
+  /** La revisione del docente: le note viaggiano con la trascrizione,
+   *  perché è rileggendo la conversazione che insegnano qualcosa. */
+  review?: ConversationReview | null
 }
 
 /**
@@ -95,14 +98,52 @@ export interface PreviousAttempt {
   criteria_scores: Record<string, number>
 }
 
+/** Una nota del docente appuntata su un singolo messaggio. */
+export interface MessageAnnotation {
+  id: string
+  message_id: string
+  note: string
+  reviewer_name: string
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * La revisione del docente sopra la valutazione AI: nota di sintesi,
+ * eventuale correzione del punteggio con la sua motivazione, e le note
+ * appuntate sui singoli messaggi.
+ *
+ * La legge sia chi l'ha scritta sia lo studente a cui si riferisce: una
+ * correzione che lo studente non può leggere non protegge nessuno.
+ */
+export interface ConversationReview {
+  conversation_id: string
+  reviewer_name: string
+  summary_note: string | null
+  /** Presenti insieme o per niente: un voto corretto porta sempre il perché. */
+  override_score: number | null
+  override_reason: string | null
+  /** Il voto AI al momento della revisione, e se da allora è cambiato. */
+  ai_score_at_review: number | null
+  is_stale: boolean
+  annotations: MessageAnnotation[]
+  created_at: string
+  updated_at: string
+}
+
 export interface ConversationEvaluation {
   id: string
   conversation_id: string
+  /** Quello che ha assegnato la macchina. */
   overall_score: number
+  /** Quello che il voto È: la correzione del docente quando c'è. */
+  final_score: number
   summary: string
   criteria: EvaluationCriterion[]
   /** Null on the first evaluated attempt at this scenario. */
   previous?: PreviousAttempt | null
+  /** La revisione del docente, quando ne è stata scritta una. */
+  review?: ConversationReview | null
   created_at: string
   updated_at: string
 }

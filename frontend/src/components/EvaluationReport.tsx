@@ -1,12 +1,18 @@
 import type { ConversationEvaluation, EvaluationCitation } from '../services/api'
+import TrainerReviewNote from './TrainerReviewNote'
 
-/* Corpo della valutazione AI: punteggio complessivo, punteggi per criterio e
+/* Corpo della valutazione: punteggio complessivo, punteggi per criterio e
  * spunti di miglioramento. Usato sia dalla EvaluationModal post-chiamata sia
  * dal dettaglio conversazione della dashboard admin.
  *
  * Ogni criterio può citare i messaggi su cui il giudizio si fonda: le chip
  * compaiono solo se chi ospita il report passa onCitationClick, perché senza
- * una trascrizione da raggiungere il numero da solo non dice nulla. */
+ * una trascrizione da raggiungere il numero da solo non dice nulla.
+ *
+ * Il punteggio grande è quello finale, cioè la correzione del docente quando
+ * c'è: la pagella deve dire qual è il voto, con quello proposto dalla
+ * macchina accanto e non al suo posto. I punteggi per criterio restano
+ * quelli dell'AI, che il docente corregge nel complesso e non uno a uno. */
 
 function scoreTextColor(score: number): string {
   if (score >= 7) return 'text-emerald-400'
@@ -65,6 +71,9 @@ export default function EvaluationReport({
   onCitationPlay,
 }: EvaluationReportProps) {
   const previous = evaluation.previous ?? null
+  const review = evaluation.review ?? null
+  const finalScore = evaluation.final_score
+  const isCorrected = review?.override_score != null
 
   return (
     <>
@@ -74,16 +83,20 @@ export default function EvaluationReport({
           Punteggio complessivo
         </span>
         <div className="flex items-baseline gap-1">
-          <span
-            className={`font-heading text-5xl font-bold ${scoreTextColor(evaluation.overall_score)}`}
-          >
-            {formatScore(evaluation.overall_score)}
+          <span className={`font-heading text-5xl font-bold ${scoreTextColor(finalScore)}`}>
+            {formatScore(finalScore)}
           </span>
           <span className="text-lg text-slate-500">/ 10</span>
         </div>
+        {isCorrected && (
+          <span className="mt-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[0.7rem] font-semibold text-violet-300">
+            Corretto dal docente · la valutazione automatica assegnava{' '}
+            {formatScore(evaluation.overall_score)}
+          </span>
+        )}
         {previous && (
           <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5 px-6 text-xs text-slate-500">
-            <DeltaBadge delta={evaluation.overall_score - previous.overall_score} />
+            <DeltaBadge delta={finalScore - previous.overall_score} />
             <span>
               rispetto a «{previous.title}» del{' '}
               {new Date(previous.conversation_at).toLocaleDateString('it-IT', {
@@ -99,6 +112,10 @@ export default function EvaluationReport({
             {evaluation.summary}
           </p>
         )}
+        {/* La voce del docente chiude il blocco del punteggio invece di
+            aprirne uno suo: è quel punteggio, motivato, e un riquadro a
+            parte costringerebbe a ripetere il numero corretto due volte. */}
+        {review && <TrainerReviewNote review={review} />}
       </div>
 
       {/* Per-criterion scores */}

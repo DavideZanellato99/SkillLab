@@ -1,10 +1,17 @@
 """Assigned training paths.
 
-The super admin hands a user a goal on one avatar ("reach 7 with Mario
-Rossi", optionally by a deadline); the operator sees their goals on the
-home page and the admins follow the completion state from the Percorsi
-page. An organization admin reads only its own organization, exactly like
-the other report endpoints.
+An admin hands a user a goal on one avatar ("reach 7 with Mario Rossi",
+optionally by a deadline); the operator sees their goals on the home page
+and the admins follow the completion state from the Percorsi page.
+
+Both admin roles assign: an organization admin is the one who actually
+teaches its students, so waiting on the super admin to hand out every goal
+would put a stranger to the course in the middle of it. What confines it is
+the tenant, here as everywhere else: it only ever starts from an avatar of
+its own organization, and since a goal always lands on users of the
+avatar's organization, its trainees can only be its own. Every read is
+scoped the same way (resolve_admin_scope), so an organization admin never
+sees, assigns or deletes outside its own.
 
 Progress is derived here at read time and never stored: an assignment is
 completed when an evaluated conversation of that user with that avatar,
@@ -24,7 +31,6 @@ from sqlalchemy.orm import Session
 import audit
 from auth_dependency import (
     get_current_admin,
-    get_current_super_admin,
     get_current_user,
     resolve_admin_scope,
 )
@@ -35,6 +41,7 @@ from models import (
     Avatar,
     ChatConversation,
     ConversationEvaluation,
+    ConversationReview,
     Role,
     TrainingAssignment,
     User,
@@ -69,11 +76,15 @@ def _naive_utc(value: datetime | None) -> datetime | None:
 def _evaluated_by_pair(
     db: Session, assignments: list[TrainingAssignment]
 ) -> dict[tuple, list[tuple[datetime, float]]]:
-    """(user_id, avatar_id) -> [(conversation opened at, overall score)].
+    """(user_id, avatar_id) -> [(conversation opened at, score that counts)].
 
     One query for the whole page instead of one per assignment; the
     per-assignment cut (only conversations after its creation) happens in
     Python since two assignments may share the same pair.
+
+    The score is the final one, so a grade the trainer corrected is the
+    grade the objective is measured against: a student told they scored 7.5
+    must not find their goal still open because the machine had said 6.
     """
     if not assignments:
         return {}
@@ -83,10 +94,15 @@ def _evaluated_by_pair(
             ChatConversation.avatar_id,
             ChatConversation.created_at,
             ConversationEvaluation.overall_score,
+            ConversationReview.override_score,
         )
         .join(
             ConversationEvaluation,
             ConversationEvaluation.conversation_id == ChatConversation.id,
+        )
+        .outerjoin(
+            ConversationReview,
+            ConversationReview.conversation_id == ChatConversation.id,
         )
         .filter(
             ChatConversation.user_id.in_({a.user_id for a in assignments}),
@@ -95,8 +111,10 @@ def _evaluated_by_pair(
         .all()
     )
     by_pair: dict[tuple, list[tuple[datetime, float]]] = defaultdict(list)
-    for user_id, avatar_id, opened_at, score in rows:
-        by_pair[(user_id, avatar_id)].append((opened_at, score))
+    for user_id, avatar_id, opened_at, ai_score, override_score in rows:
+        by_pair[(user_id, avatar_id)].append(
+            (opened_at, override_score if override_score is not None else ai_score)
+        )
     return by_pair
 
 
@@ -184,8 +202,8 @@ def list_assignments(
 
 @router.get("/assignable-users", response_model=list[UserResponse])
 def assignable_users(
-    organization_id: UUID,
-    current_super_admin: User = Depends(get_current_super_admin),
+    organization_id: UUID | None = None,
+    current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     """The users an avatar of `organization_id` can be handed to as a goal.
@@ -196,12 +214,23 @@ def assignable_users(
     avatar is private to its tenant, so a goal on one the user cannot even
     see would be impossible, and a suspended account could never work on
     it. The super admin is left out because it belongs to no tenant.
+
+    An organization admin does not name the tenant: resolve_admin_scope pins
+    it to its own, so an `organization_id` pointing anywhere else is ignored
+    rather than obeyed. The super admin has to pass one, since "every
+    organization" is not an answer to this question.
     """
+    scope_org_id = resolve_admin_scope(current_admin, organization_id)
+    if scope_org_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Specificare l'organizzazione di cui elencare gli utenti.",
+        )
     users = (
         db.query(User)
         .join(Role, Role.id == User.role_id)
         .filter(
-            User.organization_id == organization_id,
+            User.organization_id == scope_org_id,
             User.status == USER_STATUS_ACTIVE,
             Role.name != ROLE_SUPER_ADMIN,
         )
@@ -219,16 +248,25 @@ def assignable_users(
 def create_assignments(
     payload: TrainingAssignmentCreate,
     http_request: Request,
-    current_super_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Assign one avatar as a goal to one or more users (super admin only).
+    """Assign one avatar as a goal to one or more users.
 
     One row per user. Every user must belong to the avatar's organization:
     an avatar is private to its tenant, a goal on an avatar the user cannot
     even see would be impossible by construction.
+
+    That same rule is what confines an organization admin: the avatar it
+    starts from has to be one of its own (an avatar of another tenant
+    answers 404, it does not exist as far as this admin is concerned), and
+    the trainees then have to belong to that organization, which is its own.
     """
-    avatar = db.query(Avatar).filter(Avatar.id == payload.avatar_id).first()
+    scope_org_id = resolve_admin_scope(current_admin, None)
+    avatar_query = db.query(Avatar).filter(Avatar.id == payload.avatar_id)
+    if scope_org_id is not None:
+        avatar_query = avatar_query.filter(Avatar.organization_id == scope_org_id)
+    avatar = avatar_query.first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
     # An archived avatar has left the students' gallery: a goal on it would
@@ -250,7 +288,7 @@ def create_assignments(
         TrainingAssignment(
             user_id=user.id,
             avatar_id=avatar.id,
-            assigned_by_id=current_super_admin.id,
+            assigned_by_id=current_admin.id,
             target_score=round(payload.target_score, 1),
             due_at=_naive_utc(payload.due_at),
         )
@@ -274,12 +312,22 @@ def create_assignments(
 @router.delete("/assignments/{assignment_id}", response_model=MessageResponse)
 def delete_assignment(
     assignment_id: UUID,
-    current_super_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Remove an assigned goal (super admin only). The conversations and
-    evaluations it counted stay untouched: only the goal goes away."""
-    assignment = db.query(TrainingAssignment).filter(TrainingAssignment.id == assignment_id).first()
+    """Remove an assigned goal. The conversations and evaluations it counted
+    stay untouched: only the goal goes away.
+
+    An organization admin reaches only the goals of its own users: one of
+    another tenant answers 404, the same nothing the list shows it.
+    """
+    scope_org_id = resolve_admin_scope(current_admin, None)
+    query = db.query(TrainingAssignment).filter(TrainingAssignment.id == assignment_id)
+    if scope_org_id is not None:
+        query = query.join(User, User.id == TrainingAssignment.user_id).filter(
+            User.organization_id == scope_org_id
+        )
+    assignment = query.first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Percorso non trovato.")
     db.delete(assignment)

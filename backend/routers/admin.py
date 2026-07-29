@@ -11,6 +11,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import audit
+import reviews
 from auth_dependency import (
     MOCK_ADMIN_SUB,
     get_current_admin,
@@ -37,6 +38,7 @@ from models import (
     ChatConversation,
     ChatMessage,
     ConversationEvaluation,
+    ConversationReview,
     Organization,
     Role,
     User,
@@ -332,12 +334,18 @@ def evaluations_report(
 
 
 def _evaluation_report_rows(db: Session, scope_org_id) -> list[EvaluationReportRow]:
-    """Every evaluated conversation in scope, oldest first (chart order)."""
+    """Every evaluated conversation in scope, oldest first (chart order).
+
+    The trainer's review rides along on an outer join (most conversations
+    have none), so `overall_score` is the grade that counts and the charts
+    plot what the student was actually given.
+    """
     query = (
-        db.query(ConversationEvaluation, ChatConversation, User, Avatar.name)
+        db.query(ConversationEvaluation, ChatConversation, User, Avatar.name, ConversationReview)
         .join(ChatConversation, ChatConversation.id == ConversationEvaluation.conversation_id)
         .join(User, User.id == ChatConversation.user_id)
         .join(Avatar, Avatar.id == ChatConversation.avatar_id)
+        .outerjoin(ConversationReview, ConversationReview.conversation_id == ChatConversation.id)
     )
     if scope_org_id is not None:
         query = query.filter(User.organization_id == scope_org_id)
@@ -357,7 +365,10 @@ def _evaluation_report_rows(db: Session, scope_org_id) -> list[EvaluationReportR
             avatar_name=avatar_name,
             conversation_at=conv.created_at,
             evaluated_at=evaluation.created_at,
-            overall_score=evaluation.overall_score,
+            overall_score=reviews.final_score(evaluation.overall_score, review),
+            ai_overall_score=evaluation.overall_score,
+            has_override=review is not None and review.override_score is not None,
+            has_review=review is not None,
             criteria=[
                 EvaluationCriterionScore(
                     key=str(c.get("key", "")),
@@ -367,7 +378,7 @@ def _evaluation_report_rows(db: Session, scope_org_id) -> list[EvaluationReportR
                 for c in ((evaluation.result or {}).get("criteria") or [])
             ],
         )
-        for evaluation, conv, user, avatar_name in rows
+        for evaluation, conv, user, avatar_name, review in rows
     ]
 
 
@@ -422,10 +433,22 @@ def conversation_detail(
         .filter(ConversationEvaluation.conversation_id == conversation_id)
         .first()
     )
+    review = (
+        db.query(ConversationReview)
+        .filter(ConversationReview.conversation_id == conversation_id)
+        .first()
+    )
     return AdminConversationDetail(
         conversation_id=conversation.id,
         messages=[ChatMessageResponse.model_validate(m) for m in messages],
         evaluation=_evaluation_response(db, conversation, evaluation) if evaluation else None,
+        # Also outside the evaluation: a trainer can have annotated a
+        # transcript the AI never judged, and the modal still has to show it.
+        review=reviews.review_response(
+            review,
+            reviews.annotations_of(db, conversation_id),
+            evaluation.overall_score if evaluation else None,
+        ),
     )
 
 

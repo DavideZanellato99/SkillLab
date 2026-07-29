@@ -157,6 +157,21 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     ("POST", "/api/voice/recording/{conversation_id}"): AuditAction(
         "voice.recording", "Registrazione caricata", "conversation", "conversation_id"
     ),
+    # Revisione del docente sulle conversazioni. Il contenuto (nota,
+    # motivazione, annotazioni) resta fuori dal registro: è testo libero
+    # scritto su una persona, qui basta sapere chi è intervenuto e quando.
+    ("PUT", "/api/admin/conversations/{conversation_id}/review"): AuditAction(
+        "review.save", "Revisione salvata", "conversation", "conversation_id"
+    ),
+    ("DELETE", "/api/admin/conversations/{conversation_id}/review"): AuditAction(
+        "review.delete", "Revisione eliminata", "conversation", "conversation_id"
+    ),
+    ("PUT", "/api/admin/conversations/{conversation_id}/annotations"): AuditAction(
+        "review.annotate", "Messaggio annotato", "conversation", "conversation_id"
+    ),
+    ("DELETE", "/api/admin/annotations/{annotation_id}"): AuditAction(
+        "review.annotation_delete", "Annotazione eliminata", "annotation", "annotation_id"
+    ),
     # Percorsi di training
     ("POST", "/api/training/assignments"): AuditAction(
         "training.assign", "Obiettivo assegnato", "assignment"

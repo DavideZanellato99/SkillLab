@@ -1,6 +1,10 @@
 /* Percorsi di training assegnati: obiettivi (avatar + punteggio target,
- * scadenza opzionale) che il super admin affida agli utenti. Lo stato è
- * derivato dal backend a ogni lettura, mai memorizzato. */
+ * scadenza opzionale) che un admin affida agli utenti. Lo stato è derivato
+ * dal backend a ogni lettura, mai memorizzato.
+ *
+ * Assegnano sia il super admin sia l'organization admin; a quest'ultimo il
+ * server impone comunque il proprio tenant, quindi qui non c'è nessun
+ * controllo di ruolo da replicare. */
 
 import { apiFetch } from './api'
 import type { AuthUser } from './auth'
@@ -50,26 +54,28 @@ export const fetchAssignments = (organizationId?: string) =>
   })
 
 /**
- * Gli utenti a cui un avatar di quell'organizzazione può essere assegnato
- * (solo Super Admin): attivi, del tenant dell'avatar, super admin esclusi.
+ * Gli utenti a cui un avatar di quell'organizzazione può essere assegnato:
+ * attivi, del tenant dell'avatar, super admin esclusi.
  *
  * La regola vive sul server, accanto alla validazione che rifiuta
  * l'assegnazione: filtrare qui una lista completa di utenti significherebbe
- * tenerne una copia libera di divergere da quella.
+ * tenerne una copia libera di divergere da quella. All'org admin il server
+ * impone la propria organizzazione, quindi il parametro può restare vuoto;
+ * al super admin serve, perché "tutte" non è una risposta valida.
  */
-export const fetchAssignableUsers = (organizationId: string) =>
+export const fetchAssignableUsers = (organizationId?: string) =>
   apiFetch<AuthUser[]>('/api/training/assignable-users', {
-    params: { organization_id: organizationId },
+    params: organizationId ? { organization_id: organizationId } : undefined,
   })
 
-/** Assegna un avatar come obiettivo a uno o più utenti (solo Super Admin). */
+/** Assegna un avatar come obiettivo a uno o più utenti (admin). */
 export const createAssignments = (payload: CreateAssignmentsPayload) =>
   apiFetch<TrainingAssignment[]>('/api/training/assignments', {
     method: 'POST',
     body: payload,
   })
 
-/** Elimina un percorso assegnato (solo Super Admin). */
+/** Elimina un percorso assegnato (admin, solo quelli nel proprio scope). */
 export const deleteAssignment = (assignmentId: string) =>
   apiFetch<{ message: string; success: boolean }>(`/api/training/assignments/${assignmentId}`, {
     method: 'DELETE',

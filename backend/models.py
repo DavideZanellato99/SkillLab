@@ -310,6 +310,17 @@ class ChatConversation(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    review = relationship(
+        "ConversationReview",
+        back_populates="conversation",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    annotations = relationship(
+        "MessageAnnotation",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+    )
     recording = relationship(
         "ConversationRecording",
         back_populates="conversation",
@@ -357,6 +368,121 @@ class ConversationEvaluation(Base):
 
     def __repr__(self):
         return f"<ConversationEvaluation(id={self.id}, conversation_id={self.conversation_id}, overall_score={self.overall_score})>"
+
+
+class ConversationReview(Base):
+    """The trainer's own verdict on a conversation, sitting above the AI's.
+
+    One per conversation: a summary note in the trainer's own words and,
+    when the machine got it wrong, a corrected score with the reason for the
+    correction. This is what makes a grade defensible — a student who
+    contests the AI gets a human answer, signed and dated, instead of a
+    black box repeating itself.
+
+    Once `override_score` is set it IS the grade: everything that consumes a
+    score (the student's report, the progress of an assigned goal, the
+    dashboard, the exports) reads it through ``reviews.final_score``, so a
+    correction cannot mean one thing on screen and another in the report.
+
+    The AI score the trainer was looking at is copied into
+    `ai_score_at_review`, because the judgement can be re-run afterwards: a
+    correction that reads "6.5 is too harsh here" says nothing next to a
+    score that has since become an 8. Keeping the old number is what lets
+    the views admit the review is stale instead of presenting it as current.
+
+    The reviewer is stored twice, exactly like in the audit trail: the
+    foreign key (nulled if the account is deleted) and a name snapshot taken
+    at write time, so the student can still read who graded them.
+    """
+
+    __tablename__ = "conversation_reviews"
+
+    conversation_id = Column(
+        Uuid,
+        ForeignKey("chat_conversations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    reviewer_id = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewer_name = Column(String(255), nullable=False, default="")
+    # The trainer's overall comment. Nullable because a review is allowed to
+    # be only a correction, just as it is allowed to be only a note.
+    summary_note = Column(Text, nullable=True)
+    # Corrected grade. NULL means the trainer let the AI's score stand, and
+    # then the reason has nothing to justify: the API refuses one without
+    # the other, in either direction.
+    override_score = Column(Float, nullable=True)
+    override_reason = Column(Text, nullable=True)
+    # What the AI said when the review was written; NULL if the conversation
+    # had not been judged yet (a trainer can grade one the AI never saw).
+    ai_score_at_review = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    conversation = relationship("ChatConversation", back_populates="review")
+
+    def __repr__(self):
+        return (
+            f"<ConversationReview(conversation_id={self.conversation_id}, "
+            f"override_score={self.override_score})>"
+        )
+
+
+class MessageAnnotation(Base):
+    """A trainer's note pinned to one of the operator's messages.
+
+    The granular half of the feedback, where the review's summary note is
+    the general one: "here you should have asked for the customer code"
+    lands on the exact line it is about, which is how a debrief actually
+    teaches something.
+
+    Only on the operator's lines (enforced in routers/conversation_reviews):
+    the student is graded on what they said, and even a mistake triggered by
+    the avatar lives in the reply that mishandled it, never in the avatar's
+    own generated words.
+
+    At most one note per message (the unique constraint): a transcript
+    covered in overlapping opinions from several trainers would be noise,
+    not feedback, so a second trainer editing a message edits the note that
+    is there and signs it with their own name.
+
+    `conversation_id` is denormalized on purpose: every read wants "the
+    notes of this conversation", and keeping it here answers that with one
+    indexed lookup instead of a join through the messages table.
+    """
+
+    __tablename__ = "message_annotations"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(
+        Uuid,
+        ForeignKey("chat_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    message_id = Column(
+        Uuid,
+        ForeignKey("chat_messages.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    reviewer_id = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewer_name = Column(String(255), nullable=False, default="")
+    note = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    conversation = relationship("ChatConversation", back_populates="annotations")
+
+    def __repr__(self):
+        return f"<MessageAnnotation(id={self.id}, message_id={self.message_id})>"
 
 
 class ConversationRecording(Base):
@@ -426,6 +552,38 @@ class TrainingAssignment(Base):
             f"<TrainingAssignment(id={self.id}, user_id={self.user_id}, "
             f"avatar_id={self.avatar_id}, target_score={self.target_score})>"
         )
+
+
+class NotificationRead(Base):
+    """Marks one notification as already read by the user it was for.
+
+    The notifications themselves are never stored. A goal assigned, a
+    deadline coming up, a deadline gone by, a trainer publishing a review:
+    they are all facts already in the database, and copying them into rows
+    would create exactly the stale flags the rest of the app refuses to keep
+    (see TrainingAssignment). Extend a deadline, or reach the target, and a
+    stored "scaduto" would sit there contradicting the goal it describes.
+    Derived at read time they simply stop being true, with nothing to clean
+    up.
+
+    What genuinely cannot be derived is whether the person has seen it, and
+    that is all this table holds: one row per (user, notification key),
+    where the key is the stable identity of the derived event, e.g.
+    "assignment.overdue:{assignment_id}" (see ``notifications``).
+
+    A key that stops being derivable leaves its row behind, harmlessly: it
+    matches nothing, and it is the cheap price of not storing the events
+    themselves.
+    """
+
+    __tablename__ = "notification_reads"
+
+    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    key = Column(String(160), primary_key=True)
+    read_at = Column(DateTime, default=lambda: datetime.now(UTC))
+
+    def __repr__(self):
+        return f"<NotificationRead(user_id={self.user_id}, key='{self.key}')>"
 
 
 class AuditLog(Base):

@@ -1,6 +1,12 @@
 /* Admin API service for managing users */
 import { apiFetch, apiFetchBlob } from './api'
-import type { ChatMessage, ConversationEvaluation, ConversationMode } from './api'
+import type {
+  ChatMessage,
+  ConversationEvaluation,
+  ConversationMode,
+  ConversationReview,
+  MessageAnnotation,
+} from './api'
 import type { AuthUser, RoleName, UserStatus } from './auth'
 
 export interface CreateUserPayload {
@@ -276,7 +282,13 @@ export interface EvaluationReportRow {
   avatar_name: string
   conversation_at: string
   evaluated_at: string
+  /** Il voto che conta: la correzione del docente quando c'è. */
   overall_score: number
+  /** Quello proposto dalla macchina, diverso dal precedente solo se corretto. */
+  ai_overall_score: number
+  has_override: boolean
+  /** Un docente è passato di qui (nota, correzione o entrambe). */
+  has_review: boolean
   criteria: EvaluationCriterionScore[]
 }
 
@@ -288,7 +300,45 @@ export interface AdminConversationDetail {
   conversation_id: string
   messages: ChatMessage[]
   evaluation: ConversationEvaluation | null
+  /** Fuori dalla valutazione: un docente può aver annotato una trascrizione
+   *  che l'AI non ha mai giudicato. */
+  review: ConversationReview | null
 }
+
+export interface SaveReviewPayload {
+  summary_note?: string | null
+  /** Da mandare insieme alla motivazione, o per niente. */
+  override_score?: number | null
+  override_reason?: string | null
+}
+
+/** Scrive (o riscrive) la revisione del docente su una conversazione. */
+export const saveConversationReview = (conversationId: string, payload: SaveReviewPayload) =>
+  apiFetch<ConversationReview>(`/api/admin/conversations/${conversationId}/review`, {
+    method: 'PUT',
+    body: payload,
+  })
+
+/** Ritira la revisione: il voto torna a essere quello della macchina. Le
+ *  annotazioni sui messaggi restano, si tolgono una per una. */
+export const deleteConversationReview = (conversationId: string) =>
+  apiFetch<{ message: string; success: boolean }>(
+    `/api/admin/conversations/${conversationId}/review`,
+    { method: 'DELETE' },
+  )
+
+/** Appunta una nota su un messaggio, sostituendo quella che c'era già:
+ *  al massimo una per messaggio. */
+export const saveMessageAnnotation = (conversationId: string, messageId: string, note: string) =>
+  apiFetch<MessageAnnotation>(`/api/admin/conversations/${conversationId}/annotations`, {
+    method: 'PUT',
+    body: { message_id: messageId, note },
+  })
+
+export const deleteMessageAnnotation = (annotationId: string) =>
+  apiFetch<{ message: string; success: boolean }>(`/api/admin/annotations/${annotationId}`, {
+    method: 'DELETE',
+  })
 
 /**
  * Fetch the full transcript + stored evaluation of any conversation

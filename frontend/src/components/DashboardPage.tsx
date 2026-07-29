@@ -417,6 +417,9 @@ export default function DashboardPage() {
   const [search, setSearch] = useState('')
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+  /* Incrementata quando una revisione cambia il voto di una conversazione:
+   * il report è già stato letto e non se ne accorgerebbe da solo. */
+  const [reloadKey, setReloadKey] = useState(0)
 
   /* Excel del report: stesse righe della dashboard (stesso scope server
    * per organizzazione), i filtri più fini li offre il foglio stesso */
@@ -458,7 +461,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [user, orgFilter])
+  }, [user, orgFilter, reloadKey])
 
   useEffect(() => {
     if (isSuperAdmin(user)) {
@@ -939,10 +942,29 @@ export default function DashboardPage() {
                     )
                   })}
                   <Td align="right">
+                    {/* Il voto in colonna è quello che conta: se un docente
+                        l'ha corretto va detto, altrimenti la tabella
+                        sembrerebbe contraddire la valutazione automatica.
+
+                        L'etichetta è fuori dal flusso (absolute): la cella è
+                        centrata in verticale, quindi una seconda riga vera
+                        alzerebbe il numero. Riservare lo spazio in tutte le
+                        celle allineava i voti fra loro ma spostava l'intera
+                        colonna rispetto a quelle dei criteri; così invece il
+                        numero non si muove di un pixel, con o senza
+                        correzione. */}
                     <span
-                      className={`text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}
+                      className={`relative block text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}
                     >
                       {formatScore(r.overall_score)}/10
+                      {r.has_override && (
+                        <span
+                          className="absolute right-0 top-full whitespace-nowrap text-[0.7rem] font-semibold text-violet-300"
+                          title={`Punteggio corretto dal docente, la valutazione automatica assegnava ${formatScore(r.ai_overall_score)}`}
+                        >
+                          corretto
+                        </span>
+                      )}
                     </span>
                   </Td>
                 </Tr>
@@ -952,7 +974,13 @@ export default function DashboardPage() {
         </>
       )}
 
-      {detailRow && <ConversationDetailModal row={detailRow} onClose={() => setDetailRow(null)} />}
+      {detailRow && (
+        <ConversationDetailModal
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          onReviewSaved={() => setReloadKey((k) => k + 1)}
+        />
+      )}
     </div>
   )
 }

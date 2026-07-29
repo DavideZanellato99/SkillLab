@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { isAdmin, isSuperAdmin } from '../services/auth'
 import type { AuthUser } from '../services/auth'
 import { fetchAdminAvatars } from '../services/admin'
-import type { AdminAvatar } from '../services/admin'
+import { fetchAvatars } from '../services/api'
 import { fetchOrganizations } from '../services/organizations'
 import type { Organization } from '../services/organizations'
 import {
@@ -20,11 +20,29 @@ import Spinner from './Spinner'
 import Tooltip from './Tooltip'
 import { matchesSearch } from './tableSearch'
 
-/* Percorsi di training assegnati: il super admin affida a uno o più utenti
- * un obiettivo su un avatar (punteggio target, scadenza opzionale) e da qui
- * tutti gli admin ne seguono lo stato di completamento, derivato dalle
- * valutazioni. L'organization admin vede solo la propria organizzazione e
- * non crea né elimina. */
+/* Percorsi di training assegnati: un admin affida a uno o più utenti un
+ * obiettivo su un avatar (punteggio target, scadenza opzionale) e da qui ne
+ * segue lo stato di completamento, derivato dalle valutazioni.
+ *
+ * Assegnano entrambi i ruoli admin, ma l'organization admin resta chiuso nel
+ * proprio tenant: sceglie fra gli avatar della sua organizzazione, i suoi
+ * utenti, i suoi percorsi. Il filtro per organizzazione ha senso solo per il
+ * super admin, che è l'unico a vederne più di una. */
+
+/** Un avatar assegnabile, ridotto a ciò che serve al selettore.
+ *
+ *  Le due sorgenti sono diverse perché diversi sono i permessi: il super
+ *  admin legge il catalogo admin di tutti i tenant, l'organization admin la
+ *  galleria che vede comunque, cioè quella della sua organizzazione. In
+ *  entrambi i casi arrivano solo avatar non archiviati, gli unici su cui il
+ *  server accetti di aprire un percorso. */
+interface AssignableAvatar {
+  id: string
+  name: string
+  category: string
+  organization_id: string
+  organization_name: string
+}
 
 const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
 const inputCls =
@@ -68,7 +86,8 @@ function formatDate(dateStr: string): string {
 
 export default function TrainingPage() {
   const { user } = useAuth()
-  const canManage = isSuperAdmin(user)
+  const isSuper = isSuperAdmin(user)
+  const canManage = isAdmin(user)
 
   const [assignments, setAssignments] = useState<TrainingAssignment[]>([])
   const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -78,8 +97,8 @@ export default function TrainingPage() {
   const [search, setSearch] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
 
-  // ── Form di assegnazione (solo super admin) ────────
-  const [avatars, setAvatars] = useState<AdminAvatar[]>([])
+  // ── Form di assegnazione (super admin e organization admin) ────────
+  const [avatars, setAvatars] = useState<AssignableAvatar[]>([])
   /* Chi può ricevere l'avatar selezionato come obiettivo. Lo decide il
    * server, che applica la stessa regola con cui poi rifiuta o accetta
    * l'assegnazione, quindi qui non si filtra nulla. */
@@ -116,19 +135,51 @@ export default function TrainingPage() {
 
   useEffect(() => {
     if (!canManage) return
-    fetchAdminAvatars()
-      .then(setAvatars)
+    if (isSuper) {
+      fetchAdminAvatars()
+        .then((list) =>
+          setAvatars(
+            list.map((a) => ({
+              id: a.id,
+              name: a.name,
+              category: a.category,
+              organization_id: a.organization_id,
+              organization_name: a.organization_name,
+            })),
+          ),
+        )
+        .catch(() => setAvatars([]))
+      // Il filtro per organizzazione esiste solo qui: l'org admin ne ha una.
+      fetchOrganizations()
+        .then(setOrganizations)
+        .catch(() => setOrganizations([]))
+      return
+    }
+    // L'org admin non ha accesso al catalogo admin: gli avatar della sua
+    // organizzazione sono esattamente quelli della galleria, e il tenant è
+    // il suo per definizione.
+    fetchAvatars()
+      .then((list) =>
+        setAvatars(
+          list.map((a) => ({
+            id: a.id,
+            name: a.name,
+            category: a.category,
+            organization_id: user?.organization_id ?? '',
+            organization_name: user?.organization_name ?? '',
+          })),
+        ),
+      )
       .catch(() => setAvatars([]))
-    fetchOrganizations()
-      .then(setOrganizations)
-      .catch(() => setOrganizations([]))
-  }, [canManage])
+  }, [canManage, isSuper, user])
 
   const selectedAvatar = avatars.find((a) => a.id === avatarId) ?? null
   const selectedAvatarOrgId = selectedAvatar?.organization_id ?? null
 
   // Gli assegnabili si chiedono al server a ogni cambio di avatar: sono gli
-  // utenti attivi del tenant dell'avatar, che è privato del suo.
+  // utenti attivi del tenant dell'avatar, che è privato del suo. Per l'org
+  // admin il tenant che passiamo è comunque il suo, ed è quello che il
+  // server userebbe in ogni caso ignorando il parametro.
   useEffect(() => {
     if (!canManage || !selectedAvatarOrgId) {
       setAssignableUsers([])

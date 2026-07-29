@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from models import CONVERSATION_MODE_VOICE
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
@@ -70,6 +70,44 @@ class ChatMessageResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MessageAnnotationResponse(BaseModel):
+    """A trainer's note pinned to one message of the transcript."""
+
+    id: UUID
+    message_id: UUID
+    note: str
+    # Who wrote it, as it read at write time (see MessageAnnotation)
+    reviewer_name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConversationReviewResponse(BaseModel):
+    """The trainer's review of a conversation, AI evaluation aside.
+
+    Read by the trainer who wrote it and by the student it is about: the
+    whole point of a human correction is that the person graded can read it,
+    so nothing here is admin-only.
+    """
+
+    conversation_id: UUID
+    reviewer_name: str
+    summary_note: str | None = None
+    # Present together or not at all: a corrected grade always carries its
+    # reason (see ConversationReviewRequest)
+    override_score: float | None = None
+    override_reason: str | None = None
+    # What the AI said when the review was written, and whether it has
+    # changed since: a re-run judgement can leave a correction talking about
+    # a score that no longer exists, and the UI says so rather than passing
+    # it off as current.
+    ai_score_at_review: float | None = None
+    is_stale: bool = False
+    annotations: list[MessageAnnotationResponse] = []
+    created_at: datetime
+    updated_at: datetime
+
+
 class ChatConversationResponse(BaseModel):
     """Schema for conversation API responses."""
 
@@ -83,6 +121,10 @@ class ChatConversationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     messages: list[ChatMessageResponse] = []
+    # The trainer's review, so the student reads the notes pinned to their
+    # own lines while re-reading the transcript, which is where a debrief
+    # actually lands
+    review: ConversationReviewResponse | None = None
 
     model_config = {"from_attributes": True}
 
@@ -172,9 +214,66 @@ class PreviousAttempt(BaseModel):
     title: str
     mode: str
     conversation_at: datetime
+    # The grade that counted for that attempt, trainer's correction included:
+    # comparing today's corrected score against yesterday's raw AI one would
+    # invent a progress (or a regression) nobody made.
     overall_score: float
     # Criterion key -> score of the previous attempt (the UI computes deltas)
     criteria_scores: dict[str, float]
+
+
+class ConversationReviewRequest(BaseModel):
+    """Trainer's request: write (or rewrite) the review of a conversation.
+
+    A blank field means "not set": the note and the correction are
+    independent, a review can be either or both, but not neither — an empty
+    review is a delete, and deleting has its own endpoint.
+    """
+
+    summary_note: str | None = None
+    override_score: float | None = Field(default=None, ge=1, le=10)
+    override_reason: str | None = None
+
+    @field_validator("summary_note", "override_reason")
+    @classmethod
+    def blank_to_none(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        return v or None
+
+    @model_validator(mode="after")
+    def coherent(self) -> "ConversationReviewRequest":
+        """A corrected grade needs its reason, and a reason needs a grade.
+
+        Correcting the machine without saying why is exactly the black box
+        this feature exists to open, so the pair is enforced here rather
+        than left to the goodwill of whoever calls the API.
+        """
+        if self.override_score is not None and not self.override_reason:
+            raise ValueError("Motiva la correzione del punteggio.")
+        if self.override_reason and self.override_score is None:
+            raise ValueError("Indica il punteggio corretto insieme alla motivazione.")
+        if self.summary_note is None and self.override_score is None:
+            raise ValueError("Scrivi una nota o correggi il punteggio.")
+        return self
+
+
+class MessageAnnotationRequest(BaseModel):
+    """Trainer's request: pin a note to one message of the transcript.
+
+    Re-annotating a message rewrites the note that is already there: there
+    is at most one per message (see MessageAnnotation).
+    """
+
+    message_id: UUID
+    note: str
+
+    @field_validator("note")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("L'annotazione non può essere vuota.")
+        return v
 
 
 class ConversationEvaluationResponse(BaseModel):
@@ -182,11 +281,17 @@ class ConversationEvaluationResponse(BaseModel):
 
     id: UUID
     conversation_id: UUID
+    # What the AI judged. `final_score` is what the grade actually IS: the
+    # two differ exactly when a trainer corrected the machine, and both are
+    # sent so the report can show the correction instead of hiding it.
     overall_score: float
+    final_score: float
     summary: str
     criteria: list[EvaluationCriterionResponse]
     # None on the first evaluated attempt at this scenario
     previous: PreviousAttempt | None = None
+    # The trainer's review, when one has been written
+    review: ConversationReviewResponse | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -613,7 +718,14 @@ class EvaluationCriterionScore(BaseModel):
 
 
 class EvaluationReportRow(BaseModel):
-    """One evaluated conversation, flattened for the dashboard charts."""
+    """One evaluated conversation, flattened for the dashboard charts.
+
+    `overall_score` is the grade that counts, so a conversation a trainer
+    corrected is charted and exported at the corrected value: a report that
+    kept plotting the machine's number would contradict what the student
+    reads on their own page. `ai_overall_score` keeps the AI's own next to
+    it, and the two differ exactly when `has_override` is true.
+    """
 
     conversation_id: UUID
     conversation_title: str
@@ -630,6 +742,10 @@ class EvaluationReportRow(BaseModel):
     conversation_at: datetime
     evaluated_at: datetime
     overall_score: float
+    ai_overall_score: float
+    has_override: bool = False
+    # A trainer has been through this conversation (note, correction or both)
+    has_review: bool = False
     criteria: list[EvaluationCriterionScore]
 
 
@@ -639,6 +755,53 @@ class AdminConversationDetail(BaseModel):
     conversation_id: UUID
     messages: list[ChatMessageResponse]
     evaluation: ConversationEvaluationResponse | None = None
+    # Carried next to the evaluation rather than inside it: a trainer can
+    # annotate a conversation the AI never judged, and that review still has
+    # to reach the modal.
+    review: ConversationReviewResponse | None = None
+
+
+# --- Notifiche (derivate, mai memorizzate: vedi notifications.py) ---
+
+
+class NotificationResponse(BaseModel):
+    """One thing to tell the user, assembled at read time."""
+
+    # Stable identity of the event: what a read mark refers to
+    key: str
+    # "assignment.assigned", "assignment.due_soon", "assignment.overdue",
+    # "review.published" (see notifications.py)
+    kind: str
+    title: str
+    body: str
+    # When the event became true, which is the order of the list
+    at: datetime
+    read: bool
+    # Where clicking it takes the user, None when there is nowhere to go
+    link: str | None = None
+
+
+class NotificationListResponse(BaseModel):
+    """The user's notifications, newest first, with the unread counter.
+
+    The counter is returned next to the items rather than left to the client
+    to compute: the bell shows it before anything is opened, and two
+    definitions of "unread" would eventually disagree.
+    """
+
+    items: list[NotificationResponse]
+    unread: int
+
+
+class NotificationReadRequest(BaseModel):
+    """Mark notifications as read.
+
+    An empty (or absent) list means "everything the user can currently see":
+    it is the "segna tutte come lette" button, and it is resolved on the
+    server because only the server knows what is derivable right now.
+    """
+
+    keys: list[str] | None = None
 
 
 # --- Audit log (super admin only) ---

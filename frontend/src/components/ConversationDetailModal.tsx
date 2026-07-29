@@ -2,14 +2,22 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAdminConversation } from '../services/admin'
 import type { AdminConversationDetail, EvaluationReportRow } from '../services/admin'
-import type { ChatMessage, EvaluationCitation } from '../services/api'
+import type {
+  ChatMessage,
+  ConversationReview,
+  EvaluationCitation,
+  MessageAnnotation,
+} from '../services/api'
 import { fetchRecordingInfo, estimateCitationSeekMs } from '../services/voice'
 import CallRecordingPlayer from './CallRecordingPlayer'
 import type { CallRecordingPlayerHandle } from './CallRecordingPlayer'
 import ConversationModeBadge from './ConversationModeBadge'
 import EvaluationReport from './EvaluationReport'
+import MessageAnnotationEditor from './MessageAnnotationEditor'
 import MessageEmotions, { splitEmotionTag } from './MessageEmotions'
 import Spinner from './Spinner'
+import TrainerReviewNote, { hasReviewContent } from './TrainerReviewNote'
+import TrainerReviewPanel from './TrainerReviewPanel'
 
 /* Dettaglio di una conversazione valutata, aperto dalla tabella della
  * dashboard admin: trascrizione completa a sinistra e valutazione AI (la
@@ -17,7 +25,13 @@ import Spinner from './Spinner'
  *
  * I momenti citati dalla valutazione sono cliccabili: portano la
  * trascrizione sul messaggio citato e, per le chiamate con registrazione,
- * fanno ripartire l'audio dal punto stimato di quel momento. */
+ * fanno ripartire l'audio dal punto stimato di quel momento.
+ *
+ * È anche il posto in cui il docente lascia il proprio giudizio: una nota
+ * sotto ogni messaggio e, in fondo alla valutazione, la revisione con
+ * l'eventuale correzione del voto. La scheda in sola lettura dentro
+ * EvaluationReport qui è spenta, perché sarebbe il duplicato del pannello
+ * con cui la si scrive. */
 
 /** Quanto resta acceso l'alone sul messaggio raggiunto da una citazione. */
 const CITATION_HIGHLIGHT_MS = 2500
@@ -45,13 +59,23 @@ function formatTime(dateStr: string): string {
 interface ConversationDetailModalProps {
   row: EvaluationReportRow
   onClose: () => void
+  /** Una revisione salvata o ritirata cambia il voto della conversazione:
+   *  la tabella che ci ha portato qui sta mostrando quello vecchio e va
+   *  ricaricata, altrimenti il docente corregge un voto e continua a
+   *  leggere il precedente finché non aggiorna la pagina a mano. */
+  onReviewSaved?: () => void
 }
 
-export default function ConversationDetailModal({ row, onClose }: ConversationDetailModalProps) {
+export default function ConversationDetailModal({
+  row,
+  onClose,
+  onReviewSaved,
+}: ConversationDetailModalProps) {
   const [detail, setDetail] = useState<AdminConversationDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  const [isEditingReview, setIsEditingReview] = useState(false)
 
   // ── Citazioni della valutazione → trascrizione e registrazione ──
   const messageNodes = useRef(new Map<string, HTMLDivElement>())
@@ -140,6 +164,64 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
 
   const userName =
     row.user_nome && row.user_cognome ? `${row.user_nome} ${row.user_cognome}` : row.user_email
+
+  // Le note sono indicizzate per messaggio: la trascrizione le cerca riga
+  // per riga, e il server ne garantisce al massimo una per messaggio.
+  const annotationsByMessage = new Map<string, MessageAnnotation>(
+    (detail?.review?.annotations ?? []).map((a) => [a.message_id, a]),
+  )
+
+  /* Una nota salvata o eliminata aggiorna il dettaglio già in memoria invece
+   * di far ripartire la fetch: ricaricare tutto rimbalzerebbe lo scroll
+   * della trascrizione a ogni annotazione, che è esattamente il gesto che il
+   * docente ripete di più. */
+  const handleAnnotationChange = useCallback(
+    (messageId: string, annotation: MessageAnnotation | null) => {
+      setDetail((prev) => {
+        if (!prev) return prev
+        const previous = prev.review?.annotations ?? []
+        const others = previous.filter((a) => a.message_id !== messageId)
+        const annotations = annotation ? [...others, annotation] : others
+        if (!prev.review) {
+          // Prima nota su una conversazione mai revisionata: la risposta del
+          // server è la stessa intestazione sintetica che leggerebbe una
+          // GET, quindi qui basta ricostruirla con i campi che servono.
+          if (!annotation) return prev
+          return {
+            ...prev,
+            review: {
+              conversation_id: prev.conversation_id,
+              reviewer_name: annotation.reviewer_name,
+              summary_note: null,
+              override_score: null,
+              override_reason: null,
+              ai_score_at_review: null,
+              is_stale: false,
+              annotations,
+              created_at: annotation.created_at,
+              updated_at: annotation.updated_at,
+            },
+          }
+        }
+        return { ...prev, review: { ...prev.review, annotations } }
+      })
+    },
+    [],
+  )
+
+  /* Salvare o ritirare la revisione ricarica il dettaglio: il punteggio
+   * corretto cambia anche il voto finale della valutazione accanto, e
+   * ricostruirlo a mano qui vorrebbe dire tenere una seconda copia della
+   * regola che decide qual è il voto. È un gesto raro e deliberato, il
+   * mezzo secondo di ricaricamento non dà fastidio a nessuno. */
+  const handleReviewSaved = useCallback(
+    (_review: ConversationReview | null) => {
+      setIsEditingReview(false)
+      setReloadKey((k) => k + 1)
+      onReviewSaved?.()
+    },
+    [onReviewSaved],
+  )
 
   return (
     <div className={overlayCls} onClick={onClose}>
@@ -245,7 +327,7 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
                             if (node) messageNodes.current.set(msg.id, node)
                             else messageNodes.current.delete(msg.id)
                           }}
-                          className={`flex max-w-[85%] ${msg.role === 'user' ? 'self-end' : 'self-start'}`}
+                          className={`flex max-w-[85%] flex-col ${msg.role === 'user' ? 'items-end self-end' : 'items-start self-start'}`}
                         >
                           <div
                             className={`rounded-2xl px-4 py-3 leading-relaxed transition-shadow duration-300 ${
@@ -275,6 +357,25 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
                               {formatTime(msg.created_at)}
                             </span>
                           </div>
+                          {/* La nota sta sotto la riga di cui parla: è tutto
+                              il senso di annotare un messaggio invece di
+                              scrivere una sintesi.
+
+                              Solo sulle battute dell'operatore, come sul
+                              server: è lui a essere valutato, e anche
+                              l'errore innescato dall'avatar sta nella
+                              risposta che non l'ha colto. */}
+                          {msg.role === 'user' && (
+                            <div className="w-full">
+                              <MessageAnnotationEditor
+                                key={annotationsByMessage.get(msg.id)?.updated_at ?? 'vuota'}
+                                conversationId={row.conversation_id}
+                                messageId={msg.id}
+                                annotation={annotationsByMessage.get(msg.id) ?? null}
+                                onChange={handleAnnotationChange}
+                              />
+                            </div>
+                          )}
                         </div>
                       )
                     })
@@ -283,8 +384,33 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
               </section>
 
               <section>
-                <h3 className={sectionTitleCls}>Valutazione</h3>
-                <div className="max-h-[62vh] overflow-y-auto pr-1">
+                {/* Il comando della revisione vive qui, in un posto fisso:
+                    la revisione già scritta si legge dentro il blocco del
+                    punteggio, e un riquadro sempre presente in cima alla
+                    colonna era, da vuoto, un buco nel punto più visibile. */}
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className={`${sectionTitleCls} mb-0`}>Valutazione</h3>
+                  {!isEditingReview && (
+                    <button
+                      className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-0.5 text-[0.72rem] font-semibold text-violet-300 transition hover:bg-violet-500/15"
+                      onClick={() => setIsEditingReview(true)}
+                    >
+                      {hasReviewContent(detail.review)
+                        ? 'Modifica revisione'
+                        : '+ Aggiungi revisione'}
+                    </button>
+                  )}
+                </div>
+                <div className="flex max-h-[62vh] flex-col gap-5 overflow-y-auto pr-1">
+                  {isEditingReview && (
+                    <TrainerReviewPanel
+                      conversationId={row.conversation_id}
+                      review={detail.review}
+                      aiScore={detail.evaluation?.overall_score ?? null}
+                      onSaved={handleReviewSaved}
+                      onClose={() => setIsEditingReview(false)}
+                    />
+                  )}
                   {detail.evaluation ? (
                     <EvaluationReport
                       evaluation={detail.evaluation}
@@ -292,9 +418,16 @@ export default function ConversationDetailModal({ row, onClose }: ConversationDe
                       onCitationPlay={canPlayCitations ? handleCitationPlay : undefined}
                     />
                   ) : (
-                    <p className="py-8 text-center text-sm text-slate-500">
-                      Nessuna valutazione disponibile per questa conversazione.
-                    </p>
+                    /* Senza valutazione non c'è blocco punteggio in cui
+                       ospitare la revisione: se ne è stata scritta una, va
+                       mostrata comunque, altrimenti resterebbe solo nel
+                       database. */
+                    <div className="rounded-2xl border border-white/6 bg-white/4 py-6">
+                      <p className="px-6 text-center text-sm text-slate-500">
+                        Nessuna valutazione automatica per questa conversazione.
+                      </p>
+                      {detail.review && <TrainerReviewNote review={detail.review} />}
+                    </div>
                   )}
                 </div>
               </section>

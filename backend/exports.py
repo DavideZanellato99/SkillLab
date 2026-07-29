@@ -20,7 +20,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from openai_service import EVALUATION_CRITERIA
-from schemas import EvaluationReportRow, PreviousAttempt
+from schemas import ConversationReviewResponse, EvaluationReportRow, PreviousAttempt
 
 # Compact criterion names for the spreadsheet header (the full labels are
 # sentences); keys are the ones of openai_service.EVALUATION_CRITERIA and
@@ -86,13 +86,24 @@ def evaluation_pdf(
     summary: str,
     criteria: list[dict],
     previous: PreviousAttempt | None,
+    review: ConversationReviewResponse | None = None,
+    annotations: list[dict] | None = None,
 ) -> bytes:
     """One evaluation as an A4 PDF the operator can hand to the trainer.
 
     `criteria` is the stored result shape (key, label, weight, score,
     comment, suggestions); `previous` adds the per-criterion comparison
     with the previous attempt when there is one.
+
+    `review` is the trainer's own verdict, and when it corrects the score
+    the corrected number is the one printed large: this document is what a
+    student takes to a dispute, so it has to say what the grade IS, with the
+    machine's original next to it rather than in its place. `annotations`
+    are the notes pinned to single messages, each a dict with `note`,
+    `message_preview` and `reviewer_name`.
     """
+    override = review.override_score if review else None
+    final = override if override is not None else overall_score
     pdf = FPDF(format="A4")
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
@@ -133,12 +144,23 @@ def evaluation_pdf(
     pdf.set_text_color(*_LIGHT)
     pdf.cell(0, 5, "PUNTEGGIO COMPLESSIVO", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("helvetica", "B", 24)
-    pdf.set_text_color(*_score_rgb(overall_score))
-    pdf.cell(
-        0, 11, _latin(f"{_fmt_score(overall_score)} / 10"), new_x=XPos.LMARGIN, new_y=YPos.NEXT
-    )
+    pdf.set_text_color(*_score_rgb(final))
+    pdf.cell(0, 11, _latin(f"{_fmt_score(final)} / 10"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    if override is not None:
+        pdf.set_font("helvetica", "", 9)
+        pdf.set_text_color(*_LIGHT)
+        pdf.cell(
+            0,
+            5,
+            _latin(
+                f"Punteggio corretto dal docente - la valutazione automatica "
+                f"assegnava {_fmt_score(overall_score)} / 10"
+            ),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
     if previous:
-        delta = round(overall_score - previous.overall_score, 1)
+        delta = round(final - previous.overall_score, 1)
         sign = "+" if delta > 0 else ""
         pdf.set_font("helvetica", "", 9)
         pdf.set_text_color(*_LIGHT)
@@ -159,6 +181,44 @@ def evaluation_pdf(
         pdf.set_text_color(*_SLATE)
         pdf.multi_cell(0, 5, _latin(summary), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     line(5)
+
+    # The trainer's review, above the machine's reasoning: whoever reads
+    # this page has to meet the human verdict before the six criteria that
+    # the human may well have overruled.
+    if review and (review.summary_note or review.override_reason):
+        pdf.set_font("helvetica", "", 9)
+        pdf.set_text_color(*_LIGHT)
+        pdf.cell(
+            0,
+            5,
+            _latin(f"REVISIONE DEL DOCENTE - {review.reviewer_name}"),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+        pdf.set_fill_color(243, 240, 255)
+        if review.override_reason:
+            pdf.set_font("helvetica", "B", 9.5)
+            pdf.set_text_color(*_VIOLET)
+            pdf.multi_cell(
+                0,
+                4.8,
+                _latin(f"Motivo della correzione: {review.override_reason}"),
+                fill=True,
+                new_x=XPos.LMARGIN,
+                new_y=YPos.NEXT,
+            )
+        if review.summary_note:
+            pdf.set_font("helvetica", "", 9.5)
+            pdf.set_text_color(*_SLATE)
+            pdf.multi_cell(
+                0,
+                4.8,
+                _latin(review.summary_note),
+                fill=True,
+                new_x=XPos.LMARGIN,
+                new_y=YPos.NEXT,
+            )
+        line(5)
 
     # Criteria
     for criterion in criteria:
@@ -220,6 +280,31 @@ def evaluation_pdf(
             )
         line(5)
 
+    # The trainer's notes on single lines, each quoting the message it was
+    # pinned to: without the line it sits on, a note like "here you should
+    # have asked for the customer code" points at nothing on paper.
+    if annotations:
+        pdf.set_font("helvetica", "", 9)
+        pdf.set_text_color(*_LIGHT)
+        pdf.cell(0, 5, "NOTE DEL DOCENTE SULLA TRASCRIZIONE", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        line(1)
+        for annotation in annotations:
+            preview = str(annotation.get("message_preview") or "").strip()
+            if preview:
+                pdf.set_font("helvetica", "I", 9)
+                pdf.set_text_color(*_LIGHT)
+                pdf.multi_cell(0, 4.6, _latin(f'"{preview}"'), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.set_font("helvetica", "", 9.5)
+            pdf.set_text_color(*_SLATE)
+            pdf.multi_cell(
+                0,
+                4.8,
+                _latin(str(annotation.get("note", ""))),
+                new_x=XPos.LMARGIN,
+                new_y=YPos.NEXT,
+            )
+            line(3)
+
     return bytes(pdf.output())
 
 
@@ -238,12 +323,15 @@ def evaluations_report_xlsx(rows: list[EvaluationReportRow]) -> bytes:
     sheet.title = "Valutazioni"
 
     criterion_keys = [key for key, _, _ in EVALUATION_CRITERIA]
+    # "Voto" is the grade that counts, "Voto AI" the machine's own: they
+    # differ exactly on the rows a trainer corrected, and whoever slices
+    # this file has to be able to see which ones those are.
     headers = (
         ["Data", "Conversazione", "Canale", "Operatore", "Email", "Organizzazione", "Avatar"]
         + [CRITERION_SHORT_LABELS.get(key, key) for key in criterion_keys]
-        + ["Voto", "Valutata il"]
+        + ["Voto", "Voto AI", "Revisione", "Valutata il"]
     )
-    widths = [16, 30, 11, 22, 30, 20, 20] + [13] * len(criterion_keys) + [8, 16]
+    widths = [16, 30, 11, 22, 30, 20, 20] + [13] * len(criterion_keys) + [8, 9, 20, 16]
 
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="7C3AED")
@@ -276,9 +364,21 @@ def evaluations_report_xlsx(rows: list[EvaluationReportRow]) -> bytes:
             cell.font = Font(color=_score_hex(score))
         overall = sheet.cell(row=row_idx, column=8 + len(criterion_keys), value=row.overall_score)
         overall.font = Font(bold=True, color=_score_hex(row.overall_score))
+        sheet.cell(row=row_idx, column=9 + len(criterion_keys), value=row.ai_overall_score)
         sheet.cell(
             row=row_idx,
-            column=9 + len(criterion_keys),
+            column=10 + len(criterion_keys),
+            value=(
+                "Punteggio corretto"
+                if row.has_override
+                else "Note del docente"
+                if row.has_review
+                else ""
+            ),
+        )
+        sheet.cell(
+            row=row_idx,
+            column=11 + len(criterion_keys),
             value=row.evaluated_at.replace(tzinfo=None),
         )
 
@@ -287,7 +387,8 @@ def evaluations_report_xlsx(rows: list[EvaluationReportRow]) -> bytes:
     for row_cells in sheet.iter_rows(min_row=2, max_row=max(2, len(rows) + 1)):
         row_cells[0].number_format = date_format
         row_cells[last_col - 1].number_format = date_format
-        for cell in row_cells[7 : 7 + len(criterion_keys) + 1]:
+        # Criteria plus the two score columns (Voto, Voto AI)
+        for cell in row_cells[7 : 7 + len(criterion_keys) + 2]:
             cell.number_format = "0.0"
             cell.alignment = Alignment(horizontal="center")
 

@@ -19,6 +19,8 @@ from routers.audit_logs import router as audit_logs_router
 from routers.auth import router as auth_router
 from routers.avatars import router as avatars_router
 from routers.chat import router as chat_router
+from routers.conversation_reviews import router as conversation_reviews_router
+from routers.notifications import router as notifications_router
 from routers.organizations import router as organizations_router
 from routers.training import router as training_router
 from routers.voice import router as voice_router
@@ -70,6 +72,8 @@ app.include_router(audit_logs_router)
 app.include_router(organizations_router)
 app.include_router(avatars_router)
 app.include_router(chat_router)
+app.include_router(conversation_reviews_router)
+app.include_router(notifications_router)
 app.include_router(training_router)
 app.include_router(voice_router)
 

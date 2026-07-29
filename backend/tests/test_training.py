@@ -6,9 +6,39 @@ completed from completed_late, and a passed deadline without the target
 means overdue.
 """
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
-from models import ChatConversation, ConversationEvaluation, Organization, TrainingAssignment
+from auth_dependency import ensure_roles
+from models import (
+    ROLE_USER,
+    ChatConversation,
+    ConversationEvaluation,
+    Organization,
+    TrainingAssignment,
+    User,
+)
+
+
+def _make_user_in(db_session, organization) -> User:
+    """A plain user of `organization`.
+
+    The conftest factory only builds users of the test's own tenant, and
+    what the tenant tests need is precisely somebody on the other side of
+    the boundary.
+    """
+    roles = ensure_roles(db_session)
+    user = User(
+        cognito_sub=f"test-{uuid.uuid4()}",
+        email=f"{uuid.uuid4()}@test.invalid",
+        nome="Utente",
+        cognome="Vicino",
+        role_id=roles[ROLE_USER].id,
+        organization_id=organization.id,
+    )
+    db_session.add(user)
+    db_session.flush()
+    return user
 
 
 def _seed_evaluated_conversation(db_session, user, avatar, score, opened_at=None):
@@ -130,7 +160,7 @@ def test_assignment_requires_same_organization(
     assert response.status_code == 400
 
 
-def test_create_and_delete_are_super_admin_only(user_client, standard_user, make_avatar):
+def test_create_and_delete_are_admin_only(user_client, standard_user, make_avatar):
     avatar = make_avatar(category="clienti")
     response = user_client.post(
         "/api/training/assignments",
@@ -210,9 +240,111 @@ def test_assignable_users_of_another_tenant_are_not_listed(
     assert response.json() == []
 
 
-def test_assignable_users_is_super_admin_only(user_client, organization):
+def test_assignable_users_is_admin_only(user_client, organization):
     response = user_client.get(
         "/api/training/assignable-users", params={"organization_id": str(organization.id)}
     )
 
     assert response.status_code == 403
+
+
+def test_the_super_admin_must_name_an_organization(admin_client):
+    """Sta sopra i tenant: senza organizzazione la domanda non ha risposta."""
+    response = admin_client.get("/api/training/assignable-users")
+
+    assert response.status_code == 400
+
+
+# ── L'organization admin assegna nel proprio tenant ───
+#
+# È il professore dei suoi studenti: assegna e ritira gli obiettivi senza
+# passare dal super admin. Il confine è il tenant, e passa dall'avatar: può
+# partire solo dai propri, e un obiettivo atterra sempre su utenti
+# dell'organizzazione dell'avatar.
+
+
+def test_org_admin_assigns_within_its_own_organization(
+    org_admin_client, db_session, standard_user, make_avatar
+):
+    avatar = make_avatar(category="clienti")
+
+    created = _assign(org_admin_client, avatar, standard_user, target=7.0)
+
+    assert created["user_email"] == standard_user.email
+    assert created["status"] == "active"
+    assignment = db_session.query(TrainingAssignment).one()
+    assert assignment.assigned_by_id is not None
+
+
+def test_org_admin_cannot_assign_an_avatar_of_another_tenant(
+    org_admin_client, db_session, standard_user, make_avatar
+):
+    """L'avatar di un altro tenant non esiste, per questo admin: 404, non 403."""
+    other = Organization(name="Tenant vicino", slug="tenant-vicino")
+    db_session.add(other)
+    db_session.flush()
+    foreign_avatar = make_avatar(category="clienti", organization_id=other.id)
+
+    response = org_admin_client.post(
+        "/api/training/assignments",
+        json={
+            "avatar_id": str(foreign_avatar.id),
+            "user_ids": [str(standard_user.id)],
+            "target_score": 7,
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_org_admin_assignable_users_ignore_the_requested_tenant(
+    org_admin_client, db_session, standard_user, organization
+):
+    """Il tenant lo impone il server: chiederne un altro non lo cambia."""
+    other = Organization(name="Tenant vicino", slug="tenant-vicino")
+    db_session.add(other)
+    db_session.flush()
+    foreign_user = _make_user_in(db_session, other)
+
+    forced = org_admin_client.get(
+        "/api/training/assignable-users", params={"organization_id": str(other.id)}
+    )
+    implicit = org_admin_client.get("/api/training/assignable-users")
+
+    assert forced.status_code == 200
+    returned = [u["id"] for u in forced.json()]
+    assert str(standard_user.id) in returned
+    assert str(foreign_user.id) not in returned
+    assert implicit.json() == forced.json()
+
+
+def test_org_admin_cannot_delete_a_goal_of_another_tenant(
+    org_admin_client, db_session, make_avatar
+):
+    other = Organization(name="Tenant vicino", slug="tenant-vicino")
+    db_session.add(other)
+    db_session.flush()
+    foreign_avatar = make_avatar(category="clienti", organization_id=other.id)
+    foreign_user = _make_user_in(db_session, other)
+    assignment = TrainingAssignment(
+        user_id=foreign_user.id, avatar_id=foreign_avatar.id, target_score=7.0
+    )
+    db_session.add(assignment)
+    db_session.flush()
+
+    response = org_admin_client.delete(f"/api/training/assignments/{assignment.id}")
+
+    assert response.status_code == 404
+    assert db_session.query(TrainingAssignment).count() == 1
+
+
+def test_org_admin_deletes_a_goal_of_its_own_users(
+    org_admin_client, db_session, standard_user, make_avatar
+):
+    avatar = make_avatar(category="clienti")
+    created = _assign(org_admin_client, avatar, standard_user)
+
+    response = org_admin_client.delete(f"/api/training/assignments/{created['id']}")
+
+    assert response.status_code == 200
+    assert db_session.query(TrainingAssignment).count() == 0

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { isAdmin } from '../services/auth'
@@ -40,6 +40,7 @@ function TypingIndicator() {
 
 export default function ChatPage() {
   const { avatarId } = useParams<{ avatarId: string }>()
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const canDeleteConversations = isAdmin(user)
 
@@ -47,7 +48,13 @@ export default function ChatPage() {
   const { data: avatar, isError: avatarError } = useAvatar(avatarId)
   const { data: conversations = [] } = useConversations(avatarId)
 
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
+  /* ?conversation=<id> apre direttamente quella conversazione: è così che
+   * la notifica "il docente ha rivisto una tua conversazione" porta sulla
+   * conversazione giusta invece che sulla più recente dell'avatar. */
+  const requestedConversationId = searchParams.get('conversation')
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(
+    requestedConversationId,
+  )
 
   const { data: conversationData, isFetching: isLoadingConversation } =
     useConversation(currentConversationId)
@@ -147,6 +154,17 @@ export default function ChatPage() {
     setChatStarted(false)
     setChatInput('')
   }
+
+  /* Una seconda notifica sullo stesso avatar cambia solo la query string, e
+   * la pagina non viene rimontata: senza questo resterebbe aperta la
+   * conversazione di prima. */
+  useEffect(() => {
+    if (requestedConversationId) {
+      setCurrentConversationId(requestedConversationId)
+      setChatStarted(false)
+      setChatInput('')
+    }
+  }, [requestedConversationId])
 
   const closeConversationsPanel = useCallback(() => {
     setConversationsExpanded(false)
@@ -429,6 +447,14 @@ export default function ChatPage() {
   // and mode the caches can still be missing; currentMode covers a text
   // conversation reopened from the list.
   const isChatMode = chatStarted || currentMode === 'text'
+
+  // Le note che il docente ha appuntato su questa trascrizione, indicizzate
+  // per messaggio: ognuna si legge sotto la riga di cui parla. Una
+  // conversazione appena iniziata non ne ha, la mappa resta vuota.
+  const annotationsByMessage = useMemo(
+    () => new Map((conversationData?.review?.annotations ?? []).map((a) => [a.message_id, a])),
+    [conversationData],
+  )
 
   // Chatta always opens a NEW text conversation, so it is offered only
   // when there is no transcript on screen waiting to be continued.
@@ -835,8 +861,10 @@ export default function ChatPage() {
                     <path d="M9 11l3 3L22 4" />
                     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                   </svg>
+                  {/* Il voto che conta, correzione del docente inclusa: qui
+                      e nella pagella deve comparire lo stesso numero. */}
                   Valutazione ·{' '}
-                  {evaluation.overall_score.toLocaleString('it-IT', { maximumFractionDigits: 1 })}
+                  {evaluation.final_score.toLocaleString('it-IT', { maximumFractionDigits: 1 })}
                   /10
                 </button>
               </Tooltip>
@@ -924,6 +952,7 @@ export default function ChatPage() {
               avatarName={avatar.name}
               isHighlighted={msg.id === highlightedMessageId}
               registerNode={registerMessageNode}
+              annotation={annotationsByMessage.get(msg.id) ?? null}
             />
           ))}
 

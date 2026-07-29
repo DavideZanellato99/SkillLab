@@ -22,6 +22,7 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import reviews
 from auth_dependency import get_current_user
 from conversation_titles import next_conversation_title
 from database import get_db
@@ -32,6 +33,7 @@ from models import (
     ChatConversation,
     ChatMessage,
     ConversationEvaluation,
+    ConversationReview,
     User,
 )
 from openai_service import evaluate_conversation, stream_avatar_response
@@ -78,12 +80,21 @@ def _previous_attempt(db: Session, conversation: ChatConversation) -> PreviousAt
     Attempts are ordered by when the conversation was opened, not by when
     it was judged: evaluating an old transcript later must not make it the
     "previous attempt" of everything in between.
+
+    The baseline carries the score that counted for that attempt, trainer's
+    correction included (outer join, most attempts have no review): comparing
+    a corrected score against the raw AI number of the attempt before would
+    show a progress that never happened.
     """
     row = (
-        db.query(ChatConversation, ConversationEvaluation)
+        db.query(ChatConversation, ConversationEvaluation, ConversationReview)
         .join(
             ConversationEvaluation,
             ConversationEvaluation.conversation_id == ChatConversation.id,
+        )
+        .outerjoin(
+            ConversationReview,
+            ConversationReview.conversation_id == ChatConversation.id,
         )
         .filter(
             ChatConversation.user_id == conversation.user_id,
@@ -95,13 +106,15 @@ def _previous_attempt(db: Session, conversation: ChatConversation) -> PreviousAt
     )
     if not row:
         return None
-    prev_conv, prev_eval = row
+    prev_conv, prev_eval, prev_review = row
     return PreviousAttempt(
         conversation_id=prev_conv.id,
         title=prev_conv.title,
         mode=prev_conv.mode,
         conversation_at=prev_conv.created_at,
-        overall_score=prev_eval.overall_score,
+        overall_score=reviews.final_score(prev_eval.overall_score, prev_review),
+        # Per criterion the AI's own scores stand: a trainer corrects the
+        # verdict as a whole, never the six numbers behind it.
         criteria_scores={
             str(c["key"]): float(c.get("score", 0) or 0)
             for c in ((prev_eval.result or {}).get("criteria") or [])
@@ -110,17 +123,71 @@ def _previous_attempt(db: Session, conversation: ChatConversation) -> PreviousAt
     )
 
 
+def _review_of(db: Session, conversation_id: UUID) -> ConversationReview | None:
+    return (
+        db.query(ConversationReview)
+        .filter(ConversationReview.conversation_id == conversation_id)
+        .first()
+    )
+
+
+def _ai_score_of(db: Session, conversation_id: UUID) -> float | None:
+    """The AI's own score, None when the conversation was never judged."""
+    return (
+        db.query(ConversationEvaluation.overall_score)
+        .filter(ConversationEvaluation.conversation_id == conversation_id)
+        .scalar()
+    )
+
+
+def _annotations_for_pdf(db: Session, annotations: list) -> list[dict]:
+    """Trainer's notes with the line each was pinned to, for the PDF.
+
+    On screen a note lives next to its message; on paper there is no
+    transcript to sit next to, so the message travels with it (trimmed to
+    the same length as the conversation-list preview) or the note would
+    point at nothing.
+    """
+    if not annotations:
+        return []
+    contents = dict(
+        db.query(ChatMessage.id, ChatMessage.content)
+        .filter(ChatMessage.id.in_([a.message_id for a in annotations]))
+        .all()
+    )
+    return [
+        {
+            "note": a.note,
+            "reviewer_name": a.reviewer_name,
+            "message_preview": _preview(contents.get(a.message_id)) or "",
+        }
+        for a in annotations
+    ]
+
+
 def _evaluation_response(
     db: Session, conversation: ChatConversation, evaluation: ConversationEvaluation
 ) -> ConversationEvaluationResponse:
+    """The evaluation as every reader sees it, trainer's review included.
+
+    Student and admin get exactly the same object: a correction the student
+    could not read would protect nobody.
+    """
     data = evaluation.result or {}
+    review = _review_of(db, conversation.id)
     return ConversationEvaluationResponse(
         id=evaluation.id,
         conversation_id=evaluation.conversation_id,
         overall_score=evaluation.overall_score,
+        final_score=reviews.final_score(evaluation.overall_score, review),
         summary=data.get("summary", ""),
         criteria=data.get("criteria", []),
         previous=_previous_attempt(db, conversation),
+        review=reviews.review_response(
+            review,
+            reviews.annotations_of(db, conversation.id),
+            evaluation.overall_score,
+        ),
         created_at=evaluation.created_at,
         updated_at=evaluation.updated_at,
     )
@@ -253,6 +320,13 @@ def get_conversation(
             )
             for msg in messages
         ],
+        # The trainer's notes travel with the transcript: they are pinned to
+        # single lines, and re-reading the call is where they teach something.
+        review=reviews.review_response(
+            _review_of(db, conversation.id),
+            reviews.annotations_of(db, conversation.id),
+            _ai_score_of(db, conversation.id),
+        ),
     )
 
 
@@ -602,6 +676,8 @@ def download_evaluation_pdf(
 
     avatar = db.query(Avatar).filter(Avatar.id == conversation.avatar_id).first()
     data = evaluation.result or {}
+    review = _review_of(db, conversation.id)
+    annotations = reviews.annotations_of(db, conversation.id)
     pdf = evaluation_pdf(
         operator_name=f"{current_user.nome} {current_user.cognome}".strip() or current_user.email,
         avatar_name=avatar.name if avatar else "",
@@ -613,6 +689,8 @@ def download_evaluation_pdf(
         summary=data.get("summary", ""),
         criteria=data.get("criteria") or [],
         previous=_previous_attempt(db, conversation),
+        review=reviews.review_response(review, annotations, evaluation.overall_score),
+        annotations=_annotations_for_pdf(db, annotations),
     )
 
     # ASCII-only filename derived from the conversation title

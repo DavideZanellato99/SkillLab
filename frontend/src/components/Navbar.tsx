@@ -13,6 +13,7 @@ import {
   getUnmetPasswordRules,
   getInitials,
 } from '../services/auth'
+import NotificationsBell from './NotificationsBell'
 import Spinner from './Spinner'
 
 type AuthStep = 'login' | 'new-password'
@@ -290,265 +291,270 @@ export default function Navbar() {
           <div className="flex items-center gap-4" id="navbar-actions">
             {isAuthenticated && user ? (
               /* Authenticated — show user menu */
-              <div className="relative">
-                <button
-                  className="flex cursor-pointer items-center gap-2 rounded-full border border-white/6 bg-white/4 py-1 pl-1 pr-2 text-[0.82rem] font-medium text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100 max-[480px]:p-1"
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  id="user-menu-trigger"
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
-                    {getInitials(user.nome, user.cognome, user.email)}
-                  </div>
-                  <span className="max-w-[120px] truncate max-[480px]:hidden">
-                    {user.nome && user.cognome ? `${user.nome} ${user.cognome}` : user.email}
-                  </span>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`shrink-0 opacity-50 transition-transform ${showUserMenu ? 'rotate-180' : ''}`}
+              <>
+                <NotificationsBell />
+                <div className="relative">
+                  <button
+                    className="flex cursor-pointer items-center gap-2 rounded-full border border-white/6 bg-white/4 py-1 pl-1 pr-2 text-[0.82rem] font-medium text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100 max-[480px]:p-1"
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    id="user-menu-trigger"
                   >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </button>
-
-                {showUserMenu && (
-                  <div
-                    className="absolute right-0 top-[calc(100%+8px)] z-[100] min-w-60 animate-menu-in rounded-2xl border border-white/6 bg-gray-900/95 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
-                    id="user-menu-dropdown"
-                  >
-                    <div className="flex items-center gap-2 p-2">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-base font-bold text-white">
-                        {getInitials(user.nome, user.cognome, user.email)}
-                      </div>
-                      <div className="flex min-w-0 flex-col">
-                        <span className="truncate text-[0.85rem] font-semibold text-slate-100">
-                          {user.nome && user.cognome ? `${user.nome} ${user.cognome}` : user.email}
-                        </span>
-                        <span className="truncate text-xs text-slate-500">{user.email}</span>
-                        <span
-                          className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[user.ruolo] ?? ''}`}
-                        >
-                          {ROLE_LABELS[user.ruolo] ?? user.ruolo}
-                        </span>
-                      </div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
+                      {getInitials(user.nome, user.cognome, user.email)}
                     </div>
-                    <div className="my-1 h-px bg-white/6" />
-                    <Link
-                      to="/profile"
-                      className={menuItemCls}
-                      onClick={() => setShowUserMenu(false)}
+                    <span className="max-w-[120px] truncate max-[480px]:hidden">
+                      {user.nome && user.cognome ? `${user.nome} ${user.cognome}` : user.email}
+                    </span>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`shrink-0 opacity-50 transition-transform ${showUserMenu ? 'rotate-180' : ''}`}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <circle cx="12" cy="8" r="4" />
-                        <path d="M4 20c0-4 3.58-6 8-6s8 2 8 6" />
-                      </svg>
-                      Il Mio Profilo
-                    </Link>
-                    {isAdmin(user) && (
-                      <>
-                        {isSuperAdmin(user) && (
-                          <Link
-                            to="/admin"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                              <circle cx="8.5" cy="7" r="4" />
-                              <line x1="20" y1="8" x2="20" y2="14" />
-                              <line x1="23" y1="11" x2="17" y2="11" />
-                            </svg>
-                            Gestione Utenti
-                          </Link>
-                        )}
-                        {isSuperAdmin(user) && (
-                          <Link
-                            to="/admin/organizations"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M3 21h18" />
-                              <path d="M5 21V7l8-4v18" />
-                              <path d="M19 21V11l-6-4" />
-                              <line x1="9" y1="9" x2="9" y2="9.01" />
-                              <line x1="9" y1="12" x2="9" y2="12.01" />
-                              <line x1="9" y1="15" x2="9" y2="15.01" />
-                            </svg>
-                            Gestione Organizzazioni
-                          </Link>
-                        )}
-                        {isSuperAdmin(user) && (
-                          <Link
-                            to="/admin/avatars"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                              <circle cx="9" cy="7" r="4" />
-                              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                            </svg>
-                            Gestione Avatar
-                          </Link>
-                        )}
-                        {isSuperAdmin(user) && (
-                          <Link
-                            to="/admin/logs"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                              <polyline points="14 2 14 8 20 8" />
-                              <line x1="8" y1="13" x2="16" y2="13" />
-                              <line x1="8" y1="17" x2="13" y2="17" />
-                            </svg>
-                            Registro Attività
-                          </Link>
-                        )}
-                        <Link
-                          to="/admin/dashboard"
-                          className={menuItemCls}
-                          onClick={() => setShowUserMenu(false)}
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <rect x="3" y="3" width="7" height="9" rx="1" />
-                            <rect x="14" y="3" width="7" height="5" rx="1" />
-                            <rect x="14" y="12" width="7" height="9" rx="1" />
-                            <rect x="3" y="16" width="7" height="5" rx="1" />
-                          </svg>
-                          Dashboard
-                        </Link>
-                        <Link
-                          to="/admin/training"
-                          className={menuItemCls}
-                          onClick={() => setShowUserMenu(false)}
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <circle cx="12" cy="12" r="6" />
-                            <circle cx="12" cy="12" r="2" />
-                          </svg>
-                          Percorsi di Training
-                        </Link>
-                        <Link
-                          to="/admin/report"
-                          className={menuItemCls}
-                          onClick={() => setShowUserMenu(false)}
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <line x1="18" y1="20" x2="18" y2="10" />
-                            <line x1="12" y1="20" x2="12" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="14" />
-                          </svg>
-                          Report Attività
-                        </Link>
-                      </>
-                    )}
-                    <div className="my-1 h-px bg-white/6" />
-                    <button
-                      className={`${menuItemCls} hover:bg-red-500/10 hover:text-red-300`}
-                      onClick={handleLogout}
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+
+                  {showUserMenu && (
+                    <div
+                      className="absolute right-0 top-[calc(100%+8px)] z-[100] min-w-60 animate-menu-in rounded-2xl border border-white/6 bg-gray-900/95 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
+                      id="user-menu-dropdown"
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                      <div className="flex items-center gap-2 p-2">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-base font-bold text-white">
+                          {getInitials(user.nome, user.cognome, user.email)}
+                        </div>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate text-[0.85rem] font-semibold text-slate-100">
+                            {user.nome && user.cognome
+                              ? `${user.nome} ${user.cognome}`
+                              : user.email}
+                          </span>
+                          <span className="truncate text-xs text-slate-500">{user.email}</span>
+                          <span
+                            className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[user.ruolo] ?? ''}`}
+                          >
+                            {ROLE_LABELS[user.ruolo] ?? user.ruolo}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="my-1 h-px bg-white/6" />
+                      <Link
+                        to="/profile"
+                        className={menuItemCls}
+                        onClick={() => setShowUserMenu(false)}
                       >
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                        <polyline points="16 17 21 12 16 7" />
-                        <line x1="21" y1="12" x2="9" y2="12" />
-                      </svg>
-                      Esci
-                    </button>
-                  </div>
-                )}
-              </div>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="12" cy="8" r="4" />
+                          <path d="M4 20c0-4 3.58-6 8-6s8 2 8 6" />
+                        </svg>
+                        Il Mio Profilo
+                      </Link>
+                      {isAdmin(user) && (
+                        <>
+                          {isSuperAdmin(user) && (
+                            <Link
+                              to="/admin"
+                              className={menuItemCls}
+                              onClick={() => setShowUserMenu(false)}
+                            >
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                <circle cx="8.5" cy="7" r="4" />
+                                <line x1="20" y1="8" x2="20" y2="14" />
+                                <line x1="23" y1="11" x2="17" y2="11" />
+                              </svg>
+                              Gestione Utenti
+                            </Link>
+                          )}
+                          {isSuperAdmin(user) && (
+                            <Link
+                              to="/admin/organizations"
+                              className={menuItemCls}
+                              onClick={() => setShowUserMenu(false)}
+                            >
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M3 21h18" />
+                                <path d="M5 21V7l8-4v18" />
+                                <path d="M19 21V11l-6-4" />
+                                <line x1="9" y1="9" x2="9" y2="9.01" />
+                                <line x1="9" y1="12" x2="9" y2="12.01" />
+                                <line x1="9" y1="15" x2="9" y2="15.01" />
+                              </svg>
+                              Gestione Organizzazioni
+                            </Link>
+                          )}
+                          {isSuperAdmin(user) && (
+                            <Link
+                              to="/admin/avatars"
+                              className={menuItemCls}
+                              onClick={() => setShowUserMenu(false)}
+                            >
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                              </svg>
+                              Gestione Avatar
+                            </Link>
+                          )}
+                          {isSuperAdmin(user) && (
+                            <Link
+                              to="/admin/logs"
+                              className={menuItemCls}
+                              onClick={() => setShowUserMenu(false)}
+                            >
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="8" y1="13" x2="16" y2="13" />
+                                <line x1="8" y1="17" x2="13" y2="17" />
+                              </svg>
+                              Registro Attività
+                            </Link>
+                          )}
+                          <Link
+                            to="/admin/dashboard"
+                            className={menuItemCls}
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <rect x="3" y="3" width="7" height="9" rx="1" />
+                              <rect x="14" y="3" width="7" height="5" rx="1" />
+                              <rect x="14" y="12" width="7" height="9" rx="1" />
+                              <rect x="3" y="16" width="7" height="5" rx="1" />
+                            </svg>
+                            Dashboard
+                          </Link>
+                          <Link
+                            to="/admin/training"
+                            className={menuItemCls}
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <circle cx="12" cy="12" r="6" />
+                              <circle cx="12" cy="12" r="2" />
+                            </svg>
+                            Percorsi di Training
+                          </Link>
+                          <Link
+                            to="/admin/report"
+                            className={menuItemCls}
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <line x1="18" y1="20" x2="18" y2="10" />
+                              <line x1="12" y1="20" x2="12" y2="4" />
+                              <line x1="6" y1="20" x2="6" y2="14" />
+                            </svg>
+                            Report Attività
+                          </Link>
+                        </>
+                      )}
+                      <div className="my-1 h-px bg-white/6" />
+                      <button
+                        className={`${menuItemCls} hover:bg-red-500/10 hover:text-red-300`}
+                        onClick={handleLogout}
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                          <polyline points="16 17 21 12 16 7" />
+                          <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                        Esci
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               /* Not authenticated — show login button */
               <button

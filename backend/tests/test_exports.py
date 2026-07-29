@@ -60,7 +60,7 @@ def test_evaluations_report_xlsx(admin_client, db_session, standard_user, make_a
         "Organizzazione",
         "Avatar",
     ]
-    assert header[-2:] == ["Voto", "Valutata il"]
+    assert header[-4:] == ["Voto", "Voto AI", "Revisione", "Valutata il"]
 
     row = [cell.value for cell in sheet[2]]
     assert row[1] == "Clienti 1"
@@ -68,6 +68,32 @@ def test_evaluations_report_xlsx(admin_client, db_session, standard_user, make_a
     assert row[5] == "Org di test"
     assert row[header.index("Empatia")] == 7.5
     assert row[header.index("Voto")] == 7.5
+    # Nessuna revisione: il voto che conta è quello della macchina, e la
+    # colonna resta vuota (openpyxl rilegge la cella vuota come None)
+    assert row[header.index("Voto AI")] == 7.5
+    assert not row[header.index("Revisione")]
+
+
+def test_a_corrected_score_is_what_the_export_reports(
+    admin_client, db_session, standard_user, make_avatar
+):
+    """Il foglio deve dire il voto che lo studente ha ricevuto, non quello
+    che la macchina aveva proposto."""
+    avatar = make_avatar(category="clienti")
+    conversation = _seed_evaluated_conversation(db_session, standard_user, avatar)
+    admin_client.put(
+        f"/api/admin/conversations/{conversation.id}/review",
+        json={"override_score": 9, "override_reason": "Gestione del reclamo impeccabile."},
+    )
+
+    response = admin_client.get("/api/admin/evaluations-report/export")
+
+    sheet = load_workbook(BytesIO(response.content))["Valutazioni"]
+    header = [cell.value for cell in sheet[1]]
+    row = [cell.value for cell in sheet[2]]
+    assert row[header.index("Voto")] == 9
+    assert row[header.index("Voto AI")] == 7.5
+    assert row[header.index("Revisione")] == "Punteggio corretto"
 
 
 def test_export_is_admin_only(user_client):

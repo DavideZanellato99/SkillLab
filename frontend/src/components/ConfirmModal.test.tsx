@@ -55,4 +55,25 @@ describe('ConfirmModal', () => {
     render(<ConfirmModal {...baseProps} error="Qualcosa è andato storto" />)
     expect(screen.getByRole('alert')).toHaveTextContent('Qualcosa è andato storto')
   })
+
+  it('renders the optional body between description and buttons', () => {
+    render(
+      <ConfirmModal {...baseProps}>
+        <input aria-label="Conferma nome" />
+      </ConfirmModal>,
+    )
+    expect(screen.getByLabelText('Conferma nome')).toBeInTheDocument()
+  })
+
+  it('blocks only the confirm button when confirmDisabled is set', async () => {
+    const onConfirm = vi.fn()
+    const onClose = vi.fn()
+    render(<ConfirmModal {...baseProps} confirmDisabled onConfirm={onConfirm} onClose={onClose} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina' }))
+    expect(onConfirm).not.toHaveBeenCalled()
+    // Annullare resta possibile: il blocco riguarda solo la conferma
+    await userEvent.click(screen.getByRole('button', { name: 'Annulla' }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
 })

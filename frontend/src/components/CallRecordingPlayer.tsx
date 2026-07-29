@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchRecordingInfo, fetchRecordingBlob } from '../services/voice'
+import Spinner from './Spinner'
 
 /* Playback of a finished call: the operator and the avatar mixed in one
  * track, as recorded in the browser during the call itself.
@@ -170,11 +171,7 @@ export default forwardRef<CallRecordingPlayerHandle, CallRecordingPlayerProps>(
             disabled={isLoading}
           >
             {isLoading ? (
-              <span
-                className={`animate-spin rounded-full border-2 border-violet-600/25 border-t-violet-600 ${
-                  isInline ? 'h-3 w-3' : 'h-4 w-4'
-                }`}
-              />
+              <Spinner variant="small" />
             ) : (
               <svg
                 width={isInline ? 12 : 16}

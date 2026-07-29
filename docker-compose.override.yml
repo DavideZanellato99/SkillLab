@@ -10,7 +10,17 @@
 # docker-compose.yml up` (explicitly excluding this file) still gives the
 # real production build, e.g. to sanity-check it before deploying.
 services:
+  # In sviluppo le porte di servizio tornano ad affacciarsi sull'host: sul
+  # proprio computer servono per attaccarsi al database con un client e per
+  # chiamare l'API direttamente. In produzione restano chiuse (vedi il
+  # commento in testa a docker-compose.yml).
+  db:
+    ports:
+      - "5432:5432"
+
   backend:
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend:/app
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload

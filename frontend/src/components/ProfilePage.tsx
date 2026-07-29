@@ -12,66 +12,15 @@ import {
 } from '../services/auth'
 import PasswordToggle from './PasswordToggle'
 import Spinner from './Spinner'
+import FormError from './FormError'
+import FormSuccess from './FormSuccess'
+import { PageContainer, PageHeader } from './PageLayout'
+import Badge from './Badge'
+import Field, { fieldCls, labelCls, inputWrapperCls, inputCls, TextInput } from './Field'
+import PrimaryButton from './PrimaryButton'
 
 /* Shared form styles (same look as the other admin/auth forms) */
-const fieldCls = 'flex flex-col gap-1.5'
-const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
-const inputWrapperCls =
-  'flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'
-const inputCls =
-  'flex-1 border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50'
-const submitBtnCls =
-  'mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60'
-const formErrorCls =
-  'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]'
-const formSuccessCls =
-  'mb-4 flex animate-fade-in-up items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[0.82rem] text-emerald-400 [animation-duration:0.2s]'
 const sectionCls = 'mb-8 rounded-3xl border border-white/6 bg-gray-900/60 p-8 max-[480px]:p-6'
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className={formErrorCls}>
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="mt-px shrink-0 text-red-500"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
-      </svg>
-      <span>{message}</span>
-    </div>
-  )
-}
-
-function SuccessBox({ message }: { message: string }) {
-  return (
-    <div className={formSuccessCls}>
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="shrink-0"
-      >
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
-      </svg>
-      <span>{message}</span>
-    </div>
-  )
-}
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth()
@@ -183,13 +132,11 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[720px] px-6 py-12 max-md:px-4">
-      <header className="mb-10">
-        <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Il Mio Profilo</h1>
-        <p className="text-[0.95rem] text-slate-500">
-          Visualizza i tuoi dati, aggiorna nome e cognome e gestisci la password del tuo account.
-        </p>
-      </header>
+    <PageContainer width="form">
+      <PageHeader
+        title="Il Mio Profilo"
+        description="Visualizza i tuoi dati, aggiorna nome e cognome e gestisci la password del tuo account."
+      />
 
       {/* I miei dati */}
       <section className={sectionCls}>
@@ -201,16 +148,14 @@ export default function ProfilePage() {
             <h2 className="truncate font-heading text-lg font-bold text-slate-100">
               {user.nome && user.cognome ? `${user.nome} ${user.cognome}` : user.email}
             </h2>
-            <span
-              className={`mt-1 inline-block w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[user.ruolo] ?? ''}`}
-            >
+            <Badge tone={ROLE_BADGE_CLASSES[user.ruolo] ?? ''} className="mt-1">
               {ROLE_LABELS[user.ruolo] ?? user.ruolo}
-            </span>
+            </Badge>
           </div>
         </div>
 
-        {profileSuccess && <SuccessBox message={profileSuccess} />}
-        {profileError && <ErrorBox message={profileError} />}
+        {profileSuccess && <FormSuccess message={profileSuccess} />}
+        {profileError && <FormError message={profileError} />}
 
         <form className="flex flex-col gap-4" onSubmit={handleSaveProfile}>
           <div className={fieldCls}>
@@ -247,46 +192,35 @@ export default function ProfilePage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 max-[480px]:grid-cols-1">
-            <div className={fieldCls}>
-              <label className={labelCls} htmlFor="profile-nome">
-                Nome
-              </label>
-              <div className={inputWrapperCls}>
-                <input
-                  type="text"
-                  id="profile-nome"
-                  className={inputCls}
-                  placeholder="Mario"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  required
-                  disabled={isSavingProfile}
-                />
-              </div>
-            </div>
+            <Field label="Nome" htmlFor="profile-nome">
+              <TextInput
+                type="text"
+                id="profile-nome"
+                placeholder="Mario"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                required
+                disabled={isSavingProfile}
+              />
+            </Field>
 
-            <div className={fieldCls}>
-              <label className={labelCls} htmlFor="profile-cognome">
-                Cognome
-              </label>
-              <div className={inputWrapperCls}>
-                <input
-                  type="text"
-                  id="profile-cognome"
-                  className={inputCls}
-                  placeholder="Rossi"
-                  value={cognome}
-                  onChange={(e) => setCognome(e.target.value)}
-                  required
-                  disabled={isSavingProfile}
-                />
-              </div>
-            </div>
+            <Field label="Cognome" htmlFor="profile-cognome">
+              <TextInput
+                type="text"
+                id="profile-cognome"
+                placeholder="Rossi"
+                value={cognome}
+                onChange={(e) => setCognome(e.target.value)}
+                required
+                disabled={isSavingProfile}
+              />
+            </Field>
           </div>
 
-          <button
+          <PrimaryButton
             type="submit"
-            className={submitBtnCls}
+            variant="submit"
+            className="mt-1"
             disabled={isSavingProfile || !isProfileDirty}
           >
             {isSavingProfile ? (
@@ -297,7 +231,7 @@ export default function ProfilePage() {
             ) : (
               'Salva Modifiche'
             )}
-          </button>
+          </PrimaryButton>
         </form>
       </section>
 
@@ -316,8 +250,8 @@ export default function ProfilePage() {
           </p>
         ) : (
           <>
-            {passwordSuccess && <SuccessBox message={passwordSuccess} />}
-            {passwordError && <ErrorBox message={passwordError} />}
+            {passwordSuccess && <FormSuccess message={passwordSuccess} />}
+            {passwordError && <FormError message={passwordError} />}
 
             <form className="flex flex-col gap-4" onSubmit={handleChangePassword}>
               <div className={fieldCls}>
@@ -456,7 +390,12 @@ export default function ProfilePage() {
                 </ul>
               </div>
 
-              <button type="submit" className={submitBtnCls} disabled={isChangingPassword}>
+              <PrimaryButton
+                type="submit"
+                variant="submit"
+                className="mt-1"
+                disabled={isChangingPassword}
+              >
                 {isChangingPassword ? (
                   <>
                     <Spinner variant="button" />
@@ -465,7 +404,7 @@ export default function ProfilePage() {
                 ) : (
                   'Aggiorna Password'
                 )}
-              </button>
+              </PrimaryButton>
             </form>
           </>
         )}
@@ -480,7 +419,7 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        {exportError && <ErrorBox message={exportError} />}
+        {exportError && <FormError message={exportError} />}
 
         <p className="mb-4 text-[0.85rem] leading-relaxed text-slate-400">
           L'archivio contiene il tuo profilo, le trascrizioni complete delle tue conversazioni, le
@@ -489,9 +428,10 @@ export default function ProfilePage() {
           telefonate simulate, quindi può pesare parecchio e richiedere qualche secondo.
         </p>
 
-        <button
+        <PrimaryButton
           type="button"
-          className={submitBtnCls}
+          variant="submit"
+          className="mt-1"
           onClick={handleExportMyData}
           disabled={isExporting}
         >
@@ -520,8 +460,8 @@ export default function ProfilePage() {
               Scarica i Miei Dati
             </>
           )}
-        </button>
+        </PrimaryButton>
       </section>
-    </div>
+    </PageContainer>
   )
 }

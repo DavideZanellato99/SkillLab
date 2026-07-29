@@ -15,18 +15,13 @@ import { categoryBadgeClasses } from './categoryStyles'
 import ConversationModeBadge from './ConversationModeBadge'
 import DataTable, { Td, Tr } from './DataTable'
 import Select from './Select'
-import Spinner from './Spinner'
+import LoadingState from './LoadingState'
+import { PageContainer, PageHeader } from './PageLayout'
+import ConfirmModal from './ConfirmModal'
+import { TrashIcon } from './icons'
 import { matchesSearch } from './tableSearch'
 import type { DataTableColumn } from './DataTable'
-
-const overlayCls =
-  'fixed inset-0 z-[200] flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-lg [animation-duration:0.2s]'
-const modalCls =
-  'relative max-h-[90vh] w-full max-w-[420px] animate-modal-in overflow-y-auto rounded-3xl border border-white/6 bg-gray-900/95 p-12 shadow-[0_24px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(124,58,237,0.08)] backdrop-blur-2xl max-[480px]:rounded-2xl max-[480px]:p-8'
-const modalCloseCls =
-  'absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100'
-const formErrorCls =
-  'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]'
+import Badge from './Badge'
 
 interface DeletingConversation {
   userId: string
@@ -159,33 +154,30 @@ export default function UserReportPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-      <header className="mb-12 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Report Attività</h1>
-          <p className="text-[0.95rem] text-slate-500">
-            Recap in sola lettura degli utenti, delle loro conversazioni con gli avatar e delle
-            durate.
-          </p>
-        </div>
-        {showOrg && (
-          <div className="flex flex-col gap-1.5">
-            <label
-              className="text-xs font-medium tracking-wide text-slate-400"
-              htmlFor="report-org-filter"
-            >
-              Organizzazione
-            </label>
-            <Select
-              id="report-org-filter"
-              className="min-w-[240px]"
-              value={orgFilter}
-              onChange={setOrgFilter}
-              options={orgFilterOptions}
-            />
-          </div>
-        )}
-      </header>
+    <PageContainer>
+      <PageHeader
+        title="Report Attività"
+        description="Recap in sola lettura degli utenti, delle loro conversazioni con gli avatar e delle durate."
+        actions={
+          showOrg && (
+            <div className="flex flex-col gap-1.5">
+              <label
+                className="text-xs font-medium tracking-wide text-slate-400"
+                htmlFor="report-org-filter"
+              >
+                Organizzazione
+              </label>
+              <Select
+                id="report-org-filter"
+                className="min-w-[240px]"
+                value={orgFilter}
+                onChange={setOrgFilter}
+                options={orgFilterOptions}
+              />
+            </div>
+          )
+        }
+      />
 
       {error && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
@@ -208,10 +200,7 @@ export default function UserReportPage() {
       )}
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <Spinner />
-          <p>Caricamento report attività...</p>
-        </div>
+        <LoadingState message="Caricamento report attività..." />
       ) : (
         <DataTable
           columns={columns}
@@ -255,11 +244,9 @@ export default function UserReportPage() {
                     </Td>
                   )}
                   <Td>
-                    <span
-                      className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[u.ruolo] ?? ''}`}
-                    >
+                    <Badge tone={ROLE_BADGE_CLASSES[u.ruolo] ?? ''}>
                       {ROLE_LABELS[u.ruolo] ?? u.ruolo}
-                    </span>
+                    </Badge>
                   </Td>
                   <Td align="center">
                     <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
@@ -336,19 +323,7 @@ export default function UserReportPage() {
                                   setDeletingConversation({ userId: u.id, conversation: conv })
                                 }}
                               >
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <polyline points="3 6 5 6 21 6" />
-                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                </svg>
+                                <TrashIcon />
                               </button>
                             </li>
                           ))}
@@ -365,85 +340,29 @@ export default function UserReportPage() {
 
       {/* Modal Conferma Eliminazione Conversazione */}
       {deletingConversation && (
-        <div className={overlayCls} onClick={() => !isDeleting && setDeletingConversation(null)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button
-              className={modalCloseCls}
-              onClick={() => setDeletingConversation(null)}
-              disabled={isDeleting}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-red-500/25 bg-red-500/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                Elimina Conversazione
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                Stai per eliminare la conversazione con{' '}
-                <strong className="text-slate-100">
-                  {deletingConversation.conversation.avatar_name}
-                </strong>{' '}
-                del {formatDateTime(deletingConversation.conversation.created_at)}, incluse tutte le
-                sue trascrizioni e valutazioni. L'operazione non è reversibile.
-              </p>
-            </div>
-
-            {deleteError && <div className={formErrorCls}>{deleteError}</div>}
-
-            <div className="flex gap-3">
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => setDeletingConversation(null)}
-                disabled={isDeleting}
-              >
-                Annulla
-              </button>
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleConfirmDeleteConversation}
-                disabled={isDeleting}
-              >
-                {isDeleting ? (
-                  <>
-                    <Spinner variant="button" />
-                    Eliminazione...
-                  </>
-                ) : (
-                  'Elimina Definitivamente'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          icon={<TrashIcon size={24} stroke="#ef4444" />}
+          iconWrapperCls="border border-red-500/25 bg-red-500/10"
+          title="Elimina Conversazione"
+          description={
+            <>
+              Stai per eliminare la conversazione con{' '}
+              <strong className="text-slate-100">
+                {deletingConversation.conversation.avatar_name}
+              </strong>{' '}
+              del {formatDateTime(deletingConversation.conversation.created_at)}, incluse tutte le
+              sue trascrizioni e valutazioni. L'operazione non è reversibile.
+            </>
+          }
+          error={deleteError}
+          confirmLabel="Elimina Definitivamente"
+          pendingLabel="Eliminazione..."
+          confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
+          isPending={isDeleting}
+          onConfirm={handleConfirmDeleteConversation}
+          onClose={() => setDeletingConversation(null)}
+        />
       )}
-    </div>
+    </PageContainer>
   )
 }

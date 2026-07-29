@@ -2,6 +2,7 @@ import { Children, useEffect, useState } from 'react'
 import type { HTMLAttributes, ReactNode, TdHTMLAttributes } from 'react'
 import Tooltip from './Tooltip'
 import Select from './Select'
+import { CloseIcon } from './icons'
 
 /* Tabella condivisa dell'app: contenitore, header, righe e celle hanno un
  * unico stile definito qui — le pagine descrivono solo colonne e contenuto. */
@@ -120,19 +121,7 @@ export default function DataTable({
                     aria-label="Cancella ricerca"
                     className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 transition hover:text-slate-100"
                   >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
+                    <CloseIcon size={12} />
                   </button>
                 )}
               </div>

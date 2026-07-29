@@ -13,21 +13,49 @@ scrive con una persona simulata (STT + LLM + TTS) e riceve una valutazione.
 - **Voce**: ElevenLabs (STT), OpenAI (LLM), Cartesia (TTS).
 - **Infra**: Docker Compose (Postgres + backend + frontend).
 
-## Avvio rapido
+## Avvio rapido (sviluppo)
 
 ```bash
-# crea backend/.env con le tue chiavi (DATABASE_URL, COGNITO_*, OPENAI_*, CARTESIA_*, ELEVENLABS_*)
 docker compose up --build              # hot-reload (override di sviluppo)
 ```
 
 - Frontend: <http://localhost:3000>
 - Backend: <http://localhost:8000>
 
-Per la build di produzione (uvicorn + nginx statico) senza hot-reload:
+## Deploy in produzione
 
 ```bash
-docker compose -f docker-compose.yml up --build
+docker compose -f docker-compose.yml up -d --build
 ```
+
+Il `-f docker-compose.yml` non è opzionale: senza, compose legge anche
+`docker-compose.override.yml` e avvia l'ambiente di sviluppo.
+
+Quello che lo stack di produzione **non** fa, e che va completato attorno:
+
+- **Non si affaccia su internet.** L'unica porta pubblicata è quella del
+  frontend, su `127.0.0.1:3000`. Il database e l'API non ne pubblicano
+  nessuna: nginx fa da proxy per `/api` sulla rete interna di compose.
+  Davanti va messo un reverse proxy sull'host (nginx, Caddy, Traefik) che
+  inoltra il dominio pubblico a `127.0.0.1:3000`.
+- **Non termina TLS**, e HTTPS non è facoltativo: i cookie di sessione sono
+  `Secure`, quindi servita in chiaro l'applicazione non riesce nemmeno a
+  tenere il login. Il reverse proxy deve anche passare `X-Forwarded-For`
+  intestandolo lui (non fidandosi del valore del client), altrimenti la metà
+  IP del session binding diventa falsificabile (vedi `backend/token_sessions.py`).
+- **Non cifra il disco.** Le registrazioni audio delle chiamate sono il dato
+  più sensibile del sistema e stanno nel volume `db_data`: il volume, o il
+  disco che lo ospita, va cifrato a livello di sistema (LUKS, BitLocker, o
+  la cifratura del volume del provider cloud). Vale anche per i backup.
+- **Non fa backup.** Il purge di retention cancella per davvero: un backup
+  che non rispetta le stesse finestre di conservazione ricrea il problema
+  che la retention risolve.
+
+## Protezione dei dati
+
+Quali dati personali tratta l'applicazione, per quanto li conserva, a chi li
+invia, come sono implementati i diritti degli interessati e cosa manca ancora
+per la pubblicazione: [GDPR.md](GDPR.md).
 
 ## Sviluppo e test
 

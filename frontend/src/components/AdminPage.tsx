@@ -20,10 +20,17 @@ import DetailModal, { DetailField } from './DetailModal'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
 import Spinner from './Spinner'
+import LoadingState from './LoadingState'
+import { PageContainer, PageHeader } from './PageLayout'
+import Badge from './Badge'
+import PrimaryButton from './PrimaryButton'
 import FormError from './FormError'
 import ConfirmModal from './ConfirmModal'
+import ModalShell, { ModalHeader } from './ModalShell'
+import { TrashIcon, ResendIcon, UserPlusIcon } from './icons'
 import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
 import type { KebabMenuItem } from './KebabMenu'
+import Field, { fieldCls, labelCls, TextInput } from './Field'
 import {
   ROLE_OPTIONS,
   STATUS_LABELS,
@@ -51,20 +58,6 @@ const ACCESS_OPTIONS = [
 ]
 
 /* Shared form styles (modals, same look as the auth modal) */
-const fieldCls = 'flex flex-col gap-1.5'
-const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
-const inputWrapperCls =
-  'flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'
-const inputCls =
-  'flex-1 border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50'
-const submitBtnCls =
-  'mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60'
-const overlayCls =
-  'fixed inset-0 z-[200] flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-lg [animation-duration:0.2s]'
-const modalCls =
-  'relative m-auto max-h-[90vh] w-full max-w-[420px] animate-modal-in overflow-y-auto overflow-x-hidden rounded-3xl border border-white/6 bg-gray-900/95 p-12 shadow-[0_24px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(124,58,237,0.08)] backdrop-blur-2xl max-[480px]:rounded-2xl max-[480px]:p-8'
-const modalCloseCls =
-  'absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100'
 const actionBtnCls =
   'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40'
 
@@ -363,39 +356,22 @@ export default function AdminPage() {
   const statusCfg = statusAction ? STATUS_ACTIONS[statusAction.target] : null
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-      <header className="mb-12 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Gestione Utenti</h1>
-          <p className="text-[0.95rem] text-slate-500">
-            Crea, modifica ed elimina gli account autorizzati ad accedere all'applicazione.
-          </p>
-        </div>
-        <button
-          className="flex cursor-pointer items-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-6 py-2 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(124,58,237,0.25)] transition hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(124,58,237,0.4)]"
-          onClick={() => {
-            setFormError('')
-            setShowModal(true)
-          }}
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+    <PageContainer>
+      <PageHeader
+        title="Gestione Utenti"
+        description="Crea, modifica ed elimina gli account autorizzati ad accedere all'applicazione."
+        actions={
+          <PrimaryButton
+            icon={<UserPlusIcon size={18} />}
+            onClick={() => {
+              setFormError('')
+              setShowModal(true)
+            }}
           >
-            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="8.5" cy="7" r="4" />
-            <line x1="20" y1="8" x2="20" y2="14" />
-            <line x1="23" y1="11" x2="17" y2="11" />
-          </svg>
-          Nuovo Utente
-        </button>
-      </header>
+            Nuovo Utente
+          </PrimaryButton>
+        }
+      />
 
       <div className="mb-8 flex flex-wrap items-end gap-4">
         <div className={fieldCls}>
@@ -508,10 +484,7 @@ export default function AdminPage() {
       )}
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <Spinner />
-          <p>Caricamento utenti del sistema...</p>
-        </div>
+        <LoadingState message="Caricamento utenti del sistema..." />
       ) : (
         <>
           <DataTable
@@ -609,18 +582,14 @@ export default function AdminPage() {
                     )}
                   </Td>
                   <Td>
-                    <span
-                      className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[u.ruolo] ?? ''}`}
-                    >
+                    <Badge tone={ROLE_BADGE_CLASSES[u.ruolo] ?? ''}>
                       {ROLE_LABELS[u.ruolo] ?? u.ruolo}
-                    </span>
+                    </Badge>
                   </Td>
                   <Td>
-                    <span
-                      className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[u.status] ?? ''}`}
-                    >
+                    <Badge tone={STATUS_BADGE_CLASSES[u.status] ?? ''}>
                       {STATUS_LABELS[u.status] ?? u.status}
-                    </span>
+                    </Badge>
                   </Td>
                   <Td>
                     {u.last_login_at ? (
@@ -631,11 +600,7 @@ export default function AdminPage() {
                       </Tooltip>
                     ) : (
                       <Tooltip content="L'invito è stato inviato ma l'utente non ha mai effettuato l'accesso.">
-                        <span
-                          className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${NEVER_ACCESSED_BADGE_CLASSES}`}
-                        >
-                          {NEVER_ACCESSED_LABEL}
-                        </span>
+                        <Badge tone={NEVER_ACCESSED_BADGE_CLASSES}>{NEVER_ACCESSED_LABEL}</Badge>
                       </Tooltip>
                     )}
                   </Td>
@@ -689,19 +654,7 @@ export default function AdminPage() {
                           disabled={deleteDisabled}
                           aria-label={`Elimina ${u.email}`}
                         >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
+                          <TrashIcon />
                         </button>
                       </Tooltip>
                       <Tooltip wrap content="Altre azioni">
@@ -769,28 +722,20 @@ export default function AdminPage() {
             )}
           </DetailField>
           <DetailField label="Ruolo">
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[viewingUser.ruolo] ?? ''}`}
-            >
+            <Badge tone={ROLE_BADGE_CLASSES[viewingUser.ruolo] ?? ''}>
               {ROLE_LABELS[viewingUser.ruolo] ?? viewingUser.ruolo}
-            </span>
+            </Badge>
           </DetailField>
           <DetailField label="Stato">
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[viewingUser.status] ?? ''}`}
-            >
+            <Badge tone={STATUS_BADGE_CLASSES[viewingUser.status] ?? ''}>
               {STATUS_LABELS[viewingUser.status] ?? viewingUser.status}
-            </span>
+            </Badge>
           </DetailField>
           <DetailField label="Ultimo accesso">
             {viewingUser.last_login_at ? (
               `${formatDateTime(viewingUser.last_login_at)} (${formatRelativeDay(viewingUser.last_login_at)})`
             ) : (
-              <span
-                className={`inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${NEVER_ACCESSED_BADGE_CLASSES}`}
-              >
-                {NEVER_ACCESSED_LABEL}
-              </span>
+              <Badge tone={NEVER_ACCESSED_BADGE_CLASSES}>{NEVER_ACCESSED_LABEL}</Badge>
             )}
           </DetailField>
           <DetailField label="Data creazione">{formatDateTime(viewingUser.created_at)}</DetailField>
@@ -808,300 +753,228 @@ export default function AdminPage() {
 
       {/* Modal Creazione Utente */}
       {showModal && (
-        <div className={overlayCls} onClick={() => !isSubmitting && setShowModal(false)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button
-              className={modalCloseCls}
-              onClick={() => setShowModal(false)}
-              disabled={isSubmitting}
-            >
+        <ModalShell onClose={() => setShowModal(false)} locked={isSubmitting}>
+          <ModalHeader
+            iconWrapperCls="border border-violet-600/20 bg-violet-600/10"
+            icon={
               <svg
-                width="18"
-                height="18"
+                width="24"
+                height="24"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="currentColor"
+                stroke="#7c3aed"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="8.5" cy="7" r="4" />
+                <line x1="20" y1="8" x2="20" y2="14" />
+                <line x1="23" y1="11" x2="17" y2="11" />
               </svg>
-            </button>
-
-            <div className="mb-8 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#7c3aed"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="8.5" cy="7" r="4" />
-                  <line x1="20" y1="8" x2="20" y2="14" />
-                  <line x1="23" y1="11" x2="17" y2="11" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                Crea Nuovo Utente
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
+            }
+            title="Crea Nuovo Utente"
+            description={
+              <>
                 L'utente verrà registrato su AWS Cognito e riceverà la password temporanea via
                 email.
-              </p>
-            </div>
+              </>
+            }
+            className="mb-8"
+          />
 
-            {formError && <FormError message={formError} />}
+          {formError && <FormError message={formError} />}
 
-            <form className="flex flex-col gap-4" onSubmit={handleCreateUser}>
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="admin-email">
-                  Email
-                </label>
-                <div className={inputWrapperCls}>
-                  <input
-                    type="email"
-                    id="admin-email"
-                    className={inputCls}
-                    placeholder="nuovo@utente.it"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
+          <form className="flex flex-col gap-4" onSubmit={handleCreateUser}>
+            <Field label="Email" htmlFor="admin-email">
+              <TextInput
+                type="email"
+                id="admin-email"
+                placeholder="nuovo@utente.it"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={isSubmitting}
+              />
+            </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="admin-nome">
-                    Nome
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <input
-                      type="text"
-                      id="admin-nome"
-                      className={inputCls}
-                      placeholder="Mario"
-                      value={nome}
-                      onChange={(e) => setNome(e.target.value)}
-                      required
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                </div>
-
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="admin-cognome">
-                    Cognome
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <input
-                      type="text"
-                      id="admin-cognome"
-                      className={inputCls}
-                      placeholder="Rossi"
-                      value={cognome}
-                      onChange={(e) => setCognome(e.target.value)}
-                      required
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="admin-ruolo">
-                  Ruolo del sistema
-                </label>
-                <Select
-                  id="admin-ruolo"
-                  value={ruolo}
-                  onChange={(value) => setRuolo(value as RoleName)}
-                  options={ROLE_OPTIONS}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nome" htmlFor="admin-nome">
+                <TextInput
+                  type="text"
+                  id="admin-nome"
+                  placeholder="Mario"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  required
                   disabled={isSubmitting}
                 />
-              </div>
+              </Field>
 
-              {ruolo !== 'super_admin' && (
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="admin-org">
-                    Organizzazione
-                  </label>
-                  <Select
-                    id="admin-org"
-                    value={orgId}
-                    onChange={setOrgId}
-                    options={orgOptions}
-                    disabled={isSubmitting}
-                  />
-                  {orgOptions.length === 0 && (
-                    <p className="text-[0.7rem] text-amber-400">
-                      Nessuna organizzazione disponibile: creane una prima di aggiungere utenti.
-                    </p>
-                  )}
-                </div>
-              )}
+              <Field label="Cognome" htmlFor="admin-cognome">
+                <TextInput
+                  type="text"
+                  id="admin-cognome"
+                  placeholder="Rossi"
+                  value={cognome}
+                  onChange={(e) => setCognome(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                />
+              </Field>
+            </div>
 
-              <button type="submit" className={submitBtnCls} disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Spinner variant="button" />
-                    Creazione su Cognito...
-                  </>
-                ) : (
-                  'Crea Utente'
+            <div className={fieldCls}>
+              <label className={labelCls} htmlFor="admin-ruolo">
+                Ruolo del sistema
+              </label>
+              <Select
+                id="admin-ruolo"
+                value={ruolo}
+                onChange={(value) => setRuolo(value as RoleName)}
+                options={ROLE_OPTIONS}
+                disabled={isSubmitting}
+              />
+            </div>
+
+            {ruolo !== 'super_admin' && (
+              <div className={fieldCls}>
+                <label className={labelCls} htmlFor="admin-org">
+                  Organizzazione
+                </label>
+                <Select
+                  id="admin-org"
+                  value={orgId}
+                  onChange={setOrgId}
+                  options={orgOptions}
+                  disabled={isSubmitting}
+                />
+                {orgOptions.length === 0 && (
+                  <p className="text-[0.7rem] text-amber-400">
+                    Nessuna organizzazione disponibile: creane una prima di aggiungere utenti.
+                  </p>
                 )}
-              </button>
-            </form>
-          </div>
-        </div>
+              </div>
+            )}
+
+            <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Spinner variant="button" />
+                  Creazione su Cognito...
+                </>
+              ) : (
+                'Crea Utente'
+              )}
+            </PrimaryButton>
+          </form>
+        </ModalShell>
       )}
 
       {/* Modal Modifica Utente */}
       {editingUser && (
-        <div className={overlayCls} onClick={() => !isSavingEdit && setEditingUser(null)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button
-              className={modalCloseCls}
-              onClick={() => setEditingUser(null)}
-              disabled={isSavingEdit}
-            >
+        <ModalShell onClose={() => setEditingUser(null)} locked={isSavingEdit}>
+          <ModalHeader
+            iconWrapperCls="border border-violet-600/20 bg-violet-600/10"
+            icon={
               <svg
-                width="18"
-                height="18"
+                width="24"
+                height="24"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="currentColor"
+                stroke="#7c3aed"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
               </svg>
-            </button>
+            }
+            title="Modifica Utente"
+            description={<>{editingUser.email}</>}
+            className="mb-8"
+          />
 
-            <div className="mb-8 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#7c3aed"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                Modifica Utente
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">{editingUser.email}</p>
+          {editError && <FormError message={editError} />}
+
+          <form className="flex flex-col gap-4" onSubmit={handleSaveEdit}>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nome" htmlFor="edit-nome">
+                <TextInput
+                  type="text"
+                  id="edit-nome"
+                  placeholder="Mario"
+                  value={editNome}
+                  onChange={(e) => setEditNome(e.target.value)}
+                  required
+                  disabled={isSavingEdit}
+                />
+              </Field>
+
+              <Field label="Cognome" htmlFor="edit-cognome">
+                <TextInput
+                  type="text"
+                  id="edit-cognome"
+                  placeholder="Rossi"
+                  value={editCognome}
+                  onChange={(e) => setEditCognome(e.target.value)}
+                  required
+                  disabled={isSavingEdit}
+                />
+              </Field>
             </div>
 
-            {editError && <FormError message={editError} />}
+            <div className={fieldCls}>
+              <label className={labelCls} htmlFor="edit-ruolo">
+                Ruolo del sistema
+              </label>
+              <Select
+                id="edit-ruolo"
+                value={editRuolo}
+                onChange={(value) => setEditRuolo(value as RoleName)}
+                options={ROLE_OPTIONS}
+                disabled={
+                  isSavingEdit ||
+                  editingUser.id === user?.id ||
+                  editingUser.cognito_sub.startsWith('mock-')
+                }
+              />
+              {(editingUser.id === user?.id || editingUser.cognito_sub.startsWith('mock-')) && (
+                <p className="text-[0.7rem] text-slate-500">
+                  {editingUser.id === user?.id
+                    ? 'Non puoi modificare il ruolo del tuo stesso account.'
+                    : "Il ruolo dell'account di sistema non è modificabile."}
+                </p>
+              )}
+            </div>
 
-            <form className="flex flex-col gap-4" onSubmit={handleSaveEdit}>
-              <div className="grid grid-cols-2 gap-3">
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="edit-nome">
-                    Nome
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <input
-                      type="text"
-                      id="edit-nome"
-                      className={inputCls}
-                      placeholder="Mario"
-                      value={editNome}
-                      onChange={(e) => setEditNome(e.target.value)}
-                      required
-                      disabled={isSavingEdit}
-                    />
-                  </div>
-                </div>
-
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="edit-cognome">
-                    Cognome
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <input
-                      type="text"
-                      id="edit-cognome"
-                      className={inputCls}
-                      placeholder="Rossi"
-                      value={editCognome}
-                      onChange={(e) => setEditCognome(e.target.value)}
-                      required
-                      disabled={isSavingEdit}
-                    />
-                  </div>
-                </div>
-              </div>
-
+            {editRuolo !== 'super_admin' && (
               <div className={fieldCls}>
-                <label className={labelCls} htmlFor="edit-ruolo">
-                  Ruolo del sistema
+                <label className={labelCls} htmlFor="edit-org">
+                  Organizzazione
                 </label>
                 <Select
-                  id="edit-ruolo"
-                  value={editRuolo}
-                  onChange={(value) => setEditRuolo(value as RoleName)}
-                  options={ROLE_OPTIONS}
-                  disabled={
-                    isSavingEdit ||
-                    editingUser.id === user?.id ||
-                    editingUser.cognito_sub.startsWith('mock-')
-                  }
+                  id="edit-org"
+                  value={editOrgId}
+                  onChange={setEditOrgId}
+                  options={orgOptions}
+                  disabled={isSavingEdit || editingUser.cognito_sub.startsWith('mock-')}
                 />
-                {(editingUser.id === user?.id || editingUser.cognito_sub.startsWith('mock-')) && (
-                  <p className="text-[0.7rem] text-slate-500">
-                    {editingUser.id === user?.id
-                      ? 'Non puoi modificare il ruolo del tuo stesso account.'
-                      : "Il ruolo dell'account di sistema non è modificabile."}
-                  </p>
-                )}
               </div>
+            )}
 
-              {editRuolo !== 'super_admin' && (
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="edit-org">
-                    Organizzazione
-                  </label>
-                  <Select
-                    id="edit-org"
-                    value={editOrgId}
-                    onChange={setEditOrgId}
-                    options={orgOptions}
-                    disabled={isSavingEdit || editingUser.cognito_sub.startsWith('mock-')}
-                  />
-                </div>
+            <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isSavingEdit}>
+              {isSavingEdit ? (
+                <>
+                  <Spinner variant="button" />
+                  Salvataggio...
+                </>
+              ) : (
+                'Salva Modifiche'
               )}
-
-              <button type="submit" className={submitBtnCls} disabled={isSavingEdit}>
-                {isSavingEdit ? (
-                  <>
-                    <Spinner variant="button" />
-                    Salvataggio...
-                  </>
-                ) : (
-                  'Salva Modifiche'
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
+            </PrimaryButton>
+          </form>
+        </ModalShell>
       )}
 
       {/* Modal Conferma Cambio Stato (sospendi / riattiva / disabilita) */}
@@ -1124,20 +997,7 @@ export default function AdminPage() {
       {/* Modal Conferma Rinvio Credenziali */}
       {resendingUser && (
         <ConfirmModal
-          icon={
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#06b6d4"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-            </svg>
-          }
+          icon={<ResendIcon size={24} stroke="#06b6d4" />}
           iconWrapperCls="border border-cyan-500/25 bg-cyan-500/10"
           title="Rinvia Credenziali"
           description={
@@ -1160,21 +1020,7 @@ export default function AdminPage() {
       {/* Modal Conferma Eliminazione */}
       {deletingUser && (
         <ConfirmModal
-          icon={
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#ef4444"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-          }
+          icon={<TrashIcon size={24} stroke="#ef4444" />}
           iconWrapperCls="border border-red-500/25 bg-red-500/10"
           title="Elimina Utente"
           description={
@@ -1192,6 +1038,6 @@ export default function AdminPage() {
           onClose={() => setDeletingUser(null)}
         />
       )}
-    </div>
+    </PageContainer>
   )
 }

@@ -15,6 +15,8 @@ import Tooltip from './Tooltip'
 import { matchesSearch } from './tableSearch'
 import ConversationDetailModal from './ConversationDetailModal'
 import Spinner from './Spinner'
+import LoadingState from './LoadingState'
+import { PageContainer, PageHeader } from './PageLayout'
 
 /* Dashboard admin: grafici di riepilogo sui punteggi delle valutazioni,
  * globali o filtrati per singolo utente tramite la ricerca in alto. */
@@ -610,30 +612,27 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-      <header className="mb-8 flex items-start justify-between gap-4 max-sm:flex-col">
-        <div>
-          <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Dashboard</h1>
-          <p className="text-[0.95rem] text-slate-500">
-            Riepilogo dei punteggi delle valutazioni delle conversazioni, per canale e globale o per
-            singolo utente.
-          </p>
-        </div>
-        {showOrgFilter && (
-          <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
-            <Select
-              id="dashboard-org-filter"
-              className="min-w-[220px] max-sm:flex-1"
-              value={orgFilter}
-              onChange={(value) => {
-                setOrgFilter(value)
-                setSelectedUserId('')
-              }}
-              options={orgFilterOptions}
-            />
-          </div>
-        )}
-      </header>
+    <PageContainer>
+      <PageHeader
+        title="Dashboard"
+        description="Riepilogo dei punteggi delle valutazioni delle conversazioni, per canale e globale o per singolo utente."
+        actions={
+          showOrgFilter && (
+            <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
+              <Select
+                id="dashboard-org-filter"
+                className="min-w-[220px] max-sm:flex-1"
+                value={orgFilter}
+                onChange={(value) => {
+                  setOrgFilter(value)
+                  setSelectedUserId('')
+                }}
+                options={orgFilterOptions}
+              />
+            </div>
+          )
+        }
+      />
 
       {error && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
@@ -656,10 +655,7 @@ export default function DashboardPage() {
       )}
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <Spinner />
-          <p>Caricamento dashboard...</p>
-        </div>
+        <LoadingState message="Caricamento dashboard..." />
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-white/6 bg-gray-900/60 p-16 text-center">
           <svg
@@ -981,6 +977,6 @@ export default function DashboardPage() {
           onReviewSaved={() => setReloadKey((k) => k + 1)}
         />
       )}
-    </div>
+    </PageContainer>
   )
 }

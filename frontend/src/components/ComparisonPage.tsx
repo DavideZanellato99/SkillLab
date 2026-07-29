@@ -5,7 +5,8 @@ import { fetchAttempts, fetchComparableUsers } from '../services/comparison'
 import type { Attempt, ComparableUser } from '../services/comparison'
 import ConversationModeBadge from './ConversationModeBadge'
 import Select from './Select'
-import Spinner from './Spinner'
+import LoadingState from './LoadingState'
+import { PageContainer, PageHeader } from './PageLayout'
 
 /* Confronto fra due tentativi della stessa persona.
  *
@@ -244,17 +245,15 @@ export default function ComparisonPage() {
   const differentScenarios = !!left && !!right && left.avatar_id !== right.avatar_id
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-6 py-12">
-      <header className="mb-8">
-        <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">
-          Confronto tra i tentativi
-        </h1>
-        <p className="text-[0.95rem] text-slate-500">
-          {canPickUser
+    <PageContainer width="split">
+      <PageHeader
+        title="Confronto tra i tentativi"
+        description={
+          canPickUser
             ? 'Scegli una persona e metti due delle sue conversazioni una accanto all’altra per vedere cosa è cambiato.'
-            : 'Metti due delle tue conversazioni una accanto all’altra per vedere cosa è migliorato.'}
-        </p>
-      </header>
+            : 'Metti due delle tue conversazioni una accanto all’altra per vedere cosa è migliorato.'
+        }
+      />
 
       {error && (
         <div className="mb-8 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300">
@@ -313,10 +312,7 @@ export default function ComparisonPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <Spinner />
-          <p>Caricamento tentativi...</p>
-        </div>
+        <LoadingState message="Caricamento tentativi..." />
       ) : attempts.length === 0 ? (
         <p className="rounded-2xl border border-white/6 bg-white/4 p-12 text-center text-sm text-slate-500">
           Nessuna conversazione valutata da confrontare.
@@ -402,6 +398,6 @@ export default function ComparisonPage() {
           </>
         )
       )}
-    </div>
+    </PageContainer>
   )
 }

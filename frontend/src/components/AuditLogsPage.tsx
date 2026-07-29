@@ -8,7 +8,10 @@ import { isSuperAdmin, ROLE_BADGE_CLASSES, ROLE_LABELS } from '../services/auth'
 import DataTable, { Td, Tr } from './DataTable'
 import Select from './Select'
 import Spinner from './Spinner'
+import LoadingState from './LoadingState'
+import { PageContainer, PageHeader } from './PageLayout'
 import type { DataTableColumn } from './DataTable'
+import { fieldCls, labelCls } from './Field'
 
 /* Registro delle attività: ogni azione che modifica qualcosa, di qualunque
  * utente e di qualunque ruolo. Pagina riservata al super admin, il backend
@@ -29,8 +32,6 @@ const COLUMNS: DataTableColumn[] = [
   { key: 'dettaglio', ariaLabel: 'Dettaglio' },
 ]
 
-const fieldCls = 'flex flex-col gap-1.5'
-const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
 const dateInputCls =
   'rounded-xl border border-white/6 bg-slate-800/50 px-4 py-2 text-sm text-slate-100 outline-none transition [color-scheme:dark] focus:border-violet-600 focus:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'
 
@@ -149,15 +150,11 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-6 py-12">
-      <header className="mb-8">
-        <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Registro Attività</h1>
-        <p className="text-[0.95rem] text-slate-500">
-          Tutte le azioni compiute sulla piattaforma, da qualunque utente e con qualunque ruolo. Il
-          registro è in sola lettura, le righe scadono automaticamente e non possono essere
-          eliminate.
-        </p>
-      </header>
+    <PageContainer width="wide">
+      <PageHeader
+        title="Registro Attività"
+        description="Tutte le azioni compiute sulla piattaforma, da qualunque utente e con qualunque ruolo. Il registro è in sola lettura, le righe scadono automaticamente e non possono essere eliminate."
+      />
 
       <div className="mb-8 flex flex-wrap items-end gap-4">
         <div className={fieldCls}>
@@ -253,10 +250,7 @@ export default function AuditLogsPage() {
       )}
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <Spinner />
-          <p>Caricamento registro...</p>
-        </div>
+        <LoadingState message="Caricamento registro..." />
       ) : (
         <>
           <DataTable
@@ -396,6 +390,6 @@ export default function AuditLogsPage() {
           </div>
         </>
       )}
-    </div>
+    </PageContainer>
   )
 }

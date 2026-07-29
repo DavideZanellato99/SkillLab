@@ -16,19 +16,16 @@ import {
 import NotificationsBell from './NotificationsBell'
 import PasswordToggle from './PasswordToggle'
 import Spinner from './Spinner'
+import Badge from './Badge'
+import ModalShell from './ModalShell'
+import PrimaryButton from './PrimaryButton'
+import { fieldCls, labelCls, inputCls, litInputWrapperCls, litIconCls } from './Field'
 
 type AuthStep = 'login' | 'new-password'
 
-/* Shared form styles (auth modal) */
-const fieldCls = 'flex flex-col gap-1.5'
-const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
-const inputWrapperCls =
-  'group flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'
-const inputIconCls = 'shrink-0 text-slate-500 transition-colors group-focus-within:text-violet-400'
-const inputCls =
-  'flex-1 border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50'
-const submitBtnCls =
-  'mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60'
+/* Nella modale di accesso ogni campo ha la sua icona, che si accende col
+ * bordo quando il campo riceve il fuoco: da qui il riquadro nella variante
+ * `group`. Il resto degli stili è quello di tutti i form dell'app. */
 const menuItemCls =
   'flex w-full cursor-pointer items-center gap-2 rounded-lg border-none bg-transparent p-2 text-left text-[0.82rem] font-medium text-slate-400 no-underline transition hover:bg-white/8 hover:text-slate-100'
 
@@ -348,11 +345,9 @@ export default function Navbar() {
                               : user.email}
                           </span>
                           <span className="truncate text-xs text-slate-500">{user.email}</span>
-                          <span
-                            className={`mt-1 w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${ROLE_BADGE_CLASSES[user.ruolo] ?? ''}`}
-                          >
+                          <Badge tone={ROLE_BADGE_CLASSES[user.ruolo] ?? ''} className="mt-1">
                             {ROLE_LABELS[user.ruolo] ?? user.ruolo}
-                          </span>
+                          </Badge>
                         </div>
                       </div>
                       <div className="my-1 h-px bg-white/6" />
@@ -561,318 +556,289 @@ export default function Navbar() {
 
       {/* Auth Modal */}
       {showAuthModal && (
-        <div
-          className="fixed inset-0 z-[200] flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-lg [animation-duration:0.2s]"
-          onClick={closeModal}
-          id="auth-overlay"
-        >
-          <div
-            className="relative max-h-[90vh] w-full max-w-[420px] animate-modal-in overflow-y-auto rounded-3xl border border-white/6 bg-gray-900/95 p-12 shadow-[0_24px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(124,58,237,0.08)] backdrop-blur-2xl max-[480px]:rounded-2xl max-[480px]:p-8"
-            onClick={(e) => e.stopPropagation()}
-            id="auth-modal"
-          >
-            {/* Close button */}
-            <button
-              className="absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100"
-              onClick={closeModal}
-              aria-label="Chiudi"
+        <ModalShell onClose={closeModal}>
+          {/* Modal header */}
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <defs>
+                  <linearGradient id="authLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#7c3aed" />
+                    <stop offset="100%" stopColor="#06b6d4" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                  stroke="url(#authLogoGrad)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+
+            {authStep === 'login' ? (
+              <>
+                <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
+                  Bentornato!
+                </h2>
+                <p className="text-[0.85rem] text-slate-500">Accedi per continuare su SkillLab</p>
+              </>
+            ) : (
+              <>
+                <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
+                  Imposta nuova password
+                </h2>
+                <p className="text-[0.85rem] text-slate-500">
+                  La tua password temporanea è scaduta. Scegline una nuova per continuare.
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Error message */}
+          {errorMessage && (
+            <div
+              className="mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]"
+              id="auth-error"
             >
               <svg
-                width="18"
-                height="18"
+                width="16"
+                height="16"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                className="mt-px shrink-0 text-red-500"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-            </button>
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
-            {/* Modal header */}
-            <div className="mb-8 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                  <defs>
-                    <linearGradient id="authLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#7c3aed" />
-                      <stop offset="100%" stopColor="#06b6d4" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                    stroke="url(#authLogoGrad)"
+          {/* Login Form */}
+          {authStep === 'login' && (
+            <form className="flex flex-col gap-4" onSubmit={handleLogin} id="auth-form">
+              <div className={fieldCls}>
+                <label className={labelCls} htmlFor="auth-email">
+                  Email
+                </label>
+                <div className={litInputWrapperCls}>
+                  <svg
+                    className={litIconCls}
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                  >
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                  </svg>
+                  <input
+                    type="text"
+                    id="auth-email"
+                    className={inputCls}
+                    placeholder="nome@esempio.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="username"
+                    disabled={isSubmitting}
                   />
-                </svg>
+                </div>
               </div>
 
-              {authStep === 'login' ? (
-                <>
-                  <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                    Bentornato!
-                  </h2>
-                  <p className="text-[0.85rem] text-slate-500">Accedi per continuare su SkillLab</p>
-                </>
-              ) : (
-                <>
-                  <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                    Imposta nuova password
-                  </h2>
-                  <p className="text-[0.85rem] text-slate-500">
-                    La tua password temporanea è scaduta. Scegline una nuova per continuare.
-                  </p>
-                </>
-              )}
-            </div>
-
-            {/* Error message */}
-            {errorMessage && (
-              <div
-                className="mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]"
-                id="auth-error"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mt-px shrink-0 text-red-500"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-                <span>{errorMessage}</span>
+              <div className={fieldCls}>
+                <label className={labelCls} htmlFor="auth-password">
+                  Password
+                </label>
+                <div className={litInputWrapperCls}>
+                  <svg
+                    className={litIconCls}
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    id="auth-password"
+                    className={inputCls}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={1}
+                    autoComplete="current-password"
+                    disabled={isSubmitting}
+                  />
+                  <PasswordToggle
+                    visible={showPassword}
+                    onToggle={() => setShowPassword((v) => !v)}
+                    disabled={isSubmitting}
+                    controls="auth-password"
+                  />
+                </div>
               </div>
-            )}
 
-            {/* Login Form */}
-            {authStep === 'login' && (
-              <form className="flex flex-col gap-4" onSubmit={handleLogin} id="auth-form">
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-email">
-                    Email
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <svg
-                      className={inputIconCls}
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <rect x="2" y="4" width="20" height="16" rx="2" />
-                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                    </svg>
-                    <input
-                      type="text"
-                      id="auth-email"
-                      className={inputCls}
-                      placeholder="nome@esempio.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      autoComplete="username"
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                </div>
-
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-password">
-                    Password
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <svg
-                      className={inputIconCls}
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      id="auth-password"
-                      className={inputCls}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={1}
-                      autoComplete="current-password"
-                      disabled={isSubmitting}
-                    />
-                    <PasswordToggle
-                      visible={showPassword}
-                      onToggle={() => setShowPassword((v) => !v)}
-                      disabled={isSubmitting}
-                      controls="auth-password"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className={submitBtnCls}
-                  id="auth-submit-btn"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Spinner variant="button" />
-                      Accesso in corso...
-                    </>
-                  ) : (
-                    'Accedi'
-                  )}
-                </button>
-              </form>
-            )}
-
-            {/* New Password Form */}
-            {authStep === 'new-password' && (
-              <form
-                className="flex flex-col gap-4"
-                onSubmit={handleNewPassword}
-                id="auth-new-password-form"
+              <PrimaryButton
+                type="submit"
+                variant="submit"
+                className="mt-1"
+                id="auth-submit-btn"
+                disabled={isSubmitting}
               >
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-new-password">
-                    Nuova Password
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <svg
-                      className={inputIconCls}
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      id="auth-new-password"
-                      className={inputCls}
-                      placeholder="Inserisci la nuova password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
-                      minLength={PASSWORD_MIN_LENGTH}
-                      autoComplete="new-password"
-                      disabled={isSubmitting}
-                    />
-                    <PasswordToggle
-                      visible={showNewPassword}
-                      onToggle={() => setShowNewPassword((v) => !v)}
-                      disabled={isSubmitting}
-                      controls="auth-new-password"
-                    />
-                  </div>
-                </div>
+                {isSubmitting ? (
+                  <>
+                    <Spinner variant="button" />
+                    Accesso in corso...
+                  </>
+                ) : (
+                  'Accedi'
+                )}
+              </PrimaryButton>
+            </form>
+          )}
 
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="auth-confirm-new-password">
-                    Conferma Nuova Password
-                  </label>
-                  <div className={inputWrapperCls}>
-                    <svg
-                      className={inputIconCls}
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    </svg>
-                    <input
-                      type={showConfirmNewPassword ? 'text' : 'password'}
-                      id="auth-confirm-new-password"
-                      className={inputCls}
-                      placeholder="Conferma la nuova password"
-                      value={confirmNewPassword}
-                      onChange={(e) => setConfirmNewPassword(e.target.value)}
-                      required
-                      minLength={PASSWORD_MIN_LENGTH}
-                      autoComplete="new-password"
-                      disabled={isSubmitting}
-                    />
-                    <PasswordToggle
-                      visible={showConfirmNewPassword}
-                      onToggle={() => setShowConfirmNewPassword((v) => !v)}
-                      disabled={isSubmitting}
-                      controls="auth-confirm-new-password"
-                    />
-                  </div>
+          {/* New Password Form */}
+          {authStep === 'new-password' && (
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={handleNewPassword}
+              id="auth-new-password-form"
+            >
+              <div className={fieldCls}>
+                <label className={labelCls} htmlFor="auth-new-password">
+                  Nuova Password
+                </label>
+                <div className={litInputWrapperCls}>
+                  <svg
+                    className={litIconCls}
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    id="auth-new-password"
+                    className={inputCls}
+                    placeholder="Inserisci la nuova password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    minLength={PASSWORD_MIN_LENGTH}
+                    autoComplete="new-password"
+                    disabled={isSubmitting}
+                  />
+                  <PasswordToggle
+                    visible={showNewPassword}
+                    onToggle={() => setShowNewPassword((v) => !v)}
+                    disabled={isSubmitting}
+                    controls="auth-new-password"
+                  />
                 </div>
+              </div>
 
-                <div className="rounded-xl border border-white/6 bg-white/3 px-4 py-2">
-                  <p className="mb-1 text-xs font-semibold text-slate-400">Requisiti password:</p>
-                  <ul className="flex list-none flex-col gap-1">
-                    {PASSWORD_RULES.map((rule) => {
-                      const met = rule.test(newPassword)
-                      return (
-                        <li
-                          key={rule.label}
-                          className={`text-xs transition-colors ${met ? 'text-emerald-500' : 'text-slate-500'}`}
-                        >
-                          <span className="mr-2">{met ? '●' : '○'}</span>
-                          {rule.label}
-                        </li>
-                      )
-                    })}
-                  </ul>
+              <div className={fieldCls}>
+                <label className={labelCls} htmlFor="auth-confirm-new-password">
+                  Conferma Nuova Password
+                </label>
+                <div className={litInputWrapperCls}>
+                  <svg
+                    className={litIconCls}
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                  <input
+                    type={showConfirmNewPassword ? 'text' : 'password'}
+                    id="auth-confirm-new-password"
+                    className={inputCls}
+                    placeholder="Conferma la nuova password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    required
+                    minLength={PASSWORD_MIN_LENGTH}
+                    autoComplete="new-password"
+                    disabled={isSubmitting}
+                  />
+                  <PasswordToggle
+                    visible={showConfirmNewPassword}
+                    onToggle={() => setShowConfirmNewPassword((v) => !v)}
+                    disabled={isSubmitting}
+                    controls="auth-confirm-new-password"
+                  />
                 </div>
+              </div>
 
-                <button
-                  type="submit"
-                  className={submitBtnCls}
-                  id="auth-new-password-submit"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Spinner variant="button" />
-                      Aggiornamento...
-                    </>
-                  ) : (
-                    'Imposta Password'
-                  )}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
+              <div className="rounded-xl border border-white/6 bg-white/3 px-4 py-2">
+                <p className="mb-1 text-xs font-semibold text-slate-400">Requisiti password:</p>
+                <ul className="flex list-none flex-col gap-1">
+                  {PASSWORD_RULES.map((rule) => {
+                    const met = rule.test(newPassword)
+                    return (
+                      <li
+                        key={rule.label}
+                        className={`text-xs transition-colors ${met ? 'text-emerald-500' : 'text-slate-500'}`}
+                      >
+                        <span className="mr-2">{met ? '●' : '○'}</span>
+                        {rule.label}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+
+              <PrimaryButton
+                type="submit"
+                variant="submit"
+                className="mt-1"
+                id="auth-new-password-submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Spinner variant="button" />
+                    Aggiornamento...
+                  </>
+                ) : (
+                  'Imposta Password'
+                )}
+              </PrimaryButton>
+            </form>
+          )}
+        </ModalShell>
       )}
     </>
   )

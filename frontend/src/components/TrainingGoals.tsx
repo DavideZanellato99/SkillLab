@@ -4,6 +4,7 @@ import { fetchMyAssignments } from '../services/training'
 import type { TrainingAssignment } from '../services/training'
 import { AssignmentStatusBadge } from './TrainingPage'
 import { categoryBadgeClasses } from './categoryStyles'
+import Badge from './Badge'
 
 /* Striscia "I tuoi percorsi" in cima alla home: gli obiettivi assegnati
  * all'utente, con il progresso verso il punteggio target. Ogni card apre
@@ -59,11 +60,9 @@ export default function TrainingGoals() {
                   <span className="block truncate text-[0.95rem] font-semibold text-slate-100">
                     {a.avatar_name}
                   </span>
-                  <span
-                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${categoryBadgeClasses(a.avatar_category)}`}
-                  >
+                  <Badge tone={categoryBadgeClasses(a.avatar_category)} className="mt-1">
                     {a.avatar_category}
-                  </span>
+                  </Badge>
                 </div>
                 <AssignmentStatusBadge status={a.status} />
               </div>

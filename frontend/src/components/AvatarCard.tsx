@@ -1,8 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import type { Avatar } from '../services/api'
 import { getAvatarImageUrl } from '../services/api'
-import { categoryBadgeClasses } from './categoryStyles'
-import Tooltip from './Tooltip'
+import AvatarBadges from './AvatarBadges'
 
 interface AvatarCardProps {
   avatar: Avatar
@@ -54,23 +53,7 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
       </div>
 
       <div className="relative p-6">
-        <div className="mb-2 flex items-center gap-2">
-          <span
-            className={`inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(avatar.category)}`}
-          >
-            {avatar.category}
-          </span>
-          {avatar.difficulty && (
-            <Tooltip content="Grado di difficoltà dello scenario">
-              <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[0.7rem] font-semibold text-orange-400">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
-                </svg>
-                Difficoltà: {avatar.difficulty}
-              </span>
-            </Tooltip>
-          )}
-        </div>
+        <AvatarBadges category={avatar.category} difficulty={avatar.difficulty} />
         <h3 className="mb-1 font-heading text-lg font-bold text-slate-100">{avatar.name}</h3>
         <p className="line-clamp-2 text-[0.82rem] leading-normal text-slate-500">
           {avatar.description}

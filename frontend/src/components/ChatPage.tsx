@@ -24,7 +24,8 @@ import EvaluationModal from './EvaluationModal'
 import MessageBubble from './MessageBubble'
 import ExpandedConversationsPanel from './ExpandedConversationsPanel'
 import Tooltip from './Tooltip'
-import { categoryBadgeClasses } from './categoryStyles'
+import AvatarBadges from './AvatarBadges'
+import { TrashIcon } from './icons'
 import { matchesSearch } from './tableSearch'
 import { formatDate } from './chatFormat'
 
@@ -590,23 +591,7 @@ export default function ChatPage() {
             />
           </div>
           <h2 className="mb-1 font-heading text-xl font-bold text-slate-100">{avatar.name}</h2>
-          <div className="mb-2 flex items-center justify-center gap-2">
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(avatar.category)}`}
-            >
-              {avatar.category}
-            </span>
-            {avatar.difficulty && (
-              <Tooltip content="Grado di difficoltà dello scenario">
-                <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[0.7rem] font-semibold text-orange-400">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2l2.9 6.26L21.5 9.27l-4.75 4.63 1.12 6.53L12 17.35l-5.87 3.08 1.12-6.53L2.5 9.27l6.6-1.01L12 2z" />
-                  </svg>
-                  Difficoltà: {avatar.difficulty}
-                </span>
-              </Tooltip>
-            )}
-          </div>
+          <AvatarBadges category={avatar.category} difficulty={avatar.difficulty} center />
           <p className="text-[0.8rem] leading-normal text-slate-500">{avatar.description}</p>
         </div>
 
@@ -742,19 +727,7 @@ export default function ChatPage() {
                         onClick={(e) => handleDeleteConversation(conv.id, e)}
                         aria-label="Elimina conversazione"
                       >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
+                        <TrashIcon />
                       </button>
                     )}
                   </li>

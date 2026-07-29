@@ -20,10 +20,18 @@ import { categoryBadgeClasses } from './categoryStyles'
 import Select from './Select'
 import DataTable, { Td, Tr } from './DataTable'
 import Spinner from './Spinner'
+import LoadingState from './LoadingState'
+import { PageContainer, PageHeader } from './PageLayout'
+import PrimaryButton from './PrimaryButton'
+import FormError from './FormError'
+import ConfirmModal from './ConfirmModal'
+import ModalShell from './ModalShell'
+import { TrashIcon, PlusIcon } from './icons'
 import Tooltip from './Tooltip'
 import PersonaPromptPreview from './PersonaPromptPreview'
 import { matchesSearch } from './tableSearch'
 import type { DataTableColumn } from './DataTable'
+import Badge from './Badge'
 import {
   ALL_PROFILE_KEYS,
   PROFILE_SECTIONS,
@@ -34,24 +42,9 @@ import {
   percentToInput,
 } from './avatarProfileConfig'
 import type { ProfileField } from './avatarProfileConfig'
+import { fieldCls, labelCls, inputWrapperCls, inputCls, textareaCls } from './Field'
 
 /* Shared styles (same look as the users admin page) */
-const fieldCls = 'flex flex-col gap-1.5'
-const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
-const inputWrapperCls =
-  'flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'
-const inputCls =
-  'flex-1 border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50'
-const textareaCls =
-  'w-full resize-y rounded-xl border border-white/6 bg-slate-800/50 px-4 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-violet-600 focus:shadow-[0_0_0_3px_rgba(124,58,237,0.1)] disabled:cursor-not-allowed disabled:opacity-50'
-const submitBtnCls =
-  'mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60'
-const overlayCls =
-  'fixed inset-0 z-[200] flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-lg [animation-duration:0.2s]'
-const modalCloseCls =
-  'absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100'
-const formErrorCls =
-  'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]'
 const actionBtnCls =
   'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40'
 const sectionTitleCls =
@@ -218,29 +211,6 @@ function ProfileFieldInput({
         />
       </div>
       {hint}
-    </div>
-  )
-}
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className={formErrorCls}>
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="mt-px shrink-0 text-red-500"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
-      </svg>
-      <span>{message}</span>
     </div>
   )
 }
@@ -516,34 +486,16 @@ export default function AvatarAdminPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-      <header className="mb-12 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">Gestione Avatar</h1>
-          <p className="text-[0.95rem] text-slate-500">
-            Crea, modifica ed elimina i clienti simulati e le loro schede persona.
-          </p>
-        </div>
-        <button
-          className="flex cursor-pointer items-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-6 py-2 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(124,58,237,0.25)] transition hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(124,58,237,0.4)]"
-          onClick={openCreate}
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Nuovo Avatar
-        </button>
-      </header>
+    <PageContainer>
+      <PageHeader
+        title="Gestione Avatar"
+        description="Crea, modifica ed elimina i clienti simulati e le loro schede persona."
+        actions={
+          <PrimaryButton icon={<PlusIcon size={18} />} onClick={openCreate}>
+            Nuovo Avatar
+          </PrimaryButton>
+        }
+      />
 
       <div className="mb-8 flex flex-wrap items-end gap-4">
         <div className={fieldCls}>
@@ -607,13 +559,10 @@ export default function AvatarAdminPage() {
         </div>
       )}
 
-      {error && <ErrorBox message={error} />}
+      {error && <FormError message={error} />}
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <Spinner />
-          <p>Caricamento avatar...</p>
-        </div>
+        <LoadingState message="Caricamento avatar..." />
       ) : (
         <DataTable
           columns={AVATAR_COLUMNS}
@@ -644,9 +593,12 @@ export default function AvatarAdminPage() {
                     <div className="flex items-center gap-2">
                       <span className="truncate font-semibold text-slate-100">{a.name}</span>
                       {a.deleted_at && (
-                        <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-amber-400">
+                        <Badge
+                          tone="border border-amber-500/30 bg-amber-500/10 text-amber-400"
+                          className="shrink-0"
+                        >
                           Archiviato
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     {a.deleted_at ? (
@@ -669,11 +621,7 @@ export default function AvatarAdminPage() {
                 </span>
               </Td>
               <Td>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${categoryBadgeClasses(a.category)}`}
-                >
-                  {a.category}
-                </span>
+                <Badge tone={categoryBadgeClasses(a.category)}>{a.category}</Badge>
               </Td>
               <Td>
                 <span className="text-[0.85rem] text-orange-400">{a.difficulty ?? '—'}</span>
@@ -746,19 +694,7 @@ export default function AvatarAdminPage() {
                           }}
                           aria-label={`Elimina ${a.name}`}
                         >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
+                          <TrashIcon />
                         </button>
                       </Tooltip>
                     </>
@@ -772,15 +708,41 @@ export default function AvatarAdminPage() {
 
       {/* Modal Crea/Modifica Avatar */}
       {editing && (
-        <div className={overlayCls} onClick={() => !isSaving && setEditing(null)}>
-          <div
-            className="relative max-h-[92vh] w-full max-w-[780px] animate-modal-in overflow-y-auto rounded-3xl border border-white/6 bg-gray-900/95 p-10 shadow-[0_24px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(124,58,237,0.08)] backdrop-blur-2xl max-[480px]:rounded-2xl max-[480px]:p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button className={modalCloseCls} onClick={() => setEditing(null)} disabled={isSaving}>
+        <ModalShell onClose={() => setEditing(null)} locked={isSaving} size="sheet" padding="md">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
               <svg
-                width="18"
-                height="18"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#7c3aed"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
+              {editing === 'new' ? 'Crea Nuovo Avatar' : `Modifica ${editing.name}`}
+            </h2>
+            <p className="text-[0.8rem] text-slate-500">
+              Scheda compilata al{' '}
+              <strong className="text-slate-300">
+                {Math.round((countFilled(form.profile) / ALL_PROFILE_KEYS.length) * 100)}%
+              </strong>{' '}
+              ({countFilled(form.profile)} campi su {ALL_PROFILE_KEYS.length})
+            </p>
+            <button
+              type="button"
+              className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100"
+              onClick={() => setShowPromptPreview(true)}
+            >
+              <svg
+                width="14"
+                height="14"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -788,295 +750,111 @@ export default function AvatarAdminPage() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
+              Anteprima del prompt
             </button>
+          </div>
 
-            <div className="mb-8 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#7c3aed"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                {editing === 'new' ? 'Crea Nuovo Avatar' : `Modifica ${editing.name}`}
-              </h2>
-              <p className="text-[0.8rem] text-slate-500">
-                Scheda compilata al{' '}
-                <strong className="text-slate-300">
-                  {Math.round((countFilled(form.profile) / ALL_PROFILE_KEYS.length) * 100)}%
-                </strong>{' '}
-                ({countFilled(form.profile)} campi su {ALL_PROFILE_KEYS.length})
-              </p>
-              <button
-                type="button"
-                className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100"
-                onClick={() => setShowPromptPreview(true)}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-                Anteprima del prompt
-              </button>
-            </div>
+          {formError && <FormError message={formError} />}
 
-            {formError && <ErrorBox message={formError} />}
-
-            {/* I campi senza cui la simulazione non regge. Un avviso, non un
+          {/* I campi senza cui la simulazione non regge. Un avviso, non un
                 blocco: il salvataggio resta possibile perché una scheda si
                 costruisce in più riprese. */}
-            {missingEssentials(form.profile).length > 0 && (
-              <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-[0.8rem] text-amber-300">
-                <strong className="font-semibold">Campi chiave ancora vuoti:</strong>{' '}
-                {missingEssentials(form.profile).join(', ')}. Senza questi l'avatar ha poco su cui
-                reggere il personaggio.
-              </div>
-            )}
+          {missingEssentials(form.profile).length > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-[0.8rem] text-amber-300">
+              <strong className="font-semibold">Campi chiave ancora vuoti:</strong>{' '}
+              {missingEssentials(form.profile).join(', ')}. Senza questi l'avatar ha poco su cui
+              reggere il personaggio.
+            </div>
+          )}
 
-            <form className="flex flex-col gap-4" onSubmit={handleSave}>
-              {/* ── Dati base ── */}
-              <h3 className={sectionTitleCls}>Dati base</h3>
+          <form className="flex flex-col gap-4" onSubmit={handleSave}>
+            {/* ── Dati base ── */}
+            <h3 className={sectionTitleCls}>Dati base</h3>
+            <div className={fieldCls}>
+              <label className={labelCls} htmlFor="av-description">
+                Brief per l'operatore (descrizione visibile allo studente)
+              </label>
+              <textarea
+                id="av-description"
+                className={textareaCls}
+                rows={2}
+                placeholder="Cliente al telefono: la sua carta è stata rifiutata e chiama arrabbiato..."
+                value={form.description}
+                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                disabled={isSaving}
+              />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls} htmlFor="av-org">
+                Organizzazione proprietaria
+              </label>
+              <Select
+                id="av-org"
+                value={form.organizationId}
+                onChange={(value) => setForm((p) => ({ ...p, organizationId: value }))}
+                options={orgScopeOptions}
+                placeholder="Seleziona organizzazione…"
+                disabled={isSaving}
+              />
+              <p className="text-[0.7rem] text-slate-500">
+                L'avatar è privato dell'organizzazione scelta e visibile solo ai suoi utenti.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
               <div className={fieldCls}>
-                <label className={labelCls} htmlFor="av-description">
-                  Brief per l'operatore (descrizione visibile allo studente)
+                <label className={labelCls} htmlFor="av-category">
+                  Categoria
                 </label>
-                <textarea
-                  id="av-description"
-                  className={textareaCls}
-                  rows={2}
-                  placeholder="Cliente al telefono: la sua carta è stata rifiutata e chiama arrabbiato..."
-                  value={form.description}
-                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                  disabled={isSaving}
-                />
-              </div>
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="av-org">
-                  Organizzazione proprietaria
-                </label>
-                <Select
-                  id="av-org"
-                  value={form.organizationId}
-                  onChange={(value) => setForm((p) => ({ ...p, organizationId: value }))}
-                  options={orgScopeOptions}
-                  placeholder="Seleziona organizzazione…"
-                  disabled={isSaving}
-                />
-                <p className="text-[0.7rem] text-slate-500">
-                  L'avatar è privato dell'organizzazione scelta e visibile solo ai suoi utenti.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="av-category">
-                    Categoria
-                  </label>
-                  {/* Testo libero con i valori già in uso come suggerimenti:
+                {/* Testo libero con i valori già in uso come suggerimenti:
                       una categoria nuova resta possibile, un refuso su una
                       esistente diventa improbabile. */}
-                  <div className={inputWrapperCls}>
-                    <input
-                      type="text"
-                      id="av-category"
-                      list="av-category-options"
-                      className={inputCls}
-                      value={form.category}
-                      onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-                      disabled={isSaving}
-                    />
-                  </div>
-                  <datalist id="av-category-options">
-                    {knownCategories.map((c) => (
-                      <option key={c} value={c} />
-                    ))}
-                  </datalist>
+                <div className={inputWrapperCls}>
+                  <input
+                    type="text"
+                    id="av-category"
+                    list="av-category-options"
+                    className={inputCls}
+                    value={form.category}
+                    onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+                    disabled={isSaving}
+                  />
                 </div>
-
-                <div className={fieldCls}>
-                  <label className={labelCls} htmlFor="av-voice">
-                    Voce Cartesia
-                  </label>
-                  {voices.length > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <Select
-                        id="av-voice"
-                        className="flex-1"
-                        value={form.voiceId}
-                        onChange={(value) => setForm((p) => ({ ...p, voiceId: value }))}
-                        options={voiceOptions}
-                        placeholder="Voce predefinita"
-                        disabled={isSaving}
-                      />
-                      <Tooltip content="Ascolta questa voce">
-                        <button
-                          type="button"
-                          className={`${actionBtnCls} shrink-0 hover:border-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400`}
-                          onClick={() => playVoicePreview(form.voiceId)}
-                          disabled={!form.voiceId || playingVoiceId !== null || isSaving}
-                          aria-label="Ascolta anteprima della voce"
-                        >
-                          {playingVoiceId ? (
-                            <Spinner variant="button" />
-                          ) : (
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <polygon points="5 3 19 12 5 21 5 3" />
-                            </svg>
-                          )}
-                        </button>
-                      </Tooltip>
-                    </div>
-                  ) : (
-                    /* Catalogo non disponibile: si torna all'id da incollare,
-                       perché una voce mancante non deve impedire di salvare. */
-                    <div className={inputWrapperCls}>
-                      <input
-                        type="text"
-                        id="av-voice"
-                        className={inputCls}
-                        placeholder="es. b34ba556-..."
-                        value={form.voiceId}
-                        onChange={(e) => setForm((p) => ({ ...p, voiceId: e.target.value }))}
-                        disabled={isSaving}
-                      />
-                    </div>
-                  )}
-                  {voicesError && <p className="text-[0.7rem] text-amber-400">{voicesError}</p>}
-                </div>
+                <datalist id="av-category-options">
+                  {knownCategories.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
               </div>
 
               <div className={fieldCls}>
-                {/* Un <span>, non una <label>: il gruppo contiene due controlli
-                    (il file e l'URL), nessuno dei due è "il" campo immagine. */}
-                <span className={labelCls}>Immagine</span>
-                <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/6 bg-slate-800/50">
-                    {form.imageUrl ? (
-                      <img
-                        className="h-full w-full object-cover"
-                        src={getAvatarImageUrl(form.imageUrl)}
-                        alt="Anteprima immagine avatar"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[0.65rem] text-slate-600">
-                        auto
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label
-                        className={`cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100 ${
-                          isUploading || isSaving ? 'pointer-events-none opacity-50' : ''
-                        }`}
-                      >
-                        {isUploading ? 'Caricamento...' : 'Carica immagine'}
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/png,image/jpeg,image/webp"
-                          disabled={isUploading || isSaving}
-                          onChange={(e) => {
-                            handleImageUpload(e.target.files?.[0])
-                            // Permette di ricaricare lo stesso file dopo un errore
-                            e.target.value = ''
-                          }}
-                        />
-                      </label>
-                      {form.imageUrl && (
-                        <button
-                          type="button"
-                          className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-                          onClick={() => setForm((p) => ({ ...p, imageUrl: '' }))}
-                          disabled={isSaving}
-                        >
-                          Rimuovi
-                        </button>
-                      )}
-                    </div>
-                    <div className={inputWrapperCls}>
-                      <input
-                        type="text"
-                        id="av-image"
-                        className={inputCls}
-                        placeholder="oppure incolla un URL"
-                        value={form.imageUrl}
-                        onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
-                        disabled={isSaving}
-                      />
-                    </div>
-                  </div>
-                </div>
-                <p className="text-[0.7rem] text-slate-500">
-                  PNG, JPEG o WebP fino a 2 MB. Lasciando il campo vuoto viene generata un'immagine
-                  con le iniziali.
-                </p>
-              </div>
-
-              {/* ── Scheda persona ──
-                  Una sezione alla volta: il conteggio sull'intestazione dice
-                  cosa manca senza costringere ad aprirla. */}
-              <div className="mt-2 flex flex-col gap-2">
-                {PROFILE_SECTIONS.map((section) => {
-                  const keys = section.fields.map((f) => f.key)
-                  const filled = countFilled(form.profile, keys)
-                  const isOpen = openSections.includes(section.title)
-                  return (
-                    <div
-                      key={section.title}
-                      /* Niente overflow-hidden: ritaglierebbe le tendine dei
-                         Select interni. Gli angoli li arrotonda direttamente
-                         l'intestazione, che è l'unico figlio a sfondo pieno. */
-                      className="rounded-2xl border border-white/6 bg-white/2"
-                    >
+                <label className={labelCls} htmlFor="av-voice">
+                  Voce Cartesia
+                </label>
+                {voices.length > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <Select
+                      id="av-voice"
+                      className="flex-1"
+                      value={form.voiceId}
+                      onChange={(value) => setForm((p) => ({ ...p, voiceId: value }))}
+                      options={voiceOptions}
+                      placeholder="Voce predefinita"
+                      disabled={isSaving}
+                    />
+                    <Tooltip content="Ascolta questa voce">
                       <button
                         type="button"
-                        className={`flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent px-4 py-3 text-left transition hover:bg-white/4 ${
-                          isOpen ? 'rounded-t-2xl' : 'rounded-2xl'
-                        }`}
-                        onClick={() => toggleSection(section.title)}
-                        aria-expanded={isOpen}
+                        className={`${actionBtnCls} shrink-0 hover:border-cyan-500 hover:bg-cyan-500/10 hover:text-cyan-400`}
+                        onClick={() => playVoicePreview(form.voiceId)}
+                        disabled={!form.voiceId || playingVoiceId !== null || isSaving}
+                        aria-label="Ascolta anteprima della voce"
                       >
-                        <span className="text-[0.72rem] font-semibold uppercase tracking-widest text-violet-400">
-                          {section.title}
-                        </span>
-                        <span className="flex items-center gap-3">
-                          <span
-                            className={`text-[0.7rem] ${
-                              filled === 0 ? 'text-slate-600' : 'text-slate-400'
-                            }`}
-                          >
-                            {filled}/{keys.length}
-                          </span>
+                        {playingVoiceId ? (
+                          <Spinner variant="button" />
+                        ) : (
                           <svg
                             width="14"
                             height="14"
@@ -1086,47 +864,184 @@ export default function AvatarAdminPage() {
                             strokeWidth="2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            className={`shrink-0 transition-transform ${
-                              isOpen ? 'rotate-180 text-violet-400' : 'text-slate-500'
-                            }`}
                           >
-                            <path d="m6 9 6 6 6-6" />
+                            <polygon points="5 3 19 12 5 21 5 3" />
                           </svg>
-                        </span>
+                        )}
                       </button>
-                      {isOpen && (
-                        <div className="grid grid-cols-2 gap-3 border-t border-white/6 p-4 max-[600px]:grid-cols-1">
-                          {section.fields.map((field) => (
-                            <ProfileFieldInput
-                              key={field.key}
-                              field={field}
-                              value={form.profile[field.key] ?? ''}
-                              onChange={(value) => setProfileField(field.key, value)}
-                              disabled={isSaving}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              <button type="submit" className={submitBtnCls} disabled={isSaving}>
-                {isSaving ? (
-                  <>
-                    <Spinner variant="button" />
-                    Salvataggio...
-                  </>
-                ) : editing === 'new' ? (
-                  'Crea Avatar'
+                    </Tooltip>
+                  </div>
                 ) : (
-                  'Salva Modifiche'
+                  /* Catalogo non disponibile: si torna all'id da incollare,
+                       perché una voce mancante non deve impedire di salvare. */
+                  <div className={inputWrapperCls}>
+                    <input
+                      type="text"
+                      id="av-voice"
+                      className={inputCls}
+                      placeholder="es. b34ba556-..."
+                      value={form.voiceId}
+                      onChange={(e) => setForm((p) => ({ ...p, voiceId: e.target.value }))}
+                      disabled={isSaving}
+                    />
+                  </div>
                 )}
-              </button>
-            </form>
-          </div>
-        </div>
+                {voicesError && <p className="text-[0.7rem] text-amber-400">{voicesError}</p>}
+              </div>
+            </div>
+
+            <div className={fieldCls}>
+              {/* Un <span>, non una <label>: il gruppo contiene due controlli
+                    (il file e l'URL), nessuno dei due è "il" campo immagine. */}
+              <span className={labelCls}>Immagine</span>
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/6 bg-slate-800/50">
+                  {form.imageUrl ? (
+                    <img
+                      className="h-full w-full object-cover"
+                      src={getAvatarImageUrl(form.imageUrl)}
+                      alt="Anteprima immagine avatar"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[0.65rem] text-slate-600">
+                      auto
+                    </div>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label
+                      className={`cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100 ${
+                        isUploading || isSaving ? 'pointer-events-none opacity-50' : ''
+                      }`}
+                    >
+                      {isUploading ? 'Caricamento...' : 'Carica immagine'}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/png,image/jpeg,image/webp"
+                        disabled={isUploading || isSaving}
+                        onChange={(e) => {
+                          handleImageUpload(e.target.files?.[0])
+                          // Permette di ricaricare lo stesso file dopo un errore
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                    {form.imageUrl && (
+                      <button
+                        type="button"
+                        className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
+                        onClick={() => setForm((p) => ({ ...p, imageUrl: '' }))}
+                        disabled={isSaving}
+                      >
+                        Rimuovi
+                      </button>
+                    )}
+                  </div>
+                  <div className={inputWrapperCls}>
+                    <input
+                      type="text"
+                      id="av-image"
+                      className={inputCls}
+                      placeholder="oppure incolla un URL"
+                      value={form.imageUrl}
+                      onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
+                      disabled={isSaving}
+                    />
+                  </div>
+                </div>
+              </div>
+              <p className="text-[0.7rem] text-slate-500">
+                PNG, JPEG o WebP fino a 2 MB. Lasciando il campo vuoto viene generata un'immagine
+                con le iniziali.
+              </p>
+            </div>
+
+            {/* ── Scheda persona ──
+                  Una sezione alla volta: il conteggio sull'intestazione dice
+                  cosa manca senza costringere ad aprirla. */}
+            <div className="mt-2 flex flex-col gap-2">
+              {PROFILE_SECTIONS.map((section) => {
+                const keys = section.fields.map((f) => f.key)
+                const filled = countFilled(form.profile, keys)
+                const isOpen = openSections.includes(section.title)
+                return (
+                  <div
+                    key={section.title}
+                    /* Niente overflow-hidden: ritaglierebbe le tendine dei
+                         Select interni. Gli angoli li arrotonda direttamente
+                         l'intestazione, che è l'unico figlio a sfondo pieno. */
+                    className="rounded-2xl border border-white/6 bg-white/2"
+                  >
+                    <button
+                      type="button"
+                      className={`flex w-full cursor-pointer items-center justify-between gap-3 border-none bg-transparent px-4 py-3 text-left transition hover:bg-white/4 ${
+                        isOpen ? 'rounded-t-2xl' : 'rounded-2xl'
+                      }`}
+                      onClick={() => toggleSection(section.title)}
+                      aria-expanded={isOpen}
+                    >
+                      <span className="text-[0.72rem] font-semibold uppercase tracking-widest text-violet-400">
+                        {section.title}
+                      </span>
+                      <span className="flex items-center gap-3">
+                        <span
+                          className={`text-[0.7rem] ${
+                            filled === 0 ? 'text-slate-600' : 'text-slate-400'
+                          }`}
+                        >
+                          {filled}/{keys.length}
+                        </span>
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className={`shrink-0 transition-transform ${
+                            isOpen ? 'rotate-180 text-violet-400' : 'text-slate-500'
+                          }`}
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="grid grid-cols-2 gap-3 border-t border-white/6 p-4 max-[600px]:grid-cols-1">
+                        {section.fields.map((field) => (
+                          <ProfileFieldInput
+                            key={field.key}
+                            field={field}
+                            value={form.profile[field.key] ?? ''}
+                            onChange={(value) => setProfileField(field.key, value)}
+                            disabled={isSaving}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Spinner variant="button" />
+                  Salvataggio...
+                </>
+              ) : editing === 'new' ? (
+                'Crea Avatar'
+              ) : (
+                'Salva Modifiche'
+              )}
+            </PrimaryButton>
+          </form>
+        </ModalShell>
       )}
 
       {/* Anteprima del prompt: legge la scheda in corso, anche non salvata */}
@@ -1136,55 +1051,17 @@ export default function AvatarAdminPage() {
 
       {/* Modal Conferma Eliminazione */}
       {deleting && (
-        <div className={overlayCls} onClick={() => !isDeleting && setDeleting(null)}>
-          <div
-            className="relative max-h-[90vh] w-full max-w-[420px] animate-modal-in overflow-y-auto rounded-3xl border border-white/6 bg-gray-900/95 p-12 shadow-[0_24px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(124,58,237,0.08)] backdrop-blur-2xl max-[480px]:rounded-2xl max-[480px]:p-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className={modalCloseCls}
-              onClick={() => setDeleting(null)}
-              disabled={isDeleting}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-red-500/25 bg-red-500/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                Elimina Avatar
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                <strong className="text-slate-100">{deleting.name}</strong> esce dalla galleria
-                degli studenti e non sarà più possibile iniziare nuove sessioni con lui.
-              </p>
-              <p className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-left text-[0.8rem] text-emerald-300">
+        <ConfirmModal
+          icon={<TrashIcon size={24} stroke="#ef4444" />}
+          iconWrapperCls="border border-red-500/25 bg-red-500/10"
+          title="Elimina Avatar"
+          description={
+            <>
+              <strong className="text-slate-100">{deleting.name}</strong> esce dalla galleria degli
+              studenti e non sarà più possibile iniziare nuove sessioni con lui.
+              {/* L'eliminazione è logica: dirlo qui evita che sembri una
+                  cancellazione di dati e che l'admin si fermi per paura. */}
+              <span className="mt-3 block rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-left text-[0.8rem] text-emerald-300">
                 {deleting.conversation_count > 0 ? (
                   <>
                     Le{' '}
@@ -1198,37 +1075,18 @@ export default function AvatarAdminPage() {
                   <>Nessun dato viene cancellato.</>
                 )}{' '}
                 Puoi ripristinare l'avatar in qualsiasi momento dal filtro "Archiviati".
-              </p>
-            </div>
-
-            {deleteError && <ErrorBox message={deleteError} />}
-
-            <div className="flex gap-3">
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => setDeleting(null)}
-                disabled={isDeleting}
-              >
-                Annulla
-              </button>
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? (
-                  <>
-                    <Spinner variant="button" />
-                    Eliminazione...
-                  </>
-                ) : (
-                  'Elimina Avatar'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+              </span>
+            </>
+          }
+          error={deleteError}
+          confirmLabel="Elimina Avatar"
+          pendingLabel="Eliminazione..."
+          confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
+          isPending={isDeleting}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleting(null)}
+        />
       )}
-    </div>
+    </PageContainer>
   )
 }

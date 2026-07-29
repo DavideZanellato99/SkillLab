@@ -17,28 +17,21 @@ import Select from './Select'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
 import Spinner from './Spinner'
+import LoadingState from './LoadingState'
+import { PageContainer, PageHeader } from './PageLayout'
+import PrimaryButton from './PrimaryButton'
+import FormError from './FormError'
+import ConfirmModal from './ConfirmModal'
+import ModalShell, { ModalHeader } from './ModalShell'
+import { SuspendIcon, ReactivateIcon, TrashIcon, PlusIcon } from './icons'
 import { matchesSearch } from './tableSearch'
 import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
 import type { DataTableColumn } from './DataTable'
+import Badge from './Badge'
 import type { KebabMenuItem } from './KebabMenu'
+import Field, { fieldCls, labelCls, inputWrapperCls, inputCls, TextInput } from './Field'
 
 /* Shared form styles (same look as the users admin page) */
-const fieldCls = 'flex flex-col gap-1.5'
-const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
-const inputWrapperCls =
-  'flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'
-const inputCls =
-  'flex-1 border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed disabled:opacity-50'
-const submitBtnCls =
-  'mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60'
-const overlayCls =
-  'fixed inset-0 z-[200] flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-lg [animation-duration:0.2s]'
-const modalCls =
-  'relative m-auto max-h-[90vh] w-full max-w-[440px] animate-modal-in overflow-y-auto overflow-x-hidden rounded-3xl border border-white/6 bg-gray-900/95 p-12 shadow-[0_24px_80px_rgba(0,0,0,0.5),0_0_60px_rgba(124,58,237,0.08)] backdrop-blur-2xl max-[480px]:rounded-2xl max-[480px]:p-8'
-const modalCloseCls =
-  'absolute right-4 top-4 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100'
-const formErrorCls =
-  'mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]'
 const actionBtnCls =
   'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40'
 
@@ -82,60 +75,11 @@ const ORG_COLUMNS: DataTableColumn[] = [
   { key: 'azioni', label: 'Azioni', align: 'right' },
 ]
 
-const suspendIcon = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="10" y1="15" x2="10" y2="9" />
-    <line x1="14" y1="15" x2="14" y2="9" />
-  </svg>
-)
-const reactivateIcon = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="9 12 11 14 15 10" />
-  </svg>
-)
-
-function ErrorBox({ message }: { message: string }) {
-  return (
-    <div className={formErrorCls}>
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="mt-px shrink-0 text-red-500"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="12" />
-        <line x1="12" y1="16" x2="12.01" y2="16" />
-      </svg>
-      <span>{message}</span>
-    </div>
-  )
-}
+const suspendIcon = <SuspendIcon />
+const reactivateIcon = <ReactivateIcon />
+/* L'icona della modale è la stessa del menu, alla misura grande e nel rosso
+ * dell'azione distruttiva. */
+const deleteIcon = <TrashIcon size={24} stroke="#ef4444" />
 
 export default function OrganizationsPage() {
   const { user } = useAuth()
@@ -319,36 +263,16 @@ export default function OrganizationsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-      <header className="mb-12 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">
-            Gestione Organizzazioni
-          </h1>
-          <p className="text-[0.95rem] text-slate-500">
-            Crea, sospendi ed elimina le organizzazioni che usano la piattaforma.
-          </p>
-        </div>
-        <button
-          className="flex cursor-pointer items-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-6 py-2 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(124,58,237,0.25)] transition hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(124,58,237,0.4)]"
-          onClick={openCreate}
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          Nuova Organizzazione
-        </button>
-      </header>
+    <PageContainer>
+      <PageHeader
+        title="Gestione Organizzazioni"
+        description="Crea, sospendi ed elimina le organizzazioni che usano la piattaforma."
+        actions={
+          <PrimaryButton icon={<PlusIcon size={18} />} onClick={openCreate}>
+            Nuova Organizzazione
+          </PrimaryButton>
+        }
+      />
 
       <div className="mb-8 flex flex-wrap items-end gap-4">
         <div className={fieldCls}>
@@ -393,13 +317,10 @@ export default function OrganizationsPage() {
         </div>
       )}
 
-      {error && <ErrorBox message={error} />}
+      {error && <FormError message={error} />}
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <Spinner />
-          <p>Caricamento organizzazioni...</p>
-        </div>
+        <LoadingState message="Caricamento organizzazioni..." />
       ) : (
         <DataTable
           columns={ORG_COLUMNS}
@@ -450,11 +371,9 @@ export default function OrganizationsPage() {
                 </Td>
                 <Td>
                   <div className="flex flex-col items-start gap-1">
-                    <span
-                      className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[o.status] ?? ''}`}
-                    >
+                    <Badge tone={STATUS_BADGE_CLASSES[o.status] ?? ''}>
                       {STATUS_LABELS[o.status] ?? o.status}
-                    </span>
+                    </Badge>
                     {/* Il motivo sta accanto allo stato che spiega: cercarlo
                         nel dettaglio vorrebbe dire aprire riga per riga. */}
                     {o.status === 'suspended' && o.suspension_reason && (
@@ -507,19 +426,7 @@ export default function OrganizationsPage() {
                         }}
                         aria-label={`Elimina ${o.name}`}
                       >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
+                        <TrashIcon />
                       </button>
                     </Tooltip>
                     <Tooltip wrap content="Altre azioni">
@@ -567,11 +474,9 @@ export default function OrganizationsPage() {
             </code>
           </DetailField>
           <DetailField label="Stato">
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider ${STATUS_BADGE_CLASSES[viewingOrg.status] ?? ''}`}
-            >
+            <Badge tone={STATUS_BADGE_CLASSES[viewingOrg.status] ?? ''}>
               {STATUS_LABELS[viewingOrg.status] ?? viewingOrg.status}
-            </span>
+            </Badge>
           </DetailField>
           {viewingOrg.status === 'suspended' && viewingOrg.suspension_reason && (
             <DetailField label="Motivo sospensione">{viewingOrg.suspension_reason}</DetailField>
@@ -675,302 +580,172 @@ export default function OrganizationsPage() {
 
       {/* Modal Crea/Modifica Organizzazione */}
       {editing && (
-        <div className={overlayCls} onClick={() => !isSaving && setEditing(null)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button className={modalCloseCls} onClick={() => setEditing(null)} disabled={isSaving}>
+        <ModalShell onClose={() => setEditing(null)} locked={isSaving}>
+          <ModalHeader
+            iconWrapperCls="border border-violet-600/20 bg-violet-600/10"
+            icon={
               <svg
-                width="18"
-                height="18"
+                width="24"
+                height="24"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="currentColor"
+                stroke="#7c3aed"
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
               </svg>
-            </button>
+            }
+            title="{editing === 'new' ? 'Crea Nuova Organizzazione' : `Modifica ${editing.name}`}"
+            description={<>Lo slug è generato automaticamente dal nome se lasciato vuoto.</>}
+            className="mb-8"
+          />
 
-            <div className="mb-8 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#7c3aed"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                {editing === 'new' ? 'Crea Nuova Organizzazione' : `Modifica ${editing.name}`}
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                Lo slug è generato automaticamente dal nome se lasciato vuoto.
-              </p>
-            </div>
+          {formError && <FormError message={formError} />}
 
-            {formError && <ErrorBox message={formError} />}
+          <form className="flex flex-col gap-4" onSubmit={handleSave}>
+            <Field label="Nome" htmlFor="org-name">
+              <TextInput
+                type="text"
+                id="org-name"
+                placeholder="Banca Esempio S.p.A."
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                disabled={isSaving}
+              />
+            </Field>
+            <Field label="Slug (opzionale)" htmlFor="org-slug">
+              <TextInput
+                type="text"
+                id="org-slug"
+                placeholder="banca-esempio"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                disabled={isSaving}
+              />
+            </Field>
 
-            <form className="flex flex-col gap-4" onSubmit={handleSave}>
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="org-name">
-                  Nome
-                </label>
-                <div className={inputWrapperCls}>
-                  <input
-                    type="text"
-                    id="org-name"
-                    className={inputCls}
-                    placeholder="Banca Esempio S.p.A."
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    disabled={isSaving}
-                  />
-                </div>
-              </div>
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="org-slug">
-                  Slug (opzionale)
-                </label>
-                <div className={inputWrapperCls}>
-                  <input
-                    type="text"
-                    id="org-slug"
-                    className={inputCls}
-                    placeholder="banca-esempio"
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value)}
-                    disabled={isSaving}
-                  />
-                </div>
-              </div>
-
-              <button type="submit" className={submitBtnCls} disabled={isSaving}>
-                {isSaving ? (
-                  <>
-                    <Spinner variant="button" />
-                    Salvataggio...
-                  </>
-                ) : editing === 'new' ? (
-                  'Crea Organizzazione'
-                ) : (
-                  'Salva Modifiche'
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
+            <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Spinner variant="button" />
+                  Salvataggio...
+                </>
+              ) : editing === 'new' ? (
+                'Crea Organizzazione'
+              ) : (
+                'Salva Modifiche'
+              )}
+            </PrimaryButton>
+          </form>
+        </ModalShell>
       )}
 
       {/* Modal Conferma Cambio Stato */}
       {statusAction && (
-        <div className={overlayCls} onClick={() => !isSavingStatus && setStatusAction(null)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button
-              className={modalCloseCls}
-              onClick={() => setStatusAction(null)}
-              disabled={isSavingStatus}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-6 text-center">
-              <div
-                className={`mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl ${statusAction.target === 'active' ? 'border border-emerald-500/25 bg-emerald-500/10' : 'border border-amber-500/25 bg-amber-500/10'}`}
-              >
-                {statusAction.target === 'active' ? reactivateIcon : suspendIcon}
+        <ConfirmModal
+          icon={statusAction.target === 'active' ? reactivateIcon : suspendIcon}
+          iconWrapperCls={
+            statusAction.target === 'active'
+              ? 'border border-emerald-500/25 bg-emerald-500/10'
+              : 'border border-amber-500/25 bg-amber-500/10'
+          }
+          title={
+            statusAction.target === 'active' ? 'Riattiva Organizzazione' : 'Sospendi Organizzazione'
+          }
+          description={
+            statusAction.target === 'active' ? (
+              <>
+                L'organizzazione <strong className="text-slate-100">{statusAction.org.name}</strong>{' '}
+                torna attiva: i suoi utenti potranno accedere di nuovo.
+              </>
+            ) : (
+              <>
+                Blocchi l'accesso a tutti gli utenti di{' '}
+                <strong className="text-slate-100">{statusAction.org.name}</strong>: il login viene
+                impedito e le sessioni aperte chiuse subito. È reversibile.
+              </>
+            )
+          }
+          error={statusError}
+          confirmLabel={statusAction.target === 'active' ? 'Riattiva' : 'Sospendi'}
+          pendingLabel="Attendere..."
+          confirmClassName={
+            statusAction.target === 'active'
+              ? 'border border-emerald-500/35 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+              : 'border border-amber-500/35 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+          }
+          isPending={isSavingStatus}
+          onConfirm={handleConfirmStatus}
+          onClose={() => setStatusAction(null)}
+        >
+          {/* Il motivo lo leggono gli utenti bloccati al posto del muro
+              generico, quindi si scrive qui, nel momento in cui la
+              decisione viene presa. */}
+          {statusAction.target === 'suspended' && (
+            <div className={`${fieldCls} mb-4`}>
+              <label className={labelCls} htmlFor="org-suspension-reason">
+                Motivo (opzionale, visibile agli utenti)
+              </label>
+              <div className={inputWrapperCls}>
+                <textarea
+                  id="org-suspension-reason"
+                  className={`${inputCls} resize-none`}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Es. Contratto scaduto, contatta il tuo referente."
+                  value={statusReason}
+                  onChange={(e) => setStatusReason(e.target.value)}
+                  disabled={isSavingStatus}
+                />
               </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                {statusAction.target === 'active'
-                  ? 'Riattiva Organizzazione'
-                  : 'Sospendi Organizzazione'}
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                {statusAction.target === 'active' ? (
-                  <>
-                    L'organizzazione{' '}
-                    <strong className="text-slate-100">{statusAction.org.name}</strong> torna
-                    attiva: i suoi utenti potranno accedere di nuovo.
-                  </>
-                ) : (
-                  <>
-                    Blocchi l'accesso a tutti gli utenti di{' '}
-                    <strong className="text-slate-100">{statusAction.org.name}</strong>: il login
-                    viene impedito e le sessioni aperte chiuse subito. È reversibile.
-                  </>
-                )}
-              </p>
             </div>
-
-            {/* Il motivo lo leggono gli utenti bloccati al posto del muro
-                generico, quindi si scrive qui, nel momento in cui la
-                decisione viene presa. */}
-            {statusAction.target === 'suspended' && (
-              <div className={`${fieldCls} mb-4`}>
-                <label className={labelCls} htmlFor="org-suspension-reason">
-                  Motivo (opzionale, visibile agli utenti)
-                </label>
-                <div className={inputWrapperCls}>
-                  <textarea
-                    id="org-suspension-reason"
-                    className={`${inputCls} resize-none`}
-                    rows={2}
-                    maxLength={500}
-                    placeholder="Es. Contratto scaduto, contatta il tuo referente."
-                    value={statusReason}
-                    onChange={(e) => setStatusReason(e.target.value)}
-                    disabled={isSavingStatus}
-                  />
-                </div>
-              </div>
-            )}
-
-            {statusError && <ErrorBox message={statusError} />}
-
-            <div className="flex gap-3">
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => setStatusAction(null)}
-                disabled={isSavingStatus}
-              >
-                Annulla
-              </button>
-              <button
-                className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${statusAction.target === 'active' ? 'border border-emerald-500/35 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'border border-amber-500/35 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'}`}
-                onClick={handleConfirmStatus}
-                disabled={isSavingStatus}
-              >
-                {isSavingStatus ? (
-                  <>
-                    <Spinner variant="button" />
-                    Attendere...
-                  </>
-                ) : statusAction.target === 'active' ? (
-                  'Riattiva'
-                ) : (
-                  'Sospendi'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+          )}
+        </ConfirmModal>
       )}
 
       {/* Modal Conferma Eliminazione */}
       {deleting && (
-        <div className={overlayCls} onClick={() => !isDeleting && setDeleting(null)}>
-          <div className={modalCls} onClick={(e) => e.stopPropagation()}>
-            <button
-              className={modalCloseCls}
-              onClick={() => setDeleting(null)}
-              disabled={isDeleting}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-
-            <div className="mb-6 text-center">
-              <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-red-500/25 bg-red-500/10">
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </div>
-              <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                Elimina Organizzazione
-              </h2>
-              <p className="text-[0.85rem] text-slate-500">
-                Stai per eliminare <strong className="text-slate-100">{deleting.name}</strong> con{' '}
-                <strong className="text-slate-100">{deleting.user_count} utenti</strong> (rimossi
-                anche da Cognito), tutte le loro conversazioni e i{' '}
-                <strong className="text-slate-100">{deleting.avatar_count} avatar privati</strong>{' '}
-                dell'organizzazione. L'operazione non è reversibile. Scrivi{' '}
-                <strong className="text-slate-100">{deleting.name}</strong> per confermare.
-              </p>
-            </div>
-
-            {deleteError && <ErrorBox message={deleteError} />}
-
-            <div className={`${fieldCls} mb-4`}>
-              <div className={inputWrapperCls}>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder={deleting.name}
-                  value={deleteConfirmText}
-                  onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  disabled={isDeleting}
-                  aria-label="Conferma nome organizzazione"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => setDeleting(null)}
+        <ConfirmModal
+          icon={deleteIcon}
+          iconWrapperCls="border border-red-500/25 bg-red-500/10"
+          title="Elimina Organizzazione"
+          description={
+            <>
+              Stai per eliminare <strong className="text-slate-100">{deleting.name}</strong> con{' '}
+              <strong className="text-slate-100">{deleting.user_count} utenti</strong> (rimossi
+              anche da Cognito), tutte le loro conversazioni e i{' '}
+              <strong className="text-slate-100">{deleting.avatar_count} avatar privati</strong>{' '}
+              dell'organizzazione. L'operazione non è reversibile. Scrivi{' '}
+              <strong className="text-slate-100">{deleting.name}</strong> per confermare.
+            </>
+          }
+          error={deleteError}
+          confirmLabel="Elimina Definitivamente"
+          pendingLabel="Eliminazione..."
+          confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
+          isPending={isDeleting}
+          confirmDisabled={deleteConfirmText.trim() !== deleting.name}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleting(null)}
+        >
+          <div className={`${fieldCls} mb-4`}>
+            <div className={inputWrapperCls}>
+              <input
+                type="text"
+                className={inputCls}
+                placeholder={deleting.name}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
                 disabled={isDeleting}
-              >
-                Annulla
-              </button>
-              <button
-                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting || deleteConfirmText.trim() !== deleting.name}
-              >
-                {isDeleting ? (
-                  <>
-                    <Spinner variant="button" />
-                    Eliminazione...
-                  </>
-                ) : (
-                  'Elimina Definitivamente'
-                )}
-              </button>
+                aria-label="Conferma nome organizzazione"
+              />
             </div>
           </div>
-        </div>
+        </ConfirmModal>
       )}
-    </div>
+    </PageContainer>
   )
 }

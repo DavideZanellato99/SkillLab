@@ -17,7 +17,11 @@ import DataTable, { Td, Tr } from './DataTable'
 import SearchSelect from './SearchSelect'
 import Select from './Select'
 import Spinner from './Spinner'
+import LoadingState from './LoadingState'
+import { PageContainer, PageHeader } from './PageLayout'
 import Tooltip from './Tooltip'
+import { TrashIcon } from './icons'
+import { cardInputCls as inputCls } from './Field'
 import { matchesSearch } from './tableSearch'
 
 /* Percorsi di training assegnati: un admin affida a uno o più utenti un
@@ -45,8 +49,6 @@ interface AssignableAvatar {
 }
 
 const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
-const inputCls =
-  'rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-600 focus:bg-violet-600/8'
 
 export const STATUS_META: Record<AssignmentStatus, { label: string; cls: string }> = {
   active: { label: 'In corso', cls: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' },
@@ -268,30 +270,25 @@ export default function TrainingPage() {
   )
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-6 py-12">
-      <header className="mb-8 flex items-start justify-between gap-4 max-sm:flex-col">
-        <div>
-          <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">
-            Percorsi di training
-          </h1>
-          <p className="text-[0.95rem] text-slate-500">
-            Obiettivi assegnati agli utenti, con lo stato di completamento derivato dalle
-            valutazioni.
-          </p>
-        </div>
-        {isSuperAdmin(user) && (
-          <Select
-            id="training-org-filter"
-            className="min-w-[220px] shrink-0 max-sm:w-full"
-            value={orgFilter}
-            onChange={setOrgFilter}
-            options={[
-              { value: '', label: 'Tutte le organizzazioni' },
-              ...organizations.map((o) => ({ value: o.id, label: o.name })),
-            ]}
-          />
-        )}
-      </header>
+    <PageContainer>
+      <PageHeader
+        title="Percorsi di training"
+        description="Obiettivi assegnati agli utenti, con lo stato di completamento derivato dalle valutazioni."
+        actions={
+          isSuperAdmin(user) && (
+            <Select
+              id="training-org-filter"
+              className="min-w-[220px] shrink-0 max-sm:w-full"
+              value={orgFilter}
+              onChange={setOrgFilter}
+              options={[
+                { value: '', label: 'Tutte le organizzazioni' },
+                ...organizations.map((o) => ({ value: o.id, label: o.name })),
+              ]}
+            />
+          )
+        }
+      />
 
       {error && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
@@ -451,10 +448,7 @@ export default function TrainingPage() {
       )}
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center gap-4 p-16 text-slate-500">
-          <Spinner />
-          <p>Caricamento percorsi...</p>
-        </div>
+        <LoadingState message="Caricamento percorsi..." />
       ) : (
         <DataTable
           columns={[
@@ -524,19 +518,7 @@ export default function TrainingPage() {
                       onClick={() => handleDelete(a)}
                       aria-label={`Elimina il percorso di ${a.user_name} su ${a.avatar_name}`}
                     >
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
+                      <TrashIcon size={15} />
                     </button>
                   </Tooltip>
                 </Td>
@@ -545,6 +527,6 @@ export default function TrainingPage() {
           ))}
         </DataTable>
       )}
-    </div>
+    </PageContainer>
   )
 }

@@ -1,21 +1,50 @@
+# Stack di produzione.
+#
+# Attenzione: docker-compose.override.yml, accanto a questo file, viene letto
+# in automatico e lo trasforma in un ambiente di sviluppo con hot-reload. Per
+# far girare la produzione serve escluderlo esplicitamente:
+#
+#   docker compose -f docker-compose.yml up -d --build
+#
+# Due regole, che è il motivo per cui questo file non contiene né password né
+# porte affacciate all'esterno:
+#
+# 1. Nessun segreto scritto qui dentro. Le credenziali del database arrivano
+#    dall'ambiente (il file .env accanto a questo, non versionato) e senza
+#    password compose si rifiuta di partire, dicendo cosa manca. Un errore in
+#    faccia al primo avvio è infinitamente meglio di un database di
+#    produzione con dentro "postgres/postgres" che nessuno noterà mai.
+#
+#    Nessuna delle tre ha un default: chi installa le sceglie, non le eredita
+#    da qui. Utente e nome del database contano solo alla prima
+#    inizializzazione del volume db_data, quindi cambiarli dopo non li cambia
+#    dentro Postgres, li spezza e basta.
+#
+# 2. Nessuna porta di servizio pubblicata. Il database non ne espone
+#    nessuna, il backend nemmeno: nginx gli fa da proxy per /api dalla rete
+#    interna di compose, quindi il browser parla con una sola origine e
+#    l'API non è raggiungibile dall'esterno nemmeno per sbaglio. Si affaccia
+#    solo il frontend, e solo su 127.0.0.1, dietro il reverse proxy che
+#    termina TLS.
+#
+# HTTPS non è opzionale: i cookie di sessione sono Secure, e servita in
+# chiaro l'applicazione non riesce nemmeno a tenere il login.
 services:
   db:
     image: postgres:18-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: skilllab_db
+      POSTGRES_USER: ${POSTGRES_USER:?va messo nel file .env accanto a docker-compose.yml}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?va messa nel file .env accanto a docker-compose.yml, e deve essere URL-safe perche finisce dentro DATABASE_URL}
+      POSTGRES_DB: ${POSTGRES_DB:?va messo nel file .env accanto a docker-compose.yml}
     volumes:
       - db_data:/var/lib/postgresql
-    ports:
-      # Exposed on the standard host port 5432 (user: postgres / pw: postgres).
-      # The native Windows Postgres has been disabled to free this port.
-      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   backend:
@@ -23,17 +52,19 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      # Overrides the value from backend/.env: inside the compose network
-      # Postgres is reachable at the "db" service name, not localhost.
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/skilllab_db
+      # Sovrascrive il valore di backend/.env: dentro la rete di compose
+      # Postgres risponde al nome del servizio "db", non a localhost.
+      # La password deve essere URL-safe: finisce dentro una URL, e una "@"
+      # o una "/" la spezzerebbero.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?va messa nel file .env accanto a docker-compose.yml, e deve essere URL-safe perche finisce dentro DATABASE_URL}@db:5432/${POSTGRES_DB:?}
     volumes:
       # Persist uploaded avatar images across rebuilds/restarts.
       - backend_static:/app/static
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "8000:8000"
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   frontend:
@@ -41,9 +72,12 @@ services:
     depends_on:
       - backend
     ports:
-      # Container listens on 8080 (unprivileged nginx); still exposed on host
-      # port 3000.
-      - "3000:8080"
+      # Il container ascolta sulla 8080 (nginx non privilegiato). Pubblicata
+      # solo su 127.0.0.1: davanti ci va il reverse proxy che termina TLS,
+      # non internet.
+      - "127.0.0.1:3000:8080"
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:

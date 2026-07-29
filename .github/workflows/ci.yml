@@ -121,10 +121,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Create the compose .env (database credentials)
+        # docker-compose.yml has no defaults for these and refuses to start
+        # without them, exactly as it would on a real deployment. Throwaway
+        # values: this database lives for the length of the job.
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_USER=skilllab
+          POSTGRES_PASSWORD=smoketest
+          POSTGRES_DB=skilllab_db
+          EOF
       - name: Create backend .env with placeholder values
         # Placeholder values are enough to boot; the smoke test only hits the
         # unauthenticated health endpoint, never the external APIs. In compose
         # DATABASE_URL is overridden to point at the "db" service.
+        #
+        # Every REQUIRED variable has to be here or the container refuses to
+        # boot by design: this file is the check that the "no defaults for
+        # anything that matters" rule stays true.
         run: |
           cat > backend/.env <<'EOF'
           DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_db
@@ -151,15 +165,22 @@ jobs:
           ELEVENLABS_STT_WS_URL=wss://api.elevenlabs.io/v1/speech-to-text/stream
           VOICE_LATENCY_LOG=1
           AUDIT_LOG_RETENTION_DAYS=180
+          AUDIO_RECORDING_RETENTION_DAYS=90
+          CONVERSATION_RETENTION_DAYS=730
           EOF
       - name: Build images and start the stack (production compose)
         # docker-compose.yml alone (without the dev override) is the real
         # production build: backend on uvicorn, frontend static behind nginx.
         run: docker compose -f docker-compose.yml up -d --build
       - name: Wait for the backend health endpoint
+        # From inside the network, not from the host: in production the
+        # backend publishes no port at all (nginx proxies /api over the
+        # compose network), so curling localhost:8000 would only prove the
+        # hardening had been undone.
         run: |
           for _ in $(seq 1 30); do
-            if curl -fsS http://localhost:8000/ >/dev/null; then
+            if docker compose -f docker-compose.yml exec -T backend \
+                 python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" 2>/dev/null; then
               echo "backend is up"; exit 0
             fi
             sleep 2
@@ -167,6 +188,17 @@ jobs:
           echo "backend did not become healthy in time"; exit 1
       - name: Check the frontend is served
         run: curl -fsS http://localhost:3000/ >/dev/null
+      - name: Check no service port is exposed beyond the frontend
+        # La superficie di rete è parte del deploy, quindi è parte dei test:
+        # database e API devono essere irraggiungibili dall'host.
+        run: |
+          for port in 5432 8000; do
+            if curl -s --max-time 3 "http://localhost:$port/" >/dev/null 2>&1 \
+               || nc -z -w3 localhost "$port" 2>/dev/null; then
+              echo "porta $port raggiungibile dall'host: non deve esserlo in produzione"; exit 1
+            fi
+          done
+          echo "solo il frontend è affacciato"
       - name: Dump logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml logs

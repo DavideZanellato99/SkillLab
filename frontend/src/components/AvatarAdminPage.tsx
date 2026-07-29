@@ -62,21 +62,9 @@ const AVATAR_COLUMNS: DataTableColumn[] = [
   { key: 'organizzazione', label: 'Organizzazione' },
   { key: 'categoria', label: 'Categoria' },
   { key: 'difficolta', label: 'Difficoltà' },
-  {
-    key: 'scheda',
-    label: 'Scheda',
-    align: 'center',
-    compact: true,
-    title: 'Quanto è compilata la scheda persona',
-  },
   { key: 'conversazioni', label: 'Conversazioni', align: 'center' },
   { key: 'azioni', label: 'Azioni', align: 'right' },
 ]
-
-/* Sotto questa soglia la scheda è una bozza: un cliente con pochi campi
- * compilati non regge una simulazione, e chi apre la tabella deve accorgersene
- * senza dover aprire il form. */
-const DRAFT_THRESHOLD = 0.35
 
 /* L'eliminazione di un avatar è logica: l'avatar esce dal catalogo degli
  * studenti ma conversazioni, valutazioni e scheda persona restano intatte,
@@ -124,36 +112,6 @@ function formFromAvatar(a: AdminAvatar): FormState {
     organizationId: a.organization_id,
     profile: { ...emptyProfile(), ...a.profile },
   }
-}
-
-/* Quanto è compilata una scheda, in una cella di tabella: una barra e la
- * frazione. Non è un voto di qualità, è un promemoria di quanto materiale ha
- * l'avatar per restare in personaggio. */
-function SheetCompleteness({ profile }: { profile: Record<string, string> }) {
-  const filled = countFilled(profile)
-  const total = ALL_PROFILE_KEYS.length
-  const ratio = total === 0 ? 0 : filled / total
-  const isDraft = ratio < DRAFT_THRESHOLD
-
-  return (
-    <Tooltip
-      content={`${filled} campi compilati su ${total}${isDraft ? ' — scheda da completare' : ''}`}
-    >
-      <div className="mx-auto flex w-16 flex-col items-center gap-1">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/8">
-          <div
-            className={`h-full rounded-full transition-[width] ${
-              isDraft ? 'bg-amber-500' : 'bg-gradient-to-r from-violet-600 to-cyan-500'
-            }`}
-            style={{ width: `${Math.round(ratio * 100)}%` }}
-          />
-        </div>
-        <span className={`text-[0.7rem] ${isDraft ? 'text-amber-400' : 'text-slate-500'}`}>
-          {filled}/{total}
-        </span>
-      </div>
-    </Tooltip>
-  )
 }
 
 /* Un campo della scheda, disegnato secondo il suo tipo.
@@ -720,9 +678,6 @@ export default function AvatarAdminPage() {
               </Td>
               <Td>
                 <span className="text-[0.85rem] text-orange-400">{a.difficulty ?? '—'}</span>
-              </Td>
-              <Td align="center" compact>
-                <SheetCompleteness profile={a.profile} />
               </Td>
               <Td align="center">
                 <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">

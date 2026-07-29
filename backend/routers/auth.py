@@ -113,14 +113,14 @@ _ip_limiter = SlidingWindowLimiter(max_failures=10, window_seconds=_LOGIN_WINDOW
 # (email inesistente, password sbagliata, account non confermato, utente
 # assente dal DB...): a different message per case would let an attacker
 # enumerate which emails exist. The real reason goes to the server log.
-_GENERIC_LOGIN_ERROR = "Credenziali non valide."
+_GENERIC_LOGIN_ERROR = "Credenziali non valide"
 
 
 def _retry_message(seconds: int) -> str:
     if seconds >= 60:
         minutes = (seconds + 59) // 60
-        return f"Troppi tentativi di accesso. Riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}."
-    return f"Troppi tentativi di accesso. Riprova tra {seconds} secondi."
+        return f"Troppi tentativi di accesso. Riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}"
+    return f"Troppi tentativi di accesso. Riprova tra {seconds} secondi"
 
 
 def _bind_fresh_token(db: Session, access_token: str, http_request: Request, user_id) -> None:

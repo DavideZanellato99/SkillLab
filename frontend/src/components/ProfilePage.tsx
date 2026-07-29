@@ -9,6 +9,7 @@ import {
   getUnmetPasswordRules,
   getInitials,
 } from '../services/auth'
+import PasswordToggle from './PasswordToggle'
 import Spinner from './Spinner'
 
 /* Shared form styles (same look as the other admin/auth forms) */
@@ -88,6 +89,9 @@ export default function ProfilePage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
 
   if (!user) return null
 
@@ -147,6 +151,9 @@ export default function ProfilePage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmNewPassword('')
+      setShowCurrentPassword(false)
+      setShowNewPassword(false)
+      setShowConfirmNewPassword(false)
     } catch (err) {
       setPasswordError(err instanceof Error ? err.message : 'Errore durante il cambio password.')
     } finally {
@@ -312,7 +319,7 @@ export default function ProfilePage() {
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                   <input
-                    type="password"
+                    type={showCurrentPassword ? 'text' : 'password'}
                     id="profile-current-password"
                     className={inputCls}
                     placeholder="••••••••"
@@ -321,6 +328,12 @@ export default function ProfilePage() {
                     required
                     autoComplete="current-password"
                     disabled={isChangingPassword}
+                  />
+                  <PasswordToggle
+                    visible={showCurrentPassword}
+                    onToggle={() => setShowCurrentPassword((v) => !v)}
+                    disabled={isChangingPassword}
+                    controls="profile-current-password"
                   />
                 </div>
               </div>
@@ -345,7 +358,7 @@ export default function ProfilePage() {
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                   <input
-                    type="password"
+                    type={showNewPassword ? 'text' : 'password'}
                     id="profile-new-password"
                     className={inputCls}
                     placeholder="Inserisci la nuova password"
@@ -355,6 +368,12 @@ export default function ProfilePage() {
                     minLength={PASSWORD_MIN_LENGTH}
                     autoComplete="new-password"
                     disabled={isChangingPassword}
+                  />
+                  <PasswordToggle
+                    visible={showNewPassword}
+                    onToggle={() => setShowNewPassword((v) => !v)}
+                    disabled={isChangingPassword}
+                    controls="profile-new-password"
                   />
                 </div>
               </div>
@@ -378,7 +397,7 @@ export default function ProfilePage() {
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
                   <input
-                    type="password"
+                    type={showConfirmNewPassword ? 'text' : 'password'}
                     id="profile-confirm-new-password"
                     className={inputCls}
                     placeholder="Conferma la nuova password"
@@ -388,6 +407,12 @@ export default function ProfilePage() {
                     minLength={PASSWORD_MIN_LENGTH}
                     autoComplete="new-password"
                     disabled={isChangingPassword}
+                  />
+                  <PasswordToggle
+                    visible={showConfirmNewPassword}
+                    onToggle={() => setShowConfirmNewPassword((v) => !v)}
+                    disabled={isChangingPassword}
+                    controls="profile-confirm-new-password"
                   />
                 </div>
               </div>

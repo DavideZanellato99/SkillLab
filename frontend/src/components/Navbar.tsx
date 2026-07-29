@@ -14,6 +14,7 @@ import {
   getInitials,
 } from '../services/auth'
 import NotificationsBell from './NotificationsBell'
+import PasswordToggle from './PasswordToggle'
 import Spinner from './Spinner'
 
 type AuthStep = 'login' | 'new-password'
@@ -49,6 +50,9 @@ export default function Navbar() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
 
   const resetForm = () => {
     setEmail('')
@@ -59,6 +63,9 @@ export default function Navbar() {
     setAuthStep('login')
     setErrorMessage('')
     setIsSubmitting(false)
+    setShowPassword(false)
+    setShowNewPassword(false)
+    setShowConfirmNewPassword(false)
   }
 
   // The landing page CTAs ask to open the login modal via this event
@@ -72,6 +79,9 @@ export default function Navbar() {
       setAuthStep('login')
       setErrorMessage('')
       setIsSubmitting(false)
+      setShowPassword(false)
+      setShowNewPassword(false)
+      setShowConfirmNewPassword(false)
       setShowAuthModal(true)
     }
     window.addEventListener(OPEN_LOGIN_EVENT, openLogin)
@@ -702,7 +712,7 @@ export default function Navbar() {
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       id="auth-password"
                       className={inputCls}
                       placeholder="••••••••"
@@ -712,6 +722,12 @@ export default function Navbar() {
                       minLength={1}
                       autoComplete="current-password"
                       disabled={isSubmitting}
+                    />
+                    <PasswordToggle
+                      visible={showPassword}
+                      onToggle={() => setShowPassword((v) => !v)}
+                      disabled={isSubmitting}
+                      controls="auth-password"
                     />
                   </div>
                 </div>
@@ -761,7 +777,7 @@ export default function Navbar() {
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
                     <input
-                      type="password"
+                      type={showNewPassword ? 'text' : 'password'}
                       id="auth-new-password"
                       className={inputCls}
                       placeholder="Inserisci la nuova password"
@@ -771,6 +787,12 @@ export default function Navbar() {
                       minLength={PASSWORD_MIN_LENGTH}
                       autoComplete="new-password"
                       disabled={isSubmitting}
+                    />
+                    <PasswordToggle
+                      visible={showNewPassword}
+                      onToggle={() => setShowNewPassword((v) => !v)}
+                      disabled={isSubmitting}
+                      controls="auth-new-password"
                     />
                   </div>
                 </div>
@@ -794,7 +816,7 @@ export default function Navbar() {
                       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
                     <input
-                      type="password"
+                      type={showConfirmNewPassword ? 'text' : 'password'}
                       id="auth-confirm-new-password"
                       className={inputCls}
                       placeholder="Conferma la nuova password"
@@ -804,6 +826,12 @@ export default function Navbar() {
                       minLength={PASSWORD_MIN_LENGTH}
                       autoComplete="new-password"
                       disabled={isSubmitting}
+                    />
+                    <PasswordToggle
+                      visible={showConfirmNewPassword}
+                      onToggle={() => setShowConfirmNewPassword((v) => !v)}
+                      disabled={isSubmitting}
+                      controls="auth-confirm-new-password"
                     />
                   </div>
                 </div>

@@ -39,6 +39,13 @@ os.environ.setdefault("ELEVENLABS_VAD_THRESHOLD", "0.5")
 os.environ.setdefault("ELEVENLABS_STT_WS_URL", "wss://example.invalid/stt")
 os.environ.setdefault("VOICE_LATENCY_LOG", "0")
 os.environ.setdefault("AUDIT_LOG_RETENTION_DAYS", "180")
+os.environ.setdefault("AUDIO_RECORDING_RETENTION_DAYS", "90")
+os.environ.setdefault("CONVERSATION_RETENTION_DAYS", "730")
+# The background purge loop stays off under test: `with TestClient(app)`
+# triggers the lifespan, and a sweep firing mid-test would run its DELETEs
+# on its own connection, outside the transaction the test rolls back.
+# test_housekeeping drives the loop explicitly instead.
+os.environ.setdefault("HOUSEKEEPING_INTERVAL_HOURS", "0")
 
 import uuid
 

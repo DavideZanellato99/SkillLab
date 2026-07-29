@@ -15,7 +15,6 @@ the constraints down once no offending rows remain.
 
 from sqlalchemy import or_, text
 
-import audit
 from auth_dependency import ensure_roles, get_or_create_mock_admin
 from conversation_titles import next_conversation_title
 from database import SessionLocal, engine
@@ -195,9 +194,9 @@ def _backfill_last_login() -> None:
     outside the audit retention window stay NULL, which is the truthful
     answer there: we genuinely do not know.
 
-    Idempotent, and it runs before the retention purge so it can still see
-    the oldest rows: only users still NULL are touched, so a real login
-    always wins over the backfill.
+    Idempotent, and it runs at import, before the first sweep of
+    ``housekeeping``, so it can still see the oldest rows: only users still
+    NULL are touched, so a real login always wins over the backfill.
     """
     with engine.begin() as conn:
         conn.execute(
@@ -212,13 +211,15 @@ def _backfill_last_login() -> None:
         )
 
 
-def _prepare_audit_logs() -> None:
-    """Index the audit trail the way it is read, then drop what expired.
+def _index_audit_logs() -> None:
+    """Index the audit trail the way it is read.
 
     The registry is always read newest-first, filtered by user or by
     action, so both indexes are composite and descending on created_at.
-    The purge is the ONLY thing that removes a log row: no endpoint
-    deletes one, not even for the super admin (see routers/audit_logs).
+
+    Expiring the rows is not done here: retention runs on its own clock in
+    ``housekeeping``, so it also fires on a process that has been up for
+    months, not only on the ones that happen to restart.
     """
     with engine.begin() as conn:
         conn.execute(
@@ -233,10 +234,6 @@ def _prepare_audit_logs() -> None:
                 "ON audit_logs (action, created_at DESC)"
             )
         )
-        conn.execute(
-            text("DELETE FROM audit_logs WHERE created_at < :cutoff"),
-            {"cutoff": audit.purge_cutoff()},
-        )
 
 
 def run_startup_migrations() -> None:
@@ -247,4 +244,4 @@ def run_startup_migrations() -> None:
     _backfill_user_organizations()
     _backfill_avatar_organizations()
     _backfill_last_login()
-    _prepare_audit_logs()
+    _index_audit_logs()

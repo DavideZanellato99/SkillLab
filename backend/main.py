@@ -3,12 +3,15 @@
 # TLS verification against the OS certificate store (see tls_setup).
 # Kept first so the injection happens before any HTTP client is imported,
 # even though the modules that need it import tls_setup themselves.
+import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+import housekeeping
 import tls_setup  # noqa: F401
 from audit import AuditMiddleware
 from database import Base, engine
@@ -27,6 +30,17 @@ from routers.training import router as training_router
 from routers.voice import router as voice_router
 from startup_migrations import run_startup_migrations
 
+# Uvicorn configures its own loggers and leaves the root one alone, so
+# without this every logger.info() in the app writes to nowhere: the
+# retention sweep would apply its windows in complete silence, and a purge
+# nobody can see in the logs is a purge nobody can prove ever ran. INFO by
+# default (LOG_LEVEL overrides it) because on an install that is deployed
+# once and never touched, the logs are the only witness there is.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 # Create all database tables, then bring an existing database up to date.
 # create_all only creates missing tables; everything else (added columns,
 # backfills, tightened constraints, seed roles) lives in run_startup_migrations
@@ -35,10 +49,26 @@ from startup_migrations import run_startup_migrations
 Base.metadata.create_all(bind=engine)
 run_startup_migrations()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Own the background sweep for exactly as long as the app is serving.
+
+    The retention windows are enforced by a loop inside the process (see
+    ``housekeeping``) rather than by an external scheduler: an install that
+    is deployed once and never touched again still has to keep the promises
+    its informativa makes.
+    """
+    housekeeping.start()
+    yield
+    await housekeeping.stop()
+
+
 app = FastAPI(
     title="SkillLab — Avatar Selection API",
     description="API for browsing and selecting avatars.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS configuration — comma-separated list of allowed frontend origins

@@ -28,6 +28,8 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any, NamedTuple
 
+from sqlalchemy import delete
+from sqlalchemy.engine import Connection
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -264,6 +266,18 @@ def log_action(
 def purge_cutoff() -> datetime:
     """Timestamp before which log rows have expired (naive UTC, like the column)."""
     return datetime.now(UTC).replace(tzinfo=None) - timedelta(days=RETENTION_DAYS)
+
+
+def purge_expired(conn: Connection) -> int:
+    """Delete the log rows past the retention window; returns how many.
+
+    The only thing that ever removes a row from the trail: no endpoint
+    deletes one, not even for the super admin (see routers/audit_logs), so
+    the registry cannot be tidied up after the fact by whoever it
+    incriminates. Called on a schedule by ``housekeeping``, never inline
+    with a request.
+    """
+    return conn.execute(delete(AuditLog).where(AuditLog.created_at < purge_cutoff())).rowcount
 
 
 class AuditMiddleware(BaseHTTPMiddleware):

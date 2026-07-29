@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { updateMyProfile, changeMyPassword } from '../services/profile'
+import { saveBlob } from '../services/api'
+import { updateMyProfile, changeMyPassword, fetchMyDataExport } from '../services/profile'
 import {
   ROLE_LABELS,
   ROLE_BADGE_CLASSES,
@@ -93,6 +94,10 @@ export default function ProfilePage() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
 
+  // --- "I miei dati personali" (esportazione) ---
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
+
   if (!user) return null
 
   const isSystemAccount = user.cognito_sub.startsWith('mock-')
@@ -123,6 +128,22 @@ export default function ProfilePage() {
       )
     } finally {
       setIsSavingProfile(false)
+    }
+  }
+
+  /* L'archivio può contenere le registrazioni audio, quindi è pesante e
+   * arriva in un colpo solo: il bottone resta bloccato finché non è pronto */
+  const handleExportMyData = async () => {
+    if (isExporting) return
+    setIsExporting(true)
+    setExportError('')
+    try {
+      const blob = await fetchMyDataExport()
+      saveBlob(blob, `dati-personali-${new Date().toISOString().slice(0, 10)}.zip`)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Esportazione dei dati non riuscita.')
+    } finally {
+      setIsExporting(false)
     }
   }
 
@@ -448,6 +469,58 @@ export default function ProfilePage() {
             </form>
           </>
         )}
+      </section>
+
+      {/* I miei dati personali */}
+      <section className={sectionCls}>
+        <div className="mb-6">
+          <h2 className="font-heading text-lg font-bold text-slate-100">I Miei Dati Personali</h2>
+          <p className="text-[0.85rem] text-slate-500">
+            Scarica una copia di tutto quello che la piattaforma conserva su di te.
+          </p>
+        </div>
+
+        {exportError && <ErrorBox message={exportError} />}
+
+        <p className="mb-4 text-[0.85rem] leading-relaxed text-slate-400">
+          L'archivio contiene il tuo profilo, le trascrizioni complete delle tue conversazioni, le
+          valutazioni automatiche, le revisioni dei formatori, gli obiettivi assegnati, gli accessi
+          e il registro delle tue attività. Include anche le registrazioni audio delle tue
+          telefonate simulate, quindi può pesare parecchio e richiedere qualche secondo.
+        </p>
+
+        <button
+          type="button"
+          className={submitBtnCls}
+          onClick={handleExportMyData}
+          disabled={isExporting}
+        >
+          {isExporting ? (
+            <>
+              <Spinner variant="button" />
+              Preparazione dell'archivio...
+            </>
+          ) : (
+            <>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Scarica i Miei Dati
+            </>
+          )}
+        </button>
       </section>
     </div>
   )

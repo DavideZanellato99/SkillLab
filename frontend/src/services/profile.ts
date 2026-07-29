@@ -1,7 +1,7 @@
 /* Self-service profile API — the authenticated user's own data:
    view profile, edit first/last name (email is read-only) and change
    password. Available to every role, unlike services/admin.ts. */
-import { apiFetch } from './api'
+import { apiFetch, apiFetchBlob } from './api'
 import type { AuthUser } from './auth'
 
 export interface UpdateProfilePayload {
@@ -27,3 +27,9 @@ export const changeMyPassword = (payload: ChangePasswordPayload) =>
     method: 'POST',
     body: payload,
   })
+
+/* Copia dei propri dati personali (GDPR art. 15 e 20): uno ZIP con il JSON
+   strutturato, le registrazioni audio delle proprie chiamate e un LEGGIMI.
+   Riguarda sempre e solo chi chiama, l'utente lo prende il server dalla
+   sessione. */
+export const fetchMyDataExport = () => apiFetchBlob('/api/auth/me/export')

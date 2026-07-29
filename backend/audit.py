@@ -5,7 +5,8 @@ produced and logs the request only if the route it matched is listed in
 ACTIONS below, so the trail is driven by a single table instead of by
 ``log_action`` calls scattered across the routers: an endpoint that changes
 something is covered the day it is added to that table, and read-only GETs
-never get in (navigation noise would bury the real actions).
+stay out (navigation noise would bury the real actions) with one listed
+exception, the export of one's own personal data.
 
 The actor comes from ``request.state.audit_user``, set by
 ``get_current_user`` — the dependency every protected route already goes
@@ -88,6 +89,12 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     # get_current_user, quindi lo copre il middleware come ogni altra
     # azione: solo login, logout e primo accesso restano espliciti.
     ("PUT", "/api/auth/me"): AuditAction("profile.update", "Profilo aggiornato", "user"),
+    # L'unica GET nel registro: una richiesta di accesso ai propri dati non
+    # è rumore di navigazione, ed è quella che serve poter dimostrare di
+    # aver evaso (art. 15).
+    ("GET", "/api/auth/me/export"): AuditAction(
+        "profile.data_export", "Dati personali esportati", "user"
+    ),
     ("POST", "/api/auth/change-password"): AuditAction(
         "auth.password_changed", "Password modificata", "user"
     ),

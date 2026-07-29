@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 import audit
+import personal_data
 from auth_dependency import (
     ACCESS_TOKEN_COOKIE,
     MOCK_ADMIN_SUB,
@@ -514,6 +515,31 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 def get_me(current_user: User = Depends(get_current_user)):
     """Get the current authenticated user's profile."""
     return UserResponse.model_validate(current_user)
+
+
+@router.get("/me/export")
+def export_my_data(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """A copy of everything the platform holds about the caller (art. 15/20).
+
+    A ZIP with the structured data, the audio of their own calls and a
+    README that explains the archive. Self-service and about the caller
+    only: there is no path here for reading anybody else's copy, the user
+    is taken from the session and never from a parameter.
+
+    Recorded in the audit trail (the one read-only GET that is), because
+    an access request is exactly the kind of thing you want to be able to
+    prove you answered.
+    """
+    archive = personal_data.export_zip(db, current_user)
+    day = datetime.now(UTC).strftime("%Y-%m-%d")
+    return Response(
+        content=archive,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="dati-personali-{day}.zip"'},
+    )
 
 
 @router.put("/me", response_model=UserResponse)

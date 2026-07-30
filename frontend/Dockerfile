@@ -24,7 +24,7 @@ RUN npm run build
 
 # Unprivileged nginx: runs as the non-root "nginx" user (uid 101) and
 # listens on 8080 out of the box, so no root and no cap_net_bind needed.
-FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 
 # Patch OS packages whose fixes are newer than the base image snapshot
 # (curl, openssl, libxml2, ... CVEs). apk needs root, so switch up and drop

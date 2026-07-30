@@ -22,3 +22,8 @@ dist/
 # Local TLS-inspection root CA (machine-specific, needed only to build
 # Docker images behind an intercepting antivirus/proxy) — see Dockerfiles.
 avast-root.crt
+
+# Copie del database prodotte da db/backup.sh: contengono tutti i dati
+# personali che l'applicazione tratta, e non entrano nel repository per
+# nessun motivo.
+backups/

@@ -6,8 +6,8 @@
 #
 #   docker compose -f docker-compose.yml up -d --build
 #
-# Due regole, che è il motivo per cui questo file non contiene né password né
-# porte affacciate all'esterno:
+# Tre regole, che sono il motivo per cui questo file non contiene né password
+# né porte affacciate all'esterno:
 #
 # 1. Nessun segreto scritto qui dentro. Le credenziali del database arrivano
 #    dall'ambiente (il file .env accanto a questo, non versionato) e senza
@@ -20,12 +20,19 @@
 #    inizializzazione del volume db_data, quindi cambiarli dopo non li cambia
 #    dentro Postgres, li spezza e basta.
 #
-# 2. Nessuna porta di servizio pubblicata. Il database non ne espone
-#    nessuna, il backend nemmeno: nginx gli fa da proxy per /api dalla rete
-#    interna di compose, quindi il browser parla con una sola origine e
-#    l'API non è raggiungibile dall'esterno nemmeno per sbaglio. Si affaccia
-#    solo il frontend, e solo su 127.0.0.1, dietro il reverse proxy che
-#    termina TLS.
+# 2. Si affaccia su internet un servizio solo, Caddy, che termina TLS ed è
+#    l'unica porta d'ingresso. Database, backend e frontend non pubblicano
+#    niente: si parlano sulla rete interna di compose, e il browser vede una
+#    sola origine, che è ciò che permette ai cookie di sessione (Secure,
+#    HttpOnly) di funzionare senza CORS di mezzo.
+#
+# 3. Il backend gira in più copie. Un processo Python usa un core solo, quindi
+#    la capacità si aggiunge in processi, non in macchine: le repliche sono
+#    intercambiabili (nessuna tiene stato che serva a un'altra, vedi
+#    voice_sessions) e Caddy manda ogni chiamata a quella che ne ha meno in
+#    corso. Per cambiarne il numero senza toccare questo file:
+#
+#      docker compose -f docker-compose.yml up -d --scale backend=6
 #
 # HTTPS non è opzionale: i cookie di sessione sono Secure, e servita in
 # chiaro l'applicazione non riesce nemmeno a tenere il login.
@@ -63,11 +70,35 @@ services:
       # Sovrascrive il valore di backend/.env: dentro la rete di compose
       # Postgres risponde al nome del servizio "db", non a localhost.
       # La password deve essere URL-safe: finisce dentro una URL, e una "@"
-      # o una "/" la spezzerebbero.
+      # o una "/" la spezzerebbe.
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?va messa nel file .env accanto a docker-compose.yml, e deve essere URL-safe perche finisce dentro DATABASE_URL}@db:5432/${POSTGRES_DB:?}
+    deploy:
+      # Quante copie del backend. Il numero giusto lo dice il test di carico
+      # (vedi loadtest/): dipende da quante chiamate regge un processo e da
+      # quanti core ha la macchina.
+      replicas: 4
     volumes:
-      # Persist uploaded avatar images across rebuilds/restarts.
+      # Persist uploaded avatar images across rebuilds/restarts. Condiviso
+      # fra le repliche: l'immagine caricata da una deve essere servita da
+      # tutte.
       - backend_static:/app/static
+    healthcheck:
+      # Curl non c'è nell'immagine slim, ma Python sì. Serve a Caddy per
+      # smettere di mandare chiamate a una replica che non risponde più.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      # All'avvio le repliche si mettono in fila su un lock per preparare lo
+      # schema (vedi startup_migrations.prepare_schema): l'ultima della coda
+      # può metterci un po' prima di rispondere, e non è malata.
+      start_period: 60s
     depends_on:
       db:
         condition: service_healthy
@@ -79,11 +110,68 @@ services:
     build: ./frontend
     depends_on:
       - backend
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
     ports:
-      # Il container ascolta sulla 8080 (nginx non privilegiato). Pubblicata
-      # solo su 127.0.0.1: davanti ci va il reverse proxy che termina TLS,
-      # non internet.
-      - "127.0.0.1:3000:8080"
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      # Il dominio da servire, ed è anche il nome per cui viene chiesto il
+      # certificato: "skilllab.esempio.it" in produzione, "localhost" o ":80"
+      # per provare lo stack sul proprio computer.
+      #
+      # Ha un default invece di essere obbligatoria come le credenziali del
+      # database, e per un motivo pratico: compose interpola le variabili di
+      # tutti i servizi anche quando poi non li avvia, quindi una variabile
+      # obbligatoria qui costringerebbe a inventarsi un dominio anche per
+      # lavorare in locale, dove Caddy non parte nemmeno. Dimenticarla in
+      # produzione non è pericoloso come una password lasciata al default:
+      # il sito risponde solo su localhost e dal dominio vero non risponde
+      # niente, cosa che si scopre al primo collaudo.
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # I certificati vivono qui. Deve essere un volume, non una cartella
+      # temporanea: perderlo significa richiederli daccapo a ogni riavvio, e
+      # Let's Encrypt smette di emetterli dopo qualche tentativo nella stessa
+      # settimana.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  db-backup:
+    # Stessa immagine del database, così pg_dump è della stessa versione del
+    # server che sta copiando.
+    image: postgres:18-alpine
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:?}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?}
+      PGDATABASE: ${POSTGRES_DB:?}
+      # Ogni quante ore, e quanti file tenere. I default (ogni 6 ore, gli
+      # ultimi 28) coprono una settimana abbondante.
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-6}
+      BACKUP_KEEP: ${BACKUP_KEEP:-28}
+    volumes:
+      - ./db/backup.sh:/backup.sh:ro
+      # Una cartella sull'host, non un volume di Docker: da lì un rsync o un
+      # client dello Storage Box può portarli fuori dalla macchina, che è
+      # l'unica cosa che li rende dei veri backup.
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -91,3 +179,5 @@ services:
 volumes:
   db_data:
   backend_static:
+  caddy_data:
+  caddy_config:

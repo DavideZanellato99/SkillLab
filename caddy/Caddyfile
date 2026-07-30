@@ -1,0 +1,75 @@
+# Reverse proxy di produzione: termina TLS e distribuisce le chiamate fra le
+# repliche del backend.
+#
+# È l'unica porta d'ingresso: il browser parla solo con questo indirizzo, il
+# che vuol dire una sola origine (i cookie di sessione sono Secure e
+# HttpOnly, e con due origini non funzionerebbero) e nessun CORS di mezzo.
+#
+# SITE_ADDRESS decide anche se ci sono i certificati. Un dominio vero
+# ("skilllab.esempio.it") fa emettere il certificato a Let's Encrypt e
+# rinnovarlo da solo; "localhost" usa la CA interna di Caddy; ":80" serve in
+# chiaro, che va bene solo per le prove in locale (con i cookie Secure
+# l'applicazione non riesce a tenere il login).
+
+# Per ricevere da Let's Encrypt gli avvisi sui rinnovi che non riescono,
+# aggiungere qui sopra un blocco globale con dentro una riga sola:
+#
+#   {
+#   	email tu@esempio.it
+#   }
+#
+# Non c'è di serie perché una direttiva "email" senza indirizzo non è valida
+# e impedirebbe l'avvio, e i certificati si ottengono comunque senza.
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Le due strade che portano al backend: l'API (chiamata vocale compresa,
+	# che è un WebSocket e Caddy inoltra senza doverglielo dire) e le
+	# immagini degli avatar.
+	@backend path /api/* /static/*
+	handle @backend {
+		reverse_proxy {
+			# Le repliche non si elencano: si chiedono al DNS di Docker, che
+			# risponde con un indirizzo per ogni container del servizio
+			# "backend". Così "docker compose up --scale backend=6" cambia la
+			# capacità senza toccare questo file.
+			dynamic a {
+				name backend
+				port 8000
+				refresh 5s
+			}
+
+			# Non round robin: una chiamata vocale tiene la connessione
+			# aperta per dieci minuti, quindi quello che conta non è di chi
+			# sia il turno, è chi ne ha meno in corso adesso.
+			lb_policy least_conn
+
+			# Una replica che non risponde esce dal giro da sola e ci rientra
+			# quando torna a rispondere. Senza, il bilanciatore continuerebbe
+			# a mandarle una chiamata su N.
+			health_uri /
+			health_interval 10s
+			health_timeout 5s
+
+			# Sovrascritto, non aggiunto in coda: il backend legge il primo
+			# valore di questo header per sapere chi sta chiamando (vedi
+			# token_sessions.client_ip), e se lo lasciassimo accodare
+			# basterebbe che un client se lo mandasse da solo per farsi
+			# credere un altro indirizzo e passare sopra al limite sui
+			# tentativi di accesso.
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# Tutto il resto è l'applicazione React, servita statica da nginx.
+	handle {
+		reverse_proxy frontend:8080
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

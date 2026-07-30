@@ -24,6 +24,17 @@ services:
     volumes:
       - ./backend:/app
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # Una sola copia: le repliche servono a usare tutti i core di un server,
+    # e qui il carico è una persona che ricarica la pagina. Sono anche
+    # incompatibili con la porta 8000 pubblicata qui sopra, che una sola
+    # replica per volta può tenere.
+    deploy:
+      replicas: 1
+    # In sviluppo il backend non risponde subito (uvicorn --reload riparte a
+    # ogni salvataggio) e nessuno ha bisogno di saperlo: senza questo, i
+    # container comparirebbero "unhealthy" a ogni modifica.
+    healthcheck:
+      disable: true
 
   frontend:
     build:
@@ -46,8 +57,19 @@ services:
     # Vite is pinned to 3000 in vite.config.ts, so the mapping is 1:1 and the
     # "Local: http://localhost:3000" line it prints inside the container is
     # also the right URL from the host. !override (rather than the default
-    # concat merge) replaces docker-compose.yml's "3000:80" so the app stays
-    # on the same host port 3000 in both dev and prod mode.
+    # concat merge) replaces docker-compose.yml's ports so the app stays on
+    # the same host port 3000 in both dev and prod mode.
     command: npm run dev -- --host 0.0.0.0
     ports: !override
       - "3000:3000"
+
+  # I due servizi che esistono solo in produzione. Un profilo che nessuno
+  # attiva è il modo di Compose per dire "non far partire questo": in
+  # sviluppo il proxy lo fa Vite (vite.config.ts) e non c'è niente da
+  # copiare, mentre girando la produzione (senza questo file) il profilo non
+  # c'è e partono entrambi.
+  caddy:
+    profiles: ["solo-produzione"]
+
+  db-backup:
+    profiles: ["solo-produzione"]

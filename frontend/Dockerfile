@@ -29,9 +29,13 @@ FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
 # Patch OS packages whose fixes are newer than the base image snapshot
 # (curl, openssl, libxml2, ... CVEs). apk needs root, so switch up and drop
 # back to the unprivileged user afterwards.
-USER root
+#
+# UID numerici e non "root"/"nginx": i nomi esistono solo dentro l'immagine,
+# fuori si vede il numero. 0 è root, 101 è l'utente nginx del base image
+# unprivileged (verificato con "id" dentro il container).
+USER 0
 RUN apk upgrade --no-cache
-USER nginx
+USER 101
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
@@ -40,6 +44,6 @@ EXPOSE 8080
 
 # Base image already switches to this user; stated explicitly so it is
 # visible here and satisfies the image/Dockerfile scanners.
-USER nginx
+USER 101
 
 CMD ["nginx", "-g", "daemon off;"]

@@ -125,11 +125,17 @@ jobs:
         # docker-compose.yml has no defaults for these and refuses to start
         # without them, exactly as it would on a real deployment. Throwaway
         # values: this database lives for the length of the job.
+        #
+        # SITE_ADDRESS a ":80" serve in chiaro: il default "localhost" farebbe
+        # emettere a Caddy un certificato con la sua CA interna e reindirizzare
+        # da HTTP, e curl si fermerebbe sul certificato sconosciuto. Qui
+        # interessa che lo stack risponda, non che TLS funzioni.
         run: |
           cat > .env <<'EOF'
           POSTGRES_USER=skilllab
           POSTGRES_PASSWORD=smoketest
           POSTGRES_DB=skilllab_db
+          SITE_ADDRESS=:80
           EOF
       - name: Create backend .env with placeholder values
         # Placeholder values are enough to boot; the smoke test only hits the
@@ -142,7 +148,7 @@ jobs:
         run: |
           cat > backend/.env <<'EOF'
           DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_db
-          ALLOWED_ORIGINS=http://localhost:3000
+          ALLOWED_ORIGINS=http://localhost
           COGNITO_REGION=eu-west-1
           COGNITO_USER_POOL_ID=
           COGNITO_APP_CLIENT_ID=
@@ -170,29 +176,57 @@ jobs:
           EOF
       - name: Build images and start the stack (production compose)
         # docker-compose.yml alone (without the dev override) is the real
-        # production build: backend on uvicorn, frontend static behind nginx.
-        run: docker compose -f docker-compose.yml up -d --build
+        # production build: backend on uvicorn, frontend static behind nginx,
+        # tutto dietro Caddy.
+        #
+        # Due repliche invece delle quattro di produzione: bastano a provare
+        # che Caddy le scopre dal DNS di Docker e che le migrazioni all'avvio
+        # reggono più processi in fila sullo stesso lock, senza chiedere a un
+        # runner da quattro core di far partire quattro uvicorn insieme.
+        run: docker compose -f docker-compose.yml up -d --build --scale backend=2
       - name: Wait for the backend health endpoint
         # From inside the network, not from the host: in production the
-        # backend publishes no port at all (nginx proxies /api over the
+        # backend publishes no port at all (Caddy proxies /api over the
         # compose network), so curling localhost:8000 would only prove the
         # hardening had been undone.
+        #
+        # Il servizio ha più repliche, quindi la copia da interrogare va detta
+        # esplicitamente. L'attesa è larga perché le repliche si mettono in
+        # coda sul lock dello schema (vedi startup_migrations.prepare_schema).
         run: |
-          for _ in $(seq 1 30); do
-            if docker compose -f docker-compose.yml exec -T backend \
+          for _ in $(seq 1 60); do
+            if docker compose -f docker-compose.yml exec -T --index 1 backend \
                  python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" 2>/dev/null; then
               echo "backend is up"; exit 0
             fi
             sleep 2
           done
           echo "backend did not become healthy in time"; exit 1
-      - name: Check the frontend is served
-        run: curl -fsS http://localhost:3000/ >/dev/null
-      - name: Check no service port is exposed beyond the frontend
-        # La superficie di rete è parte del deploy, quindi è parte dei test:
-        # database e API devono essere irraggiungibili dall'host.
+      - name: Check the frontend is served through Caddy
+        # Porta 80, non 3000: il frontend non pubblica niente, si arriva alla
+        # React solo passando dal reverse proxy, come dal browser in
+        # produzione.
+        run: curl -fsS http://localhost/ >/dev/null
+      - name: Check the API is reachable through Caddy
+        # L'altra strada del Caddyfile: se il proxy verso le repliche non
+        # funzionasse, nginx risponderebbe comunque con la pagina della React
+        # e il controllo di sopra non se ne accorgerebbe.
+        #
+        # Un 401 è la risposta giusta: vuol dire che a rispondere è stato il
+        # backend, che senza cookie di sessione rifiuta. Un 200 qui
+        # significherebbe che /api/* sta finendo sul frontend.
         run: |
-          for port in 5432 8000; do
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/avatars)
+          if [ "$code" != "401" ]; then
+            echo "/api/avatars ha risposto $code invece di 401: Caddy non sta inoltrando al backend"; exit 1
+          fi
+          echo "l'API risponde dietro il proxy"
+      - name: Check no service port is exposed beyond Caddy
+        # La superficie di rete è parte del deploy, quindi è parte dei test:
+        # database, API e frontend devono essere irraggiungibili dall'host, e
+        # l'unica porta d'ingresso resta quella di Caddy.
+        run: |
+          for port in 5432 8000 8080 3000; do
             if curl -s --max-time 3 "http://localhost:$port/" >/dev/null 2>&1 \
                || nc -z -w3 localhost "$port" 2>/dev/null; then
               echo "porta $port raggiungibile dall'host: non deve esserlo in produzione"; exit 1

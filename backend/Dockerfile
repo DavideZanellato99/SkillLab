@@ -28,9 +28,14 @@ COPY . .
 # Run as a non-root user (container hardening). /app is chowned so the
 # static upload dir stays writable — the named volume mounted at
 # /app/static inherits this ownership when Docker first creates it.
+#
+# USER numerico, non "appuser": il nome esiste solo dentro l'immagine, quindi
+# chi guarda il container da fuori (l'host sui file del volume, o un
+# orchestratore che deve accertarsi che non giri da root) vede solo il numero
+# e non saprebbe risolverlo.
 RUN useradd --create-home --uid 10001 appuser \
     && chown -R appuser:appuser /app
-USER appuser
+USER 10001
 
 EXPOSE 8000
 

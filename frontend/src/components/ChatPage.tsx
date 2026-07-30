@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useParams, useSearchParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { isAdmin } from '../services/auth'

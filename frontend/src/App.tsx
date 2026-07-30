@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router'
 import { useAuth } from './contexts/AuthContext'
 import Navbar from './components/Navbar'
 import Header from './components/Header'

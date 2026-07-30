@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate } from 'react-router'
 import { useAuth } from '../contexts/AuthContext'
 import { isAdmin, isSuperAdmin, type AuthUser } from '../services/auth'
 

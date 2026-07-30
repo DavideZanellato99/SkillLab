@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useMyAssignments } from '../hooks/useTraining'
 import { AssignmentStatusBadge } from './TrainingPage'
 import { categoryBadgeClasses } from './categoryStyles'

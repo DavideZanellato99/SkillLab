@@ -55,7 +55,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+        # Il tag ha la "v" davanti: "aquasecurity/trivy-action@0.28.0" non
+        # esiste e il job muore in "Set up job", prima di eseguire qualsiasi
+        # cosa, senza un messaggio che spieghi il perché.
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -70,6 +73,10 @@ jobs:
           format: sarif
           output: trivy-fs.sarif
           exit-code: "1"
+          # Senza questa, "severity" vale per il codice di uscita ma non per il
+          # file SARIF, che finirebbe nella tab Security con dentro anche tutte
+          # le LOW e MEDIUM, cioè il rumore che la riga sopra voleva togliere.
+          limit-severities-for-sarif: true
       - name: Upload filesystem results to the Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@v3
@@ -100,7 +107,7 @@ jobs:
       - name: Build ${{ matrix.name }} image
         run: docker build -t skilllab-${{ matrix.name }}:scan ${{ matrix.context }}
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: skilllab-${{ matrix.name }}:scan
@@ -109,6 +116,7 @@ jobs:
           format: sarif
           output: trivy-image-${{ matrix.name }}.sarif
           exit-code: "1"
+          limit-severities-for-sarif: true
       - name: Upload ${{ matrix.name }} image results to the Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@v3

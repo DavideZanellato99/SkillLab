@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import type { Avatar } from '../services/api'
 import { getAvatarImageUrl } from '../services/api'
 import AvatarBadges from './AvatarBadges'

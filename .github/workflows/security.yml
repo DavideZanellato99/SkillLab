@@ -26,8 +26,8 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: pip-audit (backend)
@@ -37,7 +37,7 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r backend/requirements.txt
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: npm audit (frontend)
@@ -53,9 +53,9 @@ jobs:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -72,7 +72,7 @@ jobs:
           exit-code: "1"
       - name: Upload filesystem results to the Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
@@ -92,7 +92,7 @@ jobs:
           - name: frontend
             context: ./frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The filesystem scan above covers the source tree; this scans the
       # *built* image, so OS-level CVEs in the base images (python-slim,
       # nginx-alpine) are caught too. docker-smoke in ci.yml already builds
@@ -100,7 +100,7 @@ jobs:
       - name: Build ${{ matrix.name }} image
         run: docker build -t skilllab-${{ matrix.name }}:scan ${{ matrix.context }}
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: skilllab-${{ matrix.name }}:scan
@@ -111,7 +111,7 @@ jobs:
           exit-code: "1"
       - name: Upload ${{ matrix.name }} image results to the Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-image-${{ matrix.name }}.sarif
           category: trivy-image-${{ matrix.name }}
@@ -128,10 +128,10 @@ jobs:
       matrix:
         language: [python, javascript-typescript]
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"

@@ -32,6 +32,14 @@
 services:
   db:
     image: postgres:18-alpine
+    # Postgres di suo ne accetta 100, e quel numero va confrontato con la
+    # somma dei pool di tutte le repliche del backend, non con una sola
+    # (il conto sta in testa a backend/database.py): quattro repliche ne
+    # chiedono fino a 80, e i backup e chi si attacca con un client sono
+    # ancora fuori dal conto. 200 tiene il margine per crescere senza
+    # tornare qui, e costa qualche decina di MB di RAM che una macchina da
+    # centinaia di chiamate ha di sicuro.
+    command: ["postgres", "-c", "max_connections=200"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?va messo nel file .env accanto a docker-compose.yml}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?va messa nel file .env accanto a docker-compose.yml, e deve essere URL-safe perche finisce dentro DATABASE_URL}

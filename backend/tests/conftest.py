@@ -56,6 +56,8 @@ from sqlalchemy.orm import Session
 
 import audit
 import main
+import rate_limit
+import voice_sessions
 from auth_dependency import ensure_roles, get_current_user
 from database import SessionLocal, engine, get_db
 from models import (
@@ -90,10 +92,19 @@ def db_session():
     audit.session_factory = lambda: Session(
         bind=connection, join_transaction_mode="create_savepoint"
     )
+    # Same reason for the voice session registry: the WebSocket path opens a
+    # session of its own (it must not hold a pooled connection for the whole
+    # call), which would otherwise miss the rows this transaction holds.
+    voice_sessions.session_factory = audit.session_factory
+    # And for the login limiter, which records a failed attempt on a session
+    # of its own so the row survives the failure of the request it counts.
+    rate_limit.session_factory = audit.session_factory
     try:
         yield session
     finally:
         audit.session_factory = SessionLocal
+        voice_sessions.session_factory = SessionLocal
+        rate_limit.session_factory = SessionLocal
         session.close()
         transaction.rollback()
         connection.close()

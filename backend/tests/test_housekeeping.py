@@ -11,9 +11,12 @@ import uuid
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import text
+
 import audit
 import housekeeping
 import retention
+from database import engine
 from models import AuditLog, ChatConversation, TokenSession
 from tests.test_retention import _days_ago, _seed_conversation
 
@@ -115,6 +118,46 @@ def test_a_sweep_leaves_data_inside_its_window_alone(db_session, standard_user, 
         db_session.query(ChatConversation).filter(ChatConversation.id == conversation_id).count()
         == 1
     )
+
+
+# ── Una replica per volta ──────────────────────────────────────────────
+
+
+def test_only_one_replica_sweeps_at_a_time(db_session, standard_user, make_avatar):
+    """Con più repliche il ciclo parte in tutte nello stesso momento: chi non
+    si aggiudica il giro lo salta invece di fare DELETE in concorrenza sulle
+    stesse righe scadute."""
+    log = _seed_audit_log(db_session, age_days=audit.RETENTION_DAYS + 1)
+    log_id = log.id
+
+    with engine.connect() as altra_replica, altra_replica.begin():
+        altra_replica.execute(
+            text("SELECT pg_advisory_xact_lock(:k)"), {"k": housekeeping._SWEEP_LOCK_KEY}
+        )
+
+        housekeeping.purge_now(db_session.connection())
+
+        db_session.expire_all()
+        assert db_session.query(AuditLog).filter(AuditLog.id == log_id).count() == 1
+
+
+def test_the_sweep_lock_is_handed_back_on_its_own():
+    """Legato alla transazione: finita quella il lock è già andato,
+    altrimenti la prima replica bloccherebbe per sempre tutte le altre.
+
+    Un giro vero, che apre e chiude una transazione sua: è l'unico modo di
+    vedere il rilascio, perché un purge sulla connessione del test terrebbe
+    il lock fino al rollback di fine test. Gira sul database di test senza
+    la rete della transazione, e non ha niente da cancellare.
+    """
+    housekeeping.purge_now()
+
+    with engine.connect() as verifica, verifica.begin():
+        libero = verifica.execute(
+            text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": housekeeping._SWEEP_LOCK_KEY}
+        ).scalar()
+
+    assert libero
 
 
 # ── Il ciclo sopravvive ai propri errori ───────────────────────────────

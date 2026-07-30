@@ -31,6 +31,7 @@ from models import (
     TrainingAssignment,
     User,
     UserSelection,
+    VoiceSessionRecord,
 )
 from routers import admin as admin_router
 
@@ -46,6 +47,7 @@ _SEEDED_TABLES = {
     "audit_logs",
     "conversation_reviews",
     "message_annotations",
+    "voice_sessions",
 }
 
 
@@ -98,6 +100,19 @@ def _seed_everything(db_session, victim: User, other: User, avatar) -> None:
                 audio=b"abc",
             ),
         ]
+    )
+
+    # A call in progress: the row carries a copy of the transcript so far
+    db_session.add(
+        VoiceSessionRecord(
+            id=f"vs-{uuid.uuid4()}",
+            user_id=victim.id,
+            avatar_id=avatar.id,
+            conversation_id=conversation.id,
+            avatar_profile={"nome": "Cliente"},
+            prior_history=[{"role": "user", "content": "Buongiorno."}],
+            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
+        )
     )
 
     # An open session: client IP and User-Agent, the rows this test exists for

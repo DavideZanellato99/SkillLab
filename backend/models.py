@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -268,6 +269,39 @@ class TokenSession(Base):
 
     def __repr__(self):
         return f"<TokenSession(jti='{self.jti}', client_ip='{self.client_ip}')>"
+
+
+class LoginAttempt(Base):
+    """A failed sign-in, counted to slow down password guessing.
+
+    Two buckets, told apart by ``scope``: one keyed by email (a single
+    account under attack, even from many addresses) and one keyed by client
+    IP (one client probing many accounts).
+
+    In a table rather than in process memory because a limit that is not the
+    same limit for everyone is not a limit: behind a load balancer, four
+    replicas counting on their own hand an attacker four times the attempts,
+    and not one of the four ever sees the attack whole.
+
+    The rows carry a client IP, so they are personal data with a very short
+    life: whatever falls outside the window is dropped as the failures are
+    counted, and the sweep in ``housekeeping`` collects the leftovers on an
+    install where nobody ever fails a login.
+    """
+
+    __tablename__ = "login_attempts"
+    __table_args__ = (Index("ix_login_attempts_bucket", "scope", "key", "created_at"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    scope = Column(String(10), nullable=False)
+    key = Column(String(320), nullable=False)
+    # Naive UTC, like every comparison this table is read with
+    created_at = Column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC).replace(tzinfo=None)
+    )
+
+    def __repr__(self):
+        return f"<LoginAttempt(scope='{self.scope}')>"
 
 
 class ChatConversation(Base):
@@ -659,6 +693,47 @@ class ChatMessage(Base):
         return f"<ChatMessage(id={self.id}, role='{self.role}')>"
 
 
+class VoiceSessionRecord(Base):
+    """A call that has been authorised and is waiting for (or holding) its socket.
+
+    It is created by ``POST /api/voice/session`` and consumed by the voice
+    WebSocket, which are two separate HTTP requests: with more than one
+    backend replica they almost never land on the same process, so this
+    state cannot live in the memory of one of them. In a table, any replica
+    can serve any call and no session affinity is needed in front.
+
+    It carries the snapshot the pipeline reads once when the socket opens
+    (the persona sheet and the history written so far), which is what keeps
+    the per-turn hot path free of queries. That snapshot duplicates rows
+    that already exist elsewhere, so the row is deliberately short-lived:
+    it is deleted when the call hangs up, and the expiry is swept by
+    ``housekeeping`` for the calls that are never opened at all.
+
+    ``avatar_id`` carries no foreign key on purpose: it is a pointer for the
+    duration of one call, not a historical fact worth blocking the deletion
+    of an avatar over.
+    """
+
+    __tablename__ = "voice_sessions"
+
+    # The unguessable token handed to the browser. It is the only credential
+    # that opens the voice socket, so it is also the primary key.
+    id = Column(String(64), primary_key=True)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    avatar_id = Column(Uuid, nullable=False)
+    conversation_id = Column(
+        Uuid, ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    avatar_profile = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+    prior_history = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+    voice_id = Column(String(64), nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+
+    def __repr__(self):
+        return f"<VoiceSessionRecord(conversation_id={self.conversation_id})>"
+
+
 # Everything that hangs off a conversation, keyed by conversation_id. Held
 # here, next to the tables themselves, because two different features have
 # to delete a conversation completely — the retention sweep (``retention``)
@@ -672,5 +747,6 @@ CONVERSATION_CHILDREN = (
     ConversationReview,
     ConversationEvaluation,
     ConversationRecording,
+    VoiceSessionRecord,
     ChatMessage,
 )

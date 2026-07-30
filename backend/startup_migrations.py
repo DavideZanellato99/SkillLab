@@ -11,13 +11,19 @@ It is called at import time from ``main`` (before the app starts serving), so
 the DDL is in place before any request or test fixture touches the tables.
 Keep the three phases in order: add columns, backfill the old rows, then lock
 the constraints down once no offending rows remain.
+
+Entry point: ``prepare_schema``, which holds an advisory lock for the whole
+job (see there for why).
 """
+
+import logging
+from contextlib import contextmanager
 
 from sqlalchemy import or_, text
 
 from auth_dependency import ensure_roles, get_or_create_mock_admin
 from conversation_titles import next_conversation_title
-from database import SessionLocal, engine
+from database import Base, SessionLocal, engine
 from models import (
     ROLE_SUPER_ADMIN,
     Avatar,
@@ -26,6 +32,14 @@ from models import (
     Role,
     User,
 )
+
+logger = logging.getLogger(__name__)
+
+# Advisory lock key. Advisory means Postgres attaches no meaning to it: it is
+# just a number the processes agree on, unrelated to any table. Arbitrary but
+# fixed forever — changing it would let an old and a new container run the
+# schema job at the same time, which is the one thing it exists to prevent.
+_SCHEMA_LOCK_KEY = 774_155_001
 
 
 def _add_columns() -> None:
@@ -49,9 +63,11 @@ def _add_columns() -> None:
                 "mode VARCHAR(10) NOT NULL DEFAULT 'voice'"
             )
         )
-        # Voice sessions live in memory, so no call survives a restart: every
-        # call still open at boot is over and is closed retroactively. Text
-        # chats hold no server-side state, so they stay open across restarts.
+        # A call lives inside its WebSocket, which dies with the process, so
+        # no call survives a restart even though its session row now does:
+        # every call still open at boot is over and is closed retroactively.
+        # Text chats hold no server-side state, so they stay open across
+        # restarts.
         conn.execute(
             text(
                 "UPDATE chat_conversations SET ended_at = updated_at "
@@ -245,3 +261,53 @@ def run_startup_migrations() -> None:
     _backfill_avatar_organizations()
     _backfill_last_login()
     _index_audit_logs()
+
+
+@contextmanager
+def _schema_lock():
+    """Hold the schema job's advisory lock for as long as the job runs.
+
+    On its own connection, and in AUTOCOMMIT: a session-level advisory lock
+    belongs to the connection that took it, and the job itself opens and
+    closes several connections of its own along the way. AUTOCOMMIT so this
+    one never sits on an open transaction while other connections are trying
+    to ALTER the very tables it would be holding.
+
+    Nothing here has to survive a crash: Postgres drops the lock when the
+    connection goes, so a container killed mid-migration frees the next one
+    instead of wedging the whole deployment.
+    """
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        taken = conn.execute(
+            text("SELECT pg_try_advisory_lock(:key)"), {"key": _SCHEMA_LOCK_KEY}
+        ).scalar()
+        if not taken:
+            # Worth a line in the log: without it a replica waiting its turn
+            # looks exactly like a replica that has hung on startup.
+            logger.info("Schema: un'altra replica lo sta preparando, aspetto il suo turno.")
+            conn.execute(text("SELECT pg_advisory_lock(:key)"), {"key": _SCHEMA_LOCK_KEY})
+        try:
+            yield
+        finally:
+            conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": _SCHEMA_LOCK_KEY})
+
+
+def prepare_schema() -> None:
+    """Bring the database to the schema this version of the app expects.
+
+    The single entry point, and the reason it exists instead of two calls in
+    ``main``: both halves have to happen under the same lock. Start four
+    containers at once and, without it, four processes issue the same DDL on
+    the same tables in the same instant — concurrent ALTERs on one table
+    block each other or fail outright, and the container that fails restarts
+    and tries again forever. The worst case is not even the crash loop: it is
+    a migration applied halfway, its ALTER through and its backfill not,
+    leaving a schema in a state nobody designed.
+
+    So one process does the work and the others queue up behind it. When they
+    get in, everything is already done, and since every step is idempotent
+    they simply pass through.
+    """
+    with _schema_lock():
+        Base.metadata.create_all(bind=engine)
+        run_startup_migrations()

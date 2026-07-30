@@ -27,6 +27,10 @@ Three properties the loop is built around, all of them for that same
 Setting the interval to 0 disables the loop, which is what the test suite
 does and what a deployment that genuinely prefers an external scheduler
 can do.
+
+The loop lives in *every* process, so on a deployment with several replicas
+it fires several times at once. That part is settled by an advisory lock
+(see ``purge_now``): one replica sweeps, the others skip the round.
 """
 
 import asyncio
@@ -35,11 +39,13 @@ import os
 from contextlib import suppress
 from datetime import UTC, datetime
 
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from sqlalchemy.engine import Connection
 
 import audit
+import rate_limit
 import retention
+import voice_sessions
 from database import engine
 from models import RevokedJti, TokenSession
 
@@ -51,6 +57,11 @@ logger = logging.getLogger(__name__)
 # not a promise made to anyone, and a deployment must not have to know it
 # exists in order to be compliant.
 _DEFAULT_INTERVAL_HOURS = 24.0
+
+# Advisory lock key for the sweep. A different number from the schema job's
+# (see ``startup_migrations``) because they are different pieces of work and
+# must never end up waiting on each other.
+_SWEEP_LOCK_KEY = 774_155_002
 
 
 def _interval_hours() -> float:
@@ -90,6 +101,26 @@ def _purge_expired_sessions(conn: Connection) -> int:
     return sessions
 
 
+def _won_the_sweep(conn: Connection) -> bool:
+    """True when this process gets to run the sweep, False when someone else is.
+
+    Transaction-scoped (``xact``), so it is released by the commit or the
+    rollback of the very transaction doing the purge: there is no way to
+    leave it hanging, not even if the sweep blows up halfway through.
+
+    Deliberately non-blocking, unlike the schema lock in
+    ``startup_migrations``: there the replicas queueing up have to wait,
+    because they cannot serve a request until the schema is ready. Here the
+    work is being done right now by somebody else, so there is nothing left
+    to wait for, and the honest answer is to skip this round.
+    """
+    return bool(
+        conn.execute(
+            text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": _SWEEP_LOCK_KEY}
+        ).scalar()
+    )
+
+
 def purge_now(conn: Connection | None = None) -> None:
     """Apply every retention window once, in one transaction.
 
@@ -97,19 +128,34 @@ def purge_now(conn: Connection | None = None) -> None:
     rows carry IP and User-Agent, the sessions carry the same, the
     conversations carry the recorded voice and the score. Either the
     windows hold or they do not.
+
+    One replica at a time. Four containers started together wake up for
+    their first sweep in the same instant, and four concurrent DELETEs over
+    the same expired rows only manage to block each other while holding
+    locks on tables the app is serving calls from. The rows that go are the
+    same either way, so the extra three buy nothing at all.
     """
     if conn is None:
         with engine.begin() as owned:
             return purge_now(owned)
 
+    if not _won_the_sweep(conn):
+        logger.info("Housekeeping: un'altra replica sta già purgando, questo giro lo salto.")
+        return
+
     logs = audit.purge_expired(conn)
     sessions = _purge_expired_sessions(conn)
+    calls = voice_sessions.purge_expired(conn)
+    attempts = rate_limit.purge_expired(conn)
     removed = retention.purge_expired(conn)
     logger.info(
-        "Housekeeping: %d righe di audit, %d sessioni scadute, %d conversazioni, "
-        "%d registrazioni audio eliminate.",
+        "Housekeeping: %d righe di audit, %d sessioni scadute, %d chiamate mai "
+        "iniziate, %d tentativi di accesso, %d conversazioni, %d registrazioni "
+        "audio eliminate.",
         logs,
         sessions,
+        calls,
+        attempts,
         removed.conversations,
         removed.recordings,
     )

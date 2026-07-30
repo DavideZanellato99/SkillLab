@@ -186,8 +186,23 @@ export class VoiceCall {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const url = `${proto}://${window.location.host}/api/voice/ws?session_id=${encodeURIComponent(this.sessionId)}`
 
-    await new Promise<void>((resolve, reject) => {
+    await this.openSocket(url)
+  }
+
+  /** Apre il socket della chiamata; risolve quando il backend dice "ready".
+   *
+   * Staccato da connect() perché è l'unica parte che si può mettere alla
+   * prova senza microfono, worklet e registratore: quello che decide cosa
+   * legge l'utente quando una chiamata non parte sta tutto qui dentro.
+   */
+  private openSocket(url: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
       let settled = false
+      // La chiamata non è mai partita e il perché è già stato consegnato a
+      // chi ha chiamato connect(). La chiusura che arriva subito dopo non
+      // va trattata come la fine di una telefonata: non c'è registrazione
+      // da salvare e non c'è nessuna sessione da dichiarare conclusa.
+      let startupFailed = false
       const ws = new WebSocket(url)
       ws.binaryType = 'arraybuffer'
       this.ws = ws
@@ -195,6 +210,7 @@ export class VoiceCall {
       const timeout = setTimeout(() => {
         if (!settled) {
           settled = true
+          startupFailed = true
           reject(new Error('Timeout durante la connessione alla chiamata.'))
           ws.close()
         }
@@ -248,6 +264,18 @@ export class VoiceCall {
             this.cb.onProcessingChange(false)
             break
           case 'error':
+            if (!settled) {
+              // Errore prima del "ready": la chiamata non è mai partita, e
+              // il motivo lo sa solo questo messaggio (linee occupate,
+              // configurazione voce mancante). Va consegnato rifiutando la
+              // promessa, altrimenti la chiusura che segue subito dopo lo
+              // copre con un "chiusa inaspettatamente" che non spiega niente.
+              settled = true
+              startupFailed = true
+              clearTimeout(timeout)
+              reject(new Error(msg.message ?? 'Errore nella chiamata.'))
+              return
+            }
             this.cb.onError(msg.message ?? 'Errore nella chiamata.')
             break
         }
@@ -268,6 +296,7 @@ export class VoiceCall {
           reject(new Error('Connessione alla chiamata chiusa inaspettatamente.'))
           return
         }
+        if (startupFailed) return
         this.teardown()
         this.cb.onClose()
       }

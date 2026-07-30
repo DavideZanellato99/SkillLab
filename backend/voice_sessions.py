@@ -1,76 +1,160 @@
-"""In-memory registry of active voice sessions (provider-neutral).
+"""Registro delle sessioni vocali attive, condiviso via Postgres.
 
-A session is created by POST /api/voice/session (authenticated) and
-consumed by the voice WebSocket endpoint, which is reachable only with
-the unguessable session id issued here.
+Una sessione nasce da POST /api/voice/session (autenticata) e la consuma
+il WebSocket vocale, raggiungibile solo con l'id imprevedibile emesso qui.
+
+Il registro sta in tabella e non in memoria perché quelle sono **due
+richieste separate**: appena il backend gira su più di un processo non
+finiscono sullo stesso, e una sessione scritta nella RAM della replica 1
+non esiste per la replica 3 che riceve il WebSocket un istante dopo. Il
+rimedio alternativo, mandare le due richieste sulla stessa replica con
+un'affinità di sessione sul proxy, funziona ma va poi configurato ovunque
+e per sempre. Tenendo lo stato qui il problema non si pone: qualunque
+replica serve qualunque chiamata, e davanti basta un round robin.
+
+Postgres e non Redis perché le frequenze in gioco sono ridicole (una
+scrittura e una lettura per chiamata, e una chiamata dura minuti), perché
+la riga deve sopravvivere a un riavvio, e perché un componente in più
+sarebbe un pezzo in più da installare, proteggere e aggiornare per sempre.
+
+La riga porta con sé una copia della storia della conversazione, quindi ha
+vita volutamente breve: viene cancellata quando la chiamata si chiude
+(``close_voice_session``) e, per le chiamate mai aperte, alla scadenza
+dallo sweep di ``housekeeping``.
 """
 
 import secrets
-import threading
-import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
-# Voice sessions expire after this many seconds without being opened
-_SESSION_TTL = 60 * 60  # 1 hour
+from sqlalchemy import delete
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
+
+from database import SessionLocal
+from models import VoiceSessionRecord
+
+# Quanto resta valida una sessione che nessuno apre
+_SESSION_TTL = timedelta(hours=1)
+
+# Le funzioni che aprono una sessione DB per conto proprio passano da qui,
+# così la suite può legarle alla connessione della sua transazione (stesso
+# meccanismo di ``audit.session_factory``).
+session_factory = SessionLocal
+
+
+def _utcnow() -> datetime:
+    """Naive UTC, come le colonne DateTime di tutto il progetto."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 @dataclass
 class VoiceSession:
-    """State for an active voice session, keyed by session_id."""
+    """Il contesto di una chiamata, staccato dal database.
+
+    Quello che la pipeline riceve e tiene per tutta la durata della
+    chiamata: valori puri, nessun oggetto ORM e nessuna sessione DB
+    appesa. Vale la copia letta all'apertura del socket, e da lì in poi la
+    pipeline non torna più a leggere.
+    """
 
     user_id: str
     avatar_id: str
     conversation_id: str
-    # Snapshot of the avatar's persona sheet taken when the session starts:
-    # the pipeline reads it from here, keeping the per-turn hot path free
-    # of avatar lookups.
+    # Scheda persona dell'avatar, fotografata all'inizio della sessione: la
+    # pipeline la legge da qui, e il percorso caldo di ogni turno resta
+    # senza query sull'avatar.
     avatar_profile: dict = field(default_factory=dict)
-    # Snapshot of the DB history taken when the session starts. During the
-    # session the pipeline tracks turns in memory, so it never re-reads
-    # the DB.
+    # Storia già scritta a database, fotografata all'inizio della sessione.
+    # Durante la chiamata la pipeline tiene i turni in memoria, quindi non
+    # rilegge mai il database.
     prior_history: list[dict] = field(default_factory=list)
-    # Cartesia voice id for this avatar (None -> default voice)
+    # Voce Cartesia dell'avatar (None -> voce di default)
     voice_id: str | None = None
-    created_at: float = field(default_factory=time.time)
-
-
-_sessions: dict[str, VoiceSession] = {}
-_sessions_lock = threading.Lock()
 
 
 def create_voice_session(
-    user_id: str,
-    avatar_id: str,
-    conversation_id: str,
+    db: Session,
+    user_id: UUID,
+    avatar_id: UUID,
+    conversation_id: UUID,
     avatar_profile: dict,
     prior_history: list[dict],
     voice_id: str | None = None,
 ) -> str:
-    """Register a new voice session and return its unguessable id."""
-    session_id = secrets.token_urlsafe(24)
-    with _sessions_lock:
-        # Drop expired sessions while we're here
-        now = time.time()
-        expired = [sid for sid, s in _sessions.items() if now - s.created_at > _SESSION_TTL]
-        for sid in expired:
-            del _sessions[sid]
+    """Registra una nuova sessione e restituisce il suo id imprevedibile.
 
-        _sessions[session_id] = VoiceSession(
+    Usa la sessione DB di chi chiama, che a questo punto ne ha già una
+    aperta per la richiesta HTTP: la scrittura fa parte di quella stessa
+    transazione, quindi la sessione vocale esiste esattamente quando esiste
+    la conversazione a cui si riferisce.
+    """
+    session_id = secrets.token_urlsafe(24)
+    db.add(
+        VoiceSessionRecord(
+            id=session_id,
             user_id=user_id,
             avatar_id=avatar_id,
             conversation_id=conversation_id,
             avatar_profile=avatar_profile,
             prior_history=prior_history,
             voice_id=voice_id,
+            expires_at=_utcnow() + _SESSION_TTL,
         )
+    )
+    db.commit()
     return session_id
 
 
-def get_voice_session(session_id: str) -> VoiceSession | None:
-    """Look up an active voice session, or None if unknown/expired."""
-    with _sessions_lock:
-        session = _sessions.get(session_id)
-        if session and (time.time() - session.created_at) > _SESSION_TTL:
-            del _sessions[session_id]
+def load_voice_session(session_id: str) -> VoiceSession | None:
+    """La sessione se esiste ed è ancora valida, altrimenti None.
+
+    Apre e chiude una sessione DB tutta sua invece di riceverla da una
+    dipendenza FastAPI, e il motivo è la durata: una dipendenza tiene la
+    connessione impegnata per tutta la vita dell'endpoint, e l'endpoint qui
+    è un WebSocket che dura quanto la telefonata. Quaranta chiamate
+    terrebbero occupate quaranta connessioni del pool per dieci minuti,
+    esaurendolo molto prima che la CPU dia segni di cedimento.
+
+    Bloccante: va chiamata via ``asyncio.to_thread``, come le altre
+    scritture del percorso vocale.
+    """
+    with session_factory() as db:
+        record = db.get(VoiceSessionRecord, session_id)
+        if record is None or record.expires_at <= _utcnow():
             return None
-        return session
+        return VoiceSession(
+            user_id=str(record.user_id),
+            avatar_id=str(record.avatar_id),
+            conversation_id=str(record.conversation_id),
+            avatar_profile=record.avatar_profile or {},
+            prior_history=record.prior_history or [],
+            voice_id=record.voice_id,
+        )
+
+
+def close_voice_session(session_id: str) -> None:
+    """Cancella la sessione a chiamata finita.
+
+    La riga contiene una copia della storia della conversazione, quindi non
+    la si lascia in giro fino alla scadenza quando si sa già che non serve
+    più. Bloccante, come ``load_voice_session``.
+    """
+    with session_factory() as db:
+        db.query(VoiceSessionRecord).filter(VoiceSessionRecord.id == session_id).delete(
+            synchronize_session=False
+        )
+        db.commit()
+
+
+def purge_expired(conn: Connection) -> int:
+    """Elimina le sessioni scadute, cioè quelle mai aperte da nessuno.
+
+    Chiamata dallo sweep di ``housekeeping``: le chiamate che finiscono
+    normalmente cancellano già la propria riga, quindi quello che resta qui
+    è solo chi ha chiesto una chiamata e non l'ha mai iniziata.
+    """
+    return conn.execute(
+        delete(VoiceSessionRecord).where(VoiceSessionRecord.expires_at < _utcnow())
+    ).rowcount

@@ -107,8 +107,12 @@ _COGNITO_SYMBOLS = set("^$*.[]{}()?-\"!@#%&/\\,><':;|_~`+=")
 # A successful login clears the email bucket only — clearing the IP one
 # would let an attacker reset it by logging into an account they own.
 _LOGIN_WINDOW_SECONDS = 15 * 60
-_email_limiter = SlidingWindowLimiter(max_failures=5, window_seconds=_LOGIN_WINDOW_SECONDS)
-_ip_limiter = SlidingWindowLimiter(max_failures=10, window_seconds=_LOGIN_WINDOW_SECONDS)
+_email_limiter = SlidingWindowLimiter(
+    scope="email", max_failures=5, window_seconds=_LOGIN_WINDOW_SECONDS
+)
+_ip_limiter = SlidingWindowLimiter(
+    scope="ip", max_failures=10, window_seconds=_LOGIN_WINDOW_SECONDS
+)
 
 # Every login failure gets this same message, whatever the real cause
 # (email inesistente, password sbagliata, account non confermato, utente

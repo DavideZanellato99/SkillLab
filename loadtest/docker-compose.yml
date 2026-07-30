@@ -1,0 +1,44 @@
+# I finti fornitori, in un compose separato da quello dell'applicazione.
+#
+# Separato di proposito: questa roba deve poter girare su una macchina
+# diversa dal backend che sta misurando. Girando fianco a fianco ruba CPU al
+# processo cronometrato e il risultato esce più basso del vero, che è
+# l'errore peggiore perché porta a comprare più ferro del necessario.
+#
+#   docker compose up -d --build
+#
+# Poi si punta il backend qui (vedi README.md) e si lancia il generatore.
+services:
+  mocks:
+    build: .
+    ports:
+      # Esposte sull'host perché è il backend, che gira in un altro
+      # compose, a doverle raggiungere.
+      - "8801:8801"  # finto ElevenLabs Scribe
+      - "8802:8802"  # finto Cartesia Sonic
+      - "8803:8803"  # finto OpenAI
+    environment:
+      # Ritardi simulati dei fornitori. Non cambiano la capacità misurata,
+      # cambiano quanto le latenze assolute somigliano a quelle vere.
+      MOCK_NET_DELAY_MS: "0"
+      MOCK_TTS_TTFB_MS: "180"
+      MOCK_LLM_TTFT_MS: "250"
+      MOCK_LLM_TOKEN_MS: "25"
+      # Quota di commit spezzati a metà frase (0 = mai). Alzarla mette alla
+      # prova l'aggregazione VOICE_SETTLE_MS del backend.
+      MOCK_STT_SPLIT_RATIO: "0"
+    restart: unless-stopped
+
+  # Il generatore. Non parte da solo: si lancia con il profilo e i suoi
+  # argomenti, di solito da una macchina ancora diversa.
+  #
+  #   docker compose run --rm generator python /app/generator.py \
+  #     --base-url http://host.docker.internal:8000 \
+  #     --email ... --password ... --calls 20 --duration 300
+  generator:
+    build: .
+    profiles: ["gen"]
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["python", "generator.py", "--help"]

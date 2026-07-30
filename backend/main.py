@@ -14,7 +14,6 @@ from fastapi.staticfiles import StaticFiles
 import housekeeping
 import tls_setup  # noqa: F401
 from audit import AuditMiddleware
-from database import Base, engine
 from routers.admin import router as admin_router
 from routers.admin_avatars import router as admin_avatars_router
 from routers.admin_voices import router as admin_voices_router
@@ -28,7 +27,7 @@ from routers.notifications import router as notifications_router
 from routers.organizations import router as organizations_router
 from routers.training import router as training_router
 from routers.voice import router as voice_router
-from startup_migrations import run_startup_migrations
+from startup_migrations import prepare_schema
 
 # Uvicorn configures its own loggers and leaves the root one alone, so
 # without this every logger.info() in the app writes to nowhere: the
@@ -43,11 +42,11 @@ logging.basicConfig(
 
 # Create all database tables, then bring an existing database up to date.
 # create_all only creates missing tables; everything else (added columns,
-# backfills, tightened constraints, seed roles) lives in run_startup_migrations
-# and is idempotent. Both run at import so the schema is ready before the app
-# serves a request or a test fixture touches a table.
-Base.metadata.create_all(bind=engine)
-run_startup_migrations()
+# backfills, tightened constraints, seed roles) lives in startup_migrations
+# and is idempotent. Runs at import so the schema is ready before the app
+# serves a request or a test fixture touches a table, and behind an advisory
+# lock so several replicas starting together do not run it at once.
+prepare_schema()
 
 
 @asynccontextmanager

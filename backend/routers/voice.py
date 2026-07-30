@@ -13,12 +13,14 @@ Flow:
    the browser plays as it arrives.
 """
 
+import asyncio
 import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from sqlalchemy.orm import Session
 
+import voice_capacity
 from auth_dependency import get_current_user
 from cartesia_service import CARTESIA_API_KEY
 from conversation_titles import next_conversation_title
@@ -37,7 +39,7 @@ from models import (
 from routers.avatars import _visible_avatars, ensure_trainable
 from schemas import VoiceRecordingInfo, VoiceSessionRequest, VoiceSessionResponse
 from voice_pipeline import VoicePipeline
-from voice_sessions import create_voice_session, get_voice_session
+from voice_sessions import close_voice_session, create_voice_session, load_voice_session
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
@@ -125,9 +127,10 @@ def start_voice_session(
     # after the ring it waits in silence for the operator (the user) to
     # answer and introduce themselves, then it states why it is calling.
     session_id = create_voice_session(
-        user_id=str(current_user.id),
-        avatar_id=str(avatar.id),
-        conversation_id=str(conversation.id),
+        db,
+        user_id=current_user.id,
+        avatar_id=avatar.id,
+        conversation_id=conversation.id,
         avatar_profile=avatar.profile,
         prior_history=prior_history,
         voice_id=avatar.voice_id,
@@ -273,20 +276,59 @@ def get_recording(
 
 @router.websocket("/ws")
 async def voice_websocket(websocket: WebSocket, session_id: str | None = None):
-    """Realtime voice call socket; access gated by the unguessable session_id."""
-    session = get_voice_session(session_id) if session_id else None
-    if not session:
-        # Policy violation close code: invalid or expired session
+    """Realtime voice call socket; access gated by the unguessable session_id.
+
+    The session is read from the database rather than from process memory,
+    so the socket does not have to land on the same replica that issued the
+    id. Both DB touches go through a thread: they are blocking calls, and
+    this endpoint holds the event loop for the whole length of the call.
+    """
+    # Policy violation close code: no session id, or one that is unknown or
+    # expired. Same answer for all three, so a caller probing ids learns
+    # nothing from the difference.
+    if not session_id:
         await websocket.close(code=4401)
+        return
+    session = await asyncio.to_thread(load_voice_session, session_id)
+    if not session:
+        await websocket.close(code=4401)
+        return
+
+    # Over the per-process ceiling the call is turned away instead of being
+    # accepted and served badly along with all the others (see
+    # voice_capacity). The session row is deliberately left alone: nothing
+    # was consumed, so the same id still works on the next attempt.
+    if not voice_capacity.take_slot():
+        await websocket.accept()
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "error",
+                    "message": "Tutte le linee sono occupate in questo momento. "
+                    "Riprova fra qualche minuto.",
+                }
+            )
+        )
+        # 1013 Try Again Later: the condition is temporary and the client
+        # is welcome back.
+        await websocket.close(code=1013)
         return
 
     await websocket.accept()
     try:
-        pipeline = VoicePipeline(websocket, session)
-    except RuntimeError as e:
-        # Missing voice configuration (e.g. no Cartesia voice id)
-        await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
-        await websocket.close(code=1011)
-        return
+        try:
+            pipeline = VoicePipeline(websocket, session)
+        except RuntimeError as e:
+            # Missing voice configuration (e.g. no Cartesia voice id)
+            await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
+            await websocket.close(code=1011)
+            return
 
-    await pipeline.run()
+        await pipeline.run()
+    finally:
+        voice_capacity.release_slot()
+        # The row holds a copy of the conversation history, so it goes as
+        # soon as the call is over instead of waiting out its expiry. Also
+        # in the failure paths: a session nobody can use is a session that
+        # should not still be there.
+        await asyncio.to_thread(close_voice_session, session_id)

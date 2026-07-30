@@ -21,8 +21,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -65,8 +65,8 @@ jobs:
       # database has to point at the service container above.
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -85,8 +85,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -106,13 +106,13 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so gitleaks scans every commit being pushed, not
           # just the tip. gitleaks-action exits non-zero on any finding,
           # which fails this job and (via ci-success) blocks the merge.
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -120,7 +120,7 @@ jobs:
     name: Docker build & compose smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create the compose .env (database credentials)
         # docker-compose.yml has no defaults for these and refuses to start
         # without them, exactly as it would on a real deployment. Throwaway
@@ -244,7 +244,7 @@ jobs:
     name: Infra lint (hadolint, actionlint, shellcheck)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: hadolint (backend Dockerfile)
         run: docker run --rm -i hadolint/hadolint < backend/Dockerfile
       - name: hadolint (frontend Dockerfile)

@@ -1,9 +1,8 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchAuditActions, fetchAuditLogs } from '../services/auditLogs'
-import type { AuditActionOption, AuditLog } from '../services/auditLogs'
-import { fetchOrganizations } from '../services/organizations'
-import type { Organization } from '../services/organizations'
+import type { AuditLog } from '../services/auditLogs'
+import { useAuditLogs, useAuditActions, AUDIT_WINDOW_SIZE } from '../hooks/useAuditLogs'
+import { useOrganizations } from '../hooks/useOrganizations'
 import { isSuperAdmin, ROLE_BADGE_CLASSES, ROLE_LABELS } from '../services/auth'
 import DataTable, { Td, Tr } from './DataTable'
 import Select from './Select'
@@ -17,10 +16,6 @@ import { fieldCls, labelCls } from './Field'
  * utente e di qualunque ruolo. Pagina riservata al super admin, il backend
  * risponde 403 a chiunque altro. In sola lettura: il registro non si
  * modifica e non si cancella, scade e basta. */
-
-/** Righe caricate per volta: il registro cresce senza limite, quindi la
- * pagina ne tiene una finestra e la estende su richiesta. */
-const WINDOW_SIZE = 200
 
 const COLUMNS: DataTableColumn[] = [
   { key: 'quando', label: 'Data e ora' },
@@ -68,10 +63,9 @@ function summarize(log: AuditLog): string {
 
 export default function AuditLogsPage() {
   const { user } = useAuth()
-  const [logs, setLogs] = useState<AuditLog[]>([])
-  const [total, setTotal] = useState(0)
-  const [actions, setActions] = useState<AuditActionOption[]>([])
-  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const isSuper = isSuperAdmin(user)
+  const { data: organizations = [] } = useOrganizations(isSuper)
+  const { data: actions = [] } = useAuditActions(isSuper)
   const [actionFilter, setActionFilter] = useState('')
   const [orgFilter, setOrgFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -80,9 +74,6 @@ export default function AuditLogsPage() {
   // La ricerca interroga il server, non solo le righe già caricate: senza
   // il rinvio partirebbe una richiesta per ogni tasto premuto.
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -90,64 +81,27 @@ export default function AuditLogsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  const filters = useCallback(
-    (offset: number) => ({
+  /* I filtri fanno parte della chiave di cache: cambiarne uno è una domanda
+   * diversa, quindi la finestra riparte da capo invece di sovrascrivere le
+   * righe di prima. */
+  const {
+    logs,
+    total,
+    isPending: isLoading,
+    error,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage: isLoadingMore,
+  } = useAuditLogs(
+    {
       action: actionFilter,
       organizationId: orgFilter,
       dateFrom,
       dateTo,
       search: debouncedSearch,
-      limit: WINDOW_SIZE,
-      offset,
-    }),
-    [actionFilter, orgFilter, dateFrom, dateTo, debouncedSearch],
+    },
+    isSuper,
   )
-
-  useEffect(() => {
-    if (!isSuperAdmin(user)) return
-    let cancelled = false
-    setIsLoading(true)
-    setError('')
-    fetchAuditLogs(filters(0))
-      .then((page) => {
-        if (cancelled) return
-        setLogs(page.items)
-        setTotal(page.total)
-      })
-      .catch((err) => {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : 'Impossibile caricare il registro.')
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [user, filters])
-
-  useEffect(() => {
-    if (!isSuperAdmin(user)) return
-    fetchAuditActions()
-      .then(setActions)
-      .catch(() => setActions([]))
-    fetchOrganizations()
-      .then(setOrganizations)
-      .catch(() => setOrganizations([]))
-  }, [user])
-
-  const handleLoadMore = async () => {
-    setIsLoadingMore(true)
-    try {
-      const page = await fetchAuditLogs(filters(logs.length))
-      setLogs((prev) => [...prev, ...page.items])
-      setTotal(page.total)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossibile caricare altre righe.')
-    } finally {
-      setIsLoadingMore(false)
-    }
-  }
 
   return (
     <PageContainer width="wide">
@@ -245,7 +199,9 @@ export default function AuditLogsPage() {
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>{error}</span>
+          <span>
+            {error instanceof Error ? error.message : 'Impossibile caricare il registro.'}
+          </span>
         </div>
       )}
 
@@ -370,11 +326,11 @@ export default function AuditLogsPage() {
             <span className="tabular-nums">
               {logs.length} di {total} azioni registrate
             </span>
-            {logs.length < total && (
+            {hasNextPage && (
               <button
                 type="button"
                 className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleLoadMore}
+                onClick={() => fetchNextPage()}
                 disabled={isLoadingMore}
               >
                 {isLoadingMore ? (
@@ -383,7 +339,7 @@ export default function AuditLogsPage() {
                     Caricamento...
                   </>
                 ) : (
-                  `Carica altre ${Math.min(WINDOW_SIZE, total - logs.length)}`
+                  `Carica altre ${Math.min(AUDIT_WINDOW_SIZE, total - logs.length)}`
                 )}
               </button>
             )}

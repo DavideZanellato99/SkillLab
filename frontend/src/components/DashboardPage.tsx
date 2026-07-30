@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchEvaluationsReport, fetchEvaluationsReportXlsx } from '../services/admin'
+import { fetchEvaluationsReportXlsx } from '../services/admin'
+import { useEvaluationsReport } from '../hooks/useReports'
 import type { EvaluationReportRow } from '../services/admin'
 import { saveBlob } from '../services/api'
-import { fetchOrganizations } from '../services/organizations'
-import type { Organization } from '../services/organizations'
+import { useOrganizations } from '../hooks/useOrganizations'
 import { isAdmin, isSuperAdmin } from '../services/auth'
 import SearchSelect from './SearchSelect'
 import Select from './Select'
@@ -409,30 +409,39 @@ function KpiCard({ label, children }: { label: string; children: React.ReactNode
 export default function DashboardPage() {
   const { user } = useAuth()
   const showOrgFilter = isSuperAdmin(user)
-  const [rows, setRows] = useState<EvaluationReportRow[]>([])
-  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const { data: organizations = [] } = useOrganizations(isSuperAdmin(user))
   const [orgFilter, setOrgFilter] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
   const [selectedUserId, setSelectedUserId] = useState('')
   const [modeFilter, setModeFilter] = useState<ModeFilter>('voice')
   const [search, setSearch] = useState('')
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null)
   const [isExporting, setIsExporting] = useState(false)
-  /* Incrementata quando una revisione cambia il voto di una conversazione:
-   * il report è già stato letto e non se ne accorgerebbe da solo. */
-  const [reloadKey, setReloadKey] = useState(0)
+  const [exportError, setExportError] = useState('')
+
+  const {
+    data: rows = [],
+    isPending: isLoading,
+    error: loadError,
+    refetch,
+  } = useEvaluationsReport(orgFilter, isAdmin(user))
+
+  /* L'errore mostrato è quello del caricamento, o quello dell'esportazione se
+   * è lei a essere andata storta: sono due modi di non avere il report. */
+  const error = exportError || (loadError instanceof Error ? loadError.message : '')
 
   /* Excel del report: stesse righe della dashboard (stesso scope server
-   * per organizzazione), i filtri più fini li offre il foglio stesso */
+   * per organizzazione), i filtri più fini li offre il foglio stesso.
+   * Resta fuori da TanStack perché produce un file da salvare, non uno
+   * stato da tenere in cache. */
   const handleExportXlsx = async () => {
     if (isExporting) return
     setIsExporting(true)
+    setExportError('')
     try {
       const blob = await fetchEvaluationsReportXlsx(orgFilter || undefined)
       saveBlob(blob, `report-valutazioni-${new Date().toISOString().slice(0, 10)}.xlsx`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Esportazione non riuscita.')
+      setExportError(err instanceof Error ? err.message : 'Esportazione non riuscita.')
     } finally {
       setIsExporting(false)
     }
@@ -442,36 +451,6 @@ export default function DashboardPage() {
     { value: '', label: 'Tutte le organizzazioni' },
     ...organizations.map((o) => ({ value: o.id, label: o.name })),
   ]
-
-  useEffect(() => {
-    if (!isAdmin(user)) return
-    let cancelled = false
-    ;(async () => {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await fetchEvaluationsReport(orgFilter || undefined)
-        if (!cancelled) setRows(data)
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Impossibile caricare la dashboard.')
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [user, orgFilter, reloadKey])
-
-  useEffect(() => {
-    if (isSuperAdmin(user)) {
-      fetchOrganizations()
-        .then(setOrganizations)
-        .catch(() => setOrganizations([]))
-    }
-  }, [user])
 
   /* Il selettore di canale sta a monte di tutto il resto: ogni conteggio,
    * media e grafico qui sotto parte da queste righe, non da rows. */
@@ -974,7 +953,7 @@ export default function DashboardPage() {
         <ConversationDetailModal
           row={detailRow}
           onClose={() => setDetailRow(null)}
-          onReviewSaved={() => setReloadKey((k) => k + 1)}
+          onReviewSaved={() => void refetch()}
         />
       )}
     </PageContainer>

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchNotifications, markNotificationsRead } from '../services/notifications'
+import { useNotifications, useMarkNotificationsRead } from '../hooks/useNotifications'
 import type { AppNotification, NotificationKind } from '../services/notifications'
 
 /* La campanella nella barra in alto: quante notifiche non lette ci sono e,
@@ -11,10 +11,6 @@ import type { AppNotification, NotificationKind } from '../services/notification
  * ricontrollata a intervalli e al ritorno sulla scheda, perché il fatto che
  * l'annuncia (un obiettivo assegnato, una revisione pubblicata) accade
  * altrove mentre questa pagina è aperta. */
-
-/** Ogni quanto ricontrollare mentre la scheda è in primo piano. Le notizie
- *  qui non sono al secondo, un minuto è abbondante e non pesa. */
-const POLL_MS = 60_000
 
 const ICONS: Record<NotificationKind, { path: React.ReactNode; cls: string }> = {
   'assignment.assigned': {
@@ -75,56 +71,21 @@ function relativeTime(iso: string): string {
 
 export default function NotificationsBell() {
   const navigate = useNavigate()
-  const [items, setItems] = useState<AppNotification[]>([])
-  const [unread, setUnread] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      const data = await fetchNotifications()
-      setItems(data.items)
-      setUnread(data.unread)
-    } catch {
-      // Silenzioso di proposito: la campanella è un accessorio, un errore
-      // di rete qui non deve piazzare un avviso rosso in cima all'app.
-    }
-  }, [])
+  /* Gli errori restano silenziosi di proposito: la campanella è un
+   * accessorio, un errore di rete qui non deve piazzare un avviso rosso in
+   * cima all'app. `mutate` non solleva, quindi basta non guardare l'errore. */
+  const { data } = useNotifications()
+  const items = data?.items ?? []
+  const unread = data?.unread ?? 0
+  const markRead = useMarkNotificationsRead()
 
-  useEffect(() => {
-    load()
-    const timer = setInterval(load, POLL_MS)
-    // Tornare sulla scheda dopo un'ora è il momento in cui la lista in
-    // memoria è più vecchia, quindi vale più di qualunque intervallo.
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') load()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [load])
-
-  const markAll = async () => {
-    try {
-      const data = await markNotificationsRead()
-      setItems(data.items)
-      setUnread(data.unread)
-    } catch {
-      /* come sopra */
-    }
-  }
+  const markAll = () => markRead.mutate(undefined)
 
   const open = (notification: AppNotification) => {
     setIsOpen(false)
-    if (!notification.read) {
-      markNotificationsRead([notification.key])
-        .then((data) => {
-          setItems(data.items)
-          setUnread(data.unread)
-        })
-        .catch(() => {})
-    }
+    if (!notification.read) markRead.mutate([notification.key])
     if (notification.link) navigate(notification.link)
   }
 

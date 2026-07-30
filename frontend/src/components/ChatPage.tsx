@@ -1,22 +1,22 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { isAdmin } from '../services/auth'
 import type { ChatMessage, ChatConversationSummary, EvaluationCitation } from '../services/api'
 import { getAvatarImageUrl } from '../services/api'
-import { fetchRecordingInfo, estimateCitationSeekMs } from '../services/voice'
+import { estimateCitationSeekMs } from '../services/voice'
+import { useAvatar } from '../hooks/useAvatars'
 import {
-  useAvatar,
   useConversations,
   useConversation,
   useRenameConversation,
   useDeleteConversation,
-  useConversationEvaluation,
-  useEvaluateConversation,
   useSendChatMessage,
   useEndChatConversation,
-} from '../hooks/useApi'
+} from '../hooks/useConversations'
+import { useConversationEvaluation, useEvaluateConversation } from '../hooks/useEvaluation'
+import { useRecordingInfo } from '../hooks/useRecording'
 import VoiceButton from './VoiceButton'
 import CallRecordingPlayer from './CallRecordingPlayer'
 import type { CallRecordingPlayerHandle } from './CallRecordingPlayer'
@@ -467,11 +467,10 @@ export default function ChatPage() {
 
   // Same query (and same cache) as the dock player: used to estimate the
   // point of the recording a cited message falls at.
-  const { data: recordingInfo } = useQuery({
-    queryKey: ['recording-info', currentConversationId],
-    queryFn: () => fetchRecordingInfo(currentConversationId!),
-    enabled: currentConversationId !== null && currentMode === 'voice' && isConversationClosed,
-  })
+  const { data: recordingInfo } = useRecordingInfo(
+    currentConversationId,
+    currentMode === 'voice' && isConversationClosed,
+  )
 
   // A citation's index is its 1-based position in the evaluated
   // transcript, which matches the stored message order: the id is the

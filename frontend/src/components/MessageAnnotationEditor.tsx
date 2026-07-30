@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import type { MessageAnnotation } from '../services/api'
-import { deleteMessageAnnotation, saveMessageAnnotation } from '../services/admin'
+import {
+  useSaveMessageAnnotation,
+  useDeleteMessageAnnotation,
+} from '../hooks/useConversationReview'
 
 /* La nota che il docente appunta su un singolo messaggio della trascrizione,
  * con il suo mini editor.
@@ -28,41 +31,48 @@ export default function MessageAnnotationEditor({
 }: MessageAnnotationEditorProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [note, setNote] = useState(annotation?.note ?? '')
-  const [isSaving, setIsSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [validationMessage, setValidationMessage] = useState('')
+  const saveMutation = useSaveMessageAnnotation(conversationId)
+  const deleteMutation = useDeleteMessageAnnotation()
+  const isSaving = saveMutation.isPending || deleteMutation.isPending
+  const errorOf = (err: unknown, fallback: string) =>
+    err ? (err instanceof Error ? err.message : fallback) : ''
+  const error =
+    validationMessage ||
+    errorOf(saveMutation.error, 'Salvataggio non riuscito.') ||
+    errorOf(deleteMutation.error, 'Eliminazione non riuscita.')
 
   const handleSave = async () => {
     const trimmed = note.trim()
     if (!trimmed) {
-      setError("L'annotazione non può essere vuota.")
+      setValidationMessage("L'annotazione non può essere vuota.")
       return
     }
-    setIsSaving(true)
-    setError('')
+    setValidationMessage('')
+    saveMutation.reset()
     try {
-      const saved = await saveMessageAnnotation(conversationId, messageId, trimmed)
+      const saved = await saveMutation.mutateAsync({ messageId, note: trimmed })
+      // La nota viene applicata alla cache da chi ci sta sopra, invece di far
+      // rileggere la trascrizione: ricaricarla rimbalzerebbe lo scroll a ogni
+      // nota, che è il gesto che il docente ripete di più.
       onChange(messageId, saved)
       setIsEditing(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Salvataggio non riuscito.')
-    } finally {
-      setIsSaving(false)
+    } catch {
+      // Il messaggio è nella mutation
     }
   }
 
   const handleDelete = async () => {
     if (!annotation) return
-    setIsSaving(true)
-    setError('')
+    setValidationMessage('')
+    deleteMutation.reset()
     try {
-      await deleteMessageAnnotation(annotation.id)
+      await deleteMutation.mutateAsync(annotation.id)
       onChange(messageId, null)
       setNote('')
       setIsEditing(false)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Eliminazione non riuscita.')
-    } finally {
-      setIsSaving(false)
+    } catch {
+      // idem
     }
   }
 
@@ -88,7 +98,9 @@ export default function MessageAnnotationEditor({
             className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-1 text-[0.75rem] text-slate-400 transition hover:text-slate-200"
             onClick={() => {
               setNote(annotation?.note ?? '')
-              setError('')
+              setValidationMessage('')
+              saveMutation.reset()
+              deleteMutation.reset()
               setIsEditing(false)
             }}
             disabled={isSaving}

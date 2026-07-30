@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  fetchOrganizations,
-  fetchOrganization,
-  createOrganization,
-  updateOrganization,
-  setOrganizationStatus,
-  deleteOrganization,
-} from '../services/organizations'
-import type { Organization, OrganizationDetail, OrgStatus } from '../services/organizations'
+  useOrganizations,
+  useOrganization,
+  useCreateOrganization,
+  useUpdateOrganization,
+  useSetOrganizationStatus,
+  useDeleteOrganization,
+} from '../hooks/useOrganizations'
+import type { Organization, OrgStatus } from '../services/organizations'
 import { isSuperAdmin } from '../services/auth'
 import DataTable, { Td, Tr } from './DataTable'
 import DetailModal, { DetailField } from './DetailModal'
@@ -83,9 +83,11 @@ const deleteIcon = <TrashIcon size={24} stroke="#ef4444" />
 
 export default function OrganizationsPage() {
   const { user } = useAuth()
-  const [orgs, setOrgs] = useState<Organization[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
+  const {
+    data: orgs = [],
+    isPending: isLoading,
+    error: loadError,
+  } = useOrganizations(isSuperAdmin(user))
   const [successMsg, setSuccessMsg] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -100,22 +102,19 @@ export default function OrganizationsPage() {
   // già in tabella si mostra subito, le statistiche di utilizzo arrivano
   // dopo perché costano una scansione delle conversazioni del tenant.
   const [viewingOrg, setViewingOrg] = useState<Organization | null>(null)
-  const [detail, setDetail] = useState<OrganizationDetail | null>(null)
-  const [detailError, setDetailError] = useState('')
-  /** Organizzazione di cui è in volo la richiesta di dettaglio. */
-  const detailRequestRef = useRef<string | null>(null)
+  /* Il dettaglio è una query sull'organizzazione aperta: una risposta in
+   * ritardo su un dettaglio già chiuso, o riaperto su un'altra riga, non
+   * arriva sullo schermo perché quella query non è più quella attiva. */
+  const { data: detail, error: detailQueryError } = useOrganization(viewingOrg?.id ?? null)
+  const detailError = detailQueryError ? 'Statistiche non disponibili.' : ''
 
   // Create/edit modal: 'new' = create, Organization = edit, null = closed
   const [editing, setEditing] = useState<Organization | 'new' | null>(null)
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
-  const [formError, setFormError] = useState('')
 
   // Delete confirmation
   const [deleting, setDeleting] = useState<Organization | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState('')
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
 
   // Status change confirmation
@@ -123,62 +122,34 @@ export default function OrganizationsPage() {
     null,
   )
   const [statusReason, setStatusReason] = useState('')
-  const [isSavingStatus, setIsSavingStatus] = useState(false)
-  const [statusError, setStatusError] = useState('')
+
+  const createMutation = useCreateOrganization()
+  const updateMutation = useUpdateOrganization()
+  const statusMutation = useSetOrganizationStatus()
+  const deleteMutation = useDeleteOrganization()
+
+  /* Gli errori delle scritture vivono nelle mutation, non in stati paralleli:
+   * `reset()` all'apertura di una modale è quello che prima faceva un
+   * setState a vuoto. Salvare crea o aggiorna, quindi l'attesa e l'errore
+   * del form sono quelli della mutation che sta girando. */
+  const isSaving = createMutation.isPending || updateMutation.isPending
+  const saveError = createMutation.error ?? updateMutation.error
+  const formError = saveError
+    ? saveError instanceof Error
+      ? saveError.message
+      : 'Errore durante il salvataggio.'
+    : ''
 
   const flashSuccess = (msg: string) => {
     setSuccessMsg(msg)
     setTimeout(() => setSuccessMsg(''), 6000)
   }
 
-  const loadOrgs = useCallback(async () => {
-    setIsLoading(true)
-    setError('')
-    try {
-      const data = await fetchOrganizations()
-      setOrgs(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossibile caricare le organizzazioni.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (isSuperAdmin(user)) {
-      loadOrgs()
-    }
-  }, [user, loadOrgs])
-
-  /* Statistiche del tenant: si leggono all'apertura del dettaglio e non con
-   * l'elenco, così la tabella (e i menu a tendina che usano lo stesso
-   * endpoint altrove) non pagano una scansione delle conversazioni. */
-  const openDetail = async (org: Organization) => {
-    setViewingOrg(org)
-    setDetail(null)
-    setDetailError('')
-    detailRequestRef.current = org.id
-    try {
-      const data = await fetchOrganization(org.id)
-      // Una risposta in ritardo non deve comparire in un dettaglio che nel
-      // frattempo è stato chiuso, o aperto su un'altra organizzazione.
-      if (detailRequestRef.current === org.id) setDetail(data)
-    } catch (err) {
-      if (detailRequestRef.current === org.id) {
-        setDetailError(err instanceof Error ? err.message : 'Statistiche non disponibili.')
-      }
-    }
-  }
-
-  const closeDetail = () => {
-    detailRequestRef.current = null
-    setViewingOrg(null)
-    setDetail(null)
-    setDetailError('')
-  }
+  const openDetail = (org: Organization) => setViewingOrg(org)
+  const closeDetail = () => setViewingOrg(null)
 
   const openStatusChange = (org: Organization, target: OrgStatus) => {
-    setStatusError('')
+    statusMutation.reset()
     setStatusReason('')
     setStatusAction({ org, target })
   }
@@ -186,79 +157,69 @@ export default function OrganizationsPage() {
   const openCreate = () => {
     setName('')
     setSlug('')
-    setFormError('')
+    createMutation.reset()
+    updateMutation.reset()
     setEditing('new')
   }
 
   const openEdit = (o: Organization) => {
     setName(o.name)
     setSlug(o.slug)
-    setFormError('')
+    createMutation.reset()
+    updateMutation.reset()
     setEditing(o)
   }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFormError('')
-    setIsSaving(true)
     try {
       if (editing === 'new') {
-        const created = await createOrganization({ name, slug: slug.trim() || undefined })
-        setOrgs((prev) => [created, ...prev])
-        flashSuccess(`Organizzazione ${created.name} creata con successo.`)
-      } else if (editing) {
-        const updated = await updateOrganization(editing.id, {
+        const created = await createMutation.mutateAsync({
           name,
           slug: slug.trim() || undefined,
         })
-        setOrgs((prev) => prev.map((o) => (o.id === updated.id ? updated : o)))
+        flashSuccess(`Organizzazione ${created.name} creata con successo.`)
+      } else if (editing) {
+        const updated = await updateMutation.mutateAsync({
+          organizationId: editing.id,
+          payload: { name, slug: slug.trim() || undefined },
+        })
         flashSuccess(`Organizzazione ${updated.name} aggiornata con successo.`)
       }
       setEditing(null)
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Errore durante il salvataggio.')
-    } finally {
-      setIsSaving(false)
+    } catch {
+      // Il messaggio è già nella mutation, la modale resta aperta per
+      // mostrarlo e per lasciar correggere quello che si stava scrivendo.
     }
   }
 
   const handleConfirmStatus = async () => {
     if (!statusAction) return
-    setStatusError('')
-    setIsSavingStatus(true)
     try {
-      const updated = await setOrganizationStatus(
-        statusAction.org.id,
-        statusAction.target,
-        statusReason,
-      )
-      setOrgs((prev) => prev.map((o) => (o.id === updated.id ? updated : o)))
+      const updated = await statusMutation.mutateAsync({
+        organizationId: statusAction.org.id,
+        status: statusAction.target,
+        reason: statusReason,
+      })
       setStatusAction(null)
       setStatusReason('')
       flashSuccess(
         `Organizzazione ${updated.name} ${statusAction.target === 'active' ? 'riattivata' : 'sospesa'}.`,
       )
-    } catch (err) {
-      setStatusError(err instanceof Error ? err.message : 'Errore durante il cambio di stato.')
-    } finally {
-      setIsSavingStatus(false)
+    } catch {
+      // idem: l'errore lo mostra la modale
     }
   }
 
   const handleConfirmDelete = async () => {
     if (!deleting) return
-    setDeleteError('')
-    setIsDeleting(true)
     try {
-      const result = await deleteOrganization(deleting.id)
-      setOrgs((prev) => prev.filter((o) => o.id !== deleting.id))
+      const result = await deleteMutation.mutateAsync(deleting.id)
       setDeleting(null)
       setDeleteConfirmText('')
       flashSuccess(result.message)
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Errore durante l'eliminazione.")
-    } finally {
-      setIsDeleting(false)
+    } catch {
+      // idem
     }
   }
 
@@ -317,7 +278,7 @@ export default function OrganizationsPage() {
         </div>
       )}
 
-      {error && <FormError message={error} />}
+      {loadError && <FormError message="Impossibile caricare le organizzazioni." />}
 
       {isLoading ? (
         <LoadingState message="Caricamento organizzazioni..." />
@@ -420,7 +381,7 @@ export default function OrganizationsPage() {
                       <button
                         className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
                         onClick={() => {
-                          setDeleteError('')
+                          deleteMutation.reset()
                           setDeleteConfirmText('')
                           setDeleting(o)
                         }}
@@ -669,7 +630,7 @@ export default function OrganizationsPage() {
               </>
             )
           }
-          error={statusError}
+          error={statusMutation.error instanceof Error ? statusMutation.error.message : undefined}
           confirmLabel={statusAction.target === 'active' ? 'Riattiva' : 'Sospendi'}
           pendingLabel="Attendere..."
           confirmClassName={
@@ -677,7 +638,7 @@ export default function OrganizationsPage() {
               ? 'border border-emerald-500/35 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
               : 'border border-amber-500/35 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
           }
-          isPending={isSavingStatus}
+          isPending={statusMutation.isPending}
           onConfirm={handleConfirmStatus}
           onClose={() => setStatusAction(null)}
         >
@@ -698,7 +659,7 @@ export default function OrganizationsPage() {
                   placeholder="Es. Contratto scaduto, contatta il tuo referente."
                   value={statusReason}
                   onChange={(e) => setStatusReason(e.target.value)}
-                  disabled={isSavingStatus}
+                  disabled={statusMutation.isPending}
                 />
               </div>
             </div>
@@ -722,11 +683,11 @@ export default function OrganizationsPage() {
               <strong className="text-slate-100">{deleting.name}</strong> per confermare.
             </>
           }
-          error={deleteError}
+          error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
           confirmLabel="Elimina Definitivamente"
           pendingLabel="Eliminazione..."
           confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
-          isPending={isDeleting}
+          isPending={deleteMutation.isPending}
           confirmDisabled={deleteConfirmText.trim() !== deleting.name}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeleting(null)}
@@ -739,7 +700,7 @@ export default function OrganizationsPage() {
                 placeholder={deleting.name}
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
-                disabled={isDeleting}
+                disabled={deleteMutation.isPending}
                 aria-label="Conferma nome organizzazione"
               />
             </div>

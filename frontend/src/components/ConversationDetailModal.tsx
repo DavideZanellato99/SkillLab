@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { fetchAdminConversation } from '../services/admin'
+import { useQueryClient } from '@tanstack/react-query'
 import type { AdminConversationDetail, EvaluationReportRow } from '../services/admin'
 import type {
   ChatMessage,
@@ -8,7 +7,7 @@ import type {
   EvaluationCitation,
   MessageAnnotation,
 } from '../services/api'
-import { fetchRecordingInfo, estimateCitationSeekMs } from '../services/voice'
+import { estimateCitationSeekMs } from '../services/voice'
 import CallRecordingPlayer from './CallRecordingPlayer'
 import type { CallRecordingPlayerHandle } from './CallRecordingPlayer'
 import ConversationModeBadge from './ConversationModeBadge'
@@ -17,6 +16,9 @@ import MessageAnnotationEditor from './MessageAnnotationEditor'
 import MessageEmotions, { splitEmotionTag } from './MessageEmotions'
 import LoadingState from './LoadingState'
 import ModalShell from './ModalShell'
+import { useRecordingInfo } from '../hooks/useRecording'
+import { useAdminConversation } from '../hooks/useAdminConversation'
+import { queryKeys } from '../hooks/queryKeys'
 import TrainerReviewNote, { hasReviewContent } from './TrainerReviewNote'
 import TrainerReviewPanel from './TrainerReviewPanel'
 
@@ -68,10 +70,13 @@ export default function ConversationDetailModal({
   onClose,
   onReviewSaved,
 }: ConversationDetailModalProps) {
-  const [detail, setDetail] = useState<AdminConversationDetail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [reloadKey, setReloadKey] = useState(0)
+  const {
+    data: detail,
+    isPending: isLoading,
+    error,
+    refetch,
+  } = useAdminConversation(row.conversation_id)
+  const queryClient = useQueryClient()
   const [isEditingReview, setIsEditingReview] = useState(false)
 
   // ── Citazioni della valutazione → trascrizione e registrazione ──
@@ -82,11 +87,7 @@ export default function ConversationDetailModal({
 
   // Stessa query (e stessa cache) del player: serve qui per stimare il
   // punto della registrazione in cui cade un messaggio citato.
-  const { data: recordingInfo } = useQuery({
-    queryKey: ['recording-info', row.conversation_id],
-    queryFn: () => fetchRecordingInfo(row.conversation_id),
-    enabled: row.mode === 'voice',
-  })
+  const { data: recordingInfo } = useRecordingInfo(row.conversation_id, row.mode === 'voice')
 
   useEffect(() => {
     return () => {
@@ -138,27 +139,6 @@ export default function ConversationDetailModal({
     [resolveCitation, recordingInfo, flashMessage],
   )
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await fetchAdminConversation(row.conversation_id)
-        if (!cancelled) setDetail(data)
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Impossibile caricare la conversazione.')
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [row.conversation_id, reloadKey])
-
   const userName =
     row.user_nome && row.user_cognome ? `${row.user_nome} ${row.user_cognome}` : row.user_email
 
@@ -174,36 +154,39 @@ export default function ConversationDetailModal({
    * docente ripete di più. */
   const handleAnnotationChange = useCallback(
     (messageId: string, annotation: MessageAnnotation | null) => {
-      setDetail((prev) => {
-        if (!prev) return prev
-        const previous = prev.review?.annotations ?? []
-        const others = previous.filter((a) => a.message_id !== messageId)
-        const annotations = annotation ? [...others, annotation] : others
-        if (!prev.review) {
-          // Prima nota su una conversazione mai revisionata: la risposta del
-          // server è la stessa intestazione sintetica che leggerebbe una
-          // GET, quindi qui basta ricostruirla con i campi che servono.
-          if (!annotation) return prev
-          return {
-            ...prev,
-            review: {
-              conversation_id: prev.conversation_id,
-              reviewer_name: annotation.reviewer_name,
-              summary_note: null,
-              override_score: null,
-              override_reason: null,
-              ai_score_at_review: null,
-              is_stale: false,
-              annotations,
-              created_at: annotation.created_at,
-              updated_at: annotation.updated_at,
-            },
+      queryClient.setQueryData<AdminConversationDetail>(
+        queryKeys.conversations.adminDetail(row.conversation_id),
+        (prev) => {
+          if (!prev) return prev
+          const previous = prev.review?.annotations ?? []
+          const others = previous.filter((a) => a.message_id !== messageId)
+          const annotations = annotation ? [...others, annotation] : others
+          if (!prev.review) {
+            // Prima nota su una conversazione mai revisionata: la risposta del
+            // server è la stessa intestazione sintetica che leggerebbe una
+            // GET, quindi qui basta ricostruirla con i campi che servono.
+            if (!annotation) return prev
+            return {
+              ...prev,
+              review: {
+                conversation_id: prev.conversation_id,
+                reviewer_name: annotation.reviewer_name,
+                summary_note: null,
+                override_score: null,
+                override_reason: null,
+                ai_score_at_review: null,
+                is_stale: false,
+                annotations,
+                created_at: annotation.created_at,
+                updated_at: annotation.updated_at,
+              },
+            }
           }
-        }
-        return { ...prev, review: { ...prev.review, annotations } }
-      })
+          return { ...prev, review: { ...prev.review, annotations } }
+        },
+      )
     },
-    [],
+    [queryClient, row.conversation_id],
   )
 
   /* Salvare o ritirare la revisione ricarica il dettaglio: il punteggio
@@ -214,10 +197,10 @@ export default function ConversationDetailModal({
   const handleReviewSaved = useCallback(
     (_review: ConversationReview | null) => {
       setIsEditingReview(false)
-      setReloadKey((k) => k + 1)
+      void refetch()
       onReviewSaved?.()
     },
-    [onReviewSaved],
+    [onReviewSaved, refetch],
   )
 
   return (
@@ -270,11 +253,13 @@ export default function ConversationDetailModal({
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <span>{error}</span>
+            <span>
+              {error instanceof Error ? error.message : 'Impossibile caricare la conversazione.'}
+            </span>
           </div>
           <button
             className="cursor-pointer rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-6 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)]"
-            onClick={() => setReloadKey((k) => k + 1)}
+            onClick={() => void refetch()}
           >
             Riprova
           </button>

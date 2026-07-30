@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { saveBlob } from '../services/api'
-import { updateMyProfile, changeMyPassword, fetchMyDataExport } from '../services/profile'
+import { fetchMyDataExport } from '../services/profile'
+import { useUpdateMyProfile, useChangeMyPassword } from '../hooks/useProfile'
 import {
   ROLE_LABELS,
   ROLE_BADGE_CLASSES,
@@ -28,24 +29,36 @@ export default function ProfilePage() {
   // --- "I miei dati" form state ---
   const [nome, setNome] = useState(user?.nome ?? '')
   const [cognome, setCognome] = useState(user?.cognome ?? '')
-  const [isSavingProfile, setIsSavingProfile] = useState(false)
-  const [profileError, setProfileError] = useState('')
+  const [profileValidationError, setProfileValidationError] = useState('')
   const [profileSuccess, setProfileSuccess] = useState('')
 
   // --- "Cambia password" form state ---
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
-  const [isChangingPassword, setIsChangingPassword] = useState(false)
-  const [passwordError, setPasswordError] = useState('')
+  const [passwordValidationError, setPasswordValidationError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
 
-  // --- "I miei dati personali" (esportazione) ---
+  /* L'esportazione dei propri dati resta fuori dalle mutation: produce uno
+   * ZIP da salvare su disco, non uno stato da tenere. */
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState('')
+
+  const profileMutation = useUpdateMyProfile()
+  const passwordMutation = useChangeMyPassword()
+
+  /* Ogni form ha un banner solo: mostra il messaggio della validazione
+   * locale, oppure quello della scrittura che è andata storta. */
+  const errorOf = (error: unknown, fallback: string) =>
+    error ? (error instanceof Error ? error.message : fallback) : ''
+  const profileError =
+    profileValidationError ||
+    errorOf(profileMutation.error, "Errore durante l'aggiornamento dei dati.")
+  const passwordError =
+    passwordValidationError || errorOf(passwordMutation.error, 'Errore durante il cambio password.')
 
   if (!user) return null
 
@@ -54,29 +67,30 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault()
-    setProfileError('')
+    setProfileValidationError('')
     setProfileSuccess('')
+    profileMutation.reset()
 
     const trimmedNome = nome.trim()
     const trimmedCognome = cognome.trim()
     if (!trimmedNome || !trimmedCognome) {
-      setProfileError('Nome e cognome non possono essere vuoti.')
+      setProfileValidationError('Nome e cognome non possono essere vuoti.')
       return
     }
 
-    setIsSavingProfile(true)
     try {
-      const updated = await updateMyProfile({ nome: trimmedNome, cognome: trimmedCognome })
+      const updated = await profileMutation.mutateAsync({
+        nome: trimmedNome,
+        cognome: trimmedCognome,
+      })
+      // Il profilo di chi guarda vive nel contesto, non in cache: è lui che
+      // va allineato perché la barra in alto mostri il nome nuovo.
       updateUser(updated)
       setNome(updated.nome)
       setCognome(updated.cognome)
       setProfileSuccess('Dati aggiornati con successo.')
-    } catch (err) {
-      setProfileError(
-        err instanceof Error ? err.message : "Errore durante l'aggiornamento dei dati.",
-      )
-    } finally {
-      setIsSavingProfile(false)
+    } catch {
+      // Il messaggio è nella mutation, il banner lo mostra
     }
   }
 
@@ -98,25 +112,28 @@ export default function ProfilePage() {
 
   const handleChangePassword = async (e: FormEvent) => {
     e.preventDefault()
-    setPasswordError('')
+    setPasswordValidationError('')
     setPasswordSuccess('')
+    passwordMutation.reset()
 
     if (newPassword !== confirmNewPassword) {
-      setPasswordError('Le nuove password non coincidono.')
+      setPasswordValidationError('Le nuove password non coincidono.')
       return
     }
 
     const unmetRules = getUnmetPasswordRules(newPassword)
     if (unmetRules.length > 0) {
-      setPasswordError(
+      setPasswordValidationError(
         `La nuova password non soddisfa i requisiti: ${unmetRules.join(', ').toLowerCase()}.`,
       )
       return
     }
 
-    setIsChangingPassword(true)
     try {
-      await changeMyPassword({ current_password: currentPassword, new_password: newPassword })
+      await passwordMutation.mutateAsync({
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
       setPasswordSuccess('Password aggiornata con successo.')
       setCurrentPassword('')
       setNewPassword('')
@@ -124,10 +141,8 @@ export default function ProfilePage() {
       setShowCurrentPassword(false)
       setShowNewPassword(false)
       setShowConfirmNewPassword(false)
-    } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : 'Errore durante il cambio password.')
-    } finally {
-      setIsChangingPassword(false)
+    } catch {
+      // Il messaggio è nella mutation, il banner lo mostra
     }
   }
 
@@ -200,7 +215,7 @@ export default function ProfilePage() {
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 required
-                disabled={isSavingProfile}
+                disabled={profileMutation.isPending}
               />
             </Field>
 
@@ -212,7 +227,7 @@ export default function ProfilePage() {
                 value={cognome}
                 onChange={(e) => setCognome(e.target.value)}
                 required
-                disabled={isSavingProfile}
+                disabled={profileMutation.isPending}
               />
             </Field>
           </div>
@@ -221,9 +236,9 @@ export default function ProfilePage() {
             type="submit"
             variant="submit"
             className="mt-1"
-            disabled={isSavingProfile || !isProfileDirty}
+            disabled={profileMutation.isPending || !isProfileDirty}
           >
-            {isSavingProfile ? (
+            {profileMutation.isPending ? (
               <>
                 <Spinner variant="button" />
                 Salvataggio...
@@ -282,12 +297,12 @@ export default function ProfilePage() {
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     required
                     autoComplete="current-password"
-                    disabled={isChangingPassword}
+                    disabled={passwordMutation.isPending}
                   />
                   <PasswordToggle
                     visible={showCurrentPassword}
                     onToggle={() => setShowCurrentPassword((v) => !v)}
-                    disabled={isChangingPassword}
+                    disabled={passwordMutation.isPending}
                     controls="profile-current-password"
                   />
                 </div>
@@ -322,12 +337,12 @@ export default function ProfilePage() {
                     required
                     minLength={PASSWORD_MIN_LENGTH}
                     autoComplete="new-password"
-                    disabled={isChangingPassword}
+                    disabled={passwordMutation.isPending}
                   />
                   <PasswordToggle
                     visible={showNewPassword}
                     onToggle={() => setShowNewPassword((v) => !v)}
-                    disabled={isChangingPassword}
+                    disabled={passwordMutation.isPending}
                     controls="profile-new-password"
                   />
                 </div>
@@ -361,12 +376,12 @@ export default function ProfilePage() {
                     required
                     minLength={PASSWORD_MIN_LENGTH}
                     autoComplete="new-password"
-                    disabled={isChangingPassword}
+                    disabled={passwordMutation.isPending}
                   />
                   <PasswordToggle
                     visible={showConfirmNewPassword}
                     onToggle={() => setShowConfirmNewPassword((v) => !v)}
-                    disabled={isChangingPassword}
+                    disabled={passwordMutation.isPending}
                     controls="profile-confirm-new-password"
                   />
                 </div>
@@ -394,9 +409,9 @@ export default function ProfilePage() {
                 type="submit"
                 variant="submit"
                 className="mt-1"
-                disabled={isChangingPassword}
+                disabled={passwordMutation.isPending}
               >
-                {isChangingPassword ? (
+                {passwordMutation.isPending ? (
                   <>
                     <Spinner variant="button" />
                     Aggiornamento...

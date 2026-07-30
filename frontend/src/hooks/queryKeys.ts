@@ -1,0 +1,80 @@
+/* Le chiavi di cache di tutta l'app, in un posto solo.
+ *
+ * Stanno qui e non negli hook perché una chiave scritta a mano due volte è
+ * un bug silenzioso: due stringhe che dovevano essere uguali e non lo sono
+ * sdoppiano la cache senza che niente si rompa, e chi invalida la prima
+ * lascia la seconda vecchia sullo schermo. Era già successo con
+ * `['recording-info', id]`, ricopiata a mano in tre componenti.
+ *
+ * Ogni area ha un prefisso suo, ed `all` è il prefisso da invalidare quando
+ * una mutation tocca qualcosa che non si sa esattamente dove sia cacheato.
+ * I filtri entrano nella chiave: cambiare filtro è una domanda diversa,
+ * quindi è una voce di cache diversa, non la stessa da sovrascrivere. */
+
+export const queryKeys = {
+  avatars: {
+    all: ['avatars'] as const,
+    list: (category?: string) => ['avatars', 'list', category ?? '__all__'] as const,
+    detail: (id: string) => ['avatars', 'detail', id] as const,
+  },
+  categories: ['categories'] as const,
+  conversations: {
+    all: ['conversations'] as const,
+    byAvatar: (avatarId: string) => ['conversations', 'avatar', avatarId] as const,
+    detail: (id: string) => ['conversations', 'detail', id] as const,
+    /** Dettaglio lato admin: trascrizione, valutazione e revisione insieme. */
+    adminDetail: (id: string) => ['conversations', 'admin-detail', id] as const,
+  },
+  evaluations: {
+    byConversation: (conversationId: string) =>
+      ['evaluations', 'conversation', conversationId] as const,
+  },
+  /** Metadati della registrazione di una chiamata (durata, se esiste). */
+  recordings: {
+    info: (conversationId: string) => ['recordings', 'info', conversationId] as const,
+  },
+  organizations: {
+    all: ['organizations'] as const,
+    list: ['organizations', 'list'] as const,
+    detail: (id: string) => ['organizations', 'detail', id] as const,
+  },
+  users: {
+    all: ['users'] as const,
+    /** Elenco filtrato e paginato a finestra. */
+    list: (filters: unknown) => ['users', 'list', filters] as const,
+  },
+  auditLogs: {
+    all: ['audit-logs'] as const,
+    list: (filters: unknown) => ['audit-logs', 'list', filters] as const,
+    actions: ['audit-logs', 'actions'] as const,
+  },
+  reports: {
+    /** Recap per utente delle conversazioni svolte. */
+    users: (organizationId?: string) => ['reports', 'users', organizationId ?? '__all__'] as const,
+    /** Punteggi delle valutazioni per la dashboard. */
+    evaluations: (organizationId?: string) =>
+      ['reports', 'evaluations', organizationId ?? '__all__'] as const,
+  },
+  training: {
+    all: ['training'] as const,
+    /** Percorsi assegnati, visti da un admin. */
+    assignments: (organizationId?: string) =>
+      ['training', 'assignments', organizationId ?? '__all__'] as const,
+    /** I percorsi di chi sta guardando, per la striscia in home. */
+    mine: ['training', 'mine'] as const,
+    /** Chi può ricevere un avatar come obiettivo. */
+    assignableUsers: (organizationId: string) =>
+      ['training', 'assignable-users', organizationId] as const,
+  },
+  comparison: {
+    /** Persone di cui un admin può leggere i tentativi. */
+    people: ['comparison', 'people'] as const,
+    attempts: (subjectId?: string) => ['comparison', 'attempts', subjectId ?? '__me__'] as const,
+  },
+  notifications: ['notifications'] as const,
+  /** Elenco delle voci disponibili per gli avatar. */
+  voices: ['voices'] as const,
+  /** Anteprima del prompt che una scheda persona produce, per canale. */
+  personaPrompt: (profile: Record<string, string>, channel: string) =>
+    ['persona-prompt', channel, profile] as const,
+} as const

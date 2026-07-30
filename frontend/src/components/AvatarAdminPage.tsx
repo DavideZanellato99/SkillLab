@@ -1,19 +1,18 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { fetchVoicePreview } from '../services/admin'
+import type { AdminAvatar, AdminAvatarPayload } from '../services/admin'
 import {
-  fetchAdminAvatars,
-  createAvatar,
-  updateAvatar,
-  deleteAvatar,
-  restoreAvatar,
-  uploadAvatarImage,
-  fetchVoices,
-  fetchVoicePreview,
-} from '../services/admin'
-import type { AdminAvatar, AdminAvatarPayload, VoiceOption } from '../services/admin'
-import { fetchOrganizations } from '../services/organizations'
-import type { Organization } from '../services/organizations'
+  useAdminAvatars,
+  useCreateAvatar,
+  useUpdateAvatar,
+  useDeleteAvatar,
+  useRestoreAvatar,
+  useUploadAvatarImage,
+  useVoices,
+} from '../hooks/useAdminAvatars'
+import { useOrganizations } from '../hooks/useOrganizations'
 import { isSuperAdmin } from '../services/auth'
 import { getAvatarImageUrl } from '../services/api'
 import { categoryBadgeClasses } from './categoryStyles'
@@ -217,12 +216,16 @@ function ProfileFieldInput({
 
 export default function AvatarAdminPage() {
   const { user } = useAuth()
-  const [avatars, setAvatars] = useState<AdminAvatar[]>([])
-  const [organizations, setOrganizations] = useState<Organization[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { data: organizations = [] } = useOrganizations(isSuperAdmin(user))
   const [successMsg, setSuccessMsg] = useState('')
   const [search, setSearch] = useState('')
+
+  // Anche gli archiviati: sono una vista di questa stessa tabella.
+  const {
+    data: avatars = [],
+    isPending: isLoading,
+    error: loadError,
+  } = useAdminAvatars(true, isSuperAdmin(user))
 
   /* Filtro organizzazione, tenuto anche nell'URL (?organization_id=...): il
    * dettaglio di un'organizzazione linka qui per i suoi avatar, e un
@@ -265,23 +268,43 @@ export default function AvatarAdminPage() {
   // Modal state: 'new' = create, AdminAvatar = edit, null = closed
   const [editing, setEditing] = useState<AdminAvatar | 'new' | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm())
-  const [isSaving, setIsSaving] = useState(false)
-  const [formError, setFormError] = useState('')
+  /* La scheda ha due regole che il server non conosce (almeno il nome o il
+   * cognome, e l'organizzazione proprietaria): quei messaggi nascono qui e
+   * convivono con quelli delle scritture. */
+  const [formValidationError, setFormValidationError] = useState('')
 
   const [deleting, setDeleting] = useState<AdminAvatar | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState('')
-  const [restoringId, setRestoringId] = useState<string | null>(null)
 
-  /* Strumenti del form. Le voci Cartesia si caricano una volta sola quando il
-   * form si apre per la prima volta: sono un catalogo remoto, non cambiano
-   * durante una sessione di lavoro, e se Cartesia non risponde il campo torna
-   * a essere un id da incollare a mano invece di bloccare il salvataggio. */
-  const [voices, setVoices] = useState<VoiceOption[]>([])
-  const [voicesError, setVoicesError] = useState('')
+  const createMutation = useCreateAvatar()
+  const updateMutation = useUpdateAvatar()
+  const deleteMutation = useDeleteAvatar()
+  const restoreMutation = useRestoreAvatar()
+  const uploadMutation = useUploadAvatarImage()
+
+  /* Il catalogo voci si carica alla prima apertura del form, così chi non
+   * tocca mai gli avatar non paga una chiamata al fornitore. Se non risponde,
+   * il campo torna a essere un id da incollare a mano invece di bloccare il
+   * salvataggio. */
+  const [voicesWanted, setVoicesWanted] = useState(false)
+  const { data: voices = [], error: voicesQueryError } = useVoices(voicesWanted)
+  const voicesError = voicesQueryError ? 'Catalogo voci non disponibile.' : ''
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+  /* L'anteprima vocale è un blob riprodotto e buttato, quindi resta fuori
+   * dalle query: solo il suo errore va mostrato nel form. */
+  const [voicePreviewError, setVoicePreviewError] = useState('')
   const [showPromptPreview, setShowPromptPreview] = useState(false)
+
+  const isSaving = createMutation.isPending || updateMutation.isPending
+  const errorOf = (error: unknown, fallback: string) =>
+    error ? (error instanceof Error ? error.message : fallback) : ''
+  /* Nel form possono fallire quattro cose: la validazione, il caricamento
+   * dell'immagine, il salvataggio, l'anteprima vocale. Il banner è uno,
+   * quindi mostra la prima che è andata storta. */
+  const formError =
+    formValidationError ||
+    errorOf(uploadMutation.error, "Errore durante il caricamento dell'immagine.") ||
+    errorOf(createMutation.error ?? updateMutation.error, 'Errore durante il salvataggio.') ||
+    voicePreviewError
 
   /* Le sezioni della scheda sono otto: aperte tutte insieme sono uno scroll
    * di parecchi schermi, quindi si apre solo quella su cui si sta lavorando.
@@ -316,53 +339,28 @@ export default function AvatarAdminPage() {
     setTimeout(() => setSuccessMsg(''), 6000)
   }
 
-  const loadAvatars = useCallback(async () => {
-    setIsLoading(true)
-    setError('')
-    try {
-      // Anche gli archiviati: sono una vista di questa stessa tabella.
-      const data = await fetchAdminAvatars(true)
-      setAvatars(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossibile caricare gli avatar.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (isSuperAdmin(user)) {
-      loadAvatars()
-      fetchOrganizations()
-        .then(setOrganizations)
-        .catch(() => setOrganizations([]))
-    }
-  }, [user, loadAvatars])
-
-  /* Catalogo voci: caricato pigramente alla prima apertura del form, così chi
-   * non tocca mai gli avatar non paga una chiamata a Cartesia. */
-  const ensureVoicesLoaded = useCallback(() => {
-    if (voices.length > 0 || voicesError) return
-    fetchVoices()
-      .then(setVoices)
-      .catch((err) =>
-        setVoicesError(err instanceof Error ? err.message : 'Catalogo voci non disponibile.'),
-      )
-  }, [voices.length, voicesError])
+  /** Ripulisce i messaggi delle scritture che il form può aver lasciato. */
+  const resetFormErrors = () => {
+    setFormValidationError('')
+    setVoicePreviewError('')
+    uploadMutation.reset()
+    createMutation.reset()
+    updateMutation.reset()
+  }
 
   const openCreate = () => {
     setForm(emptyForm())
-    setFormError('')
+    resetFormErrors()
     setOpenSections([PROFILE_SECTIONS[0].title])
-    ensureVoicesLoaded()
+    setVoicesWanted(true)
     setEditing('new')
   }
 
   const openEdit = (a: AdminAvatar) => {
     setForm(formFromAvatar(a))
-    setFormError('')
+    resetFormErrors()
     setOpenSections([PROFILE_SECTIONS[0].title])
-    ensureVoicesLoaded()
+    setVoicesWanted(true)
     setEditing(a)
   }
 
@@ -372,17 +370,12 @@ export default function AvatarAdminPage() {
 
   const handleImageUpload = async (file: File | undefined) => {
     if (!file) return
-    setIsUploading(true)
-    setFormError('')
+    resetFormErrors()
     try {
-      const { image_url } = await uploadAvatarImage(file)
+      const { image_url } = await uploadMutation.mutateAsync(file)
       setForm((prev) => ({ ...prev, imageUrl: image_url }))
-    } catch (err) {
-      setFormError(
-        err instanceof Error ? err.message : "Errore durante il caricamento dell'immagine.",
-      )
-    } finally {
-      setIsUploading(false)
+    } catch {
+      // Il messaggio è nella mutation, il banner del form lo mostra
     }
   }
 
@@ -391,7 +384,7 @@ export default function AvatarAdminPage() {
   const playVoicePreview = async (voiceId: string) => {
     if (!voiceId) return
     setPlayingVoiceId(voiceId)
-    setFormError('')
+    setVoicePreviewError('')
     try {
       const blob = await fetchVoicePreview(voiceId)
       const url = URL.createObjectURL(blob)
@@ -399,7 +392,7 @@ export default function AvatarAdminPage() {
       audio.onended = () => URL.revokeObjectURL(url)
       await audio.play()
     } catch (err) {
-      setFormError(
+      setVoicePreviewError(
         err instanceof Error ? err.message : "Impossibile riprodurre l'anteprima vocale.",
       )
     } finally {
@@ -409,16 +402,15 @@ export default function AvatarAdminPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    resetFormErrors()
     if (!form.profile.NOME.trim() && !form.profile.COGNOME.trim()) {
-      setFormError('La scheda deve contenere almeno il nome o il cognome del cliente.')
+      setFormValidationError('La scheda deve contenere almeno il nome o il cognome del cliente.')
       return
     }
     if (!form.organizationId) {
-      setFormError("Seleziona l'organizzazione proprietaria dell'avatar.")
+      setFormValidationError("Seleziona l'organizzazione proprietaria dell'avatar.")
       return
     }
-    setFormError('')
-    setIsSaving(true)
 
     const payload: AdminAvatarPayload = {
       category: form.category.trim() || 'Clienti',
@@ -431,57 +423,38 @@ export default function AvatarAdminPage() {
 
     try {
       if (editing === 'new') {
-        const created = await createAvatar(payload)
-        setAvatars((prev) => [...prev, created])
+        const created = await createMutation.mutateAsync(payload)
         // Un avatar nuovo nasce in catalogo: se la tabella sta mostrando
         // l'archivio, torna sul catalogo così l'admin lo vede comparire.
         if (statusFilter === STATUS_ARCHIVED) setStatusFilter(STATUS_ACTIVE)
         flashSuccess(`Avatar ${created.name} creato con successo.`)
       } else if (editing) {
-        const updated = await updateAvatar(editing.id, payload)
-        setAvatars((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+        const updated = await updateMutation.mutateAsync({ avatarId: editing.id, payload })
         flashSuccess(`Avatar ${updated.name} aggiornato con successo.`)
       }
       setEditing(null)
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Errore durante il salvataggio.')
-    } finally {
-      setIsSaving(false)
+    } catch {
+      // idem
     }
   }
 
   const handleConfirmDelete = async () => {
     if (!deleting) return
-    setDeleteError('')
-    setIsDeleting(true)
     try {
-      const result = await deleteAvatar(deleting.id)
-      // L'avatar non sparisce, passa in archivio: la riga resta nei dati e
-      // il filtro di stato decide se mostrarla.
-      const archivedAt = new Date().toISOString()
-      setAvatars((prev) =>
-        prev.map((a) => (a.id === deleting.id ? { ...a, deleted_at: archivedAt } : a)),
-      )
+      const result = await deleteMutation.mutateAsync(deleting.id)
       setDeleting(null)
       flashSuccess(result.message)
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Errore durante l'archiviazione.")
-    } finally {
-      setIsDeleting(false)
+    } catch {
+      // idem
     }
   }
 
   const handleRestore = async (avatar: AdminAvatar) => {
-    setRestoringId(avatar.id)
-    setError('')
     try {
-      const restored = await restoreAvatar(avatar.id)
-      setAvatars((prev) => prev.map((a) => (a.id === restored.id ? restored : a)))
+      const restored = await restoreMutation.mutateAsync(avatar.id)
       flashSuccess(`Avatar ${restored.name} ripristinato: è di nuovo in catalogo.`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Errore durante il ripristino.')
-    } finally {
-      setRestoringId(null)
+    } catch {
+      // idem
     }
   }
 
@@ -559,7 +532,7 @@ export default function AvatarAdminPage() {
         </div>
       )}
 
-      {error && <FormError message={error} />}
+      {loadError && <FormError message={errorOf(loadError, 'Impossibile caricare gli avatar.')} />}
 
       {isLoading ? (
         <LoadingState message="Caricamento avatar..." />
@@ -641,10 +614,10 @@ export default function AvatarAdminPage() {
                       <button
                         className={`${actionBtnCls} hover:border-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-400`}
                         onClick={() => handleRestore(a)}
-                        disabled={restoringId === a.id}
+                        disabled={restoreMutation.isPending && restoreMutation.variables === a.id}
                         aria-label={`Ripristina ${a.name}`}
                       >
-                        {restoringId === a.id ? (
+                        {restoreMutation.isPending && restoreMutation.variables === a.id ? (
                           <Spinner variant="button" />
                         ) : (
                           <svg
@@ -689,7 +662,7 @@ export default function AvatarAdminPage() {
                         <button
                           className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
                           onClick={() => {
-                            setDeleteError('')
+                            deleteMutation.reset()
                             setDeleting(a)
                           }}
                           aria-label={`Elimina ${a.name}`}
@@ -912,15 +885,15 @@ export default function AvatarAdminPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <label
                       className={`cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100 ${
-                        isUploading || isSaving ? 'pointer-events-none opacity-50' : ''
+                        uploadMutation.isPending || isSaving ? 'pointer-events-none opacity-50' : ''
                       }`}
                     >
-                      {isUploading ? 'Caricamento...' : 'Carica immagine'}
+                      {uploadMutation.isPending ? 'Caricamento...' : 'Carica immagine'}
                       <input
                         type="file"
                         className="hidden"
                         accept="image/png,image/jpeg,image/webp"
-                        disabled={isUploading || isSaving}
+                        disabled={uploadMutation.isPending || isSaving}
                         onChange={(e) => {
                           handleImageUpload(e.target.files?.[0])
                           // Permette di ricaricare lo stesso file dopo un errore
@@ -1078,11 +1051,11 @@ export default function AvatarAdminPage() {
               </span>
             </>
           }
-          error={deleteError}
+          error={errorOf(deleteMutation.error, "Errore durante l'archiviazione.") || undefined}
           confirmLabel="Elimina Avatar"
           pendingLabel="Eliminazione..."
           confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
-          isPending={isDeleting}
+          isPending={deleteMutation.isPending}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeleting(null)}
         />

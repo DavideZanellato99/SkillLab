@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import AvatarCard from './AvatarCard'
 import Toast from './Toast'
-import { useAvatars, useCategories } from '../hooks/useApi'
+import { useAvatars, useCategories } from '../hooks/useAvatars'
 
 interface AvatarGalleryProps {
   onStatsUpdate: (totalAvatars: number, totalCategories: number) => void

@@ -2,16 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  fetchUsers,
-  createNewUser,
-  updateUser,
-  deleteUser,
-  resendUserCredentials,
-  setUserStatus,
-} from '../services/admin'
-import type { UserFilters } from '../services/admin'
-import { fetchOrganizations } from '../services/organizations'
-import type { Organization } from '../services/organizations'
+  useAdminUsers,
+  useCreateUser,
+  useUpdateUser,
+  useDeleteUser,
+  useResendUserCredentials,
+  useSetUserStatus,
+  USERS_WINDOW_SIZE,
+} from '../hooks/useAdminUsers'
+import { useOrganizations } from '../hooks/useOrganizations'
 import { isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../services/auth'
 import type { AuthUser, RoleName, UserStatus } from '../services/auth'
 import Select from './Select'
@@ -44,13 +43,6 @@ import {
   resendIcon,
 } from './adminUsersConfig'
 
-/** Righe caricate per volta: l'elenco cresce con ogni organizzazione, quindi
- * la pagina ne tiene una finestra e la estende su richiesta. */
-const WINDOW_SIZE = 200
-/** Tetto imposto dall'endpoint, che la rilettura dopo una modifica non deve
- * superare quando la finestra è già stata estesa parecchie volte. */
-const MAX_WINDOW = 1000
-
 const ACCESS_OPTIONS = [
   { value: '', label: 'Qualsiasi accesso' },
   { value: 'never', label: 'Mai acceduto' },
@@ -63,12 +55,7 @@ const actionBtnCls =
 
 export default function AdminPage() {
   const { user } = useAuth()
-  const [users, setUsers] = useState<AuthUser[]>([])
-  const [total, setTotal] = useState(0)
-  const [organizations, setOrganizations] = useState<Organization[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [error, setError] = useState('')
+  const { data: organizations = [] } = useOrganizations(isSuperAdmin(user))
   const [successMsg, setSuccessMsg] = useState('')
 
   // Filtri e ricerca: girano tutti sul server, quindi coprono l'intero
@@ -107,6 +94,40 @@ export default function AdminPage() {
   // Options for the organization pickers (a user/org admin must have one)
   const orgOptions = organizations.map((o) => ({ value: o.id, label: o.name }))
 
+  /* La finestra di utenti: i filtri stanno nella chiave, quindi cambiarne uno
+   * riparte da capo, mentre "carica altri" aggiunge una pagina a quelle già
+   * lette. Dopo una scrittura le mutation invalidano, e TanStack rilegge
+   * tutte le pagine caricate: la finestra resta dov'era. */
+  const {
+    users,
+    total,
+    isPending: isLoading,
+    error: loadError,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage: isLoadingMore,
+  } = useAdminUsers(
+    {
+      organizationId: orgFilter,
+      ruolo: (roleFilter || undefined) as RoleName | undefined,
+      status: (statusFilter || undefined) as UserStatus | undefined,
+      neverLoggedIn: accessFilter === '' ? undefined : accessFilter === 'never',
+      search: debouncedSearch,
+    },
+    isSuperAdmin(user),
+  )
+
+  const createMutation = useCreateUser()
+  const updateMutation = useUpdateUser()
+  const deleteMutation = useDeleteUser()
+  const resendMutation = useResendUserCredentials()
+  const statusMutation = useSetUserStatus()
+
+  /** Messaggio di una mutation fallita, con il testo di ripiego che le
+   *  spetta: gli errori non stanno più in stati paralleli. */
+  const errorOf = (error: unknown, fallback: string) =>
+    error ? (error instanceof Error ? error.message : fallback) : ''
+
   // Create form states
   const [showModal, setShowModal] = useState(false)
   const [email, setEmail] = useState('')
@@ -114,8 +135,12 @@ export default function AdminPage() {
   const [cognome, setCognome] = useState('')
   const [ruolo, setRuolo] = useState<RoleName>('user')
   const [orgId, setOrgId] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formError, setFormError] = useState('')
+  /* La creazione ha una regola che il server non conosce (un utente non super
+   * admin deve avere un'organizzazione): quel messaggio nasce qui, quindi
+   * convive con quello della mutation. */
+  const [formValidationError, setFormValidationError] = useState('')
+  const formError =
+    formValidationError || errorOf(createMutation.error, "Errore durante la creazione dell'utente.")
 
   // Detail view (clic sulla riga): utente in sola lettura
   const [viewingUser, setViewingUser] = useState<AuthUser | null>(null)
@@ -126,120 +151,46 @@ export default function AdminPage() {
   const [editCognome, setEditCognome] = useState('')
   const [editRuolo, setEditRuolo] = useState<RoleName>('user')
   const [editOrgId, setEditOrgId] = useState('')
-  const [isSavingEdit, setIsSavingEdit] = useState(false)
-  const [editError, setEditError] = useState('')
+  const [editValidationError, setEditValidationError] = useState('')
+  const editError =
+    editValidationError ||
+    errorOf(updateMutation.error, "Errore durante l'aggiornamento dell'utente.")
 
   // Delete confirmation states
   const [deletingUser, setDeletingUser] = useState<AuthUser | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState('')
 
   // Resend-credentials confirmation states
   const [resendingUser, setResendingUser] = useState<AuthUser | null>(null)
-  const [isResending, setIsResending] = useState(false)
-  const [resendError, setResendError] = useState('')
 
   // Account-status confirmation states (`target` = the status being applied)
   const [statusAction, setStatusAction] = useState<{ user: AuthUser; target: UserStatus } | null>(
     null,
   )
-  const [isSavingStatus, setIsSavingStatus] = useState(false)
-  const [statusError, setStatusError] = useState('')
 
   const flashSuccess = (msg: string) => {
     setSuccessMsg(msg)
     setTimeout(() => setSuccessMsg(''), 6000)
   }
 
-  const filters = useCallback(
-    (offset: number, limit: number = WINDOW_SIZE): UserFilters => ({
-      organizationId: orgFilter,
-      ruolo: (roleFilter || undefined) as RoleName | undefined,
-      status: (statusFilter || undefined) as UserStatus | undefined,
-      neverLoggedIn: accessFilter === '' ? undefined : accessFilter === 'never',
-      search: debouncedSearch,
-      limit,
-      offset,
-    }),
-    [orgFilter, roleFilter, statusFilter, accessFilter, debouncedSearch],
-  )
-
-  // Prima finestra: rifatta da capo a ogni cambio di filtro o di ricerca.
-  useEffect(() => {
-    if (!isSuperAdmin(user)) return
-    let cancelled = false
-    setIsLoading(true)
-    setError('')
-    fetchUsers(filters(0))
-      .then((page) => {
-        if (cancelled) return
-        setUsers(page.items)
-        setTotal(page.total)
-      })
-      .catch((err) => {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : 'Impossibile caricare gli utenti.')
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [user, filters])
-
-  useEffect(() => {
-    if (!isSuperAdmin(user)) return
-    fetchOrganizations()
-      .then(setOrganizations)
-      .catch(() => setOrganizations([]))
-  }, [user])
-
-  const handleLoadMore = async () => {
-    setIsLoadingMore(true)
-    try {
-      const page = await fetchUsers(filters(users.length))
-      setUsers((prev) => [...prev, ...page.items])
-      setTotal(page.total)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossibile caricare altri utenti.')
-    } finally {
-      setIsLoadingMore(false)
-    }
-  }
-
-  /* Dopo una modifica la finestra si rilegge invece di essere ritoccata a
-   * mano: una riga aggiornata può non soddisfare più i filtri attivi (si
-   * sospende un utente mentre si filtra per «attivi») e una appena creata
-   * potrebbe non rientrarci affatto. Rilegge esattamente quanto era già
-   * caricato, così non si perde il punto in cui si era arrivati. */
-  const reloadWindow = useCallback(async () => {
-    const size = Math.min(MAX_WINDOW, Math.max(WINDOW_SIZE, users.length))
-    const page = await fetchUsers(filters(0, size))
-    setUsers(page.items)
-    setTotal(page.total)
-  }, [filters, users.length])
-
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFormError('')
+    setFormValidationError('')
+    createMutation.reset()
 
     // A user/organization_admin must belong to an organization
     if (ruolo !== 'super_admin' && !orgId) {
-      setFormError("Seleziona l'organizzazione dell'utente.")
+      setFormValidationError("Seleziona l'organizzazione dell'utente.")
       return
     }
-    setIsSubmitting(true)
 
     try {
-      const created = await createNewUser({
+      const created = await createMutation.mutateAsync({
         email,
         nome,
         cognome,
         ruolo,
         organization_id: ruolo === 'super_admin' ? null : orgId,
       })
-      await reloadWindow()
       setShowModal(false)
       setEmail('')
       setNome('')
@@ -249,10 +200,8 @@ export default function AdminPage() {
       flashSuccess(
         `Utente ${created.email} creato con successo! Un'email con la password temporanea è stata inviata via Cognito.`,
       )
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Errore durante la creazione dell'utente.")
-    } finally {
-      setIsSubmitting(false)
+    } catch {
+      // Il messaggio è nella mutation, la modale resta aperta a mostrarlo
     }
   }
 
@@ -262,94 +211,71 @@ export default function AdminPage() {
     setEditCognome(u.cognome)
     setEditRuolo(u.ruolo as RoleName)
     setEditOrgId(u.organization_id ?? '')
-    setEditError('')
+    setEditValidationError('')
+    updateMutation.reset()
   }
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingUser) return
-    setEditError('')
+    setEditValidationError('')
+    updateMutation.reset()
 
     if (editRuolo !== 'super_admin' && !editOrgId) {
-      setEditError("Seleziona l'organizzazione dell'utente.")
+      setEditValidationError("Seleziona l'organizzazione dell'utente.")
       return
     }
-    setIsSavingEdit(true)
 
     try {
-      const updated = await updateUser(editingUser.id, {
-        nome: editNome,
-        cognome: editCognome,
-        ruolo: editRuolo,
-        organization_id: editRuolo === 'super_admin' ? null : editOrgId,
+      const updated = await updateMutation.mutateAsync({
+        userId: editingUser.id,
+        payload: {
+          nome: editNome,
+          cognome: editCognome,
+          ruolo: editRuolo,
+          organization_id: editRuolo === 'super_admin' ? null : editOrgId,
+        },
       })
-      await reloadWindow()
       setEditingUser(null)
       flashSuccess(`Utente ${updated.email} aggiornato con successo.`)
-    } catch (err) {
-      setEditError(
-        err instanceof Error ? err.message : "Errore durante l'aggiornamento dell'utente.",
-      )
-    } finally {
-      setIsSavingEdit(false)
+    } catch {
+      // idem
     }
   }
 
   const handleConfirmDelete = async () => {
     if (!deletingUser) return
-    setDeleteError('')
-    setIsDeleting(true)
-
     try {
-      const result = await deleteUser(deletingUser.id)
-      await reloadWindow()
+      const result = await deleteMutation.mutateAsync(deletingUser.id)
       setDeletingUser(null)
       flashSuccess(result.message)
-    } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : "Errore durante l'eliminazione dell'utente.",
-      )
-    } finally {
-      setIsDeleting(false)
+    } catch {
+      // idem
     }
   }
 
   const handleConfirmResend = async () => {
     if (!resendingUser) return
-    setResendError('')
-    setIsResending(true)
-
     try {
-      const result = await resendUserCredentials(resendingUser.id)
-      // The cognito_sub may have changed (re-invited account): refresh the list
-      await reloadWindow()
+      const result = await resendMutation.mutateAsync(resendingUser.id)
       setResendingUser(null)
       flashSuccess(result.message)
-    } catch (err) {
-      setResendError(
-        err instanceof Error ? err.message : 'Errore durante il rinvio delle credenziali.',
-      )
-    } finally {
-      setIsResending(false)
+    } catch {
+      // idem
     }
   }
 
   const handleConfirmStatus = async () => {
     if (!statusAction) return
-    setStatusError('')
-    setIsSavingStatus(true)
-
     try {
-      const updated = await setUserStatus(statusAction.user.id, statusAction.target)
-      await reloadWindow()
+      const updated = await statusMutation.mutateAsync({
+        userId: statusAction.user.id,
+        status: statusAction.target,
+      })
       setStatusAction(null)
       flashSuccess(`Utente ${updated.email} ${STATUS_ACTIONS[statusAction.target].successVerb}.`)
-    } catch (err) {
-      setStatusError(
-        err instanceof Error ? err.message : "Errore durante il cambio di stato dell'account.",
-      )
-    } finally {
-      setIsSavingStatus(false)
+    } catch {
+      // idem
     }
   }
 
@@ -364,7 +290,8 @@ export default function AdminPage() {
           <PrimaryButton
             icon={<UserPlusIcon size={18} />}
             onClick={() => {
-              setFormError('')
+              setFormValidationError('')
+              createMutation.reset()
               setShowModal(true)
             }}
           >
@@ -463,7 +390,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {error && (
+      {loadError && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
           <svg
             width="18"
@@ -479,7 +406,7 @@ export default function AdminPage() {
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>{error}</span>
+          <span>{errorOf(loadError, 'Impossibile caricare gli utenti.')}</span>
         </div>
       )}
 
@@ -508,7 +435,7 @@ export default function AdminPage() {
                 ? 'Non puoi modificare lo stato del tuo stesso account'
                 : "Non è possibile modificare lo stato dell'account di sistema"
               const openStatusModal = (target: UserStatus) => {
-                setStatusError('')
+                statusMutation.reset()
                 setStatusAction({ user: u, target })
               }
 
@@ -548,7 +475,7 @@ export default function AdminPage() {
                       ? "L'account è disabilitato definitivamente"
                       : "L'account è sospeso: riattivalo prima di rinviare le credenziali",
                 onSelect: () => {
-                  setResendError('')
+                  resendMutation.reset()
                   setResendingUser(u)
                 },
               })
@@ -648,7 +575,7 @@ export default function AdminPage() {
                         <button
                           className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
                           onClick={() => {
-                            setDeleteError('')
+                            deleteMutation.reset()
                             setDeletingUser(u)
                           }}
                           disabled={deleteDisabled}
@@ -676,11 +603,11 @@ export default function AdminPage() {
               {users.length} di {total} utenti
               {hasFilters ? ' che corrispondono ai filtri' : ''}
             </span>
-            {users.length < total && (
+            {hasNextPage && (
               <button
                 type="button"
                 className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleLoadMore}
+                onClick={() => fetchNextPage()}
                 disabled={isLoadingMore}
               >
                 {isLoadingMore ? (
@@ -689,7 +616,7 @@ export default function AdminPage() {
                     Caricamento...
                   </>
                 ) : (
-                  `Carica altri ${Math.min(WINDOW_SIZE, total - users.length)}`
+                  `Carica altri ${Math.min(USERS_WINDOW_SIZE, total - users.length)}`
                 )}
               </button>
             )}
@@ -753,7 +680,7 @@ export default function AdminPage() {
 
       {/* Modal Creazione Utente */}
       {showModal && (
-        <ModalShell onClose={() => setShowModal(false)} locked={isSubmitting}>
+        <ModalShell onClose={() => setShowModal(false)} locked={createMutation.isPending}>
           <ModalHeader
             iconWrapperCls="border border-violet-600/20 bg-violet-600/10"
             icon={
@@ -794,7 +721,7 @@ export default function AdminPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={isSubmitting}
+                disabled={createMutation.isPending}
               />
             </Field>
 
@@ -807,7 +734,7 @@ export default function AdminPage() {
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
                   required
-                  disabled={isSubmitting}
+                  disabled={createMutation.isPending}
                 />
               </Field>
 
@@ -819,7 +746,7 @@ export default function AdminPage() {
                   value={cognome}
                   onChange={(e) => setCognome(e.target.value)}
                   required
-                  disabled={isSubmitting}
+                  disabled={createMutation.isPending}
                 />
               </Field>
             </div>
@@ -833,7 +760,7 @@ export default function AdminPage() {
                 value={ruolo}
                 onChange={(value) => setRuolo(value as RoleName)}
                 options={ROLE_OPTIONS}
-                disabled={isSubmitting}
+                disabled={createMutation.isPending}
               />
             </div>
 
@@ -847,7 +774,7 @@ export default function AdminPage() {
                   value={orgId}
                   onChange={setOrgId}
                   options={orgOptions}
-                  disabled={isSubmitting}
+                  disabled={createMutation.isPending}
                 />
                 {orgOptions.length === 0 && (
                   <p className="text-[0.7rem] text-amber-400">
@@ -857,8 +784,13 @@ export default function AdminPage() {
               </div>
             )}
 
-            <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isSubmitting}>
-              {isSubmitting ? (
+            <PrimaryButton
+              type="submit"
+              variant="submit"
+              className="mt-4"
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? (
                 <>
                   <Spinner variant="button" />
                   Creazione su Cognito...
@@ -873,7 +805,7 @@ export default function AdminPage() {
 
       {/* Modal Modifica Utente */}
       {editingUser && (
-        <ModalShell onClose={() => setEditingUser(null)} locked={isSavingEdit}>
+        <ModalShell onClose={() => setEditingUser(null)} locked={updateMutation.isPending}>
           <ModalHeader
             iconWrapperCls="border border-violet-600/20 bg-violet-600/10"
             icon={
@@ -907,7 +839,7 @@ export default function AdminPage() {
                   value={editNome}
                   onChange={(e) => setEditNome(e.target.value)}
                   required
-                  disabled={isSavingEdit}
+                  disabled={updateMutation.isPending}
                 />
               </Field>
 
@@ -919,7 +851,7 @@ export default function AdminPage() {
                   value={editCognome}
                   onChange={(e) => setEditCognome(e.target.value)}
                   required
-                  disabled={isSavingEdit}
+                  disabled={updateMutation.isPending}
                 />
               </Field>
             </div>
@@ -934,7 +866,7 @@ export default function AdminPage() {
                 onChange={(value) => setEditRuolo(value as RoleName)}
                 options={ROLE_OPTIONS}
                 disabled={
-                  isSavingEdit ||
+                  updateMutation.isPending ||
                   editingUser.id === user?.id ||
                   editingUser.cognito_sub.startsWith('mock-')
                 }
@@ -958,13 +890,18 @@ export default function AdminPage() {
                   value={editOrgId}
                   onChange={setEditOrgId}
                   options={orgOptions}
-                  disabled={isSavingEdit || editingUser.cognito_sub.startsWith('mock-')}
+                  disabled={updateMutation.isPending || editingUser.cognito_sub.startsWith('mock-')}
                 />
               </div>
             )}
 
-            <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isSavingEdit}>
-              {isSavingEdit ? (
+            <PrimaryButton
+              type="submit"
+              variant="submit"
+              className="mt-4"
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? (
                 <>
                   <Spinner variant="button" />
                   Salvataggio...
@@ -984,11 +921,14 @@ export default function AdminPage() {
           iconWrapperCls={statusCfg.iconWrapperCls}
           title={statusCfg.title}
           description={statusCfg.description(statusAction.user.email)}
-          error={statusError || undefined}
+          error={
+            errorOf(statusMutation.error, "Errore durante il cambio di stato dell'account.") ||
+            undefined
+          }
           confirmLabel={statusCfg.confirmLabel}
           pendingLabel={statusCfg.pendingLabel}
           confirmClassName={statusCfg.confirmCls}
-          isPending={isSavingStatus}
+          isPending={statusMutation.isPending}
           onConfirm={handleConfirmStatus}
           onClose={() => setStatusAction(null)}
         />
@@ -1007,11 +947,14 @@ export default function AdminPage() {
               funzionare e al prossimo accesso l'utente dovrà impostare una nuova password.
             </>
           }
-          error={resendError || undefined}
+          error={
+            errorOf(resendMutation.error, 'Errore durante il rinvio delle credenziali.') ||
+            undefined
+          }
           confirmLabel="Invia Nuova Password"
           pendingLabel="Invio in corso..."
           confirmClassName="border-none bg-gradient-to-br from-violet-600 to-cyan-500 text-white hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0"
-          isPending={isResending}
+          isPending={resendMutation.isPending}
           onConfirm={handleConfirmResend}
           onClose={() => setResendingUser(null)}
         />
@@ -1029,11 +972,13 @@ export default function AdminPage() {
               Cognito e dal database, incluse le sue conversazioni. L'operazione non è reversibile.
             </>
           }
-          error={deleteError || undefined}
+          error={
+            errorOf(deleteMutation.error, "Errore durante l'eliminazione dell'utente.") || undefined
+          }
           confirmLabel="Elimina Definitivamente"
           pendingLabel="Eliminazione..."
           confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
-          isPending={isDeleting}
+          isPending={deleteMutation.isPending}
           onConfirm={handleConfirmDelete}
           onClose={() => setDeletingUser(null)}
         />

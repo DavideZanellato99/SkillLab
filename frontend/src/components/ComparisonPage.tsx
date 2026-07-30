@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { isAdmin } from '../services/auth'
-import { fetchAttempts, fetchComparableUsers } from '../services/comparison'
-import type { Attempt, ComparableUser } from '../services/comparison'
+import type { Attempt } from '../services/comparison'
+import { useAttempts, useComparableUsers } from '../hooks/useComparison'
 import ConversationModeBadge from './ConversationModeBadge'
 import Select from './Select'
 import LoadingState from './LoadingState'
@@ -160,49 +160,29 @@ export default function ComparisonPage() {
   const { user } = useAuth()
   const canPickUser = isAdmin(user)
 
-  const [people, setPeople] = useState<ComparableUser[]>([])
   const [subjectId, setSubjectId] = useState('')
-  const [attempts, setAttempts] = useState<Attempt[]>([])
-  const [leftId, setLeftId] = useState('')
-  const [rightId, setRightId] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { data: people = [] } = useComparableUsers(canPickUser)
+  const { data: attempts = [], isPending: isLoading, error } = useAttempts(subjectId)
 
-  useEffect(() => {
-    if (!canPickUser) return
-    fetchComparableUsers()
-      .then(setPeople)
-      .catch(() => setPeople([]))
-  }, [canPickUser])
+  /* Il confronto proposto è primo contro ultimo: è quello che si vuole
+   * vedere quasi sempre. Le due scelte sono modificabili, ma quando i
+   * tentativi cambiano (si è scelta un'altra persona) una selezione che non
+   * appartiene più a questi tentativi torna al default: tenerla mostrerebbe
+   * un confronto vuoto senza dire perché. */
+  const [pickedLeftId, setPickedLeftId] = useState('')
+  const [pickedRightId, setPickedRightId] = useState('')
 
-  /* Cambiare persona ricarica i tentativi e riparte dalla scelta di
-   * default: tenere selezionati due id di un'altra persona mostrerebbe un
-   * confronto vuoto senza dire perché. */
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await fetchAttempts(subjectId || undefined)
-        if (cancelled) return
-        setAttempts(data)
-        // Il primo e l'ultimo: è il confronto che si vuole vedere quasi
-        // sempre, e resta modificabile.
-        setLeftId(data.length > 1 ? data[0].conversation_id : '')
-        setRightId(data.length > 0 ? data[data.length - 1].conversation_id : '')
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Impossibile caricare i tentativi.')
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [subjectId])
+  const belongs = (id: string) => attempts.some((a) => a.conversation_id === id)
+  const leftId = belongs(pickedLeftId)
+    ? pickedLeftId
+    : attempts.length > 1
+      ? attempts[0].conversation_id
+      : ''
+  const rightId = belongs(pickedRightId)
+    ? pickedRightId
+    : attempts.length > 0
+      ? attempts[attempts.length - 1].conversation_id
+      : ''
 
   const left = useMemo(
     () => attempts.find((a) => a.conversation_id === leftId) ?? null,
@@ -257,7 +237,7 @@ export default function ComparisonPage() {
 
       {error && (
         <div className="mb-8 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300">
-          {error}
+          {error instanceof Error ? error.message : 'Impossibile caricare i tentativi.'}
         </div>
       )}
 
@@ -290,13 +270,18 @@ export default function ComparisonPage() {
             <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="left">
               Primo tentativo
             </label>
-            <Select id="left" value={leftId} onChange={setLeftId} options={attemptOptions} />
+            <Select id="left" value={leftId} onChange={setPickedLeftId} options={attemptOptions} />
           </div>
           <div className="min-w-[240px] flex-1">
             <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="right">
               Secondo tentativo
             </label>
-            <Select id="right" value={rightId} onChange={setRightId} options={attemptOptions} />
+            <Select
+              id="right"
+              value={rightId}
+              onChange={setPickedRightId}
+              options={attemptOptions}
+            />
           </div>
         </div>
 

@@ -1,17 +1,15 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { isAdmin, isSuperAdmin } from '../services/auth'
-import type { AuthUser } from '../services/auth'
-import { fetchAdminAvatars } from '../services/admin'
-import { fetchAvatars } from '../services/api'
-import { fetchOrganizations } from '../services/organizations'
-import type { Organization } from '../services/organizations'
+import { useOrganizations } from '../hooks/useOrganizations'
 import {
-  fetchAssignableUsers,
-  fetchAssignments,
-  createAssignments,
-  deleteAssignment,
-} from '../services/training'
+  useAssignments,
+  useAssignableUsers,
+  useCreateAssignments,
+  useDeleteAssignment,
+} from '../hooks/useTraining'
+import { useAvatars } from '../hooks/useAvatars'
+import { useAdminAvatars } from '../hooks/useAdminAvatars'
 import type { TrainingAssignment, AssignmentStatus } from '../services/training'
 import DataTable, { Td, Tr } from './DataTable'
 import SearchSelect from './SearchSelect'
@@ -91,114 +89,69 @@ export default function TrainingPage() {
   const isSuper = isSuperAdmin(user)
   const canManage = isAdmin(user)
 
-  const [assignments, setAssignments] = useState<TrainingAssignment[]>([])
-  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const { data: organizations = [] } = useOrganizations(isSuper)
   const [orgFilter, setOrgFilter] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [reloadKey, setReloadKey] = useState(0)
+
+  const {
+    data: assignments = [],
+    isPending: isLoading,
+    error: loadError,
+  } = useAssignments(orgFilter, isAdmin(user))
 
   // ── Form di assegnazione (super admin e organization admin) ────────
-  const [avatars, setAvatars] = useState<AssignableAvatar[]>([])
-  /* Chi può ricevere l'avatar selezionato come obiettivo. Lo decide il
-   * server, che applica la stessa regola con cui poi rifiuta o accetta
-   * l'assegnazione, quindi qui non si filtra nulla. */
-  const [assignableUsers, setAssignableUsers] = useState<AuthUser[]>([])
   const [avatarId, setAvatarId] = useState('')
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [targetScore, setTargetScore] = useState('7')
   const [dueDate, setDueDate] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
-  const [formError, setFormError] = useState('')
+  const [formValidationError, setFormValidationError] = useState('')
   const [formSuccess, setFormSuccess] = useState('')
 
-  useEffect(() => {
-    if (!isAdmin(user)) return
-    let cancelled = false
-    ;(async () => {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await fetchAssignments(orgFilter || undefined)
-        if (!cancelled) setAssignments(data)
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Impossibile caricare i percorsi.')
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [user, orgFilter, reloadKey])
+  const createMutation = useCreateAssignments()
+  const deleteMutation = useDeleteAssignment()
 
-  useEffect(() => {
-    if (!canManage) return
-    if (isSuper) {
-      fetchAdminAvatars()
-        .then((list) =>
-          setAvatars(
-            list.map((a) => ({
-              id: a.id,
-              name: a.name,
-              category: a.category,
-              organization_id: a.organization_id,
-              organization_name: a.organization_name,
-            })),
-          ),
-        )
-        .catch(() => setAvatars([]))
-      // Il filtro per organizzazione esiste solo qui: l'org admin ne ha una.
-      fetchOrganizations()
-        .then(setOrganizations)
-        .catch(() => setOrganizations([]))
-      return
-    }
-    // L'org admin non ha accesso al catalogo admin: gli avatar della sua
-    // organizzazione sono esattamente quelli della galleria, e il tenant è
-    // il suo per definizione.
-    fetchAvatars()
-      .then((list) =>
-        setAvatars(
-          list.map((a) => ({
+  const errorOf = (error: unknown, fallback: string) =>
+    error ? (error instanceof Error ? error.message : fallback) : ''
+  const isSaving = createMutation.isPending
+  const formError =
+    formValidationError || errorOf(createMutation.error, 'Assegnazione non riuscita.')
+
+  /* Gli avatar assegnabili arrivano da due sorgenti diverse perché diversi
+   * sono i permessi: il super admin legge il catalogo admin di tutti i
+   * tenant, l'organization admin la galleria che vede comunque, cioè quella
+   * della sua organizzazione. Solo una delle due query è attiva per volta. */
+  const { data: adminAvatars = [] } = useAdminAvatars(false, canManage && isSuper)
+  const { data: galleryAvatars = [] } = useAvatars(undefined, canManage && !isSuper)
+
+  const avatars: AssignableAvatar[] = useMemo(
+    () =>
+      isSuper
+        ? adminAvatars.map((a) => ({
+            id: a.id,
+            name: a.name,
+            category: a.category,
+            organization_id: a.organization_id,
+            organization_name: a.organization_name,
+          }))
+        : galleryAvatars.map((a) => ({
             id: a.id,
             name: a.name,
             category: a.category,
             organization_id: user?.organization_id ?? '',
             organization_name: user?.organization_name ?? '',
           })),
-        ),
-      )
-      .catch(() => setAvatars([]))
-  }, [canManage, isSuper, user])
+    [isSuper, adminAvatars, galleryAvatars, user],
+  )
 
   const selectedAvatar = avatars.find((a) => a.id === avatarId) ?? null
   const selectedAvatarOrgId = selectedAvatar?.organization_id ?? null
 
-  // Gli assegnabili si chiedono al server a ogni cambio di avatar: sono gli
-  // utenti attivi del tenant dell'avatar, che è privato del suo. Per l'org
-  // admin il tenant che passiamo è comunque il suo, ed è quello che il
-  // server userebbe in ogni caso ignorando il parametro.
-  useEffect(() => {
-    if (!canManage || !selectedAvatarOrgId) {
-      setAssignableUsers([])
-      return
-    }
-    let cancelled = false
-    fetchAssignableUsers(selectedAvatarOrgId)
-      .then((data) => {
-        if (!cancelled) setAssignableUsers(data)
-      })
-      .catch(() => {
-        if (!cancelled) setAssignableUsers([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [canManage, selectedAvatarOrgId])
+  /* Chi può ricevere l'avatar selezionato come obiettivo: gli utenti attivi
+   * del tenant a cui l'avatar appartiene. Lo decide il server, che applica la
+   * stessa regola con cui poi accetta o rifiuta l'assegnazione, quindi qui
+   * non si filtra nulla. Per l'org admin il tenant che passiamo è comunque il
+   * suo, ed è quello che il server userebbe ignorando il parametro. */
+  const { data: assignableUsers = [] } = useAssignableUsers(selectedAvatarOrgId, canManage)
 
   const toggleUser = (id: string) => {
     setSelectedUserIds((prev) => {
@@ -220,11 +173,11 @@ export default function TrainingPage() {
 
   const handleCreate = async () => {
     if (!canSubmit) return
-    setIsSaving(true)
-    setFormError('')
+    setFormValidationError('')
     setFormSuccess('')
+    createMutation.reset()
     try {
-      const created = await createAssignments({
+      const created = await createMutation.mutateAsync({
         avatar_id: avatarId,
         user_ids: Array.from(selectedUserIds),
         target_score: parsedTarget,
@@ -237,22 +190,12 @@ export default function TrainingPage() {
           : `Percorso assegnato a ${created.length} utenti.`,
       )
       setSelectedUserIds(new Set())
-      setReloadKey((k) => k + 1)
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Assegnazione non riuscita.')
-    } finally {
-      setIsSaving(false)
+    } catch {
+      // Il messaggio è nella mutation, il banner del form lo mostra
     }
   }
 
-  const handleDelete = async (assignment: TrainingAssignment) => {
-    try {
-      await deleteAssignment(assignment.id)
-      setAssignments((prev) => prev.filter((a) => a.id !== assignment.id))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Eliminazione non riuscita.')
-    }
-  }
+  const handleDelete = (assignment: TrainingAssignment) => deleteMutation.mutate(assignment.id)
 
   const searchedRows = useMemo(
     () =>
@@ -290,7 +233,7 @@ export default function TrainingPage() {
         }
       />
 
-      {error && (
+      {(loadError || deleteMutation.error) && (
         <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
           <svg
             width="18"
@@ -306,7 +249,10 @@ export default function TrainingPage() {
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>{error}</span>
+          <span>
+            {errorOf(loadError, 'Impossibile caricare i percorsi.') ||
+              errorOf(deleteMutation.error, 'Eliminazione non riuscita.')}
+          </span>
         </div>
       )}
 

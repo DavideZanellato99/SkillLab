@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchMyAssignments } from '../services/training'
-import type { TrainingAssignment } from '../services/training'
+import { useMyAssignments } from '../hooks/useTraining'
 import { AssignmentStatusBadge } from './TrainingPage'
 import { categoryBadgeClasses } from './categoryStyles'
 import Badge from './Badge'
@@ -20,13 +18,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function TrainingGoals() {
-  const [assignments, setAssignments] = useState<TrainingAssignment[]>([])
-
-  useEffect(() => {
-    fetchMyAssignments()
-      .then(setAssignments)
-      .catch(() => setAssignments([]))
-  }, [])
+  const { data: assignments = [] } = useMyAssignments()
 
   if (assignments.length === 0) return null
 

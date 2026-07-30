@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { fetchRecordingInfo, fetchRecordingBlob } from '../services/voice'
+import { fetchRecordingBlob } from '../services/voice'
 import Spinner from './Spinner'
+import { useRecordingInfo } from '../hooks/useRecording'
 
 /* Playback of a finished call: the operator and the avatar mixed in one
  * track, as recorded in the browser during the call itself.
@@ -58,10 +58,7 @@ export default forwardRef<CallRecordingPlayerHandle, CallRecordingPlayerProps>(
     // Seek asked for before the audio was loaded, in ms; applied on metadata
     const pendingSeekMs = useRef<number | null>(null)
 
-    const { data: info } = useQuery({
-      queryKey: ['recording-info', conversationId],
-      queryFn: () => fetchRecordingInfo(conversationId),
-    })
+    const { data: info } = useRecordingInfo(conversationId)
 
     // Every object URL is revoked when it is replaced or the player goes
     // away, so a session of listening back never leaks blobs.

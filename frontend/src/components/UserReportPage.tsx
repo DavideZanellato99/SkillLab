@@ -1,9 +1,9 @@
-import { Fragment, useState, useEffect, useCallback } from 'react'
+import { Fragment, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchUsersReport, deleteAdminConversation } from '../services/admin'
-import type { UserActivityReport, ConversationReport } from '../services/admin'
-import { fetchOrganizations } from '../services/organizations'
-import type { Organization } from '../services/organizations'
+import type { ConversationReport } from '../services/admin'
+import { useUsersReport } from '../hooks/useReports'
+import { useDeleteConversation } from '../hooks/useConversations'
+import { useOrganizations } from '../hooks/useOrganizations'
 import {
   isAdmin,
   isSuperAdmin,
@@ -67,18 +67,20 @@ export default function UserReportPage() {
   const { user } = useAuth()
   const showOrg = isSuperAdmin(user)
   const columns = reportColumns(showOrg)
-  const [report, setReport] = useState<UserActivityReport[]>([])
-  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const { data: organizations = [] } = useOrganizations(isSuperAdmin(user))
   const [orgFilter, setOrgFilter] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [deletingConversation, setDeletingConversation] = useState<DeletingConversation | null>(
     null,
   )
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState('')
+
+  const {
+    data: report = [],
+    isPending: isLoading,
+    error,
+  } = useUsersReport(orgFilter, isAdmin(user))
+  const deleteMutation = useDeleteConversation()
 
   const visibleReport = report.filter((u) =>
     matchesSearch(
@@ -95,61 +97,16 @@ export default function UserReportPage() {
     ...organizations.map((o) => ({ value: o.id, label: o.name })),
   ]
 
-  const loadReport = useCallback(async (organizationId?: string) => {
-    setIsLoading(true)
-    setError('')
-    try {
-      const data = await fetchUsersReport(organizationId || undefined)
-      setReport(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossibile caricare il report.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (isAdmin(user)) {
-      loadReport(orgFilter)
-    }
-  }, [user, loadReport, orgFilter])
-
-  useEffect(() => {
-    if (isSuperAdmin(user)) {
-      fetchOrganizations()
-        .then(setOrganizations)
-        .catch(() => setOrganizations([]))
-    }
-  }, [user])
-
+  /* L'eliminazione invalida il report, che si rilegge dal server: prima i
+   * conteggi e la durata totale della riga venivano ricalcolati qui a mano,
+   * cioè si riscriveva lato client una somma che il server fa già. */
   const handleConfirmDeleteConversation = async () => {
     if (!deletingConversation) return
-    setDeleteError('')
-    setIsDeleting(true)
-
     try {
-      await deleteAdminConversation(deletingConversation.conversation.id)
-      setReport((prev) =>
-        prev.map((u) => {
-          if (u.id !== deletingConversation.userId) return u
-          return {
-            ...u,
-            conversation_count: u.conversation_count - 1,
-            total_duration_seconds:
-              u.total_duration_seconds - deletingConversation.conversation.duration_seconds,
-            conversations: u.conversations.filter(
-              (c) => c.id !== deletingConversation.conversation.id,
-            ),
-          }
-        }),
-      )
+      await deleteMutation.mutateAsync(deletingConversation.conversation.id)
       setDeletingConversation(null)
-    } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : "Errore durante l'eliminazione della conversazione.",
-      )
-    } finally {
-      setIsDeleting(false)
+    } catch {
+      // Il messaggio resta nella mutation, la modale lo mostra
     }
   }
 
@@ -195,7 +152,7 @@ export default function UserReportPage() {
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>{error}</span>
+          <span>{error instanceof Error ? error.message : 'Impossibile caricare il report.'}</span>
         </div>
       )}
 
@@ -319,7 +276,7 @@ export default function UserReportPage() {
                                 aria-label="Elimina conversazione"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  setDeleteError('')
+                                  deleteMutation.reset()
                                   setDeletingConversation({ userId: u.id, conversation: conv })
                                 }}
                               >
@@ -354,11 +311,11 @@ export default function UserReportPage() {
               sue trascrizioni e valutazioni. L'operazione non è reversibile.
             </>
           }
-          error={deleteError}
+          error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
           confirmLabel="Elimina Definitivamente"
           pendingLabel="Eliminazione..."
           confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
-          isPending={isDeleting}
+          isPending={deleteMutation.isPending}
           onConfirm={handleConfirmDeleteConversation}
           onClose={() => setDeletingConversation(null)}
         />

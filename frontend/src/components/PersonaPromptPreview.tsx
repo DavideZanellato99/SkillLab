@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
-import { previewPersonaPrompt } from '../services/admin'
-import type { PersonaChannel, PersonaPromptPreview as Preview } from '../services/admin'
+import { useEffect, useState } from 'react'
+import { usePersonaPromptPreview } from '../hooks/usePersonaPrompt'
+import type { PersonaChannel } from '../services/admin'
 import { fieldLabel } from './avatarProfileConfig'
 import LoadingState from './LoadingState'
 import ModalShell from './ModalShell'
@@ -31,30 +31,18 @@ interface Props {
 
 export default function PersonaPromptPreview({ profile, onClose }: Props) {
   const [channel, setChannel] = useState<PersonaChannel>('voice')
-  const [preview, setPreview] = useState<Preview | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
-  const load = useCallback(
-    async (next: PersonaChannel) => {
-      setIsLoading(true)
-      setError('')
-      try {
-        setPreview(await previewPersonaPrompt(profile, next))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Impossibile generare l'anteprima.")
-        setPreview(null)
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [profile],
-  )
-
-  useEffect(() => {
-    load(channel)
-  }, [channel, load])
+  const {
+    data: preview,
+    isPending: isLoading,
+    error: previewError,
+  } = usePersonaPromptPreview(profile, channel)
+  const error = previewError
+    ? previewError instanceof Error
+      ? previewError.message
+      : "Impossibile generare l'anteprima."
+    : ''
 
   // Esc chiude, come negli altri modali della pagina
   useEffect(() => {

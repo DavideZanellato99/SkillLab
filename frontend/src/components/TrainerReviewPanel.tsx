@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import type { ConversationReview } from '../services/api'
-import { deleteConversationReview, saveConversationReview } from '../services/admin'
+import {
+  useSaveConversationReview,
+  useDeleteConversationReview,
+} from '../hooks/useConversationReview'
 import { hasReviewContent } from './TrainerReviewNote'
 import { CloseIcon } from './icons'
 
@@ -49,9 +52,18 @@ export default function TrainerReviewPanel({
     review?.override_score != null ? String(review.override_score) : '',
   )
   const [overrideReason, setOverrideReason] = useState(review?.override_reason ?? '')
-  const [isSaving, setIsSaving] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [error, setError] = useState('')
+  /* La validazione è locale, il resto degli errori sta nelle mutation. */
+  const [validationMessage, setValidationMessage] = useState('')
+  const saveMutation = useSaveConversationReview(conversationId)
+  const deleteMutation = useDeleteConversationReview(conversationId)
+  const isSaving = saveMutation.isPending
+  const isDeleting = deleteMutation.isPending
+  const errorOf = (err: unknown, fallback: string) =>
+    err ? (err instanceof Error ? err.message : fallback) : ''
+  const error =
+    validationMessage ||
+    errorOf(saveMutation.error, 'Salvataggio non riuscito.') ||
+    errorOf(deleteMutation.error, 'Eliminazione non riuscita.')
 
   const trimmedNote = summaryNote.trim()
   const trimmedReason = overrideReason.trim()
@@ -71,35 +83,31 @@ export default function TrainerReviewPanel({
 
   const handleSave = async () => {
     if (validationError) {
-      setError(validationError)
+      setValidationMessage(validationError)
       return
     }
-    setIsSaving(true)
-    setError('')
+    setValidationMessage('')
+    saveMutation.reset()
     try {
-      const updated = await saveConversationReview(conversationId, {
+      const updated = await saveMutation.mutateAsync({
         summary_note: trimmedNote || null,
         override_score: parsedScore,
         override_reason: parsedScore === null ? null : trimmedReason,
       })
       onSaved(updated)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Salvataggio non riuscito.')
-    } finally {
-      setIsSaving(false)
+    } catch {
+      // Il messaggio è nella mutation
     }
   }
 
   const handleDelete = async () => {
-    setIsDeleting(true)
-    setError('')
+    setValidationMessage('')
+    deleteMutation.reset()
     try {
-      await deleteConversationReview(conversationId)
+      await deleteMutation.mutateAsync()
       onSaved(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Eliminazione non riuscita.')
-    } finally {
-      setIsDeleting(false)
+    } catch {
+      // idem
     }
   }
 

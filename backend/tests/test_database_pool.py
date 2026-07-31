@@ -7,7 +7,9 @@ supera il tetto di Postgres. Nessuna delle tre fallisce in sviluppo, e per
 questo stanno scritte qui.
 """
 
-from database import _MAX_OVERFLOW, _POOL_SIZE, engine
+import logging
+
+from database import _MAX_OVERFLOW, _POOL_SIZE, engine, log_connection_budget
 
 # Quante connessioni una replica deve potersi procurare nel picco. Le
 # scritture del percorso vocale girano su thread (voice_pipeline) e ognuno
@@ -48,3 +50,34 @@ def test_il_picco_dichiarato_si_puo_davvero_ottenere():
             conn.close()
 
     assert engine.pool.checkedout() == 0
+
+
+def test_il_conto_delle_connessioni_finisce_nei_log(caplog):
+    """Il tetto del database e il pool di un processo stanno in due file che
+    nessuno cambia insieme. Il prodotto dei due è il numero che decide
+    quante repliche si possono chiedere, e va letto nei log a ogni avvio
+    invece di essere rifatto a mente il primo giorno e mai più."""
+    with caplog.at_level(logging.INFO, logger="database"):
+        log_connection_budget()
+
+    righe = [r.getMessage() for r in caplog.records]
+    assert righe, "l'avvio deve lasciare detto il conto delle connessioni"
+    assert "repliche come questa" in righe[0]
+    # Il numero dichiarato è quello vero del pool, non una costante scritta
+    # nel messaggio.
+    assert str(_POOL_SIZE + _MAX_OVERFLOW) in righe[0]
+
+
+def test_il_conto_non_fa_cadere_l_avvio_se_il_database_non_risponde(monkeypatch, caplog):
+    """È diagnostica: se il database non risponde il problema è un altro, e
+    lo dirà la prima richiesta vera. Questa funzione non deve trasformare un
+    database irraggiungibile in un container che non parte."""
+
+    def esplode():
+        raise OSError("database irraggiungibile")
+
+    monkeypatch.setattr("database.engine.connect", esplode)
+    with caplog.at_level(logging.WARNING, logger="database"):
+        log_connection_budget()
+
+    assert any("non sono riuscito" in r.getMessage().lower() for r in caplog.records)

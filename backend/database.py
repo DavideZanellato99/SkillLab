@@ -24,11 +24,14 @@ ne accorga. Da qui uno sfogo (``max_overflow``) largo rispetto al numero di
 connessioni stabili: il carico di questa app è a picchi, non piatto.
 """
 
+import logging
 import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -81,6 +84,63 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+
+def log_connection_budget() -> None:
+    """Scrive nei log quante repliche come questa entrano nel tetto del database.
+
+    Il conto sta scritto in due posti che nessuno cambia insieme: il tetto
+    di Postgres nel .env accanto al compose, il pool di ogni processo nel
+    .env del backend. Moltiplicati fra loro danno il numero che conta, e
+    finché resta un conto da fare a mente lo si fa una volta sola, il primo
+    giorno, e poi si scala a otto repliche senza rifarlo.
+
+    Qui viene rifatto a ogni avvio, coi numeri veri chiesti al database, e
+    scritto nei log. Non ferma niente e non decide niente: un tetto stretto
+    non è un errore di configurazione, è una scelta che va vista.
+
+    Un avviso esce solo per un fatto misurato, non per una soglia inventata:
+    quando le connessioni libere adesso sono meno di quelle che questo
+    processo può chiedere nel suo picco, cioè quando andare a pieno carico
+    significherebbe lasciare qualcuno fuori.
+    """
+    picco_di_un_processo = _POOL_SIZE + _MAX_OVERFLOW
+    try:
+        with engine.connect() as conn:
+            massimo = int(conn.execute(text("SHOW max_connections")).scalar())
+            riservate = int(conn.execute(text("SHOW superuser_reserved_connections")).scalar())
+            in_uso = int(
+                conn.execute(
+                    text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()")
+                ).scalar()
+            )
+    except Exception:
+        # Diagnostica: se il database non risponde il problema è un altro, e
+        # lo dirà molto più chiaramente la prima richiesta vera.
+        logger.warning("Non sono riuscito a leggere il tetto delle connessioni del database.")
+        return
+
+    utilizzabili = massimo - riservate
+    quante_repliche = utilizzabili // picco_di_un_processo
+    logger.info(
+        "Connessioni: il database ne accetta %d (%d riservate), questo processo ne può "
+        "chiedere fino a %d nel picco, quindi ci stanno %d repliche come questa. "
+        "In uso adesso: %d.",
+        massimo,
+        riservate,
+        picco_di_un_processo,
+        quante_repliche,
+        in_uso,
+    )
+    libere = utilizzabili - in_uso
+    if libere < picco_di_un_processo:
+        logger.warning(
+            "Restano %d connessioni libere, meno delle %d che questo processo può chiedere "
+            "nel picco: sotto carico qualche richiesta non ne troverà una. Alza "
+            "DB_MAX_CONNECTIONS nel .env accanto al compose, o riduci le repliche.",
+            libere,
+            picco_di_un_processo,
+        )
 
 
 def get_db():

@@ -73,14 +73,18 @@ x-logging: &logging
 services:
   db:
     image: postgres:18-alpine
-    # Postgres di suo ne accetta 100, e quel numero va confrontato con la
-    # somma dei pool di tutte le repliche del backend, non con una sola
-    # (il conto sta in testa a backend/database.py): quattro repliche ne
-    # chiedono fino a 80, e i backup e chi si attacca con un client sono
-    # ancora fuori dal conto. 200 tiene il margine per crescere senza
-    # tornare qui, e costa qualche decina di MB di RAM che una macchina da
-    # centinaia di chiamate ha di sicuro.
-    command: ["postgres", "-c", "max_connections=200"]
+    # Il tetto delle connessioni sta nel .env accanto a BACKEND_REPLICAS, e
+    # non è pignoleria: i due numeri sono legati, perché il conto è
+    # repliche * (DB_POOL_SIZE + DB_MAX_OVERFLOW), e sono legati proprio nel
+    # momento in cui si cambia il primo. Lasciato scritto qui, il tetto
+    # sarebbe rimasto quello buono per quattro repliche anche il giorno che
+    # ne fossero state chieste dodici, e il sintomo non è un errore chiaro:
+    # è qualche richiesta che ogni tanto non trova una connessione.
+    #
+    # Il conto per intero sta nel .env, accanto al valore. Postgres di suo ne
+    # accetta 100, che a quattro repliche sono già poche.
+    command:
+      ["postgres", "-c", "max_connections=${DB_MAX_CONNECTIONS:?va messo nel file .env accanto a docker-compose.yml}"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?va messo nel file .env accanto a docker-compose.yml}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?va messa nel file .env accanto a docker-compose.yml, e deve essere URL-safe perche finisce dentro DATABASE_URL}
@@ -108,6 +112,12 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *logging
+    # Postgres allo spegnimento chiude le connessioni aperte e scrive un
+    # checkpoint. I dieci secondi di serie di Docker sono pochi se in quel
+    # momento c'è lavoro in corso, e scaduti quelli il processo viene ucciso:
+    # i dati restano integri, ma il primo avvio dopo si porta via minuti di
+    # recovery, proprio mentre stai aspettando che il servizio torni su.
+    stop_grace_period: 60s
     restart: unless-stopped
 
   backend:
@@ -166,6 +176,16 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *logging
+    # Quanto Docker aspetta dopo il SIGTERM prima di uccidere il processo.
+    #
+    # Non serve a salvare le chiamate in corso: quelle durano dieci minuti e
+    # nessuna attesa ragionevole le copre, quindi a un aggiornamento cadono
+    # comunque (vedi INFRASTRUTTURA.md, punto 4.2). Serve alle scritture,
+    # che nel percorso vocale partono fire and forget verso il database
+    # (vedi voice_pipeline._persist_message): con i dieci secondi di serie
+    # quelle ancora in volo vengono troncate, e si perdono gli ultimi pezzi
+    # di trascrizione senza che nessuno se ne accorga.
+    stop_grace_period: 30s
     restart: unless-stopped
 
   frontend:

@@ -229,6 +229,7 @@ Vedi [loadtest/](loadtest/), che è il banco di prova già pronto per farlo.
 | Limite accessi su database | [backend/rate_limit.py](backend/rate_limit.py) | Con quattro repliche il limite valeva quattro volte tanto |
 | Tetto per processo | [backend/voice_capacity.py](backend/voice_capacity.py) | Un event loop pieno non rifiuta, rallenta, e rallenta per tutti insieme |
 | Pool di connessioni | [backend/database.py](backend/database.py) | I default sono per un processo solo. In più `pool_pre_ping`, senza il quale la prima richiesta dopo un riavvio del database fallisce |
+| Connessione restituita prima delle attese lunghe | [backend/routers/chat.py](backend/routers/chat.py) | Valutazione e chat in streaming aspettano il modello per decine di secondi, e fino a lì tenevano ferma una connessione senza usarla. Con quaranta persone che chiudono insieme, il pool finiva per richieste che stavano solo aspettando OpenAI |
 
 ### 3.2 L'infrastruttura
 
@@ -303,6 +304,14 @@ nessun passo di migrazione da ricordare.
 insieme e chi è al telefono viene interrotto, quindi per ora gli
 aggiornamenti vanno fatti in una finestra tranquilla. Il rimedio, quando
 servirà, è nel punto 6.
+
+Quello che invece non si perde più sono le scritture: il `stop_grace_period`
+del backend dà trenta secondi alle scritture in volo (la trascrizione parte
+fire and forget) per arrivare a destinazione, invece dei dieci di serie dopo
+i quali il processo veniva ucciso a metà. Il database ne ha sessanta, che
+gli servono per chiudere le connessioni e scrivere il checkpoint: se lo si
+uccide prima, i dati restano integri ma il riavvio dopo si porta via minuti
+di recovery.
 
 ---
 

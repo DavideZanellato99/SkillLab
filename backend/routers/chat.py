@@ -376,8 +376,11 @@ def _persist_exchange(
 ) -> ChatMessageExchange:
     """Blocking write of one completed exchange (run via asyncio.to_thread).
 
-    The request-scoped session is still open here: FastAPI tears yielded
-    dependencies down only after the response has fully streamed out.
+    La sessione della richiesta è ancora viva qui (FastAPI smonta le
+    dipendenze solo dopo che la risposta è uscita tutta), ma la sua
+    connessione è stata restituita al pool prima dello streaming: la prima
+    query qui sotto ne prende una nuova. Per questo la funzione riceve id e
+    non oggetti, e ricarica quello che le serve.
     Explicit timestamps: the two messages land in the same commit and the
     transcript is read back ordered by created_at, so the reply must be
     strictly after the message it answers.
@@ -529,6 +532,18 @@ async def send_chat_message(
             detail = str(e) if isinstance(e, RuntimeError) else "Errore nella risposta dell'avatar."
             yield _sse_event("error", json.dumps({"detail": detail}))
 
+    # Come per la valutazione qui sotto: la connessione torna al pool prima
+    # dell'attesa lunga. Il generatore gira dopo che questo handler è finito
+    # e dura quanto la risposta del modello, e fino a lì la sessione terrebbe
+    # ferma una connessione senza usarla. _persist_exchange lavora solo con
+    # id e rifà le sue query, quindi alla fine dello stream la sessione ne
+    # riprende una e scrive.
+    #
+    # `commit` e non `close`: chiude la transazione senza annullarla, che è
+    # quello che serve quando la sessione non è solo nostra (vedi il commento
+    # esteso nella valutazione, più sotto).
+    db.commit()
+
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
@@ -602,11 +617,42 @@ async def create_conversation_evaluation(
     # Same criteria either way: the channel only tells the trainer whether
     # it is reading a call or a chat.
     channel = CHANNEL_TEXT if conversation.mode == CONVERSATION_MODE_TEXT else CHANNEL_VOICE
+    avatar_profile = avatar.profile if avatar else {}
+
+    # Tutto quello che serve al giudizio è già in memoria, quindi la
+    # connessione al database torna al pool prima dell'attesa.
+    #
+    # Senza questa riga resterebbe occupata per tutta la durata della
+    # valutazione, che con un modello di ragionamento sono decine di secondi
+    # e non i millisecondi di una richiesta normale. Il caso che conta è
+    # l'aula: quaranta persone che chiudono la chiamata insieme chiedono la
+    # valutazione nello stesso minuto, e ogni replica di connessioni ne ha
+    # DB_POOL_SIZE + DB_MAX_OVERFLOW in tutto, condivise con i login e con
+    # tutto il resto. Chi non ne trova una aspetta il pool_timeout e poi si
+    # prende un errore, per colpa di richieste che nel frattempo non stanno
+    # usando il database, stanno solo aspettando OpenAI.
+    #
+    # `commit` e non `close`, per quanto qui non ci sia niente da salvare:
+    # tutti e due restituiscono la connessione, ma close *annulla* la
+    # transazione in corso, e questa sessione non sempre è solo nostra. Nei
+    # test è quella della fixture, e dentro la sua transazione ci sono i dati
+    # che il test ha appena creato: annullarla li porta via, e la scrittura
+    # di dopo fallisce per una chiave esterna che punta a un utente sparito.
+    #
+    # La sessione resta valida: alla prima query dopo l'attesa ne prende una
+    # nuova. Gli oggetti già caricati però scadono, ed è il motivo per cui
+    # sotto la conversazione viene ricaricata invece di riusare quella di
+    # prima.
+    db.commit()
 
     try:
-        result = await evaluate_conversation(history, avatar.profile if avatar else {}, channel)
+        result = await evaluate_conversation(history, avatar_profile, channel)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+    # Ricaricata, non riusata: l'oggetto di prima è staccato dalla sessione.
+    # Il controllo di proprietà si rifà da sé, il che non guasta.
+    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
 
     evaluation = (
         db.query(ConversationEvaluation)

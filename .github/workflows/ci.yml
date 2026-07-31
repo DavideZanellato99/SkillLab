@@ -142,6 +142,7 @@ jobs:
           DB_CPUS=1.0
           DB_MEM=1G
           DB_MEM_RESERVED=256M
+          DB_MAX_CONNECTIONS=100
           EOF
       - name: Create backend .env with placeholder values
         # Placeholder values are enough to boot; the smoke test only hits the

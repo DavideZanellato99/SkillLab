@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 import housekeeping
 import tls_setup  # noqa: F401
 from audit import AuditMiddleware
+from database import log_connection_budget
 from routers.admin import router as admin_router
 from routers.admin_avatars import router as admin_avatars_router
 from routers.admin_voices import router as admin_voices_router
@@ -57,7 +58,12 @@ async def lifespan(app: FastAPI):
     ``housekeeping``) rather than by an external scheduler: an install that
     is deployed once and never touched again still has to keep the promises
     its informativa makes.
+
+    Prima parte, una riga nei log col conto delle connessioni: il tetto del
+    database e il pool di questo processo stanno in due file diversi, e
+    moltiplicati fra loro dicono quante repliche ci stanno davvero.
     """
+    log_connection_budget()
     housekeeping.start()
     yield
     await housekeeping.stop()

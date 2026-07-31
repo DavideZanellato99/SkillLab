@@ -41,7 +41,56 @@ OPENAI_EVAL_FALLBACK_MODELS = [
     m.strip() for m in os.getenv("OPENAI_EVAL_FALLBACK_MODELS", "").split(",") if m.strip()
 ]
 
-async_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# Quanto si aspetta OpenAI prima di dichiarare persa una richiesta.
+#
+# Senza questi la libreria usa i suoi default, che sono dell'ordine dei dieci
+# minuti: pensati per uno script che elabora un file, non per qualcuno che
+# aspetta al telefono. Il guaio non è la richiesta persa, è che perderla
+# richiede più tempo di quanto la conversazione ne abbia.
+#
+# Due numeri, perché i due usi hanno fretta diversa. Nel roleplay dal vivo
+# l'operatore sta parlando con l'avatar: passati venti secondi senza una
+# parola la battuta è comunque rovinata, e arrendersi in fretta lascia
+# almeno provare il modello di riserva mentre la chiamata è ancora viva.
+# Sul flusso, che è il caso normale, questo tetto vale fra un pezzo e il
+# successivo, non sull'intera risposta: un modello che parla lentamente non
+# viene interrotto, uno che si è piantato sì.
+_LIVE_TIMEOUT_SECONDS = 20
+# La valutazione invece gira su un modello di ragionamento che pensa prima
+# di rispondere, e due minuti di attesa sono un suo tempo normale, non un
+# sintomo. Qui nessuno è in linea: c'è una rotella che gira in una pagina.
+_EVAL_TIMEOUT_SECONDS = 120
+
+# I ritentativi della libreria si moltiplicano per il timeout, e sono la
+# ragione per cui i due usi non possono avere la stessa regola.
+#
+# Dal vivo nessuno: due tentativi da venti secondi fanno quaranta secondi di
+# silenzio in una conversazione parlata, e a quel punto non c'è più niente
+# da salvare. Meglio dire subito che è andata male, con un tempo massimo che
+# si sa in anticipo.
+#
+# Nella valutazione uno sì: lì i tentativi valgono la pena, perché un
+# singolo intoppo di rete altrimenti si presenta all'utente come una
+# valutazione fallita da rilanciare a mano, e il costo è aspettare invece
+# che rifare.
+#
+# Nota che qui contano solo questi numeri: un timeout non fa passare al
+# modello di riserva, perché _is_retryable guarda i sovraccarichi (429, 502,
+# 503) e non le attese scadute. Il caso peggiore è quindi venti secondi dal
+# vivo e quattro minuti per la valutazione, non la somma su tutti i modelli
+# in lista.
+_LIVE_MAX_RETRIES = 0
+_EVAL_MAX_RETRIES = 1
+
+async_client = (
+    AsyncOpenAI(
+        api_key=OPENAI_API_KEY,
+        timeout=_LIVE_TIMEOUT_SECONDS,
+        max_retries=_LIVE_MAX_RETRIES,
+    )
+    if OPENAI_API_KEY
+    else None
+)
 
 
 def _candidate_models() -> list[str]:
@@ -582,7 +631,15 @@ async def evaluate_conversation(
     last_error: Exception | None = None
     for model in _eval_candidate_models():
         try:
-            response = await async_client.chat.completions.create(
+            # Il tempo lungo, non quello del roleplay: qui il modello ragiona
+            # prima di scrivere, e nessuno sta aspettando in linea.
+            # with_options non tocca il client condiviso, restituisce una
+            # copia con queste impostazioni: la prossima battuta di una
+            # chiamata torna ad avere i venti secondi di prima.
+            response = await async_client.with_options(
+                timeout=_EVAL_TIMEOUT_SECONDS,
+                max_retries=_EVAL_MAX_RETRIES,
+            ).chat.completions.create(
                 model=model,
                 messages=messages,
                 # Six criteria with comment and suggestions, plus the

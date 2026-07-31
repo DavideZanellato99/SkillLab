@@ -174,6 +174,9 @@ def _to_response(avatar: Avatar, conversation_count: int = 0) -> AdminAvatarResp
         organization_name=avatar.organization.name,
         profile=avatar.profile or {},
         created_at=avatar.created_at,
+        created_by_email=avatar.created_by_email,
+        updated_at=avatar.updated_at,
+        updated_by_email=avatar.updated_by_email,
         deleted_at=avatar.deleted_at,
         conversation_count=conversation_count,
     )

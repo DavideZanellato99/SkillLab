@@ -166,7 +166,7 @@ def _refuse_locked_out(user: User, http_request: Request) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=denied)
 
 
-def _record_login(db: Session, user: User) -> None:
+def _record_login(db: Session, user: User, http_request: Request) -> None:
     """Stamp the account's last successful authentication.
 
     Called from the two endpoints that actually hand out a fresh session,
@@ -174,7 +174,13 @@ def _record_login(db: Session, user: User) -> None:
     on purpose: rotating a token is not an access, and counting it would
     keep an abandoned browser tab looking like an active user for as long
     as its refresh token lives.
+
+    Publishing the actor before the commit is what keeps the row honest: a
+    login writes on the user's own row, and without this the paternity
+    columns would credit "sistema" for it (see `authorship`). The audit
+    middleware ignores these routes, so no duplicate log row comes of it.
     """
+    http_request.state.audit_user = user
     user.last_login_at = datetime.now(UTC)
     db.commit()
 
@@ -274,7 +280,7 @@ def login(
     _refuse_locked_out(user, http_request)
 
     _bind_fresh_token(db, result["access_token"], http_request, user.id)
-    _record_login(db, user)
+    _record_login(db, user, http_request)
     _set_access_cookie(response, result["access_token"])
     _set_refresh_cookie(response, result["refresh_token"])
     audit.log_action(audit.LOGIN, http_request, user=user)
@@ -326,7 +332,7 @@ def complete_new_password(
     _refuse_locked_out(user, http_request)
 
     _bind_fresh_token(db, result["access_token"], http_request, user.id)
-    _record_login(db, user)
+    _record_login(db, user, http_request)
     _set_access_cookie(response, result["access_token"])
     _set_refresh_cookie(response, result["refresh_token"])
     audit.log_action(audit.PASSWORD_SET, http_request, user=user)

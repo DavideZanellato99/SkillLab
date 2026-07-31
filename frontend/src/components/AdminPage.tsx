@@ -16,6 +16,7 @@ import type { AuthUser, RoleName, UserStatus } from '../services/auth'
 import Select from './Select'
 import DataTable, { Td, Tr } from './DataTable'
 import DetailModal, { DetailField } from './DetailModal'
+import AuthorshipFields from './AuthorshipFields'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
 import Spinner from './Spinner'
@@ -665,10 +666,7 @@ export default function AdminPage() {
               <Badge tone={NEVER_ACCESSED_BADGE_CLASSES}>{NEVER_ACCESSED_LABEL}</Badge>
             )}
           </DetailField>
-          <DetailField label="Data creazione">{formatDateTime(viewingUser.created_at)}</DetailField>
-          <DetailField label="Ultimo aggiornamento">
-            {formatDateTime(viewingUser.updated_at)}
-          </DetailField>
+          <AuthorshipFields row={viewingUser} />
           <DetailField label="ID utente" mono>
             {viewingUser.id}
           </DetailField>

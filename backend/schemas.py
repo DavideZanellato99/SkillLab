@@ -8,6 +8,27 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from models import CONVERSATION_MODE_VOICE
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
 
+
+class AuthorshipResponse(BaseModel):
+    """When a row was created and modified, and by whom.
+
+    The four columns every administered entity carries (see `authorship`),
+    in one schema so users, organizations and avatars answer with the same
+    field names and the admin pages can show them with one component.
+
+    The author is the email and not the id: the id is only useful to look up
+    a row the reader cannot see anyway, and the email keeps meaning something
+    after the account is gone ("sistema", "utente eliminato").
+    """
+
+    created_at: datetime
+    created_by_email: str
+    updated_at: datetime
+    updated_by_email: str
+
+    model_config = {"from_attributes": True}
+
+
 # --- Avatar Schemas ---
 
 
@@ -431,7 +452,7 @@ class NewPasswordRequest(BaseModel):
     session: str
 
 
-class UserResponse(BaseModel):
+class UserResponse(AuthorshipResponse):
     """Schema for user profile response."""
 
     id: UUID
@@ -448,10 +469,6 @@ class UserResponse(BaseModel):
     # Last successful authentication; null means the account has never been
     # used (an invitation that was never accepted).
     last_login_at: datetime | None = None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class UpdateProfileRequest(BaseModel):
@@ -473,7 +490,7 @@ class ChangePasswordRequest(BaseModel):
 # --- Organization Schemas (super admin only) ---
 
 
-class OrganizationResponse(BaseModel):
+class OrganizationResponse(AuthorshipResponse):
     """An organization/tenant with its aggregate counters."""
 
     id: UUID
@@ -483,12 +500,8 @@ class OrganizationResponse(BaseModel):
     # Only set while the organization is suspended: the admin's own wording
     # of why, shown in the admin table and to the locked-out users.
     suspension_reason: str | None = None
-    created_at: datetime
-    updated_at: datetime
     user_count: int = 0
     avatar_count: int = 0
-
-    model_config = {"from_attributes": True}
 
 
 class OrganizationDetailResponse(OrganizationResponse):
@@ -607,7 +620,7 @@ class AdminAvatarPayload(BaseModel):
     profile: dict
 
 
-class AdminAvatarResponse(BaseModel):
+class AdminAvatarResponse(AuthorshipResponse):
     """Avatar including the full persona sheet — super admin only."""
 
     id: UUID
@@ -620,7 +633,6 @@ class AdminAvatarResponse(BaseModel):
     organization_id: UUID
     organization_name: str
     profile: dict
-    created_at: datetime
     # When the avatar was archived (logical deletion); None while active.
     deleted_at: datetime | None = None
     conversation_count: int = 0

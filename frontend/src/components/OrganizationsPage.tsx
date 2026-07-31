@@ -13,6 +13,7 @@ import type { Organization, OrgStatus } from '../services/organizations'
 import { isSuperAdmin } from '../services/auth'
 import DataTable, { Td, Tr } from './DataTable'
 import DetailModal, { DetailField } from './DetailModal'
+import AuthorshipFields from './AuthorshipFields'
 import Select from './Select'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
@@ -515,24 +516,7 @@ export default function OrganizationsPage() {
               <Spinner variant="button" />
             )}
           </DetailField>
-          <DetailField label="Data creazione">
-            {new Date(viewingOrg.created_at).toLocaleString('it-IT', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </DetailField>
-          <DetailField label="Ultimo aggiornamento">
-            {new Date(viewingOrg.updated_at).toLocaleString('it-IT', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </DetailField>
+          <AuthorshipFields row={viewingOrg} />
           <DetailField label="ID organizzazione" mono>
             {viewingOrg.id}
           </DetailField>

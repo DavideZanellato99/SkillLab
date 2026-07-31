@@ -22,6 +22,7 @@ from contextlib import contextmanager
 from sqlalchemy import or_, text
 
 from auth_dependency import ensure_roles, get_or_create_mock_admin
+from authorship import SYSTEM_ACTOR_EMAIL, UTC_NOW_SQL
 from conversation_titles import next_conversation_title
 from database import Base, SessionLocal, engine
 from models import (
@@ -40,6 +41,19 @@ logger = logging.getLogger(__name__)
 # fixed forever — changing it would let an old and a new container run the
 # schema job at the same time, which is the one thing it exists to prevent.
 _SCHEMA_LOCK_KEY = 774_155_001
+
+# The tables that carry the paternity columns, the ones an administrator
+# creates and modifies (see the `Authored` mixin in `authorship`).
+_AUTHORED_TABLES = ("users", "organizations", "avatars")
+
+# Where to read the author of the rows that predate the columns: for each
+# table, the audit action that created a row and the ones that modified it.
+# Deletions are absent on purpose, there is no row left to attribute.
+_AUTHORSHIP_ACTIONS = (
+    ("users", "user.create", ("user.update", "user.status")),
+    ("organizations", "organization.create", ("organization.update", "organization.status")),
+    ("avatars", "avatar.create", ("avatar.update", "avatar.delete", "avatar.restore")),
+)
 
 
 def _add_columns() -> None:
@@ -113,6 +127,168 @@ def _add_columns() -> None:
         conn.execute(
             text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS suspension_reason TEXT")
         )
+
+
+def _add_authorship_columns() -> None:
+    """Create the paternity columns on the tables an administrator governs.
+
+    Runs before every ORM-based step below: the mapped classes already carry
+    these columns, so the very first SELECT on users, organizations or avatars
+    would fail on a database that does not have them yet.
+
+    The email columns land NOT NULL with a default, so the rows that already
+    exist say "sistema" instead of nothing: nobody knows who created them, and
+    that is exactly what the label means. The timestamps are locked down later
+    (see `_backfill_authorship`), once the legacy NULLs are gone.
+    """
+    with engine.begin() as conn:
+        # Avatars never had an updated_at: editing a persona sheet left no
+        # trace on the row at all.
+        conn.execute(text("ALTER TABLE avatars ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP"))
+        for table in _AUTHORED_TABLES:
+            for column in ("created_by", "updated_by"):
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} UUID"))
+                # The foreign key is added separately: ADD COLUMN IF NOT EXISTS
+                # would skip it on a column that is already there, and on a
+                # fresh database create_all has already made both.
+                conn.execute(text(_foreign_key_ddl(table, column)))
+            for column in ("created_by_email", "updated_by_email"):
+                conn.execute(
+                    text(
+                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} "
+                        f"VARCHAR(255) NOT NULL DEFAULT '{SYSTEM_ACTOR_EMAIL}'"
+                    )
+                )
+
+
+def _foreign_key_ddl(table: str, column: str) -> str:
+    """DDL that points `column` at users.id, unless something already does.
+
+    Existence is checked on the column and not on the constraint name: the
+    name create_all picks is not the name spelled here, and matching by name
+    would add a second identical foreign key on every fresh database.
+    """
+    return f"""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conrelid = '{table}'::regclass
+                  AND contype = 'f'
+                  AND conkey = ARRAY[(
+                      SELECT attnum FROM pg_attribute
+                      WHERE attrelid = '{table}'::regclass AND attname = '{column}'
+                  )]
+            ) THEN
+                ALTER TABLE {table} ADD CONSTRAINT fk_{table}_{column}
+                    FOREIGN KEY ({column}) REFERENCES users(id) ON DELETE SET NULL;
+            END IF;
+        END $$;
+    """  # noqa: S608 (table and column are ours, nothing comes from outside)
+
+
+# The statements of the paternity backfill, one per line of reasoning. They
+# are templates rather than f-strings because the only thing interpolated is a
+# table name from the tuple above, and keeping the interpolation in one place
+# (see `_on_table`) keeps it obvious that no value from outside ever gets in.
+_MISSING_CREATED_AT = f"UPDATE {{table}} SET created_at = {UTC_NOW_SQL} WHERE created_at IS NULL"  # noqa: S608
+
+_MISSING_UPDATED_AT = "UPDATE {table} SET updated_at = created_at WHERE updated_at IS NULL"
+
+# On a POST the new id is not in the path, so the endpoint puts it in the
+# details: `details.target_id` is the only way back from a creation to what
+# was created. The oldest row wins, a retry cannot rewrite the author.
+_AUTHOR_FROM_CREATE_ACTION = """
+    UPDATE {table} AS r
+    SET created_by = a.user_id, created_by_email = a.user_email
+    FROM (
+        SELECT DISTINCT ON (details->>'target_id')
+               details->>'target_id' AS target_id, user_id, user_email
+        FROM audit_logs
+        WHERE action = :create_action AND details->>'target_id' IS NOT NULL
+        ORDER BY details->>'target_id', created_at ASC
+    ) AS a
+    WHERE a.target_id = r.id::text AND r.created_by_email = :system
+"""
+
+# Modifications carry the id in the path, so the middleware already has it.
+# The newest row wins: what is wanted is the last hand on the row.
+_AUTHOR_FROM_UPDATE_ACTIONS = """
+    UPDATE {table} AS r
+    SET updated_by = a.user_id, updated_by_email = a.user_email
+    FROM (
+        SELECT DISTINCT ON (resource_id) resource_id, user_id, user_email
+        FROM audit_logs
+        WHERE action = ANY(:update_actions) AND resource_id IS NOT NULL
+        ORDER BY resource_id, created_at DESC
+    ) AS a
+    WHERE a.resource_id = r.id::text AND r.updated_by_email = :system
+"""
+
+# Never modified since it was created: whoever created it is the last person
+# who touched it, exactly as updated_at equals created_at on those same rows.
+_NEVER_MODIFIED = """
+    UPDATE {table} SET updated_by = created_by, updated_by_email = created_by_email
+    WHERE updated_by_email = :system AND created_by_email <> :system
+"""
+
+_LOCK_TIMESTAMPS = f"""
+    ALTER TABLE {{table}}
+        ALTER COLUMN created_at SET NOT NULL,
+        ALTER COLUMN updated_at SET NOT NULL,
+        ALTER COLUMN created_at SET DEFAULT {UTC_NOW_SQL},
+        ALTER COLUMN updated_at SET DEFAULT {UTC_NOW_SQL}
+"""
+
+
+def _on_table(statement: str, table: str):
+    """One of the templates above, aimed at a table of `_AUTHORED_TABLES`."""
+    return text(statement.format(table=table))
+
+
+def _backfill_authorship() -> None:
+    """Give the pre-existing rows a date and an author, then lock the columns.
+
+    The audit trail already knows who created and who last touched most of
+    these rows, so it is the honest source to read them from instead of
+    stamping everything as "sistema": creations carry the new id in
+    `details.target_id` (the id is not in the path on a POST), modifications
+    carry it in `resource_id`.
+
+    A row nobody can be found for keeps NULL and the "sistema" label, which is
+    the truthful answer: it was created before anyone was recording, or by the
+    system itself.
+
+    Idempotent by the label: only rows still marked "sistema" are considered,
+    so a real author, once written, is never overwritten by a later boot.
+    """
+    with engine.begin() as conn:
+        # Dates first: an avatar has always had a creation date, so its own
+        # is the only defensible value for the modification date it never had.
+        conn.execute(
+            text(
+                "UPDATE avatars SET updated_at = created_at "
+                "WHERE updated_at IS NULL AND created_at IS NOT NULL"
+            )
+        )
+        for table in _AUTHORED_TABLES:
+            conn.execute(_on_table(_MISSING_CREATED_AT, table))
+            conn.execute(_on_table(_MISSING_UPDATED_AT, table))
+
+        for table, create_action, update_actions in _AUTHORSHIP_ACTIONS:
+            conn.execute(
+                _on_table(_AUTHOR_FROM_CREATE_ACTION, table),
+                {"create_action": create_action, "system": SYSTEM_ACTOR_EMAIL},
+            )
+            conn.execute(
+                _on_table(_AUTHOR_FROM_UPDATE_ACTIONS, table),
+                {"update_actions": list(update_actions), "system": SYSTEM_ACTOR_EMAIL},
+            )
+            conn.execute(_on_table(_NEVER_MODIFIED, table), {"system": SYSTEM_ACTOR_EMAIL})
+
+        # No row is left without a date, so the constraint can go on.
+        for table in _AUTHORED_TABLES:
+            conn.execute(_on_table(_LOCK_TIMESTAMPS, table))
 
 
 def _backfill_conversation_titles() -> None:
@@ -255,11 +431,13 @@ def _index_audit_logs() -> None:
 def run_startup_migrations() -> None:
     """Run every idempotent startup migration, in dependency order."""
     _add_columns()
+    _add_authorship_columns()
     _backfill_conversation_titles()
     _seed_roles_and_admin()
     _backfill_user_organizations()
     _backfill_avatar_organizations()
     _backfill_last_login()
+    _backfill_authorship()
     _index_audit_logs()
 
 

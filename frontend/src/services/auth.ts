@@ -1,5 +1,7 @@
 /* Auth service for communicating with the backend auth endpoints */
 
+import type { Authored } from './authorship'
+
 // Same-origin: the Vite dev server proxies /api to the backend (vite.config.ts).
 const API_BASE_URL = ''
 
@@ -9,7 +11,7 @@ const API_BASE_URL = ''
 
 export type UserStatus = 'active' | 'suspended' | 'disabled'
 
-export interface AuthUser {
+export interface AuthUser extends Authored {
   id: string
   cognito_sub: string
   email: string
@@ -23,8 +25,6 @@ export interface AuthUser {
   organization_name: string | null
   /** Ultimo accesso riuscito; null se l'account non è mai stato usato. */
   last_login_at: string | null
-  created_at: string
-  updated_at: string
 }
 
 // =====================================================

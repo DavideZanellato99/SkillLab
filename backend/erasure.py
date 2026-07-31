@@ -27,6 +27,12 @@ as "erase everything about them":
   student contesting a score has the right to know who signed it. The FK is
   nulled by the schema, the snapshot stays.
 
+What deliberately does **not** survive is their name in the paternity
+columns of the rows they created (see ``authorship``): an organization or an
+avatar is not a registry and not somebody else's grade, so the id goes and
+the email is replaced by a label. The row still says it was made by a person
+and no longer says which one.
+
 Neither of these keeps a deleted user's IP, voice or transcripts, which is
 what erasure is actually about.
 
@@ -40,10 +46,13 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from authorship import DELETED_ACTOR_EMAIL
 from models import (
     CONVERSATION_CHILDREN,
+    Avatar,
     ChatConversation,
     NotificationRead,
+    Organization,
     TokenSession,
     TrainingAssignment,
     User,
@@ -60,6 +69,11 @@ _USER_OWNED = (
     NotificationRead,
     TrainingAssignment,
 )
+
+# Every table that names the person who created or last modified the row
+# (the `Authored` mixin). These rows are not about the user and they stay:
+# only the signature on them is anonymised.
+_AUTHORED = (User, Organization, Avatar)
 
 
 def erase_conversations(db: Session, conversation_ids: Sequence[UUID]) -> int:
@@ -79,11 +93,38 @@ def erase_conversations(db: Session, conversation_ids: Sequence[UUID]) -> int:
     )
 
 
+def forget_authorship(db: Session, user_ids: Sequence[UUID]) -> None:
+    """Unsign the rows these users created or last modified.
+
+    The id would be nulled by the schema anyway, the email would not: it is
+    a snapshot, and a snapshot of someone who asked to be erased is exactly
+    what must not outlive them here. Both go in one statement, and the
+    label left behind keeps the column readable.
+
+    A bulk UPDATE on purpose, so it does not pass through the flush listener:
+    somebody else's account being deleted is not a modification of this row,
+    and `updated_at` must keep pointing at the last real change.
+    """
+    if not user_ids:
+        return
+
+    for model in _AUTHORED:
+        for author, author_email in (
+            (model.created_by, model.created_by_email),
+            (model.updated_by, model.updated_by_email),
+        ):
+            db.query(model).filter(author.in_(user_ids)).update(
+                {author: None, author_email: DELETED_ACTOR_EMAIL},
+                synchronize_session=False,
+            )
+
+
 def erase_users(db: Session, user_ids: Sequence[UUID]) -> int:
     """Delete users and every row that is about them. Returns how many went.
 
     Their conversations go first (a conversation belongs to the person who
-    held it), then everything keyed by user_id, then the accounts.
+    held it), then everything keyed by user_id, then their signature on what
+    survives them, then the accounts.
     """
     if not user_ids:
         return 0
@@ -98,5 +139,7 @@ def erase_users(db: Session, user_ids: Sequence[UUID]) -> int:
 
     for model in _USER_OWNED:
         db.query(model).filter(model.user_id.in_(user_ids)).delete(synchronize_session=False)
+
+    forget_authorship(db, user_ids)
 
     return db.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)

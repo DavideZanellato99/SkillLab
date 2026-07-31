@@ -259,6 +259,18 @@ repliche:
 Le uniche due cose non verificabili in locale sono l'emissione del
 certificato pubblico e il DNS.
 
+**Tornando indietro, il frontend va ricostruito.** I due modi condividono il
+nome dell'immagine ma non lo stadio del Dockerfile: la produzione si ferma
+su nginx coi file compilati, lo sviluppo si ferma prima e lancia Vite.
+Costruire la produzione sovrascrive quell'immagine, e il `docker compose up`
+successivo riparte in ciclo con exit 127, che è `npm` cercato dentro
+un'immagine dove non c'è. Non è niente di rotto, serve solo dire di
+ricostruire:
+
+```bash
+docker compose up -d --build frontend
+```
+
 ---
 
 ## 4. Il deploy

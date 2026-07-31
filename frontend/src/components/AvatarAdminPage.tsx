@@ -24,6 +24,7 @@ import { PageContainer, PageHeader } from './PageLayout'
 import PrimaryButton from './PrimaryButton'
 import FormError from './FormError'
 import ConfirmModal from './ConfirmModal'
+import AvatarDetailModal from './AvatarDetailModal'
 import ModalShell from './ModalShell'
 import { TrashIcon, PlusIcon } from './icons'
 import Tooltip from './Tooltip'
@@ -267,6 +268,9 @@ export default function AvatarAdminPage() {
 
   // Modal state: 'new' = create, AdminAvatar = edit, null = closed
   const [editing, setEditing] = useState<AdminAvatar | 'new' | null>(null)
+  /* Dettaglio in sola lettura, aperto dal clic sulla riga come nelle tabelle
+   * di utenti e organizzazioni: la matita resta l'unica strada per modificare. */
+  const [viewing, setViewing] = useState<AdminAvatar | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm())
   /* La scheda ha due regole che il server non conosce (almeno il nome o il
    * cognome, e l'organizzazione proprietaria): quei messaggi nascono qui e
@@ -552,7 +556,11 @@ export default function AvatarAdminPage() {
           }
         >
           {visibleAvatars.map((a) => (
-            <Tr key={a.id}>
+            <Tr
+              key={a.id}
+              className={`cursor-pointer ${a.deleted_at ? 'opacity-60' : ''}`}
+              onClick={() => setViewing(a)}
+            >
               <Td>
                 <div className="flex items-center gap-4">
                   <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-white/6">
@@ -604,7 +612,7 @@ export default function AvatarAdminPage() {
                   {a.conversation_count}
                 </span>
               </Td>
-              <Td>
+              <Td onClick={(e) => e.stopPropagation()}>
                 {/* Un avatar archiviato ha una sola azione, tornare in
                     catalogo: la sua scheda è il documento di ciò su cui gli
                     studenti si sono allenati e resta in sola lettura. */}
@@ -678,6 +686,9 @@ export default function AvatarAdminPage() {
           ))}
         </DataTable>
       )}
+
+      {/* Dettaglio Avatar (clic sulla riga) */}
+      {viewing && <AvatarDetailModal avatar={viewing} onClose={() => setViewing(null)} />}
 
       {/* Modal Crea/Modifica Avatar */}
       {editing && (

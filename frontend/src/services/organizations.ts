@@ -1,17 +1,16 @@
 /* Organization (tenant) management API — super admin only. */
 import { apiFetch } from './api'
+import type { Authored } from './authorship'
 
 export type OrgStatus = 'active' | 'suspended'
 
-export interface Organization {
+export interface Organization extends Authored {
   id: string
   name: string
   slug: string
   status: OrgStatus
   /** Valorizzato solo mentre l'organizzazione è sospesa: il motivo scritto dall'admin. */
   suspension_reason: string | null
-  created_at: string
-  updated_at: string
   user_count: number
   avatar_count: number
 }

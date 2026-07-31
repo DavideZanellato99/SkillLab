@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import deferred, relationship
 
+from authorship import Authored
 from database import Base
 
 # Canonical role names (rows of the `roles` table)
@@ -49,7 +50,7 @@ CONVERSATION_MODE_VOICE = "voice"
 CONVERSATION_MODE_TEXT = "text"
 
 
-class Organization(Base):
+class Organization(Authored, Base):
     """A tenant of the platform: an organization whose users, conversations
     and private avatars are isolated from every other organization.
 
@@ -57,6 +58,9 @@ class Organization(Base):
     NULL) sees across tenants; an organization_admin is confined to its own
     organization, a plain user never leaves it. Every avatar belongs to
     exactly one organization and is visible only within it.
+
+    Who created it and who last touched it comes from `Authored` (see
+    `authorship`): the columns are filled at flush time, never by hand.
     """
 
     __tablename__ = "organizations"
@@ -75,14 +79,11 @@ class Organization(Base):
     # Free-form per-tenant settings (branding, limits...): reserved for the
     # future, not read by any enforcement today.
     settings = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at = Column(
-        DateTime,
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-    )
 
-    users = relationship("User", back_populates="organization")
+    # foreign_keys spelled out: now that the table carries created_by and
+    # updated_by, two paths run between organizations and users (membership
+    # and paternity), and SQLAlchemy cannot guess which one this follows.
+    users = relationship("User", back_populates="organization", foreign_keys="User.organization_id")
     avatars = relationship("Avatar", back_populates="organization")
 
     def __repr__(self):
@@ -104,8 +105,14 @@ class Role(Base):
         return f"<Role(id={self.id}, name='{self.name}')>"
 
 
-class User(Base):
-    """Represents an authenticated user linked to a Cognito identity."""
+class User(Authored, Base):
+    """Represents an authenticated user linked to a Cognito identity.
+
+    Who created the account and who last modified it comes from `Authored`
+    (see `authorship`), self-referencing this same table: an account created
+    by an admin carries that admin, one created by the system carries NULL
+    and the "sistema" label.
+    """
 
     __tablename__ = "users"
 
@@ -127,16 +134,15 @@ class User(Base):
     # deliberately does NOT touch this — it would turn the column into
     # "last activity" and hide exactly what it exists to show.
     last_login_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at = Column(
-        DateTime,
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-    )
 
     # Relationships
     role = relationship("Role", back_populates="users", lazy="joined")
-    organization = relationship("Organization", back_populates="users", lazy="joined")
+    organization = relationship(
+        "Organization",
+        back_populates="users",
+        lazy="joined",
+        foreign_keys=[organization_id],
+    )
     selections = relationship("UserSelection", back_populates="user")
     conversations = relationship("ChatConversation", back_populates="user")
 
@@ -154,8 +160,14 @@ class User(Base):
         return f"<User(id={self.id}, email='{self.email}', ruolo='{self.ruolo}')>"
 
 
-class Avatar(Base):
-    """Represents an avatar that users can select."""
+class Avatar(Authored, Base):
+    """Represents an avatar that users can select.
+
+    Who created the persona and who last edited its sheet comes from
+    `Authored` (see `authorship`): editing the sheet of an avatar already
+    used in training is not a small thing, and it has to leave a name and a
+    date on the row itself, not only in the audit trail.
+    """
 
     __tablename__ = "avatars"
 
@@ -177,7 +189,6 @@ class Avatar(Base):
     # students must not see hidden objectives, secrets or the real cause of
     # the problem.
     profile = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     # Deletion is logical: the row survives so that every conversation,
     # message and evaluation produced against this persona keeps its avatar,
     # and so that an old transcript can still be re-evaluated against the

@@ -8,6 +8,7 @@ import type {
   MessageAnnotation,
 } from './api'
 import type { AuthUser, RoleName, UserStatus } from './auth'
+import type { Authored } from './authorship'
 
 export interface CreateUserPayload {
   email: string
@@ -113,7 +114,7 @@ export const resendUserCredentials = (userId: string) =>
 
 // ── Avatar CRUD (super admin only) ───────────────────
 
-export interface AdminAvatar {
+export interface AdminAvatar extends Authored {
   id: string
   name: string
   image_url: string
@@ -125,7 +126,6 @@ export interface AdminAvatar {
   organization_id: string
   organization_name: string
   profile: Record<string, string>
-  created_at: string
   /** Quando l'avatar è stato archiviato; null se è ancora in catalogo. */
   deleted_at: string | null
   conversation_count: number

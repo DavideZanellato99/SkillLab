@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 import housekeeping
 import tls_setup  # noqa: F401
 from audit import AuditMiddleware
+from authorship import AuthorshipMiddleware
 from database import log_connection_budget
 from routers.admin import router as admin_router
 from routers.admin_avatars import router as admin_avatars_router
@@ -94,6 +95,11 @@ app.add_middleware(
 # order of registration): preflight OPTIONS never reach it, and a rejected
 # cross-origin call is not logged as an action.
 app.add_middleware(AuditMiddleware)
+
+# Paternità delle righe: tiene a portata del flush l'utente della richiesta,
+# così created_by/updated_by si scrivono da soli (vedi authorship). Registrato
+# per ultimo, quindi è il più interno: quando arriva al database c'è già.
+app.add_middleware(AuthorshipMiddleware)
 
 # Serve static avatar images
 os.makedirs("static/avatars", exist_ok=True)

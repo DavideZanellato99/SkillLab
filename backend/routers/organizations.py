@@ -107,7 +107,9 @@ def _response(org: Organization, user_count: int, avatar_count: int) -> Organiza
         status=org.status,
         suspension_reason=org.suspension_reason,
         created_at=org.created_at,
+        created_by_email=org.created_by_email,
         updated_at=org.updated_at,
+        updated_by_email=org.updated_by_email,
         user_count=user_count,
         avatar_count=avatar_count,
     )

@@ -48,6 +48,7 @@ questo documento e firmare l'accordo art. 28.
 | Obiettivi di formazione assegnati | `training_assignments` | Assegnati da un amministratore |
 | Indirizzo IP e User-Agent | `token_session`, `audit_logs` | Raccolti a ogni accesso e a ogni azione |
 | Registro delle azioni compiute | `audit_logs` | Scritto dal middleware a ogni richiesta che modifica qualcosa |
+| Email di chi ha creato o modificato una riga | `users`, `organizations`, `avatars`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`) |
 
 Due precisazioni che contano.
 
@@ -198,6 +199,13 @@ nell'informativa:
   chi lo ha firmato.
 
 Nessuna delle due conserva voce, trascrizioni o IP della persona cancellata.
+
+**Cosa invece non sopravvive.** La firma che l'account ha lasciato sulle
+righe che ha creato o modificato (utenti, organizzazioni, avatar) viene
+anonimizzata insieme all'account: l'id sparisce e l'email diventa l'etichetta
+"utente eliminato". Un avatar non è un registro e non è il voto di nessuno,
+quindi non c'è motivo per cui debba continuare a portare il nome di chi ha
+chiesto di essere cancellato.
 
 ## 9. Trasparenza verso l'interessato
 

@@ -21,12 +21,14 @@ from sqlalchemy import func, select
 from database import Base
 from models import (
     AuditLog,
+    Avatar,
     ChatConversation,
     ChatMessage,
     ConversationRecording,
     ConversationReview,
     MessageAnnotation,
     NotificationRead,
+    Organization,
     TokenSession,
     TrainingAssignment,
     User,
@@ -39,6 +41,8 @@ from routers import admin as admin_router
 # The guard test compares this with what the schema actually exposes.
 _SEEDED_TABLES = {
     "users",
+    "organizations",
+    "avatars",
     "user_selections",
     "token_session",
     "notification_reads",
@@ -175,6 +179,26 @@ def _seed_everything(db_session, victim: User, other: User, avatar) -> None:
             ),
         ]
     )
+    db_session.flush()
+
+    # As the author of things that outlive them: the organization, the avatar
+    # and another account all carry their id in the paternity columns.
+    # Written with bulk UPDATEs because the flush listener owns those columns
+    # and would put the current actor (nobody, here) back in (see authorship).
+    for model, row_id in (
+        (Organization, avatar.organization_id),
+        (Avatar, avatar.id),
+        (User, other.id),
+    ):
+        db_session.query(model).filter(model.id == row_id).update(
+            {
+                model.created_by: victim.id,
+                model.created_by_email: victim.email,
+                model.updated_by: victim.id,
+                model.updated_by_email: victim.email,
+            },
+            synchronize_session=False,
+        )
     db_session.flush()
 
 

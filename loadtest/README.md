@@ -41,12 +41,10 @@ I tre finti fornitori riproducono quello che conta della controparte vera:
 
 Tre preparativi, tutti obbligatori.
 
-**Togli i print di diagnostica** in `backend/voice_pipeline.py`, la riga
-`[STT-URL]` all'inizio di `run()` e il blocco `[STT-RAW]` dentro
-`_stt_loop()`. Stampano su ogni evento della STT: a cinquanta chiamate
-misureresti la scrittura su console. Sono marcati TEMP e vanno via comunque
-prima della pubblicazione, perché stampano nei log le trascrizioni di quello
-che gli utenti dicono.
+**Metti `VOICE_STT_DEBUG=0`** nel `.env` del backend. Accende il tracciato
+grezzo della STT, una `print` per ogni evento: a cinquanta chiamate
+misureresti la scrittura su console invece della pipeline. Serve mentre si
+lavora sulla VAD, non mentre si misura.
 
 **Usa un database di test.** Il giro crea conversazioni e messaggi veri.
 

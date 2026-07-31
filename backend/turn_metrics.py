@@ -26,14 +26,15 @@ import os
 import time
 from statistics import median
 
-# Diagnostic, not configuration: unlike the service modules this one keeps a
-# default instead of raising, so a .env without the flag still runs a call.
-LATENCY_LOG_ENABLED = os.getenv("VOICE_LATENCY_LOG", "1").strip().lower() not in (
-    "0",
-    "false",
-    "no",
-    "",
-)
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# I due interruttori della diagnostica. Valori ammessi e significato stanno
+# nel .env del backend, che è l'unico posto dove sono scritti: qui si legge
+# soltanto. Mancante o scritto in qualunque altro modo vale spento.
+LATENCY_LOG_ENABLED = os.getenv("VOICE_LATENCY_LOG") == "1"
+STT_DEBUG_ENABLED = os.getenv("VOICE_STT_DEBUG") == "1"
 
 # Marks, in the order the pipeline reaches them
 MARK_LLM_REQUEST = "llm_request"

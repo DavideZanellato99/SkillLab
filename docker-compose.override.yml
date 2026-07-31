@@ -62,6 +62,16 @@ services:
     command: npm run dev -- --host 0.0.0.0
     ports: !override
       - "3000:3000"
+    # In produzione qui girano file già compilati serviti da nginx, e 256 MB
+    # sono abbondanti. In sviluppo gira Vite, che tiene in memoria il grafo
+    # dei moduli e li ricompila a ogni salvataggio: con quel tetto verrebbe
+    # ucciso dal sistema a metà lavoro, e sembrerebbe un container che si
+    # riavvia da solo senza motivo.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
 
   # I due servizi che esistono solo in produzione. Un profilo che nessuno
   # attiva è il modo di Compose per dire "non far partire questo": in

@@ -136,6 +136,12 @@ jobs:
           POSTGRES_PASSWORD=smoketest
           POSTGRES_DB=skilllab_db
           SITE_ADDRESS=:80
+          BACKEND_REPLICAS=2
+          BACKEND_CPUS=1.0
+          BACKEND_MEM=1G
+          DB_CPUS=1.0
+          DB_MEM=1G
+          DB_MEM_RESERVED=256M
           EOF
       - name: Create backend .env with placeholder values
         # Placeholder values are enough to boot; the smoke test only hits the
@@ -170,6 +176,10 @@ jobs:
           ELEVENLABS_VAD_THRESHOLD=0.5
           ELEVENLABS_STT_WS_URL=wss://api.elevenlabs.io/v1/speech-to-text/stream
           VOICE_LATENCY_LOG=1
+          VOICE_STT_DEBUG=0
+          MAX_CONCURRENT_CALLS=20
+          DB_POOL_SIZE=5
+          DB_MAX_OVERFLOW=15
           AUDIT_LOG_RETENTION_DAYS=180
           AUDIO_RECORDING_RETENTION_DAYS=90
           CONVERSATION_RETENTION_DAYS=730

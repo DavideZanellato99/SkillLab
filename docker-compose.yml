@@ -36,6 +36,40 @@
 #
 # HTTPS non è opzionale: i cookie di sessione sono Secure, e servita in
 # chiaro l'applicazione non riesce nemmeno a tenere il login.
+
+# Un tetto ai log, uguale per tutti i servizi.
+#
+# Il driver di serie di Docker scrive su file e non cancella mai niente: il
+# file cresce finché c'è disco. Qui il backend stampa una riga [LATENCY] per
+# ogni turno di ogni chiamata, quindi cinquanta persone in linea scrivono di
+# continuo, e Caddy aggiunge una riga per richiesta. Senza tetto il disco si
+# riempie in silenzio, e quando succede non cade solo il servizio che
+# scriveva: si ferma anche Postgres, che sullo stesso disco ci deve scrivere
+# per accettare qualunque cosa.
+#
+# Il driver è "local" e non "json-file", che sarebbe quello di serie, per una
+# ragione sola: comprime i file già ruotati. Il testo si comprime attorno a
+# dieci volte, quindi a parità di disco occupato la storia consultabile è
+# dieci volte più lunga, e i comandi non cambiano ("docker compose logs"
+# legge questo driver come l'altro).
+#
+# 100 MB per file e 20 file fanno al massimo 2 GB per container, che
+# compressi valgono una ventina di GB di testo: mesi di storia a pieno
+# carico invece di giorni. Il file in corso di scrittura resta in chiaro,
+# quelli vecchi si leggono con zcat.
+#
+# Il conto va fatto per container e non per servizio, perché il backend ne ha
+# quanti BACKEND_REPLICAS: con quattro repliche il caso peggiore assoluto è
+# 8 GB di backend più 2 GB per ciascuno degli altri quattro servizi, cioè
+# 16 GB. È il tetto che il disco non può superare, non lo spazio che verrà
+# occupato davvero, ma è il numero da confrontare con il disco della
+# macchina prima di alzare ancora questi valori.
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "100m"
+    max-file: "20"
+
 services:
   db:
     image: postgres:18-alpine
@@ -53,6 +87,19 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?va messo nel file .env accanto a docker-compose.yml}
     volumes:
       - db_data:/var/lib/postgresql
+    deploy:
+      resources:
+        # Il tetto serve a impedire che il database si prenda tutto, la
+        # riserva a impedire che siano gli altri a lasciarlo senza niente.
+        # Delle due conta di più la seconda: senza limiti, quattro repliche
+        # del backend sotto picco possono spingere Postgres in swap, e un
+        # database che scrive su disco al posto che in RAM non rallenta un
+        # po', si ferma, e con lui tutto il resto.
+        limits:
+          cpus: ${DB_CPUS:?va messo nel file .env accanto a docker-compose.yml}
+          memory: ${DB_MEM:?va messa nel file .env accanto a docker-compose.yml}
+        reservations:
+          memory: ${DB_MEM_RESERVED:?va messa nel file .env accanto a docker-compose.yml}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?}"]
       interval: 5s
@@ -60,6 +107,7 @@ services:
       retries: 10
     security_opt:
       - no-new-privileges:true
+    logging: *logging
     restart: unless-stopped
 
   backend:
@@ -76,7 +124,20 @@ services:
       # Quante copie del backend. Il numero giusto lo dice il test di carico
       # (vedi loadtest/): dipende da quante chiamate regge un processo e da
       # quanti core ha la macchina.
-      replicas: 4
+      replicas: ${BACKEND_REPLICAS:?va messo nel file .env accanto a docker-compose.yml}
+      resources:
+        limits:
+          # Un core a replica, che è quanto un processo Python può usare
+          # comunque per via del GIL: il tetto qui non toglie niente, evita
+          # solo che una replica impazzita occupi i core delle altre e del
+          # database.
+          cpus: ${BACKEND_CPUS:?va messo nel file .env accanto a docker-compose.yml}
+          # Per replica, non in tutto. Una chiamata tiene in RAM i suoi
+          # buffer audio, quindi la memoria cresce con le chiamate insieme:
+          # se il tetto arriva, il container viene ucciso e riparte (vedi
+          # restart), ed è il segnale che il tetto è basso o che le chiamate
+          # per processo sono troppe.
+          memory: ${BACKEND_MEM:?va messa nel file .env accanto a docker-compose.yml}
     volumes:
       # Persist uploaded avatar images across rebuilds/restarts. Condiviso
       # fra le repliche: l'immagine caricata da una deve essere servita da
@@ -104,14 +165,24 @@ services:
         condition: service_healthy
     security_opt:
       - no-new-privileges:true
+    logging: *logging
     restart: unless-stopped
 
   frontend:
     build: ./frontend
     depends_on:
       - backend
+    deploy:
+      resources:
+        # Scritti qui e non nel .env come quelli del backend e del database,
+        # perché questi non cambiano con la macchina: nginx serve file già
+        # compilati, e il suo lavoro non cresce col numero di chiamate.
+        limits:
+          cpus: "0.5"
+          memory: 256M
     security_opt:
       - no-new-privileges:true
+    logging: *logging
     restart: unless-stopped
 
   caddy:
@@ -145,8 +216,17 @@ services:
     depends_on:
       - backend
       - frontend
+    deploy:
+      resources:
+        limits:
+          # Più larghi di quelli del frontend perché qui il lavoro col
+          # traffico ci cresce davvero: TLS e inoltro di tutte le chiamate
+          # passano da qui, ed è l'unico servizio esposto.
+          cpus: "1.0"
+          memory: 512M
     security_opt:
       - no-new-privileges:true
+    logging: *logging
     restart: unless-stopped
 
   db-backup:
@@ -172,8 +252,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          # Dorme quasi sempre, e quando si sveglia fa un pg_dump che non
+          # deve rubare il processore alle chiamate in corso.
+          cpus: "0.5"
+          memory: 256M
     security_opt:
       - no-new-privileges:true
+    logging: *logging
     restart: unless-stopped
 
 volumes:

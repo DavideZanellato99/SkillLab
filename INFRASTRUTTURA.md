@@ -140,7 +140,32 @@ rimesso dopo una migrazione è un lavoro che smette di girare in silenzio.
 Il corollario è il punto 3 della lista: se il lavoro vive in ogni processo,
 serve il lock.
 
-### 2.7 Chi decide dove va una richiesta deve essere uno solo
+### 2.7 Su una macchina sola, i limiti servono a proteggere il database
+
+Quando tutto gira sullo stesso server, i servizi non sono vicini di casa
+educati: si contendono gli stessi core e la stessa RAM, e chi ne ha di più
+da fare tende a prendersi tutto.
+
+Il servizio da proteggere è il database, e non perché sia il più fragile: è
+quello da cui dipendono tutti gli altri. Un backend che rallenta rallenta le
+sue chiamate, un Postgres spinto in swap ferma l'installazione intera. Per
+questo ha due numeri e non uno: un tetto, che gli impedisce di prendersi
+tutto, e soprattutto **una riserva, che impedisce agli altri di lasciarlo
+senza niente**.
+
+Il secondo posto dove i limiti servono è il disco, ed è quello che ci si
+dimentica: i log di Docker crescono senza fine, e un disco pieno ferma
+Postgres esattamente come la memoria finita. Il traffico normale non è il
+pericolo, lo è una replica che non riesce a partire e viene riavviata in
+continuazione stampando lo stesso errore: lì si passa da megabyte al giorno
+a megabyte al minuto, e il secondo guasto arriva mentre stai indagando sul
+primo.
+
+Vale la pena scegliere anche il driver, non solo il tetto: quello di serie
+tiene i file ruotati in chiaro, mentre il driver `local` li comprime, e a
+parità di disco occupato tiene una storia dieci volte più lunga.
+
+### 2.8 Chi decide dove va una richiesta deve essere uno solo
 
 Il proxy verso il backend stava in nginx, che risolve il nome di un upstream
 **una volta sola all'avvio**: con quattro repliche avrebbe mandato tutto
@@ -154,7 +179,7 @@ Per connessioni lunghe (una chiamata vocale dura dieci minuti) la politica
 va scelta: **`least_conn`, non round robin**. Conta chi ne ha meno in corso
 adesso, non di chi sia il turno.
 
-### 2.8 Gli header di provenienza si sovrascrivono, non si accodano
+### 2.9 Gli header di provenienza si sovrascrivono, non si accodano
 
 L'applicazione legge il primo valore di `X-Forwarded-For` per sapere chi sta
 chiamando. Se il proxy lo accoda, basta che un client se lo mandi da solo
@@ -164,7 +189,7 @@ basato sull'IP.
 Il proxy che sta davanti a tutto deve **sovrascriverlo** con l'indirizzo che
 vede lui. È una riga, ed è la differenza fra un limite e la sua apparenza.
 
-### 2.9 Un backup non esiste finché non l'hai ripristinato
+### 2.10 Un backup non esiste finché non l'hai ripristinato
 
 Un volume non è un backup: protegge da un container ricreato, non da un
 disco che muore né da una cancellazione sbagliata.
@@ -177,7 +202,7 @@ primo errore.
 E poi la prova, che è l'unica cosa che conta: riversarlo su un database
 vuoto e contare le righe.
 
-### 2.10 Misurare prima di dimensionare
+### 2.11 Misurare prima di dimensionare
 
 Quante richieste regge un processo non si deduce, si misura. Da quel numero
 discende tutto: quanti processi, che macchina, quando serve la seconda.
@@ -211,6 +236,8 @@ Vedi [loadtest/](loadtest/), che è il banco di prova già pronto per farlo.
 |---|---|
 | TLS, smistamento, bilanciamento `least_conn`, header blindato | [caddy/Caddyfile](caddy/Caddyfile) |
 | Repliche, healthcheck, servizi, volumi | [docker-compose.yml](docker-compose.yml) |
+| Log compressi e con un tetto (2 GB per container, mesi di storia), e limiti di CPU e memoria, con la riserva che tiene Postgres fuori dallo swap | [docker-compose.yml](docker-compose.yml) |
+| I numeri che cambiano con la macchina (repliche, memoria del backend e del database) | il `.env` accanto al compose |
 | Sviluppo: una replica, niente Caddy né backup | [docker-compose.override.yml](docker-compose.override.yml) |
 | Solo file statici, niente più proxy | [frontend/nginx.conf](frontend/nginx.conf) |
 | Dump ogni sei ore, con ritenzione | [db/backup.sh](db/backup.sh) |
@@ -248,6 +275,11 @@ certificato pubblico e il DNS.
    e nessun elenco può invecchiare. L'unica a cui fare attenzione è
    `SITE_ADDRESS`, perché ha un default: se la dimentichi il sito parte su
    `localhost` e dal dominio non risponde niente.
+
+   In quello stesso file stanno anche i numeri che cambiano con la macchina,
+   cioè quante repliche e quanta memoria a testa per backend e database. Il
+   conto da rifare quando la macchina cambia è scritto lì sopra, accanto ai
+   valori.
 4. Poi:
 
 ```bash
@@ -326,11 +358,14 @@ una cancellazione sbagliata ma non dal disco che muore.
   chiude con una email, non con del codice.
 - **Il costo al minuto**, misurato sui cruscotti dei tre fornitori con
   qualche chiamata vera, e moltiplicato per i minuti che pensi di vendere.
-- **I due print di diagnostica** in `backend/voice_pipeline.py`, che
-  scrivono nei log le trascrizioni di quello che gli utenti dicono. Sono
-  marcati TEMP e sono un problema di dati personali, non di prestazioni.
 - **Il banco di prova almeno una volta**, per sapere quante chiamate regge
   davvero un processo invece di stimarlo.
+- **`VOICE_STT_DEBUG=0` nel `.env` del server.** Accende il tracciato grezzo
+  della STT, che scrive nei log le trascrizioni di quello che gli utenti
+  dicono: in locale sta a 1 per tarare la VAD, sul server va a 0. È
+  l'eccezione fra le variabili, perché non ferma l'avvio se manca: vale
+  attivo solo scritto esattamente `1`, e qualunque altra cosa, compresa
+  l'assenza, lo lascia spento.
 
 ### Quando i numeri cresceranno
 
@@ -381,6 +416,12 @@ Nell'ordine in cui conviene affrontarli.
 - [ ] Header di provenienza sovrascritti, non accodati.
 - [ ] Healthcheck su ogni servizio, con un periodo di grazia iniziale
       abbastanza lungo da coprire l'avvio.
+- [ ] Un tetto ai log, per dimensione e per numero di file, e un driver che
+      comprima i file ruotati. Quello di serie non cancella niente, e il
+      disco pieno ferma il database.
+- [ ] Limiti di CPU e memoria su ogni servizio, e una **riserva** di memoria
+      sul database, che è l'unico modo per impedire agli altri di spingerlo
+      in swap sotto picco.
 - [ ] Backup automatici, con scrittura atomica e ritenzione, e **una prova di
       ripristino fatta davvero**.
 - [ ] La configurazione obbligatoria dichiarata in modo che l'avvio fallisca

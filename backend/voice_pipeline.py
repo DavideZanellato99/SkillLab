@@ -54,6 +54,7 @@ from turn_metrics import (
     MARK_LLM_REQUEST,
     MARK_TTS_FIRST_AUDIO,
     MARK_TTS_FIRST_SEND,
+    STT_DEBUG_ENABLED,
     CallMetrics,
     TurnTimer,
 )
@@ -197,8 +198,10 @@ class VoicePipeline:
     # ── Main loop ─────────────────────────────────────
 
     async def run(self) -> None:
-        # TEMP diagnostica: conferma che i parametri VAD partano nell'URL. Rimuovere.
-        print(f"[STT-URL] {stt_ws_url()}", flush=True)
+        # Conferma che i parametri della VAD partano davvero nell'URL, cioè
+        # che il valore messo nel .env sia quello con cui la STT sta girando.
+        if STT_DEBUG_ENABLED:
+            print(f"[STT-URL] {stt_ws_url()}", flush=True)
         try:
             async with (
                 websockets.connect(
@@ -302,21 +305,24 @@ class VoicePipeline:
             event = json.loads(raw)
             message_type = event.get("message_type", "")
 
-            # TEMP diagnostica split: ogni evento grezzo STT con tempo dal
-            # commit precedente e testo troncato, per vedere se un commit
-            # arriva mentre l'operatore sta ancora parlando. Da rimuovere.
-            _now = time.perf_counter()
-            _gap = (
-                f"{(_now - self._last_partial_at) * 1000:.0f}ms"
-                if self._last_partial_at is not None
-                else "n/d"
-            )
-            _txt = (event.get("text") or "").strip()
-            print(
-                f"[STT-RAW] {message_type} | dal_last_partial={_gap} | "
-                f'len={len(_txt)} | "{_txt[-60:]}"',
-                flush=True,
-            )
+            # Il tracciato grezzo della STT: ogni evento con il tempo passato
+            # dal parziale precedente e la coda del testo, che è come si vede
+            # se un commit arriva mentre l'operatore sta ancora parlando.
+            # Spento di default perché stampa quello che le persone dicono,
+            # vedi STT_DEBUG_ENABLED in turn_metrics.
+            if STT_DEBUG_ENABLED:
+                _now = time.perf_counter()
+                _gap = (
+                    f"{(_now - self._last_partial_at) * 1000:.0f}ms"
+                    if self._last_partial_at is not None
+                    else "n/d"
+                )
+                _txt = (event.get("text") or "").strip()
+                print(
+                    f"[STT-RAW] {message_type} | dal_last_partial={_gap} | "
+                    f'len={len(_txt)} | "{_txt[-60:]}"',
+                    flush=True,
+                )
 
             if message_type == "partial_transcript":
                 text = (event.get("text") or "").strip()

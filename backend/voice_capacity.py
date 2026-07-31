@@ -16,23 +16,34 @@ sessanta chiamate in tutto senza doversi coordinare, e ognuna sa contare
 esattamente quello che le serve, cioè quante ne sta servendo lei.
 
 Il valore giusto lo dice il test di carico (vedi ``loadtest/``), che è
-l'unico modo di sapere quante ne regge davvero un processo. Il default è
-prudente: meglio rifiutare qualche chiamata di troppo che scoprire il tetto
-vero mentre quaranta persone sono in linea.
+l'unico modo di sapere quante ne regge davvero un processo, e sta nel .env
+del backend insieme a tutto il resto della configurazione. Qui non c'è
+nessun numero di ripiego, e non per pignoleria: un tetto scritto nel codice
+è un tetto che nessuno ha misurato, e si scoprirebbe sbagliato mentre
+quaranta persone sono in linea.
 """
 
 import logging
 import os
 
-logger = logging.getLogger(__name__)
+from dotenv import load_dotenv
 
-_DEFAULT_MAX_CONCURRENT_CALLS = 20
+# Come ogni modulo che legge una variabile: senza, il .env verrebbe caricato
+# solo se qualcun altro fosse stato importato prima, e il tetto dipenderebbe
+# dall'ordine degli import invece che dalla configurazione.
+load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 def _max_calls() -> int:
     raw = (os.getenv("MAX_CONCURRENT_CALLS") or "").strip()
     if not raw:
-        return _DEFAULT_MAX_CONCURRENT_CALLS
+        raise RuntimeError(
+            "MAX_CONCURRENT_CALLS non configurato (numero di chiamate "
+            "contemporanee che un processo accetta, intero > 0). Aggiungilo "
+            "al file .env del backend."
+        )
     try:
         limite = int(raw)
     except ValueError:

@@ -8,9 +8,10 @@ processo solo, e da qui in avanti i processi sono diversi.
 tiene il proprio pool, quindi il totale che il database si vede arrivare è
 ``repliche * (pool_size + max_overflow)``, e Postgres ne accetta 100 se non
 gli si dice altro (vedi ``max_connections`` in docker-compose.yml, alzato di
-conseguenza). Con i valori qui sotto, quattro repliche chiedono al massimo
-80 connessioni, e restano fuori dal conto il backup e qualunque client ci si
-attacchi per guardare i dati.
+conseguenza). Con i valori che stanno nel .env del backend (i numeri non
+sono scritti qui: questo modulo li legge e basta), quattro repliche chiedono
+al massimo 80 connessioni, e restano fuori dal conto il backup e qualunque
+client ci si attacchi per guardare i dati.
 
 C'è un secondo effetto, meno ovvio del primo. Le scritture del percorso
 vocale passano da ``asyncio.to_thread`` (vedi ``voice_pipeline``), e ogni
@@ -36,11 +37,11 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL non configurata. Aggiungila al file .env del backend.")
 
 
-def _positive_int(name: str, default: int) -> int:
-    """Un intero dall'ambiente, o il default. Zero e negativi non passano."""
+def _positive_int(name: str) -> int:
+    """Un intero dall'ambiente. Zero, negativi e assente non passano."""
     raw = (os.getenv(name) or "").strip()
     if not raw:
-        return default
+        raise RuntimeError(f"{name} non configurato (intero > 0). Aggiungilo al file .env.")
     try:
         value = int(raw)
     except ValueError:
@@ -53,9 +54,9 @@ def _positive_int(name: str, default: int) -> int:
 
 
 # Connessioni tenute aperte da questo processo anche quando non servono.
-_POOL_SIZE = _positive_int("DB_POOL_SIZE", 5)
+_POOL_SIZE = _positive_int("DB_POOL_SIZE")
 # Quante se ne aprono in più durante un picco, chiuse appena il picco passa.
-_MAX_OVERFLOW = _positive_int("DB_MAX_OVERFLOW", 15)
+_MAX_OVERFLOW = _positive_int("DB_MAX_OVERFLOW")
 
 engine = create_engine(
     DATABASE_URL,

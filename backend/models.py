@@ -134,6 +134,13 @@ class User(Authored, Base):
     # deliberately does NOT touch this — it would turn the column into
     # "last activity" and hide exactly what it exists to show.
     last_login_at = Column(DateTime, nullable=True)
+    # L'ultima volta che l'account è stato visto vivo: la scrive ogni
+    # richiesta autenticata (vedi `activity`), non solo l'accesso. Le due
+    # colonne rispondono a domande diverse e nessuna delle due sostituisce
+    # l'altra: con una sessione che si rinnova da sola, l'ultimo accesso può
+    # essere di settimane fa mentre la persona sta usando la piattaforma
+    # adesso. NULL quando l'account non è mai stato usato, come la gemella.
+    last_activity_at = Column(DateTime, nullable=True)
 
     # Relationships
     role = relationship("Role", back_populates="users", lazy="joined")

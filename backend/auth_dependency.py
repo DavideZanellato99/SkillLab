@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+import activity
 from cognito_service import verify_access_token
 from database import get_db
 from models import (
@@ -105,8 +106,15 @@ def _identified(request: Request, user: User) -> User:
 
     The audit middleware runs outside the dependency graph, so this is how
     it learns who acted: every path that returns a user goes through here.
+
+    Being the one gate every authenticated request passes through, it is
+    also where the account is marked as active (see `activity`): a request
+    that got this far was made by someone who is using the platform right
+    now, whatever the endpoint behind it decides to answer — bar the routes
+    the browser polls on its own, which `activity` filters out.
     """
     request.state.audit_user = user
+    activity.touch(request, user)
     return user
 
 

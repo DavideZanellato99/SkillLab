@@ -41,6 +41,7 @@ questo documento e firmare l'accordo art. 28.
 | Nome e cognome | `users.nome`, `users.cognome` | Inseriti dall'amministratore o dall'utente stesso |
 | Identificativo di autenticazione | `users.cognito_sub` | Generato da AWS Cognito |
 | Ruolo, stato, organizzazione, ultimo accesso | `users.*` | Generati dall'applicazione |
+| Ultima attività nell'applicazione | `users.last_activity_at` | Scritta a intervalli di pochi minuti a ogni richiesta autenticata (`backend/activity.py`) |
 | **Registrazione audio della chiamata** | `conversation_recordings.audio` | Registrata dal browser durante la telefonata simulata |
 | **Trascrizione della conversazione** | `chat_messages.content` | Prodotta dallo speech to text, oppure digitata in modalità chat |
 | **Valutazione automatica della prestazione** | `conversation_evaluations.result`, `.overall_score` | Generata da un modello linguistico |

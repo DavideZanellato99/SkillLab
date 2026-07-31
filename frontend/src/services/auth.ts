@@ -25,6 +25,10 @@ export interface AuthUser extends Authored {
   organization_name: string | null
   /** Ultimo accesso riuscito; null se l'account non è mai stato usato. */
   last_login_at: string | null
+  /** Ultima richiesta fatta dall'account, scritta a intervalli di pochi
+   * minuti: con una sessione che si rinnova da sola è una data ben diversa
+   * dall'ultimo accesso. Null alla stessa condizione, un account mai usato. */
+  last_activity_at: string | null
 }
 
 // =====================================================

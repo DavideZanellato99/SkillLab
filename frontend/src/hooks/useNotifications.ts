@@ -14,7 +14,12 @@ import type { NotificationList } from '../services/notifications'
 import { fetchNotifications, markNotificationsRead } from '../services/notifications'
 import { queryKeys } from './queryKeys'
 
-/** Ogni quanto la campanella ricontrolla, mentre la pagina è aperta. */
+/** Ogni quanto la campanella ricontrolla, mentre la pagina è aperta.
+ *
+ * Il server sa che questa richiesta è automatica e non la conta come attività
+ * dell'utente (`POLLED_ROUTES` in backend/activity.py): un altro giro di
+ * polling aggiunto qui va elencato anche lì, o una scheda dimenticata aperta
+ * comincerà a somigliare a una persona al lavoro. */
 const NOTIFICATIONS_POLL_MS = 1000 * 60 * 2
 
 export function useNotifications(enabled = true) {

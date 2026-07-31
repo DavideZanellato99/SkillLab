@@ -469,6 +469,11 @@ class UserResponse(AuthorshipResponse):
     # Last successful authentication; null means the account has never been
     # used (an invitation that was never accepted).
     last_login_at: datetime | None = None
+    # Last authenticated request, written at intervals (see `activity`): the
+    # account was in use up to this moment, which on a long-lived session is
+    # a very different date from the one above. Null under the same
+    # condition, an account that has never been used.
+    last_activity_at: datetime | None = None
 
 
 class UpdateProfileRequest(BaseModel):

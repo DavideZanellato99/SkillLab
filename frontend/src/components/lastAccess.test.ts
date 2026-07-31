@@ -46,4 +46,12 @@ describe('formatDateTime', () => {
   it('returns an Italian date with the time', () => {
     expect(formatDateTime('2026-03-05T09:05:00Z')).toMatch(/^\d{2} \p{L}{3,} \d{4},? \d{2}:\d{2}$/u)
   })
+
+  /* Le date dell'API non portano il fuso e sono UTC: lette come ora locale
+   * mostrerebbero un orario indietro di quanto vale il fuso di chi guarda,
+   * che su "ultima attività" è la differenza fra un dato e un dato sbagliato.
+   * Il confronto fra le due forme non dipende dal fuso della macchina. */
+  it('reads a timestamp without a timezone as UTC', () => {
+    expect(formatDateTime('2026-03-05T09:05:00')).toBe(formatDateTime('2026-03-05T09:05:00Z'))
+  })
 })

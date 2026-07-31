@@ -666,6 +666,17 @@ export default function AdminPage() {
               <Badge tone={NEVER_ACCESSED_BADGE_CLASSES}>{NEVER_ACCESSED_LABEL}</Badge>
             )}
           </DetailField>
+          {/* L'accesso dice quando la sessione è nata, questa quando è stata
+              usata l'ultima volta: su una sessione che si rinnova da sola le
+              due date possono distare settimane. Conta solo quello che fa una
+              persona, non il ricontrollo automatico della campanella, e si
+              aggiorna a intervalli di pochi minuti: l'orario è preciso quanto
+              basta a dire "adesso" e non va letto al secondo. */}
+          <DetailField label="Ultima attività">
+            {viewingUser.last_activity_at
+              ? `${formatDateTime(viewingUser.last_activity_at)} (${formatRelativeDay(viewingUser.last_activity_at)})`
+              : '—'}
+          </DetailField>
           <AuthorshipFields row={viewingUser} />
           <DetailField label="ID utente" mono>
             {viewingUser.id}

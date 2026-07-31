@@ -7,6 +7,16 @@
 
 const MS_PER_DAY = 86_400_000
 
+/** Le date dell'API arrivano senza fuso ("2026-07-31T14:36:34") e sono UTC.
+ * `new Date` le leggerebbe come ora locale, cioè indietro di quanto vale il
+ * fuso di chi guarda: due ore d'estate, che su una data si notano appena e
+ * su un orario sono un orario sbagliato. Le stringhe che il fuso ce l'hanno
+ * già (quelle prodotte dal browser) passano intatte. */
+function parseApiDate(dateStr: string): Date {
+  const conFuso = /(?:Z|[+-]\d{2}:?\d{2})$/.test(dateStr)
+  return new Date(conFuso ? dateStr : `${dateStr}Z`)
+}
+
 /** Mezzanotte locale, per contare i giorni di calendario e non le 24 ore:
  * un accesso di ieri sera resta "ieri" anche se è passata un'ora sola. */
 function startOfDay(date: Date): number {
@@ -25,7 +35,7 @@ export const NEVER_ACCESSED_LABEL = 'Mai acceduto'
  * sbagliata da mostrare.
  */
 export function formatRelativeDay(dateStr: string, now: Date = new Date()): string {
-  const then = new Date(dateStr)
+  const then = parseApiDate(dateStr)
   if (Number.isNaN(then.getTime())) return '—'
 
   const days = Math.round((startOfDay(now) - startOfDay(then)) / MS_PER_DAY)
@@ -46,7 +56,7 @@ export function formatRelativeDay(dateStr: string, now: Date = new Date()): stri
 
 /** Data e ora complete "GG mese AAAA, HH:MM", per il tooltip e il dettaglio. */
 export function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('it-IT', {
+  return parseApiDate(dateStr).toLocaleString('it-IT', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

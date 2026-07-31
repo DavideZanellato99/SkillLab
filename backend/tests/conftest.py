@@ -58,6 +58,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+import activity
 import audit
 import main
 import rate_limit
@@ -103,12 +104,17 @@ def db_session():
     # And for the login limiter, which records a failed attempt on a session
     # of its own so the row survives the failure of the request it counts.
     rate_limit.session_factory = audit.session_factory
+    # And for the last-activity stamp, written on its own session for the
+    # same reason: the account was in use even if the request it was made by
+    # ends in an error.
+    activity.session_factory = audit.session_factory
     try:
         yield session
     finally:
         audit.session_factory = SessionLocal
         voice_sessions.session_factory = SessionLocal
         rate_limit.session_factory = SessionLocal
+        activity.session_factory = SessionLocal
         session.close()
         transaction.rollback()
         connection.close()

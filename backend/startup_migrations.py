@@ -111,6 +111,10 @@ def _add_columns() -> None:
             )
         )
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP"))
+        # L'ultima richiesta autenticata, gemella della colonna sopra (vedi
+        # `activity`). Il valore di partenza lo mette _backfill_last_login,
+        # dopo che l'ultimo accesso è stato a sua volta ricostruito.
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP"))
         # Avatars are deleted logically: pre-existing rows are all active, so
         # NULL (the column default) is already the right value for them and no
         # backfill is needed. The partial index serves the only query shape
@@ -377,7 +381,7 @@ def _backfill_avatar_organizations() -> None:
 
 
 def _backfill_last_login() -> None:
-    """Seed the last-access column from the audit trail.
+    """Seed the last-access and last-activity columns from the audit trail.
 
     The column is new, so on the first boot every pre-existing account would
     read as "never accessed" while plenty of them sign in daily. The registry
@@ -399,6 +403,17 @@ def _backfill_last_login() -> None:
                 "  GROUP BY user_id"
                 ") AS latest "
                 "WHERE users.id = latest.user_id AND users.last_login_at IS NULL"
+            )
+        )
+        # L'ultima attività parte dall'ultimo accesso: è l'ultimo momento in
+        # cui un account che esisteva già è stato visto, e lasciarlo vuoto lo
+        # farebbe leggere come "mai attivo", che è falso. Anche questa è
+        # idempotente: dalla prima richiesta dell'utente in poi la colonna non
+        # è più NULL e nessun avvio successivo la tocca.
+        conn.execute(
+            text(
+                "UPDATE users SET last_activity_at = last_login_at "
+                "WHERE last_activity_at IS NULL AND last_login_at IS NOT NULL"
             )
         )
 

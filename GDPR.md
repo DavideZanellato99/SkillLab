@@ -137,6 +137,7 @@ monitoraggio sistematico, dati trattati su larga scala) la **DPIA ex art. 35
 | --- | --- | --- |
 | **ElevenLabs** | L'audio del microfono dell'operatore, in streaming | Durante ogni telefonata simulata |
 | **OpenAI** | Il testo della conversazione (entrambe le parti) e la scheda dell'avatar, senza identità dell'operatore | Ad ogni battuta, e a fine chiamata per la valutazione |
+| **OpenAI** | I documenti caricati per le simulazioni tecniche, senza nessun dato dell'operatore | Al caricamento e alla generazione delle domande, mai durante lo svolgimento di un test |
 | **Cartesia** | Il testo generato dell'avatar, per sintetizzarlo in voce | Durante ogni telefonata simulata |
 | **AWS Cognito** | Solo l'indirizzo email, più la password gestita da Cognito | Alla creazione dell'account e a ogni accesso |
 
@@ -161,6 +162,7 @@ cliente**: se si cambiano lì vanno cambiati anche nell'informativa.
 | --- | --- | --- |
 | Registrazione audio della chiamata | 90 giorni | `AUDIO_RECORDING_RETENTION_DAYS` |
 | Conversazione intera: messaggi, valutazione, revisione, annotazioni | 730 giorni | `CONVERSATION_RETENTION_DAYS` |
+| Tentativi delle simulazioni tecniche: risposte date e punteggio | 730 giorni | `SIMULATION_ATTEMPT_RETENTION_DAYS` |
 | Registro delle azioni (con IP e User-Agent) | 180 giorni | `AUDIT_LOG_RETENTION_DAYS` |
 | Sessioni di accesso (IP e User-Agent) | Alla scadenza del token: 1 ora, 30 giorni per l'ancora di sessione | non configurabile |
 
@@ -168,6 +170,11 @@ L'audio scade per primo di proposito: è il dato più invasivo e dopo il
 debrief non aggiunge nulla alla trascrizione. La conversazione gli
 sopravvive, quindi restano trascrizione, valutazione e note del formatore
 mentre la voce sparisce.
+
+Dei test tecnici scade il tentativo, non la simulazione: le risposte date da
+una persona e il voto che ne è uscito sono un dato di valutazione come gli
+altri, mentre le domande e il documento da cui nascono non riguardano
+nessuno in particolare e restano.
 
 **L'orologio parte dall'ultimo utilizzo, non dalla creazione**: il riaggancio
 per una telefonata, l'ultima attività per una chat scritta
@@ -183,7 +190,7 @@ non logica.
 
 | Diritto | Come è soddisfatto |
 | --- | --- |
-| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, obiettivi, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
+| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, obiettivi, test tecnici svolti con le risposte date, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
 | **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni e obiettivi, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
 | **Rettifica** (art. 16) | L'utente modifica da solo nome e cognome; l'email la cambia un amministratore |
 | **Intervento umano** (art. 22) | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4) |

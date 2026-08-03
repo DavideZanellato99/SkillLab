@@ -14,6 +14,9 @@ import AuditLogsPage from './components/AuditLogsPage'
 import OrganizationsPage from './components/OrganizationsPage'
 import TrainingPage from './components/TrainingPage'
 import TrainingGoals from './components/TrainingGoals'
+import SimulationsPage from './components/SimulationsPage'
+import SimulationRunner from './components/SimulationRunner'
+import SimulationAdminPage from './components/SimulationAdminPage'
 import ProfilePage from './components/ProfilePage'
 import LandingPage from './components/LandingPage'
 import RequireRole from './components/RequireRole'
@@ -99,6 +102,25 @@ function App() {
                 </RequireRole>
               }
             />
+            {/* Il simulatore è di tutti: il server serve a ciascuno le
+                simulazioni della propria organizzazione, e al super admin
+                tutte. */}
+            <Route
+              path="/simulatore"
+              element={
+                <RequireRole access="authenticated">
+                  <SimulationsPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/simulatore/:simulationId"
+              element={
+                <RequireRole access="authenticated">
+                  <SimulationRunner />
+                </RequireRole>
+              }
+            />
             <Route
               path="/admin"
               element={
@@ -144,6 +166,14 @@ function App() {
               element={
                 <RequireRole access="super_admin">
                   <AvatarAdminPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/simulations"
+              element={
+                <RequireRole access="super_admin">
+                  <SimulationAdminPage />
                 </RequireRole>
               }
             />

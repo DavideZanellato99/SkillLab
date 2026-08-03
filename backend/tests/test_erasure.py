@@ -29,6 +29,8 @@ from models import (
     MessageAnnotation,
     NotificationRead,
     Organization,
+    SimulationAttempt,
+    TechnicalSimulation,
     TokenSession,
     TrainingAssignment,
     User,
@@ -52,6 +54,8 @@ _SEEDED_TABLES = {
     "conversation_reviews",
     "message_annotations",
     "voice_sessions",
+    "simulation_attempts",
+    "technical_simulations",
 }
 
 
@@ -139,6 +143,27 @@ def _seed_everything(db_session, victim: User, other: User, avatar) -> None:
             target_score=8.0,
         )
     )
+
+    # Un test tecnico consegnato: la fotografia porta le risposte che la
+    # persona ha dato, quindi è materiale suo quanto una trascrizione
+    simulation = TechnicalSimulation(
+        title="Sblocco carta",
+        status="published",
+        organization_id=avatar.organization_id,
+        document_name="procedura.txt",
+        document_text="Testo della procedura.",
+    )
+    db_session.add(simulation)
+    db_session.flush()
+    db_session.add(
+        SimulationAttempt(
+            simulation_id=simulation.id,
+            user_id=victim.id,
+            correct_count=7,
+            question_count=10,
+            answers=[{"question_id": str(uuid.uuid4()), "selected_option": 1}],
+        )
+    )
     db_session.add(
         AuditLog(
             user_id=victim.id,
@@ -181,13 +206,15 @@ def _seed_everything(db_session, victim: User, other: User, avatar) -> None:
     )
     db_session.flush()
 
-    # As the author of things that outlive them: the organization, the avatar
-    # and another account all carry their id in the paternity columns.
+    # As the author of things that outlive them: the organization, the avatar,
+    # the technical simulation and another account all carry their id in the
+    # paternity columns.
     # Written with bulk UPDATEs because the flush listener owns those columns
     # and would put the current actor (nobody, here) back in (see authorship).
     for model, row_id in (
         (Organization, avatar.organization_id),
         (Avatar, avatar.id),
+        (TechnicalSimulation, simulation.id),
         (User, other.id),
     ):
         db_session.query(model).filter(model.id == row_id).update(

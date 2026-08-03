@@ -28,6 +28,7 @@ os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:3000")
 os.environ.setdefault("COGNITO_REGION", "eu-west-1")
 os.environ.setdefault("OPENAI_MODEL", "gpt-4o")
 os.environ.setdefault("OPENAI_EVAL_MODEL", "gpt-4o")
+os.environ.setdefault("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 os.environ.setdefault("CARTESIA_MODEL", "sonic-2")
 os.environ.setdefault("CARTESIA_VERSION", "2024-11-13")
 os.environ.setdefault("CARTESIA_LANGUAGE", "it")
@@ -45,6 +46,7 @@ os.environ.setdefault("DB_MAX_OVERFLOW", "15")
 os.environ.setdefault("AUDIT_LOG_RETENTION_DAYS", "180")
 os.environ.setdefault("AUDIO_RECORDING_RETENTION_DAYS", "90")
 os.environ.setdefault("CONVERSATION_RETENTION_DAYS", "730")
+os.environ.setdefault("SIMULATION_ATTEMPT_RETENTION_DAYS", "730")
 # The background purge loop stays off under test: `with TestClient(app)`
 # triggers the lifespan, and a sweep firing mid-test would run its DELETEs
 # on its own connection, outside the transaction the test rolls back.

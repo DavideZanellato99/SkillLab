@@ -1,0 +1,181 @@
+import { useRef, useState } from 'react'
+import { useCreateSimulation } from '../hooks/useSimulations'
+import type { Organization } from '../services/organizations'
+import ModalShell, { ModalHeader } from './ModalShell'
+import Field, { textareaCls, TextInput } from './Field'
+import Select from './Select'
+import PrimaryButton from './PrimaryButton'
+import Spinner from './Spinner'
+import FormError from './FormError'
+
+/* La creazione di una simulazione: titolo, organizzazione e documento.
+ *
+ * Le domande non si generano qui. Il caricamento finisce con una bozza vuota
+ * che si apre subito sul pannello di revisione, dove la generazione è un
+ * bottone: sono due attese di durata molto diversa, e incollarle una
+ * all'altra significherebbe far ricaricare il documento a chi ha avuto
+ * sfortuna con il modello. */
+
+/** Le estensioni che il backend sa leggere (vedi document_text). */
+const ACCEPTED = '.pdf,.docx,.txt,.md,.markdown'
+
+interface SimulationCreateModalProps {
+  organizations: Organization[]
+  onClose: () => void
+  onCreated: (simulationId: string) => void
+}
+
+export default function SimulationCreateModal({
+  organizations,
+  onClose,
+  onCreated,
+}: SimulationCreateModalProps) {
+  const create = useCreateSimulation()
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const [organizationId, setOrganizationId] = useState('')
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+
+  const canSubmit = organizationId && title.trim() && file && !create.isPending
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!canSubmit || !file) return
+    create.mutate(
+      { organizationId, title: title.trim(), description: description.trim(), file },
+      { onSuccess: (simulation) => onCreated(simulation.id) },
+    )
+  }
+
+  return (
+    <ModalShell onClose={onClose} locked={create.isPending} size="md" padding="md">
+      <ModalHeader
+        icon={
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="9" y1="15" x2="15" y2="15" />
+            <line x1="9" y1="11" x2="15" y2="11" />
+          </svg>
+        }
+        iconWrapperCls="border border-violet-600/20 bg-violet-600/10 text-violet-400"
+        title="Nuova simulazione"
+        description="Carica il documento da cui ricavare le domande."
+        className="mb-6"
+      />
+
+      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <Field label="Organizzazione" htmlFor="simulation-org">
+          <Select
+            id="simulation-org"
+            value={organizationId}
+            onChange={setOrganizationId}
+            options={organizations.map((o) => ({ value: o.id, label: o.name }))}
+            placeholder="Scegli l'organizzazione"
+            disabled={create.isPending}
+          />
+        </Field>
+
+        <Field label="Titolo" htmlFor="simulation-title">
+          <TextInput
+            id="simulation-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Es. Sblocco carta di credito"
+            maxLength={150}
+            disabled={create.isPending}
+            required
+          />
+        </Field>
+
+        <Field
+          label="Descrizione"
+          htmlFor="simulation-description"
+          hint={
+            <span className="text-xs text-slate-500">
+              Facoltativa. La legge chi apre il test, prima di iniziarlo.
+            </span>
+          }
+        >
+          <textarea
+            id="simulation-description"
+            className={textareaCls}
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Di cosa tratta il test"
+            disabled={create.isPending}
+          />
+        </Field>
+
+        <Field
+          label="Documento"
+          hint={
+            <span className="text-xs text-slate-500">
+              PDF, DOCX, TXT o Markdown, fino a 10 MB. Un PDF di pagine scansionate non contiene
+              testo e non può essere letto.
+            </span>
+          }
+        >
+          <input
+            ref={fileInput}
+            type="file"
+            accept={ACCEPTED}
+            className="hidden"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            disabled={create.isPending}
+          />
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            disabled={create.isPending}
+            className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-dashed border-white/12 bg-slate-800/50 px-4 py-3 text-left text-sm text-slate-400 transition hover:border-violet-600/50 hover:bg-violet-600/8 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0 text-slate-500"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span className="min-w-0 flex-1 truncate">
+              {file ? file.name : 'Scegli un file dal computer'}
+            </span>
+          </button>
+        </Field>
+
+        {create.isError && <FormError message={(create.error as Error).message} />}
+
+        <PrimaryButton type="submit" variant="submit" className="mt-1" disabled={!canSubmit}>
+          {create.isPending ? (
+            <>
+              <Spinner variant="button" />
+              Lettura del documento...
+            </>
+          ) : (
+            'Carica e continua'
+          )}
+        </PrimaryButton>
+      </form>
+    </ModalShell>
+  )
+}

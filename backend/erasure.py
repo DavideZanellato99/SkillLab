@@ -53,6 +53,8 @@ from models import (
     ChatConversation,
     NotificationRead,
     Organization,
+    SimulationAttempt,
+    TechnicalSimulation,
     TokenSession,
     TrainingAssignment,
     User,
@@ -68,12 +70,13 @@ _USER_OWNED = (
     TokenSession,
     NotificationRead,
     TrainingAssignment,
+    SimulationAttempt,
 )
 
 # Every table that names the person who created or last modified the row
 # (the `Authored` mixin). These rows are not about the user and they stay:
 # only the signature on them is anonymised.
-_AUTHORED = (User, Organization, Avatar)
+_AUTHORED = (User, Organization, Avatar, TechnicalSimulation)
 
 
 def erase_conversations(db: Session, conversation_ids: Sequence[UUID]) -> int:

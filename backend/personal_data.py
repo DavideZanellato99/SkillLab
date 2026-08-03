@@ -46,6 +46,8 @@ from models import (
     ChatMessage,
     ConversationEvaluation,
     ConversationRecording,
+    SimulationAttempt,
+    TechnicalSimulation,
     TokenSession,
     TrainingAssignment,
     User,
@@ -73,8 +75,8 @@ esportato il {data}.
   dati.json          Tutti i dati in formato strutturato: il tuo profilo, le
                      conversazioni con le trascrizioni complete, le
                      valutazioni automatiche, le revisioni dei formatori, gli
-                     obiettivi assegnati, gli accessi e il registro delle tue
-                     attività.
+                     obiettivi assegnati, i test tecnici svolti con le tue
+                     risposte, gli accessi e il registro delle tue attività.
 
   {cartella}/   Le registrazioni audio delle tue telefonate simulate,
                      una per conversazione. Il nome del file corrisponde al
@@ -249,6 +251,43 @@ def _assignments(db: Session, user: User) -> list[dict]:
     ]
 
 
+def _simulation_attempts(db: Session, user: User) -> list[dict]:
+    """I test tecnici svolti, con le risposte date domanda per domanda.
+
+    Le risposte ci sono per intero e non solo il voto: è quello che la
+    persona ha scritto, ed è la parte dell'archivio da cui si può contestare
+    un esito. Il titolo della simulazione viene dalla riga e non dalla
+    fotografia del tentativo, così un test rinominato resta riconoscibile.
+    """
+    rows = (
+        db.query(SimulationAttempt, TechnicalSimulation)
+        .outerjoin(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
+        .filter(SimulationAttempt.user_id == user.id)
+        .order_by(SimulationAttempt.created_at.asc())
+        .all()
+    )
+    return [
+        {
+            "simulazione": simulation.title if simulation else None,
+            "svolto_il": _at(attempt.created_at),
+            "risposte_corrette": attempt.correct_count,
+            "domande_totali": attempt.question_count,
+            "punteggio": attempt.score,
+            "risposte": [
+                {
+                    "domanda": answer.get("text"),
+                    "alternative": answer.get("options"),
+                    "risposta_data": answer.get("selected_option"),
+                    "risposta_corretta": answer.get("correct_option"),
+                    "esatta": answer.get("is_correct"),
+                }
+                for answer in (attempt.answers or [])
+            ],
+        }
+        for attempt, simulation in rows
+    ]
+
+
 def _selections(db: Session, user: User) -> list[dict]:
     rows = (
         db.query(UserSelection, Avatar)
@@ -318,6 +357,7 @@ def _payload(db: Session, user: User) -> tuple[dict, dict[UUID, str]]:
         "account": _account(user),
         "conversazioni": conversations,
         "obiettivi_assegnati": _assignments(db, user),
+        "simulazioni_tecniche": _simulation_attempts(db, user),
         "avatar_selezionati": _selections(db, user),
         "sessioni_di_accesso": _sessions(db, user),
         "registro_attivita": _activity(db, user),

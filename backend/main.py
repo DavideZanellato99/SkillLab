@@ -18,6 +18,7 @@ from authorship import AuthorshipMiddleware
 from database import log_connection_budget
 from routers.admin import router as admin_router
 from routers.admin_avatars import router as admin_avatars_router
+from routers.admin_simulations import router as admin_simulations_router
 from routers.admin_voices import router as admin_voices_router
 from routers.audit_logs import router as audit_logs_router
 from routers.auth import router as auth_router
@@ -27,6 +28,7 @@ from routers.comparison import router as comparison_router
 from routers.conversation_reviews import router as conversation_reviews_router
 from routers.notifications import router as notifications_router
 from routers.organizations import router as organizations_router
+from routers.simulations import router as simulations_router
 from routers.training import router as training_router
 from routers.voice import router as voice_router
 from startup_migrations import prepare_schema
@@ -109,6 +111,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_avatars_router)
+app.include_router(admin_simulations_router)
 app.include_router(admin_voices_router)
 app.include_router(audit_logs_router)
 app.include_router(organizations_router)
@@ -117,6 +120,7 @@ app.include_router(chat_router)
 app.include_router(comparison_router)
 app.include_router(conversation_reviews_router)
 app.include_router(notifications_router)
+app.include_router(simulations_router)
 app.include_router(training_router)
 app.include_router(voice_router)
 

@@ -66,6 +66,21 @@ export const queryKeys = {
     assignableUsers: (organizationId: string) =>
       ['training', 'assignable-users', organizationId] as const,
   },
+  simulations: {
+    all: ['simulations'] as const,
+    /** Le simulazioni che si possono svolgere. */
+    list: ['simulations', 'list'] as const,
+    detail: (id: string) => ['simulations', 'detail', id] as const,
+    /** I propri tentativi su una simulazione. */
+    attempts: (simulationId: string) => ['simulations', 'attempts', simulationId] as const,
+    /** L'esito di un tentativo, con le spiegazioni. */
+    attempt: (id: string) => ['simulations', 'attempt', id] as const,
+    /** Tutti i tentativi di una simulazione, visti da un admin. */
+    results: (simulationId: string) => ['simulations', 'results', simulationId] as const,
+    /** L'elenco di gestione, bozze comprese. */
+    adminList: ['simulations', 'admin-list'] as const,
+    adminDetail: (id: string) => ['simulations', 'admin-detail', id] as const,
+  },
   comparison: {
     /** Persone di cui un admin può leggere i tentativi. */
     people: ['comparison', 'people'] as const,

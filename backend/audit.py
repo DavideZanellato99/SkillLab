@@ -181,6 +181,33 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     ("DELETE", "/api/admin/annotations/{annotation_id}"): AuditAction(
         "review.annotation_delete", "Annotazione eliminata", "annotation", "annotation_id"
     ),
+    # Simulazioni tecniche. Il documento resta fuori dal registro, ci sta il
+    # suo nome: è materiale aziendale che può contenere di tutto, e qui serve
+    # sapere chi ha caricato cosa, non cosa c'era scritto dentro.
+    ("POST", "/api/admin/simulations"): AuditAction(
+        "simulation.create", "Simulazione creata", "simulation"
+    ),
+    ("POST", "/api/admin/simulations/{simulation_id}/document"): AuditAction(
+        "simulation.document", "Documento simulazione sostituito", "simulation", "simulation_id"
+    ),
+    ("POST", "/api/admin/simulations/{simulation_id}/generate"): AuditAction(
+        "simulation.generate", "Domande generate", "simulation", "simulation_id"
+    ),
+    ("PUT", "/api/admin/simulations/{simulation_id}"): AuditAction(
+        "simulation.update", "Simulazione modificata", "simulation", "simulation_id"
+    ),
+    ("PUT", "/api/admin/simulations/{simulation_id}/questions"): AuditAction(
+        "simulation.questions", "Domande modificate", "simulation", "simulation_id"
+    ),
+    ("PUT", "/api/admin/simulations/{simulation_id}/status"): AuditAction(
+        "simulation.status", "Stato simulazione modificato", "simulation", "simulation_id"
+    ),
+    ("DELETE", "/api/admin/simulations/{simulation_id}"): AuditAction(
+        "simulation.delete", "Simulazione eliminata", "simulation", "simulation_id"
+    ),
+    ("POST", "/api/simulations/{simulation_id}/attempts"): AuditAction(
+        "simulation.attempt", "Simulazione svolta", "simulation", "simulation_id"
+    ),
     # Percorsi di training
     ("POST", "/api/training/assignments"): AuditAction(
         "training.assign", "Obiettivo assegnato", "assignment"

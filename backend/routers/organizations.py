@@ -31,6 +31,7 @@ from models import (
     ChatConversation,
     ConversationEvaluation,
     Organization,
+    TechnicalSimulation,
     User,
     UserSelection,
 )
@@ -401,6 +402,16 @@ def delete_organization(
         db.query(UserSelection).filter(UserSelection.avatar_id.in_(avatar_ids)).delete(
             synchronize_session=False
         )
+
+    # Le simulazioni tecniche del tenant, con i passaggi del documento, le
+    # domande e i tentativi che ne restassero: erase_users si è già portata
+    # via quelli dei suoi utenti, questi sono le simulazioni stesse. Riga per
+    # riga e non con una DELETE massiva, così le cascate dichiarate sulle
+    # relazioni si applicano anche dove il database non le ha.
+    for simulation in (
+        db.query(TechnicalSimulation).filter(TechnicalSimulation.organization_id == org.id).all()
+    ):
+        db.delete(simulation)
 
     # Then the private avatars and the organization itself
     if avatar_ids:

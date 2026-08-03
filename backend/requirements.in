@@ -25,3 +25,8 @@ truststore
 websockets
 fpdf2
 openpyxl
+# Estrazione del testo dai documenti caricati per le simulazioni tecniche
+# (vedi document_text): PDF e DOCX, gli altri formati accettati sono testo
+# semplice e non richiedono niente.
+pypdf
+python-docx

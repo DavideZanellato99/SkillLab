@@ -35,6 +35,9 @@ export default function Navbar() {
   const isDashboardPage = location.pathname === '/admin/dashboard'
   const isTrainingPage = location.pathname === '/admin/training'
   const isComparisonPage = location.pathname === '/confronto'
+  /* Anche mentre si svolge un test la voce resta accesa: la pagina del
+     singolo test è dentro il simulatore, non accanto. */
+  const isSimulationPage = location.pathname.startsWith('/simulatore')
   const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth()
 
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -237,6 +240,34 @@ export default function Navbar() {
                   <circle cx="12" cy="12" r="2" />
                 </svg>
                 Percorsi
+              </Link>
+            )}
+            {/* Per tutti: le simulazioni della propria organizzazione, e
+                tutte quante per il super admin. */}
+            {isAuthenticated && (
+              <Link
+                to="/simulatore"
+                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
+                  isSimulationPage
+                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
+                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
+                }`}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4" />
+                  <path d="m9 7 2 2 4-4" />
+                  <path d="M8 16h8" />
+                </svg>
+                Simulatore Tecnico
               </Link>
             )}
             {/* Per tutti: lo studente confronta i propri tentativi, un
@@ -445,6 +476,29 @@ export default function Navbar() {
                                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                               </svg>
                               Gestione Avatar
+                            </Link>
+                          )}
+                          {isSuperAdmin(user) && (
+                            <Link
+                              to="/admin/simulations"
+                              className={menuItemCls}
+                              onClick={() => setShowUserMenu(false)}
+                            >
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M9 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4" />
+                                <path d="m9 7 2 2 4-4" />
+                                <path d="M8 16h8" />
+                              </svg>
+                              Gestione Simulazioni
                             </Link>
                           )}
                           <Link

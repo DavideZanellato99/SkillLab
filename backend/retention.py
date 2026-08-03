@@ -14,6 +14,11 @@ different moments:
   evaluation and the trainer's notes, minus the recording of their voice.
 - the **conversation** as a whole (messages, evaluation, review,
   annotations, recording) expires later, and takes everything with it.
+- i **tentativi delle simulazioni tecniche** hanno il proprio orologio: sono
+  le risposte che una persona ha dato a un test e il voto che ne è uscito,
+  quindi un dato di valutazione come gli altri, ma senza voce registrata né
+  trascrizione, e chi li conserva di solito li conserva per un tempo diverso.
+  La simulazione resta, se ne vanno i tentativi.
 
 Nothing here is a soft delete. A row past its window is gone, which is the
 only thing that makes a retention policy worth writing down.
@@ -38,7 +43,12 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.engine import Connection
 
 from database import engine
-from models import CONVERSATION_CHILDREN, ChatConversation, ConversationRecording
+from models import (
+    CONVERSATION_CHILDREN,
+    ChatConversation,
+    ConversationRecording,
+    SimulationAttempt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +69,9 @@ AUDIO_RETENTION_DAYS = _required_days(
 )
 CONVERSATION_RETENTION_DAYS = _required_days(
     "CONVERSATION_RETENTION_DAYS", "delle conversazioni, trascrizioni e valutazioni"
+)
+SIMULATION_ATTEMPT_RETENTION_DAYS = _required_days(
+    "SIMULATION_ATTEMPT_RETENTION_DAYS", "dei tentativi delle simulazioni tecniche"
 )
 
 # The age of a conversation is counted from when it stopped being used, not
@@ -82,16 +95,26 @@ class PurgeResult(NamedTuple):
 
     conversations: int
     recordings: int
+    simulation_attempts: int
+
+
+def _cutoff(days: int) -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
 
 
 def audio_cutoff() -> datetime:
     """Timestamp before which a call recording has expired (naive UTC)."""
-    return datetime.now(UTC).replace(tzinfo=None) - timedelta(days=AUDIO_RETENTION_DAYS)
+    return _cutoff(AUDIO_RETENTION_DAYS)
 
 
 def conversation_cutoff() -> datetime:
     """Timestamp before which a whole conversation has expired (naive UTC)."""
-    return datetime.now(UTC).replace(tzinfo=None) - timedelta(days=CONVERSATION_RETENTION_DAYS)
+    return _cutoff(CONVERSATION_RETENTION_DAYS)
+
+
+def simulation_attempt_cutoff() -> datetime:
+    """Timestamp before which a simulation attempt has expired (naive UTC)."""
+    return _cutoff(SIMULATION_ATTEMPT_RETENTION_DAYS)
 
 
 def purge_expired(conn: Connection | None = None) -> PurgeResult:
@@ -136,23 +159,39 @@ def _purge(conn: Connection) -> PurgeResult:
         )
     ).rowcount
 
-    if conversations or recordings:
+    # I tentativi dei test tecnici, sul proprio orologio. La riga se ne va
+    # intera, fotografia delle risposte compresa: è quella la parte personale,
+    # mentre la simulazione con le sue domande non riguarda nessuno in
+    # particolare e resta.
+    simulation_attempts = conn.execute(
+        delete(SimulationAttempt).where(SimulationAttempt.created_at < simulation_attempt_cutoff())
+    ).rowcount
+
+    if conversations or recordings or simulation_attempts:
         logger.info(
             "Retention: %d conversazioni eliminate (oltre %d giorni), "
-            "%d registrazioni audio eliminate (oltre %d giorni)",
+            "%d registrazioni audio eliminate (oltre %d giorni), "
+            "%d tentativi di simulazione eliminati (oltre %d giorni)",
             conversations,
             CONVERSATION_RETENTION_DAYS,
             recordings,
             AUDIO_RETENTION_DAYS,
+            simulation_attempts,
+            SIMULATION_ATTEMPT_RETENTION_DAYS,
         )
-    return PurgeResult(conversations=conversations, recordings=recordings)
+    return PurgeResult(
+        conversations=conversations,
+        recordings=recordings,
+        simulation_attempts=simulation_attempts,
+    )
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     result = purge_expired()
     logger.info(
-        "Purge completato: %d conversazioni, %d registrazioni.",
+        "Purge completato: %d conversazioni, %d registrazioni, %d tentativi.",
         result.conversations,
         result.recordings,
+        result.simulation_attempts,
     )

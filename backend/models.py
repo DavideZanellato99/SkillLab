@@ -49,6 +49,18 @@ ALL_ORG_STATUSES = [ORG_STATUS_ACTIVE, ORG_STATUS_SUSPENDED]
 CONVERSATION_MODE_VOICE = "voice"
 CONVERSATION_MODE_TEXT = "text"
 
+# Stati di una simulazione tecnica. In bozza esiste solo per il super admin,
+# che rilegge e corregge le domande generate; pubblicata entra nell'elenco
+# della sua organizzazione. Si torna in bozza, ed è voluto: una domanda
+# sbagliata si ritira invece di restare in giro mentre la si corregge.
+SIMULATION_STATUS_DRAFT = "draft"
+SIMULATION_STATUS_PUBLISHED = "published"
+ALL_SIMULATION_STATUSES = [SIMULATION_STATUS_DRAFT, SIMULATION_STATUS_PUBLISHED]
+
+# Quante domande ha un test, e quante alternative ha una domanda.
+SIMULATION_QUESTION_COUNT = 10
+SIMULATION_OPTION_COUNT = 4
+
 
 class Organization(Authored, Base):
     """A tenant of the platform: an organization whose users, conversations
@@ -636,6 +648,203 @@ class NotificationRead(Base):
 
     def __repr__(self):
         return f"<NotificationRead(user_id={self.user_id}, key='{self.key}')>"
+
+
+class TechnicalSimulation(Authored, Base):
+    """Un test tecnico a risposta multipla, ricavato da un documento.
+
+    È il gemello scritto del roleplay: là si valuta come l'operatore gestisce
+    una persona, qui si verifica se conosce la procedura. Il super admin
+    carica il documento (una procedura, un manuale, una circolare), l'LLM ne
+    ricava le domande, e gli utenti dell'organizzazione a cui la simulazione
+    appartiene la svolgono.
+
+    Il tenant è la stessa regola di ovunque: ogni simulazione appartiene a
+    una sola organizzazione e si vede solo dentro quella. Solo il super admin
+    ne crea, e decide a chi appartengono.
+
+    ``document_text`` è il documento come il modello lo ha letto, non il file
+    originale: il file non viene conservato, perché quello che serve dopo il
+    caricamento è il testo, sia per rigenerare le domande sia per motivare
+    una risposta sbagliata. Il nome del file resta solo per far riconoscere
+    a chi l'ha caricato quale documento sta guardando.
+
+    La pubblicazione è una porta sola: finché è in bozza la simulazione esiste
+    per il solo super admin, che può rileggere e correggere le domande generate
+    prima che qualcuno le veda. Una volta pubblicata entra nell'elenco della
+    sua organizzazione.
+    """
+
+    __tablename__ = "technical_simulations"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
+    organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=False, index=True)
+    title = Column(String(150), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default=SIMULATION_STATUS_DRAFT, index=True)
+    # Il documento su cui le domande si fondano, come testo estratto
+    document_name = Column(String(255), nullable=False, default="")
+    document_text = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    organization = relationship("Organization")
+    chunks = relationship(
+        "SimulationChunk",
+        back_populates="simulation",
+        cascade="all, delete-orphan",
+        order_by="SimulationChunk.ordinal",
+    )
+    questions = relationship(
+        "SimulationQuestion",
+        back_populates="simulation",
+        cascade="all, delete-orphan",
+        order_by="SimulationQuestion.position",
+    )
+    attempts = relationship(
+        "SimulationAttempt",
+        back_populates="simulation",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def is_published(self) -> bool:
+        return self.status == SIMULATION_STATUS_PUBLISHED
+
+    def __repr__(self):
+        return f"<TechnicalSimulation(id={self.id}, title='{self.title}', status='{self.status}')>"
+
+
+class SimulationChunk(Base):
+    """Un pezzo del documento con il suo embedding: la memoria del RAG.
+
+    Il documento viene spezzato in passaggi e ognuno porta il proprio vettore,
+    così la generazione di una domanda parte dai passaggi che parlano davvero
+    dell'argomento invece che dalle prime pagine del file. Gli stessi passaggi
+    restano poi citati dalla domanda, ed è quello che permette di mostrare a
+    chi sbaglia il punto esatto della procedura che avrebbe dovuto leggere.
+
+    L'embedding è una lista di float in JSON e non un tipo vettoriale: la
+    somiglianza si calcola in Python (vedi ``simulation_rag``) su qualche
+    centinaio di passaggi, che è lavoro da millisecondi, e in cambio il
+    database resta un Postgres qualunque senza estensioni da installare su
+    una macchina che non si tocca più dopo il primo deploy.
+    """
+
+    __tablename__ = "simulation_chunks"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    simulation_id = Column(
+        Uuid,
+        ForeignKey("technical_simulations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Posizione nel documento, da 1: è il numero con cui le domande citano
+    # il passaggio, quindi non cambia finché il documento non cambia
+    ordinal = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    embedding = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+
+    simulation = relationship("TechnicalSimulation", back_populates="chunks")
+
+    def __repr__(self):
+        return f"<SimulationChunk(simulation_id={self.simulation_id}, ordinal={self.ordinal})>"
+
+
+class SimulationQuestion(Base):
+    """Una domanda a risposta multipla con la sua risposta esatta.
+
+    Generata dall'LLM ma non intoccabile: il super admin la rilegge e la
+    corregge prima di pubblicare, perché un test che vale come verifica non
+    può contenere una domanda che nessun umano ha mai guardato.
+
+    ``options`` è la lista delle alternative nell'ordine in cui si mostrano,
+    ``correct_option`` l'indice di quella giusta. Le due stanno insieme sulla
+    riga, quindi correggere il testo di un'opzione non può spostare la
+    risposta esatta su un'altra.
+
+    ``source_chunks`` sono gli ordinali dei passaggi da cui la domanda nasce:
+    la spiegazione mostrata a chi sbaglia si appoggia a quelli, così la
+    correzione rimanda al documento invece di chiedere fiducia.
+    """
+
+    __tablename__ = "simulation_questions"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    simulation_id = Column(
+        Uuid,
+        ForeignKey("technical_simulations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Ordine di presentazione, da 1 a SIMULATION_QUESTION_COUNT
+    position = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    options = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+    correct_option = Column(Integer, nullable=False)
+    explanation = Column(Text, nullable=False, default="")
+    source_chunks = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
+
+    simulation = relationship("TechnicalSimulation", back_populates="questions")
+
+    def __repr__(self):
+        return f"<SimulationQuestion(simulation_id={self.simulation_id}, position={self.position})>"
+
+
+class SimulationAttempt(Base):
+    """Un test consegnato: le risposte date, quante erano giuste e quando.
+
+    Il punteggio è congelato qui e non ricalcolato a ogni lettura, al
+    contrario dei percorsi di training: là lo stato dipende da valutazioni
+    che possono essere rifatte, qui dipende da domande che il super admin può
+    correggere dopo la consegna, e un voto che cambia da solo mesi dopo
+    l'esame non è un voto.
+
+    Per la stessa ragione ``answers`` è una fotografia e non dei puntatori:
+    ogni voce porta domanda, opzioni, risposta data e risposta esatta come
+    erano al momento della consegna, quindi il tentativo resta leggibile per
+    intero anche se la domanda viene poi riscritta o la simulazione
+    rigenerata da capo.
+    """
+
+    __tablename__ = "simulation_attempts"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    simulation_id = Column(
+        Uuid,
+        ForeignKey("technical_simulations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Risposte esatte e domande totali: il voto in decimi si ricava da questi
+    # due, e restano leggibili anche se un giorno le domande non fossero più
+    # dieci.
+    correct_count = Column(Integer, nullable=False)
+    question_count = Column(Integer, nullable=False)
+    answers = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), index=True)
+
+    simulation = relationship("TechnicalSimulation", back_populates="attempts")
+    user = relationship("User")
+
+    @property
+    def score(self) -> float:
+        """Il voto in decimi, per stare sulla stessa scala delle valutazioni."""
+        if not self.question_count:
+            return 0.0
+        return round(self.correct_count * 10 / self.question_count, 1)
+
+    def __repr__(self):
+        return (
+            f"<SimulationAttempt(id={self.id}, user_id={self.user_id}, "
+            f"correct={self.correct_count}/{self.question_count})>"
+        )
 
 
 class AuditLog(Base):

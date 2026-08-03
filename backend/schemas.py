@@ -5,7 +5,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from models import CONVERSATION_MODE_VOICE
+from models import (
+    ALL_SIMULATION_STATUSES,
+    CONVERSATION_MODE_VOICE,
+    SIMULATION_OPTION_COUNT,
+    SIMULATION_QUESTION_COUNT,
+)
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
 
 
@@ -905,6 +910,213 @@ class AuditActionOption(BaseModel):
 
     key: str
     label: str
+
+
+# --- Simulazioni tecniche ---
+
+
+class SimulationQuestionResponse(BaseModel):
+    """Una domanda come la vede chi deve rispondere.
+
+    Manca tutto quello che risolverebbe il test: la risposta esatta, la
+    spiegazione e i passaggi del documento restano sul server e arrivano solo
+    con l'esito, dopo la consegna. È il motivo per cui esiste uno schema
+    separato da quello che legge il super admin.
+    """
+
+    id: UUID
+    position: int
+    text: str
+    options: list[str]
+
+    model_config = {"from_attributes": True}
+
+
+class SimulationQuestionAdminResponse(SimulationQuestionResponse):
+    """La stessa domanda con le chiavi, per chi la deve rivedere."""
+
+    correct_option: int
+    explanation: str
+    source_chunks: list[int] | None = None
+
+
+class SimulationResponse(BaseModel):
+    """Una simulazione nell'elenco: quanto basta per decidere se aprirla."""
+
+    id: UUID
+    organization_id: UUID
+    organization_name: str
+    title: str
+    description: str | None = None
+    status: str
+    document_name: str
+    question_count: int
+    created_at: datetime
+    updated_at: datetime
+    # Come è andata a chi guarda, sull'ultimo tentativo: assenti se non ne
+    # ha ancora fatti. Un admin che guarda le simulazioni di altri legge i
+    # propri tentativi, non i loro, ed è voluto: il riepilogo di chi le ha
+    # svolte è un'altra domanda e ha il suo endpoint.
+    last_attempt_at: datetime | None = None
+    last_attempt_score: float | None = None
+    attempt_count: int = 0
+
+
+class SimulationDetailResponse(SimulationResponse):
+    """La simulazione con le sue domande, per svolgerla."""
+
+    questions: list[SimulationQuestionResponse]
+
+
+class SimulationAdminDetailResponse(SimulationResponse):
+    """La simulazione come la vede il super admin: domande con le chiavi,
+    il testo del documento e quanti l'hanno svolta."""
+
+    questions: list[SimulationQuestionAdminResponse]
+    document_text: str
+    chunk_count: int
+    total_attempts: int
+
+
+class SimulationCreateRequest(BaseModel):
+    """I dati che accompagnano il documento caricato.
+
+    Viaggiano come campi di form e non come JSON, perché arrivano insieme al
+    file nella stessa richiesta multipart.
+    """
+
+    organization_id: UUID
+    title: str = Field(min_length=1, max_length=150)
+    description: str | None = None
+
+
+class SimulationUpdateRequest(BaseModel):
+    """Titolo e descrizione. Il documento non si modifica: si ricarica."""
+
+    title: str = Field(min_length=1, max_length=150)
+    description: str | None = None
+
+
+class SimulationStatusRequest(BaseModel):
+    """Pubblicazione e ritiro."""
+
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str) -> str:
+        if v not in ALL_SIMULATION_STATUSES:
+            raise ValueError(f"Stato non valido: {v}")
+        return v
+
+
+class SimulationQuestionPayload(BaseModel):
+    """Una domanda riscritta a mano dal super admin."""
+
+    text: str = Field(min_length=1)
+    options: list[str]
+    correct_option: int
+    explanation: str = ""
+
+    @field_validator("options")
+    @classmethod
+    def validate_options(cls, v: list[str]) -> list[str]:
+        cleaned = [o.strip() for o in v]
+        if len(cleaned) != SIMULATION_OPTION_COUNT:
+            raise ValueError(f"Servono esattamente {SIMULATION_OPTION_COUNT} alternative.")
+        if any(not o for o in cleaned):
+            raise ValueError("Nessuna alternativa può essere vuota.")
+        return cleaned
+
+    @model_validator(mode="after")
+    def validate_correct_option(self) -> "SimulationQuestionPayload":
+        if not 0 <= self.correct_option < len(self.options):
+            raise ValueError("La risposta corretta deve essere una delle alternative.")
+        return self
+
+
+class SimulationQuestionsPayload(BaseModel):
+    """Le domande di una simulazione, tutte insieme.
+
+    Si salvano in blocco e non una per volta perché sono un test: riordinarne
+    una, toglierne una e riscriverne un'altra sono la stessa modifica, e a
+    pezzi lascerebbero il test in stati che non hanno senso.
+    """
+
+    questions: list[SimulationQuestionPayload]
+
+    @field_validator("questions")
+    @classmethod
+    def validate_questions(
+        cls, v: list[SimulationQuestionPayload]
+    ) -> list[SimulationQuestionPayload]:
+        if not v:
+            raise ValueError("Una simulazione deve avere almeno una domanda.")
+        if len(v) > SIMULATION_QUESTION_COUNT:
+            raise ValueError(f"Al massimo {SIMULATION_QUESTION_COUNT} domande.")
+        return v
+
+
+class SimulationAnswerPayload(BaseModel):
+    """La risposta data a una domanda: quale opzione, o nessuna."""
+
+    question_id: UUID
+    # None significa lasciata in bianco, che vale come sbagliata ma si legge
+    # diversamente nell'esito
+    selected_option: int | None = None
+
+
+class SimulationSubmitRequest(BaseModel):
+    """Il test consegnato, con una voce per domanda."""
+
+    answers: list[SimulationAnswerPayload]
+
+
+class SimulationAnswerResult(BaseModel):
+    """Com'è andata una singola domanda, con la sua correzione."""
+
+    question_id: UUID
+    position: int
+    text: str
+    options: list[str]
+    selected_option: int | None
+    correct_option: int
+    is_correct: bool
+    explanation: str
+    # I passaggi del documento su cui la domanda si fonda: è quello che
+    # trasforma "hai sbagliato" in "ecco cosa dice la procedura"
+    sources: list[str] = []
+
+
+class SimulationAttemptResponse(BaseModel):
+    """L'esito di un test consegnato."""
+
+    id: UUID
+    simulation_id: UUID
+    simulation_title: str
+    user_id: UUID
+    user_email: str
+    user_name: str
+    correct_count: int
+    question_count: int
+    score: float
+    created_at: datetime
+    answers: list[SimulationAnswerResult]
+
+
+class SimulationAttemptSummary(BaseModel):
+    """Un tentativo nell'elenco, senza il dettaglio delle risposte."""
+
+    id: UUID
+    simulation_id: UUID
+    simulation_title: str
+    user_id: UUID
+    user_email: str
+    user_name: str
+    correct_count: int
+    question_count: int
+    score: float
+    created_at: datetime
 
 
 # --- Generic Response ---

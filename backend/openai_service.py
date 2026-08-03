@@ -10,6 +10,7 @@ latency-sensitive. The persona prompt building lives in persona_prompt
 
 import json
 import os
+from collections.abc import Callable
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -31,6 +32,16 @@ if not OPENAI_MODEL:
 OPENAI_EVAL_MODEL = os.getenv("OPENAI_EVAL_MODEL")
 if not OPENAI_EVAL_MODEL:
     raise RuntimeError("OPENAI_EVAL_MODEL non configurato. Aggiungilo al file .env del backend.")
+# Il modello che trasforma un testo nel suo vettore, per la ricerca dentro i
+# documenti delle simulazioni tecniche (vedi simulation_rag). Obbligatorio
+# come gli altri: senza, una simulazione si potrebbe creare ma non generare,
+# e il momento in cui accorgersene sarebbe il primo caricamento invece
+# dell'avvio.
+OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL")
+if not OPENAI_EMBEDDING_MODEL:
+    raise RuntimeError(
+        "OPENAI_EMBEDDING_MODEL non configurato. Aggiungilo al file .env del backend."
+    )
 
 # When the primary model is saturated or unavailable we retry the same
 # request on these, in order (comma-separated; empty = no fallback).
@@ -136,6 +147,95 @@ def _eval_completion_kwargs(model: str) -> dict:
     if model.startswith("gpt-5"):
         return {"reasoning_effort": "high"}
     return {"temperature": 0.3}
+
+
+async def eval_json_completion[T](
+    messages: list[dict],
+    max_completion_tokens: int,
+    normalize: Callable[[dict], T],
+    what: str,
+) -> T:
+    """Una risposta JSON dal modello di ragionamento, normalizzata.
+
+    Il giro sui modelli di riserva sta qui e non nei chiamanti perché è lo
+    stesso per tutti: si prova il primario, e su un sovraccarico o su un JSON
+    che non si lascia leggere si passa al successivo. La normalizzazione
+    entra nel giro invece di stare fuori proprio per il secondo caso: un
+    modello che risponde con dei campi mancanti ha fallito quanto uno che non
+    ha risposto, e il rimedio è lo stesso.
+
+    `what` compare nei log e nel messaggio d'errore, così una generazione
+    fallita si distingue da una valutazione fallita senza leggere lo stack.
+    """
+    if not async_client:
+        raise RuntimeError(
+            "OPENAI_API_KEY non configurata. Aggiungi OPENAI_API_KEY al file .env del backend."
+        )
+
+    last_error: Exception | None = None
+    for model in _eval_candidate_models():
+        try:
+            # Il tempo lungo, non quello del roleplay: qui il modello ragiona
+            # prima di scrivere, e nessuno sta aspettando in linea.
+            # with_options non tocca il client condiviso, restituisce una
+            # copia con queste impostazioni: la prossima battuta di una
+            # chiamata torna ad avere i venti secondi di prima.
+            response = await async_client.with_options(
+                timeout=_EVAL_TIMEOUT_SECONDS,
+                max_retries=_EVAL_MAX_RETRIES,
+            ).chat.completions.create(
+                model=model,
+                messages=messages,
+                max_completion_tokens=max_completion_tokens,
+                response_format={"type": "json_object"},
+                **_eval_completion_kwargs(model),
+            )
+        except Exception as e:
+            if not _is_retryable(e):
+                print(f"[ERROR] OpenAI {what} fallita ({model}): {e}")
+                raise RuntimeError(f"Errore nella generazione: {what}: {e!s}")
+            print(f"[WARN] Modello {model} non disponibile per {what}: {str(e)[:120]}")
+            last_error = e
+            continue
+        try:
+            return normalize(json.loads(response.choices[0].message.content or ""))
+        except (json.JSONDecodeError, TypeError, ValueError, IndexError, KeyError) as e:
+            # JSON malformato o incompleto: si prova il modello successivo
+            print(f"[WARN] Risposta non valida da {model} per {what}, provo il successivo: {e}")
+            last_error = e
+
+    print(f"[ERROR] {what}: fallita su tutti i modelli OpenAI: {last_error}")
+    raise RuntimeError(f"Errore nella generazione: {what}: {last_error!s}")
+
+
+async def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Il vettore di ogni testo, nello stesso ordine.
+
+    Una chiamata sola per tutta la lista: l'API accetta più input insieme, e
+    spezzarli in una richiesta per passaggio moltiplicherebbe per cento la
+    latenza di un caricamento senza cambiare il costo.
+
+    Nessun modello di riserva qui, al contrario delle risposte in JSON: i
+    vettori di due modelli diversi non si possono confrontare fra loro, e un
+    documento con metà passaggi indicizzati da uno e metà dall'altro darebbe
+    ricerche silenziosamente sbagliate. Meglio fallire e far ritentare.
+    """
+    if not async_client:
+        raise RuntimeError(
+            "OPENAI_API_KEY non configurata. Aggiungi OPENAI_API_KEY al file .env del backend."
+        )
+    if not texts:
+        return []
+    try:
+        response = await async_client.with_options(
+            timeout=_EVAL_TIMEOUT_SECONDS,
+            max_retries=_EVAL_MAX_RETRIES,
+        ).embeddings.create(model=OPENAI_EMBEDDING_MODEL, input=texts)
+    except Exception as e:
+        print(f"[ERROR] OpenAI embeddings falliti: {e}")
+        raise RuntimeError(f"Errore nell'indicizzazione del documento: {e!s}")
+    # L'API non promette di rispondere in ordine, ma numera ogni vettore
+    return [item.embedding for item in sorted(response.data, key=lambda d: d.index)]
 
 
 def _build_messages(system_prompt: str, messages_history: list[dict]) -> list[dict]:
@@ -606,11 +706,6 @@ async def evaluate_conversation(
     The overall score is the weighted average of the criteria, recomputed
     here rather than taken from the model. Raises RuntimeError on failure.
     """
-    if not async_client:
-        raise RuntimeError(
-            "OPENAI_API_KEY non configurata. Aggiungi OPENAI_API_KEY al file .env del backend."
-        )
-
     # Each line carries its [n] number so the judge can cite the messages
     # its scores rest on; entries keep the ids the citations map back to.
     entries = _transcript_entries(messages_history)
@@ -628,43 +723,13 @@ async def evaluate_conversation(
         {"role": "user", "content": f"## TRASCRIZIONE DELLA {contatto}\n{transcript}"},
     ]
 
-    last_error: Exception | None = None
-    for model in _eval_candidate_models():
-        try:
-            # Il tempo lungo, non quello del roleplay: qui il modello ragiona
-            # prima di scrivere, e nessuno sta aspettando in linea.
-            # with_options non tocca il client condiviso, restituisce una
-            # copia con queste impostazioni: la prossima battuta di una
-            # chiamata torna ad avere i venti secondi di prima.
-            response = await async_client.with_options(
-                timeout=_EVAL_TIMEOUT_SECONDS,
-                max_retries=_EVAL_MAX_RETRIES,
-            ).chat.completions.create(
-                model=model,
-                messages=messages,
-                # Six criteria with comment and suggestions, plus the
-                # reasoning tokens that "high" effort spends before writing
-                # a single one of them: a tight budget here comes back as
-                # truncated JSON, not as a shorter evaluation.
-                max_completion_tokens=6144,
-                response_format={"type": "json_object"},
-                **_eval_completion_kwargs(model),
-            )
-        except Exception as e:
-            if not _is_retryable(e):
-                print(f"[ERROR] OpenAI evaluation failed ({model}): {e}")
-                raise RuntimeError(f"Errore nella generazione della valutazione: {e!s}")
-            print(f"[WARN] Modello {model} non disponibile per la valutazione: {str(e)[:120]}")
-            last_error = e
-            continue
-        try:
-            return _normalize_evaluation(
-                json.loads(response.choices[0].message.content or ""), message_ids
-            )
-        except (json.JSONDecodeError, TypeError, ValueError, IndexError) as e:
-            # Malformed/incomplete JSON: try the next model
-            print(f"[WARN] Valutazione non valida da {model}, provo il successivo: {e}")
-            last_error = e
-
-    print(f"[ERROR] Valutazione fallita su tutti i modelli OpenAI: {last_error}")
-    raise RuntimeError(f"Errore nella generazione della valutazione: {last_error!s}")
+    return await eval_json_completion(
+        messages,
+        # Six criteria with comment and suggestions, plus the reasoning
+        # tokens that "high" effort spends before writing a single one of
+        # them: a tight budget here comes back as truncated JSON, not as a
+        # shorter evaluation.
+        max_completion_tokens=6144,
+        normalize=lambda raw: _normalize_evaluation(raw, message_ids),
+        what="valutazione della conversazione",
+    )

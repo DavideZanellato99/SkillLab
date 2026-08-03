@@ -18,6 +18,8 @@ from models import (
     ConversationRecording,
     ConversationReview,
     MessageAnnotation,
+    SimulationAttempt,
+    TechnicalSimulation,
 )
 
 
@@ -126,7 +128,7 @@ def test_recent_conversation_is_left_alone(db_session, standard_user, make_avata
 
     result = _purge(db_session)
 
-    assert result == (0, 0)
+    assert result == (0, 0, 0)
     assert (
         db_session.query(ChatConversation).filter(ChatConversation.id == conversation.id).count()
         == 1
@@ -184,6 +186,70 @@ def test_an_old_chat_still_in_use_is_not_expired(db_session, standard_user, make
     )
 
 
+# ── I tentativi delle simulazioni, sul proprio orologio ────────────────
+
+
+def _seed_attempt(db_session, user, organization, *, age_days):
+    """Un test tecnico consegnato, invecchiato."""
+    simulation = TechnicalSimulation(
+        title="Sblocco carta",
+        status="published",
+        organization_id=organization.id,
+        document_name="procedura.txt",
+        document_text="Testo della procedura.",
+    )
+    db_session.add(simulation)
+    db_session.flush()
+    attempt = SimulationAttempt(
+        simulation_id=simulation.id,
+        user_id=user.id,
+        correct_count=7,
+        question_count=10,
+        answers=[],
+        created_at=_days_ago(age_days),
+    )
+    db_session.add(attempt)
+    db_session.flush()
+    return simulation, attempt
+
+
+def test_expired_attempt_goes_and_its_simulation_stays(db_session, standard_user, organization):
+    """Il tentativo è personale e scade, la simulazione non lo è e resta."""
+    simulation, attempt = _seed_attempt(
+        db_session,
+        standard_user,
+        organization,
+        age_days=retention.SIMULATION_ATTEMPT_RETENTION_DAYS + 1,
+    )
+    # Letti prima del purge: dopo, le istanze non hanno più una riga da cui
+    # ricaricarsi e leggerne l'id solleverebbe ObjectDeletedError.
+    attempt_id, simulation_id = attempt.id, simulation.id
+
+    result = _purge(db_session)
+
+    assert result.simulation_attempts == 1
+    assert (
+        db_session.query(SimulationAttempt).filter(SimulationAttempt.id == attempt_id).count() == 0
+    )
+    assert (
+        db_session.query(TechnicalSimulation)
+        .filter(TechnicalSimulation.id == simulation_id)
+        .count()
+        == 1
+    )
+
+
+def test_recent_attempt_is_left_alone(db_session, standard_user, organization):
+    _, attempt = _seed_attempt(db_session, standard_user, organization, age_days=1)
+
+    result = _purge(db_session)
+
+    assert result.simulation_attempts == 0
+    assert (
+        db_session.query(SimulationAttempt).filter(SimulationAttempt.id == attempt.id).count() == 1
+    )
+
+
 # ── Il purge è ripetibile ──────────────────────────────────────────────
 
 
@@ -196,4 +262,4 @@ def test_purge_is_idempotent(db_session, standard_user, make_avatar):
     second = _purge(db_session)
 
     assert first.conversations == 1
-    assert second == (0, 0)
+    assert second == (0, 0, 0)

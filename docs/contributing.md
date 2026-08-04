@@ -36,17 +36,13 @@ Oltre ai gate del hook, la CI esegue anche il lint dell'infrastruttura
 script in `.githooks`) e uno smoke test Docker del compose di produzione.
 Un workflow separato ([security.yml](../.github/workflows/security.yml)) fa
 girare `pip-audit` sui lock del backend, `npm audit --audit-level=high` sul
-frontend, Trivy, CodeQL e una scansione DAST con ZAP contro lo stack di
-produzione avviato dal runner. Gira sulle PR, sui push a `main` e ogni lunedì,
-e si può lanciare a mano dalla tab Actions. Nessuno dei suoi job compare fra i
+frontend, Trivy e CodeQL. Gira sulle PR, sui push a `main` e ogni lunedì, e si
+può lanciare a mano dalla tab Actions. Nessuno dei suoi job compare fra i
 `needs` di `ci-success`, di proposito: un CVE appena pubblicato non deve
 bloccare lavoro che non c'entra.
 
-La scansione DAST è passiva (nessun payload di attacco) e arriva solo dove si
-arriva senza credenziali, cioè login, file statici e le rotte `/api/*` che
-rispondono 401: serve soprattutto a sorvegliare le intestazioni di sicurezza e
-i flag dei cookie. Il piano è in [.zap/baseline.yaml](../.zap/baseline.yaml), che
-in testa riporta anche il comando per rifare la stessa scansione in locale.
+Sono tutte analisi statiche, del codice e delle immagini: **niente scansione
+dell'applicazione in esecuzione**.
 
 ## Gate automatici prima del commit (hook pre-commit)
 

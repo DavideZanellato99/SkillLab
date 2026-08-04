@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Scrive i due .env che servono ad avviare lo stack di produzione dentro la CI.
+# Scrive i due .env che servono ad avviare lo stack di produzione dentro la CI,
+# cioè per lo smoke test di ci.yml.
 #
-# Sta in uno script e non dentro i workflow perché lo usano in due, lo smoke
-# test di ci.yml e la scansione DAST di security.yml, e finché era copiato in
-# entrambi bastava aggiungere una variabile obbligatoria al backend per far
-# cadere solo uno dei due, con un container che si rifiuta di partire e un
-# messaggio che non dice da dove viene la differenza.
+# Sta in uno script e non dentro il workflow perché l'elenco delle variabili
+# obbligatorie cambia col backend, e tenerlo in un file solo evita che una
+# variabile aggiunta al codice si scopra come un container che si rifiuta di
+# partire con un messaggio che non dice da dove viene la differenza.
 #
 # Va lanciato dalla radice del repo.
 set -euo pipefail
@@ -15,9 +15,9 @@ set -euo pipefail
 # vive quanto il job.
 #
 # SITE_ADDRESS a ":80" serve in chiaro: il default "localhost" farebbe emettere
-# a Caddy un certificato con la sua CA interna e reindirizzare da HTTP, e i
-# client (curl, e lo spider di ZAP) si fermerebbero sul certificato
-# sconosciuto. Qui interessa che lo stack risponda, non che TLS funzioni.
+# a Caddy un certificato con la sua CA interna e reindirizzare da HTTP, e curl
+# si fermerebbe sul certificato sconosciuto. Qui interessa che lo stack
+# risponda, non che TLS funzioni.
 cat > .env <<'EOF'
 POSTGRES_USER=skilllab
 POSTGRES_PASSWORD=smoketest
@@ -33,9 +33,8 @@ DB_MAX_CONNECTIONS=100
 EOF
 
 # Valori segnaposto: bastano ad avviare il backend, che nella CI non chiama mai
-# le API esterne (lo smoke test tocca solo la rotta di salute, e la scansione
-# DAST si ferma davanti al login). In compose DATABASE_URL viene sovrascritta
-# per puntare al servizio "db".
+# le API esterne, lo smoke test tocca solo la rotta di salute. In compose
+# DATABASE_URL viene sovrascritta per puntare al servizio "db".
 #
 # Ogni variabile OBBLIGATORIA deve stare qui o il container si rifiuta di
 # partire, ed è voluto: questo file è il controllo che la regola "nessun

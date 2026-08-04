@@ -271,10 +271,9 @@ conclusione.
 - Credenziali del database obbligatorie da ambiente, nessun valore di
   default nel repository.
 - Segreti esclusi dall'immagine Docker (`backend/.dockerignore`).
-- Scansioni automatiche settimanali su dipendenze, codice, immagini e
-  applicazione in esecuzione (`.github/workflows/security.yml`: pip-audit,
-  npm audit, Trivy, CodeQL, ZAP). È la verifica periodica delle misure
-  tecniche richiesta dall'art. 32.1.d.
+- Scansioni automatiche settimanali su dipendenze, codice e immagini
+  (`.github/workflows/security.yml`: pip-audit, npm audit, Trivy, CodeQL). È
+  la verifica periodica delle misure tecniche richiesta dall'art. 32.1.d.
 
 ## 11. Cosa non fa l'applicazione
 

@@ -122,8 +122,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Write the .env files the stack needs
-        # Condiviso con il job dast di security.yml, che avvia lo stesso stack:
-        # vedi il commento in testa allo script.
         run: .github/scripts/write-ci-env.sh
       - name: Build images and start the stack (production compose)
         # docker-compose.yml alone (without the dev override) is the real

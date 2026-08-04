@@ -67,8 +67,7 @@ verificando l'instradamento, e l'unica risposta che prova che dietro c'è
 davvero l'API è il rifiuto di chi non ha i cookie.
 
 I file `.env` che lo stack pretende li scrive
-[.github/scripts/write-ci-env.sh](../.github/scripts/write-ci-env.sh), condiviso
-con la scansione dinamica dell'altro workflow, che avvia lo stesso stack.
+[.github/scripts/write-ci-env.sh](../.github/scripts/write-ci-env.sh).
 
 ## Il workflow Security
 
@@ -78,7 +77,6 @@ sui push a `main`, **ogni lunedì alle 6 UTC** e a mano dalla tab Actions.
 | Job | Cosa scansiona |
 | --- | --- |
 | `dependencies` | `pip-audit` sui due lock del backend con `--require-hashes`, e `npm audit --audit-level=high` sul frontend |
-| `dast` | ZAP contro lo stack di produzione in esecuzione |
 | `filesystem` | Trivy sull'albero dei sorgenti: vulnerabilità, segreti e configurazioni sbagliate |
 | `images` | Trivy sulle immagini **costruite**, così vengono prese anche le CVE dei sistemi di base |
 | `codeql` | Analisi statica su Python e TypeScript |
@@ -98,19 +96,13 @@ un'esclusione dichiarata con il suo perché nel file: una vulnerabilità senza
 correzione disponibile, tenuta fuori così il job resta un segnale utile sulle
 cose **nuove** invece di essere rosso fisso.
 
-### La scansione dinamica
-
-`dast` avvia lo stesso stack di produzione dello smoke test e lo aspetta **dalla
-porta 80**, non da dentro la rete, perché è da lì che entrerà ZAP. Anche qui il
-401 su `/api` serve a distinguere "il backend risponde" da "nginx sta servendo
-la React anche sotto `/api`": nel secondo caso la scansione girerebbe su metà
-applicazione senza dirlo.
-
-È una scansione **passiva**: nessun payload d'attacco, e arriva dove si arriva
-senza credenziali, cioè login, file statici e le rotte che rispondono 401.
-Serve soprattutto a sorvegliare le intestazioni di sicurezza e i flag dei
-cookie. Il piano è in [.zap/baseline.yaml](../.zap/baseline.yaml), che in testa
-riporta il comando per rifare la stessa scansione in locale.
+Qui dentro **non c'è nessuna scansione dinamica dell'applicazione in
+esecuzione**: tutti questi job guardano il codice, le dipendenze e le immagini,
+mai un'istanza che risponde. C'è stato un job `dast` con ZAP, tolto perché
+senza credenziali arrivava solo al login e alle rotte che rispondono 401, cioè
+sorvegliava le intestazioni e i flag dei cookie e nient'altro. Rifarlo con
+copertura vera vuol dire un user pool Cognito dedicato ai test e una scansione
+autenticata.
 
 ## I test
 

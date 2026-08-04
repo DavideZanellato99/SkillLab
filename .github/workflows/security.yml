@@ -1,11 +1,10 @@
 name: Security
 
-# Dependency and code scanning (Trivy, pip-audit, npm audit, CodeQL) più la
-# scansione dinamica dell'applicazione in esecuzione (ZAP). Kept separate from
-# ci.yml so a newly-disclosed CVE shows up on the weekly schedule without
-# waiting for a code change, and so these (sometimes noisy) checks are not the
-# ones gating every merge. Secret scanning (gitleaks) is the exception: it
-# lives in ci.yml because it IS a blocking gate.
+# Dependency and code scanning (Trivy, pip-audit, npm audit, CodeQL). Kept
+# separate from ci.yml so a newly-disclosed CVE shows up on the weekly schedule
+# without waiting for a code change, and so these (sometimes noisy) checks are
+# not the ones gating every merge. Secret scanning (gitleaks) is the exception:
+# it lives in ci.yml because it IS a blocking gate.
 #
 # Nessun job qui dentro compare fra i needs di ci-success, quindi un rosso in
 # questo workflow si vede ma non blocca un merge: è voluto, sono controlli che
@@ -57,82 +56,6 @@ jobs:
         # installare le dipendenze.
         working-directory: frontend
         run: npm audit --audit-level=high
-
-  dast:
-    name: DAST (ZAP baseline)
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Write the .env files the stack needs
-        run: .github/scripts/write-ci-env.sh
-      - name: Build images and start the stack (production compose)
-        # Lo stesso stack dello smoke test di ci.yml, cioè il compose di
-        # produzione senza l'override di sviluppo: si scansiona quello che
-        # verrà messo online, non un server di sviluppo con altre
-        # intestazioni e altri messaggi d'errore.
-        run: docker compose -f docker-compose.yml up -d --build --scale backend=2
-      - name: Wait for the stack to answer through Caddy
-        # Si aspetta dalla porta 80, non da dentro la rete, perché è da lì che
-        # entrerà ZAP. Il 401 su /api serve a distinguere "il backend risponde"
-        # da "nginx sta servendo la React anche sotto /api": nel secondo caso
-        # la scansione girerebbe su metà applicazione senza dirlo.
-        run: |
-          for _ in $(seq 1 90); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/avatars || true)
-            if curl -fsS http://localhost/ >/dev/null 2>&1 && [ "$code" = "401" ]; then
-              echo "lo stack risponde"; exit 0
-            fi
-            sleep 2
-          done
-          echo "lo stack non è salito in tempo"; exit 1
-      - name: Prepare the report directory
-        # Il container di ZAP gira con un utente suo (uid 1000), che non è
-        # quello che possiede il workspace del runner: senza questo, il job
-        # muore alla scrittura del report dopo aver scansionato per dieci
-        # minuti.
-        run: mkdir -p zap-out && chmod 777 zap-out
-      - name: ZAP baseline scan
-        # --network host: il bersaglio è Caddy sulla porta 80 del runner, e da
-        # dentro una rete bridge "localhost" sarebbe il container stesso.
-        #
-        # Il piano è montato in sola lettura e separato dalla cartella dei
-        # report, così ZAP non può riscriverselo.
-        #
-        # Esce 1 se ci sono alert Medium o High (vedi il job exitStatus nel
-        # piano), quindi questo passo rende rosso il job. Il caricamento sotto
-        # gira comunque grazie a if: always().
-        run: |
-          docker run --rm --network host \
-            -v "$PWD/.zap:/zap/plan:ro" \
-            -v "$PWD/zap-out:/zap/wrk:rw" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap.sh -cmd -autorun /zap/plan/baseline.yaml
-      - name: Normalise the report file name
-        # ZAP aggiunge da sé l'estensione del template al nome che gli si dà,
-        # quindi il file si cerca con una glob invece di indovinarne il nome.
-        if: always()
-        run: |
-          report=$(find zap-out -maxdepth 1 -type f -name 'zap-dast*' | head -1)
-          if [ -z "$report" ]; then
-            echo "ZAP non ha prodotto nessun report: il motivo è nel log del passo precedente"
-            exit 1
-          fi
-          mv "$report" zap-dast.sarif
-      - name: Upload DAST results to the Security tab
-        if: always() && hashFiles('zap-dast.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: zap-dast.sarif
-          category: zap-dast
-      - name: Dump logs on failure
-        if: failure()
-        run: docker compose -f docker-compose.yml logs
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.yml down -v
 
   filesystem:
     name: Filesystem scan (trivy)

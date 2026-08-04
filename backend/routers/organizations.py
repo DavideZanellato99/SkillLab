@@ -5,7 +5,7 @@ creates organizations, suspends or reactivates them, and can hard-delete
 one together with all of its users (on Cognito too), their conversations
 and its private avatars. Suspending an organization locks out all its
 users at the next login and on their next request (see
-auth_dependency.access_denied_reason); deleting one is irreversible.
+account_status.access_denied_reason); deleting one is irreversible.
 """
 
 import contextlib

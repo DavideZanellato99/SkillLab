@@ -204,9 +204,14 @@ class Chiamata:
             self.stats.errore(f"sessione: {type(e).__name__}")
             return
 
-        url = f"{self.args.ws_url}?session_id={session_id}"
+        # L'id sta nei sottoprotocolli e non nell'indirizzo, come lo manda il
+        # browser (vedi VOICE_WS_PROTOCOL nel backend).
         try:
-            async with websockets.connect(url, max_size=16 * 1024 * 1024) as ws:
+            async with websockets.connect(
+                self.args.ws_url,
+                subprotocols=["skilllab-voice", session_id],
+                max_size=16 * 1024 * 1024,
+            ) as ws:
                 self.ws = ws
                 self.stats.attive += 1
                 await ws.send(json.dumps({"type": "start"}))

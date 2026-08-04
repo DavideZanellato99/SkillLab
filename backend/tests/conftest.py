@@ -136,6 +136,25 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def voice_socket(client):
+    """Apre il socket vocale come lo apre il browser.
+
+    L'id di sessione sta nei sottoprotocolli dell'handshake e non nella
+    query string (vedi ``routers.voice``), quindi ogni test che tocca quel
+    socket deve aprirlo così: passa da qui invece di ricostruire la
+    chiamata a mano, che è come i test si erano accorti in ritardo del
+    cambiamento la prima volta.
+    """
+    from routers.voice import VOICE_WS_PROTOCOL
+
+    def _open(session_id: str | None = None):
+        protocols = [VOICE_WS_PROTOCOL, session_id] if session_id else None
+        return client.websocket_connect("/api/voice/ws", subprotocols=protocols)
+
+    return _open
+
+
 def _make_user(db_session, role_name: str, organization_id=None) -> User:
     roles = ensure_roles(db_session)
     user = User(

@@ -75,6 +75,16 @@ richiesta HTTP l'autore non c'è: `created_by` resta NULL e l'email dice
 `sistema`, che è la verità e si legge senza doverla indovinare da un campo
 vuoto.
 
+**Le colonne escono solo dalle risposte dell'amministrazione.** Ogni entità ha
+due schemi: quello che legge chi la usa e quello che legge chi la amministra,
+e la paternità sta sul secondo. `SimulationResponse` contro
+`AdminSimulationResponse`, `UserResponse` contro `AdminUserResponse`: chi
+svolge un test non riceve l'indirizzo di chi l'ha scritto, e chi usa un account
+non riceve l'indirizzo dell'amministratore che gliel'ha aperto, che è
+un'informazione su una terza persona e non serve a niente di quello che fa.
+Sul frontend la stessa coppia, `AuthUser` e
+[AdminUser](../frontend/src/services/admin.ts).
+
 L'email è ridondante di proposito: gli account si cancellano davvero, la chiave
 esterna diventa NULL insieme a loro, e senza quello scatto testuale una riga
 perderebbe il proprio autore il giorno in cui l'autore lascia l'azienda. Su una

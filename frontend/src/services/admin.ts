@@ -19,11 +19,16 @@ export interface CreateUserPayload {
   organization_id?: string | null
 }
 
+/** L'account come lo vede l'amministrazione: in più rispetto ad AuthUser porta
+ * chi l'ha aperto e chi l'ha toccato per ultimo, che le rotte di /api/admin
+ * sono le uniche a rispondere. */
+export interface AdminUser extends AuthUser, Authored {}
+
 /** Una finestra sugli utenti: `total` conta tutti quelli che soddisfano i
  * filtri, non quelli restituiti. */
 export interface UserPage {
   total: number
-  items: AuthUser[]
+  items: AdminUser[]
 }
 
 export interface UserFilters {
@@ -62,7 +67,7 @@ export const fetchUsers = (filters: UserFilters = {}) =>
  * Create a new user in Cognito and local DB (Super Admin only).
  */
 export const createNewUser = (payload: CreateUserPayload) =>
-  apiFetch<AuthUser>('/api/admin/users', {
+  apiFetch<AdminUser>('/api/admin/users', {
     method: 'POST',
     body: payload,
   })
@@ -78,7 +83,7 @@ export interface UpdateUserPayload {
  * Update a user's fields and/or role (Super Admin only).
  */
 export const updateUser = (userId: string, payload: UpdateUserPayload) =>
-  apiFetch<AuthUser>(`/api/admin/users/${userId}`, {
+  apiFetch<AdminUser>(`/api/admin/users/${userId}`, {
     method: 'PUT',
     body: payload,
   })
@@ -97,7 +102,7 @@ export const deleteUser = (userId: string) =>
  * user's open sessions immediately.
  */
 export const setUserStatus = (userId: string, status: UserStatus) =>
-  apiFetch<AuthUser>(`/api/admin/users/${userId}/status`, {
+  apiFetch<AdminUser>(`/api/admin/users/${userId}/status`, {
     method: 'PUT',
     body: { status },
   })

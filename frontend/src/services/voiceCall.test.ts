@@ -30,7 +30,10 @@ class FakeWebSocket {
   close = vi.fn()
   send = vi.fn()
 
-  constructor(public url: string) {
+  constructor(
+    public url: string,
+    public protocols?: string[],
+  ) {
     FakeWebSocket.last = this
   }
 
@@ -53,7 +56,7 @@ const callbacks = () => ({
 const apriSocket = (cb: ReturnType<typeof callbacks>) => {
   const call = new VoiceCall('sess-1', cb)
   const promise = (call as unknown as { openSocket: (url: string) => Promise<void> }).openSocket(
-    'ws://test/api/voice/ws?session_id=sess-1',
+    'ws://test/api/voice/ws',
   )
   // La promessa viene rifiutata dai test: senza questo Node segnala un
   // rejection non gestito prima ancora che l'assert la osservi.
@@ -63,6 +66,17 @@ const apriSocket = (cb: ReturnType<typeof callbacks>) => {
 
 beforeEach(() => {
   vi.stubGlobal('WebSocket', FakeWebSocket)
+})
+
+describe('VoiceCall, come si apre il socket', () => {
+  it("porta l'id di sessione nell'handshake e non nell'indirizzo", () => {
+    // L'id è la sola credenziale che apre la chiamata: in un indirizzo
+    // finirebbe nel log degli accessi del proxy, nell'handshake no.
+    const { ws } = apriSocket(callbacks())
+
+    expect(ws.url).not.toContain('sess-1')
+    expect(ws.protocols).toEqual(['skilllab-voice', 'sess-1'])
+  })
 })
 
 describe('VoiceCall, una chiamata che non parte', () => {

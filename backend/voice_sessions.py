@@ -32,8 +32,9 @@ from sqlalchemy import delete
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
+from account_status import access_denied_reason
 from database import SessionLocal
-from models import VoiceSessionRecord
+from models import User, VoiceSessionRecord
 
 # Quanto resta valida una sessione che nessuno apre
 _SESSION_TTL = timedelta(hours=1)
@@ -108,7 +109,7 @@ def create_voice_session(
 
 
 def load_voice_session(session_id: str) -> VoiceSession | None:
-    """La sessione se esiste ed è ancora valida, altrimenti None.
+    """La sessione se esiste, è ancora valida e l'account può ancora usarla.
 
     Apre e chiude una sessione DB tutta sua invece di riceverla da una
     dipendenza FastAPI, e il motivo è la durata: una dipendenza tiene la
@@ -117,12 +118,23 @@ def load_voice_session(session_id: str) -> VoiceSession | None:
     terrebbero occupate quaranta connessioni del pool per dieci minuti,
     esaurendolo molto prima che la CPU dia segni di cedimento.
 
+    Lo stato dell'account si rilegge qui perché il socket vocale è l'unica
+    rotta che non passa da ``get_current_user``: senza questo controllo la
+    sospensione di un utente, o di tutta la sua organizzazione, non
+    arriverebbe mai fino alla chiamata, e un id già emesso resterebbe buono
+    fino alla scadenza. Le altre rotte quella verifica la fanno a ogni
+    richiesta (vedi ``account_status.access_denied_reason``), e questa è la
+    stessa promessa mantenuta sull'unica strada che gira al largo.
+
     Bloccante: va chiamata via ``asyncio.to_thread``, come le altre
     scritture del percorso vocale.
     """
     with session_factory() as db:
         record = db.get(VoiceSessionRecord, session_id)
         if record is None or record.expires_at <= _utcnow():
+            return None
+        user = db.get(User, record.user_id)
+        if user is None or access_denied_reason(user):
             return None
         return VoiceSession(
             user_id=str(record.user_id),

@@ -134,6 +134,13 @@ scadenza del token, perché `access_denied_reason` gira su ogni richiesta. Il
 super admin non appartiene a nessuna organizzazione, quindi la seconda regola
 non lo tocca mai.
 
+La regola sta in [account_status.py](../backend/account_status.py) e non dentro
+la dipendenza che la usa, perché se la chiedono anche l'accesso, prima di
+consegnare i cookie, e il registro delle sessioni vocali, che serve l'unica
+rotta senza dipendenza di autenticazione (vedi
+[chiamata-vocale.md](chiamata-vocale.md)). Quel modulo non importa il client di
+Cognito, così chi ha bisogno solo della regola non si porta dietro la rete.
+
 ## Il rinnovo
 
 `POST /api/auth/refresh` è il punto in cui una sessione si allunga, ed è per

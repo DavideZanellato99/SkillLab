@@ -458,8 +458,15 @@ class NewPasswordRequest(BaseModel):
     session: str
 
 
-class UserResponse(AuthorshipResponse):
-    """Schema for user profile response."""
+class UserResponse(BaseModel):
+    """Schema for user profile response.
+
+    Senza la paternità: questa risposta esce anche dall'accesso e da
+    ``/api/auth/me``, quindi la riceve l'utente stesso, e l'indirizzo
+    dell'amministratore che ha aperto l'account non è qualcosa che serva a chi
+    quell'account lo usa. Chi ha creato e chi ha modificato stanno su
+    ``AdminUserResponse``, che esce solo dalle rotte di amministrazione.
+    """
 
     id: UUID
     cognito_sub: str
@@ -480,6 +487,17 @@ class UserResponse(AuthorshipResponse):
     # a very different date from the one above. Null under the same
     # condition, an account that has never been used.
     last_activity_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AdminUserResponse(UserResponse, AuthorshipResponse):
+    """La stessa riga dell'elenco utenti, con in più chi ha aperto l'account e
+    chi l'ha toccato per ultimo: è quello che mostra la scheda utente della
+    pagina di amministrazione, che vede solo il super admin.
+    """
 
 
 class UpdateProfileRequest(BaseModel):
@@ -613,7 +631,7 @@ class UserPage(BaseModel):
     """
 
     total: int
-    items: list[UserResponse]
+    items: list[AdminUserResponse]
 
 
 class AdminAvatarPayload(BaseModel):

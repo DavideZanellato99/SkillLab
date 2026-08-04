@@ -51,6 +51,11 @@ MAX_RECORDING_BYTES = 50 * 1024 * 1024
 # webm/opus on Chrome and Firefox, mp4/aac on Safari.
 _ALLOWED_RECORDING_TYPES = {"audio/webm", "audio/ogg", "audio/mp4"}
 
+# Il nome del sottoprotocollo con cui il client apre il socket vocale. Ne
+# manda due, questo e l'id di sessione, e il server sceglie questo nella
+# risposta: l'id viaggia nell'header dell'handshake e non nell'indirizzo.
+VOICE_WS_PROTOCOL = "skilllab-voice"
+
 
 @router.post("/session", response_model=VoiceSessionResponse)
 def start_voice_session(
@@ -274,8 +279,24 @@ def get_recording(
     )
 
 
+def _session_id_from(websocket: WebSocket) -> str | None:
+    """L'id di sessione, letto dai sottoprotocolli dell'handshake.
+
+    Il client ne offre due, il nome del protocollo e l'id. Sta lì e non
+    nella query string perché un indirizzo finisce nel log degli accessi del
+    proxy, e da lì in ogni posto dove quei log vengono raccolti: l'id è la
+    sola credenziale che apre la chiamata, e una credenziale scritta in
+    chiaro in un registro pensato per essere condiviso è una credenziale
+    già mezza persa. Nell'handshake viaggia in un header, che nessuno logga.
+    """
+    protocols = websocket.scope.get("subprotocols") or []
+    if len(protocols) == 2 and protocols[0] == VOICE_WS_PROTOCOL:
+        return protocols[1].strip() or None
+    return None
+
+
 @router.websocket("/ws")
-async def voice_websocket(websocket: WebSocket, session_id: str | None = None):
+async def voice_websocket(websocket: WebSocket):
     """Realtime voice call socket; access gated by the unguessable session_id.
 
     The session is read from the database rather than from process memory,
@@ -283,9 +304,11 @@ async def voice_websocket(websocket: WebSocket, session_id: str | None = None):
     id. Both DB touches go through a thread: they are blocking calls, and
     this endpoint holds the event loop for the whole length of the call.
     """
-    # Policy violation close code: no session id, or one that is unknown or
-    # expired. Same answer for all three, so a caller probing ids learns
-    # nothing from the difference.
+    # Policy violation close code: no session id, one that is unknown or
+    # expired, or an account that in the meantime was suspended. Same answer
+    # for all of them, so a caller probing ids learns nothing from the
+    # difference.
+    session_id = _session_id_from(websocket)
     if not session_id:
         await websocket.close(code=4401)
         return
@@ -299,7 +322,7 @@ async def voice_websocket(websocket: WebSocket, session_id: str | None = None):
     # voice_capacity). The session row is deliberately left alone: nothing
     # was consumed, so the same id still works on the next attempt.
     if not voice_capacity.take_slot():
-        await websocket.accept()
+        await websocket.accept(subprotocol=VOICE_WS_PROTOCOL)
         await websocket.send_text(
             json.dumps(
                 {
@@ -314,7 +337,10 @@ async def voice_websocket(websocket: WebSocket, session_id: str | None = None):
         await websocket.close(code=1013)
         return
 
-    await websocket.accept()
+    # Scegliere il sottoprotocollo nella risposta non è un dettaglio: se il
+    # client ne offre e il server non ne conferma uno, il browser chiude
+    # l'handshake da solo.
+    await websocket.accept(subprotocol=VOICE_WS_PROTOCOL)
     try:
         try:
             pipeline = VoicePipeline(websocket, session)

@@ -127,14 +127,17 @@ sequenceDiagram
     B->>A: POST /api/voice/session (autenticata)
     A->>D: scrive la sessione, con la scheda persona e la storia
     A-->>B: session_id imprevedibile
-    B->>A: WS /api/voice/ws?session_id=...
+    B->>A: WS /api/voice/ws (id nel sottoprotocollo)
     A->>D: rilegge la sessione (qualunque replica)
     A-->>B: {"type": "ready"}
 ```
 
 Il WebSocket non è autenticato dai cookie ma dal `session_id`, che è un token
-casuale a vita breve. La sessione sta su Postgres proprio perché le due
-richieste possono finire su repliche diverse: il dettaglio completo è in
+casuale a vita breve e viaggia nei sottoprotocolli dell'handshake, non nella
+query string, perché un indirizzo finisce nei log del proxy. La sessione sta su
+Postgres proprio perché le due richieste possono finire su repliche diverse, e
+all'apertura viene riletto anche lo stato dell'account, che è l'unico posto in
+cui una sospensione può raggiungere questa rotta: il dettaglio completo è in
 [chiamata-vocale.md](chiamata-vocale.md).
 
 ---

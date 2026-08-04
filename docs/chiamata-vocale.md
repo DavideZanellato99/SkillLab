@@ -20,7 +20,7 @@ sequenceDiagram
     B->>P: POST /api/voice/session
     P-->>B: session_id
     B->>B: microfono, AudioContext, worklet, registratore
-    B->>P: WS /api/voice/ws?session_id=...
+    B->>P: WS /api/voice/ws (id nel sottoprotocollo)
     P->>E: apre il socket STT
     P->>C: apre il socket TTS
     P-->>B: ready
@@ -42,7 +42,7 @@ sequenceDiagram
 ## L'apertura in due tempi
 
 `POST /api/voice/session` autentica, controlla e prepara; il WebSocket poi si
-apre col solo `session_id`.
+apre col solo `session_id`, che porta nell'handshake e non nell'indirizzo.
 
 Perché due richieste e non una: un WebSocket non porta con sé le dipendenze di
 FastAPI in modo comodo, e soprattutto la preparazione (permessi, avatar,
@@ -69,6 +69,33 @@ normale senza affinità di sessione da configurare per sempre.
 La riga porta una copia della storia della conversazione, quindi ha vita
 volutamente breve: si cancella a chiamata finita, e le sessioni chieste e mai
 aperte scadono in un'ora e le raccoglie la pulizia periodica.
+
+### L'id non viaggia nell'indirizzo
+
+Il socket si apre su `/api/voice/ws` senza parametri, e l'id sta nei
+**sottoprotocolli** dell'handshake: il client ne offre due, il nome
+`skilllab-voice` e l'id, e il server conferma il primo. Sceglierlo nella
+risposta non è formalità, se il client offre sottoprotocolli e il server non
+ne conferma nessuno il browser chiude l'handshake da solo.
+
+Il motivo è che l'id è la sola credenziale che apre la chiamata, e un indirizzo
+finisce nel log degli accessi del proxy, e da lì ovunque quei log vengano
+raccolti. Nell'handshake viaggia in un header, che nessuno registra.
+
+### Lo stato dell'account si rilegge qui
+
+Il socket è l'unica rotta che non passa da `get_current_user`, quindi è anche
+l'unica che non vedrebbe una sospensione. Per questo `load_voice_session`
+rilegge l'utente e chiama `access_denied_reason`
+([account_status.py](../backend/account_status.py)), la stessa regola che ogni
+altra richiesta applica: un account sospeso, o un'organizzazione sospesa, non
+apre la chiamata nemmeno con un id ancora valido in mano. La risposta è la
+stessa 4401 di un id sconosciuto.
+
+Resta fuori la chiamata **già in corso**: chi viene sospeso mentre è al
+telefono finisce la telefonata. Interromperla a metà vorrebbe dire rileggere lo
+stato a ogni turno, cioè una query nel percorso caldo, e una chiamata dura
+minuti, non ore.
 
 ## Il tetto alle chiamate
 
@@ -267,7 +294,8 @@ sbagliare.
 | Sintomo | Causa | Cosa risponde |
 | --- | --- | --- |
 | La chiamata non parte | Chiavi dei fornitori mancanti | 503 sul POST della sessione |
-| `session_id` mancante, sconosciuto o scaduto | Sessione mai creata o già consumata | Chiusura 4401, uguale in tutti e tre i casi così chi prova a indovinare non impara niente dalla differenza |
+| `session_id` mancante, sconosciuto, scaduto, o account sospeso | Sessione mai creata, già consumata, o utente e organizzazione non più attivi | Chiusura 4401, uguale in tutti i casi così chi prova a indovinare non impara niente dalla differenza |
+| La chiamata non parte e l'id sembra giusto | L'id è finito nella query string invece che nel sottoprotocollo | Chiusura 4401: il vecchio indirizzo non è più una strada |
 | "Tutte le linee sono occupate" | Tetto del processo raggiunto | Chiusura 1013 |
 | "Riconoscimento vocale non disponibile" | Errore fatale della STT (quota, autenticazione, limite di sessione) | Evento `error` e chiusura |
 | Il modello non risponde | Guasto su OpenAI | Battuta di ripiego, la chiamata continua |

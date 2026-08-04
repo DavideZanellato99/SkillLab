@@ -84,7 +84,7 @@ def test_un_rilascio_di_troppo_non_regala_capacita(monkeypatch):
 
 
 def test_a_linee_occupate_la_chiamata_viene_rifiutata_con_un_messaggio(
-    client, sessione_vocale, monkeypatch
+    voice_socket, sessione_vocale, monkeypatch
 ):
     """Il processo è pieno: la connessione viene aperta solo per spiegare
     perché, e chiusa con il codice che invita a riprovare."""
@@ -93,7 +93,7 @@ def test_a_linee_occupate_la_chiamata_viene_rifiutata_con_un_messaggio(
 
     with (
         pytest.raises(WebSocketDisconnect) as scoppio,
-        client.websocket_connect(f"/api/voice/ws?session_id={sessione_vocale}") as ws,
+        voice_socket(sessione_vocale) as ws,
     ):
         evento = ws.receive_json()
         assert evento["type"] == "error"
@@ -104,14 +104,14 @@ def test_a_linee_occupate_la_chiamata_viene_rifiutata_con_un_messaggio(
 
 
 def test_la_chiamata_rifiutata_puo_riprovare_con_lo_stesso_id(
-    client, db_session, sessione_vocale, monkeypatch
+    voice_socket, db_session, sessione_vocale, monkeypatch
 ):
     """Niente è stato consumato, quindi la sessione resta valida: sarebbe
     assurdo far ricominciare da capo chi ha trovato occupato."""
     monkeypatch.setattr(voice_capacity, "MAX_CONCURRENT_CALLS", 1)
     voice_capacity.take_slot()
 
-    with client.websocket_connect(f"/api/voice/ws?session_id={sessione_vocale}") as ws:
+    with voice_socket(sessione_vocale) as ws:
         assert ws.receive_json()["type"] == "error"
 
     rimasta = (

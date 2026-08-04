@@ -12,7 +12,8 @@ import {
 } from '../hooks/useAdminUsers'
 import { useOrganizations } from '../hooks/useOrganizations'
 import { isSuperAdmin, ROLE_LABELS, ROLE_BADGE_CLASSES, getInitials } from '../services/auth'
-import type { AuthUser, RoleName, UserStatus } from '../services/auth'
+import type { RoleName, UserStatus } from '../services/auth'
+import type { AdminUser } from '../services/admin'
 import Select from './Select'
 import DataTable, { Td, Tr } from './DataTable'
 import DetailModal, { DetailField } from './DetailModal'
@@ -144,10 +145,10 @@ export default function AdminPage() {
     formValidationError || errorOf(createMutation.error, "Errore durante la creazione dell'utente.")
 
   // Detail view (clic sulla riga): utente in sola lettura
-  const [viewingUser, setViewingUser] = useState<AuthUser | null>(null)
+  const [viewingUser, setViewingUser] = useState<AdminUser | null>(null)
 
   // Edit form states
-  const [editingUser, setEditingUser] = useState<AuthUser | null>(null)
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [editNome, setEditNome] = useState('')
   const [editCognome, setEditCognome] = useState('')
   const [editRuolo, setEditRuolo] = useState<RoleName>('user')
@@ -158,13 +159,13 @@ export default function AdminPage() {
     errorOf(updateMutation.error, "Errore durante l'aggiornamento dell'utente.")
 
   // Delete confirmation states
-  const [deletingUser, setDeletingUser] = useState<AuthUser | null>(null)
+  const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null)
 
   // Resend-credentials confirmation states
-  const [resendingUser, setResendingUser] = useState<AuthUser | null>(null)
+  const [resendingUser, setResendingUser] = useState<AdminUser | null>(null)
 
   // Account-status confirmation states (`target` = the status being applied)
-  const [statusAction, setStatusAction] = useState<{ user: AuthUser; target: UserStatus } | null>(
+  const [statusAction, setStatusAction] = useState<{ user: AdminUser; target: UserStatus } | null>(
     null,
   )
 
@@ -206,7 +207,7 @@ export default function AdminPage() {
     }
   }
 
-  const openEditModal = (u: AuthUser) => {
+  const openEditModal = (u: AdminUser) => {
     setEditingUser(u)
     setEditNome(u.nome)
     setEditCognome(u.cognome)

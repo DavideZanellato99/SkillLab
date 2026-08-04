@@ -19,7 +19,12 @@ import pytest
 from starlette.websockets import WebSocketDisconnect
 
 from erasure import erase_conversations
-from models import ChatConversation, VoiceSessionRecord
+from models import (
+    ORG_STATUS_SUSPENDED,
+    USER_STATUS_SUSPENDED,
+    ChatConversation,
+    VoiceSessionRecord,
+)
 from voice_sessions import (
     close_voice_session,
     create_voice_session,
@@ -128,20 +133,57 @@ def test_una_sessione_scaduta_non_vale_piu(db_session, conversation):
     assert load_voice_session(session_id) is None
 
 
-def test_il_socket_rifiuta_una_sessione_che_non_esiste(client):
+def test_una_sessione_di_un_utente_sospeso_non_vale_piu(db_session, conversation, standard_user):
+    """Il socket vocale è l'unica rotta che non passa da get_current_user:
+    se lo stato dell'account non si rileggesse qui, sospendere qualcuno non
+    fermerebbe la chiamata che ha già chiesto."""
+    session_id = _crea(db_session, conversation)
+    standard_user.status = USER_STATUS_SUSPENDED
+    db_session.flush()
+
+    assert load_voice_session(session_id) is None
+
+
+def test_una_sessione_di_un_organizzazione_sospesa_non_vale_piu(
+    db_session, conversation, organization
+):
+    """Sospendere il tenant chiude le chiamate dei suoi utenti allo stesso
+    modo, che è la regola che vale su ogni altra rotta."""
+    session_id = _crea(db_session, conversation)
+    organization.status = ORG_STATUS_SUSPENDED
+    db_session.flush()
+
+    assert load_voice_session(session_id) is None
+
+
+# ── L'id sta nell'handshake, non nell'indirizzo ────────────────────────
+
+
+def test_il_socket_rifiuta_una_sessione_che_non_esiste(voice_socket):
     """4401: id sbagliato o scaduto, e il socket non viene nemmeno accettato."""
-    with (
-        pytest.raises(WebSocketDisconnect) as scoppio,
-        client.websocket_connect("/api/voice/ws?session_id=inventato"),
-    ):
+    with pytest.raises(WebSocketDisconnect) as scoppio, voice_socket("inventato"):
         pass
 
     assert scoppio.value.code == 4401
 
 
-def test_il_socket_rifiuta_una_richiesta_senza_sessione(client):
-    with pytest.raises(WebSocketDisconnect), client.websocket_connect("/api/voice/ws"):
+def test_il_socket_rifiuta_una_richiesta_senza_sessione(voice_socket):
+    with pytest.raises(WebSocketDisconnect), voice_socket():
         pass
+
+
+def test_l_id_nella_query_string_non_apre_piu_niente(client, db_session, conversation):
+    """Il vecchio indirizzo con l'id in chiaro: finiva nel log degli accessi
+    del proxy, e adesso non è più una strada per entrare."""
+    session_id = _crea(db_session, conversation)
+
+    with (
+        pytest.raises(WebSocketDisconnect) as scoppio,
+        client.websocket_connect(f"/api/voice/ws?session_id={session_id}"),
+    ):
+        pass
+
+    assert scoppio.value.code == 4401
 
 
 # ── Pulizia: la riga porta una copia della conversazione ───────────────

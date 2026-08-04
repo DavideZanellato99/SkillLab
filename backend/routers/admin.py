@@ -49,6 +49,7 @@ from models import (
 from routers.chat import _evaluation_response
 from schemas import (
     AdminConversationDetail,
+    AdminUserResponse,
     ChatMessageResponse,
     ConversationReport,
     CreateUserRequest,
@@ -60,7 +61,6 @@ from schemas import (
     UpdateUserStatusRequest,
     UserActivityReport,
     UserPage,
-    UserResponse,
 )
 from user_fields import clean_email_or_400, clean_name_or_400, find_user_by_email
 
@@ -232,7 +232,7 @@ def list_users(
     # instant would otherwise be free to swap places between two requests,
     # and an offset window would skip one of them and repeat the other.
     users = query.order_by(User.created_at.desc(), User.id.desc()).offset(offset).limit(limit).all()
-    return UserPage(total=total, items=[UserResponse.model_validate(u) for u in users])
+    return UserPage(total=total, items=[AdminUserResponse.model_validate(u) for u in users])
 
 
 @router.get("/users-report", response_model=list[UserActivityReport])
@@ -525,7 +525,7 @@ def delete_conversation(
     return MessageResponse(message="Conversazione eliminata con successo.", success=True)
 
 
-@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     request: CreateUserRequest,
     http_request: Request,
@@ -594,10 +594,10 @@ def create_user(
         http_request, target_id=str(new_user.id), email=new_user.email, ruolo=request.ruolo
     )
 
-    return UserResponse.model_validate(new_user)
+    return AdminUserResponse.model_validate(new_user)
 
 
-@router.put("/users/{user_id}", response_model=UserResponse)
+@router.put("/users/{user_id}", response_model=AdminUserResponse)
 def update_user(
     user_id: UUID,
     request: UpdateUserRequest,
@@ -663,10 +663,10 @@ def update_user(
         changes["organizzazione_a"] = user.organization_name or "nessuna"
     audit.describe(http_request, email=user.email, **changes)
 
-    return UserResponse.model_validate(user)
+    return AdminUserResponse.model_validate(user)
 
 
-@router.put("/users/{user_id}/status", response_model=UserResponse)
+@router.put("/users/{user_id}/status", response_model=AdminUserResponse)
 def set_user_status(
     user_id: UUID,
     request: UpdateUserStatusRequest,
@@ -717,7 +717,7 @@ def set_user_status(
         db.commit()
         db.refresh(user)
 
-    return UserResponse.model_validate(user)
+    return AdminUserResponse.model_validate(user)
 
 
 @router.post("/users/{user_id}/resend-credentials", response_model=MessageResponse)

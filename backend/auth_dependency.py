@@ -5,14 +5,21 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 import activity
+
+# Ri-esportata: la regola vive in `account_status`, che non importa il
+# client di Cognito e può quindi servire anche il registro delle sessioni
+# vocali. Chi la usa continua a prenderla da qui.
+from account_status import (
+    ACCOUNT_BLOCKED_MESSAGE,  # noqa: F401
+    ORGANIZATION_BLOCKED_MESSAGE,  # noqa: F401
+    access_denied_reason,
+)
 from cognito_service import verify_access_token
 from database import get_db
 from models import (
     ALL_ROLES,
-    ORG_STATUS_ACTIVE,
     ROLE_ORGANIZATION_ADMIN,
     ROLE_SUPER_ADMIN,
-    USER_STATUS_ACTIVE,
     Role,
     User,
 )
@@ -28,12 +35,6 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 
 # Cognito sub of the local mock super admin (dev account, not on Cognito)
 MOCK_ADMIN_SUB = "mock-admin-sub-0000-0000-0000"
-
-# Why an account is locked out, in the wording the user reads. Both the
-# login and every authenticated request answer with these same two
-# sentences: see access_denied_reason below.
-ACCOUNT_BLOCKED_MESSAGE = "L'account è stato sospeso o disabilitato. Contatta l'amministratore."
-ORGANIZATION_BLOCKED_MESSAGE = "L'organizzazione è stata sospesa. Contatta l'amministratore."
 
 
 def ensure_roles(db: Session) -> dict[str, Role]:
@@ -72,33 +73,6 @@ def get_or_create_mock_admin(db: Session) -> User:
         db.commit()
         db.refresh(user)
     return user
-
-
-def access_denied_reason(user: User) -> str | None:
-    """Why `user` cannot use the platform, None when the account is free to.
-
-    Suspended or disabled accounts die immediately: the check runs on every
-    request, so tokens already issued stop working the moment the admin
-    flips the status (Cognito alone would let them live until exp).
-    Suspending the whole organization locks out every one of its users the
-    same way. The super admin has no organization, so it is never caught by
-    the second rule.
-
-    The login calls this too, before handing out any cookie: a check on the
-    request path alone would let a locked-out user sign in successfully and
-    be thrown out by the very next call, with an access recorded in the
-    audit trail and last_login_at stamped for a session that never was.
-    """
-    if user.status != USER_STATUS_ACTIVE:
-        return ACCOUNT_BLOCKED_MESSAGE
-    if user.organization is not None and user.organization.status != ORG_STATUS_ACTIVE:
-        # The admin's own wording when there is one: someone locked out of
-        # their training deserves the actual reason, not a generic wall.
-        reason = (user.organization.suspension_reason or "").strip()
-        if reason:
-            return f"L'organizzazione è stata sospesa: {reason}"
-        return ORGANIZATION_BLOCKED_MESSAGE
-    return None
 
 
 def _identified(request: Request, user: User) -> User:

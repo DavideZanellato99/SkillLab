@@ -279,6 +279,18 @@ def test_the_admin_apis_answer_with_the_same_four_fields(
             assert row["updated_by_email"]
 
 
+def test_chi_usa_l_account_non_riceve_l_email_di_chi_lo_ha_aperto(user_client, admin_client):
+    """La paternità è roba dell'amministrazione: la scheda utente la mostra,
+    il profilo che l'utente legge di sé non deve nemmeno portarla."""
+    profilo = user_client.get("/api/auth/me").json()
+    assert "created_by_email" not in profilo
+    assert "updated_by_email" not in profilo
+
+    riga_admin = admin_client.get(USERS).json()["items"][0]
+    assert riga_admin["created_by_email"]
+    assert riga_admin["updated_by_email"]
+
+
 # ── Quando l'autore se ne va ───────────────────────────
 
 

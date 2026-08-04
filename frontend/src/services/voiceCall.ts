@@ -5,6 +5,11 @@
  * JSON text frames carry transcripts and call state events.
  */
 
+/* Il nome del sottoprotocollo del socket vocale, che deve corrispondere a
+ * VOICE_WS_PROTOCOL del backend: è quello che il server conferma nella
+ * risposta all'handshake, mentre l'id di sessione viaggia accanto. */
+const VOICE_WS_PROTOCOL = 'skilllab-voice'
+
 /** Sample rate of the mic frames the backend expects (ElevenLabs STT). */
 const CAPTURE_SAMPLE_RATE = 16000
 /** Sample rate of the TTS audio the backend sends (Cartesia). */
@@ -184,7 +189,7 @@ export class VoiceCall {
     this.setupRecorder()
 
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const url = `${proto}://${window.location.host}/api/voice/ws?session_id=${encodeURIComponent(this.sessionId)}`
+    const url = `${proto}://${window.location.host}/api/voice/ws`
 
     await this.openSocket(url)
   }
@@ -203,7 +208,11 @@ export class VoiceCall {
       // va trattata come la fine di una telefonata: non c'è registrazione
       // da salvare e non c'è nessuna sessione da dichiarare conclusa.
       let startupFailed = false
-      const ws = new WebSocket(url)
+      // L'id di sessione viaggia come sottoprotocollo e non nell'indirizzo:
+      // un indirizzo finisce nel log degli accessi del proxy, e questo id è
+      // la sola credenziale che apre la chiamata. Il backend risponde
+      // scegliendo VOICE_WS_PROTOCOL (vedi backend/routers/voice.py).
+      const ws = new WebSocket(url, [VOICE_WS_PROTOCOL, this.sessionId])
       ws.binaryType = 'arraybuffer'
       this.ws = ws
 

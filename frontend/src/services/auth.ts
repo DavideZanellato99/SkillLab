@@ -1,7 +1,5 @@
 /* Auth service for communicating with the backend auth endpoints */
 
-import type { Authored } from './authorship'
-
 // Same-origin: the Vite dev server proxies /api to the backend (vite.config.ts).
 const API_BASE_URL = ''
 
@@ -11,7 +9,10 @@ const API_BASE_URL = ''
 
 export type UserStatus = 'active' | 'suspended' | 'disabled'
 
-export interface AuthUser extends Authored {
+/* L'account come lo legge chi lo usa: è quello che tornano l'accesso e
+ * /api/auth/me. Senza la paternità, che è roba dell'amministrazione e sta su
+ * AdminUser (services/admin.ts). */
+export interface AuthUser {
   id: string
   cognito_sub: string
   email: string
@@ -29,6 +30,8 @@ export interface AuthUser extends Authored {
    * minuti: con una sessione che si rinnova da sola è una data ben diversa
    * dall'ultimo accesso. Null alla stessa condizione, un account mai usato. */
   last_activity_at: string | null
+  created_at: string
+  updated_at: string
 }
 
 // =====================================================

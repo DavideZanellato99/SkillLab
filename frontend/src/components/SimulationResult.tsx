@@ -1,9 +1,14 @@
 import type { SimulationAttempt, SimulationAnswerResult } from '../services/simulations'
 import Badge from './Badge'
-import { formatScore, optionLabel, scoreBadgeTone } from './simulationFormat'
+import { formatElapsed, formatScore, optionLabel, scoreBadgeTone } from './simulationFormat'
 
 /* L'esito di un test consegnato: il voto in cima e poi, domanda per domanda,
- * cosa era stato risposto e cosa dice il documento.
+ * cosa era stato risposto, quanto è valso e cosa dice il documento.
+ *
+ * I punti stanno accanto a ogni domanda insieme al tempo, e non solo nel
+ * totale: una risposta giusta che ha preso 0,4 è la sola cosa che spiega un
+ * sei con otto risposte esatte, e senza il tempo lì accanto sembrerebbe un
+ * errore di correzione.
  *
  * Le spiegazioni ci sono anche sulle domande andate bene. Chi ha indovinato
  * senza esserne sicuro è esattamente la persona che deve leggerle, e non c'è
@@ -30,6 +35,22 @@ function AnswerRow({ answer, own }: { answer: SimulationAnswerResult; own: boole
           <span className="mr-1 text-slate-500">{answer.position}.</span>
           {answer.text}
         </p>
+        {/* I punti presi e, quando c'è, in quanto tempo. Il tempo manca sui
+            tentativi consegnati prima che contasse, e lì non si scrive. */}
+        <span className="shrink-0 text-right">
+          <span
+            className={`font-heading text-sm font-bold tabular-nums ${
+              answer.points > 0 ? 'text-slate-200' : 'text-slate-600'
+            }`}
+          >
+            {formatScore(answer.points)}
+          </span>
+          {answer.elapsed_ms !== null && (
+            <span className="block text-[0.7rem] text-slate-500">
+              in {formatElapsed(answer.elapsed_ms)}
+            </span>
+          )}
+        </span>
       </div>
 
       <ul className="mb-3 flex list-none flex-col gap-1.5">
@@ -110,6 +131,13 @@ export default function SimulationResult({ attempt, actions, own = true }: Simul
           <p className="mb-1 text-xs font-medium tracking-wide text-slate-400">Risultato</p>
           <p className="font-heading text-2xl font-bold text-slate-100">
             {attempt.correct_count} risposte corrette su {attempt.question_count}
+          </p>
+          {/* Perché il voto non è semplicemente le corrette in decimi: i
+              punti sono meno delle risposte esatte ogni volta che una di
+              quelle è arrivata con calma. */}
+          <p className="mt-1 text-[0.8rem] text-slate-500">
+            {formatScore(attempt.earned_points)} punti su {attempt.question_count}, perché una
+            risposta vale meno man mano che passa il tempo
           </p>
         </div>
         <Badge tone={scoreBadgeTone(attempt.score)} className="!px-4 !py-1.5 !text-base">

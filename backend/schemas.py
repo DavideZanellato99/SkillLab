@@ -1149,12 +1149,17 @@ class SimulationQuestionsPayload(BaseModel):
 
 
 class SimulationAnswerPayload(BaseModel):
-    """La risposta data a una domanda: quale opzione, o nessuna."""
+    """La risposta data a una domanda: quale opzione, in quanto tempo."""
 
     question_id: UUID
     # None significa lasciata in bianco, che vale come sbagliata ma si legge
     # diversamente nell'esito
     selected_option: int | None = None
+    # Quanto ci ha messo, misurato dal browser da quando la domanda è
+    # comparsa: è quello che fa scendere il valore di una risposta corretta
+    # (vedi simulation_scoring). Assente vale come il tempo massimo, non come
+    # il minimo: chi non lo manda non deve guadagnarci.
+    elapsed_ms: int | None = None
 
 
 class SimulationSubmitRequest(BaseModel):
@@ -1173,6 +1178,12 @@ class SimulationAnswerResult(BaseModel):
     selected_option: int | None
     correct_option: int
     is_correct: bool
+    # Quanto ci è voluto e quanto è valso: i punti sono da 1 a 0,1 su una
+    # risposta corretta, 0 sulle altre. Il tempo torna indietro insieme ai
+    # punti perché un numero più basso di 1 senza il tempo accanto sembra un
+    # errore di correzione.
+    elapsed_ms: int | None = None
+    points: float = 0.0
     explanation: str
     # I passaggi del documento su cui la domanda si fonda: è quello che
     # trasforma "hai sbagliato" in "ecco cosa dice la procedura"
@@ -1190,6 +1201,9 @@ class SimulationAttemptResponse(BaseModel):
     user_name: str
     correct_count: int
     question_count: int
+    # I punti raccolti sulle domande, da cui esce il voto: le risposte esatte
+    # restano accanto perché dicono un'altra cosa, quante ne sapeva
+    earned_points: float
     score: float
     created_at: datetime
     answers: list[SimulationAnswerResult]
@@ -1206,6 +1220,7 @@ class SimulationAttemptSummary(BaseModel):
     user_name: str
     correct_count: int
     question_count: int
+    earned_points: float
     score: float
     created_at: datetime
 

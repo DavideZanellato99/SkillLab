@@ -190,7 +190,7 @@ non logica.
 
 | Diritto | Come è soddisfatto |
 | --- | --- |
-| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, obiettivi, test tecnici svolti con le risposte date, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
+| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, obiettivi, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
 | **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni e obiettivi, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
 | **Rettifica** (art. 16) | L'utente modifica da solo nome e cognome; l'email la cambia un amministratore |
 | **Intervento umano** (art. 22) | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4) |

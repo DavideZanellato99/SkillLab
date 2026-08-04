@@ -73,6 +73,10 @@ export interface SimulationAnswerResult {
   selected_option: number | null
   correct_option: number
   is_correct: boolean
+  /** Quanto ci è voluto, null sui tentativi di prima del cronometro. */
+  elapsed_ms: number | null
+  /** Da 1 a 0,1 se la risposta è giusta, 0 se è sbagliata o in bianco. */
+  points: number
   explanation: string
   /** Il testo dei passaggi del documento su cui la domanda si fonda. */
   sources: string[]
@@ -87,6 +91,8 @@ export interface SimulationAttemptSummary {
   user_name: string
   correct_count: number
   question_count: number
+  /** I punti raccolti, da cui il voto: il tempo li fa scendere. */
+  earned_points: number
   /** Il voto in decimi, sulla stessa scala delle valutazioni. */
   score: number
   created_at: string
@@ -100,6 +106,8 @@ export interface SimulationAttempt extends SimulationAttemptSummary {
 export interface SimulationAnswerPayload {
   question_id: string
   selected_option: number | null
+  /** Da quando la domanda è comparsa a quando è stata consegnata. */
+  elapsed_ms: number
 }
 
 export interface SimulationQuestionPayload {

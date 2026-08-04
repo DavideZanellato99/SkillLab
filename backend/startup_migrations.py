@@ -134,6 +134,16 @@ def _add_columns() -> None:
         conn.execute(
             text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS suspension_reason TEXT")
         )
+        # I punti di un test consegnato, da cui ora si ricava il voto: una
+        # risposta giusta vale meno se è arrivata tardi. Nasce nullable
+        # perché i tentativi di prima non ne hanno, e viene riempita e
+        # bloccata subito dopo (vedi _backfill_simulation_points).
+        conn.execute(
+            text(
+                "ALTER TABLE simulation_attempts ADD COLUMN IF NOT EXISTS "
+                "earned_points DOUBLE PRECISION"
+            )
+        )
 
 
 def _add_authorship_columns() -> None:
@@ -421,6 +431,29 @@ def _backfill_last_login() -> None:
         )
 
 
+def _backfill_simulation_points() -> None:
+    """Dare un punteggio ai test consegnati prima che il tempo contasse.
+
+    Fino a ieri il voto era "quante ne ha prese", quindi una risposta giusta
+    valeva un punto pieno: assegnare `correct_count` non è una stima di
+    comodo, è quello che quei tentativi valevano davvero, e li lascia con lo
+    stesso voto che mostravano prima.
+
+    Idempotente due volte: l'UPDATE guarda solo le righe ancora vuote, e il
+    vincolo si può rimettere su una colonna che ce l'ha già.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE simulation_attempts SET earned_points = correct_count "
+                "WHERE earned_points IS NULL"
+            )
+        )
+        conn.execute(
+            text("ALTER TABLE simulation_attempts ALTER COLUMN earned_points SET NOT NULL")
+        )
+
+
 def _index_audit_logs() -> None:
     """Index the audit trail the way it is read.
 
@@ -456,6 +489,7 @@ def run_startup_migrations() -> None:
     _backfill_avatar_organizations()
     _backfill_last_login()
     _backfill_authorship()
+    _backfill_simulation_points()
     _index_audit_logs()
 
 

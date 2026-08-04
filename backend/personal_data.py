@@ -272,6 +272,7 @@ def _simulation_attempts(db: Session, user: User) -> list[dict]:
             "svolto_il": _at(attempt.created_at),
             "risposte_corrette": attempt.correct_count,
             "domande_totali": attempt.question_count,
+            "punti": attempt.earned_points,
             "punteggio": attempt.score,
             "risposte": [
                 {
@@ -280,6 +281,11 @@ def _simulation_attempts(db: Session, user: User) -> list[dict]:
                     "risposta_data": answer.get("selected_option"),
                     "risposta_corretta": answer.get("correct_option"),
                     "esatta": answer.get("is_correct"),
+                    # Quanto ci ha messo e quanto è valsa: fanno parte
+                    # dell'esito quanto la risposta, perché sono la ragione
+                    # per cui una risposta giusta ha preso meno di un punto.
+                    "tempo_ms": answer.get("elapsed_ms"),
+                    "punti": answer.get("points"),
                 }
                 for answer in (attempt.answers or [])
             ],

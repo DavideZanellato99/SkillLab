@@ -3,9 +3,10 @@
 Il gemello scritto del roleplay: là si misura come l'operatore gestisce una
 persona, qui se conosce la procedura. Il super admin carica un documento
 aziendale, un modello di ragionamento ne ricava dieci domande a risposta
-multipla, un umano le rilegge, e gli utenti dell'organizzazione le svolgono
-ottenendo un voto in decimi con la spiegazione di ogni risposta e il passaggio
-del documento da cui la domanda nasce.
+multipla, un umano le rilegge, e gli utenti dell'organizzazione le svolgono una
+domanda alla volta, trenta secondi ciascuna, ottenendo un voto in decimi che
+tiene conto anche della prontezza, con la spiegazione di ogni risposta e il
+passaggio del documento da cui la domanda nasce.
 
 Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 
@@ -17,11 +18,15 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [backend/simulation_rag.py](../backend/simulation_rag.py) | Spezza il testo in passaggi, calcola le somiglianze, campiona |
 | [backend/openai_service.py](../backend/openai_service.py) | Le chiamate a OpenAI: embedding e risposte JSON dal modello di ragionamento |
 | [backend/simulation_questions.py](../backend/simulation_questions.py) | I due prompt e le due passate che producono le domande |
+| [backend/simulation_scoring.py](../backend/simulation_scoring.py) | Quanto vale una risposta: la scala che fa scendere i punti con il tempo |
 | [backend/routers/admin_simulations.py](../backend/routers/admin_simulations.py) | Il ciclo di vita lato super admin: caricamento, generazione, revisione, pubblicazione |
 | [backend/routers/simulations.py](../backend/routers/simulations.py) | Lo svolgimento e la correzione |
 | [backend/models.py:653-848](../backend/models.py#L653-L848) | Le quattro tabelle |
 | [frontend/src/services/simulations.ts](../frontend/src/services/simulations.ts) | I tipi e le chiamate HTTP |
 | [frontend/src/hooks/useSimulations.ts](../frontend/src/hooks/useSimulations.ts) | Gli hook TanStack Query |
+| [frontend/src/components/SimulationRunner.tsx](../frontend/src/components/SimulationRunner.tsx) | Le tre schermate dello svolgimento: regole, domande, esito |
+| [frontend/src/components/SimulationQuestionStep.tsx](../frontend/src/components/SimulationQuestionStep.tsx) | Una domanda e il suo cronometro |
+| [frontend/src/components/simulationFormat.ts](../frontend/src/components/simulationFormat.ts) | Come si scrivono voti, punti e tempi, e la copia della scala che si legge durante la domanda |
 
 ## Il flusso in un colpo d'occhio
 
@@ -366,21 +371,69 @@ restare sul server fino alla consegna, altrimenti il test lo risolverebbe la
 scheda di rete.
 
 In [SimulationRunner](../frontend/src/components/SimulationRunner.tsx) le risposte
-vivono in uno stato locale `question_id -> indice dell'opzione`. Non c'è
-cronometro e non c'è blocco: si può tornare indietro su una domanda fino alla
-consegna, perché il test verifica se la procedura è nota, non se la si ricorda
-sotto pressione, e per quello c'è il roleplay. Non c'è nemmeno un limite ai
-tentativi.
+vivono in uno stato locale `question_id -> indice dell'opzione`, e la pagina ha
+tre schermate: le regole, le domande, l'esito. Sono una pagina sola e non tre
+indirizzi, perché un id nuovo a metà test sarebbe un tasto "indietro" del
+browser che rimette in gioco una domanda già consegnata. Ricaricando si riparte
+dalle regole e quello che si era risposto è perso: le risposte vivono nel
+browser finché non si consegna, perché un test a metà non è un tentativo. Non
+c'è nessun limite ai tentativi.
 
-Se si consegna con delle domande in bianco compare una conferma che dice quante
-sono e che contano come sbagliate.
+**Una domanda alla volta, trenta secondi ciascuna.** Si risponde, si passa alla
+successiva e non si torna più indietro. Il conto alla rovescia scende a schermo
+e la barra sotto il numero si svuota, di ambra sotto i dieci secondi e di rosso
+sotto i cinque. Accanto ai secondi c'è quanto varrebbe rispondere adesso, che
+scende insieme a loro: una regola che decide un voto va guardata mentre agisce,
+non scoperta nel riepilogo. Quel numero lo calcola il browser con la sua copia
+della scala (in `simulationFormat`), ma i punti che contano sono quelli che il
+server rimanda con l'esito.
+
+Le regole stanno in [SimulationIntro](../frontend/src/components/SimulationIntro.tsx)
+e si leggono **prima**: quante domande sono, quanto dura ognuna, che non si
+torna indietro e che il tempo scaduto vale come sbagliata. Il test comincia
+quando lo si dice, e la schermata esiste per questo: il cronometro della prima
+domanda non può partire su una pagina appena aperta, mentre si sta ancora
+leggendo il titolo.
+
+Ogni domanda è un
+[SimulationQuestionStep](../frontend/src/components/SimulationQuestionStep.tsx)
+montato con `key={question.id}`, quindi il passo alla domanda dopo rimonta il
+componente e con lui il cronometro: è il rimontaggio a rimettere a trenta i
+secondi, non un effetto che azzera un contatore. Dentro, tre scelte che vale la
+pena conoscere:
+
+| Scelta | Perché |
+| --- | --- |
+| Il tempo residuo si calcola da una scadenza assoluta, non scalando un contatore a ogni battito | Una scheda in secondo piano riceve meno battiti del previsto, e un contatore scalato regalerebbe secondi a chi cambia finestra |
+| La consegna della domanda passa da un `answered` in ref | Il tempo può finire nello stesso istante in cui si preme il pulsante, e consegnare due volte farebbe saltare un avanzamento |
+| Finché non si va avanti la scelta si può cambiare, dopo no | I trenta secondi sono per decidere, non per battere sul pulsante |
+
+Allo scadere si passa avanti con l'opzione selezionata, se ce n'è una, o in
+bianco. Chi non sa la risposta non deve aspettare il tempo per forza: il
+pulsante diventa "Salta la domanda" e la consegna in bianco.
+
+**Nessun riscontro durante il percorso.** Giusto e sbagliato arrivano insieme
+alla fine, perché sapere di aver sbagliato la seconda mentre si legge la terza
+cambia il modo di rispondere alle otto che restano.
+
+Il cronometro vive nel browser e il server non ne sa niente: non c'è un istante
+d'inizio registrato e la consegna viene accettata quando arriva. È un test di
+formazione e non un esame sorvegliato, quindi il tempo serve a chi lo svolge,
+per allenarsi a rispondere senza rileggere il manuale, e non a impedire a
+qualcuno di barare.
+
+Finita l'ultima domanda il test **si consegna da solo**. È l'unica pagina
+dell'app in cui una chiamata fallita non lascerebbe niente da ritentare a mano,
+quindi l'errore resta a schermo con le risposte ancora in memoria e il pulsante
+per riprovare la consegna.
 
 ---
 
 ## Fase 5, la correzione
 
 `POST /api/simulations/{id}/attempts`, con una voce per domanda
-(`selected_option` a `null` significa lasciata in bianco).
+(`selected_option` a `null` significa lasciata in bianco, `elapsed_ms` dice
+quanto ci è voluto a darla).
 
 **La correzione è deterministica e sta nel codice, non nel modello.** La
 risposta esatta è stata decisa quando la domanda è nata e riletta da un umano
@@ -395,8 +448,9 @@ della simulazione:
    sbagliata: significa che il client ha mandato qualcosa di incoerente;
 2. `is_correct` è `choice == question.correct_option`, quindi una domanda in
    bianco (`None`) è sbagliata ma resta distinguibile;
-3. si accumula una voce con **domanda, alternative, risposta data, risposta
-   esatta, esito e spiegazione**.
+3. i punti della domanda escono da `is_correct` e dal tempo (vedi sotto);
+4. si accumula una voce con **domanda, alternative, risposta data, risposta
+   esatta, esito, tempo, punti e spiegazione**.
 
 Quella lista è la `answers` del `SimulationAttempt`, ed è il punto centrale del
 disegno: **una fotografia, non dei puntatori**. Il tentativo resta leggibile
@@ -404,10 +458,59 @@ per intero anche se la domanda viene poi riscritta o la simulazione rigenerata
 da capo, e una domanda corretta dopo la consegna non può far apparire sbagliata
 una risposta che era giusta.
 
-Il punteggio è congelato nella riga (`correct_count` e `question_count`) e non
-ricalcolato a ogni lettura. Il voto in decimi è la proprietà
-[score](../backend/models.py#L836-L841), `corrette * 10 / totali` arrotondato a un
-decimale, sulla stessa scala delle valutazioni del roleplay.
+### Quanto vale una risposta
+
+Sapere una procedura e ricordarsela subito non sono la stessa cosa, e allo
+sportello la differenza si vede: chi deve rileggere il manuale la risposta ce
+l'ha, ma dopo. Il punteggio la misura, e la scala vive tutta in
+[simulation_scoring](../backend/simulation_scoring.py):
+
+| Quando arriva la risposta | Se è giusta vale |
+| --- | --- |
+| entro 3 secondi | 1 |
+| entro 6 | 0,9 |
+| entro 9 | 0,8 |
+| … un decimo ogni 3 secondi … | … |
+| entro 30, cioè l'ultimo istante | 0,1 |
+| sbagliata o in bianco, a qualsiasi velocità | 0 |
+
+Tre scelte dietro la tabella. L'ultimo scalino vale un decimo e non zero,
+perché rispondere giusto all'ultimo istante è comunque saperlo e vale più che
+sbagliare. Un `elapsed_ms` fuori scala viene riportato dentro invece di far
+fallire la consegna: un numero storto è comunque un test che qualcuno ha
+svolto.
+
+La terza è la meno ovvia: **un `elapsed_ms` assente vale come l'ultimo
+scalino**, non come il primo. Il tempo è l'unica parte del punteggio che il
+server non può verificare, quindi la scelta è fra due errori: chi non lo manda
+prende il massimo, oppure prende il minimo. Il primo è silenzioso, un client
+vecchio o modificato piglia dieci e nessuno se ne accorge. Il secondo si vede
+subito nel voto, e un voto strano è una cosa che qualcuno viene a chiedere.
+
+Non è teoria: questo difetto c'è stato. Il tempo è arrivato `null` per un
+giorno perché il browser aveva ancora la versione senza cronometro, i voti
+sono usciti pieni e la sola traccia era che i punti coincidevano sempre con le
+risposte esatte. Col fallback al minimo quei tentativi sarebbero saltati
+all'occhio subito.
+
+Il punteggio è congelato nella riga (`earned_points` e `question_count`) e non
+ricalcolato a ogni lettura, cosa che con i punti a tempo conta doppio: il
+tempo di una risposta è successo una volta sola. Il voto in decimi è la
+proprietà [score](../backend/models.py#L839-L842), cioè
+`punti * 10 / domande` arrotondato a un decimale, sulla stessa scala delle
+valutazioni del roleplay.
+
+`correct_count` resta accanto ai punti e non è più il voto: risponde a
+un'altra domanda, quante ne sapeva, e senza di lui un sei con otto risposte
+esatte sarebbe illeggibile. Nel riepilogo si vedono entrambi, e ogni domanda
+porta i suoi punti con accanto il tempo che li ha decisi.
+
+**Il tempo lo misura il browser.** Il server lo riporta dentro scala se arriva
+storto, ma non ha modo di verificarlo: non consegna le domande una alla volta
+e non registra un istante d'inizio, quindi un client modificato può dichiarare
+zero. È una scelta e non una svista, questo è un test di formazione e non un
+esame sorvegliato. Renderlo davvero vincolante vorrebbe dire consegnare le
+domande a tempo dal server, che è un altro disegno.
 
 Infine [audit.describe](../backend/audit.py) registra titolo della simulazione e
 punteggio.
@@ -420,7 +523,7 @@ due sorgenti apposta
 
 | Cosa si mostra | Da dove viene | Perché |
 | --- | --- | --- |
-| Testo, alternative, risposta data, risposta esatta, esito | La fotografia nel tentativo | Il voto non deve poter cambiare da solo mesi dopo l'esame |
+| Testo, alternative, risposta data, risposta esatta, esito, tempo e punti | La fotografia nel tentativo | Il voto non deve poter cambiare da solo mesi dopo l'esame, e il tempo di una risposta è successo una volta sola |
 | Spiegazione | La domanda **attuale**, se esiste ancora | Lì una correzione è un miglioramento |
 | Passaggi del documento | I chunk **attuali** della simulazione | Sono il documento, e tenerne una copia per ogni tentativo di ogni utente moltiplicherebbe un manuale per il numero di chi lo studia |
 
@@ -429,11 +532,34 @@ che deve restare fermo è il voto, non la citazione.
 
 A schermo
 ([SimulationResult](../frontend/src/components/SimulationResult.tsx)) si vede il
-voto in cima, poi domanda per domanda l'alternativa corretta in verde, quella
-scelta in rosso se diversa, la nota sulle domande lasciate in bianco, la
-spiegazione, e in fondo un "Cosa dice il documento" apribile con i passaggi
-citati. Le spiegazioni compaiono anche sulle domande andate bene, perché chi ha
+voto in cima, con accanto quante risposte erano esatte e quanti punti hanno
+fruttato, poi domanda per domanda i punti presi e in quanto tempo,
+l'alternativa corretta in verde, quella scelta in rosso se diversa, la nota
+sulle domande lasciate in bianco, la spiegazione, e in fondo un "Cosa dice il
+documento" apribile con i passaggi citati. Le spiegazioni compaiono anche sulle domande andate bene, perché chi ha
 indovinato senza esserne sicuro è esattamente la persona che deve leggerle.
+
+### Rileggere un proprio tentativo
+
+L'esito non vive solo nell'attimo della consegna. Nella barra "Tentativi
+passati", sotto le regole del test, ogni voto è un pulsante che riapre quel
+tentativo per intero in
+[SimulationAttemptModal](../frontend/src/components/SimulationAttemptModal.tsx),
+con le stesse domande, le stesse risposte, le spiegazioni e i passaggi del
+documento. Ne compaiono cinque, i più recenti, e chi ne ha di più li chiede
+tutti con il pulsante accanto: una barra lunga quanto la storia di un anno
+spingerebbe il test fuori dallo schermo.
+
+È la stessa modale che gli amministratori aprono dalla dashboard, con la sola
+prop `own` a cambiare: con `own` l'esito è scritto in seconda persona ("la tua
+risposta") e l'intestazione non ripete nome e indirizzo di chi legge. Il
+componente è uno perché la pagina deve essere una: chi corregge legge esattamente
+quello che legge chi ha sbagliato.
+
+**Ognuno vede solo i propri.** L'elenco dei tentativi arriva già filtrato
+sull'utente che chiede, e il tentativo singolo lo serve solo a chi lo ha svolto o
+a un admin del tenant, quindi il frontend non ha nessun controllo da rifare: il
+pulsante può aprire soltanto quello che il server gli manderebbe comunque.
 
 ---
 
@@ -441,8 +567,8 @@ indovinato senza esserne sicuro è esattamente la persona che deve leggerle.
 
 | Endpoint | Chi | Cosa |
 | --- | --- | --- |
-| `GET /api/simulations/{id}/attempts` | L'utente | I propri tentativi su quella simulazione, dal più recente |
-| `GET /api/simulations/attempts/{id}` | Chi lo ha svolto, o un admin del tenant a cui la simulazione appartiene | Un tentativo con la sua correzione completa. È quello che si apre cliccando una riga nella dashboard |
+| `GET /api/simulations/{id}/attempts` | L'utente | I propri tentativi su quella simulazione, dal più recente: è la barra "Tentativi passati" in cima al test |
+| `GET /api/simulations/attempts/{id}` | Chi lo ha svolto, o un admin del tenant a cui la simulazione appartiene | Un tentativo con la sua correzione completa. È quello che si apre cliccando una riga nella dashboard o un proprio tentativo passato |
 | `GET /api/simulations/{id}/results` | Admin | Tutti i tentativi su una simulazione. Un organization admin li vede solo per le simulazioni della propria organizzazione, che è la stessa cosa che dire "solo dei propri utenti" |
 | `GET /api/admin/simulations-report` | Admin | Tutti i tentativi in un colpo solo, chi li ha svolti e come è andata: è la sezione del simulatore nella dashboard (vedi [training-e-report.md](training-e-report.md)) |
 | `GET /api/comparison/simulation-attempts` | L'utente, o un admin per una persona del proprio ambito | I test consegnati da una persona sola, dal più vecchio, con le risposte: è la linguetta del simulatore nella pagina di confronto |
@@ -464,7 +590,7 @@ persone".
 | `technical_simulations` | Titolo, descrizione, stato, nome e testo del documento, organizzazione | Il file originale non c'è, solo il testo estratto |
 | `simulation_chunks` | `ordinal`, `content`, `embedding` | Cancellati e riscritti a ogni caricamento del documento |
 | `simulation_questions` | `position`, `text`, `options`, `correct_option`, `explanation`, `source_chunks` | `options` e `correct_option` stanno sulla stessa riga, quindi correggere il testo di un'opzione non può spostare la risposta esatta su un'altra |
-| `simulation_attempts` | `correct_count`, `question_count`, `answers` (la fotografia), `created_at` | Il voto si ricava dai primi due, quindi resta leggibile anche se un giorno le domande non fossero più dieci |
+| `simulation_attempts` | `correct_count`, `question_count`, `earned_points`, `answers` (la fotografia), `created_at` | Il voto si ricava da punti e domande, quindi resta leggibile anche se un giorno le domande non fossero più dieci. `earned_points` è arrivata dopo: i tentativi di prima l'hanno riempita con le loro risposte esatte, che è quello che valevano quando il tempo non contava (vedi [startup_migrations](../backend/startup_migrations.py)) |
 
 Tutto ha `ondelete CASCADE` verso la simulazione. Eliminare una simulazione è
 definitivo, al contrario dell'archiviazione di un avatar: un avatar archiviato

@@ -1,27 +1,35 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { useMyAttempts, useSimulation, useSubmitSimulation } from '../hooks/useSimulations'
-import type { SimulationAttempt } from '../services/simulations'
+import { useSimulation, useSubmitSimulation } from '../hooks/useSimulations'
+import type { SimulationAnswerPayload, SimulationAttempt } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
-import Spinner from './Spinner'
 import FormError from './FormError'
-import Badge from './Badge'
 import SimulationResult from './SimulationResult'
-import ConfirmModal from './ConfirmModal'
-import { formatDateTime, formatScore, optionLabel, scoreBadgeTone } from './simulationFormat'
+import SimulationIntro from './SimulationIntro'
+import SimulationQuestionStep from './SimulationQuestionStep'
+import { QUESTION_SECONDS } from './simulationFormat'
 
-/* Lo svolgimento di un test e, subito dopo la consegna, il suo esito.
+/* Lo svolgimento di un test e, alla fine, il suo esito.
  *
- * Una schermata sola per le due cose perché sono lo stesso momento: si
- * consegna e si vede com'è andata, senza cambiare pagina e senza un id nuovo
- * nell'indirizzo. Ricaricando si riparte dal test, ed è giusto: l'esito
- * appena letto resta negli ultimi tentativi.
+ * Il test è una domanda alla volta, con trenta secondi ciascuna: si risponde,
+ * si passa alla successiva e non si torna più indietro. Nessun riscontro
+ * durante il percorso, perché sapere di aver sbagliato la seconda mentre si
+ * legge la terza cambia il modo di rispondere alle otto che restano: giusto e
+ * sbagliato arrivano insieme, nel riepilogo finale.
  *
- * Nessun cronometro e nessun blocco: si può tornare indietro su una domanda
- * fino alla consegna. Il test verifica se la procedura è nota, non se la si
- * ricorda sotto pressione, e per quello c'è il roleplay. */
+ * Le tre schermate sono una pagina sola e non tre indirizzi: le regole, le
+ * domande, l'esito. Un id nuovo nell'indirizzo a metà test sarebbe un tasto
+ * "indietro" del browser che rimette in gioco una domanda già consegnata.
+ * Ricaricando si riparte dalle regole, e quello che si era già risposto è
+ * perso: le risposte vivono qui finché non si consegna, perché un test a
+ * metà non è un tentativo.
+ *
+ * Le risposte si consegnano da sole quando finisce l'ultima domanda, quindi
+ * questa è l'unica pagina in cui una chiamata fallita non lascia niente da
+ * ritentare a mano: l'errore resta a schermo con le risposte ancora in mano e
+ * il pulsante per riprovare la consegna. */
 
 const linkBtnCls =
   'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/6 bg-white/4 px-6 py-2 text-sm font-medium text-slate-400 no-underline transition hover:bg-white/8 hover:text-slate-100'
@@ -29,13 +37,15 @@ const linkBtnCls =
 export default function SimulationRunner() {
   const { simulationId } = useParams<{ simulationId: string }>()
   const { data: simulation, isLoading, error } = useSimulation(simulationId)
-  const { data: attempts = [] } = useMyAttempts(simulationId)
   const submit = useSubmitSimulation(simulationId ?? '')
 
-  /** question_id -> indice dell'opzione scelta. */
-  const [answers, setAnswers] = useState<Record<string, number>>({})
+  /** Il test è cominciato: da qui in poi il cronometro corre. */
+  const [started, setStarted] = useState(false)
+  /** La domanda a schermo, contata da 0. */
+  const [index, setIndex] = useState(0)
+  /** question_id -> opzione scelta (null se in bianco) e tempo impiegato. */
+  const [answers, setAnswers] = useState<Record<string, SimulationAnswerPayload>>({})
   const [result, setResult] = useState<SimulationAttempt | null>(null)
-  const [confirmIncomplete, setConfirmIncomplete] = useState(false)
 
   if (isLoading) {
     return (
@@ -58,17 +68,22 @@ export default function SimulationRunner() {
     )
   }
 
-  const answered = simulation.questions.filter((q) => answers[q.id] !== undefined).length
-  const total = simulation.questions.length
-  const allAnswered = answered === total
+  const questions = simulation.questions
+  const total = questions.length
 
-  const send = () => {
-    setConfirmIncomplete(false)
+  const send = (given: Record<string, SimulationAnswerPayload>) => {
     submit.mutate(
-      simulation.questions.map((q) => ({
-        question_id: q.id,
-        selected_option: answers[q.id] ?? null,
-      })),
+      /* Le domande mai arrivate a schermo, che ci sono solo se qualcosa è
+       * andato storto, viaggiano in bianco e con tempo pieno: sono l'unica
+       * cosa che il server non può ricostruire da solo. */
+      questions.map(
+        (q) =>
+          given[q.id] ?? {
+            question_id: q.id,
+            selected_option: null,
+            elapsed_ms: QUESTION_SECONDS * 1000,
+          },
+      ),
       {
         onSuccess: (attempt) => {
           setResult(attempt)
@@ -78,9 +93,36 @@ export default function SimulationRunner() {
     )
   }
 
-  const retry = () => {
+  /* Una domanda consegnata: si registra la risposta con il tempo che è
+   * costata e si passa avanti, o si consegna il test se quella era
+   * l'ultima. Le risposte di prima arrivano dallo stato, quella appena data
+   * no: `send` riceve la mappa già completa perché lo stato aggiornato non è
+   * leggibile nello stesso giro. */
+  const handleAnswer = (choice: number | null, elapsedMs: number) => {
+    const question = questions[index]
+    const given = {
+      ...answers,
+      [question.id]: {
+        question_id: question.id,
+        selected_option: choice,
+        elapsed_ms: elapsedMs,
+      },
+    }
+    setAnswers(given)
+    if (index + 1 < total) {
+      setIndex(index + 1)
+      // In cima subito e non con lo scorrimento morbido: la domanda nuova ha
+      // già il suo cronometro che corre, e non deve arrivare da sotto.
+      window.scrollTo({ top: 0 })
+    } else send(given)
+  }
+
+  const restart = () => {
     setResult(null)
     setAnswers({})
+    setIndex(0)
+    setStarted(false)
+    submit.reset()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -92,7 +134,7 @@ export default function SimulationRunner() {
           attempt={result}
           actions={
             <>
-              <PrimaryButton onClick={retry}>Riprova il test</PrimaryButton>
+              <PrimaryButton onClick={restart}>Riprova il test</PrimaryButton>
               <Link to="/simulatore" className={linkBtnCls}>
                 Torna all'elenco
               </Link>
@@ -103,147 +145,68 @@ export default function SimulationRunner() {
     )
   }
 
+  if (total === 0) {
+    return (
+      <PageContainer>
+        <PageHeader title={simulation.title} description="Simulazione non ancora svolgibile." />
+        <div className="rounded-2xl border border-white/6 bg-gray-900/60 p-16 text-center text-slate-500 backdrop-blur-md">
+          <p className="mb-1 text-[0.95rem]">Questa simulazione non ha ancora domande</p>
+          <p className="text-sm">Sarà svolgibile appena chi la gestisce le avrà preparate</p>
+        </div>
+        <Link to="/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
+          Torna all'elenco
+        </Link>
+      </PageContainer>
+    )
+  }
+
   return (
     <PageContainer>
       <PageHeader
         title={simulation.title}
-        description={simulation.description || `${total} domande a risposta multipla.`}
+        description={
+          started
+            ? 'Rispondi entro il tempo, il riepilogo arriva alla fine.'
+            : simulation.description || `${total} domande a risposta multipla, una alla volta.`
+        }
         actions={
-          <Link to="/simulatore" className={linkBtnCls}>
-            Torna all'elenco
-          </Link>
+          started ? undefined : (
+            <Link to="/simulatore" className={linkBtnCls}>
+              Torna all'elenco
+            </Link>
+          )
         }
       />
 
-      {attempts.length > 0 && (
-        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-white/6 bg-gray-900/60 px-5 py-3 backdrop-blur-md">
-          <span className="text-xs font-medium tracking-wide text-slate-400">
-            Tentativi passati
-          </span>
-          {attempts.slice(0, 5).map((attempt) => (
-            <span key={attempt.id} className="flex items-center gap-1.5 text-xs text-slate-500">
-              <Badge tone={scoreBadgeTone(attempt.score)}>{formatScore(attempt.score)}</Badge>
-              {formatDateTime(attempt.created_at)}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <ol className="mb-6 flex list-none flex-col gap-4">
-        {simulation.questions.map((question) => (
-          <li
-            key={question.id}
-            className="rounded-2xl border border-white/6 bg-gray-900/60 p-5 backdrop-blur-md"
-          >
-            <fieldset>
-              <legend className="mb-3 text-[0.95rem] font-medium leading-relaxed text-slate-100">
-                <span className="mr-1 text-slate-500">{question.position}.</span>
-                {question.text}
-              </legend>
-              <div className="flex flex-col gap-1.5">
-                {question.options.map((option, index) => {
-                  const selected = answers[question.id] === index
-                  return (
-                    <label
-                      key={index}
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-2.5 text-[0.9rem] transition ${
-                        selected
-                          ? 'border-violet-600 bg-violet-600/12 text-slate-100'
-                          : 'border-white/6 bg-white/2 text-slate-400 hover:border-white/12 hover:bg-white/5'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name={question.id}
-                        checked={selected}
-                        onChange={() => setAnswers((prev) => ({ ...prev, [question.id]: index }))}
-                        className="sr-only"
-                      />
-                      <span
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[0.7rem] font-bold ${
-                          selected
-                            ? 'border-violet-600 bg-violet-600 text-white'
-                            : 'border-white/15 text-slate-500'
-                        }`}
-                        aria-hidden
-                      >
-                        {optionLabel(index)}
-                      </span>
-                      <span className="flex-1 leading-relaxed">{option}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </fieldset>
-          </li>
-        ))}
-      </ol>
-
-      {submit.isError && (
-        <FormError
-          message={
-            submit.error instanceof Error ? submit.error.message : 'Errore nella consegna del test.'
-          }
+      {submit.isPending ? (
+        <LoadingState message="Consegna del test in corso..." />
+      ) : submit.isError ? (
+        <>
+          <FormError
+            message={
+              submit.error instanceof Error
+                ? submit.error.message
+                : 'Errore nella consegna del test.'
+            }
+          />
+          <p className="mb-4 text-[0.85rem] text-slate-400">
+            Le tue risposte non sono andate perse: riprova la consegna.
+          </p>
+          <PrimaryButton onClick={() => send(answers)}>Riprova la consegna</PrimaryButton>
+        </>
+      ) : started ? (
+        /* La chiave rimonta il passo a ogni domanda, e con lui il cronometro:
+           è il rimontaggio a rimettere a trenta i secondi, non un effetto. */
+        <SimulationQuestionStep
+          key={questions[index].id}
+          question={questions[index]}
+          number={index + 1}
+          total={total}
+          isLast={index + 1 === total}
+          onAnswer={handleAnswer}
         />
-      )}
-
-      {/* La barra della consegna resta a portata di pollice mentre si scorre:
-          con dieci domande il fondo pagina è lontano, e chi ha finito non
-          deve andarselo a cercare. */}
-      <div className="sticky bottom-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/6 bg-gray-900/90 px-5 py-4 backdrop-blur-xl">
-        <span className="text-[0.85rem] text-slate-400">
-          Hai risposto a <span className="font-semibold text-slate-100">{answered}</span> domande su{' '}
-          {total}
-        </span>
-        <PrimaryButton
-          onClick={() => (allAnswered ? send() : setConfirmIncomplete(true))}
-          disabled={submit.isPending}
-        >
-          {submit.isPending ? (
-            <>
-              <Spinner variant="button" />
-              Consegna in corso...
-            </>
-          ) : (
-            'Consegna il test'
-          )}
-        </PrimaryButton>
-      </div>
-
-      {confirmIncomplete && (
-        <ConfirmModal
-          icon={
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          }
-          iconWrapperCls="border border-amber-500/25 bg-amber-500/10 text-amber-400"
-          title="Test incompleto"
-          description={
-            <>
-              Hai lasciato in bianco {total - answered}{' '}
-              {total - answered === 1 ? 'domanda' : 'domande'}. Le domande senza risposta contano
-              come sbagliate. Vuoi consegnare lo stesso?
-            </>
-          }
-          confirmLabel="Consegna"
-          pendingLabel="Consegna in corso..."
-          confirmClassName="bg-gradient-to-br from-violet-600 to-cyan-500 text-white"
-          isPending={submit.isPending}
-          onConfirm={send}
-          onClose={() => setConfirmIncomplete(false)}
-        />
+      ) : (
+        <SimulationIntro simulation={simulation} onStart={() => setStarted(true)} />
       )}
     </PageContainer>
   )

@@ -216,6 +216,10 @@ def _test_attempt(db_session, user, organization, *, correct, title="Procedure",
         user_id=user.id,
         correct_count=correct,
         question_count=2,
+        # Risposte istantanee, quindi punto pieno a ognuna: qui si guarda il
+        # confronto fra due prove, non la scala del tempo (vedi
+        # test_simulation_scoring)
+        earned_points=float(correct),
         answers=[
             {
                 "question_id": str(simulation.id),

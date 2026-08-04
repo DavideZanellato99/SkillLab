@@ -6,6 +6,31 @@
 
 import type { SimulationStatus } from '../services/simulations'
 
+/* La scala del punteggio a tempo, gemella di `backend/simulation_scoring.py`.
+ *
+ * È scritta due volte, e la copia che conta è quella del server: i punti di
+ * un tentativo li assegna lui e tornano indietro con l'esito. Questa serve a
+ * dire quanto vale la risposta *mentre* il tempo scorre, che è l'unico
+ * momento in cui il server non ha ancora niente da dire. Cambiando la scala
+ * là va cambiata anche qui, o il numero che si legge durante la domanda non
+ * sarà quello che arriva nel riepilogo. */
+export const QUESTION_SECONDS = 30
+const SCORE_STEPS = 10
+export const STEP_SECONDS = QUESTION_SECONDS / SCORE_STEPS
+const STEP_POINTS = 1 / SCORE_STEPS
+
+/** Quanto vale ora una risposta corretta, dopo `elapsedMs` dalla domanda. */
+export function pointsAfter(elapsedMs: number): number {
+  const seconds = Math.min(Math.max(elapsedMs, 0), QUESTION_SECONDS * 1000) / 1000
+  const step = Math.max(Math.ceil(seconds / STEP_SECONDS), 1)
+  return Number((1 - (step - 1) * STEP_POINTS).toFixed(1))
+}
+
+/** Il tempo di una risposta come si legge nell'esito: "in 8s". */
+export function formatElapsed(ms: number): string {
+  return `${Math.round(ms / 100) / 10}s`.replace('.', ',')
+}
+
 /** La lettera con cui un'alternativa si presenta nel test: A, B, C, D. */
 export function optionLabel(index: number): string {
   return String.fromCharCode(65 + index)

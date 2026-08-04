@@ -156,12 +156,19 @@ def test_le_domande_non_portano_la_risposta_esatta(user_client, make_simulation)
 # ── Consegna e correzione ─────────────────────────────────────────────
 
 
-def _answers(simulation, *, correct: bool):
-    """Le risposte a tutte le domande, tutte giuste o tutte sbagliate."""
+def _answers(simulation, *, correct: bool, elapsed_ms: int | None = 1_000):
+    """Le risposte a tutte le domande, tutte giuste o tutte sbagliate.
+
+    Di serie arrivano in un secondo, cioè al valore pieno: i test che guardano
+    la correzione e non il cronometro restano leggibili, e un dieci nel test
+    resta il dieci che si legge nell'app. Passando `elapsed_ms=None` il tempo
+    non viene mandato affatto, che è tutt'altro caso (vale il minimo).
+    """
     return [
         {
             "question_id": str(q.id),
             "selected_option": q.correct_option if correct else (q.correct_option + 1) % 4,
+            "elapsed_ms": elapsed_ms,
         }
         for q in simulation.questions
     ]
@@ -179,6 +186,94 @@ def test_un_test_tutto_giusto_prende_dieci(user_client, make_simulation):
     assert esito["question_count"] == 3
     assert esito["score"] == 10.0
     assert all(a["is_correct"] for a in esito["answers"])
+
+
+def test_rispondere_giusto_ma_lentamente_non_prende_dieci(user_client, make_simulation):
+    """Il cuore della regola: sapere la procedura, ma dopo, vale meno."""
+    simulation = make_simulation()
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        # Venti secondi su trenta: settimo scalino, quattro decimi a domanda
+        json={"answers": _answers(simulation, correct=True, elapsed_ms=20_000)},
+    ).json()
+
+    assert esito["correct_count"] == 3
+    assert esito["earned_points"] == 1.2
+    assert esito["score"] == 4.0
+    assert all(a["points"] == 0.4 for a in esito["answers"])
+    assert all(a["elapsed_ms"] == 20_000 for a in esito["answers"])
+
+
+def test_i_punti_di_ogni_domanda_dipendono_dal_suo_tempo(user_client, make_simulation):
+    """Il tempo si conta per domanda e non sul test intero."""
+    simulation = make_simulation(questions=3)
+    risposte = _answers(simulation, correct=True)
+    risposte[0]["elapsed_ms"] = 2_000  # primo scalino, punto pieno
+    risposte[1]["elapsed_ms"] = 10_000  # quarto scalino
+    risposte[2]["elapsed_ms"] = 29_000  # ultimo scalino
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": risposte}
+    ).json()
+
+    assert [a["points"] for a in esito["answers"]] == [1.0, 0.7, 0.1]
+    assert esito["earned_points"] == 1.8
+    assert esito["score"] == 6.0
+
+
+def test_una_risposta_sbagliata_non_vale_niente_per_quanto_veloce(user_client, make_simulation):
+    simulation = make_simulation()
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=False, elapsed_ms=200)},
+    ).json()
+    assert esito["earned_points"] == 0.0
+    assert esito["score"] == 0.0
+    assert all(a["points"] == 0.0 for a in esito["answers"])
+
+
+def test_il_tempo_e_i_punti_restano_nella_fotografia_del_tentativo(user_client, make_simulation):
+    """Rileggendo un tentativo il voto non si ricalcola: si rilegge."""
+    simulation = make_simulation()
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True, elapsed_ms=8_000)},
+    ).json()
+
+    riletto = user_client.get(f"/api/simulations/attempts/{esito['id']}").json()
+    assert riletto["score"] == esito["score"] == 8.0
+    assert riletto["earned_points"] == 2.4
+    assert [a["points"] for a in riletto["answers"]] == [0.8, 0.8, 0.8]
+    assert [a["elapsed_ms"] for a in riletto["answers"]] == [8_000] * 3
+
+
+def test_una_consegna_senza_tempi_non_prende_dieci(user_client, make_simulation):
+    """Il caso del client vecchio, che è come questo difetto si era nascosto.
+
+    Un'app che non misura il tempo consegna risposte senza `elapsed_ms`: se
+    valessero punto pieno prenderebbe dieci in silenzio, e nessuno saprebbe
+    che il cronometro non sta arrivando. Prendendo il minimo, il voto lo dice.
+    """
+    simulation = make_simulation()
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True, elapsed_ms=None)},
+    ).json()
+
+    assert esito["correct_count"] == 3
+    assert esito["earned_points"] == 0.3
+    assert esito["score"] == 1.0
+    assert all(a["elapsed_ms"] is None for a in esito["answers"])
+
+
+def test_un_tempo_assurdo_non_fa_saltare_la_consegna(user_client, make_simulation):
+    """Un client che manda un numero storto consegna comunque un test."""
+    simulation = make_simulation()
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True, elapsed_ms=99_999_999)},
+    ).json()
+    assert esito["score"] == 1.0
+    assert all(a["points"] == 0.1 for a in esito["answers"])
 
 
 def test_l_esito_porta_spiegazioni_e_passaggi_del_documento(user_client, make_simulation):

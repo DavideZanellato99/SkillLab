@@ -12,6 +12,13 @@ lo stesso voto. Quello che l'LLM ha scritto e che arriva a chi ha sbagliato è
 la spiegazione, insieme ai passaggi del documento da cui la domanda viene: è
 lì che il test smette di essere un voto e diventa una lezione.
 
+Il voto però non è più solo quante ne ha prese: una risposta corretta vale
+meno se ci è voluto tempo (vedi ``simulation_scoring``), perché sapere una
+procedura e ricordarsela subito non sono la stessa cosa. Il tempo lo misura
+il browser e lo manda con la risposta; il server lo riporta dentro scala se
+arriva storto, ma non ha modo di verificarlo, ed è una scelta: questo è un
+test di formazione, non un esame sorvegliato.
+
 Le domande viaggiano verso il browser senza la risposta esatta (vedi
 ``SimulationQuestionResponse``): la chiave resta sul server fino alla
 consegna, altrimenti il test lo risolverebbe la scheda di rete.
@@ -42,6 +49,7 @@ from schemas import (
     SimulationResponse,
     SimulationSubmitRequest,
 )
+from simulation_scoring import attempt_points, attempt_score, question_points
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
@@ -101,7 +109,7 @@ def attempt_stats(db: Session, user_id: UUID, simulation_ids: list[UUID]) -> dic
         db.query(
             SimulationAttempt.simulation_id,
             SimulationAttempt.created_at,
-            SimulationAttempt.correct_count,
+            SimulationAttempt.earned_points,
             SimulationAttempt.question_count,
         )
         .filter(
@@ -112,13 +120,13 @@ def attempt_stats(db: Session, user_id: UUID, simulation_ids: list[UUID]) -> dic
         .all()
     )
     stats: dict = {}
-    for simulation_id, created_at, correct, total in rows:
+    for simulation_id, created_at, points, total in rows:
         entry = stats.setdefault(simulation_id, {"count": 0})
         entry["count"] += 1
         # Le righe arrivano dalla più vecchia, quindi l'ultima che passa di
         # qui è l'ultimo tentativo
         entry["last_at"] = created_at
-        entry["last_score"] = round(correct * 10 / total, 1) if total else 0.0
+        entry["last_score"] = attempt_score(points or 0.0, total)
     return stats
 
 
@@ -200,11 +208,17 @@ def _answer_results(
 ) -> list[SimulationAnswerResult]:
     """La correzione di un tentativo, come si legge nell'esito.
 
-    Testo, alternative e risposta esatta vengono dalla fotografia salvata nel
-    tentativo, non dalle domande di oggi: una domanda corretta dopo la
-    consegna non deve poter far apparire sbagliata una risposta che era
-    giusta. Spiegazione e passaggi invece si rileggono dalla domanda attuale,
-    quando esiste ancora, perché lì una correzione è un miglioramento.
+    Testo, alternative, risposta esatta, tempo e punti vengono dalla
+    fotografia salvata nel tentativo, non dalle domande di oggi: una domanda
+    corretta dopo la consegna non deve poter far apparire sbagliata una
+    risposta che era giusta, e i punti dipendono da un tempo che è successo
+    una volta sola. Spiegazione e passaggi invece si rileggono dalla domanda
+    attuale, quando esiste ancora, perché lì una correzione è un
+    miglioramento.
+
+    I tentativi consegnati prima che il tempo contasse non hanno né l'uno né
+    gli altri nella fotografia: lì il tempo resta vuoto e una risposta giusta
+    vale il punto pieno che valeva allora.
     """
     questions = {q.id: q for q in simulation.questions}
     results = []
@@ -220,6 +234,8 @@ def _answer_results(
                 selected_option=entry.get("selected_option"),
                 correct_option=entry["correct_option"],
                 is_correct=entry["is_correct"],
+                elapsed_ms=entry.get("elapsed_ms"),
+                points=entry.get("points", float(entry["is_correct"])),
                 explanation=(question.explanation if question else entry.get("explanation", "")),
                 sources=_sources(simulation, question.source_chunks if question else None),
             )
@@ -237,6 +253,7 @@ def _attempt_response(attempt: SimulationAttempt) -> dict:
         "user_name": _user_name(attempt.user),
         "correct_count": attempt.correct_count,
         "question_count": attempt.question_count,
+        "earned_points": attempt.earned_points or 0.0,
         "score": attempt.score,
         "created_at": attempt.created_at,
     }
@@ -263,19 +280,24 @@ def submit_attempt(
             detail="Questa simulazione non ha ancora domande.",
         )
 
-    selected = {a.question_id: a.selected_option for a in payload.answers}
+    given = {a.question_id: a for a in payload.answers}
     answers = []
     correct_count = 0
+    points: list[float] = []
     for question in simulation.questions:
-        choice = selected.get(question.id)
+        answer = given.get(question.id)
+        choice = answer.selected_option if answer else None
         if choice is not None and not 0 <= choice < len(question.options):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Risposta non valida per una delle domande.",
             )
         is_correct = choice == question.correct_option
+        elapsed_ms = answer.elapsed_ms if answer else None
+        earned = question_points(is_correct, elapsed_ms)
         if is_correct:
             correct_count += 1
+        points.append(earned)
         answers.append(
             {
                 "question_id": str(question.id),
@@ -285,6 +307,8 @@ def submit_attempt(
                 "selected_option": choice,
                 "correct_option": question.correct_option,
                 "is_correct": is_correct,
+                "elapsed_ms": elapsed_ms,
+                "points": earned,
                 "explanation": question.explanation,
             }
         )
@@ -294,6 +318,7 @@ def submit_attempt(
         user_id=current_user.id,
         correct_count=correct_count,
         question_count=len(simulation.questions),
+        earned_points=attempt_points(points),
         answers=answers,
     )
     db.add(attempt)

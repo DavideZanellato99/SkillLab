@@ -21,6 +21,7 @@ from sqlalchemy.orm import deferred, relationship
 
 from authorship import Authored
 from database import Base
+from simulation_scoring import attempt_score
 
 # Canonical role names (rows of the `roles` table)
 ROLE_SUPER_ADMIN = "super_admin"
@@ -797,19 +798,20 @@ class SimulationQuestion(Base):
 
 
 class SimulationAttempt(Base):
-    """Un test consegnato: le risposte date, quante erano giuste e quando.
+    """Un test consegnato: le risposte date, quanto valevano e quando.
 
     Il punteggio è congelato qui e non ricalcolato a ogni lettura, al
     contrario dei percorsi di training: là lo stato dipende da valutazioni
     che possono essere rifatte, qui dipende da domande che il super admin può
     correggere dopo la consegna, e un voto che cambia da solo mesi dopo
-    l'esame non è un voto.
+    l'esame non è un voto. Ora c'è una ragione in più: i punti dipendono dal
+    tempo di ogni risposta, e quel tempo è successo una volta sola.
 
     Per la stessa ragione ``answers`` è una fotografia e non dei puntatori:
-    ogni voce porta domanda, opzioni, risposta data e risposta esatta come
-    erano al momento della consegna, quindi il tentativo resta leggibile per
-    intero anche se la domanda viene poi riscritta o la simulazione
-    rigenerata da capo.
+    ogni voce porta domanda, opzioni, risposta data, risposta esatta, tempo
+    impiegato e punti come erano al momento della consegna, quindi il
+    tentativo resta leggibile per intero anche se la domanda viene poi
+    riscritta o la simulazione rigenerata da capo.
     """
 
     __tablename__ = "simulation_attempts"
@@ -822,11 +824,17 @@ class SimulationAttempt(Base):
         index=True,
     )
     user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    # Risposte esatte e domande totali: il voto in decimi si ricava da questi
-    # due, e restano leggibili anche se un giorno le domande non fossero più
-    # dieci.
+    # Risposte esatte e domande totali: non fanno più il voto, ma restano la
+    # risposta alla domanda "quante ne sapeva", che il voto da solo non dà
+    # più. Leggibili anche se un giorno le domande non fossero più dieci.
     correct_count = Column(Integer, nullable=False)
     question_count = Column(Integer, nullable=False)
+    # I punti raccolti, che è da dove il voto si ricava: una risposta giusta
+    # ne vale da 1 a 0,1 a seconda di quanto in fretta è arrivata (vedi
+    # ``simulation_scoring``), una sbagliata zero. Sui tentativi consegnati
+    # prima che il tempo contasse vale quante ne erano giuste, che è la
+    # verità di allora: lì una risposta esatta valeva un punto pieno.
+    earned_points = Column(Float, nullable=False, default=0.0)
     answers = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), index=True)
 
@@ -836,14 +844,13 @@ class SimulationAttempt(Base):
     @property
     def score(self) -> float:
         """Il voto in decimi, per stare sulla stessa scala delle valutazioni."""
-        if not self.question_count:
-            return 0.0
-        return round(self.correct_count * 10 / self.question_count, 1)
+        return attempt_score(self.earned_points or 0.0, self.question_count)
 
     def __repr__(self):
         return (
             f"<SimulationAttempt(id={self.id}, user_id={self.user_id}, "
-            f"correct={self.correct_count}/{self.question_count})>"
+            f"corrette={self.correct_count}/{self.question_count}, "
+            f"punti={self.earned_points})>"
         )
 
 

@@ -9,6 +9,7 @@
  * tipi diversi e non uno con dei campi opzionali. */
 
 import { apiFetch } from './api'
+import type { Authored } from './authorship'
 
 /** In bozza esiste solo per il super admin, pubblicata la vede la sua org. */
 export type SimulationStatus = 'draft' | 'published'
@@ -51,7 +52,12 @@ export interface SimulationDetail extends Simulation {
   questions: SimulationQuestion[]
 }
 
-export interface SimulationAdminDetail extends Simulation {
+/* La stessa riga con la firma di chi l'ha scritta. La paternità arriva solo
+ * dagli endpoint di amministrazione: a chi svolge il test il server non manda
+ * l'indirizzo di chi lo ha preparato. */
+export interface AdminSimulation extends Simulation, Authored {}
+
+export interface SimulationAdminDetail extends AdminSimulation {
   questions: SimulationQuestionAdmin[]
   document_text: string
   chunk_count: number
@@ -129,7 +135,7 @@ export const fetchSimulationResults = (simulationId: string) =>
 
 // --- Gestione (super admin) ---
 
-export const fetchAdminSimulations = () => apiFetch<Simulation[]>('/api/admin/simulations')
+export const fetchAdminSimulations = () => apiFetch<AdminSimulation[]>('/api/admin/simulations')
 
 export const fetchAdminSimulation = (simulationId: string) =>
   apiFetch<SimulationAdminDetail>(`/api/admin/simulations/${simulationId}`)

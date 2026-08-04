@@ -1,12 +1,12 @@
-/* I due report in sola lettura dell'area admin: il recap per utente delle
- * conversazioni svolte, e i punteggi delle valutazioni da cui la dashboard
- * ricava i suoi conteggi.
+/* I report in sola lettura dell'area admin: il recap per utente delle
+ * conversazioni svolte, i punteggi delle valutazioni e i tentativi sulle
+ * simulazioni, da cui la dashboard ricava i suoi conteggi.
  *
  * I download (XLSX del report valutazioni) non stanno qui: producono un file
  * da salvare su disco, non uno stato da tenere in cache. */
 
 import { useQuery } from '@tanstack/react-query'
-import { fetchEvaluationsReport, fetchUsersReport } from '../services/admin'
+import { fetchEvaluationsReport, fetchSimulationsReport, fetchUsersReport } from '../services/admin'
 import { queryKeys } from './queryKeys'
 
 /* Sono le due letture più costose dell'app: il server scandisce le
@@ -32,6 +32,16 @@ export function useEvaluationsReport(organizationId?: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.reports.evaluations(organizationId || undefined),
     queryFn: () => fetchEvaluationsReport(organizationId || undefined),
+    enabled,
+    staleTime: REPORT_STALE_TIME,
+  })
+}
+
+/** Le righe dei tentativi, una per test tecnico consegnato. */
+export function useSimulationsReport(organizationId?: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.reports.simulations(organizationId || undefined),
+    queryFn: () => fetchSimulationsReport(organizationId || undefined),
     enabled,
     staleTime: REPORT_STALE_TIME,
   })

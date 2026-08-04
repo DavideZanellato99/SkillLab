@@ -49,7 +49,7 @@ questo documento e firmare l'accordo art. 28.
 | Obiettivi di formazione assegnati | `training_assignments` | Assegnati da un amministratore |
 | Indirizzo IP e User-Agent | `token_session`, `audit_logs` | Raccolti a ogni accesso e a ogni azione |
 | Registro delle azioni compiute | `audit_logs` | Scritto dal middleware a ogni richiesta che modifica qualcosa |
-| Email di chi ha creato o modificato una riga | `users`, `organizations`, `avatars`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`) |
+| Email di chi ha creato o modificato una riga | `users`, `organizations`, `avatars`, `technical_simulations`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`) |
 
 Due precisazioni che contano.
 
@@ -271,8 +271,10 @@ conclusione.
 - Credenziali del database obbligatorie da ambiente, nessun valore di
   default nel repository.
 - Segreti esclusi dall'immagine Docker (`backend/.dockerignore`).
-- Scansioni automatiche settimanali su dipendenze e codice
-  (`.github/workflows/security.yml`).
+- Scansioni automatiche settimanali su dipendenze, codice, immagini e
+  applicazione in esecuzione (`.github/workflows/security.yml`: pip-audit,
+  npm audit, Trivy, CodeQL, ZAP). È la verifica periodica delle misure
+  tecniche richiesta dall'art. 32.1.d.
 
 ## 11. Cosa non fa l'applicazione
 

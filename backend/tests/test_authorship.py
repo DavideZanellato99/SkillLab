@@ -15,10 +15,11 @@ import pytest
 import routers.admin as admin_router
 import routers.auth as auth_router
 from authorship import DELETED_ACTOR_EMAIL, SYSTEM_ACTOR_EMAIL
-from models import Avatar, Organization, User
+from models import Avatar, Organization, TechnicalSimulation, User
 
 AVATARS = "/api/admin/avatars"
 ORGS = "/api/admin/organizations"
+SIMULATIONS = "/api/admin/simulations"
 USERS = "/api/admin/users"
 
 
@@ -243,16 +244,25 @@ def test_the_login_signs_the_row_as_the_user_themselves(
 # ── Quello che le pagine di amministrazione leggono ────
 
 
-def test_the_three_apis_answer_with_the_same_four_fields(
+def test_the_admin_apis_answer_with_the_same_four_fields(
     admin_client, db_session, cognito, organization, make_avatar, super_admin_user
 ):
-    """Le schede di utente, organizzazione e avatar mostrano gli stessi
-    quattro campi con lo stesso componente: se un'API smettesse di
+    """Le schede di utente, organizzazione, avatar e simulazione mostrano gli
+    stessi quattro campi con lo stesso componente: se un'API smettesse di
     rispondere con uno di loro, la scheda mostrerebbe un buco."""
     make_avatar(name="Da Elencare")
     admin_client.post(USERS, json=_user_payload(organization))
+    db_session.add(
+        TechnicalSimulation(
+            title="Da elencare",
+            organization_id=organization.id,
+            document_name="procedura.txt",
+            document_text="Il testo della procedura.",
+        )
+    )
+    db_session.flush()
 
-    for url in (USERS, ORGS, AVATARS):
+    for url in (USERS, ORGS, AVATARS, SIMULATIONS):
         response = admin_client.get(url)
         assert response.status_code == 200, url
         body = response.json()

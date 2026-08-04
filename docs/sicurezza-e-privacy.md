@@ -1,0 +1,194 @@
+# Sicurezza e privacy
+
+Cosa viene registrato, cosa viene difeso, per quanto restano i dati e come si
+portano via. Quali dati personali tratta l'applicazione e su quale base
+giuridica sta invece in [gdpr.md](gdpr.md): qui c'è come funziona il
+meccanismo.
+
+## Il registro delle azioni
+
+Un middleware solo scrive tutto il registro
+([backend/audit.py](../backend/audit.py)). Gira **dopo** che la risposta è
+stata prodotta, e registra la richiesta solo se la rotta che ha corrisposto è
+in una tabella dichiarata nel modulo.
+
+Questa è la scelta di fondo: il registro è guidato da **una tabella**, non da
+chiamate sparse dentro i router. Un endpoint che cambia qualcosa è coperto il
+giorno in cui viene aggiunto a quella tabella, e non c'è nessuna riga da
+ricordarsi di scrivere dentro la funzione.
+
+La chiave è il percorso **templato** che FastAPI ha riconosciuto
+(`/api/admin/users/{user_id}`), non quello concreto: una rotta si dichiara una
+volta e vale per ogni id.
+
+| Cosa entra | Cosa resta fuori |
+| --- | --- |
+| Tutto quello che cambia qualcosa, di qualunque ruolo | Le GET, che sarebbero rumore di navigazione |
+| Login, login fallito, logout, prima password (registrati esplicitamente, perché lì un utente autenticato non c'è ancora) | Il corpo delle richieste, sempre |
+| L'export dei propri dati personali, unica GET nel registro | |
+
+L'export è nel registro perché una richiesta di accesso ai propri dati non è
+navigazione: è esattamente la cosa di cui serve poter dimostrare di aver dato
+seguito.
+
+Due garanzie su cui il resto del codice conta:
+
+- **scrivere una riga di registro non può far cadere la richiesta che
+  descrive.** La scrittura gira su una sessione tutta sua, dentro un
+  try/except: un guasto viene stampato e la risposta esce intatta;
+- **niente qui legge il corpo della richiesta.** Nel campo dei dettagli
+  finiscono solo gli extra che un endpoint ha attaccato esplicitamente con
+  `describe()`, quindi password, token e contenuto delle conversazioni restano
+  fuori per costruzione.
+
+L'attore viene da `request.state.audit_user`, pubblicato da `get_current_user`.
+Le righe portano anche email, ruolo e organizzazione **fotografati**: il
+registro deve restare leggibile dopo che l'account è stato cancellato, o smette
+di essere un registro.
+
+Il super admin lo legge da `/admin/logs`
+([routers/audit_logs.py](../backend/routers/audit_logs.py)), con i filtri per
+azione, utente e periodo.
+
+## Le difese sugli accessi
+
+Descritte per esteso in [autenticazione.md](autenticazione.md), in sintesi:
+
+| Difesa | Contro cosa | Dove |
+| --- | --- | --- |
+| Cookie `HttpOnly` | Furto del token via XSS | [routers/auth.py](../backend/routers/auth.py) |
+| Limite a finestra scorrevole, su database | Tentativi di password a raffica, anche distribuiti | [rate_limit.py](../backend/rate_limit.py) |
+| Messaggio di errore unico | Scoprire quali email esistono | [routers/auth.py](../backend/routers/auth.py) |
+| Denylist dei token | Il logout che altrimenti non varrebbe fino alla scadenza | [token_denylist.py](../backend/token_denylist.py) |
+| Session binding a IP e User-Agent | Un cookie portato via dal browser del proprietario | [token_sessions.py](../backend/token_sessions.py) |
+| Stato di account e organizzazione a ogni richiesta | Sospensioni che varrebbero solo al login successivo | [auth_dependency.py](../backend/auth_dependency.py) |
+
+Due altre difese stanno lontano dal login e vale la pena nominarle:
+
+- **i ritratti degli avatar** vengono riconosciuti dai **byte iniziali** del
+  file, non dal nome né dal tipo dichiarato dal browser: quei file finiscono
+  serviti da `/static`, quindi va escluso tutto quello che un browser potrebbe
+  eseguire, e SVG e HTML sono proprio quello. Passano solo PNG, JPEG e WebP, e
+  l'estensione salvata è quella che la firma dimostra;
+- **la scheda persona non esce mai dal server** verso chi si allena. È l'API di
+  amministrazione a esporla, e l'export dei dati personali la esclude
+  esplicitamente: contiene l'obiettivo nascosto e la vera causa del problema,
+  cioè la soluzione dell'esercizio.
+
+## La conservazione
+
+Ogni finestra è configurata, e **nessuna ha un valore di ripiego nel codice**:
+per quanto si tengono dei dati personali è una decisione che deve stare nella
+configurazione, dove si vede, non in un default che nessuno legge. In
+produzione i valori sono quelli elencati in [gdpr.md](gdpr.md):
+
+| Dato | Finestra | Variabile |
+| --- | --- | --- |
+| Registrazione audio della chiamata | 90 giorni | `AUDIO_RECORDING_RETENTION_DAYS` |
+| Conversazione intera con valutazione e revisione | 730 giorni | `CONVERSATION_RETENTION_DAYS` |
+| Tentativi delle simulazioni tecniche | 730 giorni | `SIMULATION_ATTEMPT_RETENTION_DAYS` |
+| Registro delle azioni | 180 giorni | `AUDIT_LOG_RETENTION_DAYS` |
+
+L'audio ha la finestra più corta perché è il dato più sensibile del sistema: la
+voce di una persona. La conversazione più lunga, perché è il percorso
+formativo. Un tentativo di simulazione se ne va intero, fotografia delle
+risposte compresa, mentre la simulazione con le sue domande non riguarda
+nessuno in particolare e resta.
+
+## Il ciclo di pulizia
+
+Le finestre le applica un ciclo che gira **dentro l'applicazione**
+([housekeeping.py](../backend/housekeeping.py)), non un cron dell'host e non un
+comando manuale.
+
+Il motivo: una promessa mantenuta solo al riavvio non è mantenuta. Un container
+acceso da otto mesi starebbe seduto su otto mesi di dati scaduti ed è, sulla
+carta, conforme esattamente quanto uno che pulisce ogni notte.
+
+Tre proprietà, tutte per la stessa ragione ("installato una volta e mai più
+toccato"):
+
+- **gira una volta all'avvio**, poi ogni `HOUSEKEEPING_INTERVAL_HOURS`, così
+  sia un riavvio sia una lunga permanenza in piedi finiscono puliti;
+- **non può morire**. Un giro fallito viene registrato e dimenticato, il ciclo
+  resta vivo e riprova. Un'eccezione che scappasse da lì spegnerebbe la
+  conservazione per tutta la vita del processo, che è l'unico guasto che
+  nessuno noterebbe;
+- **non può portarsi giù l'applicazione**: il lavoro è sincrono e va su un
+  thread, quindi l'event loop continua a servire le chiamate mentre una DELETE
+  grossa gira.
+
+Il ciclo vive in **ogni** replica, quindi parte più volte insieme. Lo risolve un
+advisory lock **non bloccante**: una replica pulisce, le altre saltano il giro.
+Non bloccante e non in coda, al contrario del lock sullo schema: qui il lavoro
+lo sta già facendo qualcun altro, e la risposta onesta è saltare.
+
+Un giro applica tutte le finestre insieme, e pulisce anche le cose che scadono
+da sole: sessioni di token, token revocati, tentativi di accesso, sessioni
+vocali chieste e mai aperte.
+
+## I diritti delle persone
+
+**Accesso e portabilità (art. 15 e 20).** `GET /api/auth/me/export` produce uno
+ZIP che l'utente scarica da solo dalla propria pagina di profilo
+([personal_data.py](../backend/personal_data.py)): un JSON con i dati
+strutturati e le chiavi in italiano, l'audio delle proprie chiamate come file,
+e un README in italiano che spiega cosa c'è nell'archivio. La copia deve essere
+intelligibile, non solo completa.
+
+Due regole su cosa **non** entra:
+
+- **la scheda persona di un avatar**, come detto sopra;
+- **i dati di chiunque altro**. Ogni query è filtrata sul richiedente, e gli
+  unici nomi di altre persone che compaiono sono quelli dei docenti che hanno
+  firmato un giudizio sulle sue conversazioni, che fa parte del suo voto e che
+  ha diritto di leggere.
+
+E una cosa che entra ed è facile dimenticare: le righe di registro che lo
+riguardano e le sessioni registrate sul suo account con IP e User-Agent. Sono
+dati personali tenuti su di lui, quindi l'art. 15 li copre, anche se il
+registro nell'interfaccia è una schermata da super admin.
+
+**Cancellazione (art. 17).** La sa fare un modulo solo,
+[erasure.py](../backend/erasure.py), usato sia dalla cancellazione di un
+singolo utente sia da quella di un'organizzazione intera. Prima esistevano due
+idee diverse di cosa sia fatta una persona, ed entrambe si dimenticavano la
+stessa tabella: è così che la cancellazione va storta, non con un errore
+visibile ma con una riga che nessuno ha ricordato.
+
+Cosa **sopravvive di proposito**:
+
+| Cosa | Perché |
+| --- | --- |
+| Le righe di registro (chiave esterna azzerata, email e ruolo fotografati) | Un registro deve restare leggibile dopo che l'account è sparito, e scade sul proprio orologio |
+| Il nome del docente sulle revisioni scritte per altre persone | Fa parte del voto di qualcun altro, e chi contesta un punteggio ha diritto di sapere chi l'ha firmato |
+
+Cosa **non** sopravvive: il nome nelle colonne di paternità delle righe che ha
+creato, sostituito da `utente eliminato`. Un'organizzazione o un avatar non
+sono un registro e non sono il voto di nessuno: la riga continua a dire che
+l'ha fatta una persona e smette di dire quale.
+
+Nessuna delle due eccezioni conserva IP, voce o trascrizioni di chi è stato
+cancellato, che è quello di cui la cancellazione parla davvero.
+
+Il modulo **non fa commit**: la transazione è di chi chiama, così la rimozione
+dei dati locali e il resto di quello che l'endpoint sta facendo (per esempio
+cancellare l'account da Cognito) riescono o falliscono insieme.
+
+## Quello che l'applicazione non fa da sola
+
+Tre cose stanno fuori dal codice e sono elencate in
+[deploy-e-scalabilita.md](deploy-e-scalabilita.md) e
+[infrastruttura.md](infrastruttura.md), ma vanno ripetute perché senza di esse
+la parte fatta qui non basta:
+
+- **la cifratura del disco**, che protegge le registrazioni audio nel volume
+  del database, e vale anche per i backup;
+- **HTTPS e l'header di provenienza sovrascritto** dal proxy, senza cui i
+  cookie `Secure` non funzionano e la metà IP del binding si può falsificare;
+- **il tenere i backup fuori dalla macchina**, e con le stesse finestre di
+  conservazione, altrimenti ricreano il problema che la pulizia risolve.
+
+C'è infine un interruttore da tenere d'occhio sul server: `VOICE_STT_DEBUG`
+stampa nei log le trascrizioni grezze di quello che gli utenti dicono. In
+locale serve a tarare la VAD, in produzione va spento.

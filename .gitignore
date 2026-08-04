@@ -23,6 +23,12 @@ dist/
 # Docker images behind an intercepting antivirus/proxy) — see Dockerfiles.
 avast-root.crt
 
+# Report della scansione DAST, prodotti da .zap/baseline.yaml quando la si
+# lancia in locale. Contengono richieste e risposte per intero, quindi anche
+# quello che l'applicazione ha rimandato indietro mentre veniva esplorata.
+zap-out/
+zap-dast.sarif
+
 # Copie del database prodotte da db/backup.sh: contengono tutti i dati
 # personali che l'applicazione tratta, e non entrano nel repository per
 # nessun motivo.

@@ -213,7 +213,7 @@ punto di rottura. La soglia sulla CPU è il **70% di un core**, non il 100%:
 un event loop ha una coda sola, e quando il core è davvero pieno la latenza
 cresce in modo non lineare.
 
-Vedi [loadtest/](loadtest/), che è il banco di prova già pronto per farlo.
+Vedi [loadtest.md](loadtest.md), il banco di prova già pronto per farlo.
 
 ---
 
@@ -223,26 +223,26 @@ Vedi [loadtest/](loadtest/), che è il banco di prova già pronto per farlo.
 
 | Cosa | Dove | Perché |
 |---|---|---|
-| Sessioni vocali su database | [backend/voice_sessions.py](backend/voice_sessions.py) | Il `POST` che apre la chiamata e il WebSocket che la usa sono due richieste: con più repliche non finiscono sullo stesso processo. Risolto così, cade anche il bisogno di affinità di sessione sul proxy |
-| Lock sullo schema | [backend/startup_migrations.py](backend/startup_migrations.py) | Quattro container che partono insieme facevano lo stesso DDL nello stesso istante |
-| Lock sulla pulizia | [backend/housekeeping.py](backend/housekeeping.py) | Lo stesso purge partiva quattro volte, con DELETE che si bloccavano a vicenda |
-| Limite accessi su database | [backend/rate_limit.py](backend/rate_limit.py) | Con quattro repliche il limite valeva quattro volte tanto |
-| Tetto per processo | [backend/voice_capacity.py](backend/voice_capacity.py) | Un event loop pieno non rifiuta, rallenta, e rallenta per tutti insieme |
-| Pool di connessioni | [backend/database.py](backend/database.py) | I default sono per un processo solo. In più `pool_pre_ping`, senza il quale la prima richiesta dopo un riavvio del database fallisce |
-| Connessione restituita prima delle attese lunghe | [backend/routers/chat.py](backend/routers/chat.py) | Valutazione e chat in streaming aspettano il modello per decine di secondi, e fino a lì tenevano ferma una connessione senza usarla. Con quaranta persone che chiudono insieme, il pool finiva per richieste che stavano solo aspettando OpenAI |
+| Sessioni vocali su database | [backend/voice_sessions.py](../backend/voice_sessions.py) | Il `POST` che apre la chiamata e il WebSocket che la usa sono due richieste: con più repliche non finiscono sullo stesso processo. Risolto così, cade anche il bisogno di affinità di sessione sul proxy |
+| Lock sullo schema | [backend/startup_migrations.py](../backend/startup_migrations.py) | Quattro container che partono insieme facevano lo stesso DDL nello stesso istante |
+| Lock sulla pulizia | [backend/housekeeping.py](../backend/housekeeping.py) | Lo stesso purge partiva quattro volte, con DELETE che si bloccavano a vicenda |
+| Limite accessi su database | [backend/rate_limit.py](../backend/rate_limit.py) | Con quattro repliche il limite valeva quattro volte tanto |
+| Tetto per processo | [backend/voice_capacity.py](../backend/voice_capacity.py) | Un event loop pieno non rifiuta, rallenta, e rallenta per tutti insieme |
+| Pool di connessioni | [backend/database.py](../backend/database.py) | I default sono per un processo solo. In più `pool_pre_ping`, senza il quale la prima richiesta dopo un riavvio del database fallisce |
+| Connessione restituita prima delle attese lunghe | [backend/routers/chat.py](../backend/routers/chat.py) | Valutazione e chat in streaming aspettano il modello per decine di secondi, e fino a lì tenevano ferma una connessione senza usarla. Con quaranta persone che chiudono insieme, il pool finiva per richieste che stavano solo aspettando OpenAI |
 
 ### 3.2 L'infrastruttura
 
 | Cosa | Dove |
 |---|---|
-| TLS, smistamento, bilanciamento `least_conn`, header blindato | [caddy/Caddyfile](caddy/Caddyfile) |
-| Repliche, healthcheck, servizi, volumi | [docker-compose.yml](docker-compose.yml) |
-| Log compressi e con un tetto (2 GB per container, mesi di storia), e limiti di CPU e memoria, con la riserva che tiene Postgres fuori dallo swap | [docker-compose.yml](docker-compose.yml) |
+| TLS, smistamento, bilanciamento `least_conn`, header blindato | [caddy/Caddyfile](../caddy/Caddyfile) |
+| Repliche, healthcheck, servizi, volumi | [docker-compose.yml](../docker-compose.yml) |
+| Log compressi e con un tetto (2 GB per container, mesi di storia), e limiti di CPU e memoria, con la riserva che tiene Postgres fuori dallo swap | [docker-compose.yml](../docker-compose.yml) |
 | I numeri che cambiano con la macchina (repliche, memoria del backend e del database) | il `.env` accanto al compose |
-| Sviluppo: una replica, niente Caddy né backup | [docker-compose.override.yml](docker-compose.override.yml) |
-| Solo file statici, niente più proxy | [frontend/nginx.conf](frontend/nginx.conf) |
-| Dump ogni sei ore, con ritenzione | [db/backup.sh](db/backup.sh) |
-| Banco di prova per la capacità | [loadtest/](loadtest/) |
+| Sviluppo: una replica, niente Caddy né backup | [docker-compose.override.yml](../docker-compose.override.yml) |
+| Solo file statici, niente più proxy | [frontend/nginx.conf](../frontend/nginx.conf) |
+| Dump ogni sei ore, con ritenzione | [db/backup.sh](../db/backup.sh) |
+| Banco di prova per la capacità | [loadtest/](../loadtest/) |
 
 ### 3.3 Come è stato verificato
 
@@ -343,7 +343,7 @@ docker compose -f docker-compose.yml logs -f caddy
 docker stats
 ```
 
-Le righe `[LATENCY]` si aggregano con [loadtest/report.py](loadtest/report.py),
+Le righe `[LATENCY]` si aggregano con [loadtest/report.py](../loadtest/report.py),
 che dà mediana, p95 e massimo per stadio della pipeline. Vale anche sul
 traffico vero, non solo sotto prova.
 

@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchEvaluationsReportXlsx } from '../services/admin'
-import { useEvaluationsReport } from '../hooks/useReports'
+import { useEvaluationsReport, useSimulationsReport } from '../hooks/useReports'
 import type { EvaluationReportRow } from '../services/admin'
 import { saveBlob } from '../services/api'
 import { useOrganizations } from '../hooks/useOrganizations'
@@ -14,54 +14,32 @@ import DataTable, { Td, Tr } from './DataTable'
 import Tooltip from './Tooltip'
 import { matchesSearch } from './tableSearch'
 import ConversationDetailModal from './ConversationDetailModal'
+import DashboardSimulations from './DashboardSimulations'
+import TabBar from './TabBar'
 import Spinner from './Spinner'
 import LoadingState from './LoadingState'
 import { PageContainer, PageHeader } from './PageLayout'
+import { KpiCard, MeterRow, TrendChart } from './scoreCharts'
+import {
+  cardCls,
+  dailyAverages,
+  formatDateTime,
+  formatScore,
+  personName,
+  scoreTextColor,
+} from './scoreFormat'
 
-/* Dashboard admin: grafici di riepilogo sui punteggi delle valutazioni,
- * globali o filtrati per singolo utente tramite la ricerca in alto. */
+/* Dashboard admin: grafici di riepilogo sui punteggi, globali o filtrati per
+ * singolo utente tramite la ricerca in alto.
+ *
+ * Due prove, una linguetta per ciascuna: le conversazioni con gli avatar,
+ * valutate da un modello e a volte corrette da un docente, e i test tecnici
+ * del simulatore, corretti da soli. Sono due modi di misurare la stessa
+ * persona, quindi stanno nella stessa pagina, sotto gli stessi filtri e con
+ * gli stessi disegni (vedi scoreCharts), ma non nella stessa colonna: si
+ * guarda una prova per volta. */
 
-const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
-
-/* Stessa convenzione colori dell'EvaluationModal: ≥7 verde, ≥5 arancio, <5 rosso */
-function scoreTextColor(score: number): string {
-  if (score >= 7) return 'text-emerald-400'
-  if (score >= 5) return 'text-orange-400'
-  return 'text-red-400'
-}
-
-function scoreBarColor(score: number): string {
-  if (score >= 7) return 'bg-emerald-500'
-  if (score >= 5) return 'bg-orange-500'
-  return 'bg-red-500'
-}
-
-function formatScore(score: number): string {
-  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 })
-}
-
-function formatDay(date: Date): string {
-  return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
-}
-
-function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function displayName(row: EvaluationReportRow): string {
-  return row.user_nome && row.user_cognome ? `${row.user_nome} ${row.user_cognome}` : row.user_email
-}
-
-interface DayPoint {
-  date: Date
-  avg: number
-  count: number
-}
+type DashboardSection = 'conversazioni' | 'simulazioni'
 
 interface CriterionAvg {
   key: string
@@ -152,266 +130,13 @@ function ModeFilterTabs({
   )
 }
 
-/* ── Grafico a linee: media giornaliera del voto complessivo ── */
-
-function TrendChart({ points }: { points: DayPoint[] }) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const [width, setWidth] = useState(0)
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const ro = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  const H = 240
-  const M = { left: 34, right: 24, top: 18, bottom: 28 }
-  const plotW = Math.max(0, width - M.left - M.right)
-  const plotH = H - M.top - M.bottom
-
-  const minT = points.length ? points[0].date.getTime() : 0
-  const maxT = points.length ? points[points.length - 1].date.getTime() : 0
-  const x = useCallback(
-    (t: number) =>
-      maxT === minT ? M.left + plotW / 2 : M.left + ((t - minT) / (maxT - minT)) * plotW,
-    [minT, maxT, M.left, plotW],
-  )
-  const y = (v: number) => M.top + (1 - v / 10) * plotH
-
-  const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!points.length) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const px = e.clientX - rect.left
-    let nearest = 0
-    let best = Infinity
-    points.forEach((p, i) => {
-      const d = Math.abs(px - x(p.date.getTime()))
-      if (d < best) {
-        best = d
-        nearest = i
-      }
-    })
-    setHoverIdx(nearest)
-  }
-
-  // Etichette X: tutte se poche, altrimenti un sottoinsieme uniforme
-  const labelStep = points.length > 8 ? Math.ceil(points.length / 6) : 1
-
-  const path = points
-    .map(
-      (p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.date.getTime()).toFixed(1)} ${y(p.avg).toFixed(1)}`,
-    )
-    .join(' ')
-
-  const hover = hoverIdx !== null ? points[hoverIdx] : null
-  const last = points[points.length - 1]
-
-  return (
-    <div ref={containerRef} className="relative w-full">
-      {width > 0 && (
-        <svg
-          width={width}
-          height={H}
-          onPointerMove={handleMove}
-          onPointerLeave={() => setHoverIdx(null)}
-        >
-          {/* Griglia orizzontale: hairline pieno, recessivo */}
-          {[0, 2, 4, 6, 8, 10].map((v) => (
-            <g key={v}>
-              <line
-                x1={M.left}
-                y1={y(v)}
-                x2={width - M.right}
-                y2={y(v)}
-                stroke={v === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)'}
-                strokeWidth="1"
-              />
-              <text x={M.left - 8} y={y(v) + 3.5} textAnchor="end" fontSize="10" fill="#64748b">
-                {v}
-              </text>
-            </g>
-          ))}
-
-          {/* Etichette asse X */}
-          {points.map((p, i) =>
-            i % labelStep === 0 || i === points.length - 1 ? (
-              <text
-                key={i}
-                x={x(p.date.getTime())}
-                y={H - 8}
-                textAnchor="middle"
-                fontSize="10"
-                fill="#64748b"
-              >
-                {formatDay(p.date)}
-              </text>
-            ) : null,
-          )}
-
-          {/* Crosshair */}
-          {hover && (
-            <line
-              x1={x(hover.date.getTime())}
-              y1={M.top}
-              x2={x(hover.date.getTime())}
-              y2={M.top + plotH}
-              stroke="rgba(255,255,255,0.18)"
-              strokeWidth="1"
-            />
-          )}
-
-          {/* Linea 2px, join arrotondati */}
-          {points.length > 1 && (
-            <path
-              d={path}
-              fill="none"
-              stroke="#7c3aed"
-              strokeWidth="2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          )}
-
-          {/* Marker con anello nel colore della superficie */}
-          {points.map((p, i) => (
-            <circle
-              key={i}
-              cx={x(p.date.getTime())}
-              cy={y(p.avg)}
-              r={hoverIdx === i ? 5.5 : 4.5}
-              fill="#7c3aed"
-              stroke="#0e1422"
-              strokeWidth="2"
-            />
-          ))}
-
-          {/* Etichetta diretta solo sull'ultimo punto (testo in token, non nel colore serie) */}
-          {last && hoverIdx === null && (
-            <text
-              x={x(last.date.getTime())}
-              y={y(last.avg) - 12}
-              textAnchor="middle"
-              fontSize="11"
-              fontWeight="600"
-              fill="#cbd5e1"
-            >
-              {formatScore(last.avg)}
-            </text>
-          )}
-        </svg>
-      )}
-
-      {/* Tooltip: il valore guida, l'etichetta segue */}
-      {hover && width > 0 && (
-        <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-white/10 bg-gray-950/95 px-3 py-2 shadow-lg"
-          style={{
-            left: Math.min(Math.max(x(hover.date.getTime()), 70), width - 70),
-            top: y(hover.avg) - 12,
-            transform: 'translate(-50%, -100%)',
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="h-0.5 w-3 rounded bg-violet-500" />
-            <span className="text-sm font-bold text-slate-100">{formatScore(hover.avg)}/10</span>
-          </div>
-          <div className="mt-0.5 text-[0.7rem] text-slate-400">
-            {hover.count} {hover.count === 1 ? 'valutazione' : 'valutazioni'} ·{' '}
-            {hover.date.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/* ── Riga a barra (meter): riempimento = punteggio/10, colore per fascia ── */
-
-function MeterRow({
-  label,
-  sub,
-  score,
-  dimmed = false,
-  highlighted = false,
-  fullLabel = false,
-}: {
-  label: string
-  sub?: string
-  score: number
-  dimmed?: boolean
-  highlighted?: boolean
-  /* Etichetta sempre per intero su una riga (mai troncata): la mette sopra
-   * la barra invece che affiancata, così non deve condividere spazio con nulla. */
-  fullLabel?: boolean
-}) {
-  if (fullLabel) {
-    return (
-      <div
-        className={`rounded-lg px-2 py-1.5 transition-opacity ${dimmed ? 'opacity-40' : ''} ${
-          highlighted ? 'bg-white/4' : ''
-        }`}
-      >
-        <div className="mb-1.5 flex items-baseline justify-between gap-3">
-          <p className="whitespace-nowrap text-[0.82rem] font-medium text-slate-300">{label}</p>
-          <span className={`shrink-0 text-right text-sm font-bold ${scoreTextColor(score)}`}>
-            {formatScore(score)}
-          </span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-white/6">
-          <div
-            className={`h-full rounded-full transition-all ${scoreBarColor(score)}`}
-            style={{ width: `${Math.max(0, Math.min(100, score * 10))}%` }}
-          />
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      className={`grid grid-cols-[minmax(0,200px)_1fr_56px] items-center gap-4 rounded-lg px-2 py-1.5 transition-opacity max-sm:grid-cols-[minmax(0,130px)_1fr_56px] ${
-        dimmed ? 'opacity-40' : ''
-      } ${highlighted ? 'bg-white/4' : ''}`}
-    >
-      <div className="min-w-0">
-        <Tooltip content={label} truncateOnly>
-          <p className="truncate text-[0.82rem] font-medium text-slate-300">{label}</p>
-        </Tooltip>
-        {sub && <p className="truncate text-[0.68rem] text-slate-500">{sub}</p>}
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/6">
-        <div
-          className={`h-full rounded-full transition-all ${scoreBarColor(score)}`}
-          style={{ width: `${Math.max(0, Math.min(100, score * 10))}%` }}
-        />
-      </div>
-      <span className={`text-right text-sm font-bold ${scoreTextColor(score)}`}>
-        {formatScore(score)}
-      </span>
-    </div>
-  )
-}
-
-/* ── Card KPI ── */
-
-function KpiCard({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className={cardCls}>
-      <p className="mb-2 text-xs font-medium tracking-wide text-slate-500">{label}</p>
-      {children}
-    </div>
-  )
-}
-
 export default function DashboardPage() {
   const { user } = useAuth()
   const showOrgFilter = isSuperAdmin(user)
   const { data: organizations = [] } = useOrganizations(isSuperAdmin(user))
   const [orgFilter, setOrgFilter] = useState('')
   const [selectedUserId, setSelectedUserId] = useState('')
+  const [section, setSection] = useState<DashboardSection>('conversazioni')
   const [modeFilter, setModeFilter] = useState<ModeFilter>('voice')
   const [search, setSearch] = useState('')
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null)
@@ -420,14 +145,29 @@ export default function DashboardPage() {
 
   const {
     data: rows = [],
-    isPending: isLoading,
+    isPending: isLoadingEvaluations,
     error: loadError,
     refetch,
   } = useEvaluationsReport(orgFilter, isAdmin(user))
 
+  /* L'altra metà della pagina. È una query a parte e non un campo in più
+   * della prima: le due prove hanno una riga per volta ciascuna, e chi non
+   * usa il simulatore non deve pagare la scansione dei tentativi dentro la
+   * lettura delle valutazioni. */
+  const {
+    data: simulationRows = [],
+    isPending: isLoadingSimulations,
+    error: simulationsError,
+  } = useSimulationsReport(orgFilter, isAdmin(user))
+
+  const isLoading = isLoadingEvaluations || isLoadingSimulations
+
   /* L'errore mostrato è quello del caricamento, o quello dell'esportazione se
    * è lei a essere andata storta: sono due modi di non avere il report. */
-  const error = exportError || (loadError instanceof Error ? loadError.message : '')
+  const error =
+    exportError ||
+    (loadError instanceof Error ? loadError.message : '') ||
+    (simulationsError instanceof Error ? simulationsError.message : '')
 
   /* Excel del report: stesse righe della dashboard (stesso scope server
    * per organizzazione), i filtri più fini li offre il foglio stesso.
@@ -459,19 +199,21 @@ export default function DashboardPage() {
     [rows, modeFilter],
   )
 
-  /* Utenti presenti nelle valutazioni (per la ricerca utente).
+  /* Utenti presenti nei dati (per la ricerca utente), da entrambe le prove:
+   * il filtro vale per tutta la pagina, quindi chi ha solo svolto dei test
+   * deve poterci finire dentro.
    * Volutamente su tutte le righe e non su scopedRows: se l'elenco si
    * restringesse col canale, l'utente selezionato potrebbe sparire dalle
    * opzioni e la sua chip svanirebbe pur restando il filtro attivo. */
   const usersInData = useMemo(() => {
     const map = new Map<string, { name: string; email: string }>()
-    for (const r of rows) {
-      if (!map.has(r.user_id)) map.set(r.user_id, { name: displayName(r), email: r.user_email })
+    for (const r of [...rows, ...simulationRows]) {
+      if (!map.has(r.user_id)) map.set(r.user_id, { name: personName(r), email: r.user_email })
     }
     return Array.from(map, ([id, u]) => ({ id, ...u })).sort((a, b) =>
       a.name.localeCompare(b.name, 'it'),
     )
-  }, [rows])
+  }, [rows, simulationRows])
 
   /* Il filtro utente scopa KPI, andamento e criteri */
   const filtered = useMemo(
@@ -488,24 +230,15 @@ export default function DashboardPage() {
   )
 
   /* Media per giorno (asse temporale del grafico a linee) */
-  const trendPoints = useMemo<DayPoint[]>(() => {
-    const byDay = new Map<string, { sum: number; count: number; date: Date }>()
-    for (const r of filtered) {
-      const d = new Date(r.conversation_at)
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-      const entry = byDay.get(key) ?? {
-        sum: 0,
-        count: 0,
-        date: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
-      }
-      entry.sum += r.overall_score
-      entry.count += 1
-      byDay.set(key, entry)
-    }
-    return Array.from(byDay.values())
-      .map((e) => ({ date: e.date, avg: e.sum / e.count, count: e.count }))
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-  }, [filtered])
+  const trendPoints = useMemo(
+    () =>
+      dailyAverages(
+        filtered,
+        (r) => r.conversation_at,
+        (r) => r.overall_score,
+      ),
+    [filtered],
+  )
 
   /* Media per criterio, nell'ordine in cui i criteri arrivano dal backend */
   const criteriaAvgs = useMemo<CriterionAvg[]>(() => {
@@ -544,7 +277,7 @@ export default function DashboardPage() {
     for (const r of scopedRows) {
       const entry = acc.get(r.user_id) ?? {
         userId: r.user_id,
-        name: displayName(r),
+        name: personName(r),
         email: r.user_email,
         avg: 0,
         count: 0,
@@ -581,7 +314,7 @@ export default function DashboardPage() {
           r.conversation_title,
           // The channel is searchable by the same word the badge shows
           conversationModeLabel(r.mode),
-          displayName(r),
+          personName(r),
           r.user_email,
           r.avatar_name,
           formatDateTime(r.conversation_at),
@@ -594,7 +327,7 @@ export default function DashboardPage() {
     <PageContainer>
       <PageHeader
         title="Dashboard"
-        description="Riepilogo dei punteggi delle valutazioni delle conversazioni, per canale e globale o per singolo utente."
+        description="Riepilogo dei punteggi delle conversazioni valutate e dei test tecnici svolti, globale o per singolo utente."
         actions={
           showOrgFilter && (
             <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
@@ -635,7 +368,7 @@ export default function DashboardPage() {
 
       {isLoading ? (
         <LoadingState message="Caricamento dashboard..." />
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && simulationRows.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-white/6 bg-gray-900/60 p-16 text-center">
           <svg
             width="40"
@@ -652,13 +385,31 @@ export default function DashboardPage() {
             <line x1="12" y1="20" x2="12" y2="4" />
             <line x1="6" y1="20" x2="6" y2="14" />
           </svg>
-          <h2 className="font-heading text-xl text-slate-100">Nessuna valutazione disponibile</h2>
+          <h2 className="font-heading text-xl text-slate-100">Nessun dato disponibile</h2>
           <p className="max-w-[420px] text-sm text-slate-500">
-            I grafici appariranno quando le conversazioni con gli avatar verranno valutate.
+            I grafici appariranno quando le conversazioni con gli avatar verranno valutate, o quando
+            qualcuno svolgerà un test tecnico.
           </p>
         </div>
       ) : (
         <>
+          {/* Le due prove non si guardano insieme: una linguetta per volta,
+           * perché "come parlano" e "cosa sanno" sono due domande e mescolarne
+           * i grafici in una colonna sola li farebbe leggere come un seguito
+           * l'uno dell'altro. I filtri restano di sopra: valgono per
+           * entrambe, e ritrovarli al loro posto cambiando linguetta è quello
+           * che tiene insieme la pagina. */}
+          <TabBar
+            items={[
+              { value: 'conversazioni', label: `Conversazioni (${rows.length})` },
+              { value: 'simulazioni', label: `Simulazioni tecniche (${simulationRows.length})` },
+            ]}
+            value={section}
+            onChange={setSection}
+            ariaLabel="Prova da guardare"
+            className="mb-5 border-b border-white/6 pb-2"
+          />
+
           {/* Riga filtri: scopa tutto ciò che sta sotto */}
           <div className="mb-6 flex items-center gap-3 max-lg:flex-wrap">
             <label
@@ -676,248 +427,289 @@ export default function DashboardPage() {
               emptyHint="Tutti gli utenti"
               className="w-full max-w-[440px]"
             />
-            <span className="ml-auto text-xs font-medium tracking-wide text-slate-400 max-lg:ml-0">
-              Canale
-            </span>
-            <ModeFilterTabs value={modeFilter} onChange={setModeFilter} />
-          </div>
-
-          {/* Il canale può non avere nessuna conversazione: senza questo avviso
-           * i KPI a zero si leggerebbero come un errore di caricamento. */}
-          {scopedRows.length === 0 && (
-            <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="shrink-0 text-slate-500"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="16" x2="12" y2="12" />
-                <line x1="12" y1="8" x2="12.01" y2="8" />
-              </svg>
-              <span>
-                Nessuna valutazione {MODE_SUFFIX[modeFilter]}. Cambia canale per vedere i dati
-                disponibili.
-              </span>
-            </div>
-          )}
-
-          {/* KPI */}
-          <div className="mb-6 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
-            <KpiCard label="Voto medio complessivo">
-              <p className="font-heading text-4xl font-bold text-slate-100">
-                {overallAvg !== null ? (
-                  <>
-                    <span className={scoreTextColor(overallAvg)}>{formatScore(overallAvg)}</span>
-                    <span className="text-lg font-medium text-slate-500"> /10</span>
-                  </>
-                ) : (
-                  '—'
-                )}
-              </p>
-            </KpiCard>
-            <KpiCard label="Conversazioni valutate">
-              <p className="font-heading text-4xl font-bold text-slate-100">{filtered.length}</p>
-            </KpiCard>
-            <KpiCard label="Criterio più forte">
-              {bestCriterion ? (
-                <>
-                  <Tooltip content={bestCriterion.label} truncateOnly>
-                    <p className="truncate text-[0.95rem] font-semibold text-slate-100">
-                      {bestCriterion.label}
-                    </p>
-                  </Tooltip>
-                  <p className={`mt-1 text-xl font-bold ${scoreTextColor(bestCriterion.avg)}`}>
-                    {formatScore(bestCriterion.avg)}
-                    <span className="text-xs font-medium text-slate-500"> /10</span>
-                  </p>
-                </>
-              ) : (
-                <p className="text-2xl text-slate-500">—</p>
-              )}
-            </KpiCard>
-            <KpiCard label="Criterio più debole">
-              {worstCriterion ? (
-                <>
-                  <Tooltip content={worstCriterion.label} truncateOnly>
-                    <p className="truncate text-[0.95rem] font-semibold text-slate-100">
-                      {worstCriterion.label}
-                    </p>
-                  </Tooltip>
-                  <p className={`mt-1 text-xl font-bold ${scoreTextColor(worstCriterion.avg)}`}>
-                    {formatScore(worstCriterion.avg)}
-                    <span className="text-xs font-medium text-slate-500"> /10</span>
-                  </p>
-                </>
-              ) : (
-                <p className="text-2xl text-slate-500">—</p>
-              )}
-            </KpiCard>
-          </div>
-
-          {/* Andamento nel tempo */}
-          <div className={`${cardCls} mb-6`}>
-            <h2 className="text-sm font-semibold text-slate-300">Andamento nel tempo</h2>
-            <p className="mb-4 text-xs text-slate-500">
-              Media giornaliera del voto complessivo {MODE_SUFFIX[modeFilter]}
-              {selectedUserId ? ', per l’utente selezionato' : ''}
-            </p>
-            {trendPoints.length > 0 ? (
-              <TrendChart points={trendPoints} />
-            ) : (
-              <p className="py-10 text-center text-sm italic text-slate-500">
-                Nessuna valutazione per la selezione corrente.
-              </p>
+            {/* Il canale è un filtro delle sole conversazioni: nella sezione
+                scritta non c'è niente da filtrare per canale. */}
+            {section === 'conversazioni' && (
+              <>
+                <span className="ml-auto text-xs font-medium tracking-wide text-slate-400 max-lg:ml-0">
+                  Canale
+                </span>
+                <ModeFilterTabs value={modeFilter} onChange={setModeFilter} />
+              </>
             )}
           </div>
 
-          {/* Media per criterio */}
-          <div className={`${cardCls} mb-6`}>
-            <h2 className="text-sm font-semibold text-slate-300">Media per criterio</h2>
-            <p className="mb-4 text-xs text-slate-500">
-              Punteggio medio dei 6 criteri di valutazione {MODE_SUFFIX[modeFilter]}
-            </p>
-            {criteriaAvgs.length > 0 ? (
-              <div className="flex flex-col gap-2.5">
-                {criteriaAvgs.map((c) => (
-                  <MeterRow key={c.key} label={c.label} score={c.avg} fullLabel />
-                ))}
-              </div>
-            ) : (
-              <p className="py-6 text-center text-sm italic text-slate-500">
-                Nessuna valutazione per la selezione corrente.
-              </p>
-            )}
-          </div>
-
-          {/* Confronto tra utenti */}
-          <div className={`${cardCls} mb-6`}>
-            <h2 className="text-sm font-semibold text-slate-300">Confronto tra utenti</h2>
-            <p className="mb-4 text-xs text-slate-500">
-              Voto medio complessivo per utente, su tutte le valutazioni {MODE_SUFFIX[modeFilter]}
-            </p>
-            {userAvgs.length > 0 ? (
-              <div className="flex flex-col gap-1.5">
-                {userAvgs.map((u) => (
-                  <MeterRow
-                    key={u.userId}
-                    label={u.name}
-                    sub={`${u.count} ${u.count === 1 ? 'valutazione' : 'valutazioni'}`}
-                    score={u.avg}
-                    dimmed={selectedUserId !== '' && u.userId !== selectedUserId}
-                    highlighted={selectedUserId !== '' && u.userId === selectedUserId}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="py-6 text-center text-sm italic text-slate-500">
-                Nessuna valutazione per la selezione corrente.
-              </p>
-            )}
-          </div>
-
-          {/* Vista tabellare: tutti i valori raggiungibili senza hover */}
-          <DataTable
-            columns={[
-              { key: 'conversazione', label: 'Conversazione' },
-              { key: 'data', label: 'Data' },
-              { key: 'utente', label: 'Utente' },
-              { key: 'avatar', label: 'Avatar' },
-              ...criteriaAvgs.map((c) => ({
-                key: c.key,
-                label: shortCriterionLabel(c.key, c.label),
-                title: c.label,
-                align: 'center' as const,
-                compact: true,
-              })),
-              { key: 'voto', label: 'Voto', align: 'right' },
-            ]}
-            searchValue={search}
-            onSearchChange={setSearch}
-            searchPlaceholder="Cerca per conversazione, utente o avatar..."
-            searchActions={
-              <button
-                className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-                onClick={handleExportXlsx}
-                disabled={isExporting || isLoading || rows.length === 0}
-                title="Scarica il report delle valutazioni in Excel"
-              >
-                {isExporting ? (
-                  <Spinner variant="small" />
-                ) : (
+          {section === 'conversazioni' && (
+            <>
+              {/* Il canale può non avere nessuna conversazione: senza questo avviso
+               * i KPI a zero si leggerebbero come un errore di caricamento. */}
+              {rows.length > 0 && scopedRows.length === 0 && (
+                <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
                   <svg
-                    width="15"
-                    height="15"
+                    width="18"
+                    height="18"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    className="shrink-0 text-slate-500"
                   >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
                   </svg>
-                )}
-                Esporta Excel
-              </button>
-            }
-            isEmpty={searchedRows.length === 0}
-            emptyMessage={
-              search
-                ? 'Nessuna valutazione corrisponde alla ricerca.'
-                : 'Nessuna valutazione per la selezione corrente.'
-            }
-          >
-            {searchedRows.map((r) => (
-              <Tooltip
-                key={r.conversation_id}
-                content="Vedi conversazione e valutazione"
-                anchor="cursor"
-              >
-                <Tr className="cursor-pointer" onClick={() => setDetailRow(r)}>
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      <ConversationModeBadge mode={r.mode} iconOnly />
-                      <span className="text-[0.85rem] font-medium text-slate-100">
-                        {r.conversation_title}
-                      </span>
-                    </div>
-                  </Td>
-                  <Td className="text-[0.82rem] text-slate-400">
-                    {formatDateTime(r.conversation_at)}
-                  </Td>
-                  <Td>
-                    <span className="text-[0.85rem] font-medium text-slate-100">
-                      {displayName(r)}
-                    </span>
-                  </Td>
-                  <Td className="text-[0.82rem] text-slate-400">{r.avatar_name}</Td>
-                  {criteriaAvgs.map((c) => {
-                    const crit = r.criteria.find((rc) => rc.key === c.key)
-                    return (
-                      <Td key={c.key} align="center" compact>
-                        {crit ? (
-                          <span
-                            className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(crit.score)}`}
-                          >
-                            {formatScore(crit.score)}
-                          </span>
+                  <span>
+                    Nessuna valutazione {MODE_SUFFIX[modeFilter]}. Cambia canale per vedere i dati
+                    disponibili.
+                  </span>
+                </div>
+              )}
+
+              {rows.length === 0 ? (
+                <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="shrink-0 text-slate-500"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
+                  </svg>
+                  <span>
+                    Nessuna conversazione ancora valutata. I grafici appariranno quando le sessioni
+                    con gli avatar verranno valutate
+                  </span>
+                </div>
+              ) : (
+                <>
+                  {/* KPI */}
+                  <div className="mb-6 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
+                    <KpiCard label="Voto medio complessivo">
+                      <p className="font-heading text-4xl font-bold text-slate-100">
+                        {overallAvg !== null ? (
+                          <>
+                            <span className={scoreTextColor(overallAvg)}>
+                              {formatScore(overallAvg)}
+                            </span>
+                            <span className="text-lg font-medium text-slate-500"> /10</span>
+                          </>
                         ) : (
-                          <span className="text-slate-600">—</span>
+                          '—'
                         )}
-                      </Td>
-                    )
-                  })}
-                  <Td align="right">
-                    {/* Il voto in colonna è quello che conta: se un docente
+                      </p>
+                    </KpiCard>
+                    <KpiCard label="Conversazioni valutate">
+                      <p className="font-heading text-4xl font-bold text-slate-100">
+                        {filtered.length}
+                      </p>
+                    </KpiCard>
+                    <KpiCard label="Criterio più forte">
+                      {bestCriterion ? (
+                        <>
+                          <Tooltip content={bestCriterion.label} truncateOnly>
+                            <p className="truncate text-[0.95rem] font-semibold text-slate-100">
+                              {bestCriterion.label}
+                            </p>
+                          </Tooltip>
+                          <p
+                            className={`mt-1 text-xl font-bold ${scoreTextColor(bestCriterion.avg)}`}
+                          >
+                            {formatScore(bestCriterion.avg)}
+                            <span className="text-xs font-medium text-slate-500"> /10</span>
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-2xl text-slate-500">—</p>
+                      )}
+                    </KpiCard>
+                    <KpiCard label="Criterio più debole">
+                      {worstCriterion ? (
+                        <>
+                          <Tooltip content={worstCriterion.label} truncateOnly>
+                            <p className="truncate text-[0.95rem] font-semibold text-slate-100">
+                              {worstCriterion.label}
+                            </p>
+                          </Tooltip>
+                          <p
+                            className={`mt-1 text-xl font-bold ${scoreTextColor(worstCriterion.avg)}`}
+                          >
+                            {formatScore(worstCriterion.avg)}
+                            <span className="text-xs font-medium text-slate-500"> /10</span>
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-2xl text-slate-500">—</p>
+                      )}
+                    </KpiCard>
+                  </div>
+
+                  {/* Andamento nel tempo */}
+                  <div className={`${cardCls} mb-6`}>
+                    <h2 className="text-sm font-semibold text-slate-300">Andamento nel tempo</h2>
+                    <p className="mb-4 text-xs text-slate-500">
+                      Media giornaliera del voto complessivo {MODE_SUFFIX[modeFilter]}
+                      {selectedUserId ? ', per l’utente selezionato' : ''}
+                    </p>
+                    {trendPoints.length > 0 ? (
+                      <TrendChart points={trendPoints} />
+                    ) : (
+                      <p className="py-10 text-center text-sm italic text-slate-500">
+                        Nessuna valutazione per la selezione corrente.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Media per criterio */}
+                  <div className={`${cardCls} mb-6`}>
+                    <h2 className="text-sm font-semibold text-slate-300">Media per criterio</h2>
+                    <p className="mb-4 text-xs text-slate-500">
+                      Punteggio medio dei 6 criteri di valutazione {MODE_SUFFIX[modeFilter]}
+                    </p>
+                    {criteriaAvgs.length > 0 ? (
+                      <div className="flex flex-col gap-2.5">
+                        {criteriaAvgs.map((c) => (
+                          <MeterRow key={c.key} label={c.label} score={c.avg} fullLabel />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="py-6 text-center text-sm italic text-slate-500">
+                        Nessuna valutazione per la selezione corrente.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Confronto tra utenti */}
+                  <div className={`${cardCls} mb-6`}>
+                    <h2 className="text-sm font-semibold text-slate-300">Confronto tra utenti</h2>
+                    <p className="mb-4 text-xs text-slate-500">
+                      Voto medio complessivo per utente, su tutte le valutazioni{' '}
+                      {MODE_SUFFIX[modeFilter]}
+                    </p>
+                    {userAvgs.length > 0 ? (
+                      <div className="flex flex-col gap-1.5">
+                        {userAvgs.map((u) => (
+                          <MeterRow
+                            key={u.userId}
+                            label={u.name}
+                            sub={`${u.count} ${u.count === 1 ? 'valutazione' : 'valutazioni'}`}
+                            score={u.avg}
+                            dimmed={selectedUserId !== '' && u.userId !== selectedUserId}
+                            highlighted={selectedUserId !== '' && u.userId === selectedUserId}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="py-6 text-center text-sm italic text-slate-500">
+                        Nessuna valutazione per la selezione corrente.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Vista tabellare: tutti i valori raggiungibili senza hover */}
+                  <DataTable
+                    columns={[
+                      { key: 'conversazione', label: 'Conversazione' },
+                      { key: 'data', label: 'Data' },
+                      { key: 'utente', label: 'Utente' },
+                      { key: 'avatar', label: 'Avatar' },
+                      ...criteriaAvgs.map((c) => ({
+                        key: c.key,
+                        label: shortCriterionLabel(c.key, c.label),
+                        title: c.label,
+                        align: 'center' as const,
+                        compact: true,
+                      })),
+                      { key: 'voto', label: 'Voto', align: 'right' },
+                    ]}
+                    searchValue={search}
+                    onSearchChange={setSearch}
+                    searchPlaceholder="Cerca per conversazione, utente o avatar..."
+                    searchActions={
+                      <button
+                        className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                        onClick={handleExportXlsx}
+                        disabled={isExporting || isLoading || rows.length === 0}
+                        title="Scarica il report delle valutazioni in Excel"
+                      >
+                        {isExporting ? (
+                          <Spinner variant="small" />
+                        ) : (
+                          <svg
+                            width="15"
+                            height="15"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                          </svg>
+                        )}
+                        Esporta Excel
+                      </button>
+                    }
+                    isEmpty={searchedRows.length === 0}
+                    emptyMessage={
+                      search
+                        ? 'Nessuna valutazione corrisponde alla ricerca.'
+                        : 'Nessuna valutazione per la selezione corrente.'
+                    }
+                  >
+                    {searchedRows.map((r) => (
+                      <Tooltip
+                        key={r.conversation_id}
+                        content="Vedi conversazione e valutazione"
+                        anchor="cursor"
+                      >
+                        <Tr className="cursor-pointer" onClick={() => setDetailRow(r)}>
+                          <Td>
+                            <div className="flex items-center gap-2">
+                              <ConversationModeBadge mode={r.mode} iconOnly />
+                              <span className="text-[0.85rem] font-medium text-slate-100">
+                                {r.conversation_title}
+                              </span>
+                            </div>
+                          </Td>
+                          <Td className="text-[0.82rem] text-slate-400">
+                            {formatDateTime(r.conversation_at)}
+                          </Td>
+                          <Td>
+                            <span className="text-[0.85rem] font-medium text-slate-100">
+                              {personName(r)}
+                            </span>
+                          </Td>
+                          <Td className="text-[0.82rem] text-slate-400">{r.avatar_name}</Td>
+                          {criteriaAvgs.map((c) => {
+                            const crit = r.criteria.find((rc) => rc.key === c.key)
+                            return (
+                              <Td key={c.key} align="center" compact>
+                                {crit ? (
+                                  <span
+                                    className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(crit.score)}`}
+                                  >
+                                    {formatScore(crit.score)}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-600">—</span>
+                                )}
+                              </Td>
+                            )
+                          })}
+                          <Td align="right">
+                            {/* Il voto in colonna è quello che conta: se un docente
                         l'ha corretto va detto, altrimenti la tabella
                         sembrerebbe contraddire la valutazione automatica.
 
@@ -928,24 +720,32 @@ export default function DashboardPage() {
                         colonna rispetto a quelle dei criteri; così invece il
                         numero non si muove di un pixel, con o senza
                         correzione. */}
-                    <span
-                      className={`relative block text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}
-                    >
-                      {formatScore(r.overall_score)}/10
-                      {r.has_override && (
-                        <span
-                          className="absolute right-0 top-full whitespace-nowrap text-[0.7rem] font-semibold text-violet-300"
-                          title={`Punteggio corretto dal docente, la valutazione automatica assegnava ${formatScore(r.ai_overall_score)}`}
-                        >
-                          corretto
-                        </span>
-                      )}
-                    </span>
-                  </Td>
-                </Tr>
-              </Tooltip>
-            ))}
-          </DataTable>
+                            <span
+                              className={`relative block text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}
+                            >
+                              {formatScore(r.overall_score)}/10
+                              {r.has_override && (
+                                <span
+                                  className="absolute right-0 top-full whitespace-nowrap text-[0.7rem] font-semibold text-violet-300"
+                                  title={`Punteggio corretto dal docente, la valutazione automatica assegnava ${formatScore(r.ai_overall_score)}`}
+                                >
+                                  corretto
+                                </span>
+                              )}
+                            </span>
+                          </Td>
+                        </Tr>
+                      </Tooltip>
+                    ))}
+                  </DataTable>
+                </>
+              )}
+            </>
+          )}
+
+          {section === 'simulazioni' && (
+            <DashboardSimulations rows={simulationRows} selectedUserId={selectedUserId} />
+          )}
         </>
       )}
 

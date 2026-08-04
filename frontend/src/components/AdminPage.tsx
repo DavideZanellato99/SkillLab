@@ -27,8 +27,8 @@ import PrimaryButton from './PrimaryButton'
 import FormError from './FormError'
 import ConfirmModal from './ConfirmModal'
 import ModalShell, { ModalHeader } from './ModalShell'
-import { TrashIcon, ResendIcon, UserPlusIcon } from './icons'
-import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
+import { TrashIcon, ResendIcon, UserPlusIcon, PencilIcon } from './icons'
+import { formatDate, formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
 import type { KebabMenuItem } from './KebabMenu'
 import Field, { fieldCls, labelCls, TextInput } from './Field'
 import {
@@ -534,11 +534,7 @@ export default function AdminPage() {
                   </Td>
                   <Td>
                     <span className="text-[0.85rem] text-slate-500">
-                      {new Date(u.created_at).toLocaleDateString('it-IT', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
+                      {formatDate(u.created_at)}
                     </span>
                   </Td>
                   <Td onClick={(e) => e.stopPropagation()}>
@@ -549,18 +545,7 @@ export default function AdminPage() {
                           onClick={() => openEditModal(u)}
                           aria-label={`Modifica ${u.email}`}
                         >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                          </svg>
+                          <PencilIcon />
                         </button>
                       </Tooltip>
                       <Tooltip
@@ -817,20 +802,7 @@ export default function AdminPage() {
         <ModalShell onClose={() => setEditingUser(null)} locked={updateMutation.isPending}>
           <ModalHeader
             iconWrapperCls="border border-violet-600/20 bg-violet-600/10"
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#7c3aed"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-              </svg>
-            }
+            icon={<PencilIcon size={24} stroke="#7c3aed" />}
             title="Modifica Utente"
             description={<>{editingUser.email}</>}
             className="mb-8"

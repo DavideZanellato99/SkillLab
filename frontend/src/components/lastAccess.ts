@@ -54,6 +54,17 @@ export function formatRelativeDay(dateStr: string, now: Date = new Date()): stri
   return years === 1 ? '1 anno fa' : `${years} anni fa`
 }
 
+/* Solo la data "GG mese AAAA", per la colonna "Data Creazione" delle tabelle
+ * di amministrazione: lì di una riga interessa il giorno in cui è nata, e
+ * l'ora è una precisione che nessuno legge e che allunga la colonna. */
+export function formatDate(dateStr: string): string {
+  return parseApiDate(dateStr).toLocaleDateString('it-IT', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
 /** Data e ora complete "GG mese AAAA, HH:MM", per il tooltip e il dettaglio. */
 export function formatDateTime(dateStr: string): string {
   return parseApiDate(dateStr).toLocaleString('it-IT', {

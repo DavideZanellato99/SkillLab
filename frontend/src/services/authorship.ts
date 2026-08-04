@@ -1,8 +1,8 @@
 /* Chi ha creato una riga e chi l'ha modificata per ultimo.
  *
- * Le stesse quattro colonne su utenti, organizzazioni e avatar (lato server
- * stanno in backend/authorship.py), quindi un tipo solo e un componente solo
- * a mostrarle: vedi AuthorshipFields. */
+ * Le stesse quattro colonne su utenti, organizzazioni, avatar e simulazioni
+ * (lato server stanno in backend/authorship.py), quindi un tipo solo e un
+ * componente solo a mostrarle: vedi AuthorshipFields. */
 
 export interface Authored {
   created_at: string

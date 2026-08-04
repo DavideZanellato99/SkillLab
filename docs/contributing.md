@@ -34,15 +34,23 @@ verso `stage`, allora ha senso proteggere `stage` con i check richiesti.
 Oltre ai gate del hook, la CI esegue anche il lint dell'infrastruttura
 (`hadolint` sui Dockerfile, `actionlint` sui workflow, `shellcheck` sugli
 script in `.githooks`) e uno smoke test Docker del compose di produzione.
-Un workflow separato ([security-audit.yml](.github/workflows/security-audit.yml))
-fa girare ogni lunedì `pip-audit` sui lock del backend e `npm audit
---audit-level=high` sul frontend: è fuori dal gate dei push di proposito,
-così un CVE appena pubblicato non blocca lavoro che non c'entra; si può
-lanciare a mano dalla tab Actions.
+Un workflow separato ([security.yml](../.github/workflows/security.yml)) fa
+girare `pip-audit` sui lock del backend, `npm audit --audit-level=high` sul
+frontend, Trivy, CodeQL e una scansione DAST con ZAP contro lo stack di
+produzione avviato dal runner. Gira sulle PR, sui push a `main` e ogni lunedì,
+e si può lanciare a mano dalla tab Actions. Nessuno dei suoi job compare fra i
+`needs` di `ci-success`, di proposito: un CVE appena pubblicato non deve
+bloccare lavoro che non c'entra.
+
+La scansione DAST è passiva (nessun payload di attacco) e arriva solo dove si
+arriva senza credenziali, cioè login, file statici e le rotte `/api/*` che
+rispondono 401: serve soprattutto a sorvegliare le intestazioni di sicurezza e
+i flag dei cookie. Il piano è in [.zap/baseline.yaml](../.zap/baseline.yaml), che
+in testa riporta anche il comando per rifare la stessa scansione in locale.
 
 ## Gate automatici prima del commit (hook pre-commit)
 
-Il repo include un hook `pre-commit` in [.githooks/pre-commit](.githooks/pre-commit)
+Il repo include un hook `pre-commit` in [.githooks/pre-commit](../.githooks/pre-commit)
 che, a ogni `git commit`, esegue in locale gli stessi gate della CI e **blocca
 il commit se qualcosa è rosso**. Abilitalo una tantum (dopo il clone):
 

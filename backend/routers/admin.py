@@ -42,6 +42,8 @@ from models import (
     ConversationReview,
     Organization,
     Role,
+    SimulationAttempt,
+    TechnicalSimulation,
     User,
 )
 from routers.chat import _evaluation_response
@@ -53,6 +55,7 @@ from schemas import (
     EvaluationCriterionScore,
     EvaluationReportRow,
     MessageResponse,
+    SimulationReportRow,
     UpdateUserRequest,
     UpdateUserStatusRequest,
     UserActivityReport,
@@ -379,6 +382,52 @@ def _evaluation_report_rows(db: Session, scope_org_id) -> list[EvaluationReportR
             ],
         )
         for evaluation, conv, user, avatar_name, review in rows
+    ]
+
+
+@router.get("/simulations-report", response_model=list[SimulationReportRow])
+def simulations_report(
+    organization_id: UUID | None = None,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Read-only recap of every technical test delivered: who took it, when, and
+    how it went. The written half of the dashboard, with the same scope rules
+    as /evaluations-report: a Super Admin sees every organization (optionally
+    filtered by `organization_id`), an Organization Admin only its own.
+
+    Scoped by the taker's organization and not by the simulation's: what the
+    dashboard of a tenant is about is how ITS people are doing, and a test
+    borrowed from elsewhere would otherwise disappear from their own numbers.
+    """
+    scope_org_id = resolve_admin_scope(current_admin, organization_id)
+    query = (
+        db.query(SimulationAttempt, TechnicalSimulation.title, User)
+        .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
+        .join(User, User.id == SimulationAttempt.user_id)
+    )
+    if scope_org_id is not None:
+        query = query.filter(User.organization_id == scope_org_id)
+    # Oldest first, like the evaluations report: the charts plot in this order.
+    rows = query.order_by(SimulationAttempt.created_at.asc()).all()
+    return [
+        SimulationReportRow(
+            attempt_id=attempt.id,
+            simulation_id=attempt.simulation_id,
+            simulation_title=title,
+            user_id=user.id,
+            user_email=user.email,
+            user_nome=user.nome,
+            user_cognome=user.cognome,
+            organization_id=user.organization_id,
+            organization_name=user.organization_name,
+            attempted_at=attempt.created_at,
+            correct_count=attempt.correct_count,
+            question_count=attempt.question_count,
+            score=attempt.score,
+        )
+        for attempt, title, user in rows
     ]
 
 

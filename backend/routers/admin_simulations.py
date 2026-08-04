@@ -51,11 +51,11 @@ from models import (
 from openai_service import embed_texts
 from routers.simulations import attempt_stats, to_response
 from schemas import (
+    AdminSimulationResponse,
     MessageResponse,
     SimulationAdminDetailResponse,
     SimulationQuestionAdminResponse,
     SimulationQuestionsPayload,
-    SimulationResponse,
     SimulationStatusRequest,
     SimulationUpdateRequest,
 )
@@ -76,13 +76,29 @@ def _get_or_404(db: Session, simulation_id: UUID) -> TechnicalSimulation:
     return simulation
 
 
+def _admin_response(
+    simulation: TechnicalSimulation, question_count: int, stats: dict | None = None
+) -> dict:
+    """La riga dell'elenco con la firma di chi l'ha scritta.
+
+    Le quattro colonne di paternità le scrive il listener di ``authorship``
+    su ogni scrittura, qui si leggono e basta: escono solo dalle risposte
+    dell'amministrazione, come per utenti, organizzazioni e avatar.
+    """
+    return {
+        **to_response(simulation, question_count, stats),
+        "created_by_email": simulation.created_by_email,
+        "updated_by_email": simulation.updated_by_email,
+    }
+
+
 def _admin_detail(db: Session, simulation: TechnicalSimulation, admin: User) -> dict:
     stats = attempt_stats(db, admin.id, [simulation.id])
     total_attempts = (
         db.query(SimulationAttempt).filter(SimulationAttempt.simulation_id == simulation.id).count()
     )
     return {
-        **to_response(simulation, len(simulation.questions), stats.get(simulation.id)),
+        **_admin_response(simulation, len(simulation.questions), stats.get(simulation.id)),
         "questions": [
             SimulationQuestionAdminResponse(
                 id=q.id,
@@ -150,7 +166,7 @@ async def _index_document(
         )
 
 
-@router.get("", response_model=list[SimulationResponse])
+@router.get("", response_model=list[AdminSimulationResponse])
 def list_all_simulations(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_super_admin),
@@ -160,7 +176,7 @@ def list_all_simulations(
         db.query(TechnicalSimulation).order_by(TechnicalSimulation.created_at.desc()).all()
     )
     stats = attempt_stats(db, current_admin.id, [s.id for s in simulations])
-    return [to_response(s, len(s.questions), stats.get(s.id)) for s in simulations]
+    return [_admin_response(s, len(s.questions), stats.get(s.id)) for s in simulations]
 
 
 @router.get("/{simulation_id}", response_model=SimulationAdminDetailResponse)

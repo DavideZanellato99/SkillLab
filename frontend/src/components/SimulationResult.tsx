@@ -7,9 +7,13 @@ import { formatScore, optionLabel, scoreBadgeTone } from './simulationFormat'
  *
  * Le spiegazioni ci sono anche sulle domande andate bene. Chi ha indovinato
  * senza esserne sicuro è esattamente la persona che deve leggerle, e non c'è
- * modo di distinguerla da chi sapeva. */
+ * modo di distinguerla da chi sapeva.
+ *
+ * Lo stesso esito lo rilegge chi l'ha svolto e chi lo corregge, quindi il
+ * "tu" non può essere scritto nel componente: con `own` a false le stesse
+ * righe parlano di una terza persona. */
 
-function AnswerRow({ answer }: { answer: SimulationAnswerResult }) {
+function AnswerRow({ answer, own }: { answer: SimulationAnswerResult; own: boolean }) {
   const blank = answer.selected_option === null
   return (
     <li className="rounded-2xl border border-white/6 bg-gray-900/60 p-5 backdrop-blur-md">
@@ -46,7 +50,9 @@ function AnswerRow({ answer }: { answer: SimulationAnswerResult }) {
               <span className="font-semibold">{optionLabel(index)}</span>
               <span className="flex-1">{option}</span>
               {isChosen && !isCorrect && (
-                <span className="shrink-0 text-xs opacity-70">la tua risposta</span>
+                <span className="shrink-0 text-xs opacity-70">
+                  {own ? 'la tua risposta' : 'risposta data'}
+                </span>
               )}
               {isCorrect && <span className="shrink-0 text-xs opacity-70">corretta</span>}
             </li>
@@ -55,7 +61,9 @@ function AnswerRow({ answer }: { answer: SimulationAnswerResult }) {
       </ul>
 
       {blank && (
-        <p className="mb-3 text-xs italic text-slate-500">Hai lasciato questa domanda in bianco.</p>
+        <p className="mb-3 text-xs italic text-slate-500">
+          {own ? 'Hai lasciato questa domanda in bianco.' : 'Domanda lasciata in bianco.'}
+        </p>
       )}
 
       {answer.explanation && (
@@ -90,9 +98,11 @@ interface SimulationResultProps {
   attempt: SimulationAttempt
   /** Azioni sotto il riepilogo, es. "Riprova" e "Torna all'elenco". */
   actions?: React.ReactNode
+  /** Falso quando a rileggere il test è un altro, non chi l'ha svolto. */
+  own?: boolean
 }
 
-export default function SimulationResult({ attempt, actions }: SimulationResultProps) {
+export default function SimulationResult({ attempt, actions, own = true }: SimulationResultProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md">
@@ -111,7 +121,7 @@ export default function SimulationResult({ attempt, actions }: SimulationResultP
 
       <ul className="flex list-none flex-col gap-3">
         {attempt.answers.map((answer) => (
-          <AnswerRow key={answer.question_id} answer={answer} />
+          <AnswerRow key={answer.question_id} answer={answer} own={own} />
         ))}
       </ul>
     </div>

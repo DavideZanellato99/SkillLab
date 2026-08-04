@@ -5,8 +5,8 @@ import type { Authored } from '../services/authorship'
 
 /* Le due righe finali di ogni scheda: quando la riga è nata e quando è stata
  * toccata l'ultima volta, con il nome di chi. Un componente solo per utenti,
- * organizzazioni e avatar, così le tre schede non possono raccontare la
- * stessa cosa in tre modi diversi. */
+ * organizzazioni, avatar e simulazioni, così le schede non possono raccontare
+ * la stessa cosa in quattro modi diversi. */
 
 export default function AuthorshipFields({ row }: { row: Authored }) {
   return (

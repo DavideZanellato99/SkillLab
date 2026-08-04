@@ -31,12 +31,16 @@ from models import (
     ConversationEvaluation,
     ConversationReview,
     Role,
+    SimulationAttempt,
+    TechnicalSimulation,
     User,
 )
 from schemas import (
     AttemptResponse,
     ComparableUserResponse,
     EvaluationCriterionScore,
+    SimulationAnswerOutcome,
+    SimulationComparisonAttempt,
 )
 
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
@@ -79,16 +83,29 @@ def comparable_users(
 
     Empty for a student: they have themselves and no picker to fill. The
     count is computed here so the list can leave out whoever has nothing
-    evaluated yet.
+    to compare yet, and it counts both proofs: the picker sits above both
+    tabs, so somebody who has only ever taken written tests has to be in it.
     """
     if not _is_admin(current_user):
         return []
 
     scope_org_id = resolve_admin_scope(current_user)
-    # Colonne esplicite e non l'entità User: `role` e `organization` sono
-    # lazy="joined", quindi selezionare l'entità porterebbe nella query le
-    # loro colonne, che una GROUP BY su users.id non copre.
-    query = (
+
+    def _people_with(joined_query):
+        """The same person query, hung off whatever proof is being counted.
+
+        Colonne esplicite e non l'entità User: `role` e `organization` sono
+        lazy="joined", quindi selezionare l'entità porterebbe nella query le
+        loro colonne, che una GROUP BY su users.id non copre.
+        """
+        query = joined_query.join(Role, Role.id == User.role_id).filter(
+            Role.name != ROLE_SUPER_ADMIN
+        )
+        if scope_org_id is not None:
+            query = query.filter(User.organization_id == scope_org_id)
+        return query.group_by(User.id).all()
+
+    evaluated = _people_with(
         db.query(
             User.id,
             User.nome,
@@ -101,23 +118,28 @@ def comparable_users(
             ConversationEvaluation,
             ConversationEvaluation.conversation_id == ChatConversation.id,
         )
-        .join(Role, Role.id == User.role_id)
-        .filter(Role.name != ROLE_SUPER_ADMIN)
     )
-    if scope_org_id is not None:
-        query = query.filter(User.organization_id == scope_org_id)
-    rows = query.group_by(User.id).order_by(User.cognome.asc(), User.nome.asc()).all()
+    tested = _people_with(
+        db.query(
+            User.id,
+            User.nome,
+            User.cognome,
+            User.email,
+            func.count(SimulationAttempt.id),
+        ).join(SimulationAttempt, SimulationAttempt.user_id == User.id)
+    )
 
-    return [
-        ComparableUserResponse(
-            id=user_id,
-            nome=nome,
-            cognome=cognome,
-            email=email,
-            attempts=count,
-        )
-        for user_id, nome, cognome, email, count in rows
-    ]
+    people: dict[UUID, ComparableUserResponse] = {}
+    for user_id, nome, cognome, email, count in [*evaluated, *tested]:
+        person = people.get(user_id)
+        if person is None:
+            people[user_id] = ComparableUserResponse(
+                id=user_id, nome=nome, cognome=cognome, email=email, attempts=count
+            )
+        else:
+            person.attempts += count
+
+    return sorted(people.values(), key=lambda p: (p.cognome.lower(), p.nome.lower()))
 
 
 @router.get("/attempts", response_model=list[AttemptResponse])
@@ -176,4 +198,57 @@ def list_attempts(
             ],
         )
         for conversation, evaluation, avatar_name, review in rows
+    ]
+
+
+@router.get("/simulation-attempts", response_model=list[SimulationComparisonAttempt])
+def list_simulation_attempts(
+    user_id: UUID | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """One person's delivered technical tests, oldest first.
+
+    Same rules and same order as /attempts: the picker puts the earliest on
+    the left and the latest on the right, which is how progress reads.
+
+    The answers ride along instead of waiting for a second call on the two
+    that get picked: they are the only thing that makes two attempts at the
+    SAME test comparable question by question, which is the whole point of
+    retaking one.
+    """
+    subject = _subject_or_404(db, current_user, user_id)
+
+    rows = (
+        db.query(SimulationAttempt, TechnicalSimulation.title)
+        .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
+        .filter(SimulationAttempt.user_id == subject.id)
+        .order_by(SimulationAttempt.created_at.asc())
+        .all()
+    )
+
+    return [
+        SimulationComparisonAttempt(
+            attempt_id=attempt.id,
+            simulation_id=attempt.simulation_id,
+            simulation_title=title,
+            attempted_at=attempt.created_at,
+            correct_count=attempt.correct_count,
+            question_count=attempt.question_count,
+            score=attempt.score,
+            # La fotografia scritta alla consegna, non le domande di adesso:
+            # un tentativo resta leggibile anche se il test è stato riscritto.
+            answers=[
+                SimulationAnswerOutcome(
+                    question_id=answer["question_id"],
+                    position=answer["position"],
+                    text=answer["text"],
+                    is_correct=answer["is_correct"],
+                    selected_option=answer.get("selected_option"),
+                    correct_option=answer["correct_option"],
+                )
+                for answer in (attempt.answers or [])
+            ],
+        )
+        for attempt, title in rows
     ]

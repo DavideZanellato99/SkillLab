@@ -15,7 +15,9 @@ import uuid
 
 import pytest
 
+from auth_dependency import ensure_roles
 from models import (
+    ROLE_USER,
     SIMULATION_STATUS_DRAFT,
     SIMULATION_STATUS_PUBLISHED,
     Organization,
@@ -23,6 +25,7 @@ from models import (
     SimulationChunk,
     SimulationQuestion,
     TechnicalSimulation,
+    User,
 )
 
 
@@ -119,6 +122,22 @@ def test_la_simulazione_di_un_altro_tenant_risponde_404(
 ):
     altrui = make_simulation(organization_id=other_organization.id)
     assert user_client.get(f"/api/simulations/{altrui.id}").status_code == 404
+
+
+def test_chi_svolge_il_test_non_riceve_l_email_di_chi_lo_ha_scritto(
+    user_client, admin_client, make_simulation
+):
+    """La paternità è roba dell'amministrazione: la scheda del super admin la
+    mostra, l'elenco di chi deve svolgere il test non deve nemmeno portarla."""
+    make_simulation(title="Con un autore")
+
+    riga_utente = user_client.get("/api/simulations").json()[0]
+    assert "created_by_email" not in riga_utente
+    assert "updated_by_email" not in riga_utente
+
+    riga_admin = admin_client.get("/api/admin/simulations").json()[0]
+    assert riga_admin["created_by_email"]
+    assert riga_admin["updated_by_email"]
 
 
 # ── Le chiavi restano sul server ──────────────────────────────────────
@@ -287,6 +306,68 @@ def test_un_admin_non_legge_i_risultati_di_un_altro_tenant(
 ):
     altrui = make_simulation(organization_id=other_organization.id)
     assert org_admin_client.get(f"/api/simulations/{altrui.id}/results").status_code == 404
+
+
+# ── Il report della dashboard ─────────────────────────────────────────
+
+
+def test_il_report_porta_i_tentativi_con_chi_li_ha_svolti(
+    client, act_as, make_simulation, standard_user, org_admin_user
+):
+    simulation = make_simulation(title="Sblocco carta")
+    act_as(standard_user)
+    esito = client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True)},
+    ).json()
+
+    act_as(org_admin_user)
+    righe = client.get("/api/admin/simulations-report").json()
+    assert len(righe) == 1
+    riga = righe[0]
+    assert riga["attempt_id"] == esito["id"]
+    assert riga["simulation_title"] == "Sblocco carta"
+    assert riga["user_email"] == standard_user.email
+    assert riga["score"] == 10.0
+    assert riga["correct_count"] == 3
+    assert riga["question_count"] == 3
+
+
+def test_il_report_di_un_admin_si_ferma_al_proprio_tenant(
+    db_session, client, act_as, make_simulation, other_organization, standard_user, org_admin_user
+):
+    """Lo scope è l'organizzazione di chi ha svolto il test, non quella della
+    simulazione: la dashboard di un tenant parla della propria gente."""
+    altrui = User(
+        cognito_sub=f"test-{uuid.uuid4()}",
+        email="estraneo@test.invalid",
+        nome="Estraneo",
+        cognome="Altrove",
+        role_id=ensure_roles(db_session)[ROLE_USER].id,
+        organization_id=other_organization.id,
+    )
+    db_session.add(altrui)
+    db_session.flush()
+
+    simulation = make_simulation()
+    db_session.add(
+        SimulationAttempt(
+            simulation_id=simulation.id,
+            user_id=altrui.id,
+            correct_count=1,
+            question_count=3,
+            answers=[],
+        )
+    )
+    act_as(standard_user)
+    client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True)},
+    )
+
+    act_as(org_admin_user)
+    email = [r["user_email"] for r in client.get("/api/admin/simulations-report").json()]
+    assert email == [standard_user.email]
 
 
 def test_una_simulazione_senza_domande_non_si_consegna(db_session, user_client, organization):

@@ -42,8 +42,11 @@ logger = logging.getLogger(__name__)
 # schema job at the same time, which is the one thing it exists to prevent.
 _SCHEMA_LOCK_KEY = 774_155_001
 
-# The tables that carry the paternity columns, the ones an administrator
-# creates and modifies (see the `Authored` mixin in `authorship`).
+# The tables that carry the paternity columns and predate them, so they need
+# the columns added and their old rows attributed (see the `Authored` mixin in
+# `authorship`). `technical_simulations` is absent on purpose: it was born with
+# the mixin already on it, so create_all makes the columns and there is no
+# older row to go looking for.
 _AUTHORED_TABLES = ("users", "organizations", "avatars")
 
 # Where to read the author of the rows that predate the columns: for each

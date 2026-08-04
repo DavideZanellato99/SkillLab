@@ -50,6 +50,15 @@ export function TrashIcon(props: IconProps) {
   )
 }
 
+/* La matita con cui si apre la modifica di una riga, in ogni tabella. */
+export function PencilIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </Svg>
+  )
+}
+
 export function CloseIcon(props: IconProps) {
   return (
     <Svg {...props}>

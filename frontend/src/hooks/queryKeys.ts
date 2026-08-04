@@ -54,6 +54,9 @@ export const queryKeys = {
     /** Punteggi delle valutazioni per la dashboard. */
     evaluations: (organizationId?: string) =>
       ['reports', 'evaluations', organizationId ?? '__all__'] as const,
+    /** Tentativi delle simulazioni tecniche, l'altra metà della dashboard. */
+    simulations: (organizationId?: string) =>
+      ['reports', 'simulations', organizationId ?? '__all__'] as const,
   },
   training: {
     all: ['training'] as const,
@@ -85,6 +88,9 @@ export const queryKeys = {
     /** Persone di cui un admin può leggere i tentativi. */
     people: ['comparison', 'people'] as const,
     attempts: (subjectId?: string) => ['comparison', 'attempts', subjectId ?? '__me__'] as const,
+    /** I test tecnici della stessa persona, l'altra prova da confrontare. */
+    simulationAttempts: (subjectId?: string) =>
+      ['comparison', 'simulation-attempts', subjectId ?? '__me__'] as const,
   },
   notifications: ['notifications'] as const,
   /** Elenco delle voci disponibili per gli avatar. */

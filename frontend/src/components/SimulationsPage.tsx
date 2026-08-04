@@ -71,9 +71,9 @@ export default function SimulationsPage() {
         </div>
       ) : simulations.length === 0 ? (
         <div className="rounded-2xl border border-white/6 bg-gray-900/60 p-16 text-center text-slate-500 backdrop-blur-md">
-          <p className="mb-1 text-[0.95rem]">Nessuna simulazione disponibile.</p>
+          <p className="mb-1 text-[0.95rem]">Nessuna simulazione disponibile</p>
           <p className="text-sm">
-            Le simulazioni tecniche vengono pubblicate da chi gestisce la piattaforma.
+            Le simulazioni tecniche vengono pubblicate da chi gestisce la piattaforma
           </p>
         </div>
       ) : (

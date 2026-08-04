@@ -1,46 +1,41 @@
 import { useState } from 'react'
 import { useAdminSimulations, useDeleteSimulation } from '../hooks/useSimulations'
 import { useOrganizations } from '../hooks/useOrganizations'
-import type { Simulation } from '../services/simulations'
+import type { AdminSimulation } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
 import DataTable, { Td, Tr } from './DataTable'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
 import Badge from './Badge'
 import ConfirmModal from './ConfirmModal'
-import { PlusIcon, TrashIcon } from './icons'
+import Tooltip from './Tooltip'
+import { PencilIcon, PlusIcon, TrashIcon } from './icons'
 import { matchesSearch } from './tableSearch'
 import SimulationCreateModal from './SimulationCreateModal'
 import SimulationDetailModal from './SimulationDetailModal'
-import { formatDateTime } from './simulationFormat'
+import SimulationEditorModal from './SimulationEditorModal'
+import { formatDate } from './lastAccess'
+import { statusBadgeTone, statusLabel } from './simulationFormat'
 
 /* La gestione delle simulazioni tecniche, riservata al super admin.
  *
- * La tabella è l'indice: si crea da qui, e ogni riga si apre sul pannello in
- * cui si generano le domande, si rileggono, si correggono e si pubblica. Il
- * ciclo di vita sta tutto in quel pannello perché è una cosa sola, non
- * cinque schermate. */
-
-const STATUS_TONES: Record<string, string> = {
-  draft: 'border border-amber-500/25 bg-amber-500/10 text-amber-400',
-  published: 'border border-emerald-500/25 bg-emerald-500/10 text-emerald-400',
-}
-const STATUS_LABELS: Record<string, string> = {
-  draft: 'Bozza',
-  published: 'Pubblicata',
-}
+ * La tabella si legge come quelle di utenti, organizzazioni e avatar: il clic
+ * sulla riga apre la scheda di sola lettura, la matita apre il pannello in cui
+ * si generano le domande, si rileggono, si correggono e si pubblica. Il ciclo
+ * di vita sta tutto in quel pannello perché è una cosa sola, non cinque
+ * schermate. */
 
 const COLUMNS = [
   { key: 'title', label: 'Simulazione' },
   { key: 'organization', label: 'Organizzazione' },
   { key: 'questions', label: 'Domande', align: 'center' as const, compact: true },
   { key: 'status', label: 'Stato' },
-  { key: 'created', label: 'Creata' },
-  { key: 'actions', label: '', ariaLabel: 'Azioni' },
+  { key: 'creazione', label: 'Data Creazione' },
+  { key: 'actions', label: 'Azioni', align: 'right' as const },
 ]
 
-const iconBtnCls =
-  'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50'
+const actionBtnCls =
+  'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40'
 
 export default function SimulationAdminPage() {
   const { data: simulations = [], isLoading } = useAdminSimulations()
@@ -49,8 +44,13 @@ export default function SimulationAdminPage() {
 
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
+  /* Il pannello di revisione, aperto dalla matita. Tiene l'id e non la riga
+   * perché si ricarica dal server: le domande non stanno nell'elenco. */
   const [openId, setOpenId] = useState<string | null>(null)
-  const [toDelete, setToDelete] = useState<Simulation | null>(null)
+  /* Dettaglio in sola lettura, aperto dal clic sulla riga come nelle tabelle
+   * di utenti, organizzazioni e avatar. */
+  const [viewing, setViewing] = useState<AdminSimulation | null>(null)
+  const [toDelete, setToDelete] = useState<AdminSimulation | null>(null)
 
   const filtered = simulations.filter((s) =>
     matchesSearch(search, s.title, s.organization_name, s.document_name),
@@ -61,6 +61,7 @@ export default function SimulationAdminPage() {
     remove.mutate(toDelete.id, {
       onSuccess: () => {
         if (openId === toDelete.id) setOpenId(null)
+        if (viewing?.id === toDelete.id) setViewing(null)
         setToDelete(null)
       },
     })
@@ -85,21 +86,22 @@ export default function SimulationAdminPage() {
           columns={COLUMNS}
           isEmpty={filtered.length === 0}
           emptyMessage={
-            search ? 'Nessuna simulazione corrisponde alla ricerca.' : 'Nessuna simulazione ancora.'
+            search ? 'Nessuna simulazione corrisponde alla ricerca' : 'Nessuna simulazione ancora'
           }
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Cerca per titolo, organizzazione o documento..."
         >
           {filtered.map((simulation) => (
-            <Tr key={simulation.id}>
+            <Tr
+              key={simulation.id}
+              className="cursor-pointer"
+              onClick={() => setViewing(simulation)}
+            >
               <Td>
-                <button
-                  className="cursor-pointer border-none bg-transparent p-0 text-left text-[0.9rem] font-medium text-slate-100 transition hover:text-violet-400"
-                  onClick={() => setOpenId(simulation.id)}
-                >
+                <span className="block text-[0.9rem] font-medium text-slate-100">
                   {simulation.title}
-                </button>
+                </span>
                 <span className="block truncate text-xs text-slate-500">
                   {simulation.document_name}
                 </span>
@@ -109,21 +111,39 @@ export default function SimulationAdminPage() {
                 {simulation.question_count}
               </Td>
               <Td>
-                <Badge tone={STATUS_TONES[simulation.status] ?? ''}>
-                  {STATUS_LABELS[simulation.status] ?? simulation.status}
+                <Badge tone={statusBadgeTone(simulation.status)}>
+                  {statusLabel(simulation.status)}
                 </Badge>
               </Td>
-              <Td className="whitespace-nowrap text-xs text-slate-500">
-                {formatDateTime(simulation.created_at)}
+              <Td>
+                <span className="text-[0.85rem] text-slate-500">
+                  {formatDate(simulation.created_at)}
+                </span>
               </Td>
-              <Td align="right">
-                <button
-                  className={iconBtnCls}
-                  onClick={() => setToDelete(simulation)}
-                  aria-label={`Elimina ${simulation.title}`}
-                >
-                  <TrashIcon size={15} />
-                </button>
+              <Td onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-end gap-2">
+                  {/* La matita apre il pannello delle domande: modificare una
+                      simulazione vuol dire scriverle e pubblicarle, non
+                      correggere un titolo in un form. */}
+                  <Tooltip content="Modifica simulazione">
+                    <button
+                      className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
+                      onClick={() => setOpenId(simulation.id)}
+                      aria-label={`Modifica ${simulation.title}`}
+                    >
+                      <PencilIcon />
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Elimina simulazione">
+                    <button
+                      className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
+                      onClick={() => setToDelete(simulation)}
+                      aria-label={`Elimina ${simulation.title}`}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </Tooltip>
+                </div>
               </Td>
             </Tr>
           ))}
@@ -141,7 +161,11 @@ export default function SimulationAdminPage() {
         />
       )}
 
-      {openId && <SimulationDetailModal simulationId={openId} onClose={() => setOpenId(null)} />}
+      {/* Dettaglio simulazione (clic sulla riga) */}
+      {viewing && <SimulationDetailModal simulation={viewing} onClose={() => setViewing(null)} />}
+
+      {/* Pannello domande e pubblicazione (matita) */}
+      {openId && <SimulationEditorModal simulationId={openId} onClose={() => setOpenId(null)} />}
 
       {toDelete && (
         <ConfirmModal

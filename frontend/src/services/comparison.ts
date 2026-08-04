@@ -28,12 +28,39 @@ export interface Attempt {
   criteria: EvaluationCriterionScore[]
 }
 
+/* Com'è andata una domanda, per appaiare due prove sullo stesso test. */
+export interface SimulationAnswerOutcome {
+  question_id: string
+  position: number
+  text: string
+  is_correct: boolean
+  /** null quando la domanda è stata lasciata in bianco. */
+  selected_option: number | null
+  correct_option: number
+}
+
+/* Il gemello scritto di Attempt: un test tecnico consegnato.
+ *
+ * Niente voto della macchina e niente parole del docente: un test a risposta
+ * multipla si corregge da solo, e il voto congelato sul tentativo è l'unico
+ * che ci sia mai stato. */
+export interface SimulationComparisonAttempt {
+  attempt_id: string
+  simulation_id: string
+  simulation_title: string
+  attempted_at: string
+  correct_count: number
+  question_count: number
+  score: number
+  answers: SimulationAnswerOutcome[]
+}
+
 export interface ComparableUser {
   id: string
   nome: string
   cognome: string
   email: string
-  /** Quanti tentativi valutati ha: chi non ne ha non compare nell'elenco. */
+  /** Quante prove confrontabili ha in tutto, conversazioni valutate e test. */
   attempts: number
 }
 
@@ -48,5 +75,11 @@ export const fetchComparableUsers = () => apiFetch<ComparableUser[]>('/api/compa
  */
 export const fetchAttempts = (userId?: string) =>
   apiFetch<Attempt[]>('/api/comparison/attempts', {
+    params: userId ? { user_id: userId } : undefined,
+  })
+
+/** I test tecnici consegnati da una persona, dal più vecchio. */
+export const fetchSimulationAttempts = (userId?: string) =>
+  apiFetch<SimulationComparisonAttempt[]>('/api/comparison/simulation-attempts', {
     params: userId ? { user_id: userId } : undefined,
   })

@@ -1,0 +1,225 @@
+# Docker e i due ambienti
+
+Come l'applicazione viene impacchettata e messa in piedi, e in che cosa
+l'ambiente di sviluppo è diverso da quello di produzione. I comandi del deploy
+stanno in [deploy-e-scalabilita.md](deploy-e-scalabilita.md).
+
+## Un file solo, due ambienti
+
+Accanto a [docker-compose.yml](../docker-compose.yml) c'è
+[docker-compose.override.yml](../docker-compose.override.yml), e Compose lo
+legge **da solo**, senza che nessuno glielo chieda. La conseguenza è la
+regola più importante di tutto questo capitolo:
+
+```bash
+docker compose up --build                    # sviluppo (l'override viene letto)
+docker compose -f docker-compose.yml up -d   # produzione (l'override viene escluso)
+```
+
+Il `-f` esplicito non è un vezzo: senza, si sta avviando lo sviluppo credendo
+di avviare la produzione.
+
+| | Sviluppo | Produzione |
+| --- | --- | --- |
+| Backend | `uvicorn --reload`, sorgenti montate dall'host | uvicorn normale, codice dentro l'immagine |
+| Repliche del backend | 1 | `BACKEND_REPLICAS` |
+| Frontend | Vite dev server | File compilati serviti da nginx |
+| Caddy e backup | Spenti (profilo mai attivato) | Attivi |
+| Porte affacciate | 5432, 8000, 3000 sull'host | Solo 80 e 443 di Caddy |
+| Healthcheck del backend | Disattivato | Attivo |
+
+Il frontend in sviluppo si ferma allo **stadio di build** del Dockerfile e
+lancia Vite; in produzione arriva fino allo stadio nginx. Le due modalità
+condividono il nome dell'immagine ma non lo stadio, ed è il motivo di un
+inciampo noto: dopo aver costruito la produzione, il `docker compose up` di
+sviluppo riparte in ciclo con exit 127, che è `npm` cercato dentro
+un'immagine dove non c'è. Non è rotto niente, va solo ricostruito:
+
+```bash
+docker compose up -d --build frontend
+```
+
+## I cinque servizi di produzione
+
+```mermaid
+flowchart TD
+    NET["rete interna di compose"]
+    C["caddy<br/>80, 443, 443/udp"] --> F["frontend<br/>nginx :8080"]
+    C --> B["backend<br/>uvicorn :8000, N repliche"]
+    B --> D[("db<br/>postgres:18-alpine")]
+    BK["db-backup<br/>pg_dump ogni 6h"] --> D
+    C -.-|unico affacciato| NET
+```
+
+| Servizio | Immagine | Affacciato | Note |
+| --- | --- | --- | --- |
+| `caddy` | `caddy:2-alpine` | **Sì**, 80 e 443 | Termina TLS, smista, bilancia |
+| `backend` | Costruita da `./backend` | No | N repliche identiche |
+| `frontend` | Costruita da `./frontend` | No | Solo file statici |
+| `db` | `postgres:18-alpine` | No | |
+| `db-backup` | `postgres:18-alpine` | No | Stessa immagine del database, così `pg_dump` è della stessa versione del server che copia |
+
+**Nessun segreto sta nel compose.** Le credenziali del database arrivano dal
+file `.env` accanto al compose, e sono dichiarate con la sintassi che fa
+fallire l'avvio dicendo cosa manca. Un errore in faccia al primo avvio è molto
+meglio di un database di produzione con dentro `postgres/postgres` che nessuno
+noterà mai.
+
+Utente e nome del database contano solo alla prima inizializzazione del volume:
+cambiarli dopo non li cambia dentro Postgres, li spezza e basta. La password
+deve essere URL-safe, perché finisce dentro `DATABASE_URL`.
+
+## Le immagini
+
+**[backend/Dockerfile](../backend/Dockerfile)**, da `python:3.12-slim`. Le
+dipendenze si installano prima del codice, così quel livello resta in cache
+finché `requirements.txt` non cambia. Alla fine il container passa a un utente
+non privilegiato, dichiarato **col numero** (`USER 10001`) e non col nome:
+quel nome esiste solo dentro l'immagine, mentre chi guarda da fuori (l'host sui
+file del volume, uno scanner che verifica che non giri da root) vede solo il
+numero.
+
+**[frontend/Dockerfile](../frontend/Dockerfile)**, a due stadi: Node compila,
+e l'immagine finale è `nginx-unprivileged`, che gira come utente non root e
+ascolta sulla 8080 perché sotto la 1024 non potrebbe. Nel secondo stadio c'è un
+`apk upgrade` per prendere le correzioni uscite dopo lo scatto dell'immagine di
+base.
+
+Tutti i servizi hanno `no-new-privileges:true`, cioè non possono guadagnare
+privilegi durante l'esecuzione.
+
+## Chi decide dove va una richiesta
+
+Il proxy verso il backend **stava in nginx**, e adesso sta solo in Caddy. Il
+motivo non è estetico: nginx risolve il nome di un upstream **una volta sola
+all'avvio**, quindi con quattro repliche avrebbe mandato tutto sempre alla
+stessa, senza che niente sembrasse rotto.
+
+Adesso [nginx.conf](../frontend/nginx.conf) serve solo i file compilati, con il
+`try_files` che manda tutto a `index.html` perché il routing è lato React. Chi
+smista è [caddy/Caddyfile](../caddy/Caddyfile), e lo fa così:
+
+| Percorso | Destinazione |
+| --- | --- |
+| `/api/*`, `/static/*` | Le repliche del backend, sulla 8000 |
+| Tutto il resto | `frontend:8080` |
+
+Quattro dettagli del Caddyfile che valgono da soli:
+
+- **le repliche non si elencano**: si chiedono al DNS di Docker, con un
+  aggiornamento ogni cinque secondi. Così `--scale backend=6` cambia la
+  capacità senza toccare nessun file;
+- **`lb_policy least_conn`**, non round robin. Una chiamata vocale tiene la
+  connessione aperta per dieci minuti, quindi quello che conta non è di chi sia
+  il turno, è chi ne ha meno in corso adesso;
+- **health check attivo**: una replica che smette di rispondere esce dal giro
+  da sola e ci rientra quando torna. Senza, il bilanciatore continuerebbe a
+  mandarle una chiamata su N;
+- **`X-Forwarded-For` sovrascritto, non accodato**. Il backend legge il primo
+  valore per sapere chi sta chiamando, e accodandolo basterebbe che un client
+  se lo mandasse da solo per farsi credere un altro indirizzo, aggirando il
+  limite sui tentativi di accesso. È una riga, ed è la differenza fra un limite
+  e la sua apparenza.
+
+Il WebSocket della chiamata passa di qui senza configurazione aggiuntiva: Caddy
+lo inoltra da sé.
+
+`SITE_ADDRESS` decide anche i certificati: un dominio vero fa emettere e
+rinnovare da Let's Encrypt, `localhost` usa la CA interna di Caddy, `:80` serve
+in chiaro e va bene solo per le prove (coi cookie `Secure` l'applicazione non
+riesce nemmeno a tenere il login). Ha un default, al contrario delle credenziali
+del database, perché Compose interpola le variabili di tutti i servizi anche
+quando non li avvia, e una variabile obbligatoria qui costringerebbe a
+inventarsi un dominio pure per lavorare in locale.
+
+## I volumi
+
+| Volume | Contiene | Se lo perdi |
+| --- | --- | --- |
+| `db_data` | Il database | Tutto, e per questo esistono i backup |
+| `backend_static` | I ritratti caricati degli avatar | Le immagini caricate. È condiviso fra le repliche: quella caricata da una deve essere servita da tutte |
+| `caddy_data`, `caddy_config` | I certificati | Vanno richiesti daccapo, e Let's Encrypt smette di emetterli dopo qualche tentativo nella stessa settimana |
+| `./backups` | I dump | Una cartella dell'host, non un volume, apposta perché un `rsync` possa portarli fuori dalla macchina |
+
+## Limiti, log e spegnimento
+
+**I limiti di CPU e memoria** ci sono su tutti i servizi. Il pezzo che conta è
+la **riserva** di memoria sul database: il tetto impedisce a Postgres di
+prendersi tutto, la riserva impedisce agli altri di lasciarlo senza niente.
+Senza, quattro repliche sotto picco possono spingerlo in swap, e un database
+che scrive su disco al posto che in RAM non rallenta un po', si ferma, e con
+lui tutto il resto.
+
+Backend e database prendono i loro numeri dal `.env`, perché cambiano con la
+macchina. Frontend e Caddy li hanno scritti nel compose, perché non cambiano:
+nginx serve file già compilati e il suo lavoro non cresce col numero di
+chiamate.
+
+**I log** hanno un tetto uguale per tutti: driver `local`, 100 MB per file e 20
+file, cioè al massimo 2 GB per container. Il driver di serie non cancella mai
+niente, e il disco pieno non ferma solo chi scriveva: ferma anche Postgres, che
+su quel disco deve scrivere per accettare qualunque cosa. Il `local` in più
+comprime i file già ruotati, e il testo si comprime attorno a dieci volte, cioè
+mesi di storia invece di giorni. Il conto va fatto **per container**, non per
+servizio: con quattro repliche il caso peggiore è 8 GB di backend più 2 GB per
+ciascuno degli altri.
+
+**Lo spegnimento** ha due attese diverse e non arbitrarie:
+
+- il backend ha 30 secondi. Non servono a salvare le chiamate in corso, che
+  durano dieci minuti e cadono comunque: servono alle scritture, che nel
+  percorso vocale partono fire and forget verso il database e con i dieci
+  secondi di serie verrebbero troncate, perdendo gli ultimi pezzi di
+  trascrizione senza che nessuno se ne accorga;
+- il database ne ha 60, che gli servono per chiudere le connessioni e scrivere
+  il checkpoint. Ucciso prima, i dati restano integri ma il riavvio successivo
+  si porta via minuti di recovery, proprio mentre stai aspettando che torni su.
+
+**Gli healthcheck** ci sono su database e backend. Quello del backend usa
+Python e non `curl`, che nell'immagine slim non c'è, e ha un periodo di grazia
+di 60 secondi all'avvio: le repliche si mettono in coda su un lock per
+preparare lo schema, e l'ultima della fila può metterci un po' prima di
+rispondere senza per questo essere malata.
+
+## I backup
+
+Un servizio a parte che gira un ciclo suo
+([db/backup.sh](../db/backup.sh)), non un cron dell'host: l'installazione si fa
+una volta e nessuno deve tornare sulla macchina perché i backup ripartano.
+
+Tre proprietà, tutte per lo stesso motivo:
+
+- **il primo dump parte subito**, non fra sei ore;
+- **un dump interrotto non prende il posto di uno buono**: si scrive su file
+  temporaneo e si rinomina solo a `pg_dump` riuscito, così nella cartella non
+  finisce mai un archivio troncato che sembra valido;
+- **il ciclo non muore**. Un backup fallito viene scritto nei log e si riprova
+  al giro dopo, perché un ciclo che si spegne al primo errore smette di fare
+  backup per sempre e nessuno se ne accorge finché non servono.
+
+La ritenzione tiene i più recenti (di serie 28 file, uno ogni sei ore, cioè una
+settimana abbondante). Il dump è fatto con `--clean --if-exists`, così si può
+riversare su un database che ha già le tabelle, che è la situazione di ogni
+ripristino vero.
+
+Restano copie sulla stessa macchina: proteggono da una cancellazione sbagliata
+e da un volume perso, **non dal disco che muore**. Portarle fuori è l'unica
+cosa che le rende backup davvero.
+
+## In sviluppo
+
+Le porte tornano affacciate sull'host perché servono: la 5432 per attaccarsi al
+database con un client, la 8000 per chiamare l'API direttamente, la 3000 per
+l'applicazione.
+
+Il proxy verso il backend in sviluppo lo fa **Vite**
+([vite.config.ts](../frontend/vite.config.ts)), che inoltra `/api` e `/static`:
+per questo l'applicazione non conosce nessun dominio e funziona uguale in
+entrambi gli ambienti, e per questo Caddy in sviluppo non serve.
+
+Due accortezze del file di override che sembrano dettagli e non lo sono: il
+volume anonimo su `node_modules`, che impedisce al bind mount di coprire quelli
+Linux installati dentro l'immagine con quelli Windows dell'host, e i limiti più
+larghi sul frontend, perché lì gira Vite che tiene in memoria il grafo dei
+moduli, e col tetto della produzione verrebbe ucciso a metà lavoro sembrando un
+container che si riavvia da solo senza motivo.

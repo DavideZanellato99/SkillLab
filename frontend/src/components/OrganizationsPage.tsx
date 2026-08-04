@@ -24,9 +24,9 @@ import PrimaryButton from './PrimaryButton'
 import FormError from './FormError'
 import ConfirmModal from './ConfirmModal'
 import ModalShell, { ModalHeader } from './ModalShell'
-import { SuspendIcon, ReactivateIcon, TrashIcon, PlusIcon } from './icons'
+import { SuspendIcon, ReactivateIcon, TrashIcon, PlusIcon, PencilIcon } from './icons'
 import { matchesSearch } from './tableSearch'
-import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
+import { formatDate, formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
 import type { DataTableColumn } from './DataTable'
 import Badge from './Badge'
 import type { KebabMenuItem } from './KebabMenu'
@@ -348,13 +348,7 @@ export default function OrganizationsPage() {
                   </div>
                 </Td>
                 <Td>
-                  <span className="text-[0.85rem] text-slate-500">
-                    {new Date(o.created_at).toLocaleDateString('it-IT', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </span>
+                  <span className="text-[0.85rem] text-slate-500">{formatDate(o.created_at)}</span>
                 </Td>
                 <Td onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-2">
@@ -364,18 +358,7 @@ export default function OrganizationsPage() {
                         onClick={() => openEdit(o)}
                         aria-label={`Modifica ${o.name}`}
                       >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                        </svg>
+                        <PencilIcon />
                       </button>
                     </Tooltip>
                     <Tooltip wrap content="Elimina organizzazione con tutti i suoi dati">

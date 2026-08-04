@@ -13,6 +13,8 @@ from models import (
     ConversationEvaluation,
     ConversationReview,
     Organization,
+    SimulationAttempt,
+    TechnicalSimulation,
 )
 from tests.test_training import _make_user_in
 
@@ -194,3 +196,108 @@ def test_conversations_without_an_evaluation_are_not_attempts(
 
 def test_comparison_requires_authentication(client):
     assert client.get("/api/comparison/attempts").status_code == 401
+
+
+# ── I test tecnici, l'altra prova ─────────────────────
+
+
+def _test_attempt(db_session, user, organization, *, correct, title="Procedure", days_ago=0):
+    """Un test consegnato, con la sua fotografia delle risposte."""
+    simulation = TechnicalSimulation(
+        title=title,
+        organization_id=organization.id,
+        document_name="procedura.txt",
+        document_text="Il testo della procedura.",
+    )
+    db_session.add(simulation)
+    db_session.flush()
+    attempt = SimulationAttempt(
+        simulation_id=simulation.id,
+        user_id=user.id,
+        correct_count=correct,
+        question_count=2,
+        answers=[
+            {
+                "question_id": str(simulation.id),
+                "position": position,
+                "text": f"Domanda {position}?",
+                "options": ["A", "B"],
+                "selected_option": 0 if position <= correct else 1,
+                "correct_option": 0,
+                "is_correct": position <= correct,
+            }
+            for position in (1, 2)
+        ],
+        created_at=(datetime.now(UTC) - timedelta(days=days_ago)).replace(tzinfo=None),
+    )
+    db_session.add(attempt)
+    db_session.flush()
+    return attempt
+
+
+def test_a_student_reads_their_own_delivered_tests(
+    user_client, db_session, standard_user, organization
+):
+    _test_attempt(db_session, standard_user, organization, correct=1, title="Primo", days_ago=10)
+    _test_attempt(db_session, standard_user, organization, correct=2, title="Secondo", days_ago=1)
+
+    attempts = user_client.get("/api/comparison/simulation-attempts").json()
+
+    assert [a["simulation_title"] for a in attempts] == ["Primo", "Secondo"]
+    assert [a["score"] for a in attempts] == [5.0, 10.0]
+    # Le risposte viaggiano con il tentativo: sono l'unica cosa che rende
+    # confrontabili domanda per domanda due prove sullo stesso test
+    assert [a["is_correct"] for a in attempts[0]["answers"]] == [True, False]
+    assert attempts[0]["answers"][0]["text"] == "Domanda 1?"
+
+
+def test_a_student_asking_for_someone_elses_tests_gets_their_own(
+    user_client, db_session, standard_user, org_admin_user, organization
+):
+    _test_attempt(db_session, standard_user, organization, correct=2, title="Mio")
+    _test_attempt(db_session, org_admin_user, organization, correct=1, title="Di un altro")
+
+    attempts = user_client.get(
+        "/api/comparison/simulation-attempts", params={"user_id": str(org_admin_user.id)}
+    ).json()
+
+    assert [a["simulation_title"] for a in attempts] == ["Mio"]
+
+
+def test_an_admin_cannot_open_another_tenants_tests(org_admin_client, db_session):
+    other = Organization(name="Tenant vicino", slug="tenant-vicino")
+    db_session.add(other)
+    db_session.flush()
+    foreign_user = _make_user_in(db_session, other)
+    _test_attempt(db_session, foreign_user, other, correct=2)
+
+    response = org_admin_client.get(
+        "/api/comparison/simulation-attempts", params={"user_id": str(foreign_user.id)}
+    )
+
+    assert response.status_code == 404
+
+
+def test_the_picker_lists_who_has_only_taken_tests(
+    org_admin_client, db_session, standard_user, organization
+):
+    """Il selettore sta sopra entrambe le linguette: chi ha solo svolto test
+    deve poterci finire, o la metà scritta non si aprirebbe su nessuno."""
+    _test_attempt(db_session, standard_user, organization, correct=2)
+
+    users = org_admin_client.get("/api/comparison/users").json()
+
+    assert [u["id"] for u in users] == [str(standard_user.id)]
+    assert users[0]["attempts"] == 1
+
+
+def test_the_picker_counts_both_proofs_together(
+    org_admin_client, db_session, standard_user, organization, make_avatar
+):
+    _attempt(db_session, standard_user, make_avatar(), score=6.0)
+    _test_attempt(db_session, standard_user, organization, correct=2)
+
+    users = org_admin_client.get("/api/comparison/users").json()
+
+    assert len(users) == 1
+    assert users[0]["attempts"] == 2

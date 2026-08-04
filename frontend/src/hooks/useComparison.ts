@@ -6,7 +6,11 @@
  * risposte diverse allo stesso endpoint. */
 
 import { useQuery } from '@tanstack/react-query'
-import { fetchAttempts, fetchComparableUsers } from '../services/comparison'
+import {
+  fetchAttempts,
+  fetchComparableUsers,
+  fetchSimulationAttempts,
+} from '../services/comparison'
 import { queryKeys } from './queryKeys'
 
 /** Le persone del proprio tenant di cui un admin può leggere i tentativi. */
@@ -23,5 +27,13 @@ export function useAttempts(subjectId?: string) {
   return useQuery({
     queryKey: queryKeys.comparison.attempts(subjectId || undefined),
     queryFn: () => fetchAttempts(subjectId || undefined),
+  })
+}
+
+/** I test tecnici consegnati dalla stessa persona, l'altra prova. */
+export function useSimulationAttempts(subjectId?: string) {
+  return useQuery({
+    queryKey: queryKeys.comparison.simulationAttempts(subjectId || undefined),
+    queryFn: () => fetchSimulationAttempts(subjectId || undefined),
   })
 }

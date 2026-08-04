@@ -87,12 +87,21 @@ export default function SimulationCreateModal({
           />
         </Field>
 
-        <Field label="Titolo" htmlFor="simulation-title">
+        <Field
+          label="Titolo"
+          htmlFor="simulation-title"
+          hint={
+            <span className="text-xs text-slate-500">
+              Nomina il documento nel suo insieme: le domande nascono da tutto quello che contiene,
+              non da una sola casistica.
+            </span>
+          }
+        >
           <TextInput
             id="simulation-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Es. Sblocco carta di credito"
+            placeholder="Es. Procedure di assistenza clienti"
             maxLength={150}
             disabled={create.isPending}
             required
@@ -114,7 +123,7 @@ export default function SimulationCreateModal({
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Di cosa tratta il test"
+            placeholder="Es. Le venti casistiche più frequenti del primo livello"
             disabled={create.isPending}
           />
         </Field>

@@ -180,7 +180,7 @@ services:
     #
     # Non serve a salvare le chiamate in corso: quelle durano dieci minuti e
     # nessuna attesa ragionevole le copre, quindi a un aggiornamento cadono
-    # comunque (vedi INFRASTRUTTURA.md, punto 4.2). Serve alle scritture,
+    # comunque (vedi docs/deploy-e-scalabilita.md). Serve alle scritture,
     # che nel percorso vocale partono fire and forget verso il database
     # (vedi voice_pipeline._persist_message): con i dieci secondi di serie
     # quelle ancora in volo vengono troncate, e si perdono gli ultimi pezzi

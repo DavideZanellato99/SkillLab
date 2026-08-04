@@ -26,7 +26,7 @@ import FormError from './FormError'
 import ConfirmModal from './ConfirmModal'
 import AvatarDetailModal from './AvatarDetailModal'
 import ModalShell from './ModalShell'
-import { TrashIcon, PlusIcon } from './icons'
+import { TrashIcon, PlusIcon, PencilIcon } from './icons'
 import Tooltip from './Tooltip'
 import PersonaPromptPreview from './PersonaPromptPreview'
 import { matchesSearch } from './tableSearch'
@@ -652,18 +652,7 @@ export default function AvatarAdminPage() {
                           onClick={() => openEdit(a)}
                           aria-label={`Modifica ${a.name}`}
                         >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                          </svg>
+                          <PencilIcon />
                         </button>
                       </Tooltip>
                       <Tooltip content="Elimina avatar">

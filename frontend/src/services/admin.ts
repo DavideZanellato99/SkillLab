@@ -292,6 +292,28 @@ export interface EvaluationReportRow {
   criteria: EvaluationCriterionScore[]
 }
 
+/* Il gemello scritto della riga qui sopra: un test tecnico consegnato.
+ *
+ * Stessa forma (chi, quando, che voto) perché la dashboard disegna le due
+ * metà con gli stessi componenti. Il voto è quello congelato sul tentativo:
+ * qui non c'è nessuna correzione del docente da tenere accanto. */
+export interface SimulationReportRow {
+  attempt_id: string
+  simulation_id: string
+  simulation_title: string
+  user_id: string
+  user_email: string
+  user_nome: string
+  user_cognome: string
+  organization_id: string | null
+  organization_name: string | null
+  attempted_at: string
+  correct_count: number
+  question_count: number
+  /** In decimi, la stessa scala delle valutazioni. */
+  score: number
+}
+
 /**
  * Fetch every evaluated conversation with its scores — the data source for
  * the dashboard charts (Super Admin + Organization Admin).
@@ -368,5 +390,11 @@ export const fetchEvaluationsReportXlsx = (organizationId?: string) =>
 
 export const fetchEvaluationsReport = (organizationId?: string) =>
   apiFetch<EvaluationReportRow[]>('/api/admin/evaluations-report', {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  })
+
+/** I tentativi sulle simulazioni tecniche, stesse regole di scope. */
+export const fetchSimulationsReport = (organizationId?: string) =>
+  apiFetch<SimulationReportRow[]>('/api/admin/simulations-report', {
     params: organizationId ? { organization_id: organizationId } : undefined,
   })

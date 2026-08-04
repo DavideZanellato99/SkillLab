@@ -18,8 +18,9 @@ class AuthorshipResponse(BaseModel):
     """When a row was created and modified, and by whom.
 
     The four columns every administered entity carries (see `authorship`),
-    in one schema so users, organizations and avatars answer with the same
-    field names and the admin pages can show them with one component.
+    in one schema so users, organizations, avatars and simulations answer
+    with the same field names and the admin pages can show them with one
+    component.
 
     The author is the email and not the id: the id is only useful to look up
     a row the reader cannot see anyway, and the email keeps meaning something
@@ -771,6 +772,31 @@ class EvaluationReportRow(BaseModel):
     criteria: list[EvaluationCriterionScore]
 
 
+class SimulationReportRow(BaseModel):
+    """One delivered technical test, flattened for the dashboard charts.
+
+    The written twin of `EvaluationReportRow`: same shape (who, when, what
+    grade) so the dashboard can draw the two halves with the same components.
+    The grade is the one frozen on the attempt, and nobody corrects it by
+    hand, so here there is no AI score and no override to keep next to it.
+    """
+
+    attempt_id: UUID
+    simulation_id: UUID
+    simulation_title: str
+    user_id: UUID
+    user_email: str
+    user_nome: str
+    user_cognome: str
+    organization_id: UUID | None = None
+    organization_name: str | None = None
+    attempted_at: datetime
+    correct_count: int
+    question_count: int
+    # Out of ten, the same scale as the conversation evaluations
+    score: float
+
+
 class AdminConversationDetail(BaseModel):
     """Full transcript + stored evaluation of a conversation, for the admin dashboard."""
 
@@ -815,11 +841,48 @@ class AttemptResponse(BaseModel):
     criteria: list[EvaluationCriterionScore] = []
 
 
+class SimulationAnswerOutcome(BaseModel):
+    """How one question went, as the comparison screen reads it.
+
+    The question travels with its own text and not just its id: two attempts
+    at the same test are matched by question, and a question that has been
+    rewritten since must still be readable next to the answer it got.
+    """
+
+    question_id: UUID
+    position: int
+    text: str
+    is_correct: bool
+    # None when the question was left blank
+    selected_option: int | None = None
+    correct_option: int
+
+
+class SimulationComparisonAttempt(BaseModel):
+    """One delivered technical test, as the comparison screen reads it.
+
+    The written twin of `AttemptResponse`. There is no AI score and no
+    trainer's words here: a multiple-choice test corrects itself, so the
+    grade frozen on the attempt is the only one there has ever been.
+    """
+
+    attempt_id: UUID
+    simulation_id: UUID
+    simulation_title: str
+    attempted_at: datetime
+    correct_count: int
+    question_count: int
+    score: float
+    answers: list[SimulationAnswerOutcome] = []
+
+
 class ComparableUserResponse(BaseModel):
     """Someone whose attempts an admin can open, with how many there are.
 
     Only people with something to compare are listed: offering a name that
     opens an empty screen is a dead end the picker can spare the trainer.
+    `attempts` counts both proofs together, evaluated conversations and
+    delivered tests, because the picker is one for the whole screen.
     """
 
     id: UUID
@@ -968,7 +1031,17 @@ class SimulationDetailResponse(SimulationResponse):
     questions: list[SimulationQuestionResponse]
 
 
-class SimulationAdminDetailResponse(SimulationResponse):
+class AdminSimulationResponse(SimulationResponse, AuthorshipResponse):
+    """La stessa riga dell'elenco, con in più chi l'ha creata e chi l'ha
+    toccata per ultimo.
+
+    La paternità sta qui e non su ``SimulationResponse`` perché quella la
+    riceve anche chi il test lo svolge, e l'indirizzo di chi prepara i test
+    non è qualcosa che serva a chi li fa.
+    """
+
+
+class SimulationAdminDetailResponse(AdminSimulationResponse):
     """La simulazione come la vede il super admin: domande con le chiavi,
     il testo del documento e quanti l'hanno svolta."""
 

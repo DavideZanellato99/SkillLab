@@ -39,6 +39,8 @@ import document_text
 from auth_dependency import get_current_super_admin
 from database import get_db
 from models import (
+    ALL_SIMULATION_KINDS,
+    SIMULATION_KIND_MULTIPLE,
     SIMULATION_QUESTION_COUNT,
     SIMULATION_STATUS_DRAFT,
     Organization,
@@ -104,8 +106,9 @@ def _admin_detail(db: Session, simulation: TechnicalSimulation, admin: User) -> 
                 id=q.id,
                 position=q.position,
                 text=q.text,
-                options=q.options,
+                options=q.options or [],
                 correct_option=q.correct_option,
+                expected_answer=q.expected_answer,
                 explanation=q.explanation,
                 source_chunks=q.source_chunks,
             )
@@ -195,6 +198,7 @@ async def create_simulation(
     organization_id: UUID = Form(...),
     title: str = Form(...),
     description: str = Form(""),
+    kind: str = Form(SIMULATION_KIND_MULTIPLE),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_super_admin),
@@ -204,11 +208,19 @@ async def create_simulation(
     Nasce in bozza e senza domande: generarle è il passo successivo, e
     tenerlo separato significa che un modello non disponibile non fa perdere
     il documento appena caricato.
+
+    Il tipo si sceglie qui perché è quello che le domande saranno: quattro
+    alternative con una giusta, oppure una traccia di risposta attesa. Non
+    si cambia più (vedi ``update_simulation``).
     """
     title = title.strip()
     if not title:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Il titolo è obbligatorio."
+        )
+    if kind not in ALL_SIMULATION_KINDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Tipo di test non valido: {kind}"
         )
     organization = db.query(Organization).filter(Organization.id == organization_id).first()
     if not organization:
@@ -240,6 +252,7 @@ async def create_simulation(
         title=title,
         description=description.strip() or None,
         status=SIMULATION_STATUS_DRAFT,
+        kind=kind,
     )
     db.add(simulation)
     db.flush()
@@ -312,7 +325,7 @@ async def generate_simulation_questions(
 
     try:
         generated = await generate_questions(
-            [c.content for c in chunks], [c.embedding for c in chunks]
+            [c.content for c in chunks], [c.embedding for c in chunks], simulation.kind
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
@@ -328,6 +341,7 @@ async def generate_simulation_questions(
                 text=question["text"],
                 options=question["options"],
                 correct_option=question["correct_option"],
+                expected_answer=question["expected_answer"],
                 explanation=question["explanation"],
                 source_chunks=question["source_chunks"],
             )
@@ -348,9 +362,13 @@ def update_simulation(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_super_admin),
 ):
-    """Titolo e descrizione. Il tenant non si cambia: una simulazione che
-    cambia organizzazione si porterebbe dietro i tentativi di persone che
-    nell'organizzazione nuova non esistono."""
+    """Titolo e descrizione, e nient'altro.
+
+    Il tenant non si cambia: una simulazione che cambia organizzazione si
+    porterebbe dietro i tentativi di persone che nell'organizzazione nuova
+    non esistono. Nemmeno il tipo: le domande sono già nate dell'una forma o
+    dell'altra, e cambiarlo vorrebbe dire buttarle senza dirlo.
+    """
     simulation = _get_or_404(db, simulation_id)
     simulation.title = payload.title.strip()
     simulation.description = (payload.description or "").strip() or None
@@ -375,8 +393,30 @@ def save_questions(
     rende impossibile lasciarne indietro una che l'admin aveva tolto. I
     tentativi già consegnati non puntano a queste righe, li porta con sé la
     loro fotografia.
+
+    La chiave che una domanda deve portare dipende dal tipo del test, e il
+    tipo si sa qui e non nel payload (vedi ``SimulationQuestionPayload``):
+    alternative con l'indice di quella giusta, oppure la traccia della
+    risposta attesa. Quella dell'altro tipo, se arriva, si butta invece di
+    restare scritta in una colonna che nessuno leggerà più.
     """
     simulation = _get_or_404(db, simulation_id)
+    is_open = simulation.is_open
+    for position, question in enumerate(payload.questions, start=1):
+        if is_open and not question.expected_answer.strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    f"La domanda {position} non ha la risposta attesa, che è quello con cui "
+                    "verrà corretta."
+                ),
+            )
+        if not is_open and question.options is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"La domanda {position} non ha le alternative fra cui scegliere.",
+            )
+
     # Le citazioni al documento si conservano dove la domanda è rimasta la
     # stessa: sono ordinali di passaggi, non qualcosa che il super admin
     # possa riscrivere nel form, e perderle a ogni correzione di un refuso
@@ -390,8 +430,9 @@ def save_questions(
                 simulation_id=simulation.id,
                 position=position,
                 text=question.text.strip(),
-                options=question.options,
-                correct_option=question.correct_option,
+                options=None if is_open else question.options,
+                correct_option=None if is_open else question.correct_option,
+                expected_answer=question.expected_answer.strip() if is_open else "",
                 explanation=question.explanation.strip(),
                 source_chunks=old.source_chunks
                 if old and old.text == question.text.strip()

@@ -38,6 +38,7 @@ condivisa per area:
 | Area | Funzione | Regola |
 | --- | --- | --- |
 | Avatar | `_visible_avatars` in [avatars.py](../backend/routers/avatars.py) | Solo quelli della propria organizzazione, tutti per il super admin |
+| Categorie degli avatar | `get_categories` in [avatars.py](../backend/routers/avatars.py) | Come sopra. Il legame con l'avatar è una chiave esterna composta che porta con sé il tenant, così cambiare categoria non può spostare l'avatar di organizzazione (vedi [avatar-e-persona.md](avatar-e-persona.md)) |
 | Simulazioni | `visible_query` in [simulations.py](../backend/routers/simulations.py) | Come sopra, più le bozze escluse fuori dall'amministrazione |
 | Conversazioni | `_owned_conversation_or_404` in [chat.py](../backend/routers/chat.py) | Solo le proprie, sempre |
 
@@ -82,7 +83,9 @@ Le gestisce il super admin da
 [OrganizationsPage](../frontend/src/components/OrganizationsPage.tsx).
 
 **Creazione.** Nome e slug, quest'ultimo derivato dal nome e reso unico
-aggiungendo un numero finché è libero.
+aggiungendo un numero finché è libero. Il tenant nasce già con una categoria
+di avatar, "Clienti": la categoria è obbligatoria su ogni avatar, quindi senza
+non si potrebbe creare nemmeno il primo.
 
 **Sospensione.** Reversibile, e ha effetto immediato su tutti gli utenti del
 tenant: nessuno entra più e chi era già dentro viene rifiutato alla richiesta
@@ -94,8 +97,8 @@ perché descrive la sospensione in corso e non è uno storico (per quello c'è i
 registro).
 
 **Cancellazione.** Irreversibile, e porta via tutto: gli utenti, anche da
-Cognito, le loro conversazioni, gli avatar privati del tenant, i ritratti dal
-disco. Passa dallo stesso modulo di cancellazione di un singolo utente
+Cognito, le loro conversazioni, gli avatar privati del tenant con le loro
+categorie, i ritratti dal disco. Passa dallo stesso modulo di cancellazione di un singolo utente
 ([erasure.py](../backend/erasure.py)), così una tabella nuova viene coperta da
 entrambe le strade insieme.
 

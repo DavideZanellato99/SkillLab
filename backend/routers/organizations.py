@@ -26,8 +26,10 @@ from database import get_db
 from erasure import erase_conversations, erase_users
 from models import (
     ALL_ORG_STATUSES,
+    DEFAULT_AVATAR_CATEGORY_NAME,
     ORG_STATUS_SUSPENDED,
     Avatar,
+    AvatarCategory,
     ChatConversation,
     ConversationEvaluation,
     Organization,
@@ -226,6 +228,11 @@ def create_organization(
     slug = _unique_slug(db, request.slug or name)
     org = Organization(name=name, slug=slug)
     db.add(org)
+    db.flush()
+    # Un'organizzazione nasce con una categoria di avatar, altrimenti il suo
+    # primo avatar non si potrebbe creare: la categoria è obbligatoria e non
+    # ce ne sarebbe nessuna da scegliere. Resta rinominabile come le altre.
+    db.add(AvatarCategory(organization_id=org.id, name=DEFAULT_AVATAR_CATEGORY_NAME))
     db.commit()
     db.refresh(org)
     audit.describe(http_request, target_id=str(org.id), nome=org.name)
@@ -413,9 +420,14 @@ def delete_organization(
     ):
         db.delete(simulation)
 
-    # Then the private avatars and the organization itself
+    # Then the private avatars and the organization itself. The categories
+    # go after the avatars that point at them, never before: they exist only
+    # inside this tenant, so nothing outside it is left without a group.
     if avatar_ids:
         db.query(Avatar).filter(Avatar.id.in_(avatar_ids)).delete(synchronize_session=False)
+    db.query(AvatarCategory).filter(AvatarCategory.organization_id == org.id).delete(
+        synchronize_session=False
+    )
     name = org.name
     db.delete(org)
     db.commit()

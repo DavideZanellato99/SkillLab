@@ -7,6 +7,7 @@
 
 import { apiFetch } from './api'
 import type { EvaluationCriterionScore } from './admin'
+import type { SimulationKind } from './simulations'
 
 export interface Attempt {
   conversation_id: string
@@ -34,20 +35,23 @@ export interface SimulationAnswerOutcome {
   position: number
   text: string
   is_correct: boolean
-  /** null quando la domanda è stata lasciata in bianco. */
+  /** null quando la domanda è stata lasciata in bianco, o è aperta. */
   selected_option: number | null
-  correct_option: number
+  /** null sui test a risposta aperta, dove non c'è niente da scegliere. */
+  correct_option: number | null
 }
 
 /* Il gemello scritto di Attempt: un test tecnico consegnato.
  *
- * Niente voto della macchina e niente parole del docente: un test a risposta
- * multipla si corregge da solo, e il voto congelato sul tentativo è l'unico
- * che ci sia mai stato. */
+ * Niente voto della macchina e niente parole del docente: il voto congelato
+ * sul tentativo è l'unico che ci sia mai stato, sia che l'abbia deciso il
+ * confronto fra due numeri sia un modello che ha letto delle risposte. */
 export interface SimulationComparisonAttempt {
   attempt_id: string
   simulation_id: string
   simulation_title: string
+  /** Come si rispondeva, il gemello di `mode` su una conversazione. */
+  simulation_kind: SimulationKind
   attempted_at: string
   correct_count: number
   question_count: number

@@ -31,6 +31,7 @@ const simulation = {
   title: 'Procedure di sportello',
   description: 'Due domande di prova',
   status: 'published',
+  kind: 'multiple',
   document_name: 'procedura.pdf',
   question_count: questions.length,
   created_at: '2026-01-01T10:00:00Z',
@@ -41,10 +42,21 @@ const simulation = {
   questions,
 }
 
+/* Lo stesso test in versione a risposta aperta: le domande non hanno
+ * alternative e si risponde scrivendo. Serve a provare che il corpo della
+ * consegna cambia forma, che è l'altra metà di quello che questo file
+ * verifica. */
+const openSimulation = {
+  ...simulation,
+  kind: 'open',
+  questions: questions.map((q) => ({ ...q, options: [] })),
+}
+
 const attemptResponse = {
   id: 'att-1',
   simulation_id: 'sim-1',
   simulation_title: simulation.title,
+  simulation_kind: 'multiple',
   user_id: 'user-1',
   user_email: 'tizio@example.com',
   user_name: 'Tizio',
@@ -66,6 +78,15 @@ function submittedBody() {
     ([url, init]) => String(url).endsWith('/attempts') && init?.method === 'POST',
   )
   return call ? JSON.parse(call[1].body as string) : null
+}
+
+/** Serve la simulazione a risposta aperta al posto di quella di serie. */
+function serveOpenSimulation() {
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') return json({ ...attemptResponse, simulation_kind: 'open' })
+    if (String(url).endsWith('/attempts')) return json([])
+    return json(openSimulation)
+  })
 }
 
 function renderRunner() {
@@ -150,5 +171,61 @@ describe('SimulationRunner', () => {
     await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
 
     expect(await screen.findByText(/1 risposte corrette su 2/)).toBeInTheDocument()
+  })
+
+  it('su un test a risposta aperta consegna il testo scritto e nessun tempo', async () => {
+    const user = userEvent.setup()
+    serveOpenSimulation()
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+
+    await user.type(await screen.findByRole('textbox'), 'Prima risposta scritta')
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+
+    await user.type(await screen.findByRole('textbox'), 'Seconda risposta scritta')
+    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+
+    await waitFor(() => expect(submittedBody()).not.toBeNull())
+    const body = submittedBody()
+
+    expect(body.answers.map((a: { answer_text: string }) => a.answer_text)).toEqual([
+      'Prima risposta scritta',
+      'Seconda risposta scritta',
+    ])
+    /* Nessun tempo: qui non c'è cronometro, e mandarne uno finto
+       significherebbe far scendere i punti di chi si è riletto. */
+    for (const answer of body.answers) {
+      expect(answer.elapsed_ms).toBeUndefined()
+      expect(answer.selected_option).toBeUndefined()
+    }
+  })
+
+  it('una domanda aperta lasciata in bianco viaggia come non risposta', async () => {
+    const user = userEvent.setup()
+    serveOpenSimulation()
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Salta la domanda' }))
+
+    await user.type(await screen.findByRole('textbox'), 'Solo la seconda')
+    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+
+    await waitFor(() => expect(submittedBody()).not.toBeNull())
+    const [saltata] = submittedBody().answers
+    // Null e non stringa vuota: chi non ha risposto resta distinguibile
+    expect(saltata.answer_text).toBeNull()
+  })
+
+  it('il cronometro non compare sui test a risposta aperta', async () => {
+    const user = userEvent.setup()
+    serveOpenSimulation()
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+
+    expect(await screen.findByRole('textbox')).toBeInTheDocument()
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
   })
 })

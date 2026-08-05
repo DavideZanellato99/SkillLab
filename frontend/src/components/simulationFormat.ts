@@ -4,7 +4,7 @@
  * svolgimento, all'esito e alla pagina di gestione, e un voto che è verde in
  * una schermata e giallo in quella accanto è un voto che non si legge. */
 
-import type { SimulationStatus } from '../services/simulations'
+import type { SimulationKind, SimulationStatus } from '../services/simulations'
 
 /* La scala del punteggio a tempo, gemella di `backend/simulation_scoring.py`.
  *
@@ -60,6 +60,17 @@ export function statusBadgeTone(status: SimulationStatus): string {
   return status === 'published'
     ? 'border border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
     : 'border border-amber-500/25 bg-amber-500/10 text-amber-400'
+}
+
+/* Come si chiama un tipo di test dove lo si legge: dentro
+ * `SimulationKindBadge`, nell'elenco di chi lo deve svolgere, e nelle
+ * ricerche delle tabelle, che si fanno sulla stessa parola che il badge
+ * mostra. La parola sta qui e non in ognuno di quei posti, come lo stato.
+ *
+ * Il colore invece non sta qui: appartiene al badge, che è l'unico modo in
+ * cui il tipo si disegna. */
+export function kindLabel(kind: SimulationKind): string {
+  return kind === 'open' ? 'Risposta aperta' : 'Scelta multipla'
 }
 
 export function formatDateTime(value: string): string {

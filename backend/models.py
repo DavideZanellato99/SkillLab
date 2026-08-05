@@ -9,11 +9,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -58,9 +60,43 @@ SIMULATION_STATUS_DRAFT = "draft"
 SIMULATION_STATUS_PUBLISHED = "published"
 ALL_SIMULATION_STATUSES = [SIMULATION_STATUS_DRAFT, SIMULATION_STATUS_PUBLISHED]
 
+# Come si risponde a un test: scegliendo fra alternative o scrivendo.
+#
+# Il tipo sta sulla simulazione e non sulla singola domanda, quindi un test è
+# tutto dell'una forma o tutto dell'altra. Le due si svolgono in modi troppo
+# diversi per stare nella stessa pagina: le multiple hanno un cronometro e si
+# correggono da sole, le aperte no. Chi vuole verificare le stesse procedure
+# in entrambi i modi carica due volte lo stesso documento, che costa una
+# generazione e non un disegno.
+SIMULATION_KIND_MULTIPLE = "multiple"
+SIMULATION_KIND_OPEN = "open"
+ALL_SIMULATION_KINDS = [SIMULATION_KIND_MULTIPLE, SIMULATION_KIND_OPEN]
+
 # Quante domande ha un test, e quante alternative ha una domanda.
 SIMULATION_QUESTION_COUNT = 10
 SIMULATION_OPTION_COUNT = 4
+
+# Le tinte fra cui si sceglie il colore di una categoria di avatar. Un elenco
+# chiuso e non un colore libero: la pastiglia è disegnata da classi Tailwind
+# scritte a mano nel frontend (categoryStyles), e una classe composta a
+# runtime non finirebbe mai nel CSS compilato. Il nome della tinta è quindi
+# una chiave condivisa fra le due sponde, non un valore CSS.
+AVATAR_CATEGORY_COLORS = [
+    "violet",
+    "orange",
+    "cyan",
+    "emerald",
+    "pink",
+    "amber",
+    "sky",
+    "rose",
+    "slate",
+]
+DEFAULT_AVATAR_CATEGORY_COLOR = "violet"
+
+# La categoria che ogni organizzazione ha per partire: un avatar deve averne
+# una, quindi una deve esistere prima del primo avatar.
+DEFAULT_AVATAR_CATEGORY_NAME = "Clienti"
 
 
 class Organization(Authored, Base):
@@ -180,6 +216,43 @@ class User(Authored, Base):
         return f"<User(id={self.id}, email='{self.email}', ruolo='{self.ruolo}')>"
 
 
+class AvatarCategory(Authored, Base):
+    """Come un'organizzazione raggruppa i propri avatar.
+
+    Anagrafica vera e non più una stringa scritta a mano sull'avatar: la
+    categoria si crea, si rinomina, si colora e si ordina dalla pagina di
+    amministrazione, e rinominarla la cambia ovunque invece di lasciare in
+    giro i vecchi avatar con il vecchio nome.
+
+    Appartiene a un'organizzazione sola, esattamente come gli avatar che
+    raggruppa: due tenant possono avere una categoria che si chiama allo
+    stesso modo senza che sia la stessa categoria.
+
+    L'unico su `(id, organization_id)` non serve a impedire un duplicato che
+    la chiave primaria già impedisce: esiste perché la chiave esterna che
+    arriva dagli avatar è composta, e Postgres pretende un unico sulle due
+    colonne a cui punta (vedi `Avatar`).
+    """
+
+    __tablename__ = "avatar_categories"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
+    organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=False, index=True)
+    name = Column(String(50), nullable=False)
+    # Il nome di una tinta di AVATAR_CATEGORY_COLORS, non un colore CSS.
+    color = Column(String(20), nullable=False, default=DEFAULT_AVATAR_CATEGORY_COLOR)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_avatar_categories_org_name"),
+        UniqueConstraint("id", "organization_id", name="uq_avatar_categories_id_org"),
+    )
+
+    organization = relationship("Organization", foreign_keys=[organization_id])
+
+    def __repr__(self):
+        return f"<AvatarCategory(id={self.id}, name='{self.name}')>"
+
+
 class Avatar(Authored, Base):
     """Represents an avatar that users can select.
 
@@ -194,7 +267,12 @@ class Avatar(Authored, Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String(100), nullable=False)
     image_url = Column(String(500), nullable=False)
-    category = Column(String(50), nullable=False, index=True)
+    # La categoria di appartenenza, sempre una di quelle della stessa
+    # organizzazione. La chiave esterna è composta e porta con sé
+    # organization_id (vedi __table_args__): senza, cambiare categoria a un
+    # avatar potrebbe spostarlo nel tenant di un'altra, che è una fuga di
+    # dati travestita da modifica anagrafica.
+    category_id = Column(Uuid, nullable=False, index=True)
     description = Column(Text, nullable=True)
     # Owning tenant: every avatar belongs to exactly one organization and is
     # visible only within it. Only the super admin creates avatars and assigns
@@ -219,8 +297,28 @@ class Avatar(Authored, Base):
     # of its owning organization, where the whole tenant goes away with it.
     deleted_at = Column(DateTime, nullable=True, index=True)
 
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["category_id", "organization_id"],
+            ["avatar_categories.id", "avatar_categories.organization_id"],
+            name="fk_avatars_category_org",
+        ),
+    )
+
     # Relationship to selections
     organization = relationship("Organization", back_populates="avatars")
+    # Sola lettura e su category_id soltanto: la categoria si assegna
+    # scrivendo l'id, e lasciare la relazione fuori dal flush evita che
+    # SQLAlchemy si trovi due relazioni diverse a scrivere organization_id.
+    # lazy="joined" perché il nome della categoria serve quasi ovunque serva
+    # l'avatar, dalla galleria al titolo di una conversazione.
+    category = relationship(
+        "AvatarCategory",
+        primaryjoin="Avatar.category_id == AvatarCategory.id",
+        foreign_keys="Avatar.category_id",
+        lazy="joined",
+        viewonly=True,
+    )
     selections = relationship("UserSelection", back_populates="avatar")
     conversations = relationship("ChatConversation", back_populates="avatar")
 
@@ -228,6 +326,16 @@ class Avatar(Authored, Base):
     def is_deleted(self) -> bool:
         """True once the avatar has been archived (logically deleted)."""
         return self.deleted_at is not None
+
+    @property
+    def category_name(self) -> str:
+        """Il nome della categoria, per chi deve solo mostrarlo o scriverlo."""
+        return self.category.name if self.category else ""
+
+    @property
+    def category_color(self) -> str:
+        """La tinta della pastiglia della categoria (vedi AVATAR_CATEGORY_COLORS)."""
+        return self.category.color if self.category else DEFAULT_AVATAR_CATEGORY_COLOR
 
     @property
     def difficulty(self) -> str | None:
@@ -238,7 +346,7 @@ class Avatar(Authored, Base):
         return value or None
 
     def __repr__(self):
-        return f"<Avatar(id={self.id}, name='{self.name}', category='{self.category}')>"
+        return f"<Avatar(id={self.id}, name='{self.name}', category='{self.category_name}')>"
 
 
 class UserSelection(Base):
@@ -652,13 +760,19 @@ class NotificationRead(Base):
 
 
 class TechnicalSimulation(Authored, Base):
-    """Un test tecnico a risposta multipla, ricavato da un documento.
+    """Un test tecnico ricavato da un documento, a scelta multipla o aperto.
 
     È il gemello scritto del roleplay: là si valuta come l'operatore gestisce
     una persona, qui si verifica se conosce la procedura. Il super admin
     carica il documento (una procedura, un manuale, una circolare), l'LLM ne
     ricava le domande, e gli utenti dell'organizzazione a cui la simulazione
     appartiene la svolgono.
+
+    ``kind`` decide come si risponde, e si sceglie al caricamento del
+    documento: cambiarlo dopo vorrebbe dire buttare le domande, perché
+    un'alternativa e una risposta attesa non sono la stessa cosa scritta in
+    due modi. Chi ha scelto il tipo sbagliato ricarica il documento in una
+    simulazione nuova.
 
     Il tenant è la stessa regola di ovunque: ogni simulazione appartiene a
     una sola organizzazione e si vede solo dentro quella. Solo il super admin
@@ -683,6 +797,8 @@ class TechnicalSimulation(Authored, Base):
     title = Column(String(150), nullable=False)
     description = Column(Text, nullable=True)
     status = Column(String(20), nullable=False, default=SIMULATION_STATUS_DRAFT, index=True)
+    # Scelta multipla o risposta aperta, per tutte le domande del test
+    kind = Column(String(20), nullable=False, default=SIMULATION_KIND_MULTIPLE)
     # Il documento su cui le domande si fondano, come testo estratto
     document_name = Column(String(255), nullable=False, default="")
     document_text = Column(Text, nullable=False, default="")
@@ -715,6 +831,10 @@ class TechnicalSimulation(Authored, Base):
     @property
     def is_published(self) -> bool:
         return self.status == SIMULATION_STATUS_PUBLISHED
+
+    @property
+    def is_open(self) -> bool:
+        return self.kind == SIMULATION_KIND_OPEN
 
     def __repr__(self):
         return f"<TechnicalSimulation(id={self.id}, title='{self.title}', status='{self.status}')>"
@@ -758,16 +878,27 @@ class SimulationChunk(Base):
 
 
 class SimulationQuestion(Base):
-    """Una domanda a risposta multipla con la sua risposta esatta.
+    """Una domanda con la sua risposta esatta, da scegliere o da scrivere.
 
     Generata dall'LLM ma non intoccabile: il super admin la rilegge e la
     corregge prima di pubblicare, perché un test che vale come verifica non
     può contenere una domanda che nessun umano ha mai guardato.
 
-    ``options`` è la lista delle alternative nell'ordine in cui si mostrano,
-    ``correct_option`` l'indice di quella giusta. Le due stanno insieme sulla
-    riga, quindi correggere il testo di un'opzione non può spostare la
-    risposta esatta su un'altra.
+    Le colonne della chiave sono due e se ne riempie una sola, a seconda del
+    ``kind`` della simulazione a cui la domanda appartiene:
+
+    - a scelta multipla, ``options`` è la lista delle alternative nell'ordine
+      in cui si mostrano e ``correct_option`` l'indice di quella giusta. Le
+      due stanno insieme sulla riga, quindi correggere il testo di
+      un'opzione non può spostare la risposta esatta su un'altra;
+    - a risposta aperta, ``expected_answer`` è quello che una risposta deve
+      dire per essere considerata giusta. Non è una soluzione da confrontare
+      parola per parola: è la traccia contro cui il modello giudica quello
+      che l'utente ha scritto, ed è anche quello che gli si mostra nell'esito
+      accanto alla propria risposta.
+
+    Il tipo non sta qui perché non è una proprietà della domanda: sta sulla
+    simulazione, che è quello che decide come si svolge il test.
 
     ``source_chunks`` sono gli ordinali dei passaggi da cui la domanda nasce:
     la spiegazione mostrata a chi sbaglia si appoggia a quelli, così la
@@ -786,8 +917,12 @@ class SimulationQuestion(Base):
     # Ordine di presentazione, da 1 a SIMULATION_QUESTION_COUNT
     position = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
-    options = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
-    correct_option = Column(Integer, nullable=False)
+    # Le due chiavi, alternative fra loro: piene quelle del tipo del test,
+    # vuote le altre. Nullable per questo, non perché una domanda possa non
+    # avere una risposta esatta.
+    options = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
+    correct_option = Column(Integer, nullable=True)
+    expected_answer = Column(Text, nullable=False, default="")
     explanation = Column(Text, nullable=False, default="")
     source_chunks = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
 
@@ -812,6 +947,11 @@ class SimulationAttempt(Base):
     impiegato e punti come erano al momento della consegna, quindi il
     tentativo resta leggibile per intero anche se la domanda viene poi
     riscritta o la simulazione rigenerata da capo.
+
+    Su un test a risposta aperta la fotografia conta ancora di più: lì la
+    voce porta anche il giudizio del modello, che è stato dato una volta
+    sola su quel testo. Rivalutare la stessa risposta domani darebbe un
+    numero simile ma non lo stesso, e un voto che oscilla non è un voto.
     """
 
     __tablename__ = "simulation_attempts"
@@ -827,6 +967,9 @@ class SimulationAttempt(Base):
     # Risposte esatte e domande totali: non fanno più il voto, ma restano la
     # risposta alla domanda "quante ne sapeva", che il voto da solo non dà
     # più. Leggibili anche se un giorno le domande non fossero più dieci.
+    # Su un test a risposta aperta "esatta" vuol dire arrivata alla
+    # sufficienza (vedi ``simulation_scoring.OPEN_PASS_QUALITY``): il
+    # giudizio è una scala continua, questa colonna una conta.
     correct_count = Column(Integer, nullable=False)
     question_count = Column(Integer, nullable=False)
     # I punti raccolti, che è da dove il voto si ricava: una risposta giusta

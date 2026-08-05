@@ -21,7 +21,7 @@ def test_category_label(raw, expected):
 
 def test_first_title_is_number_one(db_session, standard_user, make_avatar):
     avatar = make_avatar(category="clienti")
-    title = next_conversation_title(db_session, standard_user.id, avatar.category)
+    title = next_conversation_title(db_session, standard_user.id, avatar.category_name)
     assert title == "Clienti 1"
 
 
@@ -37,5 +37,5 @@ def test_next_title_skips_taken_numbers(db_session, standard_user, make_avatar):
     )
     db_session.flush()
 
-    title = next_conversation_title(db_session, standard_user.id, avatar.category)
+    title = next_conversation_title(db_session, standard_user.id, avatar.category_name)
     assert title == "Clienti 2"

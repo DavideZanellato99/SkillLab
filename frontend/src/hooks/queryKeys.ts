@@ -14,10 +14,19 @@
 export const queryKeys = {
   avatars: {
     all: ['avatars'] as const,
-    list: (category?: string) => ['avatars', 'list', category ?? '__all__'] as const,
+    list: (categoryId?: string) => ['avatars', 'list', categoryId ?? '__all__'] as const,
     detail: (id: string) => ['avatars', 'detail', id] as const,
   },
-  categories: ['categories'] as const,
+  categories: {
+    /** Da invalidare a ogni scrittura sull'anagrafica: le due liste sotto
+     *  sono la stessa cosa vista da chi si allena e da chi la governa. */
+    all: ['categories'] as const,
+    /** L'elenco della propria organizzazione, per i filtri della galleria. */
+    mine: ['categories', 'mine'] as const,
+    /** L'anagrafica lato admin, per tenant quando se ne guarda uno solo. */
+    admin: (organizationId?: string) =>
+      ['categories', 'admin', organizationId ?? '__all__'] as const,
+  },
   conversations: {
     all: ['conversations'] as const,
     byAvatar: (avatarId: string) => ['conversations', 'avatar', avatarId] as const,

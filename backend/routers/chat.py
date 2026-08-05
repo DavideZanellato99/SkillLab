@@ -502,7 +502,7 @@ async def send_chat_message(
     # returns, when lazy loads on the ORM objects are no longer welcome.
     avatar_profile = avatar.profile
     avatar_id = avatar.id
-    avatar_category = avatar.category
+    avatar_category = avatar.category_name
     conversation_id = conversation.id if conversation else None
     user_id = current_user.id
 

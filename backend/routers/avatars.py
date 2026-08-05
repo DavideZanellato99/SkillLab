@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from auth_dependency import get_current_user
 from database import get_db
-from models import ROLE_SUPER_ADMIN, Avatar, User, UserSelection
+from models import ROLE_SUPER_ADMIN, Avatar, AvatarCategory, User, UserSelection
 from schemas import (
+    AvatarCategoryResponse,
     AvatarResponse,
     MessageResponse,
     SelectionCreate,
@@ -84,7 +85,9 @@ def _avatar_response(avatar: Avatar, selection_count: int) -> AvatarResponse:
         id=avatar.id,
         name=avatar.name,
         image_url=avatar.image_url,
-        category=avatar.category,
+        category=avatar.category_name,
+        category_id=avatar.category_id,
+        category_color=avatar.category_color,
         description=avatar.description,
         created_at=avatar.created_at,
         selection_count=selection_count,
@@ -94,15 +97,15 @@ def _avatar_response(avatar: Avatar, selection_count: int) -> AvatarResponse:
 
 @router.get("", response_model=list[AvatarResponse])
 def get_avatars(
-    category: str | None = None,
+    category_id: UUID | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get all avatars, optionally filtered by category."""
     query = active_avatars(_visible_avatars(db.query(Avatar), current_user))
 
-    if category:
-        query = query.filter(Avatar.category == category)
+    if category_id:
+        query = query.filter(Avatar.category_id == category_id)
 
     avatars = query.order_by(Avatar.id).all()
 
@@ -110,15 +113,22 @@ def get_avatars(
     return [_avatar_response(a, counts.get(a.id, 0)) for a in avatars]
 
 
-@router.get("/categories", response_model=list[str])
+@router.get("/categories", response_model=list[AvatarCategoryResponse])
 def get_categories(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get all distinct avatar categories."""
-    query = active_avatars(_visible_avatars(db.query(Avatar.category), current_user))
-    categories = query.distinct().order_by(Avatar.category).all()
-    return [c[0] for c in categories]
+    """Le categorie dell'organizzazione di chi guarda, in ordine alfabetico.
+
+    L'anagrafica intera e non solo le categorie che hanno un avatar: un
+    gruppo appena creato e ancora vuoto deve comunque comparire nei filtri,
+    altrimenti sembrerebbe non essere stato salvato. Il super admin, che non
+    sta in nessun tenant, le vede tutte.
+    """
+    query = db.query(AvatarCategory)
+    if current_user.ruolo != ROLE_SUPER_ADMIN:
+        query = query.filter(AvatarCategory.organization_id == current_user.organization_id)
+    return query.order_by(AvatarCategory.name.asc()).all()
 
 
 @router.get("/{avatar_id}", response_model=AvatarResponse)

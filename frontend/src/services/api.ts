@@ -15,12 +15,23 @@ export interface Avatar {
   id: string
   name: string
   image_url: string
+  /** Il nome della categoria, per mostrarlo: a filtrare è `category_id`. */
   category: string
+  category_id: string
+  /** Tinta della pastiglia, una di CATEGORY_COLORS (vedi categoryStyles). */
+  category_color: string
   description: string | null
   created_at: string
   selection_count: number
   /** Difficulty grade of the training persona (e.g. "8/10"), if any. */
   difficulty: string | null
+}
+
+/** Una categoria del catalogo, come la vede chi si allena. */
+export interface AvatarCategory {
+  id: string
+  name: string
+  color: string
 }
 
 export interface UserSelection {
@@ -272,14 +283,15 @@ export async function apiFetchBlob(endpoint: string, options: ApiFetchOptions = 
 
 // --- Avatars ---
 
-export const fetchAvatars = (category?: string) =>
+export const fetchAvatars = (categoryId?: string) =>
   apiFetch<Avatar[]>('/api/avatars', {
-    params: category ? { category } : undefined,
+    params: categoryId ? { category_id: categoryId } : undefined,
   })
 
 export const fetchAvatar = (avatarId: string) => apiFetch<Avatar>(`/api/avatars/${avatarId}`)
 
-export const fetchCategories = () => apiFetch<string[]>('/api/avatars/categories')
+/** Le categorie della propria organizzazione, nell'ordine deciso in admin. */
+export const fetchCategories = () => apiFetch<AvatarCategory[]>('/api/avatars/categories')
 
 export const selectAvatar = (avatarId: string) =>
   apiFetch<MessageResponse>('/api/avatars/select', {

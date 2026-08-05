@@ -10,7 +10,9 @@ import SearchSelect from './SearchSelect'
 import Select from './Select'
 import ConversationModeBadge, { conversationModeLabel } from './ConversationModeBadge'
 import type { ConversationMode } from '../services/api'
+import type { SimulationKind } from '../services/simulations'
 import DataTable, { Td, Tr } from './DataTable'
+import FilterTabs from './FilterTabs'
 import Tooltip from './Tooltip'
 import { matchesSearch } from './tableSearch'
 import ConversationDetailModal from './ConversationDetailModal'
@@ -94,41 +96,25 @@ const MODE_SUFFIX: Record<ModeFilter, string> = {
   all: 'su chiamate e chat',
 }
 
-function ModeFilterTabs({
-  value,
-  onChange,
-}: {
-  value: ModeFilter
-  onChange: (value: ModeFilter) => void
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Canale delle conversazioni"
-      className="flex shrink-0 gap-1 rounded-xl border border-white/6 bg-slate-800/50 p-1"
-    >
-      {MODE_FILTERS.map((opt) => {
-        const isActive = opt.value === value
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            role="radio"
-            aria-checked={isActive}
-            onClick={() => onChange(opt.value)}
-            className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              isActive
-                ? 'bg-violet-600/20 text-violet-200 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.35)]'
-                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-            }`}
-          >
-            {opt.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
+/* ── Selettore di tipo: lo stesso mestiere, sull'altra metà ──
+ *
+ * Il gemello scritto del selettore qui sopra. Anche qui le due prove si
+ * misurano sulla stessa scala in decimi ma non sono la stessa fatica: a
+ * crocette conta anche la prontezza, a risposta aperta conta quanto si sa
+ * scrivere di una procedura. Chi guarda una media vuole poter chiedere di
+ * quale delle due sta parlando.
+ *
+ * A differenza del canale, però, qui si parte da "Entrambi": i test aperti
+ * sono arrivati dopo, e un default che ne mostrasse un tipo solo terrebbe
+ * nascosta metà della dashboard a chi non sa che questo selettore esiste. */
+
+type KindFilter = SimulationKind | 'all'
+
+const KIND_FILTERS: { value: KindFilter; label: string }[] = [
+  { value: 'multiple', label: 'Scelta multipla' },
+  { value: 'open', label: 'Risposta aperta' },
+  { value: 'all', label: 'Entrambi' },
+]
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -138,6 +124,7 @@ export default function DashboardPage() {
   const [selectedUserId, setSelectedUserId] = useState('')
   const [section, setSection] = useState<DashboardSection>('conversazioni')
   const [modeFilter, setModeFilter] = useState<ModeFilter>('voice')
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [search, setSearch] = useState('')
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null)
   const [isExporting, setIsExporting] = useState(false)
@@ -427,14 +414,33 @@ export default function DashboardPage() {
               emptyHint="Tutti gli utenti"
               className="w-full max-w-[440px]"
             />
-            {/* Il canale è un filtro delle sole conversazioni: nella sezione
-                scritta non c'è niente da filtrare per canale. */}
-            {section === 'conversazioni' && (
+            {/* Ogni metà ha il proprio selettore di prova, nello stesso posto
+                della barra: il canale di là, il tipo di test di qua. Sono la
+                stessa domanda ("quale delle due sto guardando") fatta su due
+                cose diverse, quindi non possono essere un selettore solo. */}
+            {section === 'conversazioni' ? (
               <>
                 <span className="ml-auto text-xs font-medium tracking-wide text-slate-400 max-lg:ml-0">
                   Canale
                 </span>
-                <ModeFilterTabs value={modeFilter} onChange={setModeFilter} />
+                <FilterTabs
+                  value={modeFilter}
+                  onChange={setModeFilter}
+                  options={MODE_FILTERS}
+                  ariaLabel="Canale delle conversazioni"
+                />
+              </>
+            ) : (
+              <>
+                <span className="ml-auto text-xs font-medium tracking-wide text-slate-400 max-lg:ml-0">
+                  Tipo
+                </span>
+                <FilterTabs
+                  value={kindFilter}
+                  onChange={setKindFilter}
+                  options={KIND_FILTERS}
+                  ariaLabel="Tipo dei test tecnici"
+                />
               </>
             )}
           </div>
@@ -744,7 +750,11 @@ export default function DashboardPage() {
           )}
 
           {section === 'simulazioni' && (
-            <DashboardSimulations rows={simulationRows} selectedUserId={selectedUserId} />
+            <DashboardSimulations
+              rows={simulationRows}
+              selectedUserId={selectedUserId}
+              kindFilter={kindFilter}
+            />
           )}
         </>
       )}

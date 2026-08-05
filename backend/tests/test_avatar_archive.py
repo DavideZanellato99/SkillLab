@@ -31,7 +31,7 @@ def _seed_evaluated_conversation(db_session, user, avatar) -> ChatConversation:
 def _payload(avatar: Avatar) -> dict:
     """The admin form payload that re-sends an avatar unchanged."""
     return {
-        "category": avatar.category,
+        "category_id": str(avatar.category_id),
         "description": avatar.description,
         "image_url": avatar.image_url,
         "voice_id": avatar.voice_id,

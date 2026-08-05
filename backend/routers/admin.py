@@ -36,6 +36,7 @@ from models import (
     USER_STATUS_ACTIVE,
     USER_STATUS_DISABLED,
     Avatar,
+    AvatarCategory,
     ChatConversation,
     ChatMessage,
     ConversationEvaluation,
@@ -257,8 +258,10 @@ def users_activity_report(
         users_query = users_query.filter(User.organization_id == scope_org_id)
     users = users_query.order_by(User.created_at.desc()).all()
 
-    conv_query = db.query(ChatConversation, Avatar.name, Avatar.category).join(
-        Avatar, Avatar.id == ChatConversation.avatar_id
+    conv_query = (
+        db.query(ChatConversation, Avatar.name, AvatarCategory.name, AvatarCategory.color)
+        .join(Avatar, Avatar.id == ChatConversation.avatar_id)
+        .join(AvatarCategory, AvatarCategory.id == Avatar.category_id)
     )
     if scope_org_id is not None:
         conv_query = conv_query.filter(ChatConversation.user_id.in_([u.id for u in users]))
@@ -275,12 +278,12 @@ def users_activity_report(
     )
     if scope_org_id is not None:
         stats_query = stats_query.filter(
-            ChatMessage.conversation_id.in_([conv.id for conv, _, _ in rows])
+            ChatMessage.conversation_id.in_([conv.id for conv, *_ in rows])
         )
     stats = {row.conversation_id: row for row in stats_query.group_by(ChatMessage.conversation_id)}
 
     conversations_by_user: dict[UUID, list[ConversationReport]] = defaultdict(list)
-    for conv, avatar_name, avatar_category in rows:
+    for conv, avatar_name, avatar_category, avatar_category_color in rows:
         s = stats.get(conv.id)
         message_count = s.message_count if s else 0
         duration = (
@@ -294,6 +297,7 @@ def users_activity_report(
                 avatar_id=conv.avatar_id,
                 avatar_name=avatar_name,
                 avatar_category=avatar_category,
+                avatar_category_color=avatar_category_color,
                 created_at=conv.created_at,
                 message_count=message_count,
                 duration_seconds=duration,
@@ -403,7 +407,7 @@ def simulations_report(
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
     query = (
-        db.query(SimulationAttempt, TechnicalSimulation.title, User)
+        db.query(SimulationAttempt, TechnicalSimulation.title, TechnicalSimulation.kind, User)
         .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
         .join(User, User.id == SimulationAttempt.user_id)
     )
@@ -416,6 +420,7 @@ def simulations_report(
             attempt_id=attempt.id,
             simulation_id=attempt.simulation_id,
             simulation_title=title,
+            simulation_kind=kind,
             user_id=user.id,
             user_email=user.email,
             user_nome=user.nome,
@@ -427,7 +432,7 @@ def simulations_report(
             question_count=attempt.question_count,
             score=attempt.score,
         )
-        for attempt, title, user in rows
+        for attempt, title, kind, user in rows
     ]
 
 

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useCreateSimulation } from '../hooks/useSimulations'
 import type { Organization } from '../services/organizations'
+import type { SimulationKind } from '../services/simulations'
 import ModalShell, { ModalHeader } from './ModalShell'
 import Field, { textareaCls, TextInput } from './Field'
 import Select from './Select'
@@ -8,16 +9,32 @@ import PrimaryButton from './PrimaryButton'
 import Spinner from './Spinner'
 import FormError from './FormError'
 
-/* La creazione di una simulazione: titolo, organizzazione e documento.
+/* La creazione di una simulazione: titolo, organizzazione, tipo e documento.
  *
  * Le domande non si generano qui. Il caricamento finisce con una bozza vuota
  * che si apre subito sul pannello di revisione, dove la generazione è un
  * bottone: sono due attese di durata molto diversa, e incollarle una
  * all'altra significherebbe far ricaricare il documento a chi ha avuto
- * sfortuna con il modello. */
+ * sfortuna con il modello.
+ *
+ * Il tipo però si sceglie qui, ed è l'unica occasione: le domande nascono
+ * già con quattro alternative o con la traccia della risposta attesa, quindi
+ * cambiarlo dopo vorrebbe dire buttarle. Chi si accorge di aver scelto male
+ * ricarica il documento in una simulazione nuova. */
 
 /** Le estensioni che il backend sa leggere (vedi document_text). */
 const ACCEPTED = '.pdf,.docx,.txt,.md,.markdown'
+
+const KIND_OPTIONS = [
+  { value: 'multiple', label: 'Scelta multipla' },
+  { value: 'open', label: 'Risposta aperta' },
+]
+
+const KIND_HINTS: Record<SimulationKind, string> = {
+  multiple:
+    'Quattro alternative per domanda, trenta secondi ciascuna. Si corregge da sé, e conta anche la prontezza.',
+  open: "Si risponde scrivendo, senza tempo limite. Alla consegna un modello legge le risposte e assegna i punti in base a quanto sono complete, quindi l'esito arriva dopo qualche secondo.",
+}
 
 interface SimulationCreateModalProps {
   organizations: Organization[]
@@ -36,6 +53,7 @@ export default function SimulationCreateModal({
   const [organizationId, setOrganizationId] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [kind, setKind] = useState<SimulationKind>('multiple')
   const [file, setFile] = useState<File | null>(null)
 
   const canSubmit = organizationId && title.trim() && file && !create.isPending
@@ -44,7 +62,7 @@ export default function SimulationCreateModal({
     e.preventDefault()
     if (!canSubmit || !file) return
     create.mutate(
-      { organizationId, title: title.trim(), description: description.trim(), file },
+      { organizationId, title: title.trim(), description: description.trim(), kind, file },
       { onSuccess: (simulation) => onCreated(simulation.id) },
     )
   }
@@ -83,6 +101,20 @@ export default function SimulationCreateModal({
             onChange={setOrganizationId}
             options={organizations.map((o) => ({ value: o.id, label: o.name }))}
             placeholder="Scegli l'organizzazione"
+            disabled={create.isPending}
+          />
+        </Field>
+
+        <Field
+          label="Tipo di test"
+          htmlFor="simulation-kind"
+          hint={<span className="text-xs text-slate-500">{KIND_HINTS[kind]}</span>}
+        >
+          <Select
+            id="simulation-kind"
+            value={kind}
+            onChange={(value) => setKind(value as SimulationKind)}
+            options={KIND_OPTIONS}
             disabled={create.isPending}
           />
         </Field>

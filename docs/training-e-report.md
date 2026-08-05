@@ -156,8 +156,8 @@ sanno" sono due domande, e in una colonna sola i grafici della seconda si
 leggerebbero come il seguito della prima. Il conteggio sulla linguetta dice
 subito da che parte ci sono dati.
 
-Stessi filtri in cima (organizzazione e utente, il canale solo dove esiste) e
-stessi disegni ([scoreCharts](../frontend/src/components/scoreCharts.tsx):
+Stessi filtri in cima (organizzazione e utente) e stessi disegni
+([scoreCharts](../frontend/src/components/scoreCharts.tsx):
 andamento nel tempo, righe a barra, card dei KPI), perché la domanda è la
 stessa e cambia solo la prova su cui si risponde. Sull'asse orizzontale della
 sezione scritta, al posto dei sei criteri di una valutazione, ci sono le
@@ -170,9 +170,55 @@ raccolti per **organizzazione di chi ha svolto il test**, non della simulazione:
 la dashboard di un tenant parla della propria gente, e un test preparato
 altrove sparirebbe dai suoi numeri.
 
-I voti dei test non passano da `final_score` e non hanno un `has_override`: un
-test a risposta multipla si corregge da solo, e il voto resta quello congelato
-sul tentativo.
+**Ogni metà ha il proprio selettore di prova**, nello stesso posto della barra
+dei filtri e con lo stesso gruppo di pulsanti
+([FilterTabs](../frontend/src/components/FilterTabs.tsx), estratto dal
+selettore di canale quando è servito il gemello): di là chiamate, chat o
+entrambe, di qua scelta multipla, risposta aperta o entrambi. Non può essere
+un selettore solo, perché è la stessa domanda ("quale delle due sto
+guardando") fatta su due cose diverse.
+
+La scelta **sta a monte di tutto**: KPI, andamento, medie per test e confronto
+fra utenti partono dalle righe già ristrette, perché una media che mescola due
+prove diverse non risponde alla domanda che il selettore ha appena posto. Il
+filtro utente invece continua solo a evidenziare nel confronto fra utenti, e
+non a restringerlo: quello è un modo di guardare, il tipo è la prova di cui si
+parla. Quando il filtro non lascia niente la sezione lo dice con parole sue,
+perché "nessun test ancora consegnato" davanti a un filtro attivo si legge
+come un dato sbagliato.
+
+Un default diverso nelle due metà, e non è una svista. Il canale parte da
+"Chiamate", perché al telefono e in chat non si è valutati alla pari e
+mescolarli di default darebbe una media ambigua. Il tipo parte da "Entrambi",
+perché i test a risposta aperta sono arrivati dopo e un default che ne
+mostrasse un tipo solo terrebbe nascosta metà della dashboard a chi non sa che
+il selettore esiste.
+
+**Ogni riga dice di che prova si tratta**, in tutte e due le metà. Là una
+conversazione è al telefono o in chat
+([ConversationModeBadge](../frontend/src/components/ConversationModeBadge.tsx)),
+qui un test è a scelta multipla o a risposta aperta
+([SimulationKindBadge](../frontend/src/components/SimulationKindBadge.tsx)): due
+badge gemelli, stessa forma e stessi colori, violetto dove si sceglie o si
+parla e ciano dove si scrive. Il motivo è lo stesso nei due casi, cioè che il
+voto da solo non dice quale prova era, e nel simulatore pesa anche di più: un
+7 preso a crocette in trenta secondi e un 7 preso scrivendo dieci risposte non
+sono la stessa notizia. Nella tabella il badge è in forma di sola icona per
+non rubare spazio al titolo, e in entrambe le metà **la prova si cerca con la
+stessa parola che il badge mostra**, perché quella parola (`kindLabel` di qua,
+`conversationModeLabel` di là) finisce nella `matchesSearch` della riga. La riga "Media per simulazione" lo scrive accanto
+al conteggio dei tentativi: lì si parla del test, e come ci si risponde è una
+sua proprietà quanto quante volte è stato svolto.
+
+Il tipo arriva dal server insieme al tentativo (`simulation_kind` su
+`SimulationReportRow` e su `SimulationComparisonAttempt`, letto dalla
+simulazione con la join che c'era già), non viene dedotto dalla forma delle
+risposte: una fotografia si legge per quello che dice, non indovinando.
+
+I voti dei test non passano da `final_score` e non hanno un `has_override`:
+nessuno li corregge a mano, e il voto resta quello congelato sul tentativo,
+sia che l'abbia deciso il confronto fra due numeri sia un modello che ha letto
+delle risposte scritte (vedi [simulatore.md](simulatore.md)).
 
 Il dettaglio di una conversazione vista da un admin
 (`GET /api/admin/conversations/{id}`) porta trascrizione, valutazione e

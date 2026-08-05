@@ -40,6 +40,7 @@ valgono su tutte le righe. Tutto in
 | Tabella | Cosa contiene |
 | --- | --- |
 | `avatars` | La persona simulata, con la sua scheda in `profile` |
+| `avatar_categories` | Come un'organizzazione raggruppa i propri avatar: nome e colore. Vedi [avatar-e-persona.md](avatar-e-persona.md) |
 | `training_assignments` | Un obiettivo assegnato a una persona su un avatar |
 | `notification_reads` | L'unica cosa che si salva delle notifiche: cosa è già stato letto |
 | `technical_simulations`, `simulation_chunks`, `simulation_questions`, `simulation_attempts` | Il simulatore tecnico, descritto in [simulatore.md](simulatore.md) |
@@ -59,8 +60,8 @@ può indovinare e che non rivela quante righe esistono.
 
 ## La paternità delle righe
 
-Quattro tabelle (`users`, `organizations`, `avatars`, `technical_simulations`)
-portano sei colonne: quando è stata creata la riga, da chi, con quale email, e
+Cinque tabelle (`users`, `organizations`, `avatars`, `avatar_categories`,
+`technical_simulations`) portano sei colonne: quando è stata creata la riga, da chi, con quale email, e
 le tre gemelle della modifica.
 
 A riempirle **non è l'endpoint**, ma un listener sul flush della sessione

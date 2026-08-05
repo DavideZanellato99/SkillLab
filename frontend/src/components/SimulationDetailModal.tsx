@@ -1,6 +1,7 @@
 import DetailModal, { DetailField } from './DetailModal'
 import AuthorshipFields from './AuthorshipFields'
 import Badge from './Badge'
+import SimulationKindBadge from './SimulationKindBadge'
 import { statusBadgeTone, statusLabel } from './simulationFormat'
 import { QUESTION_COUNT } from '../services/simulations'
 import type { AdminSimulation } from '../services/simulations'
@@ -26,6 +27,11 @@ export default function SimulationDetailModal({
     <DetailModal onClose={onClose} title={simulation.title} subtitle={simulation.organization_name}>
       <DetailField label="Stato">
         <Badge tone={statusBadgeTone(simulation.status)}>{statusLabel(simulation.status)}</Badge>
+      </DetailField>
+      {/* Il tipo non si cambia dopo la creazione, quindi qui è una cosa da
+          sapere e non un campo che qualcuno andrà a cercare per modificarlo. */}
+      <DetailField label="Tipo di test">
+        <SimulationKindBadge kind={simulation.kind} />
       </DetailField>
       <DetailField label="Organizzazione">{simulation.organization_name}</DetailField>
       <DetailField label="Documento">{simulation.document_name}</DetailField>

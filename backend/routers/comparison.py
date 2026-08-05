@@ -220,7 +220,7 @@ def list_simulation_attempts(
     subject = _subject_or_404(db, current_user, user_id)
 
     rows = (
-        db.query(SimulationAttempt, TechnicalSimulation.title)
+        db.query(SimulationAttempt, TechnicalSimulation.title, TechnicalSimulation.kind)
         .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
         .filter(SimulationAttempt.user_id == subject.id)
         .order_by(SimulationAttempt.created_at.asc())
@@ -232,6 +232,7 @@ def list_simulation_attempts(
             attempt_id=attempt.id,
             simulation_id=attempt.simulation_id,
             simulation_title=title,
+            simulation_kind=kind,
             attempted_at=attempt.created_at,
             correct_count=attempt.correct_count,
             question_count=attempt.question_count,
@@ -244,11 +245,14 @@ def list_simulation_attempts(
                     position=answer["position"],
                     text=answer["text"],
                     is_correct=answer["is_correct"],
+                    # Assenti su un test a risposta aperta, dove non c'è
+                    # niente da scegliere: il confronto si regge su
+                    # is_correct, che i due tipi hanno entrambi
                     selected_option=answer.get("selected_option"),
-                    correct_option=answer["correct_option"],
+                    correct_option=answer.get("correct_option"),
                 )
                 for answer in (attempt.answers or [])
             ],
         )
-        for attempt, title in rows
+        for attempt, title, kind in rows
     ]

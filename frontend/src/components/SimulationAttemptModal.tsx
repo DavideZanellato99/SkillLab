@@ -3,6 +3,7 @@ import ModalShell from './ModalShell'
 import LoadingState from './LoadingState'
 import FormError from './FormError'
 import SimulationResult from './SimulationResult'
+import SimulationKindBadge from './SimulationKindBadge'
 import { formatDateTime } from './simulationFormat'
 
 /* Un test consegnato, riletto per intero: le domande come sono state viste,
@@ -48,9 +49,15 @@ export default function SimulationAttemptModal({
       ) : (
         <>
           <header className="border-b border-white/6 px-8 py-5 pr-16">
-            <h2 className="font-heading text-xl font-bold text-slate-100">
-              {attempt.simulation_title}
-            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-heading text-xl font-bold text-slate-100">
+                {attempt.simulation_title}
+              </h2>
+              {/* Il tipo in testa e non solo dentro le risposte: chi apre un
+                  tentativo dalla dashboard deve sapere subito che prova sta
+                  leggendo, prima di giudicare un voto. */}
+              <SimulationKindBadge kind={attempt.simulation_kind} />
+            </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
               {!own && (
                 <>

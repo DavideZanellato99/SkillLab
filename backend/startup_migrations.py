@@ -26,8 +26,10 @@ from authorship import SYSTEM_ACTOR_EMAIL, UTC_NOW_SQL
 from conversation_titles import next_conversation_title
 from database import Base, SessionLocal, engine
 from models import (
+    DEFAULT_AVATAR_CATEGORY_NAME,
     ROLE_SUPER_ADMIN,
     Avatar,
+    AvatarCategory,
     ChatConversation,
     Organization,
     Role,
@@ -113,6 +115,19 @@ def _add_columns() -> None:
                 "organization_id UUID REFERENCES organizations(id)"
             )
         )
+        # La categoria di un avatar diventa una riga di `avatar_categories`
+        # (la tabella la crea create_all) invece della stringa scritta a mano
+        # che era. Nasce nullable perché gli avatar di prima non ce l'hanno:
+        # la riempie e la blocca _migrate_avatar_categories, che è anche il
+        # posto in cui la vecchia colonna se ne va.
+        conn.execute(text("ALTER TABLE avatars ADD COLUMN IF NOT EXISTS category_id UUID"))
+        # L'indice lo fa create_all solo su un database nuovo: qui la tabella
+        # esiste già, e senza questa riga il filtro per categoria della
+        # galleria scansionerebbe tutti gli avatar del tenant. Il nome è
+        # quello che sceglie SQLAlchemy, così le due strade coincidono.
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_avatars_category_id ON avatars (category_id)")
+        )
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP"))
         # L'ultima richiesta autenticata, gemella della colonna sopra (vedi
         # `activity`). Il valore di partenza lo mette _backfill_last_login,
@@ -143,6 +158,30 @@ def _add_columns() -> None:
                 "ALTER TABLE simulation_attempts ADD COLUMN IF NOT EXISTS "
                 "earned_points DOUBLE PRECISION"
             )
+        )
+        # Come si risponde a un test. Le simulazioni che esistevano prima
+        # sono tutte a scelta multipla, che è anche il default della colonna:
+        # non serve backfill, il valore giusto per loro è già quello.
+        conn.execute(
+            text(
+                "ALTER TABLE technical_simulations ADD COLUMN IF NOT EXISTS "
+                "kind VARCHAR(20) NOT NULL DEFAULT 'multiple'"
+            )
+        )
+        # La chiave di una domanda aperta. Vuota sulle domande a scelta
+        # multipla, che è quello che il default dà già alle righe di prima.
+        conn.execute(
+            text(
+                "ALTER TABLE simulation_questions ADD COLUMN IF NOT EXISTS "
+                "expected_answer TEXT NOT NULL DEFAULT ''"
+            )
+        )
+        # Alternative e indice della corretta diventano nullable: su una
+        # domanda aperta non esistono, e riempirli di finto significherebbe
+        # far leggere a chi rilegge il test una scelta che nessuno ha fatto.
+        conn.execute(text("ALTER TABLE simulation_questions ALTER COLUMN options DROP NOT NULL"))
+        conn.execute(
+            text("ALTER TABLE simulation_questions ALTER COLUMN correct_option DROP NOT NULL")
         )
 
 
@@ -317,8 +356,9 @@ def _backfill_conversation_titles() -> None:
     """
     with SessionLocal() as db:
         untitled = (
-            db.query(ChatConversation, Avatar.category)
+            db.query(ChatConversation, AvatarCategory.name)
             .join(Avatar, Avatar.id == ChatConversation.avatar_id)
+            .join(AvatarCategory, AvatarCategory.id == Avatar.category_id)
             .filter(or_(ChatConversation.title.is_(None), ChatConversation.title == ""))
             .order_by(ChatConversation.created_at.asc())
             .all()
@@ -391,6 +431,136 @@ def _backfill_avatar_organizations() -> None:
     if remaining == 0:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE avatars ALTER COLUMN organization_id SET NOT NULL"))
+
+
+def _migrate_avatar_categories() -> None:
+    """Trasformare la categoria degli avatar da stringa a riga di anagrafica.
+
+    Prima la categoria era testo scritto a mano su ogni avatar, quindi lo
+    stesso gruppo poteva esistere in tre grafie diverse e rinominarlo voleva
+    dire riaprire ogni scheda. Ora è una riga per organizzazione, che si
+    crea, rinomina e colora dalla pagina di amministrazione.
+
+    Le categorie di partenza sono esattamente quelle già scritte sugli
+    avatar, una per coppia (organizzazione, nome): nessuno si ritrova un
+    gruppo che non aveva, e nessun avatar cambia gruppo.
+
+    Ogni organizzazione ne ha comunque almeno una, anche se non ha ancora un
+    avatar: senza, la pagina di amministrazione non avrebbe niente da
+    scegliere e il primo avatar del tenant non si potrebbe creare. Questo
+    vale anche dopo, non solo alla prima migrazione: un'organizzazione
+    rimasta senza categorie se le rivede seminata al riavvio.
+
+    Idempotente in ogni fase: le categorie si aggiungono solo se mancano, la
+    UPDATE guarda solo gli avatar ancora senza categoria, e i vincoli si
+    stringono soltanto quando non è rimasto nessuno fuori.
+    """
+    with engine.begin() as conn:
+        # Le categorie avevano un ordinamento a mano, tolto perché nessuno lo
+        # avrebbe compilato: si presentano in ordine alfabetico. La riga resta
+        # per i database che hanno visto la colonna, dove il modello che non
+        # la conosce più non riuscirebbe a inserire una categoria.
+        conn.execute(text("ALTER TABLE avatar_categories DROP COLUMN IF EXISTS sort_order"))
+
+    with SessionLocal() as db:
+        legacy_column = db.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'avatars' AND column_name = 'category'"
+            )
+        ).first()
+
+        if legacy_column:
+            existing = {
+                (org_id, name)
+                for org_id, name in db.query(
+                    AvatarCategory.organization_id, AvatarCategory.name
+                ).all()
+            }
+            legacy = db.execute(
+                text(
+                    "SELECT DISTINCT organization_id, btrim(category) AS name FROM avatars "
+                    "WHERE organization_id IS NOT NULL AND btrim(coalesce(category, '')) <> ''"
+                )
+            ).all()
+            for organization_id, name in legacy:
+                if (organization_id, name) not in existing:
+                    db.add(AvatarCategory(organization_id=organization_id, name=name))
+            db.commit()
+
+        for organization in db.query(Organization).all():
+            has_any = (
+                db.query(AvatarCategory)
+                .filter(AvatarCategory.organization_id == organization.id)
+                .first()
+            )
+            if not has_any:
+                db.add(
+                    AvatarCategory(
+                        organization_id=organization.id,
+                        name=DEFAULT_AVATAR_CATEGORY_NAME,
+                    )
+                )
+        db.commit()
+
+        if legacy_column:
+            db.execute(
+                text(
+                    "UPDATE avatars a SET category_id = c.id FROM avatar_categories c "
+                    "WHERE a.category_id IS NULL AND c.organization_id = a.organization_id "
+                    "AND c.name = btrim(a.category)"
+                )
+            )
+            db.commit()
+
+        orphans = db.query(Avatar).filter(Avatar.category_id.is_(None)).count()
+
+    if legacy_column:
+        with engine.begin() as conn:
+            # La vecchia colonna smette di essere obbligatoria prima di ogni
+            # altra cosa: il modello non la conosce più, quindi da qui in
+            # avanti ogni INSERT la lascerebbe vuota. Va fatto anche quando
+            # il resto della migrazione non può concludersi, altrimenti un
+            # database in ritardo non riuscirebbe più a salvare un avatar.
+            conn.execute(text("ALTER TABLE avatars ALTER COLUMN category DROP NOT NULL"))
+
+    if orphans:
+        # Succede solo su un database che ha ancora avatar senza
+        # organizzazione (vedi _backfill_avatar_organizations): finché sono
+        # lì, la colonna resta libera e la vecchia rimane al suo posto.
+        logger.warning(
+            "Categorie avatar: %s avatar senza organizzazione, migrazione rimandata.", orphans
+        )
+        return
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE avatars ALTER COLUMN category_id SET NOT NULL"))
+        # La chiave esterna è composta apposta: porta con sé
+        # l'organizzazione, così una categoria di un altro tenant non può
+        # finire su questo avatar nemmeno per errore di programmazione. Il
+        # nome è lo stesso che scrive create_all su un database nuovo, e la
+        # guardia lo cerca per non aggiungerne una seconda identica.
+        conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'fk_avatars_category_org'
+                          AND conrelid = 'avatars'::regclass
+                    ) THEN
+                        ALTER TABLE avatars ADD CONSTRAINT fk_avatars_category_org
+                            FOREIGN KEY (category_id, organization_id)
+                            REFERENCES avatar_categories (id, organization_id);
+                    END IF;
+                END $$;
+                """
+            )
+        )
+        # Il valore vecchio ora vive nell'anagrafica, tenerne una seconda
+        # copia sull'avatar significherebbe solo lasciarle divergere.
+        conn.execute(text("ALTER TABLE avatars DROP COLUMN IF EXISTS category"))
 
 
 def _backfill_last_login() -> None:
@@ -483,10 +653,14 @@ def run_startup_migrations() -> None:
     """Run every idempotent startup migration, in dependency order."""
     _add_columns()
     _add_authorship_columns()
-    _backfill_conversation_titles()
     _seed_roles_and_admin()
     _backfill_user_organizations()
     _backfill_avatar_organizations()
+    # Prima dei titoli: il titolo di default porta dentro il nome della
+    # categoria, che da qui in avanti si legge dall'anagrafica e non più
+    # dalla colonna che questa migrazione porta via.
+    _migrate_avatar_categories()
+    _backfill_conversation_titles()
     _backfill_last_login()
     _backfill_authorship()
     _backfill_simulation_points()

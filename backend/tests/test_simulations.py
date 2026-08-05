@@ -18,6 +18,7 @@ import pytest
 from auth_dependency import ensure_roles
 from models import (
     ROLE_USER,
+    SIMULATION_KIND_OPEN,
     SIMULATION_STATUS_DRAFT,
     SIMULATION_STATUS_PUBLISHED,
     Organization,
@@ -481,3 +482,287 @@ def test_una_simulazione_senza_domande_non_si_consegna(db_session, user_client, 
 
 def test_una_simulazione_inesistente_risponde_404(user_client):
     assert user_client.get(f"/api/simulations/{uuid.uuid4()}").status_code == 404
+
+
+# ── I test a risposta aperta ──────────────────────────────────────────
+#
+# Qui la correzione non è più aritmetica: passa da un modello, e il modello
+# nei test non esiste. Quello che si verifica è tutto il resto, che è la
+# parte che può sbagliare in silenzio: chi viene mandato a giudicare e chi
+# no, come il giudizio diventa punti, e cosa succede quando non arriva.
+
+
+@pytest.fixture
+def make_open_simulation(db_session, organization):
+    """Una simulazione a risposta aperta, pubblicata, con le sue domande."""
+
+    def _factory(*, questions=3, status=SIMULATION_STATUS_PUBLISHED) -> TechnicalSimulation:
+        simulation = TechnicalSimulation(
+            title="Procedura di rimborso",
+            description="Test di prova",
+            status=status,
+            kind=SIMULATION_KIND_OPEN,
+            organization_id=organization.id,
+            document_name="procedura.txt",
+            document_text="Il rimborso si autorizza dopo aver verificato lo scontrino.",
+        )
+        db_session.add(simulation)
+        db_session.flush()
+        db_session.add(
+            SimulationChunk(
+                simulation_id=simulation.id,
+                ordinal=1,
+                content="Il rimborso si autorizza dopo aver verificato lo scontrino.",
+                embedding=[0.1, 0.2, 0.3],
+            )
+        )
+        for position in range(1, questions + 1):
+            db_session.add(
+                SimulationQuestion(
+                    simulation_id=simulation.id,
+                    position=position,
+                    text=f"Domanda aperta {position}?",
+                    options=None,
+                    correct_option=None,
+                    expected_answer=f"Deve dire la cosa {position}.",
+                    explanation=f"Spiegazione della domanda {position}.",
+                    source_chunks=[1],
+                )
+            )
+        db_session.flush()
+        db_session.refresh(simulation)
+        return simulation
+
+    return _factory
+
+
+@pytest.fixture
+def giudice(monkeypatch):
+    """Sostituisce il modello che corregge, e registra cosa gli è arrivato.
+
+    Il finto giudice dà a tutti la stessa qualità, così i test parlano di
+    come il giudizio diventa un voto e non di quanto sia bravo il modello.
+    Le domande che riceve invece contano, ed è per questo che le conserva:
+    una risposta in bianco che arrivasse fin qui sarebbe una chiamata pagata
+    per sapere che chi non scrive niente non prende niente.
+    """
+    ricevute: list[dict] = []
+
+    def _install(quality=1.0, *, salta=(), errore=False):
+        async def _judge(items):
+            ricevute.clear()
+            ricevute.extend(items)
+            if errore:
+                raise RuntimeError("modello non disponibile")
+            return {
+                item["position"]: {"quality": quality, "feedback": "Manca una condizione."}
+                for item in items
+                if item["position"] not in salta
+            }
+
+        monkeypatch.setattr("routers.simulations.judge_open_answers", _judge)
+        return ricevute
+
+    return _install
+
+
+def _written(simulation, text="Si verifica lo scontrino e poi si autorizza."):
+    return [{"question_id": str(q.id), "answer_text": text} for q in simulation.questions]
+
+
+def test_le_domande_aperte_arrivano_senza_alternative_e_senza_traccia(
+    user_client, make_open_simulation
+):
+    """La traccia è la chiave: se viaggiasse con la domanda, il test sarebbe
+    già risolto prima di cominciare."""
+    simulation = make_open_simulation()
+    payload = user_client.get(f"/api/simulations/{simulation.id}").json()
+
+    assert payload["kind"] == "open"
+    for question in payload["questions"]:
+        assert question["options"] == []
+        assert "expected_answer" not in question
+
+
+def test_una_risposta_completa_prende_il_punto_pieno(user_client, make_open_simulation, giudice):
+    giudice(quality=1.0)
+    simulation = make_open_simulation()
+
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": _written(simulation)}
+    ).json()
+
+    assert esito["simulation_kind"] == "open"
+    assert esito["correct_count"] == 3
+    assert esito["earned_points"] == 3.0
+    assert esito["score"] == 10.0
+    assert all(a["points"] == 1.0 for a in esito["answers"])
+    # Il tempo non c'è e non deve inventarsi: qui non c'era cronometro
+    assert all(a["elapsed_ms"] is None for a in esito["answers"])
+
+
+def test_una_risposta_a_meta_prende_meta_punto(user_client, make_open_simulation, giudice):
+    """La differenza dal test a scelta multipla: non è tutto o niente."""
+    giudice(quality=0.5)
+    simulation = make_open_simulation()
+
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": _written(simulation)}
+    ).json()
+
+    assert esito["earned_points"] == 1.5
+    assert esito["score"] == 5.0
+    # Sotto la sufficienza: dei punti sì, fra le esatte no
+    assert esito["correct_count"] == 0
+
+
+def test_una_risposta_in_bianco_non_arriva_al_modello(user_client, make_open_simulation, giudice):
+    ricevute = giudice(quality=1.0)
+    simulation = make_open_simulation()
+
+    risposte = _written(simulation)
+    risposte[0]["answer_text"] = "   "
+
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": risposte}
+    ).json()
+
+    assert [item["position"] for item in ricevute] == [2, 3]
+    assert esito["answers"][0]["points"] == 0.0
+    assert esito["answers"][0]["answer_text"] is None
+    assert esito["answers"][0]["is_correct"] is False
+    assert esito["earned_points"] == 2.0
+
+
+def test_il_giudizio_arriva_nell_esito_con_la_traccia_e_il_commento(
+    user_client, make_open_simulation, giudice
+):
+    """Il voto di un modello si deve poter verificare: accanto alla risposta
+    ci sono il metro con cui è stata misurata e il perché."""
+    giudice(quality=0.7)
+    simulation = make_open_simulation()
+
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": _written(simulation)}
+    ).json()
+
+    prima = esito["answers"][0]
+    assert prima["answer_text"] == "Si verifica lo scontrino e poi si autorizza."
+    assert prima["expected_answer"] == "Deve dire la cosa 1."
+    assert prima["feedback"] == "Manca una condizione."
+    assert prima["explanation"] == "Spiegazione della domanda 1."
+    assert prima["sources"] == ["Il rimborso si autorizza dopo aver verificato lo scontrino."]
+    # Le alternative non esistono, e non ne compaiono di finte
+    assert prima["options"] == []
+    assert prima["correct_option"] is None
+
+
+def test_quello_che_il_modello_ha_visto_e_la_traccia_non_il_documento(
+    user_client, make_open_simulation, giudice
+):
+    ricevute = giudice(quality=1.0)
+    simulation = make_open_simulation(questions=1)
+
+    user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": _written(simulation)}
+    )
+
+    assert len(ricevute) == 1
+    assert ricevute[0]["expected_answer"] == "Deve dire la cosa 1."
+    assert ricevute[0]["text"] == "Domanda aperta 1?"
+    assert "document_text" not in ricevute[0]
+
+
+def test_se_il_modello_non_risponde_il_tentativo_non_si_scrive(
+    db_session, user_client, make_open_simulation, giudice
+):
+    """Meglio far riprovare che scrivere un voto che nessuno ha dato."""
+    giudice(errore=True)
+    simulation = make_open_simulation()
+
+    response = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": _written(simulation)}
+    )
+
+    assert response.status_code == 502
+    assert db_session.query(SimulationAttempt).count() == 0
+
+
+def test_una_correzione_incompleta_fa_fallire_la_consegna(
+    db_session, user_client, make_open_simulation, giudice
+):
+    """Una domanda saltata dal modello darebbe zero a chi aveva risposto, per
+    un motivo che chi legge il voto non può vedere."""
+    giudice(quality=1.0, salta=(2,))
+    simulation = make_open_simulation()
+
+    response = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": _written(simulation)}
+    )
+
+    assert response.status_code == 502
+    assert db_session.query(SimulationAttempt).count() == 0
+
+
+def test_un_test_aperto_tutto_in_bianco_non_chiama_nessuno(
+    user_client, make_open_simulation, giudice
+):
+    ricevute = giudice(quality=1.0)
+    simulation = make_open_simulation()
+
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": []}
+    ).json()
+
+    assert ricevute == []
+    assert esito["score"] == 0.0
+    assert esito["correct_count"] == 0
+
+
+def test_il_tipo_del_test_arriva_a_chi_legge_i_tentativi(
+    client, act_as, make_simulation, make_open_simulation, giudice, standard_user, org_admin_user
+):
+    """Nelle dashboard due tentativi stanno nella stessa tabella, e il voto da
+    solo non dice quale prova era: il tipo viaggia con ognuno, come `mode` su
+    una conversazione."""
+    giudice(quality=1.0)
+    multipla = make_simulation(questions=1)
+    aperta = make_open_simulation(questions=1)
+
+    act_as(standard_user)
+    client.post(
+        f"/api/simulations/{multipla.id}/attempts",
+        json={"answers": _answers(multipla, correct=True)},
+    )
+    client.post(f"/api/simulations/{aperta.id}/attempts", json={"answers": _written(aperta)})
+
+    confronto = client.get("/api/comparison/simulation-attempts").json()
+    assert [a["simulation_kind"] for a in confronto] == ["multiple", "open"]
+
+    act_as(org_admin_user)
+    report = client.get("/api/admin/simulations-report").json()
+    assert {r["simulation_title"]: r["simulation_kind"] for r in report} == {
+        multipla.title: "multiple",
+        aperta.title: "open",
+    }
+
+
+def test_il_giudizio_resta_nella_fotografia_del_tentativo(
+    db_session, user_client, make_open_simulation, giudice
+):
+    """Rivalutare la stessa risposta domani darebbe un numero simile ma non
+    lo stesso, e un voto che oscilla non è un voto."""
+    giudice(quality=0.8)
+    simulation = make_open_simulation(questions=1)
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": _written(simulation)}
+    ).json()
+    assert esito["score"] == 8.0
+
+    simulation.questions[0].expected_answer = "Una traccia completamente diversa."
+    db_session.flush()
+
+    riletto = user_client.get(f"/api/simulations/attempts/{esito['id']}").json()
+    assert riletto["score"] == 8.0
+    assert riletto["answers"][0]["expected_answer"] == "Deve dire la cosa 1."
+    assert riletto["answers"][0]["feedback"] == "Manca una condizione."

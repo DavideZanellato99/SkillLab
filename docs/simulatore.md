@@ -2,11 +2,31 @@
 
 Il gemello scritto del roleplay: là si misura come l'operatore gestisce una
 persona, qui se conosce la procedura. Il super admin carica un documento
-aziendale, un modello di ragionamento ne ricava dieci domande a risposta
-multipla, un umano le rilegge, e gli utenti dell'organizzazione le svolgono una
-domanda alla volta, trenta secondi ciascuna, ottenendo un voto in decimi che
-tiene conto anche della prontezza, con la spiegazione di ogni risposta e il
-passaggio del documento da cui la domanda nasce.
+aziendale, un modello di ragionamento ne ricava dieci domande, un umano le
+rilegge, e gli utenti dell'organizzazione le svolgono una domanda alla volta,
+ottenendo un voto in decimi, con la spiegazione di ogni risposta e il passaggio
+del documento da cui la domanda nasce.
+
+**Un test è di uno di due tipi**, scelto quando si carica il documento e mai
+più cambiato:
+
+| | Scelta multipla | Risposta aperta |
+| --- | --- | --- |
+| Come si risponde | Una fra quattro alternative | Scrivendo qualche riga |
+| Tempo | 30 secondi a domanda | Nessuno |
+| Cosa decide i punti | Se è giusta e quanto in fretta è arrivata | Quanto la risposta è completa |
+| Chi corregge | Il codice, confrontando due numeri | Un modello, alla consegna |
+| Quando si sa il voto | Subito | Dopo qualche secondo di attesa |
+
+Le due scale finiscono nello stesso posto, da 0 a 1 per domanda e un voto in
+decimi, quindi un test dell'una forma e uno dell'altra si leggono nello stesso
+riepilogo e nella stessa dashboard. Proprio per questo **ogni posto in cui
+compare un test dice di che tipo è**, con
+[SimulationKindBadge](../frontend/src/components/SimulationKindBadge.tsx): un 7
+preso a crocette in trenta secondi e un 7 preso scrivendo dieci risposte non
+sono la stessa notizia. È il gemello del badge che distingue una chiamata da
+una chat, e i colori vogliono dire la stessa cosa: violetto dove si sceglie o
+si parla, ciano dove si scrive.
 
 Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 
@@ -17,35 +37,42 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [backend/document_text.py](../backend/document_text.py) | Estrae il testo da PDF, DOCX, TXT, Markdown e lo normalizza |
 | [backend/simulation_rag.py](../backend/simulation_rag.py) | Spezza il testo in passaggi, calcola le somiglianze, campiona |
 | [backend/openai_service.py](../backend/openai_service.py) | Le chiamate a OpenAI: embedding e risposte JSON dal modello di ragionamento |
-| [backend/simulation_questions.py](../backend/simulation_questions.py) | I due prompt e le due passate che producono le domande |
-| [backend/simulation_scoring.py](../backend/simulation_scoring.py) | Quanto vale una risposta: la scala che fa scendere i punti con il tempo |
+| [backend/simulation_questions.py](../backend/simulation_questions.py) | I prompt e le due passate che producono le domande, dell'uno o dell'altro tipo |
+| [backend/simulation_open_answers.py](../backend/simulation_open_answers.py) | Il giudizio sulle risposte scritte: il prompt e la chiamata sola |
+| [backend/simulation_scoring.py](../backend/simulation_scoring.py) | Quanto vale una risposta: la scala che scende col tempo e quella del giudizio |
 | [backend/routers/admin_simulations.py](../backend/routers/admin_simulations.py) | Il ciclo di vita lato super admin: caricamento, generazione, revisione, pubblicazione |
-| [backend/routers/simulations.py](../backend/routers/simulations.py) | Lo svolgimento e la correzione |
+| [backend/routers/simulations.py](../backend/routers/simulations.py) | Lo svolgimento e le due correzioni |
 | [backend/models.py:653-848](../backend/models.py#L653-L848) | Le quattro tabelle |
 | [frontend/src/services/simulations.ts](../frontend/src/services/simulations.ts) | I tipi e le chiamate HTTP |
 | [frontend/src/hooks/useSimulations.ts](../frontend/src/hooks/useSimulations.ts) | Gli hook TanStack Query |
 | [frontend/src/components/SimulationRunner.tsx](../frontend/src/components/SimulationRunner.tsx) | Le tre schermate dello svolgimento: regole, domande, esito |
-| [frontend/src/components/SimulationQuestionStep.tsx](../frontend/src/components/SimulationQuestionStep.tsx) | Una domanda e il suo cronometro |
-| [frontend/src/components/simulationFormat.ts](../frontend/src/components/simulationFormat.ts) | Come si scrivono voti, punti e tempi, e la copia della scala che si legge durante la domanda |
+| [frontend/src/components/SimulationQuestionStep.tsx](../frontend/src/components/SimulationQuestionStep.tsx) | Una domanda a scelta multipla e il suo cronometro |
+| [frontend/src/components/SimulationOpenQuestionStep.tsx](../frontend/src/components/SimulationOpenQuestionStep.tsx) | Una domanda aperta e la casella in cui si scrive |
+| [frontend/src/components/SimulationWrittenAnswer.tsx](../frontend/src/components/SimulationWrittenAnswer.tsx) | Nell'esito: la risposta scritta, la traccia attesa, la correzione |
+| [frontend/src/components/SimulationKindBadge.tsx](../frontend/src/components/SimulationKindBadge.tsx) | La targhetta del tipo, l'unico modo in cui si disegna, ovunque compaia un test |
+| [frontend/src/components/simulationFormat.ts](../frontend/src/components/simulationFormat.ts) | Come si scrivono voti, punti e tempi, i nomi dei tipi, e la copia della scala che si legge durante la domanda |
 
 ## Il flusso in un colpo d'occhio
 
 ```mermaid
 flowchart TD
-    A[Super admin carica il documento] --> B[Estrazione del testo]
+    A[Super admin carica il documento e sceglie il tipo] --> B[Estrazione del testo]
     B --> C[Divisione in passaggi]
     C --> D[Embedding di ogni passaggio]
     D --> E[(simulation_chunks)]
     E --> F[Passata 1: gli argomenti]
     F --> G[Recupero semantico: 4 passaggi per argomento]
-    G --> H[Passata 2: le dieci domande]
+    G --> H[Passata 2: le dieci domande, del tipo scelto]
     H --> I[(simulation_questions, stato bozza)]
     I --> J[Revisione umana]
     J --> K[Pubblicazione]
     K --> L[L'utente svolge il test]
-    L --> M[Correzione deterministica]
-    M --> N[(simulation_attempts, fotografia + voto)]
-    N --> O[Esito con spiegazioni e passaggi citati]
+    L --> M{Che tipo è}
+    M -->|Scelta multipla| N[Correzione deterministica]
+    M -->|Risposta aperta| O[Una chiamata al modello che giudica tutte le risposte]
+    N --> P[(simulation_attempts, fotografia + voto)]
+    O --> P
+    P --> Q[Esito con spiegazioni e passaggi citati]
 ```
 
 Le fasi 1, 2 e 3 sono tre chiamate HTTP distinte e non una sola. Il motivo è in
@@ -59,7 +86,7 @@ minuti lasciando il super admin senza niente, documento compreso.
 ## Fase 1, il caricamento del documento
 
 `POST /api/admin/simulations` (multipart: `organization_id`, `title`,
-`description`, `file`), riservato al super admin.
+`description`, `kind`, `file`), riservato al super admin.
 
 ### 1.1 Controlli in ingresso
 
@@ -70,10 +97,14 @@ Nell'ordine, in
 2. l'organizzazione deve esistere, ed è quella a cui la simulazione
    apparterrà per sempre (il tenant non si cambia più, vedi
    [update_simulation](../backend/routers/admin_simulations.py#L327-L344));
-3. l'estensione deve essere `.pdf`, `.docx`, `.txt`, `.md` o `.markdown`. Si
+3. `kind` deve essere `multiple` o `open`. Come il tenant, non si cambia più:
+   le domande nascono già con quattro alternative o con la traccia della
+   risposta attesa, e cambiare il tipo dopo vorrebbe dire buttarle senza
+   dirlo. Chi sceglie male ricarica il documento in una simulazione nuova;
+4. l'estensione deve essere `.pdf`, `.docx`, `.txt`, `.md` o `.markdown`. Si
    guarda l'estensione e non il content type dichiarato dal browser, che su
    Windows arriva vuoto o sbagliato più spesso di quanto si creda;
-4. il file non può essere vuoto né superare 10 MB (`MAX_DOCUMENT_BYTES`). Si
+5. il file non può essere vuoto né superare 10 MB (`MAX_DOCUMENT_BYTES`). Si
    legge un byte in più del limite proprio per accorgersi del superamento
    senza caricare in memoria un file enorme.
 
@@ -189,7 +220,11 @@ come nel documento.
 
 Su questo campione si chiede al modello esattamente dieci argomenti
 verificabili, con criteri espliciti nel prompt
-([_topics_prompt](../backend/simulation_questions.py#L47-L71)): un argomento va
+([_topics_prompt](../backend/simulation_questions.py#L47-L71)). **Questa
+passata non sa di che tipo sarà il test**, ed è voluto: un argomento su cui
+vale la pena interrogare qualcuno è lo stesso sia che la risposta si scelga
+fra quattro sia che si scriva, e nominare la forma sposterebbe gli argomenti
+verso quelli che le si prestano invece che verso quelli che contano. Un argomento va
 bene se il documento dice qualcosa di preciso a riguardo, se sbagliarlo nel
 lavoro reale avrebbe una conseguenza, se riguarda procedure, condizioni,
 limiti, tempi, responsabilità o eccezioni. Non va bene se riguarda
@@ -221,6 +256,12 @@ risparmiare: un modello che scrive le dieci domande insieme vede quello che ha
 già chiesto, mentre dieci chiamate indipendenti producono tre domande sulla
 stessa cosa e nessuna su tutto il resto.
 
+È qui che il tipo del test entra in scena, e cambia solo il prompt di sistema:
+la stessa chiamata, gli stessi argomenti con i loro passaggi, un'altra cosa da
+scrivere.
+
+#### A scelta multipla
+
 Il prompt ([_questions_prompt](../backend/simulation_questions.py#L74-L123))
 impone una domanda per argomento, quattro alternative (A, B, C, D) di cui una
 sola corretta, e regole precise:
@@ -244,21 +285,46 @@ Il JSON richiesto è
 con `correct_option` contato da 0 e `source_chunks` che elenca gli ordinali fra
 parentesi quadre.
 
-Il budget è di 8192 token di completamento, perché dieci domande con quattro
-alternative e una spiegazione ciascuna, più i token che il ragionamento spende
-prima di scriverne una, con un tetto stretto tornano indietro come JSON
-troncato.
+#### A risposta aperta
+
+Il prompt ([_open_questions_prompt](../backend/simulation_questions.py)) chiede
+per ogni argomento una domanda e la **traccia della risposta attesa**, che è la
+parte che conta davvero: sarà l'unica cosa che il giudice avrà davanti quando
+dovrà dire quanto vale quello che l'operatore ha scritto. Le regole in più
+rispetto all'altro prompt:
+
+- **sulle domande**: una cosa sola e delimitata, a cui si risponde in tre o
+  quattro righe. "Descrivi la procedura di rimborso" è troppo larga, "quali
+  condizioni devono valere perché un rimborso possa essere autorizzato allo
+  sportello" va bene. E una risposta verificabile, non un parere: senza questo
+  il modello scrive domande da tema, che nessuno può correggere;
+- **sulla traccia**: i punti che devono esserci, elencati in modo che chi
+  corregge possa dire quale manca. Non è la risposta perfetta da copiare, è il
+  metro con cui si giudica, e una traccia vaga non è una chiave ma un'opinione,
+  che produce voti indifendibili.
+
+Il budget è di 8192 token di completamento in entrambi i casi: dieci domande
+con quattro alternative e una spiegazione, oppure dieci domande con una traccia
+e una spiegazione, più i token che il ragionamento spende prima di scriverne
+una. Con un tetto stretto tornano indietro come JSON troncato.
 
 ### 2.4 La pulizia della risposta
 
 [_normalize_questions](../backend/simulation_questions.py#L133-L177) scarta una
-domanda per volta invece di far cadere tutto:
+domanda per volta invece di far cadere tutto, e cosa la renda scartabile
+dipende dal tipo:
 
-- niente testo, o un numero di alternative diverso da quattro: si scarta;
-- `correct_option` non intero o fuori intervallo: si scarta;
+- niente testo: si scarta in entrambi i casi;
+- a scelta multipla, un numero di alternative diverso da quattro, o un
+  `correct_option` non intero o fuori intervallo: si scarta;
+- a risposta aperta, una `expected_answer` vuota: si scarta. Non è una domanda
+  a cui manca un pezzo, è una domanda che nessuno potrebbe correggere;
 - ordinali in `source_chunks` che non sono fra quelli davvero forniti: si
   scartano **loro**, non la domanda, perché la citazione accompagna la
   spiegazione, non la sostiene.
+
+Ogni domanda esce con entrambi i mazzi di campi e quello inutile vuoto, così il
+router che le scrive nel database non deve sapere di che tipo erano.
 
 Se non resta niente si solleva `ValueError`, che il router traduce in 422. Nove
 domande buone su dieci si rimediano rigenerando, mentre buttare via tutto per
@@ -269,7 +335,8 @@ costato due chiamate.
 
 Entrambe le passate girano dentro
 [eval_json_completion](../backend/openai_service.py#L152-L208), lo stesso
-meccanismo che valuta le conversazioni:
+meccanismo che valuta le conversazioni e che, sui test aperti, corregge le
+risposte alla consegna:
 
 | Aspetto | Comportamento |
 | --- | --- |
@@ -279,6 +346,12 @@ meccanismo che valuta le conversazioni:
 | Timeout | 120 secondi per chiamata, non i 20 del roleplay: qui nessuno è in linea, c'è una rotella che gira in una pagina |
 | Ritentativi | 1, quindi al massimo due tentativi per modello |
 | Passaggio al modello di riserva | Solo su sovraccarichi (429, 500, 502, 503) **o su un JSON illeggibile**: un modello che risponde con campi mancanti ha fallito quanto uno che non ha risposto, e il rimedio è lo stesso. Un timeout invece non fa cambiare modello |
+
+L'unica differenza per la correzione delle risposte aperte è che lì qualcuno
+sta aspettando davvero: non è un super admin davanti a una rotella, è chi ha
+appena consegnato un test. Il budget è più basso (4096 token, dieci giudizi con
+due frasi di commento ciascuno) e il resto è identico, giro sui modelli di
+riserva compreso.
 
 Alla fine il router cancella le domande precedenti, scrive le nuove numerate da
 1, e **riporta la simulazione in bozza anche se era pubblicata**: le domande
@@ -311,8 +384,9 @@ entità amministrata, ma l'indirizzo di chi prepara i test non serve a chi li
 fa.
 
 Il super admin vede le domande **con le chiavi** (`SimulationQuestionAdminResponse`
-aggiunge `correct_option`, `explanation` e `source_chunks`), più il testo del
-documento e quante persone hanno già svolto il test.
+aggiunge `correct_option`, `expected_answer`, `explanation` e `source_chunks`),
+più il testo del documento e quante persone hanno già svolto il test. Delle due
+chiavi se ne legge una sola, quella del tipo del test.
 
 `PUT /api/admin/simulations/{id}/questions` salva le domande **in blocco**: le
 righe di prima si cancellano e si riscrivono. Riordinarne una, toglierne una e
@@ -324,12 +398,23 @@ stati che non hanno senso. Due dettagli:
   che il super admin possa riscrivere nel form, e perderle a ogni correzione di
   un refuso toglierebbe a chi sbaglia il rimando alla procedura;
 - il validatore Pydantic pretende almeno una domanda e al massimo dieci, e che
-  `correct_option` sia l'indice di una delle alternative presenti.
+  `correct_option`, dove ci sono delle alternative, sia l'indice di una di
+  quelle presenti;
+- **la chiave giusta per il tipo la controlla il router e non lo schema**: il
+  payload porta le domande e non la simulazione a cui appartengono, quindi il
+  tipo lì non si sa. Un test aperto con una domanda senza `expected_answer`, o
+  uno a scelta multipla con una domanda senza alternative, risponde 422 dicendo
+  quale posizione. La chiave dell'altro tipo, se arriva, viene buttata invece
+  di restare scritta in una colonna che nessuno leggerà.
 
-Nell'editor la risposta corretta si sceglie **cliccando la lettera
-dell'alternativa** e non da una tendina a parte: la tendina lascerebbe scrivere
-"corretta: C" con la C vuota
-([SimulationQuestionEditor](../frontend/src/components/SimulationQuestionEditor.tsx#L5-L10)).
+Nell'editor la chiave che si vede è una sola, quella del tipo
+([SimulationQuestionEditor](../frontend/src/components/SimulationQuestionEditor.tsx)).
+Su un test a scelta multipla la risposta corretta si sceglie **cliccando la
+lettera dell'alternativa** e non da una tendina a parte: la tendina lascerebbe
+scrivere "corretta: C" con la C vuota. Su uno a risposta aperta c'è una casella
+per la traccia, con scritto sotto che è il metro con cui ogni risposta verrà
+corretta: lì il super admin non sta correggendo un refuso, sta scrivendo la
+regola del voto.
 
 `PUT /api/admin/simulations/{id}/status` pubblica o ritira. Pubblicare pretende
 il test completo, dieci domande, che è quello che la pagina promette a chi lo
@@ -364,11 +449,17 @@ costerebbe o una query per riga o una window function.
 ### 4.2 Il test
 
 `GET /api/simulations/{id}` restituisce le domande **senza la risposta esatta,
-senza la spiegazione e senza i passaggi**. Non è un dettaglio: sono due schemi
-diversi e non uno con campi opzionali
-([schemas.py:918-941](../backend/schemas.py#L918-L941)), perché la chiave deve
-restare sul server fino alla consegna, altrimenti il test lo risolverebbe la
-scheda di rete.
+senza la traccia della risposta attesa, senza la spiegazione e senza i
+passaggi**. Non è un dettaglio: sono due schemi diversi e non uno con campi
+opzionali ([schemas.py:918-941](../backend/schemas.py#L918-L941)), perché la
+chiave deve restare sul server fino alla consegna, altrimenti il test lo
+risolverebbe la scheda di rete. Su un test a risposta aperta la traccia è la
+chiave, e vale esattamente la stessa regola: chi la ricevesse con la domanda
+avrebbe la risposta scritta davanti.
+
+Nelle domande di un test aperto `options` arriva come lista vuota, e non è un
+campo mancante: è la domanda che non ne ha. A dire come si risponde è `kind`,
+che sta sulla simulazione.
 
 In [SimulationRunner](../frontend/src/components/SimulationRunner.tsx) le risposte
 vivono in uno stato locale `question_id -> indice dell'opzione`, e la pagina ha
@@ -378,6 +469,14 @@ browser che rimette in gioco una domanda già consegnata. Ricaricando si riparte
 dalle regole e quello che si era risposto è perso: le risposte vivono nel
 browser finché non si consegna, perché un test a metà non è un tentativo. Non
 c'è nessun limite ai tentativi.
+
+Il passo che monta a ogni domanda è uno dei due, scelto in base a `kind`:
+`SimulationQuestionStep` per le alternative, `SimulationOpenQuestionStep` per
+la casella in cui si scrive. Sono due componenti e non uno con dei rami perché
+hanno in comune solo il fatto di stare in mezzo a un test: uno vive attorno a
+un cronometro, l'altro non ce l'ha.
+
+### 4.2.1 A scelta multipla
 
 **Una domanda alla volta, trenta secondi ciascuna.** Si risponde, si passa alla
 successiva e non si torna più indietro. Il conto alla rovescia scende a schermo
@@ -422,6 +521,25 @@ formazione e non un esame sorvegliato, quindi il tempo serve a chi lo svolge,
 per allenarsi a rispondere senza rileggere il manuale, e non a impedire a
 qualcuno di barare.
 
+### 4.2.2 A risposta aperta
+
+Una domanda alla volta e nessun ritorno indietro come sopra, ma **senza
+cronometro**. Trenta secondi bastano a scegliere una lettera, non a scrivere
+una procedura, e un tempo che scorre mentre si compone una risposta premierebbe
+chi scrive in fretta invece di chi conosce il lavoro. Qui i punti dipendono solo
+da quanto la risposta è completa, quindi rileggersi prima di consegnare non
+costa niente ed è anzi la cosa giusta da fare, ed è scritto nelle regole prima
+di cominciare.
+
+La casella prende il fuoco da sola, perché è l'unica cosa da fare in quella
+schermata. Il tetto è di 5000 caratteri, lo stesso che il server accetta, e lo
+spazio rimasto compare solo negli ultimi 500: un contatore sempre a schermo
+suggerirebbe che la lunghezza conta, mentre una risposta breve che dice tutto
+vale quanto una lunga. Chi non sa la risposta ha il pulsante "Salta la
+domanda", che la consegna in bianco.
+
+Anche qui nessun riscontro durante il percorso.
+
 Finita l'ultima domanda il test **si consegna da solo**. È l'unica pagina
 dell'app in cui una chiamata fallita non lascerebbe niente da ritentare a mano,
 quindi l'errore resta a schermo con le risposte ancora in memoria e il pulsante
@@ -431,18 +549,25 @@ per riprovare la consegna.
 
 ## Fase 5, la correzione
 
-`POST /api/simulations/{id}/attempts`, con una voce per domanda
-(`selected_option` a `null` significa lasciata in bianco, `elapsed_ms` dice
-quanto ci è voluto a darla).
+`POST /api/simulations/{id}/attempts`, con una voce per domanda. Un campo per
+tipo di test e se ne manda uno solo: `selected_option` con `elapsed_ms`, oppure
+`answer_text`. Vuoti entrambi significa lasciata in bianco, che si può fare in
+tutti e due i casi.
 
-**La correzione è deterministica e sta nel codice, non nel modello.** La
-risposta esatta è stata decisa quando la domanda è nata e riletta da un umano
-prima della pubblicazione, quindi lo stesso test consegnato due volte prende lo
-stesso voto. Quello che l'LLM ha scritto e che arriva a chi ha sbagliato è la
+[submit_attempt](../backend/routers/simulations.py) guarda il tipo e prende una
+delle due strade, poi il resto è identico: la conta delle esatte, la somma dei
+punti, la fotografia, il voto congelato nella riga.
+
+### 5.1 A scelta multipla, il codice
+
+**Deterministica, e sta nel codice, non nel modello.** La risposta esatta è
+stata decisa quando la domanda è nata e riletta da un umano prima della
+pubblicazione, quindi lo stesso test consegnato due volte prende lo stesso
+voto. Quello che l'LLM ha scritto e che arriva a chi ha sbagliato è la
 spiegazione.
 
-In [submit_attempt](../backend/routers/simulations.py#L245-L311), per ogni domanda
-della simulazione:
+In [_multiple_choice_answers](../backend/routers/simulations.py), per ogni
+domanda della simulazione:
 
 1. un indice fuori dall'intervallo delle alternative è 400, non una risposta
    sbagliata: significa che il client ha mandato qualcosa di incoerente;
@@ -458,12 +583,56 @@ per intero anche se la domanda viene poi riscritta o la simulazione rigenerata
 da capo, e una domanda corretta dopo la consegna non può far apparire sbagliata
 una risposta che era giusta.
 
+### 5.2 A risposta aperta, il modello
+
+Qui la correzione non può stare nel codice: la risposta è testo scritto da una
+persona, e dire se "prima si identifica il cliente" copre una procedura che il
+documento descrive in cinque righe è un giudizio, non un uguale.
+
+[_open_answers](../backend/routers/simulations.py) manda tutte le risposte
+scritte a
+[judge_open_answers](../backend/simulation_open_answers.py), che è **una
+chiamata sola per l'intero tentativo**. Non dieci: in parallelo sarebbero dieci
+volte il rischio che una vada storta, in serie un minuto di rotella, e in più un
+modello che vede tutto il test giudica con lo stesso metro dalla prima
+all'ultima, mentre dieci chiamate indipendenti sono dieci esaminatori diversi.
+
+Cosa vede il modello, per ogni domanda: il testo, la **traccia della risposta
+attesa** e quello che l'operatore ha scritto (troncato a 2000 caratteri: oltre
+non c'è una risposta, c'è un incollaggio del manuale). Non vede il documento,
+di proposito: la traccia è già la sintesi che il super admin ha approvato, e
+dargli anche i passaggi rimetterebbe in discussione la chiave nel momento in
+cui la si applica.
+
+Cosa torna indietro, per posizione: `quality` da 0 a 1 e due righe di
+`feedback`. Il prompt dice esplicitamente cosa **non** deve spostare il voto,
+che è la parte che serve di più: ortografia, forma, parole diverse da quelle
+della traccia, lunghezza. E una regola severa: una risposta che afferma
+qualcosa di sbagliato non supera 0,5 anche se nel resto dice cose giuste,
+perché sul lavoro quell'affermazione porterebbe a un errore.
+
+Tre scelte attorno alla chiamata:
+
+| Caso | Cosa succede | Perché |
+| --- | --- | --- |
+| Risposta in bianco | Non arriva al modello, vale zero | Più veloce, costa meno, ed è l'unico modo di essere certi che chi non scrive niente non prenda niente |
+| Il modello non risponde su nessun modello della lista | 502, il tentativo **non** si scrive | Le risposte sono ancora nel browser e il pulsante per riprovare c'è già; scrivere un tentativo mezzo corretto no |
+| Il modello salta una domanda a cui era stato risposto | 502, il tentativo **non** si scrive | Un voto più basso del dovuto per un motivo che chi lo riceve non può né vedere né contestare è peggio di una consegna da ripetere |
+
+La voce che finisce nella fotografia porta **domanda, risposta scritta, traccia
+attesa, commento, esito, punti e spiegazione**. Il giudizio è congelato lì
+insieme al resto, e per una ragione in più rispetto alle scelte multiple:
+rivalutare la stessa risposta domani darebbe un numero simile ma non lo stesso,
+e un voto che oscilla non è un voto.
+
 ### Quanto vale una risposta
 
 Sapere una procedura e ricordarsela subito non sono la stessa cosa, e allo
 sportello la differenza si vede: chi deve rileggere il manuale la risposta ce
-l'ha, ma dopo. Il punteggio la misura, e la scala vive tutta in
-[simulation_scoring](../backend/simulation_scoring.py):
+l'ha, ma dopo. Il punteggio la misura, e le due scale vivono tutte in
+[simulation_scoring](../backend/simulation_scoring.py).
+
+**Su un test a scelta multipla**, il tempo:
 
 | Quando arriva la risposta | Se è giusta vale |
 | --- | --- |
@@ -493,17 +662,46 @@ sono usciti pieni e la sola traccia era che i punti coincidevano sempre con le
 risposte esatte. Col fallback al minimo quei tentativi sarebbero saltati
 all'occhio subito.
 
+**Su un test a risposta aperta**, la completezza:
+
+| Quanto la risposta copre la traccia | Vale |
+| --- | --- |
+| tutto quello che serviva | 1 |
+| manca una condizione o un passaggio secondario | 0,7 - 0,8 |
+| metà, oppure giusto ma troppo vago | 0,5 |
+| sfiora l'argomento senza rispondere | 0,2 - 0,3 |
+| sbagliata, fuori tema, o in bianco | 0 |
+
+Qui il tempo non c'entra e non viene misurato. Le altre tre scelte:
+
+- **un giudizio fuori scala rientra** invece di far fallire la consegna, come
+  il tempo storto: un modello che scrive 1,3 ha comunque detto che la risposta
+  era completa;
+- **una risposta non giudicata vale zero**, che non è la stessa prudenza del
+  tempo assente: là il tempo c'era e non è arrivato, qui il giudizio non c'è, e
+  una risposta non giudicata non può valere punti. Detto questo, il caso non
+  arriva mai fino ai punti, perché un giudizio mancante fa fallire la consegna
+  prima;
+- **la sufficienza si guarda sui punti arrotondati** e non sul giudizio grezzo:
+  con la soglia sul numero nascosto, una risposta da 0,57 mostrerebbe 0,6
+  accanto a una crocetta rossa, e nessuno saprebbe spiegare perché.
+
 Il punteggio è congelato nella riga (`earned_points` e `question_count`) e non
 ricalcolato a ogni lettura, cosa che con i punti a tempo conta doppio: il
-tempo di una risposta è successo una volta sola. Il voto in decimi è la
-proprietà [score](../backend/models.py#L839-L842), cioè
+tempo di una risposta è successo una volta sola. Sulle risposte aperte conta
+per un motivo gemello: quel giudizio è stato dato una volta sola. Il voto in
+decimi è la proprietà [score](../backend/models.py#L839-L842), cioè
 `punti * 10 / domande` arrotondato a un decimale, sulla stessa scala delle
 valutazioni del roleplay.
 
 `correct_count` resta accanto ai punti e non è più il voto: risponde a
 un'altra domanda, quante ne sapeva, e senza di lui un sei con otto risposte
 esatte sarebbe illeggibile. Nel riepilogo si vedono entrambi, e ogni domanda
-porta i suoi punti con accanto il tempo che li ha decisi.
+porta i suoi punti con accanto il tempo che li ha decisi. Su un test a risposta
+aperta "esatta" vuol dire **arrivata almeno a 0,6** (`OPEN_PASS_POINTS`), che è
+la sufficienza, la stessa soglia con cui il voto finale si colora a schermo: il
+giudizio è una scala continua, ma quella colonna è una conta, e da qualche
+parte la riga va tirata.
 
 **Il tempo lo misura il browser.** Il server lo riporta dentro scala se arriva
 storto, ma non ha modo di verificarlo: non consegna le domande una alla volta
@@ -524,6 +722,7 @@ due sorgenti apposta
 | Cosa si mostra | Da dove viene | Perché |
 | --- | --- | --- |
 | Testo, alternative, risposta data, risposta esatta, esito, tempo e punti | La fotografia nel tentativo | Il voto non deve poter cambiare da solo mesi dopo l'esame, e il tempo di una risposta è successo una volta sola |
+| Risposta scritta, traccia attesa e commento del modello | La fotografia nel tentativo | La traccia di oggi potrebbe essere stata riscritta, e mostrarla accanto a un voto dato su quella di ieri farebbe leggere una correzione sbagliata |
 | Spiegazione | La domanda **attuale**, se esiste ancora | Lì una correzione è un miglioramento |
 | Passaggi del documento | I chunk **attuali** della simulazione | Sono il documento, e tenerne una copia per ogni tentativo di ogni utente moltiplicherebbe un manuale per il numero di chi lo studia |
 
@@ -533,11 +732,24 @@ che deve restare fermo è il voto, non la citazione.
 A schermo
 ([SimulationResult](../frontend/src/components/SimulationResult.tsx)) si vede il
 voto in cima, con accanto quante risposte erano esatte e quanti punti hanno
-fruttato, poi domanda per domanda i punti presi e in quanto tempo,
-l'alternativa corretta in verde, quella scelta in rosso se diversa, la nota
-sulle domande lasciate in bianco, la spiegazione, e in fondo un "Cosa dice il
-documento" apribile con i passaggi citati. Le spiegazioni compaiono anche sulle domande andate bene, perché chi ha
-indovinato senza esserne sicuro è esattamente la persona che deve leggerle.
+fruttato, poi domanda per domanda i punti presi, la spiegazione, e in fondo un
+"Cosa dice il documento" apribile con i passaggi citati. Le spiegazioni
+compaiono anche sulle domande andate bene, perché chi ha indovinato senza
+esserne sicuro è esattamente la persona che deve leggerle.
+
+Quello che cambia fra i due tipi è solo il corpo di ogni domanda:
+
+- **a scelta multipla**, in quanto tempo la risposta è arrivata, l'alternativa
+  corretta in verde, quella scelta in rosso se diversa, e la nota sulle domande
+  lasciate in bianco;
+- **a risposta aperta**
+  ([SimulationWrittenAnswer](../frontend/src/components/SimulationWrittenAnswer.tsx)),
+  tre riquadri in quest'ordine: quello che ha scritto, cosa doveva dire, la
+  correzione. La traccia sta lì per una ragione precisa: su una scelta multipla
+  il voto si verifica da solo, l'alternativa giusta è lì e o era quella o non
+  lo era, mentre qui il voto lo ha dato un modello che ha letto un testo. Senza
+  il metro con cui è stato misurato, uno 0,6 sarebbe una parola dell'autorità e
+  non una correzione.
 
 ### Rileggere un proprio tentativo
 
@@ -587,10 +799,23 @@ persone".
 
 | Tabella | Contiene | Note |
 | --- | --- | --- |
-| `technical_simulations` | Titolo, descrizione, stato, nome e testo del documento, organizzazione | Il file originale non c'è, solo il testo estratto |
+| `technical_simulations` | Titolo, descrizione, stato, `kind`, nome e testo del documento, organizzazione | Il file originale non c'è, solo il testo estratto. `kind` si decide al caricamento e non si cambia |
 | `simulation_chunks` | `ordinal`, `content`, `embedding` | Cancellati e riscritti a ogni caricamento del documento |
-| `simulation_questions` | `position`, `text`, `options`, `correct_option`, `explanation`, `source_chunks` | `options` e `correct_option` stanno sulla stessa riga, quindi correggere il testo di un'opzione non può spostare la risposta esatta su un'altra |
+| `simulation_questions` | `position`, `text`, `options`, `correct_option`, `expected_answer`, `explanation`, `source_chunks` | Le due chiavi sono alternative fra loro e se ne riempie una sola, secondo il `kind` della simulazione: per questo `options` e `correct_option` sono nullable, non perché una domanda possa non avere una risposta esatta. `options` e `correct_option` stanno comunque sulla stessa riga, quindi correggere il testo di un'opzione non può spostare la risposta esatta su un'altra |
 | `simulation_attempts` | `correct_count`, `question_count`, `earned_points`, `answers` (la fotografia), `created_at` | Il voto si ricava da punti e domande, quindi resta leggibile anche se un giorno le domande non fossero più dieci. `earned_points` è arrivata dopo: i tentativi di prima l'hanno riempita con le loro risposte esatte, che è quello che valevano quando il tempo non contava (vedi [startup_migrations](../backend/startup_migrations.py)) |
+
+Il tipo sta sulla simulazione e non sulla singola domanda, quindi un test è
+tutto dell'una forma o tutto dell'altra. Le due si svolgono in modi troppo
+diversi per stare nella stessa pagina: le multiple hanno un cronometro e si
+correggono da sole, le aperte no. Chi vuole verificare le stesse procedure in
+entrambi i modi carica due volte lo stesso documento, che costa una generazione
+e non un disegno.
+
+Le colonne nuove (`kind` e `expected_answer`) arrivano con un default che è già
+il valore giusto per le righe che c'erano: le simulazioni di prima sono tutte a
+scelta multipla, e le loro domande non hanno una traccia. Nessun backfill da
+scrivere, solo la ALTER e il passaggio di `options` e `correct_option` a
+nullable.
 
 Tutto ha `ondelete CASCADE` verso la simulazione. Eliminare una simulazione è
 definitivo, al contrario dell'archiviazione di un avatar: un avatar archiviato
@@ -600,7 +825,7 @@ esista ancora. Chi vuole solo toglierla di mezzo la ritira.
 
 Le costanti sono in [models.py:56-62](../backend/models.py#L56-L62):
 `SIMULATION_QUESTION_COUNT = 10`, `SIMULATION_OPTION_COUNT = 4`, gli stati
-`draft` e `published`.
+`draft` e `published`, i tipi `multiple` e `open`.
 
 ---
 
@@ -609,15 +834,18 @@ Le costanti sono in [models.py:56-62](../backend/models.py#L56-L62):
 | Situazione | Risposta |
 | --- | --- |
 | Estensione non supportata | 400, "carica un file PDF, DOCX, TXT o Markdown" |
+| Tipo di test diverso da `multiple` o `open` | 400 |
 | File vuoto o illeggibile, PDF scansionato | 400, con il motivo. Non è un problema di ritentativi, è il file |
 | Documento oltre 10 MB | 413 |
 | Embedding falliti | 502, il caricamento si ripete |
 | Generazione su una simulazione senza passaggi indicizzati | 409 |
 | Il modello non risponde o non risponde su nessun modello della lista | 502 |
 | Il modello risponde qualcosa di inutilizzabile | 422 |
+| Domande salvate senza la chiave del loro tipo | 422, con la posizione della domanda |
 | Pubblicazione con meno di dieci domande | 409, con quante ce ne sono |
 | Consegna di una simulazione senza domande | 409 |
 | Indice di risposta fuori intervallo | 400 |
+| La correzione delle risposte aperte fallisce o torna incompleta | 502, con l'invito a riprovare: il tentativo non si scrive |
 | Simulazione o tentativo non visibili a chi chiede | 404 |
 
 ---

@@ -9,10 +9,10 @@ import { queryKeys } from './queryKeys'
  *
  *  `enabled` serve a chi la usa come sorgente di un selettore solo in certi
  *  ruoli, come il form dei percorsi di training. */
-export function useAvatars(category?: string | null, enabled = true) {
+export function useAvatars(categoryId?: string | null, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.avatars.list(category ?? undefined),
-    queryFn: () => fetchAvatars(category ?? undefined),
+    queryKey: queryKeys.avatars.list(categoryId ?? undefined),
+    queryFn: () => fetchAvatars(categoryId ?? undefined),
     enabled,
   })
 }
@@ -26,10 +26,10 @@ export function useAvatar(avatarId: string | undefined) {
   })
 }
 
-/** Le categorie presenti nel catalogo. */
+/** Le categorie della propria organizzazione, nell'ordine deciso in admin. */
 export function useCategories() {
   return useQuery({
-    queryKey: queryKeys.categories,
+    queryKey: queryKeys.categories.mine,
     queryFn: fetchCategories,
   })
 }

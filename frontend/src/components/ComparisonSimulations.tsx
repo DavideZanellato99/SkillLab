@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { SimulationComparisonAttempt } from '../services/comparison'
 import Select from './Select'
+import SimulationKindBadge from './SimulationKindBadge'
 import { Delta } from './scoreCharts'
 import { cardCls, formatScore, scoreTextColor } from './scoreFormat'
 import { formatDate } from './lastAccess'
@@ -58,8 +59,9 @@ function AttemptPanel({
             <Delta value={delta} />
           </span>
         )}
-        <span className="px-4 text-center text-[0.78rem] text-slate-400">
+        <span className="flex items-center gap-2 px-4 text-center text-[0.78rem] text-slate-400">
           {attempt.simulation_title}
+          <SimulationKindBadge kind={attempt.simulation_kind} />
         </span>
         <span className="text-[0.72rem] text-slate-500">{formatDate(attempt.attempted_at)}</span>
         <div className="mt-1 flex items-baseline gap-1">

@@ -7,7 +7,7 @@ import {
   useUpdateSimulationStatus,
 } from '../hooks/useSimulations'
 import { QUESTION_COUNT } from '../services/simulations'
-import type { SimulationQuestionPayload } from '../services/simulations'
+import type { SimulationQuestionAdmin, SimulationQuestionPayload } from '../services/simulations'
 import ModalShell from './ModalShell'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
@@ -17,6 +17,7 @@ import FormSuccess from './FormSuccess'
 import Badge from './Badge'
 import TabBar from './TabBar'
 import SimulationQuestionEditor from './SimulationQuestionEditor'
+import SimulationKindBadge from './SimulationKindBadge'
 import {
   formatDateTime,
   formatScore,
@@ -41,15 +42,22 @@ import {
 const secondaryBtnCls =
   'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-50'
 
-function toPayload(
-  questions: { text: string; options: string[]; correct_option: number; explanation: string }[],
-): SimulationQuestionPayload[] {
+function toPayload(questions: SimulationQuestionAdmin[]): SimulationQuestionPayload[] {
   return questions.map((q) => ({
     text: q.text,
-    options: [...q.options],
+    options: q.options.length ? [...q.options] : null,
     correct_option: q.correct_option,
+    expected_answer: q.expected_answer,
     explanation: q.explanation,
   }))
+}
+
+/** Una domanda è pronta quando ha il testo e la chiave del suo tipo. */
+function isComplete(question: SimulationQuestionPayload, open: boolean): boolean {
+  if (!question.text.trim()) return false
+  return open
+    ? Boolean(question.expected_answer.trim())
+    : Boolean(question.options?.every((o) => o.trim()))
 }
 
 interface SimulationEditorModalProps {
@@ -81,9 +89,9 @@ export default function SimulationEditorModal({
 
   const busy = generate.isPending || save.isPending || setStatus.isPending
   const isPublished = simulation?.status === 'published'
+  const isOpen = simulation?.kind === 'open'
   const complete =
-    draft.length === QUESTION_COUNT &&
-    draft.every((q) => q.text.trim() && q.options.every((o) => o.trim()))
+    draft.length === QUESTION_COUNT && draft.every((q) => isComplete(q, Boolean(isOpen)))
 
   /* Pubblicare salva prima le domande: quello che finisce davanti agli utenti
    * deve essere quello che il super admin sta guardando, non l'ultima
@@ -115,9 +123,12 @@ export default function SimulationEditorModal({
                 <span>{simulation.chunk_count} passaggi indicizzati</span>
               </p>
             </div>
-            <Badge tone={statusBadgeTone(simulation.status)} className="mr-8 shrink-0">
-              {statusLabel(simulation.status)}
-            </Badge>
+            <div className="mr-8 flex shrink-0 items-center gap-2">
+              <SimulationKindBadge kind={simulation.kind} />
+              <Badge tone={statusBadgeTone(simulation.status)}>
+                {statusLabel(simulation.status)}
+              </Badge>
+            </div>
           </header>
 
           <TabBar
@@ -141,7 +152,11 @@ export default function SimulationEditorModal({
                   </p>
                   <p className="max-w-md text-sm text-slate-500">
                     La generazione legge il documento, individua gli argomenti verificabili e scrive
-                    dieci domande sui passaggi che li riguardano. Può richiedere qualche minuto.
+                    dieci domande{' '}
+                    {isOpen
+                      ? 'con la traccia della risposta attesa'
+                      : 'con quattro alternative ciascuna'}
+                    , sui passaggi che li riguardano. Può richiedere qualche minuto.
                   </p>
                 </div>
               ) : (
@@ -151,6 +166,7 @@ export default function SimulationEditorModal({
                       key={index}
                       index={index}
                       question={question}
+                      open={isOpen}
                       disabled={busy}
                       onChange={(updated) =>
                         setDraft((prev) => prev.map((q, i) => (i === index ? updated : q)))

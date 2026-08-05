@@ -13,12 +13,42 @@ def test_list_avatars_returns_visible_ones(user_client, make_avatar):
 
 def test_filter_by_category(user_client, make_avatar):
     make_avatar(name="Solo Clienti", category="clienti")
-    make_avatar(name="Solo Fornitori", category="fornitori")
+    fornitori = make_avatar(name="Solo Fornitori", category="fornitori")
 
-    response = user_client.get("/api/avatars", params={"category": "fornitori"})
+    response = user_client.get("/api/avatars", params={"category_id": str(fornitori.category_id)})
     assert response.status_code == 200
     categories = {a["category"] for a in response.json()}
     assert categories == {"fornitori"}
+
+
+def test_categories_are_the_tenant_anagraphic(
+    user_client, make_avatar, make_category, organization
+):
+    """L'elenco è l'anagrafica dell'organizzazione, non i valori in uso.
+
+    Una categoria appena creata e ancora senza avatar deve comparire lo
+    stesso, altrimenti sembrerebbe non essere stata salvata.
+    """
+    make_avatar(name="Cliente", category="clienti")
+    make_category("ancora vuota", organization.id)
+
+    response = user_client.get("/api/avatars/categories")
+    assert response.status_code == 200
+    names = {c["name"] for c in response.json()}
+    assert {"clienti", "ancora vuota"} <= names
+
+
+def test_categories_of_another_tenant_stay_hidden(user_client, make_category, db_session):
+    from models import Organization
+
+    other = Organization(name="Altro tenant", slug="altro-tenant")
+    db_session.add(other)
+    db_session.flush()
+    make_category("solo loro", other.id)
+
+    response = user_client.get("/api/avatars/categories")
+    assert response.status_code == 200
+    assert "solo loro" not in {c["name"] for c in response.json()}
 
 
 def test_persona_sheet_is_never_exposed(user_client, make_avatar):

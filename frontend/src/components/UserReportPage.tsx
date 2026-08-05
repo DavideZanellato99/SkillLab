@@ -256,7 +256,7 @@ export default function UserReportPage() {
                                   {conv.avatar_name}
                                 </span>
                                 <span
-                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(conv.avatar_category)}`}
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(conv.avatar_category_color)}`}
                                 >
                                   {conv.avatar_category}
                                 </span>

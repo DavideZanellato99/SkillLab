@@ -212,7 +212,7 @@ def _conversations(db: Session, user: User) -> tuple[list[dict], dict[UUID, str]
                 "tipo": "chiamata" if conversation.mode == "voice" else "chat",
                 # Name and category only: the persona sheet stays server-side.
                 "avatar": avatar.name if avatar else None,
-                "categoria_avatar": avatar.category if avatar else None,
+                "categoria_avatar": avatar.category_name if avatar else None,
                 "iniziata_il": _at(conversation.created_at),
                 "terminata_il": _at(conversation.ended_at),
                 "messaggi": _messages(db, conversation.id),

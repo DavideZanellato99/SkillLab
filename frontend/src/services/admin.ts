@@ -9,6 +9,7 @@ import type {
 } from './api'
 import type { AuthUser, RoleName, UserStatus } from './auth'
 import type { Authored } from './authorship'
+import type { SimulationKind } from './simulations'
 
 export interface CreateUserPayload {
   email: string
@@ -123,7 +124,11 @@ export interface AdminAvatar extends Authored {
   id: string
   name: string
   image_url: string
+  /** Il nome della categoria, per mostrarla: a salvarla è `category_id`. */
   category: string
+  category_id: string
+  /** Tinta della pastiglia, una di CATEGORY_COLORS. */
+  category_color: string
   description: string | null
   voice_id: string | null
   difficulty: string | null
@@ -137,7 +142,8 @@ export interface AdminAvatar extends Authored {
 }
 
 export interface AdminAvatarPayload {
-  category: string
+  /** Una categoria della stessa organizzazione dell'avatar. */
+  category_id: string
   description: string | null
   image_url: string | null
   voice_id: string | null
@@ -176,6 +182,50 @@ export const deleteAvatar = (avatarId: string) =>
 export const restoreAvatar = (avatarId: string) =>
   apiFetch<AdminAvatar>(`/api/admin/avatars/${avatarId}/restore`, {
     method: 'POST',
+  })
+
+// ── Anagrafica delle categorie (super admin only) ────
+
+export interface AdminAvatarCategory extends Authored {
+  id: string
+  name: string
+  /** Una di CATEGORY_COLORS: il nome di una tinta, non un colore CSS. */
+  color: string
+  organization_id: string
+  organization_name: string
+  /** Quanti avatar la usano, archiviati compresi: se non è 0 non si elimina. */
+  avatar_count: number
+}
+
+export interface AdminAvatarCategoryPayload {
+  name: string
+  color: string
+  /** Solo alla creazione: l'organizzazione di una categoria non si cambia. */
+  organization_id?: string
+}
+
+/** L'anagrafica di tutte le organizzazioni, o di una sola. */
+export const fetchAvatarCategories = (organizationId?: string) =>
+  apiFetch<AdminAvatarCategory[]>('/api/admin/avatar-categories', {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  })
+
+export const createAvatarCategory = (payload: AdminAvatarCategoryPayload) =>
+  apiFetch<AdminAvatarCategory>('/api/admin/avatar-categories', {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateAvatarCategory = (categoryId: string, payload: AdminAvatarCategoryPayload) =>
+  apiFetch<AdminAvatarCategory>(`/api/admin/avatar-categories/${categoryId}`, {
+    method: 'PUT',
+    body: payload,
+  })
+
+/** Elimina una categoria. Il backend rifiuta con 409 se la usa qualcuno. */
+export const deleteAvatarCategory = (categoryId: string) =>
+  apiFetch<{ message: string; success: boolean }>(`/api/admin/avatar-categories/${categoryId}`, {
+    method: 'DELETE',
   })
 
 // ── Strumenti del form avatar ────────────────────────
@@ -235,6 +285,8 @@ export interface ConversationReport {
   avatar_id: string
   avatar_name: string
   avatar_category: string
+  /** Tinta della categoria, per la targhetta (vedi categoryStyles). */
+  avatar_category_color: string
   created_at: string
   message_count: number
   duration_seconds: number
@@ -306,6 +358,8 @@ export interface SimulationReportRow {
   attempt_id: string
   simulation_id: string
   simulation_title: string
+  /** Come si rispondeva, il gemello di `mode` su una conversazione. */
+  simulation_kind: SimulationKind
   user_id: string
   user_email: string
   user_nome: string

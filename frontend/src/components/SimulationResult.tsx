@@ -1,5 +1,6 @@
 import type { SimulationAttempt, SimulationAnswerResult } from '../services/simulations'
 import Badge from './Badge'
+import SimulationWrittenAnswer from './SimulationWrittenAnswer'
 import { formatElapsed, formatScore, optionLabel, scoreBadgeTone } from './simulationFormat'
 
 /* L'esito di un test consegnato: il voto in cima e poi, domanda per domanda,
@@ -14,11 +15,58 @@ import { formatElapsed, formatScore, optionLabel, scoreBadgeTone } from './simul
  * senza esserne sicuro è esattamente la persona che deve leggerle, e non c'è
  * modo di distinguerla da chi sapeva.
  *
+ * I due tipi di test si leggono nella stessa pagina, e cambia solo il corpo
+ * di ogni domanda: le alternative con la corretta in verde, oppure quello che
+ * è stato scritto accanto a quello che doveva dire. Il voto in cima, i punti
+ * di ogni domanda, le spiegazioni e i passaggi del documento sono le stesse
+ * cose in entrambi.
+ *
  * Lo stesso esito lo rilegge chi l'ha svolto e chi lo corregge, quindi il
  * "tu" non può essere scritto nel componente: con `own` a false le stesse
  * righe parlano di una terza persona. */
 
-function AnswerRow({ answer, own }: { answer: SimulationAnswerResult; own: boolean }) {
+function ChoiceRows({ answer, own }: { answer: SimulationAnswerResult; own: boolean }) {
+  return (
+    <ul className="mb-3 flex list-none flex-col gap-1.5">
+      {answer.options.map((option, index) => {
+        const isCorrect = index === answer.correct_option
+        const isChosen = index === answer.selected_option
+        return (
+          <li
+            key={index}
+            className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-[0.85rem] ${
+              isCorrect
+                ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-200'
+                : isChosen
+                  ? 'border-red-500/30 bg-red-500/8 text-red-200'
+                  : 'border-white/6 bg-white/2 text-slate-400'
+            }`}
+          >
+            <span className="font-semibold">{optionLabel(index)}</span>
+            <span className="flex-1">{option}</span>
+            {isChosen && !isCorrect && (
+              <span className="shrink-0 text-xs opacity-70">
+                {own ? 'la tua risposta' : 'risposta data'}
+              </span>
+            )}
+            {isCorrect && <span className="shrink-0 text-xs opacity-70">corretta</span>}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function AnswerRow({
+  answer,
+  own,
+  written,
+}: {
+  answer: SimulationAnswerResult
+  own: boolean
+  /** Il test era a risposta aperta: si legge quello che ha scritto. */
+  written: boolean
+}) {
   const blank = answer.selected_option === null
   return (
     <li className="rounded-2xl border border-white/6 bg-gray-900/60 p-5 backdrop-blur-md">
@@ -53,38 +101,19 @@ function AnswerRow({ answer, own }: { answer: SimulationAnswerResult; own: boole
         </span>
       </div>
 
-      <ul className="mb-3 flex list-none flex-col gap-1.5">
-        {answer.options.map((option, index) => {
-          const isCorrect = index === answer.correct_option
-          const isChosen = index === answer.selected_option
-          return (
-            <li
-              key={index}
-              className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-[0.85rem] ${
-                isCorrect
-                  ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-200'
-                  : isChosen
-                    ? 'border-red-500/30 bg-red-500/8 text-red-200'
-                    : 'border-white/6 bg-white/2 text-slate-400'
-              }`}
-            >
-              <span className="font-semibold">{optionLabel(index)}</span>
-              <span className="flex-1">{option}</span>
-              {isChosen && !isCorrect && (
-                <span className="shrink-0 text-xs opacity-70">
-                  {own ? 'la tua risposta' : 'risposta data'}
-                </span>
-              )}
-              {isCorrect && <span className="shrink-0 text-xs opacity-70">corretta</span>}
-            </li>
-          )
-        })}
-      </ul>
-
-      {blank && (
-        <p className="mb-3 text-xs italic text-slate-500">
-          {own ? 'Hai lasciato questa domanda in bianco.' : 'Domanda lasciata in bianco.'}
-        </p>
+      {written ? (
+        <SimulationWrittenAnswer answer={answer} own={own} />
+      ) : (
+        <>
+          <ChoiceRows answer={answer} own={own} />
+          {/* Sulle risposte scritte la stessa nota sta dentro il riquadro
+              della risposta, dove c'è il vuoto che sta spiegando. */}
+          {blank && (
+            <p className="mb-3 text-xs italic text-slate-500">
+              {own ? 'Hai lasciato questa domanda in bianco.' : 'Domanda lasciata in bianco.'}
+            </p>
+          )}
+        </>
       )}
 
       {answer.explanation && (
@@ -124,6 +153,7 @@ interface SimulationResultProps {
 }
 
 export default function SimulationResult({ attempt, actions, own = true }: SimulationResultProps) {
+  const written = attempt.simulation_kind === 'open'
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md">
@@ -132,12 +162,16 @@ export default function SimulationResult({ attempt, actions, own = true }: Simul
           <p className="font-heading text-2xl font-bold text-slate-100">
             {attempt.correct_count} risposte corrette su {attempt.question_count}
           </p>
-          {/* Perché il voto non è semplicemente le corrette in decimi: i
-              punti sono meno delle risposte esatte ogni volta che una di
-              quelle è arrivata con calma. */}
+          {/* Perché il voto non è semplicemente le corrette in decimi. Sulle
+              scelte multiple i punti calano col tempo, sulle aperte una
+              risposta a metà ne prende una parte: sono due motivi diversi
+              per lo stesso scarto, e chi legge merita quello giusto. */}
           <p className="mt-1 text-[0.8rem] text-slate-500">
             {formatScore(attempt.earned_points)} punti su {attempt.question_count}, perché una
-            risposta vale meno man mano che passa il tempo
+            risposta vale{' '}
+            {written
+              ? 'quanto è completa, e una risposta a metà prende metà punto'
+              : 'meno man mano che passa il tempo'}
           </p>
         </div>
         <Badge tone={scoreBadgeTone(attempt.score)} className="!px-4 !py-1.5 !text-base">
@@ -149,7 +183,7 @@ export default function SimulationResult({ attempt, actions, own = true }: Simul
 
       <ul className="flex list-none flex-col gap-3">
         {attempt.answers.map((answer) => (
-          <AnswerRow key={answer.question_id} answer={answer} own={own} />
+          <AnswerRow key={answer.question_id} answer={answer} own={own} written={written} />
         ))}
       </ul>
     </div>

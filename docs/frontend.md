@@ -85,7 +85,10 @@ stessa in tutta l'app, deve stare scritta una volta.
 - **Le formattazioni condivise stanno in un modulo a parte** accanto ai
   componenti che le usano: [simulationFormat.ts](../frontend/src/components/simulationFormat.ts),
   [chatFormat.ts](../frontend/src/components/chatFormat.ts),
-  [categoryStyles.ts](../frontend/src/components/categoryStyles.ts).
+  [categoryStyles.ts](../frontend/src/components/categoryStyles.ts), che tiene
+  anche le tinte selezionabili per le categorie degli avatar: sono un elenco
+  chiuso di classi scritte per intero, perché una classe Tailwind composta a
+  runtime non finirebbe mai nel CSS compilato.
 
 ## I test
 

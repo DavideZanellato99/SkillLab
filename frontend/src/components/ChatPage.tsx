@@ -590,7 +590,12 @@ export default function ChatPage() {
             />
           </div>
           <h2 className="mb-1 font-heading text-xl font-bold text-slate-100">{avatar.name}</h2>
-          <AvatarBadges category={avatar.category} difficulty={avatar.difficulty} center />
+          <AvatarBadges
+            category={avatar.category}
+            categoryColor={avatar.category_color}
+            difficulty={avatar.difficulty}
+            center
+          />
           <p className="text-[0.8rem] leading-normal text-slate-500">{avatar.description}</p>
         </div>
 

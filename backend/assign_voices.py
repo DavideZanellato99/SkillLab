@@ -44,7 +44,7 @@ def list_avatars():
     with SessionLocal() as db:
         for a in db.query(Avatar).order_by(Avatar.name).all():
             voice = a.voice_id or "(default)"
-            print(f"  {a.name} [{a.category}] — voce: {voice}")
+            print(f"  {a.name} [{a.category_name}] — voce: {voice}")
 
 
 def set_voice(avatar_name: str, voice_id: str):

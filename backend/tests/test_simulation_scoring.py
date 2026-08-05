@@ -3,11 +3,23 @@
 Sono quattro righe di aritmetica, e si provano da sole perché è l'aritmetica
 che decide i voti: ogni altra cosa nel simulatore si può correggere dopo, un
 voto sbagliato è già stato letto da chi lo ha preso.
+
+Le scale sono due, una per tipo di test: quella a tempo delle risposte
+multiple e quella del giudizio delle risposte aperte. Finiscono nello stesso
+intervallo, da 0 a 1 per domanda, ed è quello che permette a un voto in
+decimi di significare la stessa cosa in entrambi.
 """
 
 import pytest
 
-from simulation_scoring import QUESTION_SECONDS, attempt_points, attempt_score, question_points
+from simulation_scoring import (
+    QUESTION_SECONDS,
+    attempt_points,
+    attempt_score,
+    is_open_answer_correct,
+    open_answer_points,
+    question_points,
+)
 
 
 @pytest.mark.parametrize(
@@ -50,6 +62,49 @@ def test_un_tempo_fuori_scala_rientra_invece_di_far_saltare_la_consegna():
     assert question_points(True, 999_000) == 0.1
     # Sotto zero, che è un orologio andato all'indietro: il primo scalino
     assert question_points(True, -5_000) == 1.0
+
+
+# ── Le risposte aperte ────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("quality", "expected"),
+    [
+        (1.0, 1.0),
+        (0.75, 0.8),
+        (0.5, 0.5),
+        (0.0, 0.0),
+        # Fuori scala: un modello che scrive 1,3 ha comunque detto che la
+        # risposta era completa, e uno che scrive -0,2 che era sbagliata
+        (1.3, 1.0),
+        (-0.2, 0.0),
+    ],
+)
+def test_una_risposta_aperta_vale_quanto_e_completa(quality, expected):
+    assert open_answer_points(quality) == expected
+
+
+def test_una_risposta_non_giudicata_non_vale_niente():
+    """Diverso dal tempo mancante: lì è prudenza, qui non c'è un giudizio."""
+    assert open_answer_points(None) == 0.0
+
+
+def test_una_risposta_aperta_conta_fra_le_esatte_dalla_sufficienza():
+    assert is_open_answer_correct(0.6) is True
+    assert is_open_answer_correct(1.0) is True
+    assert is_open_answer_correct(0.5) is False
+    assert is_open_answer_correct(0.0) is False
+
+
+def test_i_punti_che_si_vedono_sono_quelli_che_decidono_l_esito():
+    """Nessuna risposta mostra 0,6 accanto a una crocetta rossa.
+
+    La soglia si applica ai punti già arrotondati: un giudizio di 0,57
+    diventa 0,6 e conta come esatto, perché 0,6 è quello che si legge.
+    """
+    punti = open_answer_points(0.57)
+    assert punti == 0.6
+    assert is_open_answer_correct(punti) is True
 
 
 def test_i_punti_di_un_tentativo_si_sommano_senza_code_di_virgola():

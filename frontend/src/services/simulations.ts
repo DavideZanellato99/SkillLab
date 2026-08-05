@@ -1,7 +1,7 @@
-/* Simulatore tecnico: test a risposta multipla ricavati da un documento
- * aziendale. Le simulazioni appartengono a un'organizzazione, quindi qui non
- * c'è nessun filtro da replicare: il server serve a ciascuno quelle che può
- * vedere, e al super admin tutte.
+/* Simulatore tecnico: test ricavati da un documento aziendale, a scelta
+ * multipla o a risposta aperta. Le simulazioni appartengono a
+ * un'organizzazione, quindi qui non c'è nessun filtro da replicare: il server
+ * serve a ciascuno quelle che può vedere, e al super admin tutte.
  *
  * Le domande che arrivano a chi svolge il test non contengono la risposta
  * esatta: quella entra in scena solo nell'esito, dopo la consegna. È il
@@ -14,6 +14,11 @@ import type { Authored } from './authorship'
 /** In bozza esiste solo per il super admin, pubblicata la vede la sua org. */
 export type SimulationStatus = 'draft' | 'published'
 
+/* Come si risponde a un test, per tutte le sue domande: scegliendo fra
+ * quattro alternative, oppure scrivendo. Si decide quando si carica il
+ * documento e non si cambia più, perché le domande nascono già così. */
+export type SimulationKind = 'multiple' | 'open'
+
 /** Quante domande ha un test, come il server pretende per pubblicarlo. */
 export const QUESTION_COUNT = 10
 
@@ -21,11 +26,15 @@ export interface SimulationQuestion {
   id: string
   position: number
   text: string
+  /** Vuoto sui test a risposta aperta, dove non c'è niente da scegliere. */
   options: string[]
 }
 
 export interface SimulationQuestionAdmin extends SimulationQuestion {
-  correct_option: number
+  /** null sui test a risposta aperta. */
+  correct_option: number | null
+  /** La traccia con cui una risposta scritta viene giudicata. */
+  expected_answer: string
   explanation: string
   /** I passaggi del documento da cui la domanda nasce. */
   source_chunks: number[] | null
@@ -38,6 +47,7 @@ export interface Simulation {
   title: string
   description: string | null
   status: SimulationStatus
+  kind: SimulationKind
   document_name: string
   question_count: number
   created_at: string
@@ -68,14 +78,23 @@ export interface SimulationAnswerResult {
   question_id: string
   position: number
   text: string
+  /** Vuoto sulle domande aperte. */
   options: string[]
-  /** null quando la domanda è stata lasciata in bianco. */
+  /** null quando la domanda è stata lasciata in bianco, o è aperta. */
   selected_option: number | null
-  correct_option: number
+  correct_option: number | null
+  /** Quello che ha scritto, null se la domanda è rimasta in bianco. */
+  answer_text: string | null
+  /** La traccia con cui quella risposta è stata giudicata. */
+  expected_answer: string
+  /** Le due righe con cui il modello motiva i punti di una risposta aperta. */
+  feedback: string
   is_correct: boolean
-  /** Quanto ci è voluto, null sui tentativi di prima del cronometro. */
+  /** Quanto ci è voluto: null sulle aperte, dove non c'è cronometro. */
   elapsed_ms: number | null
-  /** Da 1 a 0,1 se la risposta è giusta, 0 se è sbagliata o in bianco. */
+  /* Su una domanda a scelta multipla: da 1 a 0,1 se la risposta è giusta, 0
+   * se è sbagliata o in bianco. Su una aperta: quanto la risposta è
+   * completa, da 0 a 1. */
   points: number
   explanation: string
   /** Il testo dei passaggi del documento su cui la domanda si fonda. */
@@ -86,6 +105,8 @@ export interface SimulationAttemptSummary {
   id: string
   simulation_id: string
   simulation_title: string
+  /** Il tipo del test, che decide come si legge l'esito. */
+  simulation_kind: SimulationKind
   user_id: string
   user_email: string
   user_name: string
@@ -102,18 +123,24 @@ export interface SimulationAttempt extends SimulationAttemptSummary {
   answers: SimulationAnswerResult[]
 }
 
-/** Una risposta data: l'indice dell'opzione scelta, o null se in bianco. */
+/* Una risposta data. Un campo per tipo di test e se ne manda uno solo:
+ * l'indice dell'opzione scelta, oppure quello che è stato scritto. Vuoti
+ * entrambi vuol dire lasciata in bianco. */
 export interface SimulationAnswerPayload {
   question_id: string
-  selected_option: number | null
-  /** Da quando la domanda è comparsa a quando è stata consegnata. */
-  elapsed_ms: number
+  selected_option?: number | null
+  answer_text?: string | null
+  /** Da quando la domanda è comparsa a quando è stata consegnata. Solo
+   * sulle domande a scelta multipla: le aperte non hanno cronometro. */
+  elapsed_ms?: number
 }
 
 export interface SimulationQuestionPayload {
   text: string
-  options: string[]
-  correct_option: number
+  /** Assenti sulle domande aperte. */
+  options: string[] | null
+  correct_option: number | null
+  expected_answer: string
   explanation: string
 }
 
@@ -157,12 +184,14 @@ export function createSimulation(payload: {
   organizationId: string
   title: string
   description: string
+  kind: SimulationKind
   file: File
 }) {
   const form = new FormData()
   form.append('organization_id', payload.organizationId)
   form.append('title', payload.title)
   form.append('description', payload.description)
+  form.append('kind', payload.kind)
   form.append('file', payload.file)
   return apiFetch<SimulationAdminDetail>('/api/admin/simulations', {
     method: 'POST',

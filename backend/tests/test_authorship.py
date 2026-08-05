@@ -53,9 +53,9 @@ def second_admin(db_session, super_admin_user):
     return admin
 
 
-def _avatar_payload(organization, **overrides) -> dict:
+def _avatar_payload(organization, category, **overrides) -> dict:
     return {
-        "category": "Clienti",
+        "category_id": str(category.id),
         "description": "Persona di prova",
         "image_url": "/static/avatars/test.png",
         "voice_id": None,
@@ -112,9 +112,9 @@ def test_a_new_organization_carries_the_admin_who_created_it(
 
 
 def test_a_new_avatar_carries_the_admin_who_created_it(
-    admin_client, db_session, organization, super_admin_user
+    admin_client, db_session, organization, super_admin_user, make_category
 ):
-    response = admin_client.post(AVATARS, json=_avatar_payload(organization))
+    response = admin_client.post(AVATARS, json=_avatar_payload(organization, make_category()))
     assert response.status_code == 201
 
     created = _reload(db_session, Avatar, uuid.UUID(response.json()["id"]))
@@ -158,11 +158,11 @@ def test_modifying_an_organization_records_the_second_admin(
 
 
 def test_editing_a_persona_sheet_records_the_second_admin(
-    admin_client, act_as, db_session, organization, super_admin_user, second_admin
+    admin_client, act_as, db_session, organization, super_admin_user, second_admin, make_category
 ):
     """La modifica di una scheda persona è la cosa che prima non lasciava
     traccia sulla riga: l'avatar non aveva nemmeno una data di modifica."""
-    payload = _avatar_payload(organization)
+    payload = _avatar_payload(organization, make_category())
     created_id = uuid.UUID(admin_client.post(AVATARS, json=payload).json()["id"])
 
     act_as(second_admin)
@@ -295,12 +295,19 @@ def test_chi_usa_l_account_non_riceve_l_email_di_chi_lo_ha_aperto(user_client, a
 
 
 def test_deleting_the_author_takes_their_name_off_what_they_created(
-    admin_client, act_as, db_session, cognito, organization, super_admin_user, second_admin
+    admin_client,
+    act_as,
+    db_session,
+    cognito,
+    organization,
+    super_admin_user,
+    second_admin,
+    make_category,
 ):
     """Cancellare un account significa cancellarlo davvero: la firma sulla
     riga resta, il nome di chi l'ha messa no."""
     act_as(second_admin)
-    response = admin_client.post(AVATARS, json=_avatar_payload(organization))
+    response = admin_client.post(AVATARS, json=_avatar_payload(organization, make_category()))
     avatar_id = uuid.UUID(response.json()["id"])
     assert _reload(db_session, Avatar, avatar_id).created_by == second_admin.id
 

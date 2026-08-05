@@ -53,7 +53,11 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
       </div>
 
       <div className="relative p-6">
-        <AvatarBadges category={avatar.category} difficulty={avatar.difficulty} />
+        <AvatarBadges
+          category={avatar.category}
+          categoryColor={avatar.category_color}
+          difficulty={avatar.difficulty}
+        />
         <h3 className="mb-1 font-heading text-lg font-bold text-slate-100">{avatar.name}</h3>
         <p className="line-clamp-2 text-[0.82rem] leading-normal text-slate-500">
           {avatar.description}

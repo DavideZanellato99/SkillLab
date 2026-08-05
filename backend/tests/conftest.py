@@ -72,6 +72,7 @@ from models import (
     ROLE_SUPER_ADMIN,
     ROLE_USER,
     Avatar,
+    AvatarCategory,
     Organization,
     User,
 )
@@ -253,25 +254,58 @@ def admin_client(client, super_admin_user):
 
 
 @pytest.fixture
-def make_avatar(db_session, organization):
+def make_category(db_session, organization):
+    """Factory that returns a category of a tenant, creating it once.
+
+    Categories are an anagraphic table now, so a test that wants an avatar
+    in "clienti" wants the row named "clienti" of that organization, not a
+    second one every time it asks.
+    """
+
+    def _factory(name="clienti", organization_id=None, **fields) -> AvatarCategory:
+        organization_id = organization_id or organization.id
+        existing = (
+            db_session.query(AvatarCategory)
+            .filter(
+                AvatarCategory.organization_id == organization_id,
+                AvatarCategory.name == name,
+            )
+            .first()
+        )
+        if existing:
+            return existing
+        category = AvatarCategory(organization_id=organization_id, name=name, **fields)
+        db_session.add(category)
+        db_session.flush()
+        return category
+
+    return _factory
+
+
+@pytest.fixture
+def make_avatar(db_session, organization, make_category):
     """Factory that inserts an avatar (a valid persona sheet is required).
 
     The avatar is owned by the same organization as the standard user, so
     the two share a tenant and the avatar is visible to that user. Pass
     `organization_id` explicitly to place it in a different tenant.
+
+    `category` is the name of the group: the row is created in the avatar's
+    own organization the first time that name is asked for.
     """
 
     def _factory(
         *, name="Mario Rossi", category="clienti", organization_id=None, **profile_extra
     ) -> Avatar:
         profile = {"NOME": name, "GRADO_DIFFICOLTA": "5/10", **profile_extra}
+        organization_id = organization_id or organization.id
         avatar = Avatar(
             name=name,
             image_url="/static/avatars/test.png",
-            category=category,
+            category_id=make_category(category, organization_id).id,
             description="Persona di test",
             profile=profile,
-            organization_id=organization_id or organization.id,
+            organization_id=organization_id,
         )
         db_session.add(avatar)
         db_session.flush()

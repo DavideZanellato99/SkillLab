@@ -22,6 +22,7 @@ from database import Base
 from models import (
     AuditLog,
     Avatar,
+    AvatarCategory,
     ChatConversation,
     ChatMessage,
     ConversationRecording,
@@ -45,6 +46,7 @@ _SEEDED_TABLES = {
     "users",
     "organizations",
     "avatars",
+    "avatar_categories",
     "user_selections",
     "token_session",
     "notification_reads",
@@ -214,6 +216,7 @@ def _seed_everything(db_session, victim: User, other: User, avatar) -> None:
     for model, row_id in (
         (Organization, avatar.organization_id),
         (Avatar, avatar.id),
+        (AvatarCategory, avatar.category_id),
         (TechnicalSimulation, simulation.id),
         (User, other.id),
     ):

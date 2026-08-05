@@ -12,6 +12,7 @@ import {
   useUploadAvatarImage,
   useVoices,
 } from '../hooks/useAdminAvatars'
+import { useAvatarCategories } from '../hooks/useAvatarCategories'
 import { useOrganizations } from '../hooks/useOrganizations'
 import { isSuperAdmin } from '../services/auth'
 import { getAvatarImageUrl } from '../services/api'
@@ -25,6 +26,7 @@ import PrimaryButton from './PrimaryButton'
 import FormError from './FormError'
 import ConfirmModal from './ConfirmModal'
 import AvatarDetailModal from './AvatarDetailModal'
+import AvatarCategoriesModal from './AvatarCategoriesModal'
 import ModalShell from './ModalShell'
 import { TrashIcon, PlusIcon, PencilIcon } from './icons'
 import Tooltip from './Tooltip'
@@ -76,7 +78,8 @@ const archivedDate = (iso: string) =>
   new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
 interface FormState {
-  category: string
+  /** Una categoria dell'organizzazione scelta qui sotto. */
+  categoryId: string
   description: string
   imageUrl: string
   voiceId: string
@@ -87,7 +90,7 @@ interface FormState {
 
 function emptyForm(): FormState {
   return {
-    category: 'Clienti',
+    categoryId: '',
     description: '',
     imageUrl: '',
     voiceId: '',
@@ -98,7 +101,7 @@ function emptyForm(): FormState {
 
 function formFromAvatar(a: AdminAvatar): FormState {
   return {
-    category: a.category,
+    categoryId: a.category_id,
     description: a.description ?? '',
     imageUrl: a.image_url,
     voiceId: a.voice_id ?? '',
@@ -278,6 +281,9 @@ export default function AvatarAdminPage() {
   const [formValidationError, setFormValidationError] = useState('')
 
   const [deleting, setDeleting] = useState<AdminAvatar | null>(null)
+  /* L'anagrafica delle categorie, che si apre sia dalla testata della pagina
+   * sia dal campo del form: nel secondo caso sta sopra la scheda aperta. */
+  const [managingCategories, setManagingCategories] = useState(false)
 
   const createMutation = useCreateAvatar()
   const updateMutation = useUpdateAvatar()
@@ -319,10 +325,15 @@ export default function AvatarAdminPage() {
       prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title],
     )
 
-  /* Categorie già in uso, per non inventarne una nuova con un refuso: sono
-   * suggerimenti, non un elenco chiuso, perché una categoria nuova deve
-   * restare possibile senza passare da qui. */
-  const knownCategories = Array.from(new Set(avatars.map((a) => a.category).filter(Boolean))).sort()
+  /* Le categorie fra cui scegliere sono quelle dell'organizzazione scelta
+   * per l'avatar, e nessun'altra: una categoria di un altro tenant sposterebbe
+   * l'avatar di organizzazione, e il server la rifiuta. Finché
+   * l'organizzazione non è scelta non c'è niente da chiedere al server. */
+  const { data: formCategories = [] } = useAvatarCategories(
+    form.organizationId,
+    Boolean(form.organizationId),
+  )
+  const categoryOptions = formCategories.map((c) => ({ value: c.id, label: c.name }))
 
   /* Voci selezionabili. La prima opzione è "nessuna voce", che il backend
    * risolve nella voce predefinita del .env. Se l'avatar porta un id che il
@@ -415,9 +426,13 @@ export default function AvatarAdminPage() {
       setFormValidationError("Seleziona l'organizzazione proprietaria dell'avatar.")
       return
     }
+    if (!form.categoryId) {
+      setFormValidationError("Seleziona la categoria dell'avatar.")
+      return
+    }
 
     const payload: AdminAvatarPayload = {
-      category: form.category.trim() || 'Clienti',
+      category_id: form.categoryId,
       description: form.description.trim() || null,
       image_url: form.imageUrl.trim() || null,
       voice_id: form.voiceId.trim() || null,
@@ -468,9 +483,18 @@ export default function AvatarAdminPage() {
         title="Gestione Avatar"
         description="Crea, modifica ed elimina i clienti simulati e le loro schede persona."
         actions={
-          <PrimaryButton icon={<PlusIcon size={18} />} onClick={openCreate}>
-            Nuovo Avatar
-          </PrimaryButton>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-6 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
+              onClick={() => setManagingCategories(true)}
+            >
+              Categorie
+            </button>
+            <PrimaryButton icon={<PlusIcon size={18} />} onClick={openCreate}>
+              Nuovo Avatar
+            </PrimaryButton>
+          </div>
         }
       />
 
@@ -602,7 +626,7 @@ export default function AvatarAdminPage() {
                 </span>
               </Td>
               <Td>
-                <Badge tone={categoryBadgeClasses(a.category)}>{a.category}</Badge>
+                <Badge tone={categoryBadgeClasses(a.category_color)}>{a.category}</Badge>
               </Td>
               <Td>
                 <span className="text-[0.85rem] text-orange-400">{a.difficulty ?? '—'}</span>
@@ -767,7 +791,13 @@ export default function AvatarAdminPage() {
               <Select
                 id="av-org"
                 value={form.organizationId}
-                onChange={(value) => setForm((p) => ({ ...p, organizationId: value }))}
+                onChange={(value) =>
+                  /* La categoria si azzera insieme all'organizzazione: quella
+                   * scelta prima è di un altro tenant, e tenerla ferma nel
+                   * campo darebbe un rifiuto al salvataggio senza far capire
+                   * da dove arriva. */
+                  setForm((p) => ({ ...p, organizationId: value, categoryId: '' }))
+                }
                 options={orgScopeOptions}
                 placeholder="Seleziona organizzazione…"
                 disabled={isSaving}
@@ -781,25 +811,27 @@ export default function AvatarAdminPage() {
                 <label className={labelCls} htmlFor="av-category">
                   Categoria
                 </label>
-                {/* Testo libero con i valori già in uso come suggerimenti:
-                      una categoria nuova resta possibile, un refuso su una
-                      esistente diventa improbabile. */}
-                <div className={inputWrapperCls}>
-                  <input
-                    type="text"
-                    id="av-category"
-                    list="av-category-options"
-                    className={inputCls}
-                    value={form.category}
-                    onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-                    disabled={isSaving}
-                  />
-                </div>
-                <datalist id="av-category-options">
-                  {knownCategories.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
+                {/* Un elenco chiuso, non più testo libero: le categorie sono
+                    un'anagrafica dell'organizzazione, e da qui si arriva a
+                    gestirla senza chiudere la scheda a metà. */}
+                <Select
+                  id="av-category"
+                  value={form.categoryId}
+                  onChange={(value) => setForm((p) => ({ ...p, categoryId: value }))}
+                  options={categoryOptions}
+                  placeholder={
+                    form.organizationId ? 'Seleziona categoria…' : 'Scegli prima l’organizzazione'
+                  }
+                  disabled={isSaving || !form.organizationId}
+                />
+                <button
+                  type="button"
+                  className="w-fit cursor-pointer border-none bg-transparent p-0 text-[0.7rem] text-violet-400 underline-offset-2 transition hover:underline"
+                  onClick={() => setManagingCategories(true)}
+                  disabled={isSaving}
+                >
+                  Gestisci categorie
+                </button>
               </div>
 
               <div className={fieldCls}>
@@ -1015,6 +1047,16 @@ export default function AvatarAdminPage() {
             </PrimaryButton>
           </form>
         </ModalShell>
+      )}
+
+      {/* L'anagrafica delle categorie. Parte dall'organizzazione che si ha
+          già in mano: quella della scheda aperta, o quella del filtro. */}
+      {managingCategories && (
+        <AvatarCategoriesModal
+          organizationId={form.organizationId || orgFilter || undefined}
+          elevated={editing !== null}
+          onClose={() => setManagingCategories(false)}
+        />
       )}
 
       {/* Anteprima del prompt: legge la scheda in corso, anche non salvata */}

@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
 import type { SimulationReportRow } from '../services/admin'
+import type { SimulationKind } from '../services/simulations'
 import DataTable, { Td, Tr } from './DataTable'
 import Tooltip from './Tooltip'
 import SimulationAttemptModal from './SimulationAttemptModal'
+import SimulationKindBadge from './SimulationKindBadge'
+import { kindLabel } from './simulationFormat'
 import { matchesSearch } from './tableSearch'
 import { KpiCard, MeterRow, TrendChart } from './scoreCharts'
 import {
@@ -23,16 +26,54 @@ import {
  * una valutazione, qui le simulazioni svolte.
  *
  * Il filtro utente e quello per organizzazione sono quelli della pagina: le
- * due sezioni guardano sempre le stesse persone. */
+ * due sezioni guardano sempre le stesse persone. Anche il tipo di test arriva
+ * da lassù, dove sta il selettore, ma si applica qui: il gemello del canale
+ * nell'altra metà, e come là scopa tutto quello che c'è sotto, perché una
+ * media che mescola due prove diverse non risponde alla domanda che il
+ * selettore ha appena posto. */
 
 const TENTATIVI: [string, string] = ['tentativo', 'tentativi']
+
+/* Come si legge il tipo attivo dentro le descrizioni delle sezioni, gemello
+ * di `MODE_SUFFIX` nella metà parlata. Vuoto su "Entrambi": lì la frase è già
+ * quella giusta, e "sui test di entrambi i tipi" sarebbe rumore. */
+const KIND_SUFFIX: Record<SimulationKind | 'all', string> = {
+  multiple: ' a scelta multipla',
+  open: ' a risposta aperta',
+  all: '',
+}
 
 /** Quante volte, scritto come si legge: "1 tentativo", "4 tentativi". */
 const conteggio = (n: number) => `${n} ${n === 1 ? TENTATIVI[0] : TENTATIVI[1]}`
 
+/** La riga con il punto interrogativo che dice perché non c'è un grafico. */
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="shrink-0 text-slate-500"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
+      <span>{children}</span>
+    </div>
+  )
+}
+
 interface SimulationAvg {
   simulationId: string
   title: string
+  kind: SimulationKind
   avg: number
   count: number
 }
@@ -48,19 +89,29 @@ interface UserAvg {
 export default function DashboardSimulations({
   rows,
   selectedUserId,
+  kindFilter,
 }: {
   rows: SimulationReportRow[]
   /** Vuoto quando la pagina non sta filtrando su nessuno. */
   selectedUserId: string
+  /** Il tipo scelto in cima alla pagina, o 'all' per entrambi. */
+  kindFilter: SimulationKind | 'all'
 }) {
   const [search, setSearch] = useState('')
   /* Il tentativo aperto dal clic su una riga. Tiene l'id e non la riga
    * perché le risposte non stanno nel report: le carica la modale. */
   const [openAttemptId, setOpenAttemptId] = useState<string | null>(null)
 
+  /* Il tipo sta a monte di tutto il resto, come il canale nell'altra metà:
+   * ogni conteggio, media e grafico qui sotto parte da queste righe. */
+  const scoped = useMemo(
+    () => (kindFilter === 'all' ? rows : rows.filter((r) => r.simulation_kind === kindFilter)),
+    [rows, kindFilter],
+  )
+
   const filtered = useMemo(
-    () => (selectedUserId ? rows.filter((r) => r.user_id === selectedUserId) : rows),
-    [rows, selectedUserId],
+    () => (selectedUserId ? scoped.filter((r) => r.user_id === selectedUserId) : scoped),
+    [scoped, selectedUserId],
   )
 
   const overallAvg = useMemo(
@@ -101,6 +152,7 @@ export default function DashboardSimulations({
       const entry = acc.get(r.simulation_id) ?? {
         simulationId: r.simulation_id,
         title: r.simulation_title,
+        kind: r.simulation_kind,
         avg: 0,
         count: 0,
         sum: 0,
@@ -114,10 +166,12 @@ export default function DashboardSimulations({
       .sort((a, b) => a.avg - b.avg)
   }, [filtered])
 
-  /* Confronto fra utenti: sempre su tutti, il filtro utente evidenzia soltanto */
+  /* Confronto fra utenti: sempre su tutti, il filtro utente evidenzia
+   * soltanto. Il tipo invece li restringe davvero, perché è la prova di cui
+   * si sta parlando e non un modo di guardarla. */
   const userAvgs = useMemo<UserAvg[]>(() => {
     const acc = new Map<string, UserAvg & { sum: number }>()
-    for (const r of rows) {
+    for (const r of scoped) {
       const entry = acc.get(r.user_id) ?? {
         userId: r.user_id,
         name: personName(r),
@@ -133,7 +187,7 @@ export default function DashboardSimulations({
     return Array.from(acc.values())
       .map((e) => ({ ...e, avg: e.sum / e.count }))
       .sort((a, b) => b.avg - a.avg)
-  }, [rows])
+  }, [scoped])
 
   const detailRows = useMemo(
     () =>
@@ -149,6 +203,8 @@ export default function DashboardSimulations({
         matchesSearch(
           search,
           r.simulation_title,
+          // Il tipo si cerca con la stessa parola che il badge mostra
+          kindLabel(r.simulation_kind),
           personName(r),
           r.user_email,
           formatDateTime(r.attempted_at),
@@ -157,29 +213,16 @@ export default function DashboardSimulations({
     [detailRows, search],
   )
 
-  if (rows.length === 0) {
+  /* Due modi diversi di non avere niente da disegnare, e vanno detti
+   * diversi: chi ha appena messo un filtro deve leggere che è il filtro,
+   * altrimenti "nessun test ancora consegnato" sembra un dato sbagliato. */
+  if (scoped.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="shrink-0 text-slate-500"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="16" x2="12" y2="12" />
-          <line x1="12" y1="8" x2="12.01" y2="8" />
-        </svg>
-        <span>
-          Nessun test tecnico ancora consegnato. I grafici appariranno quando le simulazioni
-          pubblicate verranno svolte
-        </span>
-      </div>
+      <Notice>
+        {rows.length > 0 && kindFilter !== 'all'
+          ? `Nessun test ${kindLabel(kindFilter).toLowerCase()} fra quelli consegnati. Cambia tipo per vedere i dati disponibili`
+          : 'Nessun test tecnico ancora consegnato. I grafici appariranno quando le simulazioni pubblicate verranno svolte'}
+      </Notice>
     )
   }
 
@@ -223,7 +266,7 @@ export default function DashboardSimulations({
       <div className={`${cardCls} mb-6`}>
         <h3 className="text-sm font-semibold text-slate-300">Andamento nel tempo</h3>
         <p className="mb-4 text-xs text-slate-500">
-          Media giornaliera dei voti dei test consegnati
+          Media giornaliera dei voti dei test{KIND_SUFFIX[kindFilter]} consegnati
           {selectedUserId ? ', per l’utente selezionato' : ''}
         </p>
         {trendPoints.length > 0 ? (
@@ -246,7 +289,16 @@ export default function DashboardSimulations({
             <MeterRow
               key={s.simulationId}
               label={s.title}
-              sub={conteggio(s.count)}
+              /* Il tipo accanto al conteggio e non un badge sopra la barra:
+                 qui la riga parla del test, e come ci si risponde è una sua
+                 proprietà quanto quante volte è stato svolto. Con un tipo
+                 già scelto in cima sparisce: sarebbe la stessa parola
+                 ripetuta su ogni riga dell'elenco. */
+              sub={
+                kindFilter === 'all'
+                  ? `${kindLabel(s.kind).toLowerCase()} · ${conteggio(s.count)}`
+                  : conteggio(s.count)
+              }
               score={s.avg}
               fullLabel
             />
@@ -258,7 +310,7 @@ export default function DashboardSimulations({
       <div className={`${cardCls} mb-6`}>
         <h3 className="text-sm font-semibold text-slate-300">Confronto tra utenti</h3>
         <p className="mb-4 text-xs text-slate-500">
-          Voto medio per utente, su tutti i test che ha consegnato
+          Voto medio per utente, su tutti i test{KIND_SUFFIX[kindFilter]} che ha consegnato
         </p>
         <div className="flex flex-col gap-1.5">
           {userAvgs.map((u) => (
@@ -297,9 +349,12 @@ export default function DashboardSimulations({
           <Tooltip key={r.attempt_id} content="Vedi il test svolto" anchor="cursor">
             <Tr className="cursor-pointer" onClick={() => setOpenAttemptId(r.attempt_id)}>
               <Td>
-                <span className="text-[0.85rem] font-medium text-slate-100">
-                  {r.simulation_title}
-                </span>
+                <div className="flex items-center gap-2">
+                  <SimulationKindBadge kind={r.simulation_kind} iconOnly />
+                  <span className="text-[0.85rem] font-medium text-slate-100">
+                    {r.simulation_title}
+                  </span>
+                </div>
               </Td>
               <Td className="text-[0.82rem] text-slate-400">{formatDateTime(r.attempted_at)}</Td>
               <Td>

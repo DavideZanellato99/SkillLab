@@ -9,15 +9,22 @@ import FormError from './FormError'
 import SimulationResult from './SimulationResult'
 import SimulationIntro from './SimulationIntro'
 import SimulationQuestionStep from './SimulationQuestionStep'
+import SimulationOpenQuestionStep from './SimulationOpenQuestionStep'
 import { QUESTION_SECONDS } from './simulationFormat'
 
 /* Lo svolgimento di un test e, alla fine, il suo esito.
  *
- * Il test è una domanda alla volta, con trenta secondi ciascuna: si risponde,
- * si passa alla successiva e non si torna più indietro. Nessun riscontro
- * durante il percorso, perché sapere di aver sbagliato la seconda mentre si
- * legge la terza cambia il modo di rispondere alle otto che restano: giusto e
- * sbagliato arrivano insieme, nel riepilogo finale.
+ * Il test è una domanda alla volta: si risponde, si passa alla successiva e
+ * non si torna più indietro. Nessun riscontro durante il percorso, perché
+ * sapere di aver sbagliato la seconda mentre si legge la terza cambia il modo
+ * di rispondere alle otto che restano: giusto e sbagliato arrivano insieme,
+ * nel riepilogo finale.
+ *
+ * Come si risponde dipende dal tipo del test, e sono due passi diversi:
+ * quattro alternative con trenta secondi ciascuna, oppure una casella in cui
+ * scrivere senza cronometro. Questa pagina è la sola cosa che i due hanno in
+ * comune, ed è per questo che sceglie qui invece di lasciare che un
+ * componente solo faccia entrambe le cose a metà.
  *
  * Le tre schermate sono una pagina sola e non tre indirizzi: le regole, le
  * domande, l'esito. Un id nuovo nell'indirizzo a metà test sarebbe un tasto
@@ -70,6 +77,7 @@ export default function SimulationRunner() {
 
   const questions = simulation.questions
   const total = questions.length
+  const isOpen = simulation.kind === 'open'
 
   const send = (given: Record<string, SimulationAnswerPayload>) => {
     submit.mutate(
@@ -78,11 +86,14 @@ export default function SimulationRunner() {
        * cosa che il server non può ricostruire da solo. */
       questions.map(
         (q) =>
-          given[q.id] ?? {
-            question_id: q.id,
-            selected_option: null,
-            elapsed_ms: QUESTION_SECONDS * 1000,
-          },
+          given[q.id] ??
+          (isOpen
+            ? { question_id: q.id, answer_text: null }
+            : {
+                question_id: q.id,
+                selected_option: null,
+                elapsed_ms: QUESTION_SECONDS * 1000,
+              }),
       ),
       {
         onSuccess: (attempt) => {
@@ -93,21 +104,11 @@ export default function SimulationRunner() {
     )
   }
 
-  /* Una domanda consegnata: si registra la risposta con il tempo che è
-   * costata e si passa avanti, o si consegna il test se quella era
-   * l'ultima. Le risposte di prima arrivano dallo stato, quella appena data
-   * no: `send` riceve la mappa già completa perché lo stato aggiornato non è
-   * leggibile nello stesso giro. */
-  const handleAnswer = (choice: number | null, elapsedMs: number) => {
-    const question = questions[index]
-    const given = {
-      ...answers,
-      [question.id]: {
-        question_id: question.id,
-        selected_option: choice,
-        elapsed_ms: elapsedMs,
-      },
-    }
+  /* Una domanda consegnata: si registra la risposta e si passa avanti, o si
+   * consegna il test se quella era l'ultima. Le risposte di prima arrivano
+   * dallo stato, quella appena data no: `send` riceve la mappa già completa
+   * perché lo stato aggiornato non è leggibile nello stesso giro. */
+  const handleAnswer = (given: Record<string, SimulationAnswerPayload>) => {
     setAnswers(given)
     if (index + 1 < total) {
       setIndex(index + 1)
@@ -115,6 +116,24 @@ export default function SimulationRunner() {
       // già il suo cronometro che corre, e non deve arrivare da sotto.
       window.scrollTo({ top: 0 })
     } else send(given)
+  }
+
+  /** Una scelta e il tempo che è costata, sui test a scelta multipla. */
+  const handleChoice = (choice: number | null, elapsedMs: number) => {
+    const question = questions[index]
+    handleAnswer({
+      ...answers,
+      [question.id]: { question_id: question.id, selected_option: choice, elapsed_ms: elapsedMs },
+    })
+  }
+
+  /** Quello che ha scritto, sui test a risposta aperta. */
+  const handleWritten = (text: string | null) => {
+    const question = questions[index]
+    handleAnswer({
+      ...answers,
+      [question.id]: { question_id: question.id, answer_text: text },
+    })
   }
 
   const restart = () => {
@@ -166,8 +185,11 @@ export default function SimulationRunner() {
         title={simulation.title}
         description={
           started
-            ? 'Rispondi entro il tempo, il riepilogo arriva alla fine.'
-            : simulation.description || `${total} domande a risposta multipla, una alla volta.`
+            ? isOpen
+              ? 'Rispondi con parole tue, il riepilogo arriva alla fine.'
+              : 'Rispondi entro il tempo, il riepilogo arriva alla fine.'
+            : simulation.description ||
+              `${total} domande ${isOpen ? 'a risposta aperta' : 'a risposta multipla'}, una alla volta.`
         }
         actions={
           started ? undefined : (
@@ -179,7 +201,14 @@ export default function SimulationRunner() {
       />
 
       {submit.isPending ? (
-        <LoadingState message="Consegna del test in corso..." />
+        /* Su un test a risposta aperta la consegna aspetta il modello che
+           legge tutte le risposte, quindi qui si sta qualche secondo e non
+           un istante: l'attesa va detta, o sembra che si sia inceppato. */
+        <LoadingState
+          message={
+            isOpen ? 'Correzione delle risposte in corso...' : 'Consegna del test in corso...'
+          }
+        />
       ) : submit.isError ? (
         <>
           <FormError
@@ -195,16 +224,28 @@ export default function SimulationRunner() {
           <PrimaryButton onClick={() => send(answers)}>Riprova la consegna</PrimaryButton>
         </>
       ) : started ? (
-        /* La chiave rimonta il passo a ogni domanda, e con lui il cronometro:
-           è il rimontaggio a rimettere a trenta i secondi, non un effetto. */
-        <SimulationQuestionStep
-          key={questions[index].id}
-          question={questions[index]}
-          number={index + 1}
-          total={total}
-          isLast={index + 1 === total}
-          onAnswer={handleAnswer}
-        />
+        /* La chiave rimonta il passo a ogni domanda, e con lui il cronometro
+           o la casella: è il rimontaggio a rimettere a trenta i secondi e a
+           svuotare quello che si era scritto, non un effetto. */
+        isOpen ? (
+          <SimulationOpenQuestionStep
+            key={questions[index].id}
+            question={questions[index]}
+            number={index + 1}
+            total={total}
+            isLast={index + 1 === total}
+            onAnswer={handleWritten}
+          />
+        ) : (
+          <SimulationQuestionStep
+            key={questions[index].id}
+            question={questions[index]}
+            number={index + 1}
+            total={total}
+            isLast={index + 1 === total}
+            onAnswer={handleChoice}
+          />
+        )
       ) : (
         <SimulationIntro simulation={simulation} onStart={() => setStarted(true)} />
       )}

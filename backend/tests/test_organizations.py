@@ -22,12 +22,14 @@ import routers.auth as auth_router
 import routers.organizations as organizations_router
 from auth_dependency import ACCESS_TOKEN_COOKIE, MOCK_ADMIN_SUB, ensure_roles
 from models import (
+    DEFAULT_AVATAR_CATEGORY_NAME,
     ORG_STATUS_ACTIVE,
     ORG_STATUS_SUSPENDED,
     ROLE_USER,
     USER_STATUS_SUSPENDED,
     AuditLog,
     Avatar,
+    AvatarCategory,
     ChatConversation,
     ChatMessage,
     ConversationEvaluation,
@@ -248,6 +250,21 @@ def test_create_keeps_the_slug_unique(admin_client, make_org):
     assert response.json()["slug"] == "tenant-2"
 
 
+def test_create_gives_the_tenant_its_first_avatar_category(admin_client, db_session):
+    """Un tenant nasce con una categoria, altrimenti il suo primo avatar non
+    si potrebbe creare: la categoria è obbligatoria e non ce ne sarebbe
+    nessuna da scegliere."""
+    response = admin_client.post(BASE, json={"name": "Tenant Appena Nato"})
+    assert response.status_code == 201
+
+    categories = (
+        db_session.query(AvatarCategory)
+        .filter(AvatarCategory.organization_id == uuid.UUID(response.json()["id"]))
+        .all()
+    )
+    assert [c.name for c in categories] == [DEFAULT_AVATAR_CATEGORY_NAME]
+
+
 def test_create_rejects_a_duplicate_name_whatever_the_case(admin_client, make_org):
     """Two tenants nobody can tell apart in any admin table: only the slug
     would differ, with a numeric suffix nobody asked for."""
@@ -435,7 +452,7 @@ def test_delete_takes_the_whole_tenant_with_it(
     # Everything is read before the sweep: these rows are about to be gone,
     # and the objects that carry them would raise on any access afterwards.
     org_id, user_id, email = organization.id, standard_user.id, standard_user.email
-    conversation_id, avatar_id = conversation.id, avatar.id
+    conversation_id, avatar_id, category_id = conversation.id, avatar.id, avatar.category_id
 
     response = admin_client.delete(f"{BASE}/{org_id}")
     assert response.status_code == 200, response.text
@@ -444,6 +461,8 @@ def test_delete_takes_the_whole_tenant_with_it(
     assert db_session.query(Organization).filter(Organization.id == org_id).first() is None
     assert db_session.query(User).filter(User.id == user_id).first() is None
     assert db_session.query(Avatar).filter(Avatar.id == avatar_id).first() is None
+    # Le categorie sono del tenant come gli avatar: se ne vanno con lui.
+    assert db_session.query(AvatarCategory).filter(AvatarCategory.id == category_id).first() is None
     assert (
         db_session.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
         is None

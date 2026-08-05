@@ -52,7 +52,7 @@ export default function TrainingGoals() {
                   <span className="block truncate text-[0.95rem] font-semibold text-slate-100">
                     {a.avatar_name}
                   </span>
-                  <Badge tone={categoryBadgeClasses(a.avatar_category)} className="mt-1">
+                  <Badge tone={categoryBadgeClasses(a.avatar_category_color)} className="mt-1">
                     {a.avatar_category}
                   </Badge>
                 </div>

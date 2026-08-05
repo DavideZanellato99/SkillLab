@@ -73,7 +73,8 @@ quel punto della registrazione.
 ### La chiamata al modello
 
 Passa da `eval_json_completion`, lo stesso meccanismo che genera le domande del
-simulatore:
+simulatore e che ne corregge le risposte aperte (vedi
+[simulatore.md](simulatore.md)):
 
 | Aspetto | Valore |
 | --- | --- |

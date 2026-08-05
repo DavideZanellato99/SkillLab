@@ -10,7 +10,8 @@ il roleplay sia il metro con cui la conversazione viene poi giudicata.
 | --- | --- |
 | `profile` | La scheda persona, in JSON. È il cuore: senza, l'avatar non esiste |
 | `name` | Derivato da `NOME` e `COGNOME` della scheda, non scritto a parte |
-| `category`, `description`, `image_url` | Come si presenta nella galleria |
+| `category_id` | La categoria in cui è raggruppato, una riga di `avatar_categories` |
+| `description`, `image_url` | Come si presenta nella galleria |
 | `organization_id` | Il tenant a cui appartiene: si vede solo lì dentro |
 | `voice_id` | La voce Cartesia con cui parla al telefono |
 | `deleted_at` | La data di archiviazione, NULL finché è attivo |
@@ -18,6 +19,37 @@ il roleplay sia il metro con cui la conversazione viene poi giudicata.
 Il grado di difficoltà mostrato nella galleria non è una colonna: è il campo
 `GRADO_DIFFICOLTA` della scheda, l'unico che si può mostrare senza rivelare
 niente.
+
+## Le categorie
+
+Sono un'anagrafica, non una stringa scritta sull'avatar: una riga di
+`avatar_categories` con nome e colore, che il super admin crea e
+rinomina dal pulsante "Categorie" della pagina avatar
+([AvatarCategoriesModal](../frontend/src/components/AvatarCategoriesModal.tsx)).
+Rinominarne una la cambia su ogni avatar che la porta, invece di lasciare in
+giro il nome vecchio.
+
+Una categoria appartiene a **un'organizzazione sola**, come gli avatar che
+raggruppa: due tenant possono averne una che si chiama allo stesso modo senza
+che sia la stessa, e nessuno vede quelle di un altro. Ogni organizzazione
+nasce con la sua "Clienti", altrimenti il suo primo avatar non si potrebbe
+creare.
+
+Il legame è tenuto insieme da una chiave esterna **composta**,
+`(category_id, organization_id)` verso `(id, organization_id)`: senza,
+cambiare categoria a un avatar potrebbe spostarlo nel tenant di un'altra, che
+è una fuga di dati travestita da modifica anagrafica. Il router dà un 400
+prima di arrivarci, ma a garantirlo è il vincolo.
+
+Il colore non è un colore libero ma il nome di una tinta fra quelle di
+`AVATAR_CATEGORY_COLORS`: le classi che disegnano la pastiglia sono scritte a
+mano in [categoryStyles.ts](../frontend/src/components/categoryStyles.ts),
+perché una classe Tailwind composta a runtime non finirebbe nel CSS compilato.
+
+**Una categoria si elimina solo se non la usa nessuno**, archiviati compresi:
+il server risponde 409 e non tocca niente. Un avatar senza categoria non può
+esistere, e sceglierne una al posto dell'amministratore vorrebbe dire
+spostargli il gruppo di nascosto.
 
 ## La scheda persona
 

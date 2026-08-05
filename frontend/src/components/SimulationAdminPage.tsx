@@ -14,8 +14,9 @@ import { matchesSearch } from './tableSearch'
 import SimulationCreateModal from './SimulationCreateModal'
 import SimulationDetailModal from './SimulationDetailModal'
 import SimulationEditorModal from './SimulationEditorModal'
+import SimulationKindBadge from './SimulationKindBadge'
 import { formatDate } from './lastAccess'
-import { statusBadgeTone, statusLabel } from './simulationFormat'
+import { kindLabel, statusBadgeTone, statusLabel } from './simulationFormat'
 
 /* La gestione delle simulazioni tecniche, riservata al super admin.
  *
@@ -28,6 +29,7 @@ import { statusBadgeTone, statusLabel } from './simulationFormat'
 const COLUMNS = [
   { key: 'title', label: 'Simulazione' },
   { key: 'organization', label: 'Organizzazione' },
+  { key: 'kind', label: 'Tipo' },
   { key: 'questions', label: 'Domande', align: 'center' as const, compact: true },
   { key: 'status', label: 'Stato' },
   { key: 'creazione', label: 'Data Creazione' },
@@ -53,7 +55,8 @@ export default function SimulationAdminPage() {
   const [toDelete, setToDelete] = useState<AdminSimulation | null>(null)
 
   const filtered = simulations.filter((s) =>
-    matchesSearch(search, s.title, s.organization_name, s.document_name),
+    // Il tipo si cerca con la stessa parola che il badge mostra
+    matchesSearch(search, s.title, s.organization_name, s.document_name, kindLabel(s.kind)),
   )
 
   const confirmDelete = () => {
@@ -107,6 +110,9 @@ export default function SimulationAdminPage() {
                 </span>
               </Td>
               <Td className="text-[0.85rem] text-slate-400">{simulation.organization_name}</Td>
+              <Td>
+                <SimulationKindBadge kind={simulation.kind} />
+              </Td>
               <Td align="center" compact className="tabular-nums text-slate-400">
                 {simulation.question_count}
               </Td>

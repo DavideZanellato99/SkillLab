@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from models import (
     ALL_SIMULATION_STATUSES,
+    AVATAR_CATEGORY_COLORS,
     CONVERSATION_MODE_VOICE,
+    DEFAULT_AVATAR_CATEGORY_COLOR,
+    SIMULATION_KIND_MULTIPLE,
     SIMULATION_OPTION_COUNT,
     SIMULATION_QUESTION_COUNT,
 )
@@ -43,7 +46,13 @@ class AvatarBase(BaseModel):
 
     name: str
     image_url: str
+    # Il nome della categoria, non il suo id: qui serve solo da mostrare.
+    # Chi deve filtrare o salvare usa category_id.
     category: str
+    category_id: UUID
+    # Tinta della pastiglia, scelta dall'amministratore fra quelle di
+    # AVATAR_CATEGORY_COLORS.
+    category_color: str
     description: str | None = None
 
 
@@ -59,6 +68,16 @@ class AvatarResponse(AvatarBase):
     created_at: datetime
     selection_count: int = 0
     difficulty: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AvatarCategoryResponse(BaseModel):
+    """Una categoria del catalogo, come la vede chi si allena."""
+
+    id: UUID
+    name: str
+    color: str
 
     model_config = {"from_attributes": True}
 
@@ -357,6 +376,9 @@ class TrainingAssignmentResponse(BaseModel):
     avatar_id: UUID
     avatar_name: str
     avatar_category: str
+    # La tinta della categoria, così la targhetta è dello stesso colore che
+    # ha nel catalogo invece di uno indovinato dal nome.
+    avatar_category_color: str = DEFAULT_AVATAR_CATEGORY_COLOR
     target_score: float
     due_at: datetime | None = None
     created_at: datetime
@@ -638,7 +660,9 @@ class AdminAvatarPayload(BaseModel):
     """Schema for creating/updating an avatar (training persona) from the
     admin page. The avatar name is derived from profile NOME + COGNOME."""
 
-    category: str = "Clienti"
+    # Una categoria dell'anagrafica, e della stessa organizzazione
+    # dell'avatar: il router rifiuta le altre.
+    category_id: UUID
     description: str | None = None
     # Empty → the backend generates an initials placeholder image
     image_url: str | None = None
@@ -656,6 +680,8 @@ class AdminAvatarResponse(AuthorshipResponse):
     name: str
     image_url: str
     category: str
+    category_id: UUID
+    category_color: str
     description: str | None = None
     voice_id: str | None = None
     difficulty: str | None = None
@@ -665,6 +691,37 @@ class AdminAvatarResponse(AuthorshipResponse):
     # When the avatar was archived (logical deletion); None while active.
     deleted_at: datetime | None = None
     conversation_count: int = 0
+
+
+class AdminAvatarCategoryPayload(BaseModel):
+    """Creazione e modifica di una categoria dalla pagina di amministrazione."""
+
+    name: str
+    color: str = DEFAULT_AVATAR_CATEGORY_COLOR
+    # Il tenant proprietario. Obbligatorio in creazione e immutabile dopo:
+    # spostare una categoria di organizzazione porterebbe con sé gli avatar
+    # che la usano.
+    organization_id: UUID | None = None
+
+    @field_validator("color")
+    @classmethod
+    def _known_color(cls, v: str) -> str:
+        if v not in AVATAR_CATEGORY_COLORS:
+            raise ValueError(f"Colore non valido: scegli fra {', '.join(AVATAR_CATEGORY_COLORS)}.")
+        return v
+
+
+class AdminAvatarCategoryResponse(AuthorshipResponse):
+    """Una categoria come la vede chi la amministra."""
+
+    id: UUID
+    name: str
+    color: str
+    organization_id: UUID
+    organization_name: str
+    # Quanti avatar la usano, archiviati compresi: è il numero che dice se
+    # la categoria si può cancellare.
+    avatar_count: int = 0
 
 
 class AvatarImageResponse(BaseModel):
@@ -728,6 +785,7 @@ class ConversationReport(BaseModel):
     avatar_id: UUID
     avatar_name: str
     avatar_category: str
+    avatar_category_color: str = DEFAULT_AVATAR_CATEGORY_COLOR
     created_at: datetime
     message_count: int
     # First-to-last message span; 0 when the conversation has < 2 messages
@@ -802,6 +860,11 @@ class SimulationReportRow(BaseModel):
     attempt_id: UUID
     simulation_id: UUID
     simulation_title: str
+    # Come si rispondeva: "multiple" o "open". Sta accanto al titolo per la
+    # stessa ragione per cui `mode` sta accanto a una conversazione: due
+    # prove che si svolgono in modi diversi non si leggono nella stessa
+    # riga senza sapere quale delle due si sta guardando
+    simulation_kind: str
     user_id: UUID
     user_email: str
     user_nome: str
@@ -873,20 +936,28 @@ class SimulationAnswerOutcome(BaseModel):
     is_correct: bool
     # None when the question was left blank
     selected_option: int | None = None
-    correct_option: int
+    # None on an open-answer test, where there is nothing to pick: the two
+    # attempts are still matched question by question, and `is_correct` is
+    # what the comparison draws
+    correct_option: int | None = None
 
 
 class SimulationComparisonAttempt(BaseModel):
     """One delivered technical test, as the comparison screen reads it.
 
     The written twin of `AttemptResponse`. There is no AI score and no
-    trainer's words here: a multiple-choice test corrects itself, so the
-    grade frozen on the attempt is the only one there has ever been.
+    trainer's words here: the grade frozen on the attempt is the only one
+    there has ever been, whether it came from comparing two numbers or from
+    a model reading what the person wrote.
     """
 
     attempt_id: UUID
     simulation_id: UUID
     simulation_title: str
+    # The twin of `mode` on a conversation: which of the two kinds of test
+    # this was. Two attempts at tests of different kinds can still be put
+    # side by side, and the screen has to say so
+    simulation_kind: str
     attempted_at: datetime
     correct_count: int
     question_count: int
@@ -1000,23 +1071,34 @@ class SimulationQuestionResponse(BaseModel):
     """Una domanda come la vede chi deve rispondere.
 
     Manca tutto quello che risolverebbe il test: la risposta esatta, la
-    spiegazione e i passaggi del documento restano sul server e arrivano solo
-    con l'esito, dopo la consegna. È il motivo per cui esiste uno schema
-    separato da quello che legge il super admin.
+    traccia della risposta attesa, la spiegazione e i passaggi del documento
+    restano sul server e arrivano solo con l'esito, dopo la consegna. È il
+    motivo per cui esiste uno schema separato da quello che legge il super
+    admin.
+
+    Su un test a risposta aperta ``options`` è vuota, e non è un campo
+    mancante: è la domanda che non ne ha. Chi la mostra guarda il tipo della
+    simulazione, non la lunghezza di questa lista.
     """
 
     id: UUID
     position: int
     text: str
-    options: list[str]
+    options: list[str] = []
 
     model_config = {"from_attributes": True}
 
 
 class SimulationQuestionAdminResponse(SimulationQuestionResponse):
-    """La stessa domanda con le chiavi, per chi la deve rivedere."""
+    """La stessa domanda con le chiavi, per chi la deve rivedere.
 
-    correct_option: int
+    Le due chiavi viaggiano insieme e se ne legge una sola, quella del tipo
+    del test: l'indice dell'alternativa corretta, oppure la traccia di quello
+    che una risposta scritta deve dire.
+    """
+
+    correct_option: int | None = None
+    expected_answer: str = ""
     explanation: str
     source_chunks: list[int] | None = None
 
@@ -1030,6 +1112,8 @@ class SimulationResponse(BaseModel):
     title: str
     description: str | None = None
     status: str
+    # Come si risponde: "multiple" o "open", per tutte le domande del test
+    kind: str
     document_name: str
     question_count: int
     created_at: datetime
@@ -1074,11 +1158,15 @@ class SimulationCreateRequest(BaseModel):
 
     Viaggiano come campi di form e non come JSON, perché arrivano insieme al
     file nella stessa richiesta multipart.
+
+    Il tipo si decide qui e non si cambia più: le domande nascono già
+    dell'una forma o dell'altra, e cambiarlo dopo vorrebbe dire buttarle.
     """
 
     organization_id: UUID
     title: str = Field(min_length=1, max_length=150)
     description: str | None = None
+    kind: str = SIMULATION_KIND_MULTIPLE
 
 
 class SimulationUpdateRequest(BaseModel):
@@ -1102,16 +1190,31 @@ class SimulationStatusRequest(BaseModel):
 
 
 class SimulationQuestionPayload(BaseModel):
-    """Una domanda riscritta a mano dal super admin."""
+    """Una domanda riscritta a mano dal super admin.
+
+    Quello che rende valida una domanda dipende dal tipo del test, che qui
+    non si sa: il payload porta le domande e non la simulazione a cui
+    appartengono. Quindi i campi delle due chiavi sono tutti facoltativi e a
+    controllarli è il router, che la simulazione ce l'ha davanti (vedi
+    ``admin_simulations.save_questions``). Ripetere il tipo dentro il
+    payload sarebbe la seconda copia di un dato che il server ha già, e due
+    copie prima o poi dicono cose diverse.
+
+    Quello che si può controllare senza sapere il tipo resta qui: le
+    alternative, se ci sono, devono essere quattro e nessuna vuota.
+    """
 
     text: str = Field(min_length=1)
-    options: list[str]
-    correct_option: int
+    options: list[str] | None = None
+    correct_option: int | None = None
+    expected_answer: str = ""
     explanation: str = ""
 
     @field_validator("options")
     @classmethod
-    def validate_options(cls, v: list[str]) -> list[str]:
+    def validate_options(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
         cleaned = [o.strip() for o in v]
         if len(cleaned) != SIMULATION_OPTION_COUNT:
             raise ValueError(f"Servono esattamente {SIMULATION_OPTION_COUNT} alternative.")
@@ -1121,7 +1224,9 @@ class SimulationQuestionPayload(BaseModel):
 
     @model_validator(mode="after")
     def validate_correct_option(self) -> "SimulationQuestionPayload":
-        if not 0 <= self.correct_option < len(self.options):
+        if self.options is None:
+            return self
+        if self.correct_option is None or not 0 <= self.correct_option < len(self.options):
             raise ValueError("La risposta corretta deve essere una delle alternative.")
         return self
 
@@ -1149,16 +1254,26 @@ class SimulationQuestionsPayload(BaseModel):
 
 
 class SimulationAnswerPayload(BaseModel):
-    """La risposta data a una domanda: quale opzione, in quanto tempo."""
+    """La risposta data a una domanda: quale opzione o cosa ha scritto.
+
+    Un campo per tipo di test, e se ne riempie uno solo. Vuoti entrambi
+    significa lasciata in bianco, che è una cosa che si può fare in tutti e
+    due i casi.
+    """
 
     question_id: UUID
     # None significa lasciata in bianco, che vale come sbagliata ma si legge
     # diversamente nell'esito
     selected_option: int | None = None
+    # Quello che ha scritto, sui test a risposta aperta. Il tetto è largo
+    # apposta: serve a fermare un client che manda un megabyte, non a dire a
+    # chi risponde quanto può scrivere.
+    answer_text: str | None = Field(default=None, max_length=5000)
     # Quanto ci ha messo, misurato dal browser da quando la domanda è
     # comparsa: è quello che fa scendere il valore di una risposta corretta
     # (vedi simulation_scoring). Assente vale come il tempo massimo, non come
-    # il minimo: chi non lo manda non deve guadagnarci.
+    # il minimo: chi non lo manda non deve guadagnarci. Sulle risposte aperte
+    # non c'è cronometro e non arriva mai.
     elapsed_ms: int | None = None
 
 
@@ -1169,19 +1284,37 @@ class SimulationSubmitRequest(BaseModel):
 
 
 class SimulationAnswerResult(BaseModel):
-    """Com'è andata una singola domanda, con la sua correzione."""
+    """Com'è andata una singola domanda, con la sua correzione.
+
+    Uno schema solo per i due tipi di test, con i campi dell'altro vuoti:
+    l'esito si legge nella stessa pagina, e due schemi vorrebbero dire due
+    pagine che devono restare uguali a mano.
+    """
 
     question_id: UUID
     position: int
     text: str
-    options: list[str]
-    selected_option: int | None
-    correct_option: int
+    options: list[str] = []
+    selected_option: int | None = None
+    correct_option: int | None = None
+    # Quello che ha scritto e quello che avrebbe dovuto dire, sulle domande
+    # aperte: la seconda è la traccia con cui il modello ha giudicato la
+    # prima, e mostrarla è l'unico modo di rendere il voto verificabile da
+    # chi lo riceve.
+    answer_text: str | None = None
+    expected_answer: str = ""
+    # Le due righe con cui il modello motiva i punti che ha dato. Sulle
+    # domande a scelta multipla è vuoto: là la correzione non ha niente da
+    # motivare oltre a quale fosse la risposta. Il giudizio invece non ha un
+    # campo suo, perché è già `points`: un numero solo, non due che devono
+    # restare d'accordo.
+    feedback: str = ""
     is_correct: bool
     # Quanto ci è voluto e quanto è valso: i punti sono da 1 a 0,1 su una
     # risposta corretta, 0 sulle altre. Il tempo torna indietro insieme ai
     # punti perché un numero più basso di 1 senza il tempo accanto sembra un
-    # errore di correzione.
+    # errore di correzione. Su una risposta aperta il tempo non c'è e i punti
+    # sono il giudizio: lì è il commento a spiegarli.
     elapsed_ms: int | None = None
     points: float = 0.0
     explanation: str
@@ -1196,6 +1329,9 @@ class SimulationAttemptResponse(BaseModel):
     id: UUID
     simulation_id: UUID
     simulation_title: str
+    # Il tipo del test, che decide come si legge l'esito: le alternative con
+    # la corretta in verde, oppure la risposta scritta accanto alla traccia
+    simulation_kind: str
     user_id: UUID
     user_email: str
     user_name: str
@@ -1215,6 +1351,7 @@ class SimulationAttemptSummary(BaseModel):
     id: UUID
     simulation_id: UUID
     simulation_title: str
+    simulation_kind: str
     user_id: UUID
     user_email: str
     user_name: str

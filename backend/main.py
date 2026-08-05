@@ -17,6 +17,7 @@ from audit import AuditMiddleware
 from authorship import AuthorshipMiddleware
 from database import log_connection_budget
 from routers.admin import router as admin_router
+from routers.admin_avatar_categories import router as admin_avatar_categories_router
 from routers.admin_avatars import router as admin_avatars_router
 from routers.admin_simulations import router as admin_simulations_router
 from routers.admin_voices import router as admin_voices_router
@@ -111,6 +112,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(admin_avatars_router)
+app.include_router(admin_avatar_categories_router)
 app.include_router(admin_simulations_router)
 app.include_router(admin_voices_router)
 app.include_router(audit_logs_router)

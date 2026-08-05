@@ -111,7 +111,7 @@ def start_voice_session(
         conversation = ChatConversation(
             avatar_id=request.avatar_id,
             user_id=current_user.id,
-            title=next_conversation_title(db, current_user.id, avatar.category),
+            title=next_conversation_title(db, current_user.id, avatar.category_name),
             mode=CONVERSATION_MODE_VOICE,
         )
         db.add(conversation)

@@ -9,17 +9,24 @@ import Tooltip from './Tooltip'
 
 interface AvatarBadgesProps {
   category: string
+  /** La tinta scelta per quella categoria in amministrazione. */
+  categoryColor: string
   /** Grado di difficoltà (es. "8/10"), assente se la scheda non lo dice. */
   difficulty: string | null
   /** Centra le targhette, come nella colonna della chat. */
   center?: boolean
 }
 
-export default function AvatarBadges({ category, difficulty, center = false }: AvatarBadgesProps) {
+export default function AvatarBadges({
+  category,
+  categoryColor,
+  difficulty,
+  center = false,
+}: AvatarBadgesProps) {
   return (
     <div className={`mb-2 flex items-center gap-2 ${center ? 'justify-center' : ''}`}>
       <span
-        className={`inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(category)}`}
+        className={`inline-block rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(categoryColor)}`}
       >
         {category}
       </span>

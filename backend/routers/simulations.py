@@ -1,23 +1,32 @@
 """Il simulatore tecnico visto da chi lo svolge.
 
 Il gemello scritto del roleplay: là si misura come l'operatore gestisce una
-persona, qui se conosce la procedura. Dieci domande a risposta multipla
-ricavate da un documento aziendale (vedi ``simulation_questions``), la stessa
-regola del tenant di tutto il resto, e nessun limite ai tentativi.
+persona, qui se conosce la procedura. Dieci domande ricavate da un documento
+aziendale (vedi ``simulation_questions``), la stessa regola del tenant di
+tutto il resto, e nessun limite ai tentativi.
 
-La correzione è deterministica e sta qui, non nel modello: la risposta esatta
-è stata decisa quando la domanda è nata, riletta da un umano prima della
-pubblicazione, e da quel momento lo stesso test consegnato due volte prende
-lo stesso voto. Quello che l'LLM ha scritto e che arriva a chi ha sbagliato è
-la spiegazione, insieme ai passaggi del documento da cui la domanda viene: è
-lì che il test smette di essere un voto e diventa una lezione.
+**Due modi di rispondere, e due correzioni diverse.** Un test a scelta
+multipla si corregge qui e non nel modello: la risposta esatta è stata decisa
+quando la domanda è nata, riletta da un umano prima della pubblicazione, e da
+quel momento lo stesso test consegnato due volte prende lo stesso voto. Un
+test a risposta aperta non può funzionare così, perché quello che l'utente ha
+scritto qualcuno lo deve leggere: alla consegna parte una chiamata sola che
+giudica tutte le risposte insieme (vedi ``simulation_open_answers``), e il
+giudizio viene congelato nel tentativo perché è stato dato una volta sola.
 
-Il voto però non è più solo quante ne ha prese: una risposta corretta vale
-meno se ci è voluto tempo (vedi ``simulation_scoring``), perché sapere una
-procedura e ricordarsela subito non sono la stessa cosa. Il tempo lo misura
-il browser e lo manda con la risposta; il server lo riporta dentro scala se
-arriva storto, ma non ha modo di verificarlo, ed è una scelta: questo è un
-test di formazione, non un esame sorvegliato.
+Quello che l'LLM ha scritto e che arriva a chi ha sbagliato è la spiegazione,
+insieme ai passaggi del documento da cui la domanda viene: è lì che il test
+smette di essere un voto e diventa una lezione.
+
+Il voto di un test a scelta multipla non è solo quante ne ha prese: una
+risposta corretta vale meno se ci è voluto tempo (vedi
+``simulation_scoring``), perché sapere una procedura e ricordarsela subito
+non sono la stessa cosa. Il tempo lo misura il browser e lo manda con la
+risposta; il server lo riporta dentro scala se arriva storto, ma non ha modo
+di verificarlo, ed è una scelta: questo è un test di formazione, non un esame
+sorvegliato. Sulle risposte aperte il cronometro non c'è, e i punti sono
+quanto la risposta è completa: trenta secondi bastano a scegliere una
+lettera, non a scrivere una procedura.
 
 Le domande viaggiano verso il browser senza la risposta esatta (vedi
 ``SimulationQuestionResponse``): la chiave resta sul server fino alla
@@ -49,7 +58,14 @@ from schemas import (
     SimulationResponse,
     SimulationSubmitRequest,
 )
-from simulation_scoring import attempt_points, attempt_score, question_points
+from simulation_open_answers import judge_open_answers
+from simulation_scoring import (
+    attempt_points,
+    attempt_score,
+    is_open_answer_correct,
+    open_answer_points,
+    question_points,
+)
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 
@@ -144,6 +160,7 @@ def to_response(
         "title": simulation.title,
         "description": simulation.description,
         "status": simulation.status,
+        "kind": simulation.kind,
         "document_name": simulation.document_name,
         "question_count": question_count,
         "created_at": simulation.created_at,
@@ -182,7 +199,14 @@ def get_simulation(
     return {
         **to_response(simulation, len(simulation.questions), stats.get(simulation.id)),
         "questions": [
-            SimulationQuestionResponse(id=q.id, position=q.position, text=q.text, options=q.options)
+            SimulationQuestionResponse(
+                id=q.id,
+                position=q.position,
+                text=q.text,
+                # Vuote su un test a risposta aperta, dove la domanda non ha
+                # alternative: è il tipo del test a dire come si risponde
+                options=q.options or [],
+            )
             for q in simulation.questions
         ],
     }
@@ -230,9 +254,16 @@ def _answer_results(
                 question_id=question_id,
                 position=entry["position"],
                 text=entry["text"],
-                options=entry["options"],
+                options=entry.get("options") or [],
                 selected_option=entry.get("selected_option"),
-                correct_option=entry["correct_option"],
+                correct_option=entry.get("correct_option"),
+                # Risposta scritta, traccia e giudizio vengono dalla
+                # fotografia come tutto il resto: la traccia di oggi potrebbe
+                # essere stata riscritta, e mostrarla accanto a un voto dato
+                # su quella di ieri farebbe leggere una correzione sbagliata.
+                answer_text=entry.get("answer_text"),
+                expected_answer=entry.get("expected_answer", ""),
+                feedback=entry.get("feedback", ""),
                 is_correct=entry["is_correct"],
                 elapsed_ms=entry.get("elapsed_ms"),
                 points=entry.get("points", float(entry["is_correct"])),
@@ -248,6 +279,7 @@ def _attempt_response(attempt: SimulationAttempt) -> dict:
         "id": attempt.id,
         "simulation_id": attempt.simulation_id,
         "simulation_title": attempt.simulation.title,
+        "simulation_kind": attempt.simulation.kind,
         "user_id": attempt.user_id,
         "user_email": attempt.user.email if attempt.user else "",
         "user_name": _user_name(attempt.user),
@@ -259,8 +291,113 @@ def _attempt_response(attempt: SimulationAttempt) -> dict:
     }
 
 
+def _multiple_choice_answers(simulation: TechnicalSimulation, given: dict) -> list[dict]:
+    """La correzione di un test a scelta multipla: due numeri e un tempo.
+
+    Deterministica e senza modelli di mezzo. Un indice fuori dall'intervallo
+    delle alternative è 400 e non una risposta sbagliata: significa che il
+    client ha mandato qualcosa di incoerente con la domanda che aveva.
+    """
+    answers = []
+    for question in simulation.questions:
+        answer = given.get(question.id)
+        choice = answer.selected_option if answer else None
+        options = question.options or []
+        if choice is not None and not 0 <= choice < len(options):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Risposta non valida per una delle domande.",
+            )
+        is_correct = choice == question.correct_option
+        elapsed_ms = answer.elapsed_ms if answer else None
+        answers.append(
+            {
+                "question_id": str(question.id),
+                "position": question.position,
+                "text": question.text,
+                "options": options,
+                "selected_option": choice,
+                "correct_option": question.correct_option,
+                "is_correct": is_correct,
+                "elapsed_ms": elapsed_ms,
+                "points": question_points(is_correct, elapsed_ms),
+                "explanation": question.explanation,
+            }
+        )
+    return answers
+
+
+async def _open_answers(simulation: TechnicalSimulation, given: dict) -> list[dict]:
+    """La correzione di un test a risposta aperta: una chiamata, poi i punti.
+
+    Le risposte in bianco non arrivano al modello. Valgono zero comunque, e
+    non chiederlo è più veloce, costa meno ed è l'unico modo di essere certi
+    che chi non scrive niente non prenda niente.
+
+    **Se anche un solo giudizio manca, la consegna fallisce.** Un tentativo
+    scritto con una domanda non valutata sarebbe un voto più basso del
+    dovuto, per un motivo che chi lo riceve non può né vedere né contestare;
+    ritentare invece costa una rotella in più, e le risposte sono ancora nel
+    browser di chi le ha appena scritte. Il modello a cui chiedere è già più
+    di uno (vedi ``eval_json_completion``), quindi arrivare qui vuol dire
+    che hanno fallito tutti.
+    """
+    to_judge = [
+        {
+            "position": question.position,
+            "text": question.text,
+            "expected_answer": question.expected_answer,
+            "answer_text": (given[question.id].answer_text or "").strip(),
+        }
+        for question in simulation.questions
+        if question.id in given and (given[question.id].answer_text or "").strip()
+    ]
+
+    try:
+        judgements = await judge_open_answers(to_judge)
+    except RuntimeError:
+        # Il motivo è già nei log di eval_json_completion, con il modello
+        # che ha fallito: qui serve solo dire a chi ha consegnato che può
+        # riprovare senza aver perso quello che ha scritto.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="La correzione non è riuscita. Le tue risposte non sono perse: riprova.",
+        )
+    if len(judgements) < len(to_judge):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="La correzione è arrivata incompleta. Le tue risposte non sono perse: riprova.",
+        )
+
+    answers = []
+    for question in simulation.questions:
+        answer = given.get(question.id)
+        written = (answer.answer_text or "").strip() if answer else ""
+        judgement = judgements.get(question.position) if written else None
+        # I punti sono il giudizio, non una sua conseguenza: c'è un numero
+        # solo, e il campo che lo tiene è quello che tutti i test usano
+        earned = open_answer_points(judgement["quality"] if judgement else None)
+        answers.append(
+            {
+                "question_id": str(question.id),
+                "position": question.position,
+                "text": question.text,
+                # In bianco resta None e non stringa vuota: è la stessa
+                # distinzione fra chi non ha risposto e chi ha risposto male
+                # che sulle multiple fa selected_option
+                "answer_text": written or None,
+                "expected_answer": question.expected_answer,
+                "feedback": judgement["feedback"] if judgement else "",
+                "is_correct": is_open_answer_correct(earned),
+                "points": earned,
+                "explanation": question.explanation,
+            }
+        )
+    return answers
+
+
 @router.post("/{simulation_id}/attempts", response_model=SimulationAttemptResponse)
-def submit_attempt(
+async def submit_attempt(
     simulation_id: UUID,
     payload: SimulationSubmitRequest,
     http_request: Request,
@@ -272,6 +409,13 @@ def submit_attempt(
     Le domande non risposte valgono come sbagliate, ma restano distinguibili
     nell'esito: chi non sa e chi non ha fatto in tempo prendono lo stesso
     voto, e a chi rilegge il proprio tentativo la differenza serve.
+
+    La consegna di un test a risposta aperta è l'unica di tutta
+    l'applicazione che aspetta un modello prima di rispondere. Il tentativo
+    nasce già corretto e già votato, invece di nascere "in valutazione" e
+    riempirsi dopo: uno stato in più significherebbe tentativi rimasti
+    appesi da riprendere, e un voto che compare mezz'ora dopo non lo legge
+    più nessuno.
     """
     simulation = get_visible_or_404(db, current_user, simulation_id)
     if not simulation.questions:
@@ -281,37 +425,13 @@ def submit_attempt(
         )
 
     given = {a.question_id: a for a in payload.answers}
-    answers = []
-    correct_count = 0
-    points: list[float] = []
-    for question in simulation.questions:
-        answer = given.get(question.id)
-        choice = answer.selected_option if answer else None
-        if choice is not None and not 0 <= choice < len(question.options):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Risposta non valida per una delle domande.",
-            )
-        is_correct = choice == question.correct_option
-        elapsed_ms = answer.elapsed_ms if answer else None
-        earned = question_points(is_correct, elapsed_ms)
-        if is_correct:
-            correct_count += 1
-        points.append(earned)
-        answers.append(
-            {
-                "question_id": str(question.id),
-                "position": question.position,
-                "text": question.text,
-                "options": question.options,
-                "selected_option": choice,
-                "correct_option": question.correct_option,
-                "is_correct": is_correct,
-                "elapsed_ms": elapsed_ms,
-                "points": earned,
-                "explanation": question.explanation,
-            }
-        )
+    if simulation.is_open:
+        answers = await _open_answers(simulation, given)
+    else:
+        answers = _multiple_choice_answers(simulation, given)
+
+    correct_count = sum(1 for a in answers if a["is_correct"])
+    points = [a["points"] for a in answers]
 
     attempt = SimulationAttempt(
         simulation_id=simulation.id,

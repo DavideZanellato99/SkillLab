@@ -21,7 +21,9 @@ const shimmerCls =
   'animate-shimmer bg-[linear-gradient(90deg,#111827_0%,rgba(255,255,255,0.05)_50%,#111827_100%)] bg-[length:200%_100%]'
 
 export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  /* L'id della categoria e non il suo nome: il nome si può rinominare
+   * mentre la galleria è aperta, l'id no. */
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
   const [toasts, setToasts] = useState<
     Array<{
       id: number
@@ -31,7 +33,7 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
     }>
   >([])
 
-  const { data: avatars = [], isLoading, isError } = useAvatars(activeCategory)
+  const { data: avatars = [], isLoading, isError } = useAvatars(activeCategoryId)
   const { data: categories = [] } = useCategories()
 
   const addToast = useCallback(
@@ -73,18 +75,18 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
         id="category-filter"
       >
         <button
-          className={`${filterBtnBase} ${activeCategory === null ? filterBtnActive : filterBtnInactive}`}
-          onClick={() => setActiveCategory(null)}
+          className={`${filterBtnBase} ${activeCategoryId === null ? filterBtnActive : filterBtnInactive}`}
+          onClick={() => setActiveCategoryId(null)}
         >
           Tutti
         </button>
         {categories.map((cat) => (
           <button
-            key={cat}
-            className={`${filterBtnBase} ${activeCategory === cat ? filterBtnActive : filterBtnInactive}`}
-            onClick={() => setActiveCategory(cat)}
+            key={cat.id}
+            className={`${filterBtnBase} ${activeCategoryId === cat.id ? filterBtnActive : filterBtnInactive}`}
+            onClick={() => setActiveCategoryId(cat.id)}
           >
-            {cat}
+            {cat.name}
           </button>
         ))}
       </div>

@@ -25,6 +25,7 @@ from auth_dependency import get_current_super_admin
 from database import get_db
 from models import (
     Avatar,
+    AvatarCategory,
     ChatConversation,
     Organization,
     User,
@@ -130,6 +131,28 @@ def _resolve_avatar_org_or_400(db: Session, organization_id) -> UUID:
     return org.id
 
 
+def _resolve_category_or_400(db: Session, category_id, organization_id: UUID) -> UUID:
+    """Validate the avatar's category: it must exist and belong to its tenant.
+
+    The composite foreign key already makes the mismatch impossible in the
+    database (see Avatar.__table_args__); this is here so the admin gets a
+    sentence instead of an integrity error, and so the check reads where the
+    decision is taken.
+    """
+    category = db.query(AvatarCategory).filter(AvatarCategory.id == category_id).first()
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Categoria non trovata.",
+        )
+    if category.organization_id != organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La categoria appartiene a un'altra organizzazione.",
+        )
+    return category.id
+
+
 def _validated_name_or_400(profile: dict) -> str:
     if not isinstance(profile, dict) or not profile:
         raise HTTPException(
@@ -166,7 +189,9 @@ def _to_response(avatar: Avatar, conversation_count: int = 0) -> AdminAvatarResp
         id=avatar.id,
         name=avatar.name,
         image_url=avatar.image_url,
-        category=avatar.category,
+        category=avatar.category_name,
+        category_id=avatar.category_id,
+        category_color=avatar.category_color,
         description=avatar.description,
         voice_id=avatar.voice_id,
         difficulty=avatar.difficulty,
@@ -222,7 +247,7 @@ def create_avatar(
 
     avatar = Avatar(
         name=name,
-        category=(payload.category or "Clienti").strip() or "Clienti",
+        category_id=_resolve_category_or_400(db, payload.category_id, organization_id),
         description=payload.description,
         voice_id=(payload.voice_id or "").strip() or None,
         image_url=(payload.image_url or "").strip(),
@@ -261,10 +286,12 @@ def update_avatar(
 
     name = _validated_name_or_400(payload.profile)
     avatar.name = name
-    avatar.category = (payload.category or "Clienti").strip() or "Clienti"
     avatar.description = payload.description
     avatar.voice_id = (payload.voice_id or "").strip() or None
     avatar.organization_id = _resolve_avatar_org_or_400(db, payload.organization_id)
+    # Dopo l'organizzazione, e con quella nuova: cambiare tenant a un avatar
+    # significa dargli una categoria di quel tenant, mai tenersi la vecchia.
+    avatar.category_id = _resolve_category_or_400(db, payload.category_id, avatar.organization_id)
     avatar.profile = payload.profile
 
     # Explicit URL wins; an emptied field keeps the current image, unless

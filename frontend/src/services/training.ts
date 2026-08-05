@@ -26,6 +26,8 @@ export interface TrainingAssignment {
   avatar_id: string
   avatar_name: string
   avatar_category: string
+  /** Tinta della categoria, per la targhetta (vedi categoryStyles). */
+  avatar_category_color: string
   target_score: number
   due_at: string | null
   created_at: string

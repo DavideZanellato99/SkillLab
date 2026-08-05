@@ -14,8 +14,18 @@ scalino. La durata è la stessa che scorre nel browser (vedi
 ``SimulationQuestionStep``): sono due valori scritti in due linguaggi, e questo
 è il posto che comanda, perché è quello che assegna i punti.
 
-Qui non si tocca il database e non si guarda una domanda vera: entrano un
-esito e un tempo, esce un numero.
+**Una risposta aperta si conta diversamente**: là non c'è cronometro, perché
+trenta secondi bastano a scegliere una lettera e non a scrivere una
+procedura, e togliere punti a chi si rilegge prima di consegnare
+premierebbe la fretta invece della competenza. Quindi il punto intero non si
+sconta col tempo, si guadagna a pezzi: vale quanto la risposta è completa,
+che è il giudizio del modello (vedi ``simulation_open_answers``). Le due
+scale finiscono nello stesso intervallo, da 0 a 1 per domanda, ed è per
+questo che un test dell'una forma e uno dell'altra si leggono sullo stesso
+voto in decimi.
+
+Qui non si tocca il database, non si guarda una domanda vera e non si chiama
+nessun modello: entrano un esito, un tempo o un giudizio, esce un numero.
 """
 
 import math
@@ -39,6 +49,15 @@ MIN_POINTS = round(STEP_POINTS, 1)
 
 # Il punteggio in decimi, la stessa scala delle valutazioni del roleplay.
 GRADE_SCALE = 10
+
+# Da quanti punti in su una risposta aperta si conta fra quelle esatte.
+#
+# Il giudizio del modello è una scala continua, ma accanto al voto resta
+# scritto "quante ne sapeva", e quella è una conta: da qualche parte la riga
+# va tirata. Sei decimi è la sufficienza, la stessa soglia con cui il voto
+# finale si colora a schermo, quindi una domanda conta come saputa quando
+# la risposta varrebbe la sufficienza da sola.
+OPEN_PASS_POINTS = 0.6
 
 
 def question_points(is_correct: bool, elapsed_ms: int | None) -> float:
@@ -70,6 +89,37 @@ def question_points(is_correct: bool, elapsed_ms: int | None) -> float:
     # secondo scalino.
     step = max(math.ceil(seconds / STEP_SECONDS), 1)
     return round(1.0 - (step - 1) * STEP_POINTS, 1)
+
+
+def open_answer_points(quality: float | None) -> float:
+    """I punti di una risposta aperta: il giudizio del modello, da 0 a 1.
+
+    ``quality`` è quanto la risposta dice di quello che doveva dire. Un
+    valore fuori dall'intervallo viene riportato dentro invece di far
+    fallire la consegna: arriva da un modello, e un modello che scrive 1,3
+    ha comunque detto che la risposta era completa.
+
+    Assente vale zero, e non è la stessa scelta prudenziale del tempo
+    mancante: qui vuol dire che quella risposta non è stata giudicata, e una
+    risposta non giudicata non può valere punti.
+
+    L'arrotondamento a un decimale è lo stesso della scala a tempo, così i
+    punti di una domanda si leggono uguali nei due tipi di test.
+    """
+    if quality is None:
+        return 0.0
+    return round(min(max(quality, 0.0), 1.0), 1)
+
+
+def is_open_answer_correct(points: float) -> bool:
+    """Se una risposta aperta conta fra quelle esatte: dalla sufficienza.
+
+    Si guardano i punti già arrotondati e non il giudizio grezzo, perché i
+    punti sono quello che si legge nell'esito: con la soglia sul numero
+    nascosto, una risposta da 0,57 mostrerebbe 0,6 accanto a una crocetta
+    rossa, e nessuno saprebbe spiegare perché.
+    """
+    return points >= OPEN_PASS_POINTS
 
 
 def attempt_points(points: list[float]) -> float:

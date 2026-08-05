@@ -5,8 +5,8 @@
 
 App di training con avatar in roleplay vocale e testuale: l'operatore parla o
 scrive con una persona simulata (STT + LLM + TTS) e riceve una valutazione. Al
-roleplay si affianca un simulatore tecnico, cioè un test a risposta multipla
-ricavato da un documento aziendale.
+roleplay si affianca un simulatore tecnico, cioè un test ricavato da un
+documento aziendale, a scelta multipla o a risposta aperta.
 
 ## Stack
 

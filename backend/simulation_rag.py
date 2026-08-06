@@ -118,8 +118,8 @@ def sample_evenly(items: list[str], budget_chars: int) -> list[str]:
 
     Serve alla prima passata della generazione, quella che deve farsi un'idea
     di cosa contiene il documento intero: di un manuale lungo non si può dare
-    tutto in pasto al modello, e prendere le prime pagine darebbe dieci
-    domande sull'indice e sulla premessa. Prendendo passaggi a distanza
+    tutto in pasto al modello, e prendere le prime pagine darebbe un
+    serbatoio di domande sull'indice e sulla premessa. Prendendo passaggi a distanza
     regolare gli argomenti restano distribuiti come nel documento.
     """
     if not items:

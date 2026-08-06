@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { useSimulation, useSubmitSimulation } from '../hooks/useSimulations'
-import type { SimulationAnswerPayload, SimulationAttempt } from '../services/simulations'
+import { useSimulation, useStartSimulation, useSubmitSimulation } from '../hooks/useSimulations'
+import type {
+  SimulationAnswerPayload,
+  SimulationAttempt,
+  SimulationQuestion,
+} from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
@@ -21,7 +25,7 @@ import { QUESTION_SECONDS } from './simulationFormat'
  * nel riepilogo finale.
  *
  * Come si risponde dipende dal tipo del test, e sono due passi diversi:
- * quattro alternative con trenta secondi ciascuna, oppure una casella in cui
+ * le alternative con trenta secondi ciascuna, oppure una casella in cui
  * scrivere senza cronometro. Questa pagina è la sola cosa che i due hanno in
  * comune, ed è per questo che sceglie qui invece di lasciare che un
  * componente solo faccia entrambe le cose a metà.
@@ -32,6 +36,13 @@ import { QUESTION_SECONDS } from './simulationFormat'
  * Ricaricando si riparte dalle regole, e quello che si era già risposto è
  * perso: le risposte vivono qui finché non si consegna, perché un test a
  * metà non è un tentativo.
+ *
+ * Le domande arrivano premendo "inizia" e non aprendo la pagina: il server ne
+ * estrae dieci a caso dal serbatoio di quel documento, e sono diverse a ogni
+ * tentativo. Vivono in questo stato e da nessun'altra parte, nemmeno nella
+ * cache di TanStack Query, perché sono l'esito di un'estrazione e non un dato
+ * da riprendere: ricaricare la pagina a metà test butta via quelle domande e
+ * ne fa estrarre altre, che è la stessa regola delle risposte perse.
  *
  * Le risposte si consegnano da sole quando finisce l'ultima domanda, quindi
  * questa è l'unica pagina in cui una chiamata fallita non lascia niente da
@@ -44,10 +55,11 @@ const linkBtnCls =
 export default function SimulationRunner() {
   const { simulationId } = useParams<{ simulationId: string }>()
   const { data: simulation, isLoading, error } = useSimulation(simulationId)
+  const start = useStartSimulation(simulationId ?? '')
   const submit = useSubmitSimulation(simulationId ?? '')
 
-  /** Il test è cominciato: da qui in poi il cronometro corre. */
-  const [started, setStarted] = useState(false)
+  /** Le domande estratte per questo tentativo: vuote finché non si comincia. */
+  const [questions, setQuestions] = useState<SimulationQuestion[]>([])
   /** La domanda a schermo, contata da 0. */
   const [index, setIndex] = useState(0)
   /** question_id -> opzione scelta (null se in bianco) e tempo impiegato. */
@@ -75,9 +87,22 @@ export default function SimulationRunner() {
     )
   }
 
-  const questions = simulation.questions
   const total = questions.length
+  const started = total > 0
   const isOpen = simulation.kind === 'open'
+
+  /* Comincia il test: le domande le estrae il server adesso. Finché non
+   * arrivano si resta sulle regole con il pulsante che gira, perché una
+   * schermata vuota in mezzo farebbe sembrare partito un test che non è
+   * ancora cominciato. */
+  const begin = () => {
+    start.mutate(undefined, {
+      onSuccess: (drawn) => {
+        setQuestions(drawn)
+        window.scrollTo({ top: 0 })
+      },
+    })
+  }
 
   const send = (given: Record<string, SimulationAnswerPayload>) => {
     submit.mutate(
@@ -136,11 +161,15 @@ export default function SimulationRunner() {
     })
   }
 
+  /* Riprovare il test torna alle regole con le mani vuote: le domande di
+   * prima si buttano, perché il tentativo nuovo ne avrà altre estratte
+   * quando lo si comincerà. */
   const restart = () => {
     setResult(null)
     setAnswers({})
     setIndex(0)
-    setStarted(false)
+    setQuestions([])
+    start.reset()
     submit.reset()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -164,7 +193,7 @@ export default function SimulationRunner() {
     )
   }
 
-  if (total === 0) {
+  if (simulation.question_count === 0) {
     return (
       <PageContainer>
         <PageHeader title={simulation.title} description="Simulazione non ancora svolgibile." />
@@ -189,7 +218,7 @@ export default function SimulationRunner() {
               ? 'Rispondi con parole tue, il riepilogo arriva alla fine.'
               : 'Rispondi entro il tempo, il riepilogo arriva alla fine.'
             : simulation.description ||
-              `${total} domande ${isOpen ? 'a risposta aperta' : 'a risposta multipla'}, una alla volta.`
+              `${simulation.question_count} domande ${isOpen ? 'a risposta aperta' : 'a risposta multipla'}, una alla volta.`
         }
         actions={
           started ? undefined : (
@@ -247,7 +276,18 @@ export default function SimulationRunner() {
           />
         )
       ) : (
-        <SimulationIntro simulation={simulation} onStart={() => setStarted(true)} />
+        <>
+          {start.isError && (
+            <FormError
+              message={
+                start.error instanceof Error
+                  ? start.error.message
+                  : 'Non è stato possibile cominciare il test.'
+              }
+            />
+          )}
+          <SimulationIntro simulation={simulation} onStart={begin} starting={start.isPending} />
+        </>
       )}
     </PageContainer>
   )

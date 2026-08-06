@@ -2,17 +2,75 @@
 
 Il gemello scritto del roleplay: là si misura come l'operatore gestisce una
 persona, qui se conosce la procedura. Il super admin carica un documento
-aziendale, un modello di ragionamento ne ricava dieci domande, un umano le
-rilegge, e gli utenti dell'organizzazione le svolgono una domanda alla volta,
-ottenendo un voto in decimi, con la spiegazione di ogni risposta e il passaggio
-del documento da cui la domanda nasce.
+aziendale, un modello di ragionamento ne ricava **cinquanta domande**, un umano
+le rilegge, e gli utenti dell'organizzazione svolgono un test di **dieci
+domande estratte a caso** da quelle cinquanta, una alla volta, ottenendo un
+voto in decimi, con la spiegazione di ogni risposta e il passaggio del
+documento da cui la domanda nasce. Oppure il documento non c'è e le domande le
+scrive il docente: cambia chi riempie il serbatoio, non il test.
 
-**Un test è di uno di due tipi**, scelto quando si carica il documento e mai
-più cambiato:
+**Le due cifre dicono cose diverse.** Cinquanta è il serbatoio, cioè tutto
+quello che si può chiedere su quel documento: si scrive una volta, si rilegge
+una volta, e il server lo pretende pieno per pubblicare. Dieci è il test, ed è
+il numero che chi risponde vede scritto ovunque. L'estrazione avviene quando si
+preme "inizia", quindi due prove dello stesso test non sono la stessa fila di
+domande, e rifarlo smette di essere un esercizio di memoria sull'ordine delle
+lettere.
+
+**Le domande arrivano da due strade**, scelte alla creazione e mai più
+cambiate:
+
+| | Generate da un documento | Scritte a mano |
+| --- | --- | --- |
+| Cosa si carica | Il documento aziendale | Niente |
+| Chi scrive le domande | Il modello, in due passate | Il docente, una per una |
+| Quante ne servono per pubblicare | 50 | 10 |
+| Quante alternative ha una domanda | 4 | Da 2 a 6, decise domanda per domanda |
+| Cosa vede chi sbaglia | La spiegazione e il passaggio del documento citato | La spiegazione scritta dal docente |
+
+Il serbatoio pieno alla generazione non costa niente, cinquanta domande sono la
+stessa attesa di dieci; a mano sono cinquanta domande scritte una per una, e il
+minimo diventa quanto serve a comporre un tentativo. Chi ne scrive dieci fa un
+test in cui tutti vedono le stesse dieci domande, chi ne scrive trenta fa un
+test in cui due prove non si somigliano: il tetto resta cinquanta in entrambi i
+casi.
+
+**Da qui in poi le due strade si svolgono allo stesso modo.** Chi fa il test
+riceve dieci domande estratte a caso, corrette allo stesso modo, con lo stesso
+voto in decimi. Quello che cambia è che **si vede da dove vengono le domande**:
+`source` viaggia fino all'ultima schermata, e ovunque compaia una simulazione o
+un tentativo compare
+[SimulationSourceBadge](../frontend/src/components/SimulationSourceBadge.tsx)
+accanto alla targhetta del tipo. Un 4 preso su domande scritte da un modello e
+un 4 preso su domande scritte dal proprio responsabile non si contestano allo
+stesso modo, e chi legge il voto deve poterlo sapere senza aprire niente.
+
+Le due targhette non si confondono, e nessuna delle due difese è il colore.
+Quella del tipo è una pastiglia colorata con la sua parola scritta; quella
+dell'origine è **solo un'icona**, neutra, con il tooltip che spiega. Due
+ragioni. La prima: violetto, ciano, verde e ambra dicono già tipo e stato, e
+una terza coppia di tinte in fila renderebbe la riga illeggibile invece che
+più informativa. La seconda: le due targhette stanno sempre appaiate, e due
+pastiglie scritte una di fianco all'altra allungano ogni riga per dire una
+cosa che l'icona dice da sola. Una scintilla dove ha scritto il modello, una
+persona dove ha scritto qualcuno.
+
+Il tooltip è quello dell'app ([Tooltip](../frontend/src/components/Tooltip.tsx)),
+come ovunque nell'app e mai l'attributo `title` del browser: qui è l'unico modo
+di leggere la targhetta, quindi non può comparire dopo un secondo né farsi
+tagliare dal bordo di una tabella. E non scrive la parola
+sola, scrive la frase intera ("domande generate da un modello che ha letto il
+documento aziendale, e rilette da una persona prima della pubblicazione"), che
+è quello che serve davvero sapere. La parola resta nel markup, nascosta, per
+chi legge con uno screen reader, e resta anche nelle ricerche delle tabelle:
+si può cercare "manuale" anche se sullo schermo quella parola non c'è.
+
+**Un test è anche di uno di due tipi**, scelto insieme alla strada e nemmeno
+lui più cambiato:
 
 | | Scelta multipla | Risposta aperta |
 | --- | --- | --- |
-| Come si risponde | Una fra quattro alternative | Scrivendo qualche riga |
+| Come si risponde | Una fra le alternative | Scrivendo qualche riga |
 | Tempo | 30 secondi a domanda | Nessuno |
 | Cosa decide i punti | Se è giusta e quanto in fretta è arrivata | Quanto la risposta è completa |
 | Chi corregge | Il codice, confrontando due numeri | Un modello, alla consegna |
@@ -37,7 +95,7 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [backend/document_text.py](../backend/document_text.py) | Estrae il testo da PDF, DOCX, TXT, Markdown e lo normalizza |
 | [backend/simulation_rag.py](../backend/simulation_rag.py) | Spezza il testo in passaggi, calcola le somiglianze, campiona |
 | [backend/openai_service.py](../backend/openai_service.py) | Le chiamate a OpenAI: embedding e risposte JSON dal modello di ragionamento |
-| [backend/simulation_questions.py](../backend/simulation_questions.py) | I prompt e le due passate che producono le domande, dell'uno o dell'altro tipo |
+| [backend/simulation_questions.py](../backend/simulation_questions.py) | I prompt e le due passate che producono il serbatoio, dell'uno o dell'altro tipo |
 | [backend/simulation_open_answers.py](../backend/simulation_open_answers.py) | Il giudizio sulle risposte scritte: il prompt e la chiamata sola |
 | [backend/simulation_scoring.py](../backend/simulation_scoring.py) | Quanto vale una risposta: la scala che scende col tempo e quella del giudizio |
 | [backend/routers/admin_simulations.py](../backend/routers/admin_simulations.py) | Il ciclo di vita lato super admin: caricamento, generazione, revisione, pubblicazione |
@@ -50,23 +108,30 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationOpenQuestionStep.tsx](../frontend/src/components/SimulationOpenQuestionStep.tsx) | Una domanda aperta e la casella in cui si scrive |
 | [frontend/src/components/SimulationWrittenAnswer.tsx](../frontend/src/components/SimulationWrittenAnswer.tsx) | Nell'esito: la risposta scritta, la traccia attesa, la correzione |
 | [frontend/src/components/SimulationKindBadge.tsx](../frontend/src/components/SimulationKindBadge.tsx) | La targhetta del tipo, l'unico modo in cui si disegna, ovunque compaia un test |
+| [frontend/src/components/SimulationSourceBadge.tsx](../frontend/src/components/SimulationSourceBadge.tsx) | La targhetta dell'origine, che le sta sempre accanto: domande di un modello o di una persona |
+| [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, le alternative, la chiave, la spiegazione |
 | [frontend/src/components/simulationFormat.ts](../frontend/src/components/simulationFormat.ts) | Come si scrivono voti, punti e tempi, i nomi dei tipi, e la copia della scala che si legge durante la domanda |
 
 ## Il flusso in un colpo d'occhio
 
 ```mermaid
 flowchart TD
-    A[Super admin carica il documento e sceglie il tipo] --> B[Estrazione del testo]
+    A0[Super admin crea la simulazione: tipo e origine delle domande] --> A1{Chi scrive le domande}
+    A1 -->|Il modello| A[Carica il documento]
+    A1 -->|Il docente| A2[Scrive le domande una per una]
+    A2 --> I
+    A --> B[Estrazione del testo]
     B --> C[Divisione in passaggi]
     C --> D[Embedding di ogni passaggio]
     D --> E[(simulation_chunks)]
     E --> F[Passata 1: gli argomenti]
     F --> G[Recupero semantico: 4 passaggi per argomento]
-    G --> H[Passata 2: le dieci domande, del tipo scelto]
-    H --> I[(simulation_questions, stato bozza)]
+    G --> H[Passata 2: cinque chiamate insieme, 50 domande del tipo scelto]
+    H --> I[(simulation_questions: il serbatoio, stato bozza)]
     I --> J[Revisione umana]
     J --> K[Pubblicazione]
-    K --> L[L'utente svolge il test]
+    K --> R[L'utente preme inizia: 10 domande estratte a caso]
+    R --> L[L'utente svolge il test]
     L --> M{Che tipo è}
     M -->|Scelta multipla| N[Correzione deterministica]
     M -->|Risposta aperta| O[Una chiamata al modello che giudica tutte le risposte]
@@ -74,6 +139,10 @@ flowchart TD
     O --> P
     P --> Q[Esito con spiegazioni e passaggi citati]
 ```
+
+Sulla strada a mano le fasi 1 e 2 non esistono: si crea la simulazione, si
+scrivono le domande nel pannello della fase 3, si pubblica. Da lì in poi il
+diagramma è lo stesso.
 
 Le fasi 1, 2 e 3 sono tre chiamate HTTP distinte e non una sola. Il motivo è in
 [admin_simulations.py:1-21](../backend/routers/admin_simulations.py#L1-L21): il
@@ -86,30 +155,39 @@ minuti lasciando il super admin senza niente, documento compreso.
 ## Fase 1, il caricamento del documento
 
 `POST /api/admin/simulations` (multipart: `organization_id`, `title`,
-`description`, `kind`, `file`), riservato al super admin.
+`description`, `kind`, `source`, `file`), riservato al super admin.
 
 ### 1.1 Controlli in ingresso
 
-Nell'ordine, in
-[create_simulation](../backend/routers/admin_simulations.py#L176-L235):
+Nell'ordine, in `create_simulation`:
 
 1. il titolo non può essere vuoto;
 2. l'organizzazione deve esistere, ed è quella a cui la simulazione
    apparterrà per sempre (il tenant non si cambia più, vedi
-   [update_simulation](../backend/routers/admin_simulations.py#L327-L344));
+   `update_simulation`);
 3. `kind` deve essere `multiple` o `open`. Come il tenant, non si cambia più:
-   le domande nascono già con quattro alternative o con la traccia della
+   le domande nascono già con delle alternative o con la traccia della
    risposta attesa, e cambiare il tipo dopo vorrebbe dire buttarle senza
-   dirlo. Chi sceglie male ricarica il documento in una simulazione nuova;
-4. l'estensione deve essere `.pdf`, `.docx`, `.txt`, `.md` o `.markdown`. Si
-   guarda l'estensione e non il content type dichiarato dal browser, che su
-   Windows arriva vuoto o sbagliato più spesso di quanto si creda;
-5. il file non può essere vuoto né superare 10 MB (`MAX_DOCUMENT_BYTES`). Si
+   dirlo. Chi sceglie male ne crea una nuova;
+4. `source` deve essere `ai` o `manual`, e nemmeno lui si cambia più. Da qui
+   in poi i due percorsi si dividono: **con `manual` il file non ci deve
+   essere** (400 se arriva, perché un test scritto a mano non ha un documento
+   da cui ricavare niente), **con `ai` il file ci deve essere** (400 se
+   manca);
+5. sul file, quando c'è: l'estensione deve essere `.pdf`, `.docx`, `.txt`,
+   `.md` o `.markdown`. Si guarda l'estensione e non il content type
+   dichiarato dal browser, che su Windows arriva vuoto o sbagliato più spesso
+   di quanto si creda;
+6. il file non può essere vuoto né superare 10 MB (`MAX_DOCUMENT_BYTES`). Si
    legge un byte in più del limite proprio per accorgersi del superamento
    senza caricare in memoria un file enorme.
 
 Poi la riga `TechnicalSimulation` nasce in stato `draft`, e solo dopo si
-indicizza il documento.
+indicizza il documento. Su una simulazione a mano `document_name` e
+`document_text` restano vuoti e non c'è nessun passaggio indicizzato: non è un
+caricamento rimandato, è un test che si regge sulle domande e basta. Per la
+stessa ragione **le due operazioni che presuppongono un documento rispondono
+409** su una simulazione a mano: `POST .../generate` e `POST .../document`.
 
 ### 1.2 Estrazione del testo
 
@@ -194,18 +272,18 @@ nuovi, ed è il super admin a decidere se rigenerarle.
 
 ---
 
-## Fase 2, la generazione delle domande
+## Fase 2, la generazione del serbatoio
 
 `POST /api/admin/simulations/{id}/generate`. È l'unica chiamata dell'app che
 può prendersi minuti. Il frontend la lancia senza ritentativi automatici
-([useGenerateQuestions](../frontend/src/hooks/useSimulations.ts#L124-L139)),
-perché ripartire da capo da solo raddoppierebbe l'attesa proprio quando è già
-lunga.
+([useGenerateQuestions](../frontend/src/hooks/useSimulations.ts)), perché
+ripartire da capo da solo raddoppierebbe l'attesa proprio quando è già lunga.
 
 Il router legge i passaggi già indicizzati (409 se non ce ne sono) e passa
 testi e vettori a
-[generate_questions](../backend/simulation_questions.py#L180-L233). Dentro
-succedono tre cose.
+[generate_questions](../backend/simulation_questions.py). Dentro succedono tre
+cose: gli argomenti, il recupero, e le cinque chiamate che scrivono le
+cinquanta domande.
 
 ### 2.1 Passata uno, gli argomenti
 
@@ -214,14 +292,22 @@ modello scrive le domande su quello che ha letto per ultimo. Quindi:
 
 [sample_evenly](../backend/simulation_rag.py#L116-L136) prende passaggi a
 **distanza regolare** finché stanno in `TOPICS_BUDGET_CHARS` (30.000
-caratteri). Prendere le prime pagine darebbe dieci domande sull'indice e sulla
-premessa; prendendoli a distanza regolare gli argomenti restano distribuiti
-come nel documento.
+caratteri). Prendere le prime pagine darebbe cinquanta domande sull'indice e
+sulla premessa; prendendoli a distanza regolare gli argomenti restano
+distribuiti come nel documento.
 
-Su questo campione si chiede al modello esattamente dieci argomenti
-verificabili, con criteri espliciti nel prompt
-([_topics_prompt](../backend/simulation_questions.py#L47-L71)). **Questa
-passata non sa di che tipo sarà il test**, ed è voluto: un argomento su cui
+Su questo campione si chiedono al modello **fino a `MAX_TOPICS` argomenti
+verificabili, che sono 25**, con criteri espliciti nel prompt
+([_topics_prompt](../backend/simulation_questions.py)). Il numero è un tetto e
+non una quota, e il prompt lo dice: un documento aziendale non contiene
+cinquanta cose distinte su cui interrogare qualcuno, e chiederne cinquanta
+vorrebbe dire farsi dare venti argomenti veri e trenta ripetizioni con
+un'altra intestazione. Su una circolare di tre pagine il modello ne trova sei,
+e va bene: le cinquanta domande si distribuiscono su quelli che ha trovato
+davvero, quindi un documento povero dà più domande per argomento e uno ricco
+meno.
+
+**Questa passata non sa di che tipo sarà il test**, ed è voluto: un argomento su cui
 vale la pena interrogare qualcuno è lo stesso sia che la risposta si scelga
 fra quattro sia che si scriva, e nominare la forma sposterebbe gli argomenti
 verso quelli che le si prestano invece che verso quelli che contano. Un argomento va
@@ -235,7 +321,7 @@ La risposta è JSON: `{"topics": ["", ""]}`.
 
 ### 2.2 Il recupero semantico
 
-1. i dieci argomenti vengono trasformati in vettori con la stessa
+1. gli argomenti vengono trasformati in vettori con la stessa
    `embed_texts`, quindi vivono nello stesso spazio dei passaggi;
 2. per ogni argomento, [most_similar](../backend/simulation_rag.py#L98-L113)
    calcola la similarità del coseno contro tutti i passaggi e tiene i
@@ -249,22 +335,75 @@ La risposta è JSON: `{"topics": ["", ""]}`.
 Gli ordinali citati finiscono in un insieme `cited`, che servirà a validare le
 citazioni della passata successiva.
 
-### 2.3 Passata due, le domande
+### 2.3 Passata due, le cinquanta domande
 
-Una chiamata sola per tutte e dieci le domande, non dieci chiamate. Non è per
-risparmiare: un modello che scrive le dieci domande insieme vede quello che ha
-già chiesto, mentre dieci chiamate indipendenti producono tre domande sulla
-stessa cosa e nessuna su tutto il resto.
+**Cinque chiamate da dieci domande, non una da cinquanta e non cinquanta da
+una.** Il tetto di token di una risposta copre una decina di domande complete
+di spiegazione, e oltre quello torna indietro un JSON troncato a metà della
+trentesima. All'estremo opposto, una chiamata per domanda produrrebbe cinquanta
+esaminatori indipendenti che chiedono tre volte la stessa cosa.
+
+Le cinque partono **insieme** (`asyncio.gather`) e non una dopo l'altra: la
+generazione è già la chiamata più lenta dell'app, e metterle in fila la
+moltiplicherebbe per cinque. Il prezzo è che ognuna vede solo il proprio gruppo
+di argomenti, quindi la varietà la garantiscono gli argomenti distinti e le
+regole del prompt, non la vista sulle domande delle altre. **Una chiamata che
+va storta si porta via il proprio gruppo e non le altre quaranta domande**: si
+scrivono quelle che sono arrivate, la simulazione resta in bozza, e il super
+admin decide se rigenerare o completare a mano. Solo se falliscono tutte
+l'errore risale, e il router lo traduce come quando la chiamata era una sola.
+
+#### Come le domande si spartiscono
+
+[_plan_batches](../backend/simulation_questions.py) divide le cinquanta domande
+in parti uguali fra gli argomenti trovati, con il resto sui primi: venticinque
+argomenti ne prendono due ciascuno, sei ne prendono otto o nove ciascuno. Poi
+raggruppa gli argomenti in chiamate da al massimo `QUESTIONS_PER_CALL` (10)
+domande, e **un argomento resta tutto nella stessa chiamata finché ci sta**,
+anche a costo di una chiamata in più con qualche domanda in meno: è proprio fra
+le domande di uno stesso argomento che la ripetizione nasce, e scriverle
+insieme è l'unico modo che il modello ha di vedere che sta per chiedere due
+volte la stessa cosa. Si spezza solo l'argomento che da solo supera il tetto,
+cioè quando il documento ne ha dati pochissimi.
+
+Nel messaggio all'utente ogni argomento porta scritto quante domande scriverne:
+
+```
+## DOMANDE DA SCRIVERE IN TUTTO: 10
+
+### ARGOMENTO: condizioni per sbloccare una carta bloccata
+Domande da scrivere su questo argomento: 5
+[7] testo del passaggio...
+```
+
+#### Le regole che rendono diverse le domande gemelle
+
+Sono in [_variety_rules](../backend/simulation_questions.py), condivise dai due
+prompt, e sono la ragione per cui il serbatoio non è la stessa domanda scritta
+cinquanta volte. A un modello a cui si chiedono cinque domande su un argomento,
+senza dirgli altro, esce la stessa domanda con cinque giri di parole. Quindi il
+prompt dice da quale lato guardare l'argomento ogni volta (la condizione, il
+limite o il tempo, l'eccezione, chi autorizza, il caso concreto, cosa succede
+se una condizione non è rispettata), che **due domande a cui si risponde con la
+stessa frase sono la stessa domanda** e riformulare non basta, e di cambiare
+anche il modo di porla, fra la regola chiesta di petto e la situazione da cui
+partire.
+
+L'ultima regola è la più importante e vale come limite a tutte le altre: se i
+passaggi non bastano per tutte le domande chieste, si scrivono partendo da
+dettagli diversi degli stessi passaggi, **mai inventando** soglie o regole che
+il documento non contiene. Due domande simili sono un difetto piccolo, una
+domanda con una risposta inventata è un errore che qualcuno porterà al lavoro.
 
 È qui che il tipo del test entra in scena, e cambia solo il prompt di sistema:
-la stessa chiamata, gli stessi argomenti con i loro passaggi, un'altra cosa da
+le stesse chiamate, gli stessi argomenti con i loro passaggi, un'altra cosa da
 scrivere.
 
 #### A scelta multipla
 
-Il prompt ([_questions_prompt](../backend/simulation_questions.py#L74-L123))
-impone una domanda per argomento, quattro alternative (A, B, C, D) di cui una
-sola corretta, e regole precise:
+Il prompt ([_questions_prompt](../backend/simulation_questions.py))
+impone quattro alternative (A, B, C, D) di cui una sola corretta, e regole
+precise:
 
 - **sulle domande**: la risposta corretta deve stare nei passaggi forniti, mai
   inventare soglie o regole; la domanda deve riguardare il lavoro
@@ -288,7 +427,7 @@ parentesi quadre.
 #### A risposta aperta
 
 Il prompt ([_open_questions_prompt](../backend/simulation_questions.py)) chiede
-per ogni argomento una domanda e la **traccia della risposta attesa**, che è la
+per ogni domanda la **traccia della risposta attesa**, che è la
 parte che conta davvero: sarà l'unica cosa che il giudice avrà davanti quando
 dovrà dire quanto vale quello che l'operatore ha scritto. Le regole in più
 rispetto all'altro prompt:
@@ -303,14 +442,14 @@ rispetto all'altro prompt:
   metro con cui si giudica, e una traccia vaga non è una chiave ma un'opinione,
   che produce voti indifendibili.
 
-Il budget è di 8192 token di completamento in entrambi i casi: dieci domande
-con quattro alternative e una spiegazione, oppure dieci domande con una traccia
-e una spiegazione, più i token che il ragionamento spende prima di scriverne
-una. Con un tetto stretto tornano indietro come JSON troncato.
+Il budget è di 8192 token di completamento **per chiamata** in entrambi i casi:
+dieci domande con quattro alternative e una spiegazione, oppure dieci domande
+con una traccia e una spiegazione, più i token che il ragionamento spende prima
+di scriverne una. Con un tetto stretto tornano indietro come JSON troncato.
 
 ### 2.4 La pulizia della risposta
 
-[_normalize_questions](../backend/simulation_questions.py#L133-L177) scarta una
+[_normalize_questions](../backend/simulation_questions.py) scarta una
 domanda per volta invece di far cadere tutto, e cosa la renda scartabile
 dipende dal tipo:
 
@@ -326,15 +465,23 @@ dipende dal tipo:
 Ogni domanda esce con entrambi i mazzi di campi e quello inutile vuoto, così il
 router che le scrive nel database non deve sapere di che tipo erano.
 
-Se non resta niente si solleva `ValueError`, che il router traduce in 422. Nove
-domande buone su dieci si rimediano rigenerando, mentre buttare via tutto per
-una riga storta significherebbe far ripartire da capo un caricamento che è già
-costato due chiamate.
+Se da una chiamata non resta niente si solleva `ValueError`, che vale come una
+chiamata fallita: le altre quattro restano. Quarantotto domande buone su
+cinquanta si rimediano scrivendone due a mano, mentre buttare via una chiamata
+intera per una riga storta significherebbe dieci domande in meno.
+
+Alla fine [_without_duplicates](../backend/simulation_questions.py) toglie le
+domande **scritte identiche** da due chiamate diverse (a meno di spazi e
+maiuscole). Cade solo la copia letterale, perché è l'unica di cui si può essere
+certi: due domande vicine ma non uguali restano, le legge il super admin e le
+toglie lui se vuole. Una domanda ripetuta nel serbatoio è peggio di una
+domanda simile, perché l'estrazione potrebbe pescarle tutte e due nello stesso
+tentativo, e chi risponde vedrebbe due volte la stessa cosa.
 
 ### 2.5 Come vengono fatte le chiamate al modello
 
-Entrambe le passate girano dentro
-[eval_json_completion](../backend/openai_service.py#L152-L208), lo stesso
+Tutte le chiamate, quella degli argomenti e le cinque delle domande, girano
+dentro [eval_json_completion](../backend/openai_service.py#L152-L208), lo stesso
 meccanismo che valuta le conversazioni e che, sui test aperti, corregge le
 risposte alla consegna:
 
@@ -354,10 +501,12 @@ due frasi di commento ciascuno) e il resto è identico, giro sui modelli di
 riserva compreso.
 
 Alla fine il router cancella le domande precedenti, scrive le nuove numerate da
-1, e **riporta la simulazione in bozza anche se era pubblicata**: le domande
-nuove non le ha ancora lette nessuno. I tentativi già consegnati non ne
+1 a 50, e **riporta la simulazione in bozza anche se era pubblicata**: le
+domande nuove non le ha ancora lette nessuno. I tentativi già consegnati non ne
 risentono, perché ognuno porta con sé la fotografia delle domande che ha
-ricevuto.
+ricevuto. Se le chiamate riuscite hanno prodotto meno di cinquanta domande, si
+scrivono quelle: la simulazione resta in bozza e non si pubblica finché il
+serbatoio non è pieno.
 
 ---
 
@@ -397,9 +546,13 @@ stati che non hanno senso. Due dettagli:
   quella posizione è rimasto identico. Sono ordinali di passaggi, non qualcosa
   che il super admin possa riscrivere nel form, e perderle a ogni correzione di
   un refuso toglierebbe a chi sbaglia il rimando alla procedura;
-- il validatore Pydantic pretende almeno una domanda e al massimo dieci, e che
-  `correct_option`, dove ci sono delle alternative, sia l'indice di una di
-  quelle presenti;
+- il validatore Pydantic pretende almeno una domanda e al massimo cinquanta,
+  che le alternative, dove ci sono, siano **da due a sei** e nessuna vuota, e
+  che `correct_option` sia l'indice di una di quelle presenti. Quante siano
+  esattamente lo decide chi scrive la domanda, domanda per domanda: il modello
+  ne scrive quattro perché è il numero su cui sono tarate le sue regole, il
+  docente sceglie ogni volta, e una domanda con due alternative accanto a una
+  con sei è un test legittimo;
 - **la chiave giusta per il tipo la controlla il router e non lo schema**: il
   payload porta le domande e non la simulazione a cui appartengono, quindi il
   tipo lì non si sa. Un test aperto con una domanda senza `expected_answer`, o
@@ -416,13 +569,42 @@ per la traccia, con scritto sotto che è il metro con cui ogni risposta verrà
 corretta: lì il super admin non sta correggendo un refuso, sta scrivendo la
 regola del voto.
 
+Le alternative si aggiungono e si tolgono dentro la domanda, fra due e sei. La
+riga della corretta si sposta insieme a loro: togliere un'alternativa che stava
+prima di quella giusta fa scalare l'indice, togliere proprio quella giusta
+lascia la domanda **senza chiave**, ed è voluto. La risposta corretta si sceglie
+di nuovo invece di scivolare da sola su un'alternativa che nessuno ha indicato,
+e finché manca il pannello lo dice sotto le alternative e la pubblicazione
+resta chiusa.
+
+### 3.1 Le domande scritte a mano
+
+Sulle simulazioni con `source = manual` il pannello è lo stesso, con due
+differenze: **non c'è il bottone di generazione** (non c'è niente da leggere) e
+**l'elenco cresce a mano**, con "Aggiungi domanda" in fondo e un cestino su
+ognuna. Una domanda nuova nasce vuota con quattro alternative, che sono un
+punto di partenza e non una regola.
+
+Il resto è identico riga per riga: stessa copia locale, stesso salvataggio in
+blocco, stesso 422 sulla domanda incompleta, stessa bozza. Non esiste un
+endpoint per scrivere una domanda alla volta, e non esiste una modalità mista:
+una simulazione generata non si completa a mano oltre le correzioni, e una
+scritta a mano non chiama mai il modello.
+
 `PUT /api/admin/simulations/{id}/status` pubblica o ritira. Pubblicare pretende
-il test completo, dieci domande, che è quello che la pagina promette a chi lo
-svolge (409 altrimenti). Ritirare non pretende niente, ed è la ragione per cui
-esiste: quando c'è qualcosa che non va, il primo gesto deve poter essere
-toglierla di mezzo. Il pulsante di pubblicazione nel pannello salva prima le
-domande, così quello che finisce davanti agli utenti è quello che si sta
-guardando.
+il **serbatoio**: cinquanta domande su una simulazione generata, **dieci** su
+una scritta a mano (409 altrimenti, dicendo quante ne servono e quante ce ne
+sono). Non è il numero che chi svolge il test vede, è quello che rende diversa
+una prova dalla successiva: pubblicarne una generata con venti domande vorrebbe
+dire un test che al terzo tentativo è già tutto noto, mentre pretendere
+cinquanta domande scritte a mano vorrebbe dire un test mai pubblicato. La
+soglia sta in `TechnicalSimulation.required_pool`, con il suo gemello
+`requiredPool` nel frontend.
+
+Ritirare non pretende niente, ed è la ragione per cui esiste: quando c'è
+qualcosa che non va, il primo gesto deve poter essere toglierla di mezzo. Il
+pulsante di pubblicazione nel pannello salva prima le domande, così quello che
+finisce davanti agli utenti è quello che si sta guardando.
 
 Finché è in bozza, la simulazione esiste solo per il super admin: il filtro sta
 in [visible_query](../backend/routers/simulations.py#L49-L64) e le bozze restano
@@ -440,35 +622,78 @@ frontend non replica nessun filtro, il server serve a ciascuno quello che può
 vedere.
 
 `GET /api/simulations` restituisce l'elenco delle pubblicate, e per ognuna,
-tramite [attempt_stats](../backend/routers/simulations.py#L89-L122), quanti
+tramite [attempt_stats](../backend/routers/simulations.py), quanti
 tentativi ha fatto chi guarda e come è andato l'ultimo. È una query sola per
 tutto l'elenco che legge quattro colonne e conta in Python: i tentativi di UNA
 persona sono decine, e farsi dare dal database l'ultimo di ogni gruppo
 costerebbe o una query per riga o una window function.
 
-### 4.2 Il test
+Nella stessa riga arrivano `kind` e `source`, cioè le due targhette: la scheda
+del test nell'elenco dice quante domande sono, come si risponde, se le domande
+vengono da un documento o le ha scritte qualcuno, e di quale organizzazione è.
+`source` prosegue poi su ogni tentativo consegnato, come `simulation_source`,
+in tutte e cinque le risposte che portano già `simulation_kind`: l'esito, i
+riepiloghi, il report attività, la dashboard e il confronto. Un tentativo
+letto sei mesi dopo dice ancora da dove venivano le domande che ha ricevuto.
 
-`GET /api/simulations/{id}` restituisce le domande **senza la risposta esatta,
-senza la traccia della risposta attesa, senza la spiegazione e senza i
-passaggi**. Non è un dettaglio: sono due schemi diversi e non uno con campi
-opzionali ([schemas.py:918-941](../backend/schemas.py#L918-L941)), perché la
-chiave deve restare sul server fino alla consegna, altrimenti il test lo
-risolverebbe la scheda di rete. Su un test a risposta aperta la traccia è la
-chiave, e vale esattamente la stessa regola: chi la ricevesse con la domanda
-avrebbe la risposta scritta davanti.
+Il `question_count` che arriva a chi svolge il test è **dieci**, cioè quante ne
+avrà il tentativo ([drawn_count](../backend/routers/simulations.py)), non le
+cinquanta del serbatoio: a chi sta per rispondere interessa quante domande deve
+rispondere. Il serbatoio è una cosa di chi il test lo prepara, e il suo numero
+si legge nelle pagine di amministrazione. Su una simulazione con meno di dieci
+domande in tutto vale il minore dei due, perché un test di sei domande su sei è
+preferibile a un errore.
+
+### 4.2 L'estrazione, e poi il test
+
+`GET /api/simulations/{id}` **non porta nessuna domanda**: porta il titolo, il
+tipo, quante domande saranno e i tentativi passati, che è quello che serve alla
+schermata delle regole. Aprire la pagina non decide più niente.
+
+`POST /api/simulations/{id}/start` è il momento in cui il test comincia:
+[start_attempt](../backend/routers/simulations.py) estrae **dieci domande a
+caso** dal serbatoio con `random.sample` e le manda, numerate da 1 a 10
+nell'ordine in cui sono uscite. Le posizioni con cui erano state scritte non
+dicono niente a chi risponde, e mostrarle in fila darebbe l'ordine del
+documento a chi fa il test due volte.
+
+Tre cose su questa chiamata:
+
+| Scelta | Perché |
+| --- | --- |
+| È un POST e non un GET | La stessa richiesta risponde due cose diverse: qui si comincia un test, non si legge una pagina, e una GET del genere sarebbe la prima cosa che una cache metterebbe da parte |
+| L'estrazione non ha memoria dei tentativi di prima | Chi ritenta può ritrovare una domanda già vista, ed è giusto: una procedura sbagliata due volte va chiesta due volte. Evitarlo vorrebbe dire tenere il conto di cosa ognuno ha già visto, cioè una tabella che cresce con i tentativi per un problema che il caso risolve da solo su cinquanta domande |
+| Il server non si segna da nessuna parte quali domande ha dato | Una riga per ogni test iniziato e mai finito sarebbe una tabella di sessioni da far scadere. Le dieci domande vivono nel browser e tornano indietro con la consegna, che le controlla (vedi 5) |
+
+Le domande arrivano **senza la risposta esatta, senza la traccia della risposta
+attesa, senza la spiegazione e senza i passaggi**. Non è un dettaglio: sono due
+schemi diversi e non uno con campi opzionali
+([schemas.py](../backend/schemas.py)), perché la chiave deve restare sul server
+fino alla consegna, altrimenti il test lo risolverebbe la scheda di rete. Su un
+test a risposta aperta la traccia è la chiave, e vale esattamente la stessa
+regola: chi la ricevesse con la domanda avrebbe la risposta scritta davanti.
 
 Nelle domande di un test aperto `options` arriva come lista vuota, e non è un
 campo mancante: è la domanda che non ne ha. A dire come si risponde è `kind`,
 che sta sulla simulazione.
 
-In [SimulationRunner](../frontend/src/components/SimulationRunner.tsx) le risposte
-vivono in uno stato locale `question_id -> indice dell'opzione`, e la pagina ha
-tre schermate: le regole, le domande, l'esito. Sono una pagina sola e non tre
+In [SimulationRunner](../frontend/src/components/SimulationRunner.tsx) le
+domande estratte e le risposte vivono in uno stato locale, e la pagina ha tre
+schermate: le regole, le domande, l'esito. Sono una pagina sola e non tre
 indirizzi, perché un id nuovo a metà test sarebbe un tasto "indietro" del
 browser che rimette in gioco una domanda già consegnata. Ricaricando si riparte
 dalle regole e quello che si era risposto è perso: le risposte vivono nel
 browser finché non si consegna, perché un test a metà non è un tentativo. Non
 c'è nessun limite ai tentativi.
+
+Le domande stanno nello stato del componente e **non nella cache di TanStack
+Query**, che è l'unica deroga alla regola del progetto, e per una ragione:
+[useStartSimulation](../frontend/src/hooks/useSimulations.ts) è una mutation
+perché le domande sono l'esito di un'estrazione fatta una volta, non un dato da
+riprendere. Una query le rifarebbe estrarre quando la finestra torna in primo
+piano, cambiando le domande sotto le mani di chi sta rispondendo. Per la stessa
+ragione "Riprova il test" le butta e torna alle regole: il tentativo nuovo avrà
+le sue.
 
 Il passo che monta a ogni domanda è uno dei due, scelto in base a `kind`:
 `SimulationQuestionStep` per le alternative, `SimulationOpenQuestionStep` per
@@ -489,10 +714,14 @@ server rimanda con l'esito.
 
 Le regole stanno in [SimulationIntro](../frontend/src/components/SimulationIntro.tsx)
 e si leggono **prima**: quante domande sono, quanto dura ognuna, che non si
-torna indietro e che il tempo scaduto vale come sbagliata. Il test comincia
-quando lo si dice, e la schermata esiste per questo: il cronometro della prima
-domanda non può partire su una pagina appena aperta, mentre si sta ancora
-leggendo il titolo.
+torna indietro, che il tempo scaduto vale come sbagliata, e che **le domande
+cambiano a ogni tentativo** perché sono estratte a caso quando si preme il
+pulsante. Il test comincia quando lo si dice, e la schermata esiste per questo:
+il cronometro della prima domanda non può partire su una pagina appena aperta,
+mentre si sta ancora leggendo il titolo. Premuto il pulsante si aspetta il
+server per un istante, e il pulsante lo dice ("Preparazione del test...")
+invece di restare fermo: se l'estrazione fallisce l'errore compare sopra le
+regole e il pulsante è ancora lì.
 
 Ogni domanda è un
 [SimulationQuestionStep](../frontend/src/components/SimulationQuestionStep.tsx)
@@ -554,9 +783,29 @@ tipo di test e se ne manda uno solo: `selected_option` con `elapsed_ms`, oppure
 `answer_text`. Vuoti entrambi significa lasciata in bianco, che si può fare in
 tutti e due i casi.
 
-[submit_attempt](../backend/routers/simulations.py) guarda il tipo e prende una
-delle due strade, poi il resto è identico: la conta delle esatte, la somma dei
-punti, la fotografia, il voto congelato nella riga.
+### 5.0 Quali domande erano
+
+Il payload dice anche **quali** domande il tentativo aveva, perché il server
+non se l'è segnato. [_submitted_questions](../backend/routers/simulations.py)
+controlla tre cose, e sono la sola difesa che questo disegno permette:
+
+1. ogni domanda consegnata è di questa simulazione (400 altrimenti);
+2. nessuna arriva due volte, o si consegnerebbe tre volte quella che si sa;
+3. sono **tante quante ne ha un tentativo**, cioè dieci. Senza questo bastava
+   consegnare una risposta giusta sola per prendere dieci: il tempo si può
+   dichiarare (vedi sotto), il numero delle domande no.
+
+Una domanda lasciata in bianco resta possibile e vale sbagliata, ma la sua voce
+va mandata lo stesso: è quello che il browser fa per le domande saltate e per
+quelle mai arrivate a schermo.
+
+Le posizioni nella fotografia sono quelle **dentro il tentativo**, da 1 a 10, e
+non quelle nel serbatoio: chi rilegge il proprio esito deve trovare la terza
+domanda al terzo posto, non al trentanovesimo.
+
+[submit_attempt](../backend/routers/simulations.py) guarda poi il tipo e prende
+una delle due strade, e il resto è identico: la conta delle esatte, la somma
+dei punti, la fotografia, il voto congelato nella riga.
 
 ### 5.1 A scelta multipla, il codice
 
@@ -567,7 +816,7 @@ voto. Quello che l'LLM ha scritto e che arriva a chi ha sbagliato è la
 spiegazione.
 
 In [_multiple_choice_answers](../backend/routers/simulations.py), per ogni
-domanda della simulazione:
+domanda del tentativo:
 
 1. un indice fuori dall'intervallo delle alternative è 400, non una risposta
    sbagliata: significa che il client ha mandato qualcosa di incoerente;
@@ -753,14 +1002,22 @@ Quello che cambia fra i due tipi è solo il corpo di ogni domanda:
 
 ### Rileggere un proprio tentativo
 
-L'esito non vive solo nell'attimo della consegna. Nella barra "Tentativi
-passati", sotto le regole del test, ogni voto è un pulsante che riapre quel
-tentativo per intero in
+L'esito non vive solo nell'attimo della consegna. Sotto le regole del test,
+[SimulationAttemptsList](../frontend/src/components/SimulationAttemptsList.tsx)
+elenca i propri tentativi **uno per riga**: data, quante risposte erano
+corrette, il voto. Ogni riga riapre quel tentativo per intero in
 [SimulationAttemptModal](../frontend/src/components/SimulationAttemptModal.tsx),
 con le stesse domande, le stesse risposte, le spiegazioni e i passaggi del
 documento. Ne compaiono cinque, i più recenti, e chi ne ha di più li chiede
-tutti con il pulsante accanto: una barra lunga quanto la storia di un anno
+tutti con il pulsante sotto: un elenco lungo quanto la storia di un anno
 spingerebbe il test fuori dallo schermo.
+
+Erano una fila di pillole con dentro voto e data, e sono diventate righe perché
+le tre cose stiano sempre nella stessa colonna: scendere con l'occhio lungo i
+voti dice da solo se si sta migliorando, mentre in una striscia le date si
+accavallavano e confrontare due prove voleva dire cercarle. Le corrette
+compaiono qui e nella pillola non ci stavano, ma sono la differenza fra un 6
+preso rispondendo piano e un 6 preso sbagliando.
 
 È la stessa modale che gli amministratori aprono dalla dashboard, con la sola
 prop `own` a cambiare: con `own` l'esito è scritto in seconda persona ("la tua
@@ -779,7 +1036,7 @@ pulsante può aprire soltanto quello che il server gli manderebbe comunque.
 
 | Endpoint | Chi | Cosa |
 | --- | --- | --- |
-| `GET /api/simulations/{id}/attempts` | L'utente | I propri tentativi su quella simulazione, dal più recente: è la barra "Tentativi passati" in cima al test |
+| `GET /api/simulations/{id}/attempts` | L'utente | I propri tentativi su quella simulazione, dal più recente: è l'elenco "Tentativi passati" sotto le regole del test |
 | `GET /api/simulations/attempts/{id}` | Chi lo ha svolto, o un admin del tenant a cui la simulazione appartiene | Un tentativo con la sua correzione completa. È quello che si apre cliccando una riga nella dashboard o un proprio tentativo passato |
 | `GET /api/simulations/{id}/results` | Admin | Tutti i tentativi su una simulazione. Un organization admin li vede solo per le simulazioni della propria organizzazione, che è la stessa cosa che dire "solo dei propri utenti" |
 | `GET /api/admin/simulations-report` | Admin | Tutti i tentativi in un colpo solo, chi li ha svolti e come è andata: è la sezione del simulatore nella dashboard (vedi [training-e-report.md](training-e-report.md)) |
@@ -787,6 +1044,11 @@ pulsante può aprire soltanto quello che il server gli manderebbe comunque.
 
 Chi non ha diritto di leggere un tentativo riceve 404 e non 403: l'esistenza
 stessa della riga non è un'informazione da dare.
+
+Nel confronto fra due tentativi si appaiano **solo le domande capitate in tutte
+e due**: con l'estrazione a caso ogni prova ha la sua fila, e una domanda vista
+una volta sola non è né recuperata né persa, non è stata chiesta (vedi
+[training-e-report.md](training-e-report.md)).
 
 Il report della dashboard è l'unica di queste letture che **non** parte da una
 simulazione: raccoglie i tentativi per organizzazione di chi li ha svolti,
@@ -799,10 +1061,17 @@ persone".
 
 | Tabella | Contiene | Note |
 | --- | --- | --- |
-| `technical_simulations` | Titolo, descrizione, stato, `kind`, nome e testo del documento, organizzazione | Il file originale non c'è, solo il testo estratto. `kind` si decide al caricamento e non si cambia |
+| `technical_simulations` | Titolo, descrizione, stato, `kind`, `source`, nome e testo del documento, organizzazione | Il file originale non c'è, solo il testo estratto, e su una simulazione a mano non c'è nemmeno quello. `kind` e `source` si decidono alla creazione e non si cambiano |
 | `simulation_chunks` | `ordinal`, `content`, `embedding` | Cancellati e riscritti a ogni caricamento del documento |
-| `simulation_questions` | `position`, `text`, `options`, `correct_option`, `expected_answer`, `explanation`, `source_chunks` | Le due chiavi sono alternative fra loro e se ne riempie una sola, secondo il `kind` della simulazione: per questo `options` e `correct_option` sono nullable, non perché una domanda possa non avere una risposta esatta. `options` e `correct_option` stanno comunque sulla stessa riga, quindi correggere il testo di un'opzione non può spostare la risposta esatta su un'altra |
-| `simulation_attempts` | `correct_count`, `question_count`, `earned_points`, `answers` (la fotografia), `created_at` | Il voto si ricava da punti e domande, quindi resta leggibile anche se un giorno le domande non fossero più dieci. `earned_points` è arrivata dopo: i tentativi di prima l'hanno riempita con le loro risposte esatte, che è quello che valevano quando il tempo non contava (vedi [startup_migrations](../backend/startup_migrations.py)) |
+| `simulation_questions` | `position`, `text`, `options`, `correct_option`, `expected_answer`, `explanation`, `source_chunks` | Il serbatoio: cinquanta righe per simulazione, e `position` è il posto lì dentro, non il numero che chi risponde vede accanto alla domanda. Le due chiavi sono alternative fra loro e se ne riempie una sola, secondo il `kind` della simulazione: per questo `options` e `correct_option` sono nullable, non perché una domanda possa non avere una risposta esatta. `options` e `correct_option` stanno comunque sulla stessa riga, quindi correggere il testo di un'opzione non può spostare la risposta esatta su un'altra |
+| `simulation_attempts` | `correct_count`, `question_count`, `earned_points`, `answers` (la fotografia), `created_at` | `question_count` sono le domande di **quel** tentativo, dieci, non quelle del serbatoio. Il voto si ricava da punti e domande, quindi resta leggibile anche se un giorno le domande non fossero più dieci, e i tentativi consegnati quando il test era di dieci domande fisse si leggono ancora come allora. `earned_points` è arrivata dopo: i tentativi di prima l'hanno riempita con le loro risposte esatte, che è quello che valevano quando il tempo non contava (vedi [startup_migrations](../backend/startup_migrations.py)) |
+
+**Quali domande siano state date a un tentativo non è scritto da nessuna
+parte** prima della consegna: l'estrazione vive nel browser di chi risponde e
+torna indietro con le risposte. Dopo la consegna invece è scritto per sempre,
+nella fotografia, come tutto il resto del tentativo. Una tabella di sessioni
+aperte darebbe righe da far scadere per ogni test cominciato e mai finito, in
+un'applicazione dove un tentativo esiste solo quando viene consegnato.
 
 Il tipo sta sulla simulazione e non sulla singola domanda, quindi un test è
 tutto dell'una forma o tutto dell'altra. Le due si svolgono in modi troppo
@@ -811,11 +1080,11 @@ correggono da sole, le aperte no. Chi vuole verificare le stesse procedure in
 entrambi i modi carica due volte lo stesso documento, che costa una generazione
 e non un disegno.
 
-Le colonne nuove (`kind` e `expected_answer`) arrivano con un default che è già
-il valore giusto per le righe che c'erano: le simulazioni di prima sono tutte a
-scelta multipla, e le loro domande non hanno una traccia. Nessun backfill da
-scrivere, solo la ALTER e il passaggio di `options` e `correct_option` a
-nullable.
+Le colonne nuove (`kind`, `source`, `expected_answer`) arrivano con un default
+che è già il valore giusto per le righe che c'erano: le simulazioni di prima
+sono tutte a scelta multipla e tutte generate da un documento, e le loro
+domande non hanno una traccia. Nessun backfill da scrivere, solo la ALTER e il
+passaggio di `options` e `correct_option` a nullable.
 
 Tutto ha `ondelete CASCADE` verso la simulazione. Eliminare una simulazione è
 definitivo, al contrario dell'archiviazione di un avatar: un avatar archiviato
@@ -823,9 +1092,19 @@ deve sopravvivere alle conversazioni giocate contro di lui, mentre un tentativo
 si porta dietro la propria fotografia e non ha bisogno che la simulazione
 esista ancora. Chi vuole solo toglierla di mezzo la ritira.
 
-Le costanti sono in [models.py:56-62](../backend/models.py#L56-L62):
-`SIMULATION_QUESTION_COUNT = 10`, `SIMULATION_OPTION_COUNT = 4`, gli stati
-`draft` e `published`, i tipi `multiple` e `open`.
+Le costanti sono in [models.py](../backend/models.py):
+`SIMULATION_POOL_COUNT = 50` (il serbatoio), `SIMULATION_QUESTION_COUNT = 10`
+(le domande di un tentativo, e il minimo per pubblicare un test scritto a
+mano), `SIMULATION_OPTION_COUNT = 4` (quante ne scrive il modello),
+`SIMULATION_MIN_OPTIONS = 2` e `SIMULATION_MAX_OPTIONS = 6` (l'intervallo entro
+cui può stare una domanda scritta a mano), gli stati `draft` e `published`, i
+tipi `multiple` e `open`, le origini `ai` e `manual`. Hanno il gemello nel
+frontend, in
+[services/simulations.ts](../frontend/src/services/simulations.ts): `POOL_COUNT`
+si legge dove si prepara un test, `QUESTION_COUNT` dove lo si svolge,
+`MIN_OPTIONS` e `MAX_OPTIONS` nell'editor di una domanda, e `requiredPool()` è
+la copia di `required_pool` che decide cosa scrive il bottone di
+pubblicazione.
 
 ---
 
@@ -835,15 +1114,21 @@ Le costanti sono in [models.py:56-62](../backend/models.py#L56-L62):
 | --- | --- |
 | Estensione non supportata | 400, "carica un file PDF, DOCX, TXT o Markdown" |
 | Tipo di test diverso da `multiple` o `open` | 400 |
+| Origine diversa da `ai` o `manual` | 400 |
+| Simulazione a mano creata con un documento, o generata creata senza | 400, con il motivo |
+| Generazione o caricamento del documento su una simulazione scritta a mano | 409, "creane una nuova" |
+| Domanda con meno di due o più di sei alternative | 422 |
 | File vuoto o illeggibile, PDF scansionato | 400, con il motivo. Non è un problema di ritentativi, è il file |
 | Documento oltre 10 MB | 413 |
 | Embedding falliti | 502, il caricamento si ripete |
 | Generazione su una simulazione senza passaggi indicizzati | 409 |
-| Il modello non risponde o non risponde su nessun modello della lista | 502 |
-| Il modello risponde qualcosa di inutilizzabile | 422 |
+| Il modello non risponde su nessun modello della lista, in **nessuna** delle cinque chiamate | 502. Se anche una sola è riuscita, le sue domande si scrivono |
+| Il modello risponde qualcosa di inutilizzabile in tutte le chiamate | 422 |
 | Domande salvate senza la chiave del loro tipo | 422, con la posizione della domanda |
-| Pubblicazione con meno di dieci domande | 409, con quante ce ne sono |
-| Consegna di una simulazione senza domande | 409 |
+| Pubblicazione con il serbatoio incompleto (cinquanta domande se generata, dieci se scritta a mano) | 409, con quante ne servono e quante ce ne sono |
+| Inizio o consegna di una simulazione senza domande | 409 |
+| Consegna con un numero di risposte diverso dalle domande del test | 400, con l'invito a ricominciare |
+| Consegna con una domanda che non è di questa simulazione, o ripetuta | 400 |
 | Indice di risposta fuori intervallo | 400 |
 | La correzione delle risposte aperte fallisce o torna incompleta | 502, con l'invito a riprovare: il tentativo non si scrive |
 | Simulazione o tentativo non visibili a chi chiede | 404 |
@@ -863,3 +1148,9 @@ Alla cancellazione di un utente
 ([backend/erasure.py](../backend/erasure.py)) i suoi `SimulationAttempt` spariscono
 con lui, mentre la firma di chi ha creato una `TechnicalSimulation` viene solo
 anonimizzata: quella riga non è **su** di lui, porta solo il suo nome in calce.
+
+Un singolo tentativo può anche essere tolto a mano da un admin, dal report
+attività (`DELETE /api/admin/simulation-attempts/{id}`, vedi
+[training-e-report.md](training-e-report.md)): è il caso di un test aperto per
+sbaglio o svolto da chi non doveva. Sparisce solo la fotografia di quelle
+risposte, e la simulazione resta lì da rifare.

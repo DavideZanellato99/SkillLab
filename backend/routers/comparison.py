@@ -220,7 +220,12 @@ def list_simulation_attempts(
     subject = _subject_or_404(db, current_user, user_id)
 
     rows = (
-        db.query(SimulationAttempt, TechnicalSimulation.title, TechnicalSimulation.kind)
+        db.query(
+            SimulationAttempt,
+            TechnicalSimulation.title,
+            TechnicalSimulation.kind,
+            TechnicalSimulation.source,
+        )
         .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
         .filter(SimulationAttempt.user_id == subject.id)
         .order_by(SimulationAttempt.created_at.asc())
@@ -233,6 +238,7 @@ def list_simulation_attempts(
             simulation_id=attempt.simulation_id,
             simulation_title=title,
             simulation_kind=kind,
+            simulation_source=source,
             attempted_at=attempt.created_at,
             correct_count=attempt.correct_count,
             question_count=attempt.question_count,
@@ -254,5 +260,5 @@ def list_simulation_attempts(
                 for answer in (attempt.answers or [])
             ],
         )
-        for attempt, title, kind in rows
+        for attempt, title, kind, source in rows
     ]

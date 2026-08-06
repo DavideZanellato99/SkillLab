@@ -13,15 +13,15 @@ avatar's organization, its trainees can only be its own. Every read is
 scoped the same way (resolve_admin_scope), so an organization admin never
 sees, assigns or deletes outside its own.
 
-Progress is derived here at read time and never stored: an assignment is
+Progress is derived at read time and never stored: an assignment is
 completed when an evaluated conversation of that user with that avatar,
 OPENED AFTER the assignment was created, reaches the target score. Only
 those conversations count, so practice from before the goal existed does
 not complete it, and deleting or re-judging a conversation can never
-leave a stale flag behind.
+leave a stale flag behind. That derivation lives in ``training_progress``,
+since the activity report counts the very same goals.
 """
 
-from collections import defaultdict
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -39,24 +39,18 @@ from models import (
     ROLE_SUPER_ADMIN,
     USER_STATUS_ACTIVE,
     Avatar,
-    ChatConversation,
-    ConversationEvaluation,
-    ConversationReview,
     Role,
     TrainingAssignment,
     User,
 )
 from routers.avatars import ensure_trainable
 from schemas import (
-    ASSIGNMENT_STATUS_ACTIVE,
-    ASSIGNMENT_STATUS_COMPLETED,
-    ASSIGNMENT_STATUS_COMPLETED_LATE,
-    ASSIGNMENT_STATUS_OVERDUE,
     MessageResponse,
     TrainingAssignmentCreate,
     TrainingAssignmentResponse,
     UserResponse,
 )
+from training_progress import evaluated_by_pair, progress_of
 
 router = APIRouter(prefix="/api/training", tags=["training"])
 
@@ -73,74 +67,12 @@ def _naive_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC).replace(tzinfo=None)
 
 
-def _evaluated_by_pair(
-    db: Session, assignments: list[TrainingAssignment]
-) -> dict[tuple, list[tuple[datetime, float]]]:
-    """(user_id, avatar_id) -> [(conversation opened at, score that counts)].
-
-    One query for the whole page instead of one per assignment; the
-    per-assignment cut (only conversations after its creation) happens in
-    Python since two assignments may share the same pair.
-
-    The score is the final one, so a grade the trainer corrected is the
-    grade the objective is measured against: a student told they scored 7.5
-    must not find their goal still open because the machine had said 6.
-    """
-    if not assignments:
-        return {}
-    rows = (
-        db.query(
-            ChatConversation.user_id,
-            ChatConversation.avatar_id,
-            ChatConversation.created_at,
-            ConversationEvaluation.overall_score,
-            ConversationReview.override_score,
-        )
-        .join(
-            ConversationEvaluation,
-            ConversationEvaluation.conversation_id == ChatConversation.id,
-        )
-        .outerjoin(
-            ConversationReview,
-            ConversationReview.conversation_id == ChatConversation.id,
-        )
-        .filter(
-            ChatConversation.user_id.in_({a.user_id for a in assignments}),
-            ChatConversation.avatar_id.in_({a.avatar_id for a in assignments}),
-        )
-        .all()
-    )
-    by_pair: dict[tuple, list[tuple[datetime, float]]] = defaultdict(list)
-    for user_id, avatar_id, opened_at, ai_score, override_score in rows:
-        by_pair[(user_id, avatar_id)].append(
-            (opened_at, override_score if override_score is not None else ai_score)
-        )
-    return by_pair
-
-
 def _assignment_response(
     assignment: TrainingAssignment,
     evaluated: list[tuple[datetime, float]],
 ) -> TrainingAssignmentResponse:
     """Assemble one assignment with its derived progress."""
-    relevant = [(at, score) for at, score in evaluated if at >= assignment.created_at]
-    best_score = max((score for _, score in relevant), default=None)
-    # First moment the target was met, by when the conversation was opened
-    achieved_at = min(
-        (at for at, score in relevant if score >= assignment.target_score),
-        default=None,
-    )
-
-    if achieved_at is not None:
-        late = assignment.due_at is not None and achieved_at > assignment.due_at
-        derived = ASSIGNMENT_STATUS_COMPLETED_LATE if late else ASSIGNMENT_STATUS_COMPLETED
-    elif (
-        assignment.due_at is not None and datetime.now(UTC).replace(tzinfo=None) > assignment.due_at
-    ):
-        derived = ASSIGNMENT_STATUS_OVERDUE
-    else:
-        derived = ASSIGNMENT_STATUS_ACTIVE
-
+    progress = progress_of(assignment, evaluated)
     user = assignment.user
     avatar = assignment.avatar
     return TrainingAssignmentResponse(
@@ -157,17 +89,17 @@ def _assignment_response(
         target_score=assignment.target_score,
         due_at=assignment.due_at,
         created_at=assignment.created_at,
-        status=derived,
-        attempts=len(relevant),
-        best_score=best_score,
-        achieved_at=achieved_at,
+        status=progress.status,
+        attempts=progress.attempts,
+        best_score=progress.best_score,
+        achieved_at=progress.achieved_at,
     )
 
 
 def _responses(
     db: Session, assignments: list[TrainingAssignment]
 ) -> list[TrainingAssignmentResponse]:
-    by_pair = _evaluated_by_pair(db, assignments)
+    by_pair = evaluated_by_pair(db, assignments)
     return [_assignment_response(a, by_pair.get((a.user_id, a.avatar_id), [])) for a in assignments]
 
 

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { SimulationComparisonAttempt } from '../services/comparison'
 import Select from './Select'
 import SimulationKindBadge from './SimulationKindBadge'
+import SimulationSourceBadge from './SimulationSourceBadge'
 import { Delta } from './scoreCharts'
 import { cardCls, formatScore, scoreTextColor } from './scoreFormat'
 import { formatDate } from './lastAccess'
@@ -11,11 +12,17 @@ import { formatDate } from './lastAccess'
  * Cambia cosa c'è sotto i due voti. Là i sei criteri di una valutazione, qui
  * le domande: rifare lo stesso test serve a sapere quali sbagli si sono
  * recuperati, e il voto da solo non lo dice. Il dettaglio compare solo fra due
- * prove sullo stesso test, perché domande diverse non si appaiano. */
+ * prove sullo stesso test, perché domande diverse non si appaiano.
+ *
+ * E dallo stesso test escono domande diverse: ogni tentativo ne estrae dieci a
+ * caso dal serbatoio, quindi due prove hanno in comune quello che il caso ha
+ * fatto capitare in tutte e due. Solo quelle si confrontano. Una domanda vista
+ * una volta sola non è né recuperata né persa, non è stata chiesta, e metterla
+ * in tabella con una crocetta rossa dalla parte in cui non c'era racconterebbe
+ * un errore che nessuno ha fatto. */
 
 interface QuestionRow {
   key: string
-  position: number
   text: string
   left: boolean
   right: boolean
@@ -62,6 +69,7 @@ function AttemptPanel({
         <span className="flex items-center gap-2 px-4 text-center text-[0.78rem] text-slate-400">
           {attempt.simulation_title}
           <SimulationKindBadge kind={attempt.simulation_kind} />
+          <SimulationSourceBadge source={attempt.simulation_source} />
         </span>
         <span className="text-[0.72rem] text-slate-500">{formatDate(attempt.attempted_at)}</span>
         <div className="mt-1 flex items-baseline gap-1">
@@ -115,35 +123,29 @@ export default function ComparisonSimulations({
 
   const sameSimulation = !!left && !!right && left.simulation_id === right.simulation_id
 
-  /* Le domande dell'uno e dell'altro, appaiate per id. Una domanda riscritta
-   * dopo il primo tentativo cambia id e compare due volte: è la verità, sono
-   * due domande diverse, e appaiarle sulla posizione le farebbe sembrare la
-   * stessa dicendo che è stata recuperata. */
+  /* Le domande capitate in tutte e due le prove, appaiate per id. Appaiarle
+   * sulla posizione le farebbe sembrare la stessa domanda solo perché sono
+   * arrivate per terze, e con l'estrazione a caso non lo sono quasi mai. Una
+   * domanda riscritta dopo il primo tentativo cambia id ed esce dal confronto
+   * per la stessa ragione: sono due domande diverse.
+   *
+   * L'ordine è quello del primo dei due tentativi, che è l'unico ordine che
+   * esiste: le posizioni dell'altro sono quelle di un'altra fila. */
   const questionRows = useMemo<QuestionRow[]>(() => {
     if (!left || !right || !sameSimulation) return []
-    const byId = new Map<string, QuestionRow>()
-    for (const answer of left.answers) {
-      byId.set(answer.question_id, {
-        key: answer.question_id,
-        position: answer.position,
-        text: answer.text,
-        left: answer.is_correct,
-        right: false,
-      })
-    }
-    for (const answer of right.answers) {
-      const row = byId.get(answer.question_id)
-      if (row) row.right = answer.is_correct
-      else
-        byId.set(answer.question_id, {
+    const rightById = new Map(right.answers.map((a) => [a.question_id, a]))
+    return left.answers.flatMap((answer) => {
+      const twin = rightById.get(answer.question_id)
+      if (!twin) return []
+      return [
+        {
           key: answer.question_id,
-          position: answer.position,
           text: answer.text,
-          left: false,
-          right: answer.is_correct,
-        })
-    }
-    return [...byId.values()].sort((a, b) => a.position - b.position)
+          left: answer.is_correct,
+          right: twin.is_correct,
+        },
+      ]
+    })
   }, [left, right, sameSimulation])
 
   const recovered = questionRows.filter((r) => !r.left && r.right).length
@@ -212,9 +214,28 @@ export default function ComparisonSimulations({
             <AttemptPanel attempt={right} baseline={left} />
           </div>
 
+          {sameSimulation && questionRows.length === 0 && (
+            <div className={cardCls}>
+              <h2 className="text-sm font-semibold text-slate-300">Domanda per domanda</h2>
+              <p className="text-xs text-slate-500">
+                Le due prove non hanno nessuna domanda in comune: sono estratte a caso a ogni
+                tentativo, e questa volta non se ne sono incontrate
+              </p>
+            </div>
+          )}
+
           {sameSimulation && questionRows.length > 0 && (
             <div className={cardCls}>
               <h2 className="text-sm font-semibold text-slate-300">Domanda per domanda</h2>
+              {/* Quante sono capitate in tutte e due va detto prima dei segni:
+                  senza, tre righe sotto due test da dieci domande sembrano
+                  sette domande sparite. */}
+              <p className="text-xs text-slate-500">
+                {questionRows.length}{' '}
+                {questionRows.length === 1
+                  ? 'domanda capitata in tutte e due le prove'
+                  : 'domande capitate in tutte e due le prove'}
+              </p>
               <p className="mb-4 text-xs text-slate-500">
                 {recovered === 0 && lost === 0
                   ? 'Le stesse risposte giuste e le stesse sbagliate nelle due prove'
@@ -240,7 +261,6 @@ export default function ComparisonSimulations({
                       }`}
                     >
                       <p className="min-w-0 flex-1 text-[0.85rem] leading-relaxed text-slate-300">
-                        <span className="mr-1 text-slate-500">{row.position}.</span>
                         {row.text}
                       </p>
                       <div className="flex shrink-0 items-center gap-3">

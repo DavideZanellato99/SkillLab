@@ -5,8 +5,9 @@ quest'ordine, che è anche il motivo per cui sono tre chiamate e non una:
 
 1. il caricamento del documento, che lo legge, lo spezza in passaggi e li
    indicizza (secondi);
-2. la generazione delle domande, che sono due chiamate a un modello di
-   ragionamento e possono prendersi minuti;
+2. la generazione delle domande, che è una lettura del documento più cinque
+   scritture in parallelo su un modello di ragionamento, e può prendersi
+   minuti;
 3. la revisione umana e la pubblicazione.
 
 Separarli non è pignoleria: se fossero un'unica richiesta, un modello lento
@@ -18,6 +19,16 @@ Il passo 3 è la ragione per cui esiste lo stato di bozza. Le domande le
 scrive una macchina che ha letto il documento, e quasi sempre le scrive bene:
 "quasi sempre" è esattamente il motivo per cui nessuno le vede prima che un
 umano le abbia rilette. Finché la simulazione è in bozza esiste solo qui.
+
+Le domande però può scriverle anche il docente, una per una, ed è la seconda
+strada che questo router serve (``source``, vedi ``TechnicalSimulation``). Là
+i tre passi diventano uno solo: niente documento da caricare e niente
+generazione da attendere, si scrivono le domande e si pubblica. Cambia quanto
+basta a pubblicare, dieci domande invece di cinquanta, e cade tutto quello
+che presuppone un documento: la generazione e la sua sostituzione rispondono
+409 su una simulazione scritta a mano. Quello che non cambia è il resto:
+stesso salvataggio in blocco, stessa bozza, stessa estrazione di dieci
+domande a caso quando qualcuno comincia il test.
 """
 
 from uuid import UUID
@@ -40,8 +51,10 @@ from auth_dependency import get_current_super_admin
 from database import get_db
 from models import (
     ALL_SIMULATION_KINDS,
+    ALL_SIMULATION_SOURCES,
     SIMULATION_KIND_MULTIPLE,
-    SIMULATION_QUESTION_COUNT,
+    SIMULATION_SOURCE_AI,
+    SIMULATION_SOURCE_MANUAL,
     SIMULATION_STATUS_DRAFT,
     Organization,
     SimulationAttempt,
@@ -118,6 +131,81 @@ def _admin_detail(db: Session, simulation: TechnicalSimulation, admin: User) -> 
         "chunk_count": len(simulation.chunks),
         "total_attempts": total_attempts,
     }
+
+
+async def _read_upload(file: UploadFile) -> bytes:
+    """Il file caricato, se è di un formato leggibile e non è troppo grande.
+
+    I tre controlli stanno insieme perché sono la stessa domanda posta a un
+    upload: si legge? Il caricamento iniziale e la sostituzione del documento
+    la pongono uguale, e una versione sola evita che il tetto cambiato in un
+    posto resti vecchio nell'altro.
+    """
+    if not document_text.is_supported(file.filename or ""):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato non supportato: carica un file PDF, DOCX, TXT o Markdown.",
+        )
+    data = await file.read(document_text.MAX_DOCUMENT_BYTES + 1)
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Il file caricato è vuoto."
+        )
+    if len(data) > document_text.MAX_DOCUMENT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=(
+                "Il documento non può superare "
+                f"{document_text.MAX_DOCUMENT_BYTES // (1024 * 1024)} MB."
+            ),
+        )
+    return data
+
+
+def _unfinished_question(simulation: TechnicalSimulation) -> str | None:
+    """La prima domanda a metà, descritta, o None se sono tutte finite.
+
+    Salvare una domanda incompleta si può, ed è quello che permette a chi ne
+    sta scrivendo trenta di fermarsi alla decima. Pubblicarla no: una
+    domanda senza la risposta corretta segnata arriverebbe a chi svolge il
+    test come una domanda che nessuna scelta indovina.
+
+    Il controllo è qui e non nello schema del payload perché cosa manchi
+    dipende dal tipo del test, che il payload non porta con sé (vedi
+    ``SimulationQuestionPayload``).
+    """
+    for question in simulation.questions:
+        if not question.text.strip():
+            return f"La domanda {question.position} non ha il testo."
+        if simulation.is_open:
+            if not (question.expected_answer or "").strip():
+                return f"La domanda {question.position} non ha la risposta attesa."
+            continue
+        options = question.options or []
+        if any(not str(o).strip() for o in options):
+            return f"La domanda {question.position} ha un'alternativa vuota."
+        if question.correct_option is None:
+            return f"La domanda {question.position} non ha la risposta corretta segnata."
+    return None
+
+
+def _require_document_source(simulation: TechnicalSimulation) -> None:
+    """Ferma le operazioni sul documento di una simulazione che non ne ha.
+
+    Generare le domande e sostituire il documento sono gesti che presuppongono
+    un documento. Su una simulazione scritta a mano non ce n'è mai stato uno,
+    e la strada per averlo non è caricarlo qui: è creare una simulazione
+    nuova, perché le domande scritte a mano non diventano domande generate
+    solo perché adesso c'è un file da cui avrebbero potuto nascere.
+    """
+    if simulation.is_manual:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Questa simulazione ha le domande scritte a mano e non ha un documento. "
+                "Per generarle da un documento, creane una nuova."
+            ),
+        )
 
 
 async def _index_document(
@@ -199,19 +287,25 @@ async def create_simulation(
     title: str = Form(...),
     description: str = Form(""),
     kind: str = Form(SIMULATION_KIND_MULTIPLE),
-    file: UploadFile = File(...),
+    source: str = Form(SIMULATION_SOURCE_AI),
+    file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_super_admin),
 ):
-    """Crea una simulazione dal documento caricato, senza ancora le domande.
+    """Crea una simulazione, dal documento caricato o vuota da riempire.
 
-    Nasce in bozza e senza domande: generarle è il passo successivo, e
-    tenerlo separato significa che un modello non disponibile non fa perdere
-    il documento appena caricato.
+    Con le domande generate nasce in bozza e senza domande: generarle è il
+    passo successivo, e tenerlo separato significa che un modello non
+    disponibile non fa perdere il documento appena caricato.
 
-    Il tipo si sceglie qui perché è quello che le domande saranno: quattro
-    alternative con una giusta, oppure una traccia di risposta attesa. Non
-    si cambia più (vedi ``update_simulation``).
+    Con le domande scritte a mano nasce in bozza, senza domande e senza
+    documento: il documento serviva al modello per scrivere, e qui a scrivere
+    è il docente. Quello che manca è lo stesso in tutti e due i casi, e il
+    passo successivo è lo stesso pannello.
+
+    Il tipo si sceglie qui perché è quello che le domande saranno: alternative
+    con una giusta, oppure una traccia di risposta attesa. Non si cambia più
+    (vedi ``update_simulation``), e nemmeno chi le scrive.
     """
     title = title.strip()
     if not title:
@@ -222,30 +316,29 @@ async def create_simulation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"Tipo di test non valido: {kind}"
         )
+    if source not in ALL_SIMULATION_SOURCES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Origine delle domande non valida: {source}",
+        )
     organization = db.query(Organization).filter(Organization.id == organization_id).first()
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Organizzazione non trovata."
         )
-    if not document_text.is_supported(file.filename or ""):
+
+    manual = source == SIMULATION_SOURCE_MANUAL
+    if manual and file is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Formato non supportato: carica un file PDF, DOCX, TXT o Markdown.",
+            detail="Un test scritto a mano non ha un documento da cui ricavare le domande.",
         )
-
-    data = await file.read(document_text.MAX_DOCUMENT_BYTES + 1)
-    if not data:
+    if not manual and file is None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Il file caricato è vuoto."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Serve il documento da cui ricavare le domande.",
         )
-    if len(data) > document_text.MAX_DOCUMENT_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=(
-                "Il documento non può superare "
-                f"{document_text.MAX_DOCUMENT_BYTES // (1024 * 1024)} MB."
-            ),
-        )
+    data = None if file is None else await _read_upload(file)
 
     simulation = TechnicalSimulation(
         organization_id=organization_id,
@@ -253,14 +346,18 @@ async def create_simulation(
         description=description.strip() or None,
         status=SIMULATION_STATUS_DRAFT,
         kind=kind,
+        source=source,
     )
     db.add(simulation)
     db.flush()
-    await _index_document(db, simulation, file.filename or "documento", data)
+    if file is not None and data is not None:
+        await _index_document(db, simulation, file.filename or "documento", data)
     db.commit()
     db.refresh(simulation)
 
-    audit.describe(http_request, titolo=title, documento=simulation.document_name)
+    audit.describe(
+        http_request, titolo=title, documento=simulation.document_name or "scritto a mano"
+    )
     return _admin_detail(db, simulation, current_admin)
 
 
@@ -274,25 +371,8 @@ async def replace_document(
 ):
     """Sostituisce il documento e reindicizza i passaggi."""
     simulation = _get_or_404(db, simulation_id)
-    if not document_text.is_supported(file.filename or ""):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Formato non supportato: carica un file PDF, DOCX, TXT o Markdown.",
-        )
-    data = await file.read(document_text.MAX_DOCUMENT_BYTES + 1)
-    if not data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Il file caricato è vuoto."
-        )
-    if len(data) > document_text.MAX_DOCUMENT_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=(
-                "Il documento non può superare "
-                f"{document_text.MAX_DOCUMENT_BYTES // (1024 * 1024)} MB."
-            ),
-        )
-
+    _require_document_source(simulation)
+    data = await _read_upload(file)
     await _index_document(db, simulation, file.filename or "documento", data)
     db.commit()
     db.refresh(simulation)
@@ -307,7 +387,14 @@ async def generate_simulation_questions(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_super_admin),
 ):
-    """Genera le domande dal documento, sostituendo quelle che c'erano.
+    """Genera il serbatoio di domande dal documento, sostituendo quello che
+    c'era.
+
+    Cinquanta domande, non dieci: dieci sono quelle che ogni tentativo
+    estrae a caso al momento di cominciare. Se il modello ne restituisce
+    meno, quelle che ci sono si scrivono lo stesso e la simulazione resta in
+    bozza, che è il posto in cui il super admin decide se rigenerare o
+    completare a mano.
 
     Rigenerare riporta la simulazione in bozza anche se era pubblicata: le
     domande nuove non le ha ancora lette nessuno, e la revisione umana prima
@@ -316,6 +403,7 @@ async def generate_simulation_questions(
     con sé la fotografia delle domande che ha ricevuto.
     """
     simulation = _get_or_404(db, simulation_id)
+    _require_document_source(simulation)
     chunks = simulation.chunks
     if not chunks:
         raise HTTPException(
@@ -399,18 +487,16 @@ def save_questions(
     alternative con l'indice di quella giusta, oppure la traccia della
     risposta attesa. Quella dell'altro tipo, se arriva, si butta invece di
     restare scritta in una colonna che nessuno leggerà più.
+
+    Qui si controlla la forma e non il contenuto: che una domanda a scelta
+    multipla porti delle alternative, non che siano scritte. Una domanda a
+    metà si salva, perché chi ne sta scrivendo trenta deve potersi fermare
+    alla decima; a pretenderle finite è la pubblicazione (vedi
+    ``update_status``).
     """
     simulation = _get_or_404(db, simulation_id)
     is_open = simulation.is_open
     for position, question in enumerate(payload.questions, start=1):
-        if is_open and not question.expected_answer.strip():
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=(
-                    f"La domanda {position} non ha la risposta attesa, che è quello con cui "
-                    "verrà corretta."
-                ),
-            )
         if not is_open and question.options is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -455,22 +541,36 @@ def update_status(
 ):
     """Pubblica la simulazione o la ritira.
 
-    Pubblicare chiede il test completo: dieci domande, che è quello che la
-    pagina promette a chi lo svolge. Ritirare invece non chiede niente, ed è
-    la ragione per cui esiste: quando c'è qualcosa che non va, il primo
-    gesto deve poter essere toglierla di mezzo.
+    Pubblicare chiede il serbatoio: cinquanta domande su una simulazione
+    generata, di cui ogni tentativo ne estrarrà dieci. Il numero non è quello
+    che chi svolge il test vede, è quello che rende diversa una prova dalla
+    successiva, e pubblicarne una con venti domande vorrebbe dire un test che
+    al terzo tentativo è già tutto noto. Su una scritta a mano il minimo è
+    dieci, perché lì ogni domanda è tempo di qualcuno (vedi
+    ``TechnicalSimulation.required_pool``).
+
+    E le pretende finite, non solo contate: una domanda a metà si salva ma non
+    si pubblica (vedi ``_unfinished_question``). Il messaggio dice quale, ed è
+    l'unico modo perché chi ha davanti cinquanta domande sappia dove guardare.
+
+    Ritirare invece non chiede niente, ed è la ragione per cui esiste: quando
+    c'è qualcosa che non va, il primo gesto deve poter essere toglierla di
+    mezzo.
     """
     simulation = _get_or_404(db, simulation_id)
-    if payload.status != SIMULATION_STATUS_DRAFT and len(simulation.questions) < (
-        SIMULATION_QUESTION_COUNT
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Servono {SIMULATION_QUESTION_COUNT} domande per pubblicare: "
-                f"ce ne sono {len(simulation.questions)}."
-            ),
-        )
+    if payload.status != SIMULATION_STATUS_DRAFT:
+        required = simulation.required_pool
+        if len(simulation.questions) < required:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Servono {required} domande per pubblicare: "
+                    f"ce ne sono {len(simulation.questions)}."
+                ),
+            )
+        unfinished = _unfinished_question(simulation)
+        if unfinished:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=unfinished)
     simulation.status = payload.status
     db.commit()
     db.refresh(simulation)

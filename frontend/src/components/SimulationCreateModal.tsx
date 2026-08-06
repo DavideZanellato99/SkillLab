@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { useCreateSimulation } from '../hooks/useSimulations'
 import type { Organization } from '../services/organizations'
-import type { SimulationKind } from '../services/simulations'
+import type { SimulationKind, SimulationSource } from '../services/simulations'
+import { QUESTION_COUNT, POOL_COUNT } from '../services/simulations'
 import ModalShell, { ModalHeader } from './ModalShell'
 import Field, { textareaCls, TextInput } from './Field'
 import Select from './Select'
@@ -9,18 +10,21 @@ import PrimaryButton from './PrimaryButton'
 import Spinner from './Spinner'
 import FormError from './FormError'
 
-/* La creazione di una simulazione: titolo, organizzazione, tipo e documento.
+/* La creazione di una simulazione: titolo, organizzazione, tipo, chi scrive
+ * le domande e, se le scrive il modello, il documento.
  *
- * Le domande non si generano qui. Il caricamento finisce con una bozza vuota
- * che si apre subito sul pannello di revisione, dove la generazione è un
- * bottone: sono due attese di durata molto diversa, e incollarle una
- * all'altra significherebbe far ricaricare il documento a chi ha avuto
- * sfortuna con il modello.
+ * Le domande non si scrivono qui, in nessuna delle due strade: la creazione
+ * finisce con una bozza vuota che si apre subito sul pannello di revisione,
+ * dove la generazione è un bottone e la scrittura a mano un elenco che
+ * cresce. Sono attese di durata molto diversa, e incollarle una all'altra
+ * significherebbe far ricaricare il documento a chi ha avuto sfortuna con il
+ * modello.
  *
- * Il tipo però si sceglie qui, ed è l'unica occasione: le domande nascono
- * già con quattro alternative o con la traccia della risposta attesa, quindi
- * cambiarlo dopo vorrebbe dire buttarle. Chi si accorge di aver scelto male
- * ricarica il documento in una simulazione nuova. */
+ * Le due scelte che non si cambiano più si fanno qui, ed è l'unica occasione.
+ * Il tipo, perché le domande nascono già con delle alternative o con la
+ * traccia della risposta attesa. E chi le scrive, perché un test scritto a
+ * mano non ha documento e uno generato ne ha uno indicizzato. Chi si accorge
+ * di aver scelto male ne crea una nuova. */
 
 /** Le estensioni che il backend sa leggere (vedi document_text). */
 const ACCEPTED = '.pdf,.docx,.txt,.md,.markdown'
@@ -32,8 +36,18 @@ const KIND_OPTIONS = [
 
 const KIND_HINTS: Record<SimulationKind, string> = {
   multiple:
-    'Quattro alternative per domanda, trenta secondi ciascuna. Si corregge da sé, e conta anche la prontezza.',
+    'Alternative per domanda, trenta secondi ciascuna. Si corregge da sé, e conta anche la prontezza.',
   open: "Si risponde scrivendo, senza tempo limite. Alla consegna un modello legge le risposte e assegna i punti in base a quanto sono complete, quindi l'esito arriva dopo qualche secondo.",
+}
+
+const SOURCE_OPTIONS = [
+  { value: 'ai', label: 'Generate da un documento' },
+  { value: 'manual', label: 'Scritte a mano' },
+]
+
+const SOURCE_HINTS: Record<SimulationSource, string> = {
+  ai: `Il modello legge il documento e scrive ${POOL_COUNT} domande con la loro spiegazione. Le rileggi e le correggi prima di pubblicare.`,
+  manual: `Scrivi tu le domande, le risposte e la spiegazione, nel pannello che si apre subito dopo. Ne servono almeno ${QUESTION_COUNT}, che sono quante ne riceve chi svolge il test.`,
 }
 
 interface SimulationCreateModalProps {
@@ -54,15 +68,27 @@ export default function SimulationCreateModal({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [kind, setKind] = useState<SimulationKind>('multiple')
+  const [source, setSource] = useState<SimulationSource>('ai')
   const [file, setFile] = useState<File | null>(null)
 
-  const canSubmit = organizationId && title.trim() && file && !create.isPending
+  const fromDocument = source === 'ai'
+  const canSubmit = organizationId && title.trim() && (!fromDocument || file) && !create.isPending
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!canSubmit || !file) return
+    if (!canSubmit) return
     create.mutate(
-      { organizationId, title: title.trim(), description: description.trim(), kind, file },
+      {
+        organizationId,
+        title: title.trim(),
+        description: description.trim(),
+        kind,
+        source,
+        /* Il file resta selezionato se qualcuno torna sulla generazione dopo
+         * averlo scelto, ma a mano non si manda: il server rifiuta una
+         * simulazione scritta a mano che porta un documento. */
+        file: fromDocument ? file : null,
+      },
       { onSuccess: (simulation) => onCreated(simulation.id) },
     )
   }
@@ -89,7 +115,11 @@ export default function SimulationCreateModal({
         }
         iconWrapperCls="border border-violet-600/20 bg-violet-600/10 text-violet-400"
         title="Nuova simulazione"
-        description="Carica il documento da cui ricavare le domande."
+        description={
+          fromDocument
+            ? 'Carica il documento da cui ricavare le domande.'
+            : 'Le domande le scrivi tu, nel passaggio successivo.'
+        }
         className="mb-6"
       />
 
@@ -101,6 +131,20 @@ export default function SimulationCreateModal({
             onChange={setOrganizationId}
             options={organizations.map((o) => ({ value: o.id, label: o.name }))}
             placeholder="Scegli l'organizzazione"
+            disabled={create.isPending}
+          />
+        </Field>
+
+        <Field
+          label="Domande"
+          htmlFor="simulation-source"
+          hint={<span className="text-xs text-slate-500">{SOURCE_HINTS[source]}</span>}
+        >
+          <Select
+            id="simulation-source"
+            value={source}
+            onChange={(value) => setSource(value as SimulationSource)}
+            options={SOURCE_OPTIONS}
             disabled={create.isPending}
           />
         </Field>
@@ -124,8 +168,9 @@ export default function SimulationCreateModal({
           htmlFor="simulation-title"
           hint={
             <span className="text-xs text-slate-500">
-              Nomina il documento nel suo insieme: le domande nascono da tutto quello che contiene,
-              non da una sola casistica.
+              {fromDocument
+                ? 'Nomina il documento nel suo insieme: le domande nascono da tutto quello che contiene, non da una sola casistica.'
+                : 'Nomina la materia nel suo insieme: chi svolge il test riceve dieci domande a caso fra tutte quelle che scriverai.'}
             </span>
           }
         >
@@ -160,49 +205,54 @@ export default function SimulationCreateModal({
           />
         </Field>
 
-        <Field
-          label="Documento"
-          hint={
-            <span className="text-xs text-slate-500">
-              PDF, DOCX, TXT o Markdown, fino a 10 MB. Un PDF di pagine scansionate non contiene
-              testo e non può essere letto.
-            </span>
-          }
-        >
-          <input
-            ref={fileInput}
-            type="file"
-            accept={ACCEPTED}
-            className="hidden"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            disabled={create.isPending}
-          />
-          <button
-            type="button"
-            onClick={() => fileInput.current?.click()}
-            disabled={create.isPending}
-            className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-dashed border-white/12 bg-slate-800/50 px-4 py-3 text-left text-sm text-slate-400 transition hover:border-violet-600/50 hover:bg-violet-600/8 disabled:cursor-not-allowed disabled:opacity-50"
+        {/* Il documento è la sola differenza fra le due strade: a mano non
+            c'è niente da leggere, e un campo spento sarebbe una promessa che
+            il resto del pannello non mantiene. */}
+        {fromDocument && (
+          <Field
+            label="Documento"
+            hint={
+              <span className="text-xs text-slate-500">
+                PDF, DOCX, TXT o Markdown, fino a 10 MB. Un PDF di pagine scansionate non contiene
+                testo e non può essere letto.
+              </span>
+            }
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0 text-slate-500"
+            <input
+              ref={fileInput}
+              type="file"
+              accept={ACCEPTED}
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              disabled={create.isPending}
+            />
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={create.isPending}
+              className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-dashed border-white/12 bg-slate-800/50 px-4 py-3 text-left text-sm text-slate-400 transition hover:border-violet-600/50 hover:bg-violet-600/8 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <span className="min-w-0 flex-1 truncate">
-              {file ? file.name : 'Scegli un file dal computer'}
-            </span>
-          </button>
-        </Field>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0 text-slate-500"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span className="min-w-0 flex-1 truncate">
+                {file ? file.name : 'Scegli un file dal computer'}
+              </span>
+            </button>
+          </Field>
+        )}
 
         {create.isError && <FormError message={(create.error as Error).message} />}
 
@@ -210,10 +260,12 @@ export default function SimulationCreateModal({
           {create.isPending ? (
             <>
               <Spinner variant="button" />
-              Lettura del documento...
+              {fromDocument ? 'Lettura del documento...' : 'Creazione...'}
             </>
-          ) : (
+          ) : fromDocument ? (
             'Carica e continua'
+          ) : (
+            'Crea e scrivi le domande'
           )}
         </PrimaryButton>
       </form>

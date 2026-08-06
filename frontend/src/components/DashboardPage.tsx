@@ -8,9 +8,10 @@ import { useOrganizations } from '../hooks/useOrganizations'
 import { isAdmin, isSuperAdmin } from '../services/auth'
 import SearchSelect from './SearchSelect'
 import Select from './Select'
-import ConversationModeBadge, { conversationModeLabel } from './ConversationModeBadge'
-import type { ConversationMode } from '../services/api'
-import type { SimulationKind } from '../services/simulations'
+import ConversationModeBadge, { conversationModeLabel, MODE_FILTERS } from './ConversationModeBadge'
+import type { ModeFilter } from './ConversationModeBadge'
+import { KIND_FILTERS } from './simulationFormat'
+import type { KindFilter } from './simulationFormat'
 import DataTable, { Td, Tr } from './DataTable'
 import FilterTabs from './FilterTabs'
 import Tooltip from './Tooltip'
@@ -74,47 +75,12 @@ interface UserAvg {
   count: number
 }
 
-/* ── Selettore di canale: scopa l'intera dashboard ──
- *
- * Le due modalità si valutano sugli stessi criteri ma non sono confrontabili
- * alla pari (al telefono contano tono e tempi, in chat la scrittura), quindi
- * di default la dashboard mostra le sole chiamate e i due canali si mescolano
- * solo se lo si chiede esplicitamente. */
-
-type ModeFilter = ConversationMode | 'all'
-
-const MODE_FILTERS: { value: ModeFilter; label: string }[] = [
-  { value: 'voice', label: 'Chiamate' },
-  { value: 'text', label: 'Chat' },
-  { value: 'all', label: 'Entrambe' },
-]
-
 /* Come si legge il canale attivo dentro le descrizioni delle sezioni */
 const MODE_SUFFIX: Record<ModeFilter, string> = {
   voice: 'sulle chiamate',
   text: 'sulle chat',
   all: 'su chiamate e chat',
 }
-
-/* ── Selettore di tipo: lo stesso mestiere, sull'altra metà ──
- *
- * Il gemello scritto del selettore qui sopra. Anche qui le due prove si
- * misurano sulla stessa scala in decimi ma non sono la stessa fatica: a
- * crocette conta anche la prontezza, a risposta aperta conta quanto si sa
- * scrivere di una procedura. Chi guarda una media vuole poter chiedere di
- * quale delle due sta parlando.
- *
- * A differenza del canale, però, qui si parte da "Entrambi": i test aperti
- * sono arrivati dopo, e un default che ne mostrasse un tipo solo terrebbe
- * nascosta metà della dashboard a chi non sa che questo selettore esiste. */
-
-type KindFilter = SimulationKind | 'all'
-
-const KIND_FILTERS: { value: KindFilter; label: string }[] = [
-  { value: 'multiple', label: 'Scelta multipla' },
-  { value: 'open', label: 'Risposta aperta' },
-  { value: 'all', label: 'Entrambi' },
-]
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -123,6 +89,16 @@ export default function DashboardPage() {
   const [orgFilter, setOrgFilter] = useState('')
   const [selectedUserId, setSelectedUserId] = useState('')
   const [section, setSection] = useState<DashboardSection>('conversazioni')
+  /* I due selettori (le opzioni stanno in MODE_FILTERS e KIND_FILTERS, che
+   * anche il report attività usa) scopano l'intera metà in cui vivono: ogni
+   * conteggio, media e grafico parte dalle righe già ristrette.
+   *
+   * Due default diversi, e non è una svista. Il canale parte dalle chiamate
+   * perché al telefono e in chat non si è valutati alla pari e mescolarli
+   * darebbe una media ambigua. Il tipo parte da "Entrambi" perché i test a
+   * risposta aperta sono arrivati dopo, e un default che ne mostrasse un
+   * tipo solo terrebbe nascosta metà della dashboard a chi non sa che il
+   * selettore esiste. */
   const [modeFilter, setModeFilter] = useState<ModeFilter>('voice')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [search, setSearch] = useState('')
@@ -640,32 +616,33 @@ export default function DashboardPage() {
                     onSearchChange={setSearch}
                     searchPlaceholder="Cerca per conversazione, utente o avatar..."
                     searchActions={
-                      <button
-                        className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-                        onClick={handleExportXlsx}
-                        disabled={isExporting || isLoading || rows.length === 0}
-                        title="Scarica il report delle valutazioni in Excel"
-                      >
-                        {isExporting ? (
-                          <Spinner variant="small" />
-                        ) : (
-                          <svg
-                            width="15"
-                            height="15"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                            <polyline points="7 10 12 15 17 10" />
-                            <line x1="12" y1="15" x2="12" y2="3" />
-                          </svg>
-                        )}
-                        Esporta Excel
-                      </button>
+                      <Tooltip content="Scarica il report delle valutazioni in Excel">
+                        <button
+                          className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                          onClick={handleExportXlsx}
+                          disabled={isExporting || isLoading || rows.length === 0}
+                        >
+                          {isExporting ? (
+                            <Spinner variant="small" />
+                          ) : (
+                            <svg
+                              width="15"
+                              height="15"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="7 10 12 15 17 10" />
+                              <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                          )}
+                          Esporta Excel
+                        </button>
+                      </Tooltip>
                     }
                     isEmpty={searchedRows.length === 0}
                     emptyMessage={
@@ -731,12 +708,13 @@ export default function DashboardPage() {
                             >
                               {formatScore(r.overall_score)}/10
                               {r.has_override && (
-                                <span
-                                  className="absolute right-0 top-full whitespace-nowrap text-[0.7rem] font-semibold text-violet-300"
-                                  title={`Punteggio corretto dal docente, la valutazione automatica assegnava ${formatScore(r.ai_overall_score)}`}
+                                <Tooltip
+                                  content={`Punteggio corretto dal docente, la valutazione automatica assegnava ${formatScore(r.ai_overall_score)}`}
                                 >
-                                  corretto
-                                </span>
+                                  <span className="absolute right-0 top-full whitespace-nowrap text-[0.7rem] font-semibold text-violet-300">
+                                    corretto
+                                  </span>
+                                </Tooltip>
                               )}
                             </span>
                           </Td>

@@ -5,7 +5,8 @@ import DataTable, { Td, Tr } from './DataTable'
 import Tooltip from './Tooltip'
 import SimulationAttemptModal from './SimulationAttemptModal'
 import SimulationKindBadge from './SimulationKindBadge'
-import { kindLabel } from './simulationFormat'
+import SimulationSourceBadge from './SimulationSourceBadge'
+import { kindLabel, sourceLabel } from './simulationFormat'
 import { matchesSearch } from './tableSearch'
 import { KpiCard, MeterRow, TrendChart } from './scoreCharts'
 import {
@@ -203,8 +204,9 @@ export default function DashboardSimulations({
         matchesSearch(
           search,
           r.simulation_title,
-          // Il tipo si cerca con la stessa parola che il badge mostra
+          // Il tipo e l'origine si cercano con le stesse parole che i badge mostrano
           kindLabel(r.simulation_kind),
+          sourceLabel(r.simulation_source),
           personName(r),
           r.user_email,
           formatDateTime(r.attempted_at),
@@ -351,6 +353,7 @@ export default function DashboardSimulations({
               <Td>
                 <div className="flex items-center gap-2">
                   <SimulationKindBadge kind={r.simulation_kind} iconOnly />
+                  <SimulationSourceBadge source={r.simulation_source} />
                   <span className="text-[0.85rem] font-medium text-slate-100">
                     {r.simulation_title}
                   </span>

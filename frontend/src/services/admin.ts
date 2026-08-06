@@ -9,7 +9,7 @@ import type {
 } from './api'
 import type { AuthUser, RoleName, UserStatus } from './auth'
 import type { Authored } from './authorship'
-import type { SimulationKind } from './simulations'
+import type { SimulationKind, SimulationSource } from './simulations'
 
 export interface CreateUserPayload {
   email: string
@@ -290,6 +290,23 @@ export interface ConversationReport {
   created_at: string
   message_count: number
   duration_seconds: number
+  /** Voto finale, correzione del docente compresa. null se non valutata. */
+  score: number | null
+}
+
+/** Un test tecnico consegnato: il gemello scritto di ConversationReport. */
+export interface SimulationAttemptReport {
+  id: string
+  simulation_id: string
+  simulation_title: string
+  /** "multiple" o "open": come si rispondeva. */
+  simulation_kind: SimulationKind
+  /** "ai" o "manual": chi aveva scritto le domande. */
+  simulation_source: SimulationSource
+  created_at: string
+  correct_count: number
+  question_count: number
+  score: number
 }
 
 export interface UserActivityReport {
@@ -303,17 +320,23 @@ export interface UserActivityReport {
   created_at: string
   conversation_count: number
   total_duration_seconds: number
+  simulation_count: number
   conversations: ConversationReport[]
+  simulation_attempts: SimulationAttemptReport[]
 }
 
 /**
- * Fetch the read-only users activity recap: conversations per avatar and
- * durations (Super Admin + Organization Admin). The Super Admin may filter
- * by organization; the Organization Admin is always scoped to its own.
+ * Fetch the read-only users activity recap: le prove di ogni persona, con il
+ * voto di ciascuna e le durate (Super Admin + Organization Admin). The Super
+ * Admin may filter by organization; the Organization Admin is always scoped
+ * to its own. `days` restringe le prove agli ultimi N giorni.
  */
-export const fetchUsersReport = (organizationId?: string) =>
+export const fetchUsersReport = (organizationId?: string, days?: number) =>
   apiFetch<UserActivityReport[]>('/api/admin/users-report', {
-    params: organizationId ? { organization_id: organizationId } : undefined,
+    params: {
+      ...(organizationId ? { organization_id: organizationId } : {}),
+      ...(days ? { days: String(days) } : {}),
+    },
   })
 
 // ── Evaluations dashboard (read-only) ────────────────
@@ -360,6 +383,8 @@ export interface SimulationReportRow {
   simulation_title: string
   /** Come si rispondeva, il gemello di `mode` su una conversazione. */
   simulation_kind: SimulationKind
+  /** Chi aveva scritto le domande: "ai" o "manual". */
+  simulation_source: SimulationSource
   user_id: string
   user_email: string
   user_nome: string

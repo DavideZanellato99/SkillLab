@@ -1,4 +1,13 @@
-import { cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  cloneElement,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { MouseEvent as ReactMouseEvent, FocusEvent, ReactElement, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -39,6 +48,12 @@ interface Pos {
 
 const EDGE_PAD = 8
 
+/* Come un tooltip nasconde quello che lo contiene. Serve quando un elemento
+ * con il suo tooltip sta dentro un'area che ne ha già uno (una riga di
+ * tabella cliccabile, per dire): fra i due vince il più interno, che è quello
+ * che parla della cosa precisa sotto al mouse. */
+const ParentTooltipContext = createContext<(() => void) | null>(null)
+
 export default function Tooltip({
   content,
   side = 'top',
@@ -51,6 +66,16 @@ export default function Tooltip({
   const [flip, setFlip] = useState(false)
   const tipRef = useRef<HTMLDivElement | null>(null)
   const visible = pos !== null && Boolean(content)
+  const hideParent = useContext(ParentTooltipContext)
+
+  /* Annidati: si spegne il tooltip che sta fuori e gli si tiene fermo il
+   * mouse, altrimenti il suo onMouseMove lo riaccenderebbe subito e se ne
+   * vedrebbero due sovrapposti. Senza un genitore non cambia nulla. */
+  const takeOver = (e: ReactMouseEvent) => {
+    if (!hideParent) return
+    e.stopPropagation()
+    hideParent()
+  }
 
   const showFromElement = (el: Element) => {
     const r = el.getBoundingClientRect()
@@ -58,30 +83,30 @@ export default function Tooltip({
   }
 
   const handleMouseEnter = (e: ReactMouseEvent) => {
+    takeOver(e)
     if (truncateOnly && !isTruncated(e.currentTarget)) return
     if (anchor === 'cursor') setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 })
     else showFromElement(e.currentTarget)
   }
-  const handleMouseMove =
-    anchor === 'cursor'
-      ? (e: ReactMouseEvent) =>
-          setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 })
-      : undefined
+  const handleMouseMove = (e: ReactMouseEvent) => {
+    takeOver(e)
+    if (anchor === 'cursor') setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 })
+  }
   const handleFocus = (e: FocusEvent) => {
     if (truncateOnly && !isTruncated(e.currentTarget)) return
     showFromElement(e.currentTarget)
   }
-  const hide = () => {
+  const hide = useCallback(() => {
     setPos(null)
     setFlip(false)
-  }
+  }, [])
 
   // Allo scroll l'ancora si sposta ma il tooltip (fixed) no: nascondilo
   useEffect(() => {
     if (!visible) return
     window.addEventListener('scroll', hide, true)
     return () => window.removeEventListener('scroll', hide, true)
-  }, [visible])
+  }, [visible, hide])
 
   const placeTop = (side === 'top') !== flip
 
@@ -129,7 +154,9 @@ export default function Tooltip({
 
   return (
     <>
-      {target}
+      {/* Il provider non aggiunge nodi: serve solo perché un eventuale
+          tooltip più interno sappia spegnere questo. */}
+      <ParentTooltipContext.Provider value={hide}>{target}</ParentTooltipContext.Provider>
       {visible &&
         pos &&
         createPortal(

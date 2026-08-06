@@ -6,7 +6,7 @@ import {
   useSimulationResults,
   useUpdateSimulationStatus,
 } from '../hooks/useSimulations'
-import { QUESTION_COUNT } from '../services/simulations'
+import { MIN_OPTIONS, POOL_COUNT, QUESTION_COUNT, requiredPool } from '../services/simulations'
 import type { SimulationQuestionAdmin, SimulationQuestionPayload } from '../services/simulations'
 import ModalShell from './ModalShell'
 import LoadingState from './LoadingState'
@@ -16,8 +16,10 @@ import FormError from './FormError'
 import FormSuccess from './FormSuccess'
 import Badge from './Badge'
 import TabBar from './TabBar'
+import { PlusIcon } from './icons'
 import SimulationQuestionEditor from './SimulationQuestionEditor'
 import SimulationKindBadge from './SimulationKindBadge'
+import SimulationSourceBadge from './SimulationSourceBadge'
 import {
   formatDateTime,
   formatScore,
@@ -26,14 +28,20 @@ import {
   statusLabel,
 } from './simulationFormat'
 
-/* Il pannello in cui una simulazione diventa un test: si generano le domande,
+/* Il pannello in cui una simulazione diventa un test: si scrivono le domande,
  * si rileggono, si correggono e si pubblica. Si apre dalla matita nella
  * tabella, come il form di modifica di un utente, di un'organizzazione o di un
  * avatar: il clic sulla riga porta invece alla scheda di sola lettura.
  *
+ * Le domande arrivano da due strade e il pannello è lo stesso: generate dal
+ * documento con un bottone, oppure scritte una per una da chi prepara il
+ * test. Cambia il modo di riempire l'elenco, non l'elenco: le stesse
+ * correzioni, lo stesso salvataggio in blocco, la stessa pubblicazione. Da
+ * quale strada venga la simulazione lo dice `source`, deciso alla creazione.
+ *
  * Sta tutto in una modale perché è un gesto solo, con un ordine che non si
  * può saltare: la pubblicazione è in fondo, dopo le domande, e il bottone
- * dice quante ne mancano invece di limitarsi a essere spento.
+ * dice cosa manca invece di limitarsi a essere spento.
  *
  * Le domande si modificano su una copia locale e si salvano in blocco. Chi
  * corregge un refuso in una spiegazione lo fa insieme al resto, e un salvataggio
@@ -52,12 +60,46 @@ function toPayload(questions: SimulationQuestionAdmin[]): SimulationQuestionPayl
   }))
 }
 
+/* Una domanda appena aggiunta: vuota, con le alternative che il modello
+ * scriverebbe. Quattro è un punto di partenza e non una regola: chi ne vuole
+ * tre ne toglie una, chi ne vuole sei le aggiunge (vedi
+ * SimulationQuestionEditor). */
+const NEW_OPTION_COUNT = 4
+
+function blankQuestion(open: boolean): SimulationQuestionPayload {
+  return {
+    text: '',
+    options: open ? null : Array<string>(NEW_OPTION_COUNT).fill(''),
+    correct_option: null,
+    expected_answer: '',
+    explanation: '',
+  }
+}
+
+/* Una riga mai toccata. Si aggiunge una domanda, ci si ripensa, e quella riga
+ * non deve arrivare al server: là una domanda senza nemmeno il testo è un
+ * errore, e qui è solo una riga aggiunta per sbaglio. Si toglie al momento del
+ * salvataggio invece di vietare l'aggiunta, così chi ne apre tre e ne scrive
+ * due non deve chiudere niente. */
+function isBlank(question: SimulationQuestionPayload): boolean {
+  return (
+    !question.text.trim() &&
+    !question.explanation.trim() &&
+    !question.expected_answer.trim() &&
+    (question.options ?? []).every((o) => !o.trim())
+  )
+}
+
 /** Una domanda è pronta quando ha il testo e la chiave del suo tipo. */
 function isComplete(question: SimulationQuestionPayload, open: boolean): boolean {
   if (!question.text.trim()) return false
-  return open
-    ? Boolean(question.expected_answer.trim())
-    : Boolean(question.options?.every((o) => o.trim()))
+  if (open) return Boolean(question.expected_answer.trim())
+  const options = question.options ?? []
+  return (
+    options.length >= MIN_OPTIONS &&
+    options.every((o) => o.trim()) &&
+    question.correct_option !== null
+  )
 }
 
 interface SimulationEditorModalProps {
@@ -90,15 +132,26 @@ export default function SimulationEditorModal({
   const busy = generate.isPending || save.isPending || setStatus.isPending
   const isPublished = simulation?.status === 'published'
   const isOpen = simulation?.kind === 'open'
-  const complete =
-    draft.length === QUESTION_COUNT && draft.every((q) => isComplete(q, Boolean(isOpen)))
+  const isManual = simulation?.source === 'manual'
+  const required = requiredPool(simulation?.source ?? 'ai')
+  /* Le righe che contano: una appena aggiunta e ancora vuota non è una
+   * domanda, quindi non si salva e non si conta verso il serbatoio. */
+  const written = draft.filter((q) => !isBlank(q))
+  const enough = written.length >= required
+  const allWritten = written.every((q) => isComplete(q, Boolean(isOpen)))
+  const complete = enough && allWritten
+
+  const addQuestion = () => {
+    setSaved(false)
+    setDraft((prev) => [...prev, blankQuestion(Boolean(isOpen))])
+  }
 
   /* Pubblicare salva prima le domande: quello che finisce davanti agli utenti
    * deve essere quello che il super admin sta guardando, non l'ultima
    * versione che era stata salvata prima delle correzioni di adesso. */
   const publish = () => {
     setSaved(false)
-    save.mutate(draft, { onSuccess: () => setStatus.mutate('published') })
+    save.mutate(written, { onSuccess: () => setStatus.mutate('published') })
   }
 
   const error =
@@ -115,16 +168,26 @@ export default function SimulationEditorModal({
           <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/6 px-8 py-5">
             <div className="min-w-0">
               <h2 className="font-heading text-xl font-bold text-slate-100">{simulation.title}</h2>
+              {/* Il documento e i suoi passaggi si nominano dove esistono:
+                  su un test scritto a mano non c'è niente da indicizzare, e
+                  "0 passaggi" farebbe sembrare rotto un caricamento che non
+                  è mai stato chiesto. Che sia scritto a mano lo dice la
+                  targhetta accanto al titolo. */}
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
                 <span>{simulation.organization_name}</span>
-                <span aria-hidden>·</span>
-                <span className="truncate">{simulation.document_name}</span>
-                <span aria-hidden>·</span>
-                <span>{simulation.chunk_count} passaggi indicizzati</span>
+                {!isManual && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span className="truncate">{simulation.document_name}</span>
+                    <span aria-hidden>·</span>
+                    <span>{simulation.chunk_count} passaggi indicizzati</span>
+                  </>
+                )}
               </p>
             </div>
             <div className="mr-8 flex shrink-0 items-center gap-2">
               <SimulationKindBadge kind={simulation.kind} />
+              <SimulationSourceBadge source={simulation.source} />
               <Badge tone={statusBadgeTone(simulation.status)}>
                 {statusLabel(simulation.status)}
               </Badge>
@@ -147,33 +210,80 @@ export default function SimulationEditorModal({
               draft.length === 0 ? (
                 <div className="flex flex-col items-center gap-4 py-16 text-center">
                   <p className="text-[0.95rem] text-slate-400">
-                    Nessuna domanda ancora. Generale dal documento, poi rileggile prima di
-                    pubblicare
+                    {isManual
+                      ? 'Nessuna domanda ancora. Le scrivi tu, una per una'
+                      : 'Nessuna domanda ancora. Generale dal documento, poi rileggile prima di pubblicare'}
                   </p>
                   <p className="max-w-md text-sm text-slate-500">
-                    La generazione legge il documento, individua gli argomenti verificabili e scrive
-                    dieci domande{' '}
-                    {isOpen
-                      ? 'con la traccia della risposta attesa'
-                      : 'con quattro alternative ciascuna'}
-                    , sui passaggi che li riguardano. Può richiedere qualche minuto.
+                    {isManual ? (
+                      <>
+                        Ogni domanda porta {isOpen ? 'la risposta attesa' : 'le sue alternative'} e
+                        la spiegazione che leggerà chi ha risposto. Ne servono almeno {required}, e
+                        ogni tentativo ne estrarrà {QUESTION_COUNT} a caso: scriverne di più
+                        significa che due prove non sono la stessa fila di domande.
+                      </>
+                    ) : (
+                      <>
+                        La generazione legge il documento, individua gli argomenti verificabili e
+                        scrive {POOL_COUNT} domande{' '}
+                        {isOpen
+                          ? 'con la traccia della risposta attesa'
+                          : 'con quattro alternative ciascuna'}
+                        , sui passaggi che li riguardano. Ogni tentativo ne estrarrà{' '}
+                        {QUESTION_COUNT} a caso. Può richiedere qualche minuto.
+                      </>
+                    )}
                   </p>
+                  {isManual && (
+                    <PrimaryButton
+                      icon={<PlusIcon size={16} />}
+                      onClick={addQuestion}
+                      disabled={busy}
+                    >
+                      Scrivi la prima domanda
+                    </PrimaryButton>
+                  )}
                 </div>
               ) : (
-                <ol className="flex list-none flex-col gap-3">
-                  {draft.map((question, index) => (
-                    <SimulationQuestionEditor
-                      key={index}
-                      index={index}
-                      question={question}
-                      open={isOpen}
+                <>
+                  <ol className="flex list-none flex-col gap-3">
+                    {draft.map((question, index) => (
+                      <SimulationQuestionEditor
+                        key={index}
+                        index={index}
+                        question={question}
+                        open={isOpen}
+                        disabled={busy}
+                        onChange={(updated) =>
+                          setDraft((prev) => prev.map((q, i) => (i === index ? updated : q)))
+                        }
+                        /* Togliere una domanda ha senso dove il serbatoio si
+                         * scrive a mano. Su una generata il serbatoio è
+                         * cinquanta o niente, e una domanda in meno sarebbe
+                         * solo una pubblicazione bloccata. */
+                        onRemove={
+                          isManual
+                            ? () => {
+                                setSaved(false)
+                                setDraft((prev) => prev.filter((_, i) => i !== index))
+                              }
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </ol>
+                  {isManual && draft.length < POOL_COUNT && (
+                    <button
+                      type="button"
+                      onClick={addQuestion}
                       disabled={busy}
-                      onChange={(updated) =>
-                        setDraft((prev) => prev.map((q, i) => (i === index ? updated : q)))
-                      }
-                    />
-                  ))}
-                </ol>
+                      className={`${secondaryBtnCls} mt-3 w-full border-dashed`}
+                    >
+                      <PlusIcon size={16} />
+                      Aggiungi domanda
+                    </button>
+                  )}
+                </>
               )
             ) : results.length === 0 ? (
               <p className="py-16 text-center text-sm text-slate-500">
@@ -223,34 +333,44 @@ export default function SimulationEditorModal({
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <button
-                className={secondaryBtnCls}
-                onClick={() => {
-                  setSaved(false)
-                  generate.mutate()
-                }}
-                disabled={busy}
-              >
-                {generate.isPending ? (
-                  <>
-                    <Spinner variant="button" />
-                    Generazione in corso...
-                  </>
-                ) : draft.length === 0 ? (
-                  'Genera le domande'
-                ) : (
-                  'Rigenera dal documento'
-                )}
-              </button>
+              {/* La generazione esiste solo dove c'è un documento da leggere.
+                  A mano il posto in cui l'elenco cresce è l'elenco stesso, in
+                  fondo alle domande. */}
+              {isManual ? (
+                <span className="text-xs text-slate-500">
+                  {written.length === 1 ? '1 domanda scritta' : `${written.length} domande scritte`}
+                  {written.length < required && `, ne servono ${required}`}
+                </span>
+              ) : (
+                <button
+                  className={secondaryBtnCls}
+                  onClick={() => {
+                    setSaved(false)
+                    generate.mutate()
+                  }}
+                  disabled={busy}
+                >
+                  {generate.isPending ? (
+                    <>
+                      <Spinner variant="button" />
+                      Generazione in corso...
+                    </>
+                  ) : draft.length === 0 ? (
+                    'Genera le domande'
+                  ) : (
+                    'Rigenera dal documento'
+                  )}
+                </button>
+              )}
 
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   className={secondaryBtnCls}
                   onClick={() => {
                     setSaved(false)
-                    save.mutate(draft, { onSuccess: () => setSaved(true) })
+                    save.mutate(written, { onSuccess: () => setSaved(true) })
                   }}
-                  disabled={busy || draft.length === 0}
+                  disabled={busy || written.length === 0}
                 >
                   {save.isPending ? (
                     <>
@@ -289,8 +409,13 @@ export default function SimulationEditorModal({
                       </>
                     ) : complete ? (
                       'Pubblica'
+                    ) : enough ? (
+                      /* Le domande ci sono tutte ma qualcuna è a metà: dirlo
+                       * è l'unico modo perché chi guarda sappia dove
+                       * cercare, invece di contare righe che tornano. */
+                      'Completa le domande a metà'
                     ) : (
-                      `Servono ${QUESTION_COUNT} domande (ce ne sono ${draft.length})`
+                      `Servono ${required} domande (ce ne sono ${written.length})`
                     )}
                   </PrimaryButton>
                 )}

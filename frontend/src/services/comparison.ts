@@ -7,7 +7,7 @@
 
 import { apiFetch } from './api'
 import type { EvaluationCriterionScore } from './admin'
-import type { SimulationKind } from './simulations'
+import type { SimulationKind, SimulationSource } from './simulations'
 
 export interface Attempt {
   conversation_id: string
@@ -52,6 +52,8 @@ export interface SimulationComparisonAttempt {
   simulation_title: string
   /** Come si rispondeva, il gemello di `mode` su una conversazione. */
   simulation_kind: SimulationKind
+  /** Chi aveva scritto le domande: "ai" o "manual". */
+  simulation_source: SimulationSource
   attempted_at: string
   correct_count: number
   question_count: number

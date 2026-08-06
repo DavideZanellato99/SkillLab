@@ -168,6 +168,16 @@ def _add_columns() -> None:
                 "kind VARCHAR(20) NOT NULL DEFAULT 'multiple'"
             )
         )
+        # Chi ha scritto le domande. Le simulazioni che esistevano prima
+        # nascono tutte da un documento letto dal modello, che è il default
+        # della colonna: come per ``kind``, il valore giusto per loro è già
+        # quello e non serve backfill.
+        conn.execute(
+            text(
+                "ALTER TABLE technical_simulations ADD COLUMN IF NOT EXISTS "
+                "source VARCHAR(20) NOT NULL DEFAULT 'ai'"
+            )
+        )
         # La chiave di una domanda aperta. Vuota sulle domande a scelta
         # multipla, che è quello che il default dà già alle righe di prima.
         conn.execute(

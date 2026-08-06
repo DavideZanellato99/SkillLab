@@ -4,6 +4,7 @@ import {
   useSaveMessageAnnotation,
   useDeleteMessageAnnotation,
 } from '../hooks/useConversationReview'
+import Tooltip from './Tooltip'
 
 /* La nota che il docente appunta su un singolo messaggio della trascrizione,
  * con il suo mini editor.
@@ -124,18 +125,19 @@ export default function MessageAnnotationEditor({
 
   if (annotation) {
     return (
-      <button
-        className="mt-1.5 w-full cursor-pointer rounded-xl border border-violet-500/25 bg-violet-500/8 p-2.5 text-left transition hover:bg-violet-500/15"
-        onClick={() => setIsEditing(true)}
-        title="Modifica la nota"
-      >
-        <span className="mb-0.5 block text-[0.68rem] font-semibold uppercase tracking-wide text-violet-300">
-          Nota di {annotation.reviewer_name}
-        </span>
-        <span className="block whitespace-pre-wrap text-[0.8rem] leading-relaxed text-slate-300">
-          {annotation.note}
-        </span>
-      </button>
+      <Tooltip content="Modifica la nota">
+        <button
+          className="mt-1.5 w-full cursor-pointer rounded-xl border border-violet-500/25 bg-violet-500/8 p-2.5 text-left transition hover:bg-violet-500/15"
+          onClick={() => setIsEditing(true)}
+        >
+          <span className="mb-0.5 block text-[0.68rem] font-semibold uppercase tracking-wide text-violet-300">
+            Nota di {annotation.reviewer_name}
+          </span>
+          <span className="block whitespace-pre-wrap text-[0.8rem] leading-relaxed text-slate-300">
+            {annotation.note}
+          </span>
+        </button>
+      </Tooltip>
     )
   }
 

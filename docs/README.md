@@ -33,8 +33,8 @@ alle singole funzionalità.
 | [chiamata-vocale.md](chiamata-vocale.md) | La telefonata dal microfono all'audio di risposta: STT, LLM, TTS, turni, registrazione |
 | [chat-testuale.md](chat-testuale.md) | Il canale scritto, lo streaming della risposta, la fine di una conversazione |
 | [valutazione.md](valutazione.md) | Il giudizio dell'AI sui sei criteri, la revisione del docente, il voto che conta |
-| [training-e-report.md](training-e-report.md) | Percorsi assegnati, notifiche, confronto fra tentativi, cruscotti ed esportazioni |
-| [simulatore.md](simulatore.md) | Il test tecnico ricavato da un documento aziendale, dalla generazione delle domande alla correzione |
+| [training-e-report.md](training-e-report.md) | Percorsi assegnati, notifiche, confronto fra tentativi, cruscotti, report per persona ed esportazioni |
+| [simulatore.md](simulatore.md) | Il test tecnico, ricavato da un documento aziendale o scritto a mano dal docente: il serbatoio di domande, le dieci estratte a ogni tentativo, la correzione |
 
 ## Come gira davvero
 

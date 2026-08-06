@@ -1,5 +1,6 @@
 import type { ConversationEvaluation, EvaluationCitation } from '../services/api'
 import TrainerReviewNote from './TrainerReviewNote'
+import Tooltip from './Tooltip'
 
 /* Corpo della valutazione: punteggio complessivo, punteggi per criterio e
  * spunti di miglioramento. Usato sia dalla EvaluationModal post-chiamata sia
@@ -47,12 +48,13 @@ function DeltaBadge({ delta }: { delta: number }) {
         ? `▼ −${formatScore(Math.abs(rounded))}`
         : '='
   return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-px text-[0.68rem] font-semibold ${cls}`}
-      title="Variazione rispetto al tentativo precedente"
-    >
-      {label}
-    </span>
+    <Tooltip content="Variazione rispetto al tentativo precedente">
+      <span
+        className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-px text-[0.68rem] font-semibold ${cls}`}
+      >
+        {label}
+      </span>
+    </Tooltip>
   )
 }
 
@@ -157,30 +159,32 @@ export default function EvaluationReport({
                       key={citation.index}
                       className="inline-flex items-center overflow-hidden rounded-full border border-violet-500/30 bg-violet-500/10 text-[0.72rem] font-medium text-violet-300"
                     >
-                      <button
-                        className="cursor-pointer border-none bg-transparent px-2.5 py-0.5 text-inherit transition hover:bg-violet-500/20"
-                        onClick={() => onCitationClick(citation)}
-                        title="Vai al messaggio nella trascrizione"
-                      >
-                        Messaggio {citation.index}
-                      </button>
-                      {onCitationPlay && (
+                      <Tooltip content="Vai al messaggio nella trascrizione">
                         <button
-                          className="cursor-pointer border-y-0 border-l border-r-0 border-solid border-violet-500/30 bg-transparent py-0.5 pl-1.5 pr-2 text-inherit transition hover:bg-violet-500/20"
-                          onClick={() => onCitationPlay(citation)}
-                          aria-label={`Ascolta il messaggio ${citation.index} nella registrazione`}
-                          title="Ascolta questo momento nella registrazione"
+                          className="cursor-pointer border-none bg-transparent px-2.5 py-0.5 text-inherit transition hover:bg-violet-500/20"
+                          onClick={() => onCitationClick(citation)}
                         >
-                          <svg
-                            width="10"
-                            height="10"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            stroke="none"
-                          >
-                            <polygon points="5 3 19 12 5 21 5 3" />
-                          </svg>
+                          Messaggio {citation.index}
                         </button>
+                      </Tooltip>
+                      {onCitationPlay && (
+                        <Tooltip content="Ascolta questo momento nella registrazione">
+                          <button
+                            className="cursor-pointer border-y-0 border-l border-r-0 border-solid border-violet-500/30 bg-transparent py-0.5 pl-1.5 pr-2 text-inherit transition hover:bg-violet-500/20"
+                            onClick={() => onCitationPlay(citation)}
+                            aria-label={`Ascolta il messaggio ${citation.index} nella registrazione`}
+                          >
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                              stroke="none"
+                            >
+                              <polygon points="5 3 19 12 5 21 5 3" />
+                            </svg>
+                          </button>
+                        </Tooltip>
                       )}
                     </span>
                   ))}

@@ -4,6 +4,7 @@ import type { Simulation } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
 import LoadingState from './LoadingState'
 import Badge from './Badge'
+import SimulationSourceBadge from './SimulationSourceBadge'
 import { scoreBadgeTone, formatScore, kindLabel } from './simulationFormat'
 
 /* L'elenco dei test tecnici che si possono svolgere.
@@ -34,13 +35,17 @@ function SimulationCard({ simulation }: { simulation: Simulation }) {
           {simulation.description}
         </p>
       )}
-      {/* Il tipo si legge prima di entrare: scegliere fra quattro alternative
+      {/* Il tipo si legge prima di entrare: scegliere fra delle alternative
           in trenta secondi e scrivere dieci risposte sono due impegni molto
-          diversi, e chi apre l'elenco sta decidendo se cominciare adesso. */}
+          diversi, e chi apre l'elenco sta decidendo se cominciare adesso.
+          Accanto sta da dove vengono le domande, che non cambia l'impegno ma
+          cambia cosa si ha davanti. */}
       <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
         <span>{simulation.question_count} domande</span>
         <span aria-hidden>·</span>
         <span>{kindLabel(simulation.kind).toLowerCase()}</span>
+        <span aria-hidden>·</span>
+        <SimulationSourceBadge source={simulation.source} />
         <span aria-hidden>·</span>
         <span className="truncate">{simulation.organization_name}</span>
       </div>

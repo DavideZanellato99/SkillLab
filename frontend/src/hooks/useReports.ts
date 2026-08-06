@@ -17,11 +17,14 @@ import { queryKeys } from './queryKeys'
  * un voto fatta da qui, arriva per invalidazione e non aspetta la scadenza. */
 const REPORT_STALE_TIME = 1000 * 60 * 3
 
-/** Recap per utente: conversazioni avute e tempo passato in chiamata. */
-export function useUsersReport(organizationId?: string, enabled = true) {
+/** Recap per utente: le due prove svolte, come sono andate e gli obiettivi.
+ *
+ * `days` restringe le prove agli ultimi N giorni e fa parte della chiave:
+ * cambiare periodo è una domanda diversa, non lo stesso elenco filtrato. */
+export function useUsersReport(organizationId?: string, days?: number, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.reports.users(organizationId || undefined),
-    queryFn: () => fetchUsersReport(organizationId || undefined),
+    queryKey: queryKeys.reports.users(organizationId || undefined, days),
+    queryFn: () => fetchUsersReport(organizationId || undefined, days),
     enabled,
     staleTime: REPORT_STALE_TIME,
   })

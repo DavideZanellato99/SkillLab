@@ -72,9 +72,42 @@ SIMULATION_KIND_MULTIPLE = "multiple"
 SIMULATION_KIND_OPEN = "open"
 ALL_SIMULATION_KINDS = [SIMULATION_KIND_MULTIPLE, SIMULATION_KIND_OPEN]
 
-# Quante domande ha un test, e quante alternative ha una domanda.
+# Chi scrive le domande: il modello a partire da un documento, oppure il
+# docente, una per una.
+#
+# Sono due modi di preparare lo stesso test, e quello che cambia sta tutto
+# prima della pubblicazione: chi svolge il test riceve dieci domande estratte
+# a caso in entrambi i casi, e non ha modo di sapere da dove vengano.
+#
+# Si sceglie alla creazione e non si cambia. Una simulazione generata ha un
+# documento indicizzato, e le sue domande citano i passaggi da cui nascono;
+# una scritta a mano non ha documento affatto, perché il documento serviva al
+# modello per scrivere e a chi sbaglia per rileggere la procedura, e su un
+# test scritto a mano la spiegazione la fornisce il docente.
+SIMULATION_SOURCE_AI = "ai"
+SIMULATION_SOURCE_MANUAL = "manual"
+ALL_SIMULATION_SOURCES = [SIMULATION_SOURCE_AI, SIMULATION_SOURCE_MANUAL]
+
+# Quante domande il modello scrive per una simulazione, quante ne compongono
+# un tentativo, e quante alternative ha una domanda.
+#
+# Le due cifre dicono cose diverse. Il serbatoio è tutto quello che si può
+# chiedere su quel documento, scritto una volta e riletto una volta;
+# il tentativo ne pesca dieci a caso quando qualcuno preme "inizia", quindi
+# due prove dello stesso test non sono la stessa fila di domande e ritentare
+# smette di essere un esercizio di memoria sull'ordine delle risposte.
+SIMULATION_POOL_COUNT = 50
 SIMULATION_QUESTION_COUNT = 10
 SIMULATION_OPTION_COUNT = 4
+
+# Quante alternative può avere una domanda scritta a mano. Il modello ne
+# scrive sempre SIMULATION_OPTION_COUNT, che è il numero su cui sono tarate
+# le sue regole; il docente decide domanda per domanda, perché una scelta fra
+# due è una domanda diversa da una scelta fra sei e sono entrambe legittime.
+# Sotto le due non c'è più niente da scegliere, sopra le sei la domanda non
+# si legge più su un telefono.
+SIMULATION_MIN_OPTIONS = 2
+SIMULATION_MAX_OPTIONS = 6
 
 # Le tinte fra cui si sceglie il colore di una categoria di avatar. Un elenco
 # chiuso e non un colore libero: la pastiglia è disegnata da classi Tailwind
@@ -760,19 +793,26 @@ class NotificationRead(Base):
 
 
 class TechnicalSimulation(Authored, Base):
-    """Un test tecnico ricavato da un documento, a scelta multipla o aperto.
+    """Un test tecnico a scelta multipla o aperto, generato o scritto a mano.
 
     È il gemello scritto del roleplay: là si valuta come l'operatore gestisce
     una persona, qui si verifica se conosce la procedura. Il super admin
     carica il documento (una procedura, un manuale, una circolare), l'LLM ne
     ricava le domande, e gli utenti dell'organizzazione a cui la simulazione
-    appartiene la svolgono.
+    appartiene la svolgono. Oppure il documento non c'è e le domande le
+    scrive lui, il che è la stessa cosa vista da chi risponde.
 
     ``kind`` decide come si risponde, e si sceglie al caricamento del
     documento: cambiarlo dopo vorrebbe dire buttare le domande, perché
     un'alternativa e una risposta attesa non sono la stessa cosa scritta in
     due modi. Chi ha scelto il tipo sbagliato ricarica il documento in una
     simulazione nuova.
+
+    ``source`` dice chi le ha scritte, e nemmeno lui si cambia: su una
+    simulazione scritta a mano non c'è documento da cui generare, e su una
+    generata le domande citano passaggi che a mano nessuno riscriverebbe.
+    Quello che cambia è quante domande servono per pubblicare (vedi
+    ``required_pool``) e quali bottoni compaiono nel pannello di revisione.
 
     Il tenant è la stessa regola di ovunque: ogni simulazione appartiene a
     una sola organizzazione e si vede solo dentro quella. Solo il super admin
@@ -782,7 +822,10 @@ class TechnicalSimulation(Authored, Base):
     originale: il file non viene conservato, perché quello che serve dopo il
     caricamento è il testo, sia per rigenerare le domande sia per motivare
     una risposta sbagliata. Il nome del file resta solo per far riconoscere
-    a chi l'ha caricato quale documento sta guardando.
+    a chi l'ha caricato quale documento sta guardando. Su una simulazione
+    scritta a mano le due colonne restano vuote, ed è quello che vuol dire
+    "senza documento": non un caricamento rimandato, ma un test che si regge
+    sulle domande e basta.
 
     La pubblicazione è una porta sola: finché è in bozza la simulazione esiste
     per il solo super admin, che può rileggere e correggere le domande generate
@@ -799,6 +842,8 @@ class TechnicalSimulation(Authored, Base):
     status = Column(String(20), nullable=False, default=SIMULATION_STATUS_DRAFT, index=True)
     # Scelta multipla o risposta aperta, per tutte le domande del test
     kind = Column(String(20), nullable=False, default=SIMULATION_KIND_MULTIPLE)
+    # Chi ha scritto le domande: il modello dal documento, o il docente
+    source = Column(String(20), nullable=False, default=SIMULATION_SOURCE_AI)
     # Il documento su cui le domande si fondano, come testo estratto
     document_name = Column(String(255), nullable=False, default="")
     document_text = Column(Text, nullable=False, default="")
@@ -835,6 +880,26 @@ class TechnicalSimulation(Authored, Base):
     @property
     def is_open(self) -> bool:
         return self.kind == SIMULATION_KIND_OPEN
+
+    @property
+    def is_manual(self) -> bool:
+        return self.source == SIMULATION_SOURCE_MANUAL
+
+    @property
+    def required_pool(self) -> int:
+        """Quante domande servono per pubblicare questa simulazione.
+
+        Il serbatoio pieno è quello che rende diverso un tentativo dal
+        successivo, e alla generazione non costa niente: cinquanta domande
+        sono la stessa attesa di dieci, quindi lì si pretendono tutte.
+
+        A mano sono cinquanta domande scritte una per una, ed è il genere di
+        richiesta che finisce con un test mai pubblicato. Il minimo è quanto
+        serve a comporre un tentativo: con dieci domande tutti vedono le
+        stesse dieci, e chi vuole che la seconda prova sia diversa ne scrive
+        di più, fino allo stesso tetto di cinquanta.
+        """
+        return SIMULATION_QUESTION_COUNT if self.is_manual else SIMULATION_POOL_COUNT
 
     def __repr__(self):
         return f"<TechnicalSimulation(id={self.id}, title='{self.title}', status='{self.status}')>"
@@ -914,7 +979,9 @@ class SimulationQuestion(Base):
         nullable=False,
         index=True,
     )
-    # Ordine di presentazione, da 1 a SIMULATION_QUESTION_COUNT
+    # Posto nel serbatoio, da 1 a SIMULATION_POOL_COUNT. Non è il numero che
+    # chi svolge il test vede accanto alla domanda: quello dipende da dove
+    # l'estrazione l'ha messa, e vive nella fotografia del tentativo.
     position = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
     # Le due chiavi, alternative fra loro: piene quelle del tipo del test,

@@ -58,8 +58,9 @@ export const queryKeys = {
     actions: ['audit-logs', 'actions'] as const,
   },
   reports: {
-    /** Recap per utente delle conversazioni svolte. */
-    users: (organizationId?: string) => ['reports', 'users', organizationId ?? '__all__'] as const,
+    /** Recap per utente delle prove svolte, nel periodo scelto. */
+    users: (organizationId?: string, days?: number) =>
+      ['reports', 'users', organizationId ?? '__all__', days ?? '__ever__'] as const,
     /** Punteggi delle valutazioni per la dashboard. */
     evaluations: (organizationId?: string) =>
       ['reports', 'evaluations', organizationId ?? '__all__'] as const,

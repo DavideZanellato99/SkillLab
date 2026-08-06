@@ -1,9 +1,19 @@
 """Il simulatore tecnico visto da chi lo svolge.
 
 Il gemello scritto del roleplay: là si misura come l'operatore gestisce una
-persona, qui se conosce la procedura. Dieci domande ricavate da un documento
-aziendale (vedi ``simulation_questions``), la stessa regola del tenant di
-tutto il resto, e nessun limite ai tentativi.
+persona, qui se conosce la procedura. Dieci domande estratte a caso dal
+serbatoio ricavato da un documento aziendale (vedi ``simulation_questions``),
+la stessa regola del tenant di tutto il resto, e nessun limite ai tentativi.
+
+**L'estrazione avviene quando il test comincia**, non quando la pagina si
+apre: è il senso di ``start_attempt``, che è l'unica lettura di questa
+applicazione a rispondere due cose diverse alla stessa domanda. Le dieci
+domande vivono da lì in poi nel browser di chi risponde, e tornano indietro
+con la consegna: il server non tiene da nessuna parte quali aveva dato, e
+corregge quelle che gli vengono riconsegnate dopo aver controllato che siano
+davvero sue e che siano il numero giusto. Una riga in più per ogni test
+iniziato e mai finito sarebbe una tabella di sessioni da far scadere, per un
+test di formazione dove un tentativo esiste solo quando viene consegnato.
 
 **Due modi di rispondere, e due correzioni diverse.** Un test a scelta
 multipla si corregge qui e non nel modello: la risposta esatta è stata decisa
@@ -33,6 +43,7 @@ Le domande viaggiano verso il browser senza la risposta esatta (vedi
 consegna, altrimenti il test lo risolverebbe la scheda di rete.
 """
 
+import random
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -44,8 +55,10 @@ from database import get_db
 from models import (
     ROLE_ORGANIZATION_ADMIN,
     ROLE_SUPER_ADMIN,
+    SIMULATION_QUESTION_COUNT,
     SIMULATION_STATUS_PUBLISHED,
     SimulationAttempt,
+    SimulationQuestion,
     TechnicalSimulation,
     User,
 )
@@ -146,6 +159,22 @@ def attempt_stats(db: Session, user_id: UUID, simulation_ids: list[UUID]) -> dic
     return stats
 
 
+def drawn_count(simulation: TechnicalSimulation) -> int:
+    """Quante domande ha un tentativo di questa simulazione.
+
+    Dieci, cioè quante ne promette la pagina, tranne che su una simulazione
+    con un serbatoio più piccolo: le pubblicate ce l'hanno pieno, ma una
+    bozza che il super admin sta ancora scrivendo può averne meno, e un test
+    di sei domande su sei è preferibile a un errore.
+
+    È anche il numero che gli utenti leggono nell'elenco e nelle regole: a
+    chi svolge il test interessa quante domande deve rispondere, non quante
+    ne sono state scritte in tutto. Il serbatoio è una cosa di chi il test
+    lo prepara, e si legge dalle pagine di amministrazione.
+    """
+    return min(SIMULATION_QUESTION_COUNT, len(simulation.questions))
+
+
 def to_response(
     simulation: TechnicalSimulation,
     question_count: int,
@@ -161,6 +190,7 @@ def to_response(
         "description": simulation.description,
         "status": simulation.status,
         "kind": simulation.kind,
+        "source": simulation.source,
         "document_name": simulation.document_name,
         "question_count": question_count,
         "created_at": simulation.created_at,
@@ -184,7 +214,7 @@ def list_simulations(
         .all()
     )
     stats = attempt_stats(db, current_user.id, [s.id for s in simulations])
-    return [to_response(s, len(s.questions), stats.get(s.id)) for s in simulations]
+    return [to_response(s, drawn_count(s), stats.get(s.id)) for s in simulations]
 
 
 @router.get("/{simulation_id}", response_model=SimulationDetailResponse)
@@ -193,23 +223,67 @@ def get_simulation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Il test da svolgere: le domande senza le risposte esatte."""
+    """Il test prima di cominciarlo: il titolo, il tipo, quante domande sono.
+
+    Le domande non ci sono, ed è la differenza con quando ce n'erano dieci
+    fisse: qui non si sa ancora quali saranno, perché si estraggono quando il
+    test comincia. La pagina che si apre mostra le regole e i tentativi
+    passati, e per quello basta questo.
+    """
     simulation = get_visible_or_404(db, current_user, simulation_id)
     stats = attempt_stats(db, current_user.id, [simulation.id])
-    return {
-        **to_response(simulation, len(simulation.questions), stats.get(simulation.id)),
-        "questions": [
-            SimulationQuestionResponse(
-                id=q.id,
-                position=q.position,
-                text=q.text,
-                # Vuote su un test a risposta aperta, dove la domanda non ha
-                # alternative: è il tipo del test a dire come si risponde
-                options=q.options or [],
-            )
-            for q in simulation.questions
-        ],
-    }
+    return to_response(simulation, drawn_count(simulation), stats.get(simulation.id))
+
+
+@router.post("/{simulation_id}/start", response_model=list[SimulationQuestionResponse])
+def start_attempt(
+    simulation_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Le dieci domande di questo tentativo, estratte adesso e a caso.
+
+    Un'estrazione completamente casuale, senza memoria di quelle di prima:
+    chi ritenta può ritrovare una domanda che aveva già visto, ed è giusto
+    così, perché una procedura che si sbaglia due volte va chiesta due
+    volte. Evitarlo vorrebbe dire tenere il conto di cosa ognuno ha già
+    visto, cioè una tabella che cresce con i tentativi per risolvere un
+    problema che il caso risolve da solo su un serbatoio da cinquanta.
+
+    L'ordine è quello dell'estrazione e non quello del serbatoio: le
+    posizioni con cui le domande sono state scritte non dicono niente a chi
+    risponde, e mostrarle in fila darebbe l'ordine del documento a chi fa il
+    test due volte.
+
+    È un POST e non un GET perché la stessa richiesta risponde due cose
+    diverse: qui si comincia un test, non si legge una pagina, e una GET del
+    genere sarebbe la prima cosa che una cache metterebbe da parte.
+
+    Le chiavi restano dov'erano: la risposta esatta, la traccia attesa, la
+    spiegazione e i passaggi non escono da qui. È lo stesso schema di prima
+    (``SimulationQuestionResponse``) e la ragione è la stessa: se la chiave
+    viaggia con la domanda, il test lo risolve la scheda di rete.
+    """
+    simulation = get_visible_or_404(db, current_user, simulation_id)
+    if not simulation.questions:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Questa simulazione non ha ancora domande.",
+        )
+    drawn = random.sample(simulation.questions, drawn_count(simulation))
+    return [
+        SimulationQuestionResponse(
+            id=q.id,
+            # La posizione dentro il test appena estratto, non quella nel
+            # serbatoio: è il numero che si legge accanto alla domanda
+            position=position,
+            text=q.text,
+            # Vuote su un test a risposta aperta, dove la domanda non ha
+            # alternative: è il tipo del test a dire come si risponde
+            options=q.options or [],
+        )
+        for position, q in enumerate(drawn, start=1)
+    ]
 
 
 def _sources(simulation: TechnicalSimulation, ordinals: list[int] | None) -> list[str]:
@@ -280,6 +354,7 @@ def _attempt_response(attempt: SimulationAttempt) -> dict:
         "simulation_id": attempt.simulation_id,
         "simulation_title": attempt.simulation.title,
         "simulation_kind": attempt.simulation.kind,
+        "simulation_source": attempt.simulation.source,
         "user_id": attempt.user_id,
         "user_email": attempt.user.email if attempt.user else "",
         "user_name": _user_name(attempt.user),
@@ -291,15 +366,62 @@ def _attempt_response(attempt: SimulationAttempt) -> dict:
     }
 
 
-def _multiple_choice_answers(simulation: TechnicalSimulation, given: dict) -> list[dict]:
+def _submitted_questions(
+    simulation: TechnicalSimulation, payload: SimulationSubmitRequest
+) -> list[SimulationQuestion]:
+    """Le domande che questo tentativo ha ricevuto, nell'ordine in cui sono
+    state consegnate.
+
+    Quali fossero lo dice il payload, perché il server non se l'è segnato da
+    nessuna parte, e per questo tre cose vanno controllate qui: che ogni
+    domanda sia di questa simulazione, che nessuna arrivi due volte, e che
+    siano tante quante un tentativo ne ha. Senza l'ultimo controllo bastava
+    consegnare una sola risposta giusta per prendere dieci, ed è l'unico
+    modo che questo disegno lascerebbe aperto: il tempo si può dichiarare
+    (vedi ``simulation_scoring``), ma il numero delle domande no.
+
+    Il fatto che una risposta manchi resta possibile e vale sbagliata: si
+    manda la voce con la risposta in bianco, che è quello che il browser fa
+    per le domande saltate.
+    """
+    by_id = {q.id: q for q in simulation.questions}
+    questions: list[SimulationQuestion] = []
+    seen: set[UUID] = set()
+    for answer in payload.answers:
+        question = by_id.get(answer.question_id)
+        if question is None or answer.question_id in seen:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le risposte consegnate non corrispondono alle domande del test.",
+            )
+        seen.add(answer.question_id)
+        questions.append(question)
+
+    expected = drawn_count(simulation)
+    if len(questions) != expected:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Il test ha {expected} domande e ne sono arrivate {len(questions)}: "
+                "ricomincia il test."
+            ),
+        )
+    return questions
+
+
+def _multiple_choice_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
     """La correzione di un test a scelta multipla: due numeri e un tempo.
 
     Deterministica e senza modelli di mezzo. Un indice fuori dall'intervallo
     delle alternative è 400 e non una risposta sbagliata: significa che il
     client ha mandato qualcosa di incoerente con la domanda che aveva.
+
+    La posizione che finisce nella fotografia è quella dentro il tentativo e
+    non quella nel serbatoio: chi rilegge il proprio esito deve trovare la
+    terza domanda al terzo posto, non al trentanovesimo.
     """
     answers = []
-    for question in simulation.questions:
+    for position, question in enumerate(questions, start=1):
         answer = given.get(question.id)
         choice = answer.selected_option if answer else None
         options = question.options or []
@@ -313,7 +435,7 @@ def _multiple_choice_answers(simulation: TechnicalSimulation, given: dict) -> li
         answers.append(
             {
                 "question_id": str(question.id),
-                "position": question.position,
+                "position": position,
                 "text": question.text,
                 "options": options,
                 "selected_option": choice,
@@ -327,7 +449,7 @@ def _multiple_choice_answers(simulation: TechnicalSimulation, given: dict) -> li
     return answers
 
 
-async def _open_answers(simulation: TechnicalSimulation, given: dict) -> list[dict]:
+async def _open_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
     """La correzione di un test a risposta aperta: una chiamata, poi i punti.
 
     Le risposte in bianco non arrivano al modello. Valgono zero comunque, e
@@ -344,12 +466,12 @@ async def _open_answers(simulation: TechnicalSimulation, given: dict) -> list[di
     """
     to_judge = [
         {
-            "position": question.position,
+            "position": position,
             "text": question.text,
             "expected_answer": question.expected_answer,
             "answer_text": (given[question.id].answer_text or "").strip(),
         }
-        for question in simulation.questions
+        for position, question in enumerate(questions, start=1)
         if question.id in given and (given[question.id].answer_text or "").strip()
     ]
 
@@ -370,17 +492,17 @@ async def _open_answers(simulation: TechnicalSimulation, given: dict) -> list[di
         )
 
     answers = []
-    for question in simulation.questions:
+    for position, question in enumerate(questions, start=1):
         answer = given.get(question.id)
         written = (answer.answer_text or "").strip() if answer else ""
-        judgement = judgements.get(question.position) if written else None
+        judgement = judgements.get(position) if written else None
         # I punti sono il giudizio, non una sua conseguenza: c'è un numero
         # solo, e il campo che lo tiene è quello che tutti i test usano
         earned = open_answer_points(judgement["quality"] if judgement else None)
         answers.append(
             {
                 "question_id": str(question.id),
-                "position": question.position,
+                "position": position,
                 "text": question.text,
                 # In bianco resta None e non stringa vuota: è la stessa
                 # distinzione fra chi non ha risposto e chi ha risposto male
@@ -406,6 +528,10 @@ async def submit_attempt(
 ):
     """Consegna il test e restituisce l'esito con le spiegazioni.
 
+    Si corregge quello che è stato consegnato, non tutto il serbatoio: quali
+    fossero le domande di questo tentativo lo dice il payload, dopo i
+    controlli di ``_submitted_questions``.
+
     Le domande non risposte valgono come sbagliate, ma restano distinguibili
     nell'esito: chi non sa e chi non ha fatto in tempo prendono lo stesso
     voto, e a chi rilegge il proprio tentativo la differenza serve.
@@ -424,11 +550,12 @@ async def submit_attempt(
             detail="Questa simulazione non ha ancora domande.",
         )
 
+    questions = _submitted_questions(simulation, payload)
     given = {a.question_id: a for a in payload.answers}
     if simulation.is_open:
-        answers = await _open_answers(simulation, given)
+        answers = await _open_answers(questions, given)
     else:
-        answers = _multiple_choice_answers(simulation, given)
+        answers = _multiple_choice_answers(questions, given)
 
     correct_count = sum(1 for a in answers if a["is_correct"])
     points = [a["points"] for a in answers]
@@ -437,7 +564,7 @@ async def submit_attempt(
         simulation_id=simulation.id,
         user_id=current_user.id,
         correct_count=correct_count,
-        question_count=len(simulation.questions),
+        question_count=len(questions),
         earned_points=attempt_points(points),
         answers=answers,
     )

@@ -2,7 +2,7 @@
 
 import logging
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -57,6 +57,7 @@ from schemas import (
     EvaluationCriterionScore,
     EvaluationReportRow,
     MessageResponse,
+    SimulationAttemptReport,
     SimulationReportRow,
     UpdateUserRequest,
     UpdateUserStatusRequest,
@@ -239,16 +240,25 @@ def list_users(
 @router.get("/users-report", response_model=list[UserActivityReport])
 def users_activity_report(
     organization_id: UUID | None = None,
+    days: int | None = Query(None, ge=1, le=3650),
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     """
-    Read-only activity recap: every user with their conversations per avatar,
-    the duration of each conversation (first-to-last message span) and the
-    total duration. A Super Admin sees every organization (optionally
-    filtered by `organization_id`); an Organization Admin only its own.
+    Read-only activity recap, one row per person: le conversazioni avute con
+    gli avatar, le simulazioni consegnate, e per ognuna com'è andata. A Super
+    Admin sees every organization (optionally filtered by `organization_id`);
+    an Organization Admin only its own.
+
+    Le due prove stanno insieme di proposito: la dashboard risponde a "come va
+    il gruppo" e le tiene separate, questo è l'unico posto dove si guarda una
+    persona sola, e lì chi ha solo svolto simulazioni sembrerebbe fermo.
+
+    `days` restringe le prove e i conteggi agli ultimi N giorni: senza, il
+    numero di chi si allena da un anno non dice cosa ha fatto adesso.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days) if days else None
 
     # Resolve the users in scope first so both the conversations and their
     # message stats can be restricted to them: an organization admin must not
@@ -258,32 +268,49 @@ def users_activity_report(
         users_query = users_query.filter(User.organization_id == scope_org_id)
     users = users_query.order_by(User.created_at.desc()).all()
 
+    # La valutazione e la revisione arrivano in outer join: la maggior parte
+    # delle conversazioni non ha né l'una né l'altra, e il voto che conta è
+    # quello finale, lo stesso che lo studente legge sulla propria pagella
     conv_query = (
-        db.query(ChatConversation, Avatar.name, AvatarCategory.name, AvatarCategory.color)
+        db.query(
+            ChatConversation,
+            Avatar.name,
+            AvatarCategory.name,
+            AvatarCategory.color,
+            ConversationEvaluation.overall_score,
+            ConversationReview.override_score,
+        )
         .join(Avatar, Avatar.id == ChatConversation.avatar_id)
         .join(AvatarCategory, AvatarCategory.id == Avatar.category_id)
+        .outerjoin(
+            ConversationEvaluation,
+            ConversationEvaluation.conversation_id == ChatConversation.id,
+        )
+        .outerjoin(ConversationReview, ConversationReview.conversation_id == ChatConversation.id)
     )
     if scope_org_id is not None:
         conv_query = conv_query.filter(ChatConversation.user_id.in_([u.id for u in users]))
+    if since is not None:
+        conv_query = conv_query.filter(ChatConversation.created_at >= since)
     rows = conv_query.order_by(ChatConversation.created_at.desc()).all()
 
     # Message stats aggregated per conversation in a single query, restricted
-    # to the conversations in scope (unbounded only for the super admin, who
-    # legitimately wants every conversation).
+    # to the conversations in scope (unbounded only for the super admin
+    # looking at every period, who legitimately wants every conversation).
     stats_query = db.query(
         ChatMessage.conversation_id.label("conversation_id"),
         func.count(ChatMessage.id).label("message_count"),
         func.min(ChatMessage.created_at).label("first_at"),
         func.max(ChatMessage.created_at).label("last_at"),
     )
-    if scope_org_id is not None:
+    if scope_org_id is not None or since is not None:
         stats_query = stats_query.filter(
             ChatMessage.conversation_id.in_([conv.id for conv, *_ in rows])
         )
     stats = {row.conversation_id: row for row in stats_query.group_by(ChatMessage.conversation_id)}
 
     conversations_by_user: dict[UUID, list[ConversationReport]] = defaultdict(list)
-    for conv, avatar_name, avatar_category, avatar_category_color in rows:
+    for conv, avatar_name, avatar_category, color, ai_score, override_score in rows:
         s = stats.get(conv.id)
         message_count = s.message_count if s else 0
         duration = (
@@ -297,31 +324,73 @@ def users_activity_report(
                 avatar_id=conv.avatar_id,
                 avatar_name=avatar_name,
                 avatar_category=avatar_category,
-                avatar_category_color=avatar_category_color,
+                avatar_category_color=color,
                 created_at=conv.created_at,
                 message_count=message_count,
                 duration_seconds=duration,
+                score=(
+                    None
+                    if ai_score is None
+                    else round(override_score if override_score is not None else ai_score, 1)
+                ),
             )
         )
 
-    return [
-        UserActivityReport(
-            id=u.id,
-            email=u.email,
-            nome=u.nome,
-            cognome=u.cognome,
-            ruolo=u.ruolo,
-            organization_id=u.organization_id,
-            organization_name=u.organization_name,
-            created_at=u.created_at,
-            conversation_count=len(conversations_by_user.get(u.id, [])),
-            total_duration_seconds=sum(
-                c.duration_seconds for c in conversations_by_user.get(u.id, [])
-            ),
-            conversations=conversations_by_user.get(u.id, []),
+    # I tentativi in una query a parte e non in join con le conversazioni: le
+    # due prove non hanno niente in comune se non la persona che le ha svolte,
+    # e chi non usa il simulatore non deve pagarne la scansione
+    attempts_query = (
+        db.query(
+            SimulationAttempt,
+            TechnicalSimulation.title,
+            TechnicalSimulation.kind,
+            TechnicalSimulation.source,
         )
-        for u in users
-    ]
+        .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
+        .filter(SimulationAttempt.user_id.in_([u.id for u in users]))
+    )
+    if since is not None:
+        attempts_query = attempts_query.filter(SimulationAttempt.created_at >= since)
+    attempts_by_user: dict[UUID, list[SimulationAttemptReport]] = defaultdict(list)
+    for attempt, title, kind, source in attempts_query.order_by(
+        SimulationAttempt.created_at.desc()
+    ):
+        attempts_by_user[attempt.user_id].append(
+            SimulationAttemptReport(
+                id=attempt.id,
+                simulation_id=attempt.simulation_id,
+                simulation_title=title,
+                simulation_kind=kind,
+                simulation_source=source,
+                created_at=attempt.created_at,
+                correct_count=attempt.correct_count,
+                question_count=attempt.question_count,
+                score=round(attempt.score, 1),
+            )
+        )
+
+    report = []
+    for u in users:
+        conversations = conversations_by_user.get(u.id, [])
+        attempts = attempts_by_user.get(u.id, [])
+        report.append(
+            UserActivityReport(
+                id=u.id,
+                email=u.email,
+                nome=u.nome,
+                cognome=u.cognome,
+                ruolo=u.ruolo,
+                organization_id=u.organization_id,
+                organization_name=u.organization_name,
+                created_at=u.created_at,
+                conversation_count=len(conversations),
+                total_duration_seconds=sum(c.duration_seconds for c in conversations),
+                simulation_count=len(attempts),
+                conversations=conversations,
+                simulation_attempts=attempts,
+            )
+        )
+    return report
 
 
 @router.get("/evaluations-report", response_model=list[EvaluationReportRow])
@@ -407,7 +476,13 @@ def simulations_report(
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
     query = (
-        db.query(SimulationAttempt, TechnicalSimulation.title, TechnicalSimulation.kind, User)
+        db.query(
+            SimulationAttempt,
+            TechnicalSimulation.title,
+            TechnicalSimulation.kind,
+            TechnicalSimulation.source,
+            User,
+        )
         .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
         .join(User, User.id == SimulationAttempt.user_id)
     )
@@ -421,6 +496,7 @@ def simulations_report(
             simulation_id=attempt.simulation_id,
             simulation_title=title,
             simulation_kind=kind,
+            simulation_source=source,
             user_id=user.id,
             user_email=user.email,
             user_nome=user.nome,
@@ -432,7 +508,7 @@ def simulations_report(
             question_count=attempt.question_count,
             score=attempt.score,
         )
-        for attempt, title, kind, user in rows
+        for attempt, title, kind, source, user in rows
     ]
 
 
@@ -528,6 +604,43 @@ def delete_conversation(
     db.commit()
 
     return MessageResponse(message="Conversazione eliminata con successo.", success=True)
+
+
+@router.delete("/simulation-attempts/{attempt_id}", response_model=MessageResponse)
+def delete_simulation_attempt(
+    attempt_id: UUID,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Elimina un test tecnico consegnato (Super Admin + Organization Admin).
+
+    Il gemello di `delete_conversation`, e per la stessa ragione: le due prove
+    si cancellano dallo stesso posto, il report attività, e una prova che si
+    può togliere solo se è una conversazione lascerebbe lì per sempre il
+    tentativo aperto per sbaglio o svolto da chi non doveva.
+
+    Lo scope è l'organizzazione di **chi ha svolto** il test, non quella della
+    simulazione, come nel report che lo elenca: un test preparato altrove ma
+    svolto dalla propria gente è una riga del proprio tenant.
+
+    La simulazione non viene toccata: sparisce il tentativo, cioè la
+    fotografia di quelle dieci risposte, e il test resta lì da rifare.
+    """
+    scope_org_id = resolve_admin_scope(current_admin)
+    query = db.query(SimulationAttempt).filter(SimulationAttempt.id == attempt_id)
+    if scope_org_id is not None:
+        query = query.join(User, User.id == SimulationAttempt.user_id).filter(
+            User.organization_id == scope_org_id
+        )
+    attempt = query.first()
+    if not attempt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentativo non trovato.")
+
+    db.delete(attempt)
+    db.commit()
+
+    return MessageResponse(message="Tentativo eliminato con successo.", success=True)
 
 
 @router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)

@@ -146,12 +146,81 @@ def test_chi_svolge_il_test_non_riceve_l_email_di_chi_lo_ha_scritto(
 
 def test_le_domande_non_portano_la_risposta_esatta(user_client, make_simulation):
     simulation = make_simulation()
-    payload = user_client.get(f"/api/simulations/{simulation.id}").json()
-    assert len(payload["questions"]) == 3
-    for question in payload["questions"]:
+    domande = user_client.post(f"/api/simulations/{simulation.id}/start").json()
+    assert len(domande) == 3
+    for question in domande:
         assert set(question) == {"id", "position", "text", "options"}
         assert "correct_option" not in question
         assert "explanation" not in question
+
+
+def test_aprire_la_pagina_non_mostra_nessuna_domanda(user_client, make_simulation):
+    """Le domande si estraggono quando il test comincia, non quando si guarda
+    la pagina: quello che arriva prima sono le regole e quante saranno."""
+    simulation = make_simulation()
+    payload = user_client.get(f"/api/simulations/{simulation.id}").json()
+    assert "questions" not in payload
+    assert payload["question_count"] == 3
+
+
+# ── L'estrazione ──────────────────────────────────────────────────────
+
+
+def test_un_tentativo_pesca_dieci_domande_dal_serbatoio(user_client, make_simulation):
+    """Il serbatoio è grande, il test no: dieci domande, e tutte di lì."""
+    simulation = make_simulation(questions=50)
+    domande = user_client.post(f"/api/simulations/{simulation.id}/start").json()
+
+    assert len(domande) == 10
+    del_serbatoio = {str(q.id) for q in simulation.questions}
+    assert {q["id"] for q in domande} <= del_serbatoio
+    # Nessuna ripetizione: dieci domande diverse, non dieci pescate a caso
+    # una per volta
+    assert len({q["id"] for q in domande}) == 10
+    # Numerate come si leggono nel test, non come stanno nel serbatoio
+    assert [q["position"] for q in domande] == list(range(1, 11))
+
+
+def test_due_tentativi_non_ricevono_le_stesse_domande(user_client, make_simulation):
+    """Il punto di tutto il serbatoio: ritentare è rispondere di nuovo, non
+    ricordarsi le lettere della volta prima."""
+    simulation = make_simulation(questions=50)
+
+    estrazioni = [
+        tuple(q["id"] for q in user_client.post(f"/api/simulations/{simulation.id}/start").json())
+        for _ in range(5)
+    ]
+    # Su cinquanta domande, cinque estrazioni tutte uguali sono impossibili
+    # in pratica: se succede, l'estrazione non sta estraendo
+    assert len(set(estrazioni)) > 1
+
+
+def test_una_simulazione_con_poche_domande_le_usa_tutte(user_client, make_simulation):
+    """Una bozza a metà, o un serbatoio più piccolo del dovuto, resta
+    svolgibile: dieci è un tetto, non una pretesa."""
+    simulation = make_simulation(questions=4)
+    domande = user_client.post(f"/api/simulations/{simulation.id}/start").json()
+    assert len(domande) == 4
+
+
+def test_iniziare_una_simulazione_senza_domande_non_si_puo(db_session, user_client, organization):
+    simulation = TechnicalSimulation(
+        title="Vuota",
+        status=SIMULATION_STATUS_PUBLISHED,
+        organization_id=organization.id,
+        document_name="x.txt",
+        document_text="testo",
+    )
+    db_session.add(simulation)
+    db_session.flush()
+    assert user_client.post(f"/api/simulations/{simulation.id}/start").status_code == 409
+
+
+def test_una_simulazione_di_un_altro_tenant_non_si_inizia(
+    user_client, make_simulation, other_organization
+):
+    simulation = make_simulation(organization_id=other_organization.id)
+    assert user_client.post(f"/api/simulations/{simulation.id}/start").status_code == 404
 
 
 # ── Consegna e correzione ─────────────────────────────────────────────
@@ -305,18 +374,81 @@ def test_le_domande_in_bianco_valgono_sbagliate_ma_restano_riconoscibili(
     assert esito["answers"][0]["is_correct"] is False
 
 
-def test_una_domanda_non_risposta_del_tutto_conta_come_sbagliata(user_client, make_simulation):
-    """Chi consegna un payload incompleto non guadagna nulla dal silenzio."""
+def test_consegnare_meno_risposte_delle_domande_viene_rifiutato(user_client, make_simulation):
+    """Da quando le domande si estraggono, il server non può più riempire i
+    buchi da solo: le domande che ha dato non se le è segnate.
+
+    Ed è anche l'unica porta che questo disegno lascerebbe aperta: senza
+    questo controllo, consegnare una sola risposta giusta prenderebbe dieci.
+    Chi non sa rispondere manda la sua voce in bianco, che è quello che il
+    browser fa per le domande saltate.
+    """
     simulation = make_simulation()
+    risposte = _answers(simulation, correct=True)[:2]
+    response = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": risposte}
+    )
+    assert response.status_code == 400
+
+    assert (
+        user_client.post(
+            f"/api/simulations/{simulation.id}/attempts", json={"answers": []}
+        ).status_code
+        == 400
+    )
+
+
+def test_una_domanda_di_un_altro_test_non_si_consegna(
+    user_client, make_simulation, other_organization
+):
+    """Le domande arrivano dal client, quindi da qui esce la sola difesa:
+    ogni domanda consegnata deve essere di questa simulazione."""
+    simulation = make_simulation()
+    altra = make_simulation(title="Un altro test")
+    risposte = _answers(simulation, correct=True)
+    risposte[0]["question_id"] = str(altra.questions[0].id)
+
+    response = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": risposte}
+    )
+    assert response.status_code == 400
+
+
+def test_la_stessa_domanda_consegnata_due_volte_viene_rifiutata(user_client, make_simulation):
+    """Altrimenti si consegnerebbe tre volte la domanda che si sa."""
+    simulation = make_simulation()
+    risposte = _answers(simulation, correct=True)
+    risposte[1]["question_id"] = risposte[0]["question_id"]
+
+    response = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": risposte}
+    )
+    assert response.status_code == 400
+
+
+def test_le_posizioni_nell_esito_sono_quelle_del_test_non_del_serbatoio(
+    user_client, make_simulation
+):
+    """La terza domanda del test si rilegge al terzo posto, anche se nel
+    serbatoio era la trentanovesima."""
+    simulation = make_simulation(questions=50)
+    domande = user_client.post(f"/api/simulations/{simulation.id}/start").json()
     esito = user_client.post(
-        f"/api/simulations/{simulation.id}/attempts", json={"answers": []}
+        f"/api/simulations/{simulation.id}/attempts",
+        json={
+            "answers": [
+                {"question_id": q["id"], "selected_option": 0, "elapsed_ms": 1_000} for q in domande
+            ]
+        },
     ).json()
-    assert esito["correct_count"] == 0
-    assert esito["question_count"] == 3
+
+    assert esito["question_count"] == 10
+    assert [a["position"] for a in esito["answers"]] == list(range(1, 11))
+    assert [a["question_id"] for a in esito["answers"]] == [q["id"] for q in domande]
 
 
 def test_un_indice_di_opzione_inesistente_viene_rifiutato(user_client, make_simulation):
-    simulation = make_simulation()
+    simulation = make_simulation(questions=1)
     response = user_client.post(
         f"/api/simulations/{simulation.id}/attempts",
         json={"answers": [{"question_id": str(simulation.questions[0].id), "selected_option": 9}]},
@@ -576,10 +708,9 @@ def test_le_domande_aperte_arrivano_senza_alternative_e_senza_traccia(
     """La traccia è la chiave: se viaggiasse con la domanda, il test sarebbe
     già risolto prima di cominciare."""
     simulation = make_open_simulation()
-    payload = user_client.get(f"/api/simulations/{simulation.id}").json()
+    assert user_client.get(f"/api/simulations/{simulation.id}").json()["kind"] == "open"
 
-    assert payload["kind"] == "open"
-    for question in payload["questions"]:
+    for question in user_client.post(f"/api/simulations/{simulation.id}/start").json():
         assert question["options"] == []
         assert "expected_answer" not in question
 
@@ -711,7 +842,8 @@ def test_un_test_aperto_tutto_in_bianco_non_chiama_nessuno(
     simulation = make_open_simulation()
 
     esito = user_client.post(
-        f"/api/simulations/{simulation.id}/attempts", json={"answers": []}
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _written(simulation, text=None)},
     ).json()
 
     assert ricevute == []

@@ -15,8 +15,9 @@ import SimulationCreateModal from './SimulationCreateModal'
 import SimulationDetailModal from './SimulationDetailModal'
 import SimulationEditorModal from './SimulationEditorModal'
 import SimulationKindBadge from './SimulationKindBadge'
+import SimulationSourceBadge from './SimulationSourceBadge'
 import { formatDate } from './lastAccess'
-import { kindLabel, statusBadgeTone, statusLabel } from './simulationFormat'
+import { kindLabel, sourceLabel, statusBadgeTone, statusLabel } from './simulationFormat'
 
 /* La gestione delle simulazioni tecniche, riservata al super admin.
  *
@@ -55,8 +56,15 @@ export default function SimulationAdminPage() {
   const [toDelete, setToDelete] = useState<AdminSimulation | null>(null)
 
   const filtered = simulations.filter((s) =>
-    // Il tipo si cerca con la stessa parola che il badge mostra
-    matchesSearch(search, s.title, s.organization_name, s.document_name, kindLabel(s.kind)),
+    // Il tipo e l'origine si cercano con le stesse parole che i badge mostrano
+    matchesSearch(
+      search,
+      s.title,
+      s.organization_name,
+      s.document_name,
+      kindLabel(s.kind),
+      sourceLabel(s.source),
+    ),
   )
 
   const confirmDelete = () => {
@@ -74,7 +82,7 @@ export default function SimulationAdminPage() {
     <PageContainer>
       <PageHeader
         title="Gestione Simulazioni"
-        description="Crea i test tecnici da un documento e assegnali a un'organizzazione."
+        description="Crea i test tecnici da un documento o scrivendo le domande, e assegnali a un'organizzazione."
         actions={
           <PrimaryButton icon={<PlusIcon size={16} />} onClick={() => setCreating(true)}>
             Nuova Simulazione
@@ -105,13 +113,22 @@ export default function SimulationAdminPage() {
                 <span className="block text-[0.9rem] font-medium text-slate-100">
                   {simulation.title}
                 </span>
-                <span className="block truncate text-xs text-slate-500">
-                  {simulation.document_name}
-                </span>
+                {/* Sotto il titolo il documento, dove c'è. Che le domande
+                    siano scritte a mano lo dice la targhetta nella colonna
+                    del tipo, e ripeterlo qui sarebbe la stessa cosa scritta
+                    due volte sulla stessa riga. */}
+                {simulation.document_name && (
+                  <span className="block truncate text-xs text-slate-500">
+                    {simulation.document_name}
+                  </span>
+                )}
               </Td>
               <Td className="text-[0.85rem] text-slate-400">{simulation.organization_name}</Td>
               <Td>
-                <SimulationKindBadge kind={simulation.kind} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <SimulationKindBadge kind={simulation.kind} />
+                  <SimulationSourceBadge source={simulation.source} />
+                </div>
               </Td>
               <Td align="center" compact className="tabular-nums text-slate-400">
                 {simulation.question_count}

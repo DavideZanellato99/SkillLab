@@ -32,6 +32,7 @@ const simulation = {
   description: 'Due domande di prova',
   status: 'published',
   kind: 'multiple',
+  source: 'ai',
   document_name: 'procedura.pdf',
   question_count: questions.length,
   created_at: '2026-01-01T10:00:00Z',
@@ -39,24 +40,21 @@ const simulation = {
   last_attempt_at: null,
   last_attempt_score: null,
   attempt_count: 0,
-  questions,
 }
 
 /* Lo stesso test in versione a risposta aperta: le domande non hanno
  * alternative e si risponde scrivendo. Serve a provare che il corpo della
  * consegna cambia forma, che è l'altra metà di quello che questo file
  * verifica. */
-const openSimulation = {
-  ...simulation,
-  kind: 'open',
-  questions: questions.map((q) => ({ ...q, options: [] })),
-}
+const openSimulation = { ...simulation, kind: 'open' }
+const openQuestions = questions.map((q) => ({ ...q, options: [] }))
 
 const attemptResponse = {
   id: 'att-1',
   simulation_id: 'sim-1',
   simulation_title: simulation.title,
   simulation_kind: 'multiple',
+  simulation_source: 'ai',
   user_id: 'user-1',
   user_email: 'tizio@example.com',
   user_name: 'Tizio',
@@ -80,9 +78,15 @@ function submittedBody() {
   return call ? JSON.parse(call[1].body as string) : null
 }
 
+/** Quante volte è stato chiesto al server di estrarre le domande. */
+function startCalls() {
+  return fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/start')).length
+}
+
 /** Serve la simulazione a risposta aperta al posto di quella di serie. */
 function serveOpenSimulation() {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (String(url).endsWith('/start')) return json(openQuestions)
     if (init?.method === 'POST') return json({ ...attemptResponse, simulation_kind: 'open' })
     if (String(url).endsWith('/attempts')) return json([])
     return json(openSimulation)
@@ -105,6 +109,9 @@ function renderRunner() {
 describe('SimulationRunner', () => {
   beforeEach(() => {
     fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      // Le domande arrivano dall'estrazione, non dalla simulazione: è il
+      // server a decidere quali dieci, e qui sono sempre le stesse due
+      if (String(url).endsWith('/start')) return json(questions)
       if (init?.method === 'POST') return json(attemptResponse)
       if (String(url).endsWith('/attempts')) return json([])
       return json(simulation)
@@ -216,6 +223,38 @@ describe('SimulationRunner', () => {
     const [saltata] = submittedBody().answers
     // Null e non stringa vuota: chi non ha risposto resta distinguibile
     expect(saltata.answer_text).toBeNull()
+  })
+
+  it('le domande si estraggono premendo inizia, non aprendo la pagina', async () => {
+    const user = userEvent.setup()
+    renderRunner()
+
+    // La pagina è aperta sulle regole e nessuna domanda è stata ancora
+    // decisa: se l'estrazione partisse qui, il test sarebbe già composto
+    // per chi si limita a guardare
+    const inizia = await screen.findByRole('button', { name: 'Inizia il test' })
+    expect(startCalls()).toBe(0)
+
+    await user.click(inizia)
+    expect(await screen.findByText('Alfa')).toBeInTheDocument()
+    expect(startCalls()).toBe(1)
+  })
+
+  it('riprovare il test fa estrarre altre domande', async () => {
+    const user = userEvent.setup()
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByText('Alfa'))
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+    await user.click(await screen.findByText('Gamma'))
+    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+
+    await user.click(await screen.findByRole('button', { name: 'Riprova il test' }))
+    // Si torna alle regole, e il test nuovo comincia da un'altra estrazione
+    await user.click(await screen.findByRole('button', { name: /il test$/ }))
+    expect(await screen.findByText('Alfa')).toBeInTheDocument()
+    expect(startCalls()).toBe(2)
   })
 
   it('il cronometro non compare sui test a risposta aperta', async () => {

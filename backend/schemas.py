@@ -11,8 +11,10 @@ from models import (
     CONVERSATION_MODE_VOICE,
     DEFAULT_AVATAR_CATEGORY_COLOR,
     SIMULATION_KIND_MULTIPLE,
-    SIMULATION_OPTION_COUNT,
-    SIMULATION_QUESTION_COUNT,
+    SIMULATION_MAX_OPTIONS,
+    SIMULATION_MIN_OPTIONS,
+    SIMULATION_POOL_COUNT,
+    SIMULATION_SOURCE_AI,
 )
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
 
@@ -790,10 +792,44 @@ class ConversationReport(BaseModel):
     message_count: int
     # First-to-last message span; 0 when the conversation has < 2 messages
     duration_seconds: int
+    # Il voto finale, correzione del docente compresa. None finché la
+    # conversazione non è stata valutata: il report elenca anche quelle, e uno
+    # zero al posto di "non ancora" sarebbe una bocciatura inventata
+    score: float | None = None
+
+
+class SimulationAttemptReport(BaseModel):
+    """Un test tecnico consegnato, per il report attività.
+
+    Il gemello scritto di `ConversationReport`: la stessa riga (cosa, quando,
+    com'è andata) sotto un'altra linguetta della stessa persona.
+    """
+
+    id: UUID
+    simulation_id: UUID
+    simulation_title: str
+    # "multiple" o "open": come si rispondeva, che il voto da solo non dice
+    simulation_kind: str
+    # "ai" o "manual": chi aveva scritto le domande
+    simulation_source: str
+    created_at: datetime
+    correct_count: int
+    question_count: int
+    # In decimi, la stessa scala delle valutazioni
+    score: float
 
 
 class UserActivityReport(BaseModel):
-    """Read-only recap of a user with their conversations and durations."""
+    """Read-only recap of a user: le sue prove svolte e come sono andate.
+
+    Le due prove stanno sulla stessa riga perché la domanda del report è
+    "questa persona cosa ha fatto", e chi ha solo svolto delle simulazioni
+    con i soli conteggi delle conversazioni sembrerebbe fermo.
+
+    I conteggi riguardano il periodo scelto. Le medie non ci sono: il voto
+    appartiene alla singola prova, che se lo porta dentro l'elenco, e una
+    media per persona la scrive già la dashboard su tutto il gruppo.
+    """
 
     id: UUID
     email: str
@@ -805,7 +841,9 @@ class UserActivityReport(BaseModel):
     created_at: datetime
     conversation_count: int
     total_duration_seconds: int
+    simulation_count: int = 0
     conversations: list[ConversationReport]
+    simulation_attempts: list[SimulationAttemptReport] = []
 
 
 class EvaluationCriterionScore(BaseModel):
@@ -865,6 +903,8 @@ class SimulationReportRow(BaseModel):
     # prove che si svolgono in modi diversi non si leggono nella stessa
     # riga senza sapere quale delle due si sta guardando
     simulation_kind: str
+    # Chi aveva scritto le domande: "ai" o "manual"
+    simulation_source: str
     user_id: UUID
     user_email: str
     user_nome: str
@@ -958,6 +998,8 @@ class SimulationComparisonAttempt(BaseModel):
     # this was. Two attempts at tests of different kinds can still be put
     # side by side, and the screen has to say so
     simulation_kind: str
+    # Who wrote the questions: "ai" or "manual"
+    simulation_source: str
     attempted_at: datetime
     correct_count: int
     question_count: int
@@ -1079,6 +1121,11 @@ class SimulationQuestionResponse(BaseModel):
     Su un test a risposta aperta ``options`` è vuota, e non è un campo
     mancante: è la domanda che non ne ha. Chi la mostra guarda il tipo della
     simulazione, non la lunghezza di questa lista.
+
+    ``position`` vuol dire due cose diverse a seconda di chi chiede, e in
+    entrambi i casi vuol dire "in che ordine si legge": per chi svolge il
+    test è il posto nel tentativo appena estratto, per il super admin che
+    rilegge il serbatoio è il posto nel serbatoio.
     """
 
     id: UUID
@@ -1114,6 +1161,12 @@ class SimulationResponse(BaseModel):
     status: str
     # Come si risponde: "multiple" o "open", per tutte le domande del test
     kind: str
+    # Chi ha scritto le domande: "ai" o "manual". Sta accanto a `kind` per la
+    # stessa ragione per cui c'è `kind`, e viaggia fino a chi svolge il test:
+    # sapere se le domande le ha scritte un modello o una persona cambia il
+    # peso di una risposta contestata, e nasconderlo sarebbe una scelta al
+    # posto di chi legge
+    source: str
     document_name: str
     question_count: int
     created_at: datetime
@@ -1128,9 +1181,13 @@ class SimulationResponse(BaseModel):
 
 
 class SimulationDetailResponse(SimulationResponse):
-    """La simulazione con le sue domande, per svolgerla."""
+    """La simulazione prima di cominciarla: le regole, non le domande.
 
-    questions: list[SimulationQuestionResponse]
+    Le domande non stanno qui e non è una dimenticanza: si estraggono a caso
+    dal serbatoio quando il test comincia (``POST .../start``), quindi
+    aprire la pagina non le decide. ``question_count`` dice quante ne avrà
+    il tentativo, che è la cosa che chi sta per rispondere vuole sapere.
+    """
 
 
 class AdminSimulationResponse(SimulationResponse, AuthorshipResponse):
@@ -1139,7 +1196,8 @@ class AdminSimulationResponse(SimulationResponse, AuthorshipResponse):
 
     La paternità sta qui e non su ``SimulationResponse`` perché quella la
     riceve anche chi il test lo svolge, e l'indirizzo di chi prepara i test
-    non è qualcosa che serva a chi li fa.
+    non è qualcosa che serva a chi li fa. ``source`` invece sta là, perché
+    quello lo legge anche chi risponde.
     """
 
 
@@ -1157,16 +1215,19 @@ class SimulationCreateRequest(BaseModel):
     """I dati che accompagnano il documento caricato.
 
     Viaggiano come campi di form e non come JSON, perché arrivano insieme al
-    file nella stessa richiesta multipart.
+    file nella stessa richiesta multipart. Il documento c'è solo quando le
+    domande le scrive il modello: a mano non serve, e infatti non si carica.
 
     Il tipo si decide qui e non si cambia più: le domande nascono già
-    dell'una forma o dell'altra, e cambiarlo dopo vorrebbe dire buttarle.
+    dell'una forma o dell'altra, e cambiarlo dopo vorrebbe dire buttarle. Chi
+    le scrive è la stessa cosa, per la stessa ragione.
     """
 
     organization_id: UUID
     title: str = Field(min_length=1, max_length=150)
     description: str | None = None
     kind: str = SIMULATION_KIND_MULTIPLE
+    source: str = SIMULATION_SOURCE_AI
 
 
 class SimulationUpdateRequest(BaseModel):
@@ -1200,8 +1261,19 @@ class SimulationQuestionPayload(BaseModel):
     payload sarebbe la seconda copia di un dato che il server ha già, e due
     copie prima o poi dicono cose diverse.
 
-    Quello che si può controllare senza sapere il tipo resta qui: le
-    alternative, se ci sono, devono essere quattro e nessuna vuota.
+    Quello che si può controllare senza sapere il tipo resta qui: quante sono
+    le alternative, da due a sei, e che la risposta segnata come corretta sia
+    una di quelle. Quante siano esattamente lo decide chi scrive la domanda,
+    una domanda per volta: il modello ne scrive quattro perché è il numero su
+    cui sono tarate le sue regole, il docente sceglie ogni volta, e una
+    domanda con due alternative accanto a una con sei è un test legittimo.
+
+    **Una domanda a metà si può salvare.** Un'alternativa ancora vuota e la
+    risposta corretta non ancora segnata passano di qui, ed è quello che
+    permette a chi sta scrivendo cinquanta domande di fermarsi alla ventesima
+    senza perderle. A pretendere che siano finite è la pubblicazione (vedi
+    ``admin_simulations.update_status``), che è il momento in cui smettono di
+    essere appunti e diventano un test.
     """
 
     text: str = Field(min_length=1)
@@ -1216,17 +1288,18 @@ class SimulationQuestionPayload(BaseModel):
         if v is None:
             return None
         cleaned = [o.strip() for o in v]
-        if len(cleaned) != SIMULATION_OPTION_COUNT:
-            raise ValueError(f"Servono esattamente {SIMULATION_OPTION_COUNT} alternative.")
-        if any(not o for o in cleaned):
-            raise ValueError("Nessuna alternativa può essere vuota.")
+        if not SIMULATION_MIN_OPTIONS <= len(cleaned) <= SIMULATION_MAX_OPTIONS:
+            raise ValueError(
+                f"Le alternative devono essere da {SIMULATION_MIN_OPTIONS} a "
+                f"{SIMULATION_MAX_OPTIONS}."
+            )
         return cleaned
 
     @model_validator(mode="after")
     def validate_correct_option(self) -> "SimulationQuestionPayload":
-        if self.options is None:
+        if self.options is None or self.correct_option is None:
             return self
-        if self.correct_option is None or not 0 <= self.correct_option < len(self.options):
+        if not 0 <= self.correct_option < len(self.options):
             raise ValueError("La risposta corretta deve essere una delle alternative.")
         return self
 
@@ -1248,8 +1321,8 @@ class SimulationQuestionsPayload(BaseModel):
     ) -> list[SimulationQuestionPayload]:
         if not v:
             raise ValueError("Una simulazione deve avere almeno una domanda.")
-        if len(v) > SIMULATION_QUESTION_COUNT:
-            raise ValueError(f"Al massimo {SIMULATION_QUESTION_COUNT} domande.")
+        if len(v) > SIMULATION_POOL_COUNT:
+            raise ValueError(f"Al massimo {SIMULATION_POOL_COUNT} domande.")
         return v
 
 
@@ -1332,6 +1405,8 @@ class SimulationAttemptResponse(BaseModel):
     # Il tipo del test, che decide come si legge l'esito: le alternative con
     # la corretta in verde, oppure la risposta scritta accanto alla traccia
     simulation_kind: str
+    # Chi aveva scritto le domande: "ai" o "manual"
+    simulation_source: str
     user_id: UUID
     user_email: str
     user_name: str
@@ -1352,6 +1427,7 @@ class SimulationAttemptSummary(BaseModel):
     simulation_id: UUID
     simulation_title: str
     simulation_kind: str
+    simulation_source: str
     user_id: UUID
     user_email: str
     user_name: str

@@ -4,7 +4,7 @@
  * svolgimento, all'esito e alla pagina di gestione, e un voto che è verde in
  * una schermata e giallo in quella accanto è un voto che non si legge. */
 
-import type { SimulationKind, SimulationStatus } from '../services/simulations'
+import type { SimulationKind, SimulationSource, SimulationStatus } from '../services/simulations'
 
 /* La scala del punteggio a tempo, gemella di `backend/simulation_scoring.py`.
  *
@@ -72,6 +72,33 @@ export function statusBadgeTone(status: SimulationStatus): string {
 export function kindLabel(kind: SimulationKind): string {
   return kind === 'open' ? 'Risposta aperta' : 'Scelta multipla'
 }
+
+/* Chi ha scritto le domande, in una parola.
+ *
+ * A differenza di `kindLabel` questa parola non si legge sullo schermo: la
+ * targhetta dell'origine è solo un'icona con il tooltip. Serve alle ricerche
+ * delle tabelle, dove cercare "manuale" deve trovare i test scritti a mano,
+ * e a chi legge con uno screen reader, che l'icona non gliela racconta
+ * nessuno.
+ *
+ * "IA" e non "AI": è la sigla italiana, e tutto il resto dell'interfaccia è
+ * in italiano. */
+export function sourceLabel(source: SimulationSource): string {
+  return source === 'manual' ? 'Manuale' : 'IA'
+}
+
+/** Un tipo di test, o tutti e due insieme. */
+export type KindFilter = SimulationKind | 'all'
+
+/* Come si sceglie il tipo di test da guardare, il gemello di `MODE_FILTERS`
+ * in ConversationModeBadge: le stesse parole del badge, offerte una seconda
+ * volta per filtrare invece che per leggere. Lo usano la dashboard e lo
+ * storico di una persona nel report attività. */
+export const KIND_FILTERS: { value: KindFilter; label: string }[] = [
+  { value: 'multiple', label: kindLabel('multiple') },
+  { value: 'open', label: kindLabel('open') },
+  { value: 'all', label: 'Entrambi' },
+]
 
 export function formatDateTime(value: string): string {
   return new Date(value).toLocaleString('it-IT', {

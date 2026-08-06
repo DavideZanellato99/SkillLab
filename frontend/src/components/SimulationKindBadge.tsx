@@ -1,5 +1,6 @@
 import type { SimulationKind } from '../services/simulations'
 import { kindLabel } from './simulationFormat'
+import Tooltip from './Tooltip'
 
 /**
  * Come si rispondeva a un test: scegliendo fra alternative o scrivendo.
@@ -16,7 +17,7 @@ import { kindLabel } from './simulationFormat'
  *
  * Con `iconOnly` resta il solo disegno, per i posti fitti come la tabella
  * della dashboard. La parola resta nel markup per chi legge con uno screen
- * reader, e il titolo al passaggio del mouse la scrive per esteso comunque.
+ * reader, e il tooltip la scrive per esteso comunque.
  */
 export default function SimulationKindBadge({
   kind,
@@ -27,43 +28,46 @@ export default function SimulationKindBadge({
 }) {
   const isOpen = kind === 'open'
   return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-full border text-[0.62rem] font-semibold uppercase tracking-wider ${
-        iconOnly ? 'p-1' : 'gap-1 px-2 py-0.5'
-      } ${
-        isOpen
-          ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400'
-          : 'border-violet-600/35 bg-violet-600/10 text-violet-400'
-      }`}
-      title={
+    <Tooltip
+      content={
         isOpen
           ? 'Test a risposta aperta: si scrive, e i punti dicono quanto la risposta è completa'
-          : 'Test a scelta multipla: una fra quattro alternative, a tempo'
+          : 'Test a scelta multipla: una fra le alternative proposte, a tempo'
       }
     >
-      {isOpen ? (
-        /* Una matita: qui si scrive */
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 20h9" />
-          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-        </svg>
-      ) : (
-        /* Il pallino da selezionare: qui si sceglie */
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <circle cx="12" cy="12" r="9" strokeWidth="2.5" />
-          <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
-        </svg>
-      )}
-      <span className={iconOnly ? 'sr-only' : undefined}>{kindLabel(kind)}</span>
-    </span>
+      <span
+        className={`inline-flex shrink-0 items-center rounded-full border text-[0.62rem] font-semibold uppercase tracking-wider ${
+          iconOnly ? 'p-1' : 'gap-1 px-2 py-0.5'
+        } ${
+          isOpen
+            ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400'
+            : 'border-violet-600/35 bg-violet-600/10 text-violet-400'
+        }`}
+      >
+        {isOpen ? (
+          /* Una matita: qui si scrive */
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+        ) : (
+          /* Il pallino da selezionare: qui si sceglie */
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="9" strokeWidth="2.5" />
+            <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
+          </svg>
+        )}
+        <span className={iconOnly ? 'sr-only' : undefined}>{kindLabel(kind)}</span>
+      </span>
+    </Tooltip>
   )
 }

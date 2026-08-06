@@ -2,7 +2,7 @@ import { Children, useEffect, useState } from 'react'
 import type { HTMLAttributes, ReactNode, TdHTMLAttributes } from 'react'
 import Tooltip from './Tooltip'
 import Select from './Select'
-import { CloseIcon } from './icons'
+import SearchInput from './SearchInput'
 
 /* Tabella condivisa dell'app: contenitore, header, righe e celle hanno un
  * unico stile definito qui — le pagine descrivono solo colonne e contenuto. */
@@ -93,38 +93,12 @@ export default function DataTable({
         {(onSearchChange || searchActions) && (
           <div className="flex items-center gap-3 border-b border-white/6 bg-gray-900/80 px-4 py-3">
             {onSearchChange && (
-              <div className="flex max-w-[340px] flex-1 items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="shrink-0 text-slate-500"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  type="text"
-                  value={searchValue}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  placeholder={searchPlaceholder}
-                  className="w-full border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                />
-                {searchValue && (
-                  <button
-                    onClick={() => onSearchChange('')}
-                    aria-label="Cancella ricerca"
-                    className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 transition hover:text-slate-100"
-                  >
-                    <CloseIcon size={12} />
-                  </button>
-                )}
-              </div>
+              <SearchInput
+                value={searchValue}
+                onChange={onSearchChange}
+                placeholder={searchPlaceholder}
+                className="max-w-[340px] flex-1"
+              />
             )}
             {searchActions && <div className="ml-auto shrink-0">{searchActions}</div>}
           </div>

@@ -66,6 +66,7 @@ l'impaginazione dell'app è fatta di questi pezzi:
 | [DetailModal](../frontend/src/components/DetailModal.tsx) e `DetailField` | Il dettaglio in sola lettura di una riga di tabella |
 | [ConfirmModal](../frontend/src/components/ConfirmModal.tsx) | Le conferme, comprese quelle distruttive |
 | [DataTable](../frontend/src/components/DataTable.tsx) | Tabella, intestazione, righe, ricerca e paginazione. Le righe per pagina sono le stesse ovunque e la pagina non le sceglie |
+| [Tooltip](../frontend/src/components/Tooltip.tsx) | Ogni spiegazione al passaggio del mouse. Vive in un portal, quindi non lo taglia il bordo di una tabella o di una modale, e di suo non aggiunge nodi al DOM: clona il figlio e gli aggancia gli eventi |
 | [Badge](../frontend/src/components/Badge.tsx), [Spinner](../frontend/src/components/Spinner.tsx), [Toast](../frontend/src/components/Toast.tsx), [FormError](../frontend/src/components/FormError.tsx), [LoadingState](../frontend/src/components/LoadingState.tsx) | I pezzi piccoli ricorrenti |
 | [Field](../frontend/src/components/Field.tsx), [Select](../frontend/src/components/Select.tsx), [SearchSelect](../frontend/src/components/SearchSelect.tsx) | I campi dei form, con le classi già decise |
 
@@ -82,6 +83,15 @@ stessa in tutta l'app, deve stare scritta una volta.
 - **Il testo è in italiano** e senza trattini: si usano le virgole.
 - **Gli stati vuoti non finiscono col punto.** Il punto resta negli errori e
   nelle descrizioni.
+- **I tooltip sono sempre `Tooltip`, mai l'attributo `title` del browser.**
+  Quello nativo compare dopo un secondo, si veste come il sistema operativo e
+  non si sa dove finisce; il componente compare subito, è uguale in tutta
+  l'app e non lo taglia nessun contenitore. Un `title` su un elemento HTML è
+  quindi sempre un errore, mentre `title` come prop di `PageHeader`,
+  `ModalHeader`, `ConfirmModal` o `Toast` è un'altra cosa e resta. Se il
+  bersaglio può essere `disabled` serve `wrap`, perché un elemento disabilitato
+  non emette eventi del mouse. Annidati (una targhetta dentro una riga che ha
+  già il suo tooltip) vince il più interno, che spegne quello che lo contiene.
 - **Le formattazioni condivise stanno in un modulo a parte** accanto ai
   componenti che le usano: [simulationFormat.ts](../frontend/src/components/simulationFormat.ts),
   [chatFormat.ts](../frontend/src/components/chatFormat.ts),

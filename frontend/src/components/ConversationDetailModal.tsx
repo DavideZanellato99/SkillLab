@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { AdminConversationDetail, EvaluationReportRow } from '../services/admin'
+import type { AdminConversationDetail } from '../services/admin'
 import type {
   ChatMessage,
+  ConversationMode,
   ConversationReview,
   EvaluationCitation,
   MessageAnnotation,
@@ -55,8 +56,27 @@ function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
 }
 
+/** Quel poco che serve per aprire una conversazione: chi ha parlato con chi
+ * e quando, cioè l'intestazione. Il resto (trascrizione, valutazione,
+ * revisione) lo carica `useAdminConversation` dall'id.
+ *
+ * Non è più la riga del report valutazioni per intero perché ora ad aprire
+ * questa schermata sono in due: la dashboard, che quella riga ce l'ha, e il
+ * report attività, che elenca anche le conversazioni mai valutate e una riga
+ * di valutazione non ce l'ha proprio. Una `EvaluationReportRow` soddisfa
+ * questo tipo così com'è. */
+export interface ConversationDetailTarget {
+  conversation_id: string
+  mode: ConversationMode
+  user_nome: string
+  user_cognome: string
+  user_email: string
+  avatar_name: string
+  conversation_at: string
+}
+
 interface ConversationDetailModalProps {
-  row: EvaluationReportRow
+  row: ConversationDetailTarget
   onClose: () => void
   /** Una revisione salvata o ritirata cambia il voto della conversazione:
    *  la tabella che ci ha portato qui sta mostrando quello vecchio e va

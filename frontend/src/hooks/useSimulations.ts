@@ -11,6 +11,7 @@ import type { SimulationAnswerPayload, SimulationQuestionPayload } from '../serv
 import {
   createSimulation,
   deleteSimulation,
+  deleteSimulationAttempt,
   fetchAdminSimulation,
   fetchAdminSimulations,
   fetchAttempt,
@@ -21,6 +22,7 @@ import {
   generateSimulationQuestions,
   replaceSimulationDocument,
   saveSimulationQuestions,
+  startSimulation,
   submitSimulation,
   updateSimulation,
   updateSimulationStatus,
@@ -41,6 +43,21 @@ export function useSimulation(simulationId: string | undefined) {
     queryKey: queryKeys.simulations.detail(simulationId!),
     queryFn: () => fetchSimulation(simulationId!),
     enabled: Boolean(simulationId),
+  })
+}
+
+/**
+ * Comincia il test e riceve le domande estratte per questo tentativo.
+ *
+ * È una mutation e non una query, e non è un dettaglio tecnico: le domande
+ * non sono un dato da tenere in cache e da riprendere quando la finestra
+ * torna in primo piano, sono l'esito di un'estrazione fatta una volta. Una
+ * query le rifarebbe estrarre a metà test, cambiando le domande sotto le
+ * mani di chi sta rispondendo.
+ */
+export function useStartSimulation(simulationId: string) {
+  return useMutation({
+    mutationFn: () => startSimulation(simulationId),
   })
 }
 
@@ -169,5 +186,21 @@ export function useDeleteSimulation() {
   return useMutation({
     mutationFn: (simulationId: string) => deleteSimulation(simulationId),
     onSuccess: invalidate,
+  })
+}
+
+/** Elimina un test consegnato, dal report attività. La simulazione resta:
+ *  sparisce la fotografia di quelle risposte, non il test.
+ *
+ *  Insieme agli elenchi si invalidano i report, che contano i tentativi e ne
+ *  fanno le medie. */
+export function useDeleteSimulationAttempt() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (attemptId: string) => deleteSimulationAttempt(attemptId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.simulations.all })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+    },
   })
 }

@@ -4,6 +4,7 @@ import LoadingState from './LoadingState'
 import FormError from './FormError'
 import SimulationResult from './SimulationResult'
 import SimulationKindBadge from './SimulationKindBadge'
+import SimulationSourceBadge from './SimulationSourceBadge'
 import { formatDateTime } from './simulationFormat'
 
 /* Un test consegnato, riletto per intero: le domande come sono state viste,
@@ -57,6 +58,7 @@ export default function SimulationAttemptModal({
                   tentativo dalla dashboard deve sapere subito che prova sta
                   leggendo, prima di giudicare un voto. */}
               <SimulationKindBadge kind={attempt.simulation_kind} />
+              <SimulationSourceBadge source={attempt.simulation_source} />
             </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
               {!own && (

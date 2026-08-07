@@ -186,6 +186,15 @@ def _add_columns() -> None:
                 "expected_answer TEXT NOT NULL DEFAULT ''"
             )
         )
+        # Le chiavi dei due tipi aggiunti dopo: i passi nell'ordine giusto e
+        # le coppie da abbinare. Nascono vuote e restano vuote su tutte le
+        # domande di prima, che sono di un tipo che non le usa: è la stessa
+        # cosa che vale fra ``options`` e ``expected_answer``, dove ogni
+        # domanda riempie la colonna del proprio tipo e lascia stare le altre.
+        conn.execute(
+            text("ALTER TABLE simulation_questions ADD COLUMN IF NOT EXISTS ordered_steps JSONB")
+        )
+        conn.execute(text("ALTER TABLE simulation_questions ADD COLUMN IF NOT EXISTS pairs JSONB"))
         # Alternative e indice della corretta diventano nullable: su una
         # domanda aperta non esistono, e riempirli di finto significherebbe
         # far leggere a chi rilegge il test una scelta che nessuno ha fatto.

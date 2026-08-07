@@ -62,7 +62,12 @@ CRITERION_SHORT_LABELS = {
 }
 
 MODE_LABELS = {"voice": "Chiamata", "text": "Chat"}
-KIND_LABELS = {"open": "Risposta aperta", "multiple": "Scelta multipla"}
+KIND_LABELS = {
+    "open": "Risposta aperta",
+    "multiple": "Scelta multipla",
+    "ordering": "Ordinamento",
+    "matching": "Abbinamento",
+}
 
 # Le soglie dei colori del voto, gli stessi della dashboard.
 _SCORE_MID = (234, 88, 12)
@@ -494,13 +499,99 @@ def _option_rows(answer: SimulationAnswerResult) -> list[tuple[str, Rgb, str]]:
     return rows
 
 
-def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool) -> None:
+def _ordering_rows(answer: SimulationAnswerResult) -> list[tuple[str, Rgb, str]]:
+    """I passi nell'ordine in cui sono stati disposti, col posto che avevano.
+
+    Ogni riga e' verde se quel passo stava dove doveva stare e rossa
+    altrimenti, e la targhetta dice qual era il suo posto: senza quel numero
+    un elenco tutto rosso non insegna niente, perche' non si vede di quanto
+    si era sbagliato.
+    """
+    correct = answer.correct_steps
+    rows = []
+    for index, step in enumerate(answer.given_steps):
+        right_place = index < len(correct) and _same_item(step, correct[index])
+        mark = ""
+        if not right_place:
+            wanted = next(
+                (i for i, s in enumerate(correct) if _same_item(s, step)),
+                None,
+            )
+            mark = f"va al {wanted + 1}" if wanted is not None else ""
+        rows.append((f"{index + 1}.  {step}", GOOD if right_place else BAD, mark))
+    return rows
+
+
+def _matching_rows(answer: SimulationAnswerResult) -> list[tuple[str, Rgb, str]]:
+    """Gli abbinamenti fatti, ognuno col suo esito.
+
+    Si parte dalle coppie giuste e non da quelle proposte, cosi' le voci
+    lasciate scoperte compaiono comunque: una voce senza abbinamento e' una
+    coppia sbagliata come le altre, e non vederla nell'elenco farebbe
+    sembrare la domanda piu' corta di com'era.
+    """
+    given = {_item_key(p.left): p.right for p in answer.given_pairs}
+    rows = []
+    for pair in answer.correct_pairs:
+        mine = given.get(_item_key(pair.left), "")
+        is_right = _same_item(mine, pair.right)
+        text = f"{pair.left}  ->  {mine}" if mine else f"{pair.left}  ->  (nessun abbinamento)"
+        rows.append((text, GOOD if is_right else BAD, "" if is_right else f"era: {pair.right}"))
+    return rows
+
+
+def _numbered(steps: list[str]) -> list[str]:
+    """I passi con il loro numero davanti, per l'elenco dell'ordine giusto."""
+    return [f"{index}.  {step}" for index, step in enumerate(steps, start=1)]
+
+
+def _item_key(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _same_item(a: str, b: str) -> bool:
+    return _item_key(a) == _item_key(b)
+
+
+def _answer_rows(answer: SimulationAnswerResult, kind: str) -> list[tuple[str, Rgb, str]]:
+    """Il corpo di una domanda corretta, riga per riga, qualunque sia il tipo.
+
+    Le alternative, i passi disposti o gli abbinamenti fatti finiscono tutti
+    nella stessa forma (testo, colore, targhetta), cosi' la scheda che li
+    stampa e' una sola: sulla carta le tre cose si leggono allo stesso modo,
+    un elenco con accanto detto cosa non andava. Le risposte scritte non
+    passano di qui, perche' non sono un elenco.
+    """
+    if kind == "ordering":
+        return _ordering_rows(answer)
+    if kind == "matching":
+        return _matching_rows(answer)
+    return _option_rows(answer)
+
+
+def _is_blank(answer: SimulationAnswerResult, kind: str) -> bool:
+    """Se la domanda e' stata lasciata in bianco, secondo il proprio tipo."""
+    if kind == "ordering":
+        return not answer.given_steps
+    if kind == "matching":
+        return not answer.given_pairs
+    return answer.selected_option is None
+
+
+def _question_card(pdf: Report, answer: SimulationAnswerResult, *, kind: str) -> None:
     """Una domanda: cosa chiedeva, cosa e' stato risposto, quanto e' valsa."""
+    written = kind == "open"
+    rows = [] if written else _answer_rows(answer, kind)
     color = GOOD if answer.is_correct else BAD
     title = f"{answer.position}.  {answer.text}"
     earned = f"{_fmt_points(answer.points)} p."
     if answer.elapsed_ms is not None:
         earned += f"  ·  {_fmt_elapsed(answer.elapsed_ms)}"
+    # Quanti elementi erano al posto giusto, dove una risposta puo' essere
+    # giusta a meta': senza questo, "0,7 p." su una domanda da sei passi e'
+    # un numero che non si sa da dove venga.
+    elif answer.item_count:
+        earned += f"  ·  {answer.matched_count} su {answer.item_count}"
 
     inner_w = pdf.content_w - 2 * CARD_PAD_X - 1.6
     pdf.use(size=10.5, style="B")
@@ -521,12 +612,16 @@ def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool
             body_h += 2 + pdf.measure(answer.feedback, inner_w, 4.7)
     else:
         pdf.use(size=9.5)
-        for text, _, mark in _option_rows(answer):
+        for text, _, mark in rows:
             mark_w = _mark_width(pdf, mark)
             body_h += pdf.measure(text, inner_w - mark_w, 4.9) + 1.2
-        if answer.selected_option is None:
+        if _is_blank(answer, kind):
             pdf.use(size=9, style="I")
             body_h += pdf.measure("Domanda lasciata in bianco.", inner_w, 4.6)
+        if kind == "ordering" and answer.correct_steps:
+            body_h += 2 + pdf.note_height(
+                _numbered(answer.correct_steps), inner_w, label="Ordine corretto"
+            )
     if answer.explanation:
         body_h += 2.5 + pdf.note_height(answer.explanation, inner_w, label="Spiegazione")
     if answer.sources:
@@ -577,7 +672,7 @@ def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool
                 pdf.multi_cell(w, 4.7, pdf.safe(answer.feedback), new_x=XPos.LEFT, new_y=YPos.NEXT)
                 cursor = pdf.get_y()
         else:
-            for text, option_color, mark in _option_rows(answer):
+            for text, option_color, mark in rows:
                 mark_w = _mark_width(pdf, mark)
                 pdf.set_xy(x, cursor)
                 pdf.use(size=9.5, style="B" if mark else "", color=option_color)
@@ -593,11 +688,26 @@ def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool
                         size=7.5,
                     )
                 cursor += row_h + 1.2
-            if answer.selected_option is None:
+            if _is_blank(answer, kind):
                 pdf.set_xy(x, cursor)
                 pdf.use(size=9, style="I", color=MUTED)
                 pdf.multi_cell(
                     w, 4.6, "Domanda lasciata in bianco.", new_x=XPos.LEFT, new_y=YPos.NEXT
+                )
+                cursor = pdf.get_y()
+            # L'ordine giusto per intero, sotto quello proposto. Le
+            # targhette dicono di quanto ogni passo era fuori posto, ma la
+            # sequenza corretta va letta di seguito per ricordarsela, ed e'
+            # la stessa ragione per cui a schermo sta in un blocco suo.
+            if kind == "ordering" and answer.correct_steps:
+                pdf.set_xy(x, cursor + 2)
+                pdf.note(
+                    _numbered(answer.correct_steps),
+                    x=x,
+                    width=w,
+                    fg=GOOD,
+                    bg=GOOD_TINT,
+                    label="Ordine corretto",
                 )
                 cursor = pdf.get_y()
         if answer.explanation:
@@ -655,9 +765,10 @@ def simulation_attempt_pdf(
 
     The same page the result screen shows, on paper: the grade, then for
     every question what was answered, what it was worth, why, and the
-    passage of the document the question comes from. The two kinds of test
+    passage of the document the question comes from. The kinds of test
     differ only in the body of a question — the options with the right one
-    marked, or the written answer next to the expected one — exactly as on
+    marked, the written answer next to the expected one, the steps in the
+    order they were put, the pairs as they were matched — exactly as on
     screen.
 
     Written in the third person even when it is the student downloading it:
@@ -665,6 +776,7 @@ def simulation_attempt_pdf(
     handed over is what this document is for.
     """
     written = kind == "open"
+    partial = kind in ("ordering", "matching")
     pdf = Report(title="Esito del test", subtitle="simulatore tecnico")
     pdf.add_page()
 
@@ -682,11 +794,14 @@ def simulation_attempt_pdf(
     # Il voto, e sotto le due conte che lo spiegano: quante risposte sono
     # giuste e' una cosa, quanto valevano un'altra, e un sei con otto
     # risposte esatte non si legge senza entrambe.
-    reason = (
-        "proporzionale alla sua completezza: una risposta parziale vale una parte del punto"
-        if written
-        else "decrescente con il passare del tempo"
-    )
+    if written:
+        reason = (
+            "proporzionale alla sua completezza: una risposta parziale vale una parte del punto"
+        )
+    elif partial:
+        reason = "la quota di elementi al posto giusto: quattro su cinque valgono otto decimi"
+    else:
+        reason = "decrescente con il passare del tempo"
     points = "punto" if earned_points == 1 else "punti"
     _score_block(
         pdf,
@@ -712,7 +827,7 @@ def simulation_attempt_pdf(
     for index, answer in enumerate(answers):
         if index:
             pdf.add_page()
-        _question_card(pdf, answer, written=written)
+        _question_card(pdf, answer, kind=kind)
 
     return bytes(pdf.output())
 

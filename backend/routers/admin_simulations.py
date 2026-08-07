@@ -52,7 +52,10 @@ from database import get_db
 from models import (
     ALL_SIMULATION_KINDS,
     ALL_SIMULATION_SOURCES,
+    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_MULTIPLE,
+    SIMULATION_KIND_OPEN,
+    SIMULATION_KIND_ORDERING,
     SIMULATION_SOURCE_AI,
     SIMULATION_SOURCE_MANUAL,
     SIMULATION_STATUS_DRAFT,
@@ -70,6 +73,7 @@ from schemas import (
     MessageResponse,
     SimulationAdminDetailResponse,
     SimulationQuestionAdminResponse,
+    SimulationQuestionPayload,
     SimulationQuestionsPayload,
     SimulationStatusRequest,
     SimulationUpdateRequest,
@@ -122,6 +126,11 @@ def _admin_detail(db: Session, simulation: TechnicalSimulation, admin: User) -> 
                 options=q.options or [],
                 correct_option=q.correct_option,
                 expected_answer=q.expected_answer,
+                # In ordine e non mescolati, al contrario di come li riceve
+                # chi svolge il test: qui la chiave si rilegge, non si
+                # indovina
+                ordered_steps=q.ordered_steps,
+                pairs=q.pairs,
                 explanation=q.explanation,
                 source_chunks=q.source_chunks,
             )
@@ -175,18 +184,101 @@ def _unfinished_question(simulation: TechnicalSimulation) -> str | None:
     ``SimulationQuestionPayload``).
     """
     for question in simulation.questions:
+        position = question.position
         if not question.text.strip():
-            return f"La domanda {question.position} non ha il testo."
+            return f"La domanda {position} non ha il testo."
         if simulation.is_open:
             if not (question.expected_answer or "").strip():
-                return f"La domanda {question.position} non ha la risposta attesa."
+                return f"La domanda {position} non ha la risposta attesa."
+            continue
+        if simulation.is_ordering:
+            steps = question.ordered_steps or []
+            if any(not str(s).strip() for s in steps):
+                return f"La domanda {position} ha un passo vuoto."
+            # Due passi uguali sono due risposte giuste, e chi risponde non
+            # avrebbe modo di sapere quale delle due il test si aspetta
+            if _duplicated([str(s) for s in steps]):
+                return f"La domanda {position} ha due passi uguali."
+            continue
+        if simulation.is_matching:
+            pairs = list(question.pairs or [])
+            if any(not str(p.get("left") or "").strip() for p in pairs):
+                return f"La domanda {position} ha una voce da abbinare vuota."
+            if any(not str(p.get("right") or "").strip() for p in pairs):
+                return f"La domanda {position} ha un abbinamento vuoto."
+            # Come sopra, ma su una colonna sola: un elemento di destra che
+            # vale per due voci di sinistra fa sbagliare chi sa la procedura
+            if _duplicated([str(p.get("left")) for p in pairs]):
+                return f"La domanda {position} ha due voci uguali da abbinare."
+            if _duplicated([str(p.get("right")) for p in pairs]):
+                return f"La domanda {position} ha due abbinamenti uguali."
             continue
         options = question.options or []
         if any(not str(o).strip() for o in options):
-            return f"La domanda {question.position} ha un'alternativa vuota."
+            return f"La domanda {position} ha un'alternativa vuota."
         if question.correct_option is None:
-            return f"La domanda {question.position} non ha la risposta corretta segnata."
+            return f"La domanda {position} non ha la risposta corretta segnata."
     return None
+
+
+def _duplicated(values: list[str]) -> bool:
+    """Se due elementi sono lo stesso testo, a meno di spazi e maiuscole."""
+    keys = [" ".join(v.split()).casefold() for v in values]
+    return len(set(keys)) != len(keys)
+
+
+def _missing_key(
+    simulation: TechnicalSimulation, question: SimulationQuestionPayload
+) -> str | None:
+    """Perché questa domanda non è del tipo del suo test, o None se lo è.
+
+    È un controllo di forma e non di contenuto: si guarda che la chiave del
+    tipo ci sia, non che sia scritta bene. Una domanda a scelta multipla
+    senza alternative non è una domanda a metà, è una domanda di un altro
+    test, e salvarla vorrebbe dire mandare a chi risponde qualcosa che
+    nessuna risposta indovina.
+
+    La frase torna senza soggetto perché il chiamante ci mette davanti il
+    numero della domanda, che è la sola cosa che permette di trovarla in un
+    elenco da cinquanta.
+    """
+    if simulation.is_open:
+        return None
+    if simulation.is_ordering:
+        if question.ordered_steps is None:
+            return "non ha i passi da rimettere in ordine."
+        return None
+    if simulation.is_matching:
+        if question.pairs is None:
+            return "non ha le coppie da abbinare."
+        return None
+    if question.options is None:
+        return "non ha le alternative fra cui scegliere."
+    return None
+
+
+def _key_columns(kind: str, question: SimulationQuestionPayload) -> dict:
+    """Le colonne della chiave da scrivere, piena quella del tipo del test.
+
+    Le altre restano vuote di proposito, anche quando il payload le porta:
+    una traccia della risposta attesa salvata su un test a scelta multipla
+    non la leggerebbe nessuno, e resterebbe lì a contraddire la domanda il
+    giorno in cui qualcuno va a guardare la riga.
+    """
+    empty = {
+        "options": None,
+        "correct_option": None,
+        "expected_answer": "",
+        "ordered_steps": None,
+        "pairs": None,
+    }
+    if kind == SIMULATION_KIND_OPEN:
+        return {**empty, "expected_answer": question.expected_answer.strip()}
+    if kind == SIMULATION_KIND_ORDERING:
+        return {**empty, "ordered_steps": question.ordered_steps}
+    if kind == SIMULATION_KIND_MATCHING:
+        return {**empty, "pairs": [p.model_dump() for p in question.pairs or []]}
+    return {**empty, "options": question.options, "correct_option": question.correct_option}
 
 
 def _require_document_source(simulation: TechnicalSimulation) -> None:
@@ -430,6 +522,8 @@ async def generate_simulation_questions(
                 options=question["options"],
                 correct_option=question["correct_option"],
                 expected_answer=question["expected_answer"],
+                ordered_steps=question["ordered_steps"],
+                pairs=question["pairs"],
                 explanation=question["explanation"],
                 source_chunks=question["source_chunks"],
             )
@@ -484,9 +578,10 @@ def save_questions(
 
     La chiave che una domanda deve portare dipende dal tipo del test, e il
     tipo si sa qui e non nel payload (vedi ``SimulationQuestionPayload``):
-    alternative con l'indice di quella giusta, oppure la traccia della
-    risposta attesa. Quella dell'altro tipo, se arriva, si butta invece di
-    restare scritta in una colonna che nessuno leggerà più.
+    alternative con l'indice di quella giusta, la traccia della risposta
+    attesa, i passi in ordine, le coppie. Quelle degli altri tipi, se
+    arrivano, si buttano invece di restare scritte in colonne che nessuno
+    leggerà più.
 
     Qui si controlla la forma e non il contenuto: che una domanda a scelta
     multipla porti delle alternative, non che siano scritte. Una domanda a
@@ -495,12 +590,12 @@ def save_questions(
     ``update_status``).
     """
     simulation = _get_or_404(db, simulation_id)
-    is_open = simulation.is_open
     for position, question in enumerate(payload.questions, start=1):
-        if not is_open and question.options is None:
+        missing = _missing_key(simulation, question)
+        if missing:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"La domanda {position} non ha le alternative fra cui scegliere.",
+                detail=f"La domanda {position} {missing}",
             )
 
     # Le citazioni al documento si conservano dove la domanda è rimasta la
@@ -516,9 +611,7 @@ def save_questions(
                 simulation_id=simulation.id,
                 position=position,
                 text=question.text.strip(),
-                options=None if is_open else question.options,
-                correct_option=None if is_open else question.correct_option,
-                expected_answer=question.expected_answer.strip() if is_open else "",
+                **_key_columns(simulation.kind, question),
                 explanation=question.explanation.strip(),
                 source_chunks=old.source_chunks
                 if old and old.text == question.text.strip()

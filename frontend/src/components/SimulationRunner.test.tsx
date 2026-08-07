@@ -49,6 +49,35 @@ const simulation = {
 const openSimulation = { ...simulation, kind: 'open' }
 const openQuestions = questions.map((q) => ({ ...q, options: [] }))
 
+/* Gli altri due tipi senza cronometro. Le domande arrivano già mescolate dal
+ * server, quindi il mock le manda nell'ordine sbagliato apposta: rimetterle a
+ * posto è quello che il test deve provare. */
+const orderingSimulation = { ...simulation, kind: 'ordering' }
+const orderingQuestions = [
+  { id: 'q1', position: 1, text: 'Rimetti in ordine?', options: [], steps: ['Beta', 'Alfa'] },
+  { id: 'q2', position: 2, text: 'E questi?', options: [], steps: ['Delta', 'Gamma'] },
+]
+
+const matchingSimulation = { ...simulation, kind: 'matching' }
+const matchingQuestions = [
+  {
+    id: 'q1',
+    position: 1,
+    text: 'Abbina?',
+    options: [],
+    left: ['Carta'],
+    right: ['Estero', 'Sportello'],
+  },
+  {
+    id: 'q2',
+    position: 2,
+    text: 'E questi?',
+    options: [],
+    left: ['Mutuo'],
+    right: ['Crediti', 'Estero'],
+  },
+]
+
 const attemptResponse = {
   id: 'att-1',
   simulation_id: 'sim-1',
@@ -83,15 +112,17 @@ function startCalls() {
   return fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/start')).length
 }
 
-/** Serve la simulazione a risposta aperta al posto di quella di serie. */
-function serveOpenSimulation() {
+/** Serve un test di un altro tipo al posto di quello di serie. */
+function serve(sim: object, drawn: object[], kind: string) {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-    if (String(url).endsWith('/start')) return json(openQuestions)
-    if (init?.method === 'POST') return json({ ...attemptResponse, simulation_kind: 'open' })
+    if (String(url).endsWith('/start')) return json(drawn)
+    if (init?.method === 'POST') return json({ ...attemptResponse, simulation_kind: kind })
     if (String(url).endsWith('/attempts')) return json([])
-    return json(openSimulation)
+    return json(sim)
   })
 }
+
+const serveOpenSimulation = () => serve(openSimulation, openQuestions, 'open')
 
 function renderRunner() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -266,5 +297,73 @@ describe('SimulationRunner', () => {
 
     expect(await screen.findByRole('textbox')).toBeInTheDocument()
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+  })
+
+  it('su un test di ordinamento consegna i passi nella sequenza scelta', async () => {
+    const user = userEvent.setup()
+    serve(orderingSimulation, orderingQuestions, 'ordering')
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+
+    // I passi arrivano mescolati: rimetterli a posto è la risposta
+    await user.click(await screen.findByRole('button', { name: 'Sposta in alto: Alfa' }))
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+
+    await user.click(await screen.findByRole('button', { name: 'Sposta in basso: Delta' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+
+    await waitFor(() => expect(submittedBody()).not.toBeNull())
+    const body = submittedBody()
+
+    expect(body.answers.map((a: { ordered_steps: string[] }) => a.ordered_steps)).toEqual([
+      ['Alfa', 'Beta'],
+      ['Gamma', 'Delta'],
+    ])
+    // Nessun cronometro qui, come sulle risposte aperte
+    for (const answer of body.answers) {
+      expect(answer.elapsed_ms).toBeUndefined()
+    }
+  })
+
+  it('un ordinamento mai toccato viaggia come non risposto', async () => {
+    const user = userEvent.setup()
+    serve(orderingSimulation, orderingQuestions, 'ordering')
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    /* Consegnare la sequenza così com'era arrivata sarebbe una risposta, e
+       chi non tocca niente non ne sta dando una: il pulsante lo dice, e il
+       corpo della richiesta pure. */
+    await user.click(await screen.findByRole('button', { name: 'Salta la domanda' }))
+    await user.click(await screen.findByRole('button', { name: 'Sposta in alto: Gamma' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+
+    await waitFor(() => expect(submittedBody()).not.toBeNull())
+    const [saltata] = submittedBody().answers
+    expect(saltata.ordered_steps).toBeNull()
+  })
+
+  it('su un test di abbinamento consegna le coppie formate', async () => {
+    const user = userEvent.setup()
+    serve(matchingSimulation, matchingQuestions, 'matching')
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+
+    await user.click(await screen.findByRole('combobox'))
+    await user.click(await screen.findByRole('option', { name: 'Sportello' }))
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+
+    /* La seconda si lascia scoperta: vale sbagliata, e non viaggia. Sul
+       passo finale il pulsante consegna, quindi non dice "salta" nemmeno
+       quando non è stato scelto niente. */
+    await user.click(await screen.findByRole('button', { name: 'Consegna il test' }))
+
+    await waitFor(() => expect(submittedBody()).not.toBeNull())
+    const body = submittedBody()
+
+    expect(body.answers[0].pairs).toEqual([{ left: 'Carta', right: 'Sportello' }])
+    expect(body.answers[1].pairs).toBeNull()
   })
 })

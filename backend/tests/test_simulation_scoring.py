@@ -4,10 +4,11 @@ Sono quattro righe di aritmetica, e si provano da sole perché è l'aritmetica
 che decide i voti: ogni altra cosa nel simulatore si può correggere dopo, un
 voto sbagliato è già stato letto da chi lo ha preso.
 
-Le scale sono due, una per tipo di test: quella a tempo delle risposte
-multiple e quella del giudizio delle risposte aperte. Finiscono nello stesso
+Le scale sono tre: quella a tempo delle risposte multiple, quella del
+giudizio delle risposte aperte, e quella degli elementi al posto giusto, che
+ordinamento e abbinamento condividono. Finiscono tutte nello stesso
 intervallo, da 0 a 1 per domanda, ed è quello che permette a un voto in
-decimi di significare la stessa cosa in entrambi.
+decimi di significare la stessa cosa in tutti i tipi.
 """
 
 import pytest
@@ -16,7 +17,8 @@ from simulation_scoring import (
     QUESTION_SECONDS,
     attempt_points,
     attempt_score,
-    is_open_answer_correct,
+    is_partially_correct,
+    matched_points,
     open_answer_points,
     question_points,
 )
@@ -90,10 +92,10 @@ def test_una_risposta_non_giudicata_non_vale_niente():
 
 
 def test_una_risposta_aperta_conta_fra_le_esatte_dalla_sufficienza():
-    assert is_open_answer_correct(0.6) is True
-    assert is_open_answer_correct(1.0) is True
-    assert is_open_answer_correct(0.5) is False
-    assert is_open_answer_correct(0.0) is False
+    assert is_partially_correct(0.6) is True
+    assert is_partially_correct(1.0) is True
+    assert is_partially_correct(0.5) is False
+    assert is_partially_correct(0.0) is False
 
 
 def test_i_punti_che_si_vedono_sono_quelli_che_decidono_l_esito():
@@ -104,7 +106,38 @@ def test_i_punti_che_si_vedono_sono_quelli_che_decidono_l_esito():
     """
     punti = open_answer_points(0.57)
     assert punti == 0.6
-    assert is_open_answer_correct(punti) is True
+    assert is_partially_correct(punti) is True
+
+
+@pytest.mark.parametrize(
+    ("matched", "total", "expected"),
+    [
+        (5, 5, 1.0),
+        (4, 5, 0.8),
+        # Tre su cinque è la sufficienza esatta, la riga che divide una
+        # crocetta verde da una rossa
+        (3, 5, 0.6),
+        (0, 5, 0.0),
+        # Un numero di elementi diverso cambia solo il denominatore
+        (4, 6, 0.7),
+        (2, 3, 0.7),
+    ],
+)
+def test_una_risposta_a_elementi_vale_quanti_ne_ha_indovinati(matched, total, expected):
+    assert matched_points(matched, total) == expected
+
+
+def test_una_domanda_senza_elementi_non_divide_per_zero():
+    """Non capita su una domanda vera, ma è la stessa prudenza di
+    ``attempt_score``: da qui esce un numero, non un'eccezione."""
+    assert matched_points(0, 0) == 0.0
+
+
+def test_gli_elementi_indovinati_non_superano_quelli_che_erano():
+    """Un client che ne dichiarasse più di quanti ce n'erano prenderebbe
+    comunque il massimo e non di più."""
+    assert matched_points(9, 5) == 1.0
+    assert matched_points(-1, 5) == 0.0
 
 
 def test_i_punti_di_un_tentativo_si_sommano_senza_code_di_virgola():

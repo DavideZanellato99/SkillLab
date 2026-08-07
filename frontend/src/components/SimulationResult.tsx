@@ -1,7 +1,22 @@
-import type { SimulationAttempt, SimulationAnswerResult } from '../services/simulations'
+import type {
+  SimulationAttempt,
+  SimulationAnswerResult,
+  SimulationKind,
+} from '../services/simulations'
 import Badge from './Badge'
+import { MatchedAnswer, OrderedAnswer } from './SimulationItemsAnswer'
 import SimulationWrittenAnswer from './SimulationWrittenAnswer'
 import { formatElapsed, formatScore, optionLabel, scoreBadgeTone } from './simulationFormat'
+
+/* Perché un test non ha preso il massimo, tipo per tipo: la riga sotto il
+ * voto, quella che evita la domanda "ho otto risposte giuste, perché ho
+ * sei?". */
+const POINTS_REASON: Record<SimulationKind, string> = {
+  multiple: 'diminuisce con il passare del tempo',
+  open: 'è proporzionale alla sua completezza: una risposta parziale vale una parte del punto',
+  ordering: 'è la quota di passi collocati al posto giusto',
+  matching: 'è la quota di associazioni corrette',
+}
 
 /* L'esito di un test consegnato: il voto in cima e poi, domanda per domanda,
  * cosa era stato risposto, quanto è valso e cosa dice il documento.
@@ -60,12 +75,12 @@ function ChoiceRows({ answer, own }: { answer: SimulationAnswerResult; own: bool
 function AnswerRow({
   answer,
   own,
-  written,
+  kind,
 }: {
   answer: SimulationAnswerResult
   own: boolean
-  /** Il test era a risposta aperta: si legge quello che ha scritto. */
-  written: boolean
+  /** Il tipo del test, che decide come si legge il corpo della domanda. */
+  kind: SimulationKind
 }) {
   const blank = answer.selected_option === null
   return (
@@ -98,11 +113,23 @@ function AnswerRow({
               in {formatElapsed(answer.elapsed_ms)}
             </span>
           )}
+          {/* Da dove vengono i punti dove una risposta può essere giusta a
+              metà: "0,7" da solo non dice cosa sia andato storto, "4 su 6"
+              sì. Sta al posto del tempo, che qui non c'è. */}
+          {answer.item_count > 0 && (
+            <span className="block text-[0.7rem] text-slate-500">
+              {answer.matched_count} su {answer.item_count}
+            </span>
+          )}
         </span>
       </div>
 
-      {written ? (
+      {kind === 'open' ? (
         <SimulationWrittenAnswer answer={answer} own={own} />
+      ) : kind === 'ordering' ? (
+        <OrderedAnswer answer={answer} own={own} />
+      ) : kind === 'matching' ? (
+        <MatchedAnswer answer={answer} own={own} />
       ) : (
         <>
           <ChoiceRows answer={answer} own={own} />
@@ -153,7 +180,7 @@ interface SimulationResultProps {
 }
 
 export default function SimulationResult({ attempt, actions, own = true }: SimulationResultProps) {
-  const written = attempt.simulation_kind === 'open'
+  const kind = attempt.simulation_kind
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md">
@@ -163,15 +190,12 @@ export default function SimulationResult({ attempt, actions, own = true }: Simul
             {attempt.correct_count} risposte corrette su {attempt.question_count}
           </p>
           {/* Perché il voto non è semplicemente le corrette in decimi. Sulle
-              scelte multiple i punti calano col tempo, sulle aperte una
-              risposta a metà ne prende una parte: sono due motivi diversi
-              per lo stesso scarto, e chi legge merita quello giusto. */}
+              scelte multiple i punti calano col tempo, negli altri tipi una
+              risposta a metà ne prende una parte: sono motivi diversi per lo
+              stesso scarto, e chi legge merita quello giusto. */}
           <p className="mt-1 text-[0.8rem] text-slate-500">
             {formatScore(attempt.earned_points)} punti su {attempt.question_count}, perché il valore
-            di ogni risposta{' '}
-            {written
-              ? 'è proporzionale alla sua completezza: una risposta parziale vale una parte del punto'
-              : 'diminuisce con il passare del tempo'}
+            di ogni risposta {POINTS_REASON[kind]}
           </p>
         </div>
         <Badge tone={scoreBadgeTone(attempt.score)} className="!px-4 !py-1.5 !text-base">
@@ -183,7 +207,7 @@ export default function SimulationResult({ attempt, actions, own = true }: Simul
 
       <ul className="flex list-none flex-col gap-3">
         {attempt.answers.map((answer) => (
-          <AnswerRow key={answer.question_id} answer={answer} own={own} written={written} />
+          <AnswerRow key={answer.question_id} answer={answer} own={own} kind={kind} />
         ))}
       </ul>
     </div>

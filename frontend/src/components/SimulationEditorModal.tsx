@@ -6,8 +6,18 @@ import {
   useSimulationResults,
   useUpdateSimulationStatus,
 } from '../hooks/useSimulations'
-import { MIN_OPTIONS, POOL_COUNT, QUESTION_COUNT, requiredPool } from '../services/simulations'
-import type { SimulationQuestionAdmin, SimulationQuestionPayload } from '../services/simulations'
+import {
+  MIN_ITEMS,
+  MIN_OPTIONS,
+  POOL_COUNT,
+  QUESTION_COUNT,
+  requiredPool,
+} from '../services/simulations'
+import type {
+  SimulationKind,
+  SimulationQuestionAdmin,
+  SimulationQuestionPayload,
+} from '../services/simulations'
 import ModalShell from './ModalShell'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
@@ -56,22 +66,52 @@ function toPayload(questions: SimulationQuestionAdmin[]): SimulationQuestionPayl
     options: q.options.length ? [...q.options] : null,
     correct_option: q.correct_option,
     expected_answer: q.expected_answer,
+    ordered_steps: q.ordered_steps ? [...q.ordered_steps] : null,
+    pairs: q.pairs ? q.pairs.map((p) => ({ ...p })) : null,
     explanation: q.explanation,
   }))
 }
 
-/* Una domanda appena aggiunta: vuota, con le alternative che il modello
- * scriverebbe. Quattro è un punto di partenza e non una regola: chi ne vuole
- * tre ne toglie una, chi ne vuole sei le aggiunge (vedi
+/* Una domanda appena aggiunta: vuota, con tanti elementi quanti ne
+ * scriverebbe il modello. Sono punti di partenza e non regole: chi ne vuole
+ * tre ne toglie uno, chi ne vuole sei li aggiunge (vedi
  * SimulationQuestionEditor). */
 const NEW_OPTION_COUNT = 4
+const NEW_ITEM_COUNT = 5
 
-function blankQuestion(open: boolean): SimulationQuestionPayload {
+/* Come si chiama la chiave di ogni tipo, nelle due frasi che spiegano cosa
+ * contiene una domanda di questo test. Sono le stesse parole che l'editor
+ * scrive sopra il campo, e devono restare quelle: chi legge "comprende i
+ * passi in sequenza" e poi trova un campo intitolato in un altro modo pensa
+ * di aver aperto la cosa sbagliata. */
+const KEY_NAMES: Record<SimulationKind, string> = {
+  multiple: 'le alternative',
+  open: 'la risposta attesa',
+  ordering: 'i passi nella sequenza corretta',
+  matching: 'le coppie corrette',
+}
+
+const GENERATED_KEY_NAMES: Record<SimulationKind, string> = {
+  multiple: 'con quattro alternative ciascuna',
+  open: 'con la traccia della risposta attesa',
+  ordering: 'con cinque passi da riordinare ciascuna',
+  matching: 'con cinque coppie da abbinare ciascuna',
+}
+
+function blankQuestion(kind: SimulationKind): SimulationQuestionPayload {
   return {
     text: '',
-    options: open ? null : Array<string>(NEW_OPTION_COUNT).fill(''),
+    options: kind === 'multiple' ? Array<string>(NEW_OPTION_COUNT).fill('') : null,
     correct_option: null,
     expected_answer: '',
+    ordered_steps: kind === 'ordering' ? Array<string>(NEW_ITEM_COUNT).fill('') : null,
+    /* `from` e non `fill`: `fill` metterebbe lo stesso oggetto in tutte e
+     * cinque le righe, e la prima modifica che lo mutasse cambierebbe la
+     * domanda intera. */
+    pairs:
+      kind === 'matching'
+        ? Array.from({ length: NEW_ITEM_COUNT }, () => ({ left: '', right: '' }))
+        : null,
     explanation: '',
   }
 }
@@ -86,20 +126,44 @@ function isBlank(question: SimulationQuestionPayload): boolean {
     !question.text.trim() &&
     !question.explanation.trim() &&
     !question.expected_answer.trim() &&
-    (question.options ?? []).every((o) => !o.trim())
+    (question.options ?? []).every((o) => !o.trim()) &&
+    (question.ordered_steps ?? []).every((s) => !s.trim()) &&
+    (question.pairs ?? []).every((p) => !p.left.trim() && !p.right.trim())
   )
 }
 
 /** Una domanda è pronta quando ha il testo e la chiave del suo tipo. */
-function isComplete(question: SimulationQuestionPayload, open: boolean): boolean {
+function isComplete(question: SimulationQuestionPayload, kind: SimulationKind): boolean {
   if (!question.text.trim()) return false
-  if (open) return Boolean(question.expected_answer.trim())
+  if (kind === 'open') return Boolean(question.expected_answer.trim())
+  if (kind === 'ordering') {
+    const steps = question.ordered_steps ?? []
+    return steps.length >= MIN_ITEMS && steps.every((s) => s.trim()) && !hasDuplicates(steps)
+  }
+  if (kind === 'matching') {
+    const pairs = question.pairs ?? []
+    return (
+      pairs.length >= MIN_ITEMS &&
+      pairs.every((p) => p.left.trim() && p.right.trim()) &&
+      !hasDuplicates(pairs.map((p) => p.left)) &&
+      !hasDuplicates(pairs.map((p) => p.right))
+    )
+  }
   const options = question.options ?? []
   return (
     options.length >= MIN_OPTIONS &&
     options.every((o) => o.trim()) &&
     question.correct_option !== null
   )
+}
+
+/* Due elementi uguali sono due risposte giuste, e la pubblicazione li
+ * rifiuta: qui si conta come una domanda non finita, così il bottone lo dice
+ * prima che il server risponda 409. Lo stesso confronto del backend, spazi e
+ * maiuscole perdonati. */
+function hasDuplicates(values: string[]): boolean {
+  const keys = values.map((v) => v.trim().replace(/\s+/g, ' ').toLowerCase())
+  return new Set(keys).size !== keys.length
 }
 
 interface SimulationEditorModalProps {
@@ -131,19 +195,19 @@ export default function SimulationEditorModal({
 
   const busy = generate.isPending || save.isPending || setStatus.isPending
   const isPublished = simulation?.status === 'published'
-  const isOpen = simulation?.kind === 'open'
+  const kind = simulation?.kind ?? 'multiple'
   const isManual = simulation?.source === 'manual'
   const required = requiredPool(simulation?.source ?? 'ai')
   /* Le righe che contano: una appena aggiunta e ancora vuota non è una
    * domanda, quindi non si salva e non si conta verso il serbatoio. */
   const written = draft.filter((q) => !isBlank(q))
   const enough = written.length >= required
-  const allWritten = written.every((q) => isComplete(q, Boolean(isOpen)))
+  const allWritten = written.every((q) => isComplete(q, kind))
   const complete = enough && allWritten
 
   const addQuestion = () => {
     setSaved(false)
-    setDraft((prev) => [...prev, blankQuestion(Boolean(isOpen))])
+    setDraft((prev) => [...prev, blankQuestion(kind)])
   }
 
   /* Pubblicare salva prima le domande: quello che finisce davanti agli utenti
@@ -217,20 +281,17 @@ export default function SimulationEditorModal({
                   <p className="max-w-md text-sm text-slate-500">
                     {isManual ? (
                       <>
-                        Ogni domanda comprende {isOpen ? 'la risposta attesa' : 'le alternative'} e
-                        la spiegazione mostrata a chi ha risposto. Ne servono almeno {required}, e
-                        ogni tentativo ne estrae {QUESTION_COUNT} a caso: redigerne un numero
-                        maggiore riduce la sovrapposizione fra due prove.
+                        Ogni domanda comprende {KEY_NAMES[kind]} e la spiegazione mostrata a chi ha
+                        risposto. Ne servono almeno {required}, e ogni tentativo ne estrae{' '}
+                        {QUESTION_COUNT} a caso: redigerne un numero maggiore riduce la
+                        sovrapposizione fra due prove.
                       </>
                     ) : (
                       <>
                         La generazione analizza il documento, individua gli argomenti verificabili e
-                        redige {POOL_COUNT} domande{' '}
-                        {isOpen
-                          ? 'con la traccia della risposta attesa'
-                          : 'con quattro alternative ciascuna'}
-                        , sui passaggi che li riguardano. Ogni tentativo ne estrae {QUESTION_COUNT}{' '}
-                        a caso. L'operazione può richiedere qualche minuto.
+                        redige {POOL_COUNT} domande {GENERATED_KEY_NAMES[kind]}, sui passaggi che li
+                        riguardano. Ogni tentativo ne estrae {QUESTION_COUNT} a caso. L'operazione
+                        può richiedere qualche minuto.
                       </>
                     )}
                   </p>
@@ -252,7 +313,7 @@ export default function SimulationEditorModal({
                         key={index}
                         index={index}
                         question={question}
-                        open={isOpen}
+                        kind={kind}
                         disabled={busy}
                         onChange={(updated) =>
                           setDraft((prev) => prev.map((q, i) => (i === index ? updated : q)))

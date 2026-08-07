@@ -4,6 +4,7 @@ import { useSimulation, useStartSimulation, useSubmitSimulation } from '../hooks
 import type {
   SimulationAnswerPayload,
   SimulationAttempt,
+  SimulationPair,
   SimulationQuestion,
 } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
@@ -14,7 +15,9 @@ import SimulationResult from './SimulationResult'
 import SimulationIntro from './SimulationIntro'
 import SimulationQuestionStep from './SimulationQuestionStep'
 import SimulationOpenQuestionStep from './SimulationOpenQuestionStep'
-import { QUESTION_SECONDS } from './simulationFormat'
+import SimulationOrderingStep from './SimulationOrderingStep'
+import SimulationMatchingStep from './SimulationMatchingStep'
+import { isTimed, kindHint, QUESTION_SECONDS } from './simulationFormat'
 
 /* Lo svolgimento di un test e, alla fine, il suo esito.
  *
@@ -24,11 +27,12 @@ import { QUESTION_SECONDS } from './simulationFormat'
  * di rispondere alle otto che restano: giusto e sbagliato arrivano insieme,
  * nel riepilogo finale.
  *
- * Come si risponde dipende dal tipo del test, e sono due passi diversi:
- * le alternative con trenta secondi ciascuna, oppure una casella in cui
- * scrivere senza cronometro. Questa pagina è la sola cosa che i due hanno in
- * comune, ed è per questo che sceglie qui invece di lasciare che un
- * componente solo faccia entrambe le cose a metà.
+ * Come si risponde dipende dal tipo del test, e sono quattro passi diversi:
+ * le alternative con trenta secondi ciascuna, una casella in cui scrivere,
+ * dei passi da rimettere in fila, due colonne da accoppiare. Solo il primo ha
+ * il cronometro. Questa pagina è la sola cosa che i quattro hanno in comune,
+ * ed è per questo che sceglie qui invece di lasciare che un componente solo
+ * faccia quattro cose a metà.
  *
  * Le tre schermate sono una pagina sola e non tre indirizzi: le regole, le
  * domande, l'esito. Un id nuovo nell'indirizzo a metà test sarebbe un tasto
@@ -89,7 +93,9 @@ export default function SimulationRunner() {
 
   const total = questions.length
   const started = total > 0
-  const isOpen = simulation.kind === 'open'
+  const kind = simulation.kind
+  const isOpen = kind === 'open'
+  const timed = isTimed(kind)
 
   /* Comincia il test: le domande le estrae il server adesso. Finché non
    * arrivano si resta sulle regole con il pulsante che gira, perché una
@@ -112,13 +118,16 @@ export default function SimulationRunner() {
       questions.map(
         (q) =>
           given[q.id] ??
-          (isOpen
-            ? { question_id: q.id, answer_text: null }
-            : {
+          (timed
+            ? {
                 question_id: q.id,
                 selected_option: null,
                 elapsed_ms: QUESTION_SECONDS * 1000,
-              }),
+              }
+            : /* Senza cronometro basta il solo id: una voce senza nessuna
+               * risposta è una domanda lasciata in bianco, che è quello che
+               * una domanda mai comparsa è davvero. */
+              { question_id: q.id }),
       ),
       {
         onSuccess: (attempt) => {
@@ -152,12 +161,15 @@ export default function SimulationRunner() {
     })
   }
 
-  /** Quello che ha scritto, sui test a risposta aperta. */
-  const handleWritten = (text: string | null) => {
+  /* Le risposte dei tre tipi senza cronometro: quello che ha scritto,
+   * l'ordine in cui ha disposto i passi, le coppie che ha formato. Una sola
+   * funzione perché cambia solo il campo che si riempie, e il resto (la
+   * mappa di prima, il passaggio alla domanda dopo) è identico. */
+  const handleGiven = (answer: Omit<SimulationAnswerPayload, 'question_id'>) => {
     const question = questions[index]
     handleAnswer({
       ...answers,
-      [question.id]: { question_id: question.id, answer_text: text },
+      [question.id]: { question_id: question.id, ...answer },
     })
   }
 
@@ -214,11 +226,11 @@ export default function SimulationRunner() {
         title={simulation.title}
         description={
           started
-            ? isOpen
-              ? 'Rispondi con parole tue, il riepilogo viene mostrato al termine.'
-              : 'Rispondi entro il tempo previsto, il riepilogo viene mostrato al termine.'
+            ? timed
+              ? 'Rispondi entro il tempo previsto, il riepilogo viene mostrato al termine.'
+              : 'Prenditi il tempo necessario, il riepilogo viene mostrato al termine.'
             : simulation.description ||
-              `${simulation.question_count} domande ${isOpen ? 'a risposta aperta' : 'a risposta multipla'}, una alla volta.`
+              `${simulation.question_count} domande, una alla volta. ${kindHint(kind)}.`
         }
         actions={
           started ? undefined : (
@@ -256,25 +268,46 @@ export default function SimulationRunner() {
         /* La chiave rimonta il passo a ogni domanda, e con lui il cronometro
            o la casella: è il rimontaggio a rimettere a trenta i secondi e a
            svuotare quello che si era scritto, non un effetto. */
-        isOpen ? (
-          <SimulationOpenQuestionStep
-            key={questions[index].id}
-            question={questions[index]}
-            number={index + 1}
-            total={total}
-            isLast={index + 1 === total}
-            onAnswer={handleWritten}
-          />
-        ) : (
-          <SimulationQuestionStep
-            key={questions[index].id}
-            question={questions[index]}
-            number={index + 1}
-            total={total}
-            isLast={index + 1 === total}
-            onAnswer={handleChoice}
-          />
-        )
+        (() => {
+          /* La chiave sta fuori da questi campi e si scrive su ogni passo:
+             è quella che rimonta il componente a ogni domanda, e React non
+             la legge se arriva dentro uno spread. */
+          const key = questions[index].id
+          const step = {
+            question: questions[index],
+            number: index + 1,
+            total,
+            isLast: index + 1 === total,
+          }
+          if (kind === 'open') {
+            return (
+              <SimulationOpenQuestionStep
+                key={key}
+                {...step}
+                onAnswer={(answer_text: string | null) => handleGiven({ answer_text })}
+              />
+            )
+          }
+          if (kind === 'ordering') {
+            return (
+              <SimulationOrderingStep
+                key={key}
+                {...step}
+                onAnswer={(ordered_steps: string[] | null) => handleGiven({ ordered_steps })}
+              />
+            )
+          }
+          if (kind === 'matching') {
+            return (
+              <SimulationMatchingStep
+                key={key}
+                {...step}
+                onAnswer={(pairs: SimulationPair[] | null) => handleGiven({ pairs })}
+              />
+            )
+          }
+          return <SimulationQuestionStep key={key} {...step} onAnswer={handleChoice} />
+        })()
       ) : (
         <>
           {start.isError && (

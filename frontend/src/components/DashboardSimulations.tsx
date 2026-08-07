@@ -36,11 +36,13 @@ import {
 const TENTATIVI: [string, string] = ['tentativo', 'tentativi']
 
 /* Come si legge il tipo attivo dentro le descrizioni delle sezioni, gemello
- * di `MODE_SUFFIX` nella metà parlata. Vuoto su "Entrambi": lì la frase è già
- * quella giusta, e "sui test di entrambi i tipi" sarebbe rumore. */
+ * di `MODE_SUFFIX` nella metà parlata. Vuoto su "Tutti": lì la frase è già
+ * quella giusta, e "sui test di tutti i tipi" sarebbe rumore. */
 const KIND_SUFFIX: Record<SimulationKind | 'all', string> = {
   multiple: ' a scelta multipla',
   open: ' a risposta aperta',
+  ordering: ' di ordinamento',
+  matching: ' di abbinamento',
   all: '',
 }
 

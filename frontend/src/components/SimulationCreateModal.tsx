@@ -9,6 +9,7 @@ import Select from './Select'
 import PrimaryButton from './PrimaryButton'
 import Spinner from './Spinner'
 import FormError from './FormError'
+import { kindLabel } from './simulationFormat'
 
 /* La creazione di una simulazione: titolo, organizzazione, tipo, chi scrive
  * le domande e, se le scrive il modello, il documento.
@@ -21,23 +22,29 @@ import FormError from './FormError'
  * modello.
  *
  * Le due scelte che non si cambiano più si fanno qui, ed è l'unica occasione.
- * Il tipo, perché le domande nascono già con delle alternative o con la
- * traccia della risposta attesa. E chi le scrive, perché un test scritto a
+ * Il tipo, perché le domande nascono già con delle alternative, con la
+ * traccia della risposta attesa, con dei passi in ordine o con delle coppie
+ * abbinate. E chi le scrive, perché un test scritto a
  * mano non ha documento e uno generato ne ha uno indicizzato. Chi si accorge
  * di aver scelto male ne crea una nuova. */
 
 /** Le estensioni che il backend sa leggere (vedi document_text). */
 const ACCEPTED = '.pdf,.docx,.txt,.md,.markdown'
 
-const KIND_OPTIONS = [
-  { value: 'multiple', label: 'Scelta multipla' },
-  { value: 'open', label: 'Risposta aperta' },
-]
+/* I quattro tipi nell'ordine in cui sono nati, che è anche quello dal più
+ * usato al meno. Le stesse parole del badge, prese da `kindLabel`: qui si
+ * sceglie il tipo che poi si leggerà scritto su ogni riga, e due parole
+ * diverse per la stessa cosa sarebbero due tipi apparenti. */
+const KIND_OPTIONS = (['multiple', 'open', 'ordering', 'matching'] as SimulationKind[]).map(
+  (value) => ({ value, label: kindLabel(value) }),
+)
 
 const KIND_HINTS: Record<SimulationKind, string> = {
   multiple:
     'Quattro alternative per domanda, con un tempo massimo di trenta secondi ciascuna. La correzione è automatica e il punteggio tiene conto anche della rapidità.',
   open: "Si risponde in forma scritta, senza limite di tempo. Alla consegna un modello valuta le risposte e assegna il punteggio in base alla loro completezza, quindi l'esito richiede qualche secondo.",
+  ordering: `Ogni domanda presenta i passi di una procedura in ordine sparso, da ricomporre nella sequenza corretta. La correzione è automatica e assegna un punteggio proporzionale ai passi collocati al posto giusto. Verifica la sequenza di una procedura, che le altre forme non raggiungono.`,
+  matching: `Ogni domanda presenta due colonne da associare, per esempio la casistica e l'ufficio competente. La correzione è automatica e assegna un punteggio proporzionale alle associazioni corrette. È la forma adatta alle tabelle di un documento.`,
 }
 
 const SOURCE_OPTIONS = [

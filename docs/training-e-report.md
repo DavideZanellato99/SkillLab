@@ -191,9 +191,17 @@ altrove sparirebbe dai suoi numeri.
 dei filtri e con lo stesso gruppo di pulsanti
 ([FilterTabs](../frontend/src/components/FilterTabs.tsx), estratto dal
 selettore di canale quando è servito il gemello): di là chiamate, chat o
-entrambe, di qua scelta multipla, risposta aperta o entrambi. Non può essere
+entrambe, di qua uno dei quattro tipi di test o tutti. Non può essere
 un selettore solo, perché è la stessa domanda ("quale delle due sto
 guardando") fatta su due cose diverse.
+
+**Nel simulatore i tipi hanno una voce ciascuno**, e non ce n'è una che ne
+raccoglie più d'uno: si correggono con scale diverse, quindi tenerne due
+insieme in un filtro vorrebbe dire mettere sulla stessa media un voto preso a
+crocette in trenta secondi e uno preso disponendo sei passi senza fretta.
+"Tutti" resta in fondo perché è il punto di partenza, non una quinta scelta, e
+l'ordine delle voci è quello in cui i tipi sono nati, che è anche quello dal
+più usato al meno.
 
 Le opzioni dei due gruppi non vivono nella dashboard: stanno accanto alla
 parola che il badge mostra (`MODE_FILTERS` in `ConversationModeBadge`,
@@ -213,18 +221,21 @@ come un dato sbagliato.
 
 Un default diverso nelle due metà, e non è una svista. Il canale parte da
 "Chiamate", perché al telefono e in chat non si è valutati alla pari e
-mescolarli di default darebbe una media ambigua. Il tipo parte da "Entrambi",
-perché i test a risposta aperta sono arrivati dopo e un default che ne
-mostrasse un tipo solo terrebbe nascosta metà della dashboard a chi non sa che
-il selettore esiste.
+mescolarli di default darebbe una media ambigua. Il tipo parte da "Tutti",
+perché i tipi sono quattro e tre di loro sono arrivati dopo il primo: un
+default che ne mostrasse uno solo terrebbe nascosta la maggior parte della
+dashboard a chi non sa che il selettore esiste.
 
 **Ogni riga dice di che prova si tratta**, in tutte e due le metà. Là una
 conversazione è al telefono o in chat
 ([ConversationModeBadge](../frontend/src/components/ConversationModeBadge.tsx)),
-qui un test è a scelta multipla o a risposta aperta
+qui un test è di uno dei quattro tipi
 ([SimulationKindBadge](../frontend/src/components/SimulationKindBadge.tsx)): due
-badge gemelli, stessa forma e stessi colori, violetto dove si sceglie o si
-parla e ciano dove si scrive. Il motivo è lo stesso nei due casi, cioè che il
+badge gemelli, stessa forma e stessi colori, violetto dove si sceglie fra cose
+già scritte e ciano dove si compone una risposta. I colori restano due anche
+con quattro tipi, e a distinguerli dentro la famiglia è il disegno: quattro
+tinte in fila su una riga di tabella sarebbero un arcobaleno da decifrare. Il
+motivo del badge è lo stesso nei due casi, cioè che il
 voto da solo non dice quale prova era, e nel simulatore pesa anche di più: un
 7 preso a crocette in trenta secondi e un 7 preso scrivendo dieci risposte non
 sono la stessa notizia. Nella tabella il badge è in forma di sola icona per
@@ -343,8 +354,8 @@ altrimenti una linguetta vuota, e dovrebbe scoprire da sé che l'altra non lo
 
 **Accanto alle linguette, tutto a destra, il filtro e la ricerca della prova
 attiva**, e cambiano con lei: di una conversazione si chiede il canale
-(chiamate, chat, entrambe), di una simulazione il tipo (scelta multipla,
-risposta aperta, entrambi), e sono due domande che all'altra metà non si
+(chiamate, chat, entrambe), di una simulazione il tipo (uno dei quattro, o
+tutti), e sono due domande che all'altra metà non si
 possono nemmeno fare. Le opzioni sono le stesse della dashboard e stanno
 scritte una volta sola, accanto alla parola che il badge mostra: `MODE_FILTERS`
 in [ConversationModeBadge](../frontend/src/components/ConversationModeBadge.tsx)

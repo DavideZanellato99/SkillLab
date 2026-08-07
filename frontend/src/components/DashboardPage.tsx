@@ -95,10 +95,10 @@ export default function DashboardPage() {
    *
    * Due default diversi, e non è una svista. Il canale parte dalle chiamate
    * perché al telefono e in chat non si è valutati alla pari e mescolarli
-   * darebbe una media ambigua. Il tipo parte da "Entrambi" perché i test a
-   * risposta aperta sono arrivati dopo, e un default che ne mostrasse un
-   * tipo solo terrebbe nascosta metà della dashboard a chi non sa che il
-   * selettore esiste. */
+   * darebbe una media ambigua. Il tipo parte da "Tutti" perché i tipi di
+   * test sono quattro e tre di loro sono arrivati dopo il primo: un default
+   * che ne mostrasse uno solo terrebbe nascosta la maggior parte della
+   * dashboard a chi non sa che il selettore esiste. */
   const [modeFilter, setModeFilter] = useState<ModeFilter>('voice')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [search, setSearch] = useState('')

@@ -18,6 +18,15 @@ if (!('ResizeObserver' in globalThis)) {
   }
 }
 
+/* Stessa lacuna, altro metodo: jsdom non implementa `scrollIntoView`, e le
+ * tendine dell'app lo chiamano per tenere in vista la voce evidenziata (vedi
+ * Select e SearchSelect). Senza questo, aprire una tendina dentro un test fa
+ * esplodere l'ambiente invece della cosa che si stava provando. In jsdom non
+ * si scorre niente, quindi il corpo vuoto è la sostituzione giusta. */
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {}
+}
+
 afterEach(() => {
   cleanup()
 })

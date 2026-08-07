@@ -25,7 +25,7 @@ cambiate:
 | Cosa si carica | Il documento aziendale | Niente |
 | Chi scrive le domande | Il modello, in due passate | Il docente, una per una |
 | Quante ne servono per pubblicare | 50 | 10 |
-| Quante alternative ha una domanda | 4 | Da 2 a 6, decise domanda per domanda |
+| Quanti elementi ha una domanda | Il numero fisso del tipo | Un intervallo, deciso domanda per domanda |
 | Cosa vede chi sbaglia | La spiegazione e il passaggio del documento citato | La spiegazione scritta dal docente |
 
 Il serbatoio pieno alla generazione non costa niente, cinquanta domande sono la
@@ -65,26 +65,50 @@ documento aziendale, e rilette da una persona prima della pubblicazione"), che
 chi legge con uno screen reader, e resta anche nelle ricerche delle tabelle:
 si può cercare "manuale" anche se sullo schermo quella parola non c'è.
 
-**Un test è anche di uno di due tipi**, scelto insieme alla strada e nemmeno
-lui più cambiato:
+**Un test è anche di uno di quattro tipi**, scelto insieme alla strada e
+nemmeno lui più cambiato:
 
-| | Scelta multipla | Risposta aperta |
-| --- | --- | --- |
-| Come si risponde | Una fra le alternative | Scrivendo qualche riga |
-| Tempo | 30 secondi a domanda | Nessuno |
-| Cosa decide i punti | Se è giusta e quanto in fretta è arrivata | Quanto la risposta è completa |
-| Chi corregge | Il codice, confrontando due numeri | Un modello, alla consegna |
-| Quando si sa il voto | Subito | Dopo qualche secondo di attesa |
+| | Scelta multipla | Risposta aperta | Ordinamento | Abbinamento |
+| --- | --- | --- | --- | --- |
+| Come si risponde | Una fra le alternative | Scrivendo qualche riga | Rimettendo dei passi in fila | Accoppiando due colonne |
+| Tempo | 30 secondi a domanda | Nessuno | Nessuno | Nessuno |
+| Cosa decide i punti | Se è giusta e quanto in fretta è arrivata | Quanto la risposta è completa | Quanti passi sono al posto giusto | Quante coppie sono indovinate |
+| Chi corregge | Il codice, confrontando due numeri | Un modello, alla consegna | Il codice, confrontando due liste | Il codice, coppia per coppia |
+| Quando si sa il voto | Subito | Dopo qualche secondo di attesa | Subito | Subito |
+| Quanti elementi ha una domanda | 4 alternative, o da 2 a 6 a mano | Una traccia | 5 passi, o da 3 a 6 a mano | 5 coppie, o da 3 a 6 a mano |
 
-Le due scale finiscono nello stesso posto, da 0 a 1 per domanda e un voto in
-decimi, quindi un test dell'una forma e uno dell'altra si leggono nello stesso
-riepilogo e nella stessa dashboard. Proprio per questo **ogni posto in cui
-compare un test dice di che tipo è**, con
+I due tipi in fondo sono arrivati dopo, e verificano quello che una crocetta
+non raggiunge. **L'ordinamento chiede la sequenza**, che è dove le procedure si
+sbagliano davvero: tutti sanno che il cliente va identificato, pochi sanno che
+va fatto prima di aprire la pratica, e una domanda a crocette su questo o
+regala la risposta o diventa un indovinello. **L'abbinamento chiede le
+corrispondenze**, cioè le tabelle dei documenti aziendali, casistica e ufficio
+competente, importo e autorizzazione: a crocette diventano quattro domande
+dove ne basta una.
+
+Le quattro scale finiscono nello stesso posto, da 0 a 1 per domanda e un voto
+in decimi, quindi un test di una forma e uno di un'altra si leggono nello
+stesso riepilogo e nella stessa dashboard. Proprio per questo **ogni posto in
+cui compare un test dice di che tipo è**, con
 [SimulationKindBadge](../frontend/src/components/SimulationKindBadge.tsx): un 7
 preso a crocette in trenta secondi e un 7 preso scrivendo dieci risposte non
 sono la stessa notizia. È il gemello del badge che distingue una chiamata da
-una chat, e i colori vogliono dire la stessa cosa: violetto dove si sceglie o
-si parla, ciano dove si scrive.
+una chat.
+
+I colori sono due e non quattro, e dividono i tipi in due famiglie: violetto
+dove si sceglie fra cose già scritte, ciano dove si compone una risposta,
+come sul badge del canale di una conversazione. Un terzo e un quarto colore in
+fila su una riga di tabella sarebbero un arcobaleno da decifrare; a distinguere
+i tipi dentro la famiglia basta il disegno, che è la cosa che si guarda per
+seconda: il pallino da selezionare, la matita, le righe da riordinare, le due
+colonne unite da un ponte.
+
+**Solo la scelta multipla ha il cronometro.** Trenta secondi bastano a
+scegliere una lettera, non a scrivere una procedura né a disporre sei passi, e
+un tempo tarato male renderebbe un tipo ingiocabile invece che difficile. Negli
+altri tre il punto si guadagna a pezzi, e toglierne anche col tempo vorrebbe
+dire due scale che si moltiplicano su una domanda dove nessuno saprebbe più
+dire da dove viene il voto.
 
 Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 
@@ -108,10 +132,16 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationRunner.tsx](../frontend/src/components/SimulationRunner.tsx) | Le tre schermate dello svolgimento: regole, domande, esito |
 | [frontend/src/components/SimulationQuestionStep.tsx](../frontend/src/components/SimulationQuestionStep.tsx) | Una domanda a scelta multipla e il suo cronometro |
 | [frontend/src/components/SimulationOpenQuestionStep.tsx](../frontend/src/components/SimulationOpenQuestionStep.tsx) | Una domanda aperta e la casella in cui si scrive |
+| [frontend/src/components/SimulationOrderingStep.tsx](../frontend/src/components/SimulationOrderingStep.tsx) | Una domanda di ordinamento: i passi mescolati e le frecce per disporli |
+| [frontend/src/components/SimulationMatchingStep.tsx](../frontend/src/components/SimulationMatchingStep.tsx) | Una domanda di abbinamento: le due colonne e una tendina per riga |
+| [frontend/src/components/MoveControls.tsx](../frontend/src/components/MoveControls.tsx) | Le due frecce che spostano un elemento, condivise fra l'editor e lo svolgimento |
 | [frontend/src/components/SimulationWrittenAnswer.tsx](../frontend/src/components/SimulationWrittenAnswer.tsx) | Nell'esito: la risposta scritta, la traccia attesa, la correzione |
+| [frontend/src/components/SimulationItemsAnswer.tsx](../frontend/src/components/SimulationItemsAnswer.tsx) | Nell'esito: la sequenza disposta e le coppie formate, con accanto la chiave |
 | [frontend/src/components/SimulationKindBadge.tsx](../frontend/src/components/SimulationKindBadge.tsx) | La targhetta del tipo, l'unico modo in cui si disegna, ovunque compaia un test |
 | [frontend/src/components/SimulationSourceBadge.tsx](../frontend/src/components/SimulationSourceBadge.tsx) | La targhetta dell'origine, che le sta sempre accanto: domande di un modello o di una persona |
-| [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, le alternative, la chiave, la spiegazione |
+| [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, la chiave del suo tipo, la spiegazione |
+| [frontend/src/components/SimulationStepsEditor.tsx](../frontend/src/components/SimulationStepsEditor.tsx) | La chiave di un ordinamento: i passi nella sequenza corretta |
+| [frontend/src/components/SimulationPairsEditor.tsx](../frontend/src/components/SimulationPairsEditor.tsx) | La chiave di un abbinamento: le coppie già accoppiate |
 | [frontend/src/components/simulationFormat.ts](../frontend/src/components/simulationFormat.ts) | Come si scrivono voti, punti e tempi, i nomi dei tipi, e la copia della scala che si legge durante la domanda |
 | [frontend/src/components/PdfDownloadButton.tsx](../frontend/src/components/PdfDownloadButton.tsx) | Il pulsante che scarica un referto in PDF, condiviso con le valutazioni |
 
@@ -130,15 +160,18 @@ flowchart TD
     E --> F[Passata 1: gli argomenti]
     F --> G[Recupero semantico: 4 passaggi per argomento]
     G --> H[Passata 2: cinque chiamate insieme, 50 domande del tipo scelto]
+    H2[Il tipo sceglie il prompt di sistema, e niente altro] -.-> H
     H --> I[(simulation_questions: il serbatoio, stato bozza)]
     I --> J[Revisione umana]
     J --> K[Pubblicazione]
-    K --> R[L'utente preme inizia: 10 domande estratte a caso]
+    K --> R[L'utente preme inizia: 10 domande estratte a caso e mescolate]
     R --> L[L'utente svolge il test]
     L --> M{Che tipo è}
-    M -->|Scelta multipla| N[Correzione deterministica]
+    M -->|Scelta multipla| N[Correzione deterministica: giusta o sbagliata, meno il tempo]
+    M -->|Ordinamento o abbinamento| N2[Correzione deterministica: quota di elementi al posto giusto]
     M -->|Risposta aperta| O[Una chiamata al modello che giudica tutte le risposte]
     N --> P[(simulation_attempts, fotografia + voto)]
+    N2 --> P
     O --> P
     P --> Q[Esito con spiegazioni e passaggi citati]
 ```
@@ -168,10 +201,11 @@ Nell'ordine, in `create_simulation`:
 2. l'organizzazione deve esistere, ed è quella a cui la simulazione
    apparterrà per sempre (il tenant non si cambia più, vedi
    `update_simulation`);
-3. `kind` deve essere `multiple` o `open`. Come il tenant, non si cambia più:
-   le domande nascono già con delle alternative o con la traccia della
-   risposta attesa, e cambiare il tipo dopo vorrebbe dire buttarle senza
-   dirlo. Chi sceglie male ne crea una nuova;
+3. `kind` deve essere uno dei quattro (`multiple`, `open`, `ordering`,
+   `matching`). Come il tenant, non si cambia più: le domande nascono già con
+   delle alternative, con la traccia della risposta attesa, con dei passi in
+   sequenza o con delle coppie, e cambiare il tipo dopo vorrebbe dire buttarle
+   senza dirlo. Chi sceglie male ne crea una nuova;
 4. `source` deve essere `ai` o `manual`, e nemmeno lui si cambia più. Da qui
    in poi i due percorsi si dividono: **con `manual` il file non ci deve
    essere** (400 se arriva, perché un test scritto a mano non ha un documento
@@ -398,9 +432,9 @@ dettagli diversi degli stessi passaggi, **mai inventando** soglie o regole che
 il documento non contiene. Due domande simili sono un difetto piccolo, una
 domanda con una risposta inventata è un errore che qualcuno porterà al lavoro.
 
-È qui che il tipo del test entra in scena, e cambia solo il prompt di sistema:
-le stesse chiamate, gli stessi argomenti con i loro passaggi, un'altra cosa da
-scrivere.
+È qui che il tipo del test entra in scena, e cambia solo il prompt di sistema
+(`_SYSTEM_PROMPTS`, una voce per tipo): le stesse chiamate, gli stessi
+argomenti con i loro passaggi, un'altra cosa da scrivere.
 
 #### A scelta multipla
 
@@ -445,7 +479,48 @@ rispetto all'altro prompt:
   metro con cui si giudica, e una traccia vaga non è una chiave ma un'opinione,
   che produce voti indifendibili.
 
-Il budget è di 8192 token di completamento **per chiamata** in entrambi i casi:
+#### Di ordinamento
+
+Il prompt ([_ordering_questions_prompt](../backend/simulation_questions.py))
+chiede cinque passi **già nell'ordine corretto**: la chiave è l'ordine stesso,
+e la mescolata avverrà molto più tardi, quando la domanda viene consegnata a
+chi risponde. Le regole che tengono in piedi il tipo sono due, e sono
+entrambe modi di dire "questa domanda deve avere una risposta sola":
+
+- **l'ordine deve essere imposto dal documento**, non dal buon senso. Se per
+  un argomento il documento non descrive nessuna sequenza, il prompt dice di
+  cambiare aspetto invece di inventarne una: due passi che si possono
+  invertire senza sbagliare sono una domanda con due risposte giuste;
+- **nessun passo deve tradire la propria posizione**. Niente "per prima cosa",
+  niente "poi", niente "dopo aver verificato il documento" dentro un passo: un
+  passo che si rimette in fila da solo non verifica niente, e a scriverlo si
+  fa senza accorgersene.
+
+Il JSON richiesto è
+`{"questions": [{"text", "ordered_steps", "explanation", "source_chunks"}]}`.
+
+#### Di abbinamento
+
+Il prompt ([_matching_questions_prompt](../backend/simulation_questions.py))
+chiede cinque coppie, la voce a sinistra e il suo abbinato a destra. La regola
+che regge il tipo è che **ogni voce di sinistra abbia una sola destinazione
+giusta**, e che nessun elemento di destra valga per due voci: se due casi
+hanno lo stesso trattamento, il prompt dice di tenerne uno solo e cercare
+un'altra coppia. Senza questo si ottiene una domanda in cui chi conosce la
+procedura sbaglia lo stesso, che è il modo più veloce di rendere un tipo
+odiato.
+
+Il prompt indica anche dove guardare: le **tabelle** del documento sono il
+materiale migliore per questo tipo di domanda, ed è per questo che il lettore
+DOCX le rende come righe `cella | cella | cella` invece di lasciarle cadere
+(vedi 1.2). E vieta di ripetere nella voce di sinistra una parola che compare
+solo nel suo abbinato, che è il modo in cui un abbinamento si risolve
+riconoscendo una parola invece di conoscendo la procedura.
+
+Il JSON richiesto è
+`{"questions": [{"text", "pairs": [{"left", "right"}], "explanation", "source_chunks"}]}`.
+
+Il budget è di 8192 token di completamento **per chiamata** in tutti i casi:
 dieci domande con quattro alternative e una spiegazione, oppure dieci domande
 con una traccia e una spiegazione, più i token che il ragionamento spende prima
 di scriverne una. Con un tetto stretto tornano indietro come JSON troncato.
@@ -456,16 +531,24 @@ di scriverne una. Con un tetto stretto tornano indietro come JSON troncato.
 domanda per volta invece di far cadere tutto, e cosa la renda scartabile
 dipende dal tipo:
 
-- niente testo: si scarta in entrambi i casi;
+- niente testo: si scarta in tutti i casi;
 - a scelta multipla, un numero di alternative diverso da quattro, o un
   `correct_option` non intero o fuori intervallo: si scarta;
 - a risposta aperta, una `expected_answer` vuota: si scarta. Non è una domanda
   a cui manca un pezzo, è una domanda che nessuno potrebbe correggere;
+- di ordinamento, un numero di passi diverso da cinque, oppure **due passi
+  uguali**: si scarta. Due passi identici sono due risposte giuste, e chi
+  risponde non avrebbe modo di sapere quale delle due il test si aspetta;
+- di abbinamento, un numero di coppie diverso da cinque, una coppia con un
+  lato vuoto, oppure due voci uguali **dentro una colonna**: si scarta, per la
+  stessa ragione. Il controllo è per colonna e non sulla coppia intera: è
+  l'elemento di destra che vale per due voci di sinistra a rendere la domanda
+  irrisolvibile;
 - ordinali in `source_chunks` che non sono fra quelli davvero forniti: si
   scartano **loro**, non la domanda, perché la citazione accompagna la
   spiegazione, non la sostiene.
 
-Ogni domanda esce con entrambi i mazzi di campi e quello inutile vuoto, così il
+Ogni domanda esce con tutti i mazzi di campi e vuoti quelli inutili, così il
 router che le scrive nel database non deve sapere di che tipo erano.
 
 Se da una chiamata non resta niente si solleva `ValueError`, che vale come una
@@ -536,9 +619,11 @@ entità amministrata, ma l'indirizzo di chi prepara i test non serve a chi li
 fa.
 
 Il super admin vede le domande **con le chiavi** (`SimulationQuestionAdminResponse`
-aggiunge `correct_option`, `expected_answer`, `explanation` e `source_chunks`),
-più il testo del documento e quante persone hanno già svolto il test. Delle due
-chiavi se ne legge una sola, quella del tipo del test.
+aggiunge `correct_option`, `expected_answer`, `ordered_steps`, `pairs`,
+`explanation` e `source_chunks`), più il testo del documento e quante persone
+hanno già svolto il test. Delle chiavi se ne legge una sola, quella del tipo
+del test. I passi arrivano **in ordine**, al contrario di come li riceve chi
+svolge il test: qui la chiave si rilegge, non si indovina.
 
 `PUT /api/admin/simulations/{id}/questions` salva le domande **in blocco**: le
 righe di prima si cancellano e si riscrivono. Riordinarne una, toglierne una e
@@ -550,18 +635,22 @@ stati che non hanno senso. Due dettagli:
   che il super admin possa riscrivere nel form, e perderle a ogni correzione di
   un refuso toglierebbe a chi sbaglia il rimando alla procedura;
 - il validatore Pydantic pretende almeno una domanda e al massimo cinquanta,
-  che le alternative, dove ci sono, siano **da due a sei** e nessuna vuota, e
-  che `correct_option` sia l'indice di una di quelle presenti. Quante siano
-  esattamente lo decide chi scrive la domanda, domanda per domanda: il modello
-  ne scrive quattro perché è il numero su cui sono tarate le sue regole, il
+  che le alternative, dove ci sono, siano **da due a sei** e nessuna vuota, che
+  `correct_option` sia l'indice di una di quelle presenti, e che i passi o le
+  coppie, dove ci sono, siano **da tre a sei**. Quanti siano esattamente lo
+  decide chi scrive la domanda, domanda per domanda: il modello ne scrive
+  quattro o cinque perché è il numero su cui sono tarate le sue regole, il
   docente sceglie ogni volta, e una domanda con due alternative accanto a una
-  con sei è un test legittimo;
-- **la chiave giusta per il tipo la controlla il router e non lo schema**: il
-  payload porta le domande e non la simulazione a cui appartengono, quindi il
-  tipo lì non si sa. Un test aperto con una domanda senza `expected_answer`, o
-  uno a scelta multipla con una domanda senza alternative, risponde 422 dicendo
-  quale posizione. La chiave dell'altro tipo, se arriva, viene buttata invece
-  di restare scritta in una colonna che nessuno leggerà.
+  con sei è un test legittimo. Il minimo degli elementi è tre e non due perché
+  lì non si sceglie, si dispone: con due elementi il caso vale mezzo punto;
+- **la chiave giusta per il tipo la controlla il router e non lo schema**
+  (`_missing_key`): il payload porta le domande e non la simulazione a cui
+  appartengono, quindi il tipo lì non si sa. Un test aperto con una domanda
+  senza `expected_answer`, uno a scelta multipla con una domanda senza
+  alternative, un ordinamento senza passi, un abbinamento senza coppie:
+  risponde 422 dicendo quale posizione. Le chiavi degli altri tipi, se
+  arrivano, vengono buttate (`_key_columns`) invece di restare scritte in
+  colonne che nessuno leggerà.
 
 Nell'editor la chiave che si vede è una sola, quella del tipo
 ([SimulationQuestionEditor](../frontend/src/components/SimulationQuestionEditor.tsx)).
@@ -580,13 +669,49 @@ di nuovo invece di scivolare da sola su un'alternativa che nessuno ha indicato,
 e finché manca il pannello lo dice sotto le alternative e la pubblicazione
 resta chiusa.
 
-### 3.1 Le domande scritte a mano
+### 3.1 Le chiavi che sono un elenco
+
+Gli altri due tipi hanno un editor per conto loro, e non somigliano a niente
+di quello che c'è nel resto della scheda.
+
+**L'ordinamento**
+([SimulationStepsEditor](../frontend/src/components/SimulationStepsEditor.tsx))
+è un elenco numerato in cui **l'ordine è la risposta**: non c'è nessuna
+casella da spuntare che lo dica, quello che si legge dall'alto in basso è
+quello che il test si aspetta, e i numeri accanto ai passi non sono
+decorazione. Si riordina con due frecce
+([MoveControls](../frontend/src/components/MoveControls.tsx)) e non
+trascinando: si tocca con un dito senza prendere la mira, si usa con la
+tastiera senza sapere nessuna scorciatoia, e non chiede una libreria a
+un'applicazione che dopo il primo deploy non si tocca più. Un elenco lungo si
+riordinerebbe meglio trascinando, ma qui gli elementi sono al massimo sei.
+Sotto l'elenco sta scritto che chi svolge il test li riceve mescolati, e di
+non cominciare un passo con "poi" o "infine": è l'errore che si fa senza
+accorgersene, e regala la risposta.
+
+**L'abbinamento**
+([SimulationPairsEditor](../frontend/src/components/SimulationPairsEditor.tsx))
+è un elenco di righe, la voce e il suo abbinato affiancati. Affiancati e non
+in due colonne sovrapposte, perché è così che si rileggono per controllarle:
+una colonna sopra e una sotto costringerebbe a contare le posizioni per capire
+cosa sta con cosa, che è esattamente l'errore che quella schermata deve
+rendere impossibile. Qui non ci sono frecce: la colonna di destra viene
+mescolata alla consegna, quindi l'ordine delle righe non conta.
+
+Su entrambi la pubblicazione pretende, oltre agli elementi pieni, che **non ce
+ne siano due uguali** dentro una colonna: due passi identici o due voci con lo
+stesso abbinato sono una domanda con due risposte giuste. Il pannello lo
+controlla mentre si scrive, con la stessa regola del server (spazi e maiuscole
+perdonati), così il bottone lo dice prima che il server risponda 409.
+
+### 3.2 Le domande scritte a mano
 
 Sulle simulazioni con `source = manual` il pannello è lo stesso, con due
 differenze: **non c'è il bottone di generazione** (non c'è niente da leggere) e
 **l'elenco cresce a mano**, con "Aggiungi domanda" in fondo e un cestino su
-ognuna. Una domanda nuova nasce vuota con quattro alternative, che sono un
-punto di partenza e non una regola.
+ognuna. Una domanda nuova nasce vuota con gli elementi che il modello
+scriverebbe, quattro alternative o cinque passi o cinque coppie: sono punti di
+partenza e non regole.
 
 Il resto è identico riga per riga: stessa copia locale, stesso salvataggio in
 blocco, stesso 422 sulla domanda incompleta, stessa bozza. Non esiste un
@@ -676,9 +801,27 @@ fino alla consegna, altrimenti il test lo risolverebbe la scheda di rete. Su un
 test a risposta aperta la traccia è la chiave, e vale esattamente la stessa
 regola: chi la ricevesse con la domanda avrebbe la risposta scritta davanti.
 
-Nelle domande di un test aperto `options` arriva come lista vuota, e non è un
-campo mancante: è la domanda che non ne ha. A dire come si risponde è `kind`,
-che sta sulla simulazione.
+Ogni tipo riempie la propria lista e lascia vuote le altre, e una lista vuota
+non è un campo mancante: è la domanda che non ne ha. A dire come si risponde è
+`kind`, che sta sulla simulazione, e non la lunghezza di queste liste.
+
+**Su ordinamento e abbinamento la chiave non si può togliere, perché la chiave
+è l'ordine.** I passi sono salvati nella sequenza giusta e le coppie sono
+salvate già accoppiate: mandarli come sono scritti vorrebbe dire consegnare la
+risposta insieme alla domanda. Quindi si mescolano qui
+([_shuffled_items](../backend/routers/simulations.py)), nel momento in cui la
+domanda esce dal server, come le domande stesse si estraggono qui e non quando
+la pagina si apre.
+
+Sull'abbinamento si mescola **solo la colonna di destra**: la sinistra è
+l'elenco dei casi e il suo ordine non dice niente, mentre rimescolare tutte e
+due farebbe leggere la stessa domanda in due modi a due persone senza
+aggiungere niente.
+
+Il server non si segna quale mescolata ha spedito, e non gli serve: è la stessa
+scelta per cui non si segna quali domande ha estratto. La conseguenza sta nella
+consegna, che rimanda il **testo** degli elementi e non la loro posizione (vedi
+5.2).
 
 In [SimulationRunner](../frontend/src/components/SimulationRunner.tsx) le
 domande estratte e le risposte vivono in uno stato locale, e la pagina ha tre
@@ -698,11 +841,13 @@ piano, cambiando le domande sotto le mani di chi sta rispondendo. Per la stessa
 ragione "Riprova il test" le butta e torna alle regole: il tentativo nuovo avrà
 le sue.
 
-Il passo che monta a ogni domanda è uno dei due, scelto in base a `kind`:
+Il passo che monta a ogni domanda è uno dei quattro, scelto in base a `kind`:
 `SimulationQuestionStep` per le alternative, `SimulationOpenQuestionStep` per
-la casella in cui si scrive. Sono due componenti e non uno con dei rami perché
-hanno in comune solo il fatto di stare in mezzo a un test: uno vive attorno a
-un cronometro, l'altro non ce l'ha.
+la casella in cui si scrive, `SimulationOrderingStep` per i passi da disporre,
+`SimulationMatchingStep` per le due colonne. Sono quattro componenti e non uno
+con dei rami perché hanno in comune solo il fatto di stare in mezzo a un test:
+uno vive attorno a un cronometro, gli altri no, e quello che raccolgono è ogni
+volta una cosa diversa.
 
 ### 4.2.1 A scelta multipla
 
@@ -772,6 +917,43 @@ domanda", che la consegna in bianco.
 
 Anche qui nessun riscontro durante il percorso.
 
+### 4.2.3 Di ordinamento
+
+I passi arrivano già mescolati e si dispongono con le frecce, lo stesso
+[MoveControls](../frontend/src/components/MoveControls.tsx) che il super admin
+usa per scrivere la chiave. Senza cronometro, come sopra e per la stessa
+ragione, e con la stessa conseguenza scritta nelle regole: ricontrollare prima
+di andare avanti non costa niente.
+
+**L'ordine di partenza non si tocca.** È quello in cui il server li ha
+mandati, e rimescolarlo nel browser vorrebbe dire che ricaricare la pagina
+cambia la domanda: la mescolata è già avvenuta una volta, dove viveva la
+chiave.
+
+Chi non tocca niente sta saltando la domanda, e il pulsante lo dice ("Salta la
+domanda" invece di "Avanti"). Non basterebbe confrontare la sequenza con
+quella di partenza, perché consegnarla identica è una risposta legittima:
+quello che si guarda è se le frecce sono state usate.
+
+### 4.2.4 Di abbinamento
+
+Ogni voce di sinistra ha la sua tendina, quella di tutta l'app
+([Select](../frontend/src/components/Select.tsx)), con dentro la colonna di
+destra mescolata. Una tendina per riga e non il trascinamento: si usa con un
+dito senza prendere la mira, si usa con la tastiera senza sapere nessuna
+scorciatoia, e non chiede una libreria a un'applicazione che dopo il primo
+deploy non si tocca più.
+
+**Lo stesso abbinato si può scegliere due volte.** Impedirlo vorrebbe dire
+toglierlo dalle tendine che restano, e chi si accorge a metà di aver sbagliato
+la prima si ritroverebbe la scelta giusta sparita dal menu. Restano scelte
+sbagliate come le altre, con un avviso in fondo che le fa notare senza
+bloccare niente: la chiave dice che un abbinato vale per una voce sola, quindi
+due voci uguali sono già una risposta che perde punti.
+
+Le voci lasciate scoperte semplicemente non viaggiano, e valgono sbagliate.
+Chi non ne abbina nessuna consegna la domanda in bianco.
+
 Finita l'ultima domanda il test **si consegna da solo**. È l'unica pagina
 dell'app in cui una chiamata fallita non lascerebbe niente da ritentare a mano,
 quindi l'errore resta a schermo con le risposte ancora in memoria e il pulsante
@@ -782,9 +964,9 @@ per riprovare la consegna.
 ## Fase 5, la correzione
 
 `POST /api/simulations/{id}/attempts`, con una voce per domanda. Un campo per
-tipo di test e se ne manda uno solo: `selected_option` con `elapsed_ms`, oppure
-`answer_text`. Vuoti entrambi significa lasciata in bianco, che si può fare in
-tutti e due i casi.
+tipo di test e se ne manda uno solo: `selected_option` con `elapsed_ms`,
+`answer_text`, `ordered_steps`, `pairs`. Vuoti tutti significa lasciata in
+bianco, che si può fare in ogni tipo.
 
 ### 5.0 Quali domande erano
 
@@ -807,8 +989,18 @@ non quelle nel serbatoio: chi rilegge il proprio esito deve trovare la terza
 domanda al terzo posto, non al trentanovesimo.
 
 [submit_attempt](../backend/routers/simulations.py) guarda poi il tipo e prende
-una delle due strade, e il resto è identico: la conta delle esatte, la somma
-dei punti, la fotografia, il voto congelato nella riga.
+una delle quattro strade, e il resto è identico: la conta delle esatte, la
+somma dei punti, la fotografia, il voto congelato nella riga.
+
+**Ordinamento e abbinamento rimandano il testo degli elementi, non la loro
+posizione.** Il server ha mescolato la domanda quando l'ha spedita e non si è
+segnato come, quindi un indice riferito a una mescolata che nessuno ha
+conservato non vorrebbe dire niente. Il testo invece si confronta con la
+chiave, ed è la stessa scelta di `_submitted_questions`, dove è il payload a
+dire cosa era stato consegnato. Il confronto perdona spazi doppi e maiuscole e
+niente altro: quello che torna indietro è il testo che il server stesso ha
+mandato, quindi un elemento che non combacia è un elemento riscritto, non uno
+storpiato da un browser.
 
 ### 5.1 A scelta multipla, il codice
 
@@ -835,7 +1027,48 @@ per intero anche se la domanda viene poi riscritta o la simulazione rigenerata
 da capo, e una domanda corretta dopo la consegna non può far apparire sbagliata
 una risposta che era giusta.
 
-### 5.2 A risposta aperta, il modello
+### 5.2 Di ordinamento e di abbinamento, ancora il codice
+
+Deterministiche come la scelta multipla, con una differenza sola: qui una
+risposta può essere **giusta a metà**, e i punti sono la quota di elementi al
+posto giusto (`matched_points`). Quattro passi su sei valgono 0,7 come quattro
+coppie su sei indovinate.
+
+Cosa si conta:
+
+| | Cosa vale un punto | Come si contano |
+| --- | --- | --- |
+| Ordinamento | Un passo nella posizione esatta | Le due liste a confronto, posizione per posizione ([_ordering_answers](../backend/routers/simulations.py)) |
+| Abbinamento | Una voce di sinistra con accanto l'abbinato giusto | Si parte dalle coppie della chiave, e chi non ha abbinato quella voce non compare fra le proposte ([_matching_answers](../backend/routers/simulations.py)) |
+
+**Un elemento vale quanto un altro**, ed è voluto: dire che il primo passo di
+una procedura pesa più dell'ultimo vorrebbe dire scriverlo da qualche parte,
+domanda per domanda, e nessuno lo farebbe.
+
+Sull'ordinamento si contano le **posizioni esatte** e non le coppie in ordine
+relativo. È una scelta con un difetto vero: un passo spostato all'inizio fa
+scalare tutti gli altri e costa caro, mentre contando le coppie costerebbe
+poco. In cambio il numero che finisce nell'esito è "quattro passi su sei al
+posto giusto", che chi prende un voto basso capisce e sa come rimediare,
+mentre "dieci coppie su quindici" è un numero che nessuno saprebbe leggere.
+Fra una scala più giusta e una che si spiega, per un test di formazione vale
+di più la seconda.
+
+I due tipi trattano diversamente una risposta malformata, e non è
+un'incoerenza:
+
+- una **sequenza con un numero di passi diverso** da quello della domanda è
+  400, come un indice fuori intervallo sulla scelta multipla: non è una
+  risposta sbagliata, è una domanda diversa da quella che era stata data;
+- un **abbinato inventato** invece si accetta e vale sbagliato. Chi lo ha
+  scritto ha già perso quella coppia, e rifiutare la consegna intera per una
+  riga storta butterebbe via un test che qualcuno ha appena svolto.
+
+La soglia oltre cui una risposta conta fra le esatte è la stessa delle
+risposte aperte, la sufficienza (`PASS_POINTS`, 0,6): quattro passi su sei
+sono una crocetta verde, tre su sei no.
+
+### 5.3 A risposta aperta, il modello
 
 Qui la correzione non può stare nel codice: la risposta è testo scritto da una
 persona, e dire se "prima si identifica il cliente" copre una procedura che il
@@ -881,8 +1114,10 @@ e un voto che oscilla non è un voto.
 
 Sapere una procedura e ricordarsela subito non sono la stessa cosa, e allo
 sportello la differenza si vede: chi deve rileggere il manuale la risposta ce
-l'ha, ma dopo. Il punteggio la misura, e le due scale vivono tutte in
-[simulation_scoring](../backend/simulation_scoring.py).
+l'ha, ma dopo. Il punteggio la misura, e le tre scale vivono tutte in
+[simulation_scoring](../backend/simulation_scoring.py). Sono tre e non quattro
+perché ordinamento e abbinamento condividono la stessa: contano elementi al
+posto giusto, e cosa sia un elemento lo decide il tipo, non la scala.
 
 **Su un test a scelta multipla**, il tempo:
 
@@ -924,7 +1159,22 @@ all'occhio subito.
 | sfiora l'argomento senza rispondere | 0,2 - 0,3 |
 | sbagliata, fuori tema, o in bianco | 0 |
 
-Qui il tempo non c'entra e non viene misurato. Le altre tre scelte:
+**Su un test di ordinamento o di abbinamento**, la quota:
+
+| Elementi al posto giusto | Vale |
+| --- | --- |
+| tutti e cinque | 1 |
+| quattro su cinque | 0,8 |
+| tre su cinque | 0,6, cioè la sufficienza, e conta fra le esatte |
+| due su cinque | 0,4 |
+| nessuno, o domanda in bianco | 0 |
+
+Anche qui il tempo non c'entra e non viene misurato. Un numero di elementi
+diverso da cinque cambia solo il denominatore: quattro passi su sei fanno 0,7,
+arrotondato a un decimale come tutte le altre scale, così i punti di una
+domanda si leggono uguali in ogni tipo di test.
+
+Sulle risposte aperte, il tempo non c'entra ugualmente. Le altre tre scelte:
 
 - **un giudizio fuori scala rientra** invece di far fallire la consegna, come
   il tempo storto: un modello che scrive 1,3 ha comunque detto che la risposta
@@ -949,11 +1199,12 @@ valutazioni del roleplay.
 `correct_count` resta accanto ai punti e non è più il voto: risponde a
 un'altra domanda, quante ne sapeva, e senza di lui un sei con otto risposte
 esatte sarebbe illeggibile. Nel riepilogo si vedono entrambi, e ogni domanda
-porta i suoi punti con accanto il tempo che li ha decisi. Su un test a risposta
-aperta "esatta" vuol dire **arrivata almeno a 0,6** (`OPEN_PASS_POINTS`), che è
-la sufficienza, la stessa soglia con cui il voto finale si colora a schermo: il
-giudizio è una scala continua, ma quella colonna è una conta, e da qualche
-parte la riga va tirata.
+porta i suoi punti con accanto quello che li ha decisi: il tempo sulla scelta
+multipla, quanti elementi erano al posto giusto negli altri due tipi
+deterministici. Fuori dalla scelta multipla "esatta" vuol dire **arrivata
+almeno a 0,6** (`PASS_POINTS`), che è la sufficienza, la stessa soglia con cui
+il voto finale si colora a schermo: i punti sono una scala continua, ma quella
+colonna è una conta, e da qualche parte la riga va tirata.
 
 **Il tempo lo misura il browser.** Il server lo riporta dentro scala se arriva
 storto, ma non ha modo di verificarlo: non consegna le domande una alla volta
@@ -989,11 +1240,24 @@ fruttato, poi domanda per domanda i punti presi, la spiegazione, e in fondo un
 compaiono anche sulle domande andate bene, perché chi ha indovinato senza
 esserne sicuro è esattamente la persona che deve leggerle.
 
-Quello che cambia fra i due tipi è solo il corpo di ogni domanda:
+Quello che cambia fra i tipi è solo il corpo di ogni domanda:
 
 - **a scelta multipla**, in quanto tempo la risposta è arrivata, l'alternativa
   corretta in verde, quella scelta in rosso se diversa, e la nota sulle domande
   lasciate in bianco;
+- **di ordinamento e di abbinamento**
+  ([SimulationItemsAnswer](../frontend/src/components/SimulationItemsAnswer.tsx)),
+  quello che è stato risposto riga per riga, verde dove era al posto giusto e
+  rosso altrimenti, e accanto a ogni riga sbagliata **dove andava**: "va al 3"
+  su un passo fuori posto, "era: Sportello" su un abbinamento scambiato. Senza
+  quel numero un elenco tutto rosso non insegna niente, perché non si vede di
+  quanto si era sbagliato. Sotto l'elenco, sull'ordinamento, la sequenza
+  giusta per intero: le targhette dicono di quanto ogni passo era fuori posto,
+  ma la sequenza va letta di seguito per ricordarsela. Sull'abbinamento si
+  parte dalle coppie della chiave e non da quelle date, così le voci lasciate
+  scoperte compaiono comunque: una voce senza abbinamento è una coppia
+  sbagliata come le altre, e non vederla farebbe sembrare la domanda più corta
+  di com'era;
 - **a risposta aperta**
   ([SimulationWrittenAnswer](../frontend/src/components/SimulationWrittenAnswer.tsx)),
   tre riquadri in quest'ordine: quello che ha scritto, gli elementi attesi, la
@@ -1006,8 +1270,15 @@ Quello che cambia fra i due tipi è solo il corpo di ogni domanda:
 **Lo stesso esito su carta.** `GET /api/simulations/attempts/{id}/pdf`
 ([simulation_attempt_pdf](../backend/exports.py)) stampa la stessa pagina:
 il voto, e poi domanda per domanda quanto ha valso, cosa è stato risposto,
-perché, e i passaggi del documento. Tre differenze, e sono la carta a
-imporle: i passaggi non stanno dietro un "Estratti dal documento" da aprire,
+perché, e i passaggi del documento.
+
+Sulla carta i tre tipi che non si scrivono diventano la stessa cosa, un elenco
+con accanto detto cosa non andava (`_answer_rows`): le alternative con
+"corretta" e "risposta data" scritte a parole invece che col colore, i passi
+disposti con "va al 3", gli abbinamenti con "era: Sportello". Una scheda sola
+li stampa tutti e tre, perché su un foglio si leggono allo stesso modo.
+
+Tre differenze rispetto allo schermo, e sono la carta a imporle: i passaggi non stanno dietro un "Estratti dal documento" da aprire,
 perché un foglio non si apre, e restano sotto quell'intestazione sola, un
 riquadro per citazione, come le citazioni dentro il pannello a schermo; il
 referto è scritto in terza persona anche
@@ -1106,27 +1377,28 @@ persone".
 | --- | --- | --- |
 | `technical_simulations` | Titolo, descrizione, stato, `kind`, `source`, nome e testo del documento, organizzazione | Il file originale non c'è, solo il testo estratto, e su una simulazione a mano non c'è nemmeno quello. `kind` e `source` si decidono alla creazione e non si cambiano |
 | `simulation_chunks` | `ordinal`, `content`, `embedding` | Cancellati e riscritti a ogni caricamento del documento |
-| `simulation_questions` | `position`, `text`, `options`, `correct_option`, `expected_answer`, `explanation`, `source_chunks` | Il serbatoio: cinquanta righe per simulazione, e `position` è il posto lì dentro, non il numero che chi risponde vede accanto alla domanda. Le due chiavi sono alternative fra loro e se ne riempie una sola, secondo il `kind` della simulazione: per questo `options` e `correct_option` sono nullable, non perché una domanda possa non avere una risposta esatta. `options` e `correct_option` stanno comunque sulla stessa riga, quindi correggere il testo di un'opzione non può spostare la risposta esatta su un'altra |
+| `simulation_questions` | `position`, `text`, `options`, `correct_option`, `expected_answer`, `ordered_steps`, `pairs`, `explanation`, `source_chunks` | Il serbatoio: cinquanta righe per simulazione, e `position` è il posto lì dentro, non il numero che chi risponde vede accanto alla domanda. Le quattro chiavi sono alternative fra loro e se ne riempie una sola, secondo il `kind` della simulazione: per questo sono nullable, non perché una domanda possa non avere una risposta esatta. `options` e `correct_option` stanno comunque sulla stessa riga, quindi correggere il testo di un'opzione non può spostare la risposta esatta su un'altra. `ordered_steps` sono i passi **nell'ordine giusto**, che è la chiave stessa, e `pairs` le coppie già accoppiate: entrambe JSON e non due tabelle, perché sono da tre a sei righe che si leggono, si scrivono e si buttano sempre insieme alla domanda, e nessuna query le cerca per conto loro |
 | `simulation_attempts` | `correct_count`, `question_count`, `earned_points`, `answers` (la fotografia), `created_at` | `question_count` sono le domande di **quel** tentativo, dieci, non quelle del serbatoio. Il voto si ricava da punti e domande, quindi resta leggibile anche se un giorno le domande non fossero più dieci, e i tentativi consegnati quando il test era di dieci domande fisse si leggono ancora come allora. `earned_points` è arrivata dopo: i tentativi di prima l'hanno riempita con le loro risposte esatte, che è quello che valevano quando il tempo non contava (vedi [startup_migrations](../backend/startup_migrations.py)) |
 
 **Quali domande siano state date a un tentativo non è scritto da nessuna
-parte** prima della consegna: l'estrazione vive nel browser di chi risponde e
-torna indietro con le risposte. Dopo la consegna invece è scritto per sempre,
+parte** prima della consegna, e **nemmeno in che ordine erano state
+mescolate**: l'estrazione e la mescolata vivono nel browser di chi risponde e
+tornano indietro con le risposte. Dopo la consegna invece è scritto per sempre,
 nella fotografia, come tutto il resto del tentativo. Una tabella di sessioni
 aperte darebbe righe da far scadere per ogni test cominciato e mai finito, in
 un'applicazione dove un tentativo esiste solo quando viene consegnato.
 
 Il tipo sta sulla simulazione e non sulla singola domanda, quindi un test è
-tutto dell'una forma o tutto dell'altra. Le due si svolgono in modi troppo
-diversi per stare nella stessa pagina: le multiple hanno un cronometro e si
-correggono da sole, le aperte no. Chi vuole verificare le stesse procedure in
-entrambi i modi carica due volte lo stesso documento, che costa una generazione
-e non un disegno.
+tutto di una forma sola. Le quattro si svolgono in modi troppo diversi per
+stare nella stessa pagina: le multiple hanno un cronometro e si correggono da
+sole, le altre no. Chi vuole verificare le stesse procedure in più modi carica
+due volte lo stesso documento, che costa una generazione e non un disegno.
 
-Le colonne nuove (`kind`, `source`, `expected_answer`) arrivano con un default
-che è già il valore giusto per le righe che c'erano: le simulazioni di prima
-sono tutte a scelta multipla e tutte generate da un documento, e le loro
-domande non hanno una traccia. Nessun backfill da scrivere, solo la ALTER e il
+Le colonne nuove (`kind`, `source`, `expected_answer`, e più tardi
+`ordered_steps` e `pairs`) arrivano con un default che è già il valore giusto
+per le righe che c'erano: le simulazioni di prima sono tutte a scelta multipla
+e tutte generate da un documento, e le loro domande non hanno né una traccia né
+degli elementi da disporre. Nessun backfill da scrivere, solo la ALTER e il
 passaggio di `options` e `correct_option` a nullable.
 
 Tutto ha `ondelete CASCADE` verso la simulazione. Eliminare una simulazione è
@@ -1140,12 +1412,16 @@ Le costanti sono in [models.py](../backend/models.py):
 (le domande di un tentativo, e il minimo per pubblicare un test scritto a
 mano), `SIMULATION_OPTION_COUNT = 4` (quante ne scrive il modello),
 `SIMULATION_MIN_OPTIONS = 2` e `SIMULATION_MAX_OPTIONS = 6` (l'intervallo entro
-cui può stare una domanda scritta a mano), gli stati `draft` e `published`, i
-tipi `multiple` e `open`, le origini `ai` e `manual`. Hanno il gemello nel
-frontend, in
+cui può stare una domanda scritta a mano), `SIMULATION_GENERATED_ITEMS = 5`
+(quanti passi o coppie scrive il modello), `SIMULATION_MIN_ITEMS = 3` e
+`SIMULATION_MAX_ITEMS = 6` (l'intervallo dei due tipi a elenco: il minimo è
+tre e non due perché lì non si sceglie, si dispone), gli stati `draft` e
+`published`, i tipi `multiple`, `open`, `ordering` e `matching`, le origini
+`ai` e `manual`. Hanno il gemello nel frontend, in
 [services/simulations.ts](../frontend/src/services/simulations.ts): `POOL_COUNT`
 si legge dove si prepara un test, `QUESTION_COUNT` dove lo si svolge,
-`MIN_OPTIONS` e `MAX_OPTIONS` nell'editor di una domanda, e `requiredPool()` è
+`MIN_OPTIONS` e `MAX_OPTIONS` nell'editor di una domanda a crocette,
+`MIN_ITEMS` e `MAX_ITEMS` in quello dei due tipi a elenco, e `requiredPool()` è
 la copia di `required_pool` che decide cosa scrive il bottone di
 pubblicazione.
 
@@ -1156,11 +1432,12 @@ pubblicazione.
 | Situazione | Risposta |
 | --- | --- |
 | Estensione non supportata | 400, "carica un file PDF, DOCX, TXT o Markdown" |
-| Tipo di test diverso da `multiple` o `open` | 400 |
+| Tipo di test fuori dai quattro previsti | 400 |
 | Origine diversa da `ai` o `manual` | 400 |
 | Simulazione a mano creata con un documento, o generata creata senza | 400, con il motivo |
 | Generazione o caricamento del documento su una simulazione scritta a mano | 409, "creane una nuova" |
 | Domanda con meno di due o più di sei alternative | 422 |
+| Domanda con meno di tre o più di sei passi, o coppie | 422 |
 | File vuoto o illeggibile, PDF scansionato | 400, con il motivo. Non è un problema di ritentativi, è il file |
 | Documento oltre 10 MB | 413 |
 | Embedding falliti | 502, il caricamento si ripete |
@@ -1173,6 +1450,8 @@ pubblicazione.
 | Consegna con un numero di risposte diverso dalle domande del test | 400, con l'invito a ricominciare |
 | Consegna con una domanda che non è di questa simulazione, o ripetuta | 400 |
 | Indice di risposta fuori intervallo | 400 |
+| Sequenza consegnata con un numero di passi diverso da quello della domanda | 400: non è una risposta sbagliata, è una domanda diversa da quella data |
+| Pubblicazione con due passi uguali, o due voci o due abbinamenti uguali | 409: sarebbe una domanda con due risposte giuste |
 | La correzione delle risposte aperte fallisce o torna incompleta | 502, con l'invito a riprovare: il tentativo non si scrive |
 | Simulazione o tentativo non visibili a chi chiede | 404 |
 

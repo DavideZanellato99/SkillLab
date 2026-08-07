@@ -11,7 +11,9 @@ from models import (
     CONVERSATION_MODE_VOICE,
     DEFAULT_AVATAR_CATEGORY_COLOR,
     SIMULATION_KIND_MULTIPLE,
+    SIMULATION_MAX_ITEMS,
     SIMULATION_MAX_OPTIONS,
+    SIMULATION_MIN_ITEMS,
     SIMULATION_MIN_OPTIONS,
     SIMULATION_POOL_COUNT,
     SIMULATION_SOURCE_AI,
@@ -965,9 +967,10 @@ class SimulationAnswerOutcome(BaseModel):
     is_correct: bool
     # None when the question was left blank
     selected_option: int | None = None
-    # None on an open-answer test, where there is nothing to pick: the two
-    # attempts are still matched question by question, and `is_correct` is
-    # what the comparison draws
+    # None on every kind but multiple choice, where there is nothing to pick:
+    # the two attempts are still matched question by question, and
+    # `is_correct` is what the comparison draws. It exists on all four kinds,
+    # which is why this screen needed no other field when two more arrived
     correct_option: int | None = None
 
 
@@ -983,9 +986,9 @@ class SimulationComparisonAttempt(BaseModel):
     attempt_id: UUID
     simulation_id: UUID
     simulation_title: str
-    # The twin of `mode` on a conversation: which of the two kinds of test
-    # this was. Two attempts at tests of different kinds can still be put
-    # side by side, and the screen has to say so
+    # The twin of `mode` on a conversation: which kind of test this was. Two
+    # attempts at tests of different kinds can still be put side by side, and
+    # the screen has to say so
     simulation_kind: str
     # Who wrote the questions: "ai" or "manual"
     simulation_source: str
@@ -1098,6 +1101,19 @@ class AuditActionOption(BaseModel):
 # --- Simulazioni tecniche ---
 
 
+class SimulationPair(BaseModel):
+    """Una coppia di una domanda di abbinamento: la voce e il suo abbinato.
+
+    Un oggetto con due campi e non una lista di due elementi: le coppie
+    viaggiano nella chiave, nella risposta consegnata e nell'esito, e in
+    tutti e tre i posti serve poter dire quale dei due sta a sinistra senza
+    contare su un indice.
+    """
+
+    left: str
+    right: str
+
+
 class SimulationQuestionResponse(BaseModel):
     """Una domanda come la vede chi deve rispondere.
 
@@ -1107,9 +1123,19 @@ class SimulationQuestionResponse(BaseModel):
     motivo per cui esiste uno schema separato da quello che legge il super
     admin.
 
-    Su un test a risposta aperta ``options`` è vuota, e non è un campo
-    mancante: è la domanda che non ne ha. Chi la mostra guarda il tipo della
-    simulazione, non la lunghezza di questa lista.
+    Ogni tipo di test riempie la propria lista e lascia vuote le altre, e
+    una lista vuota non è un campo mancante: è la domanda che non ne ha. Chi
+    la mostra guarda il tipo della simulazione, non la lunghezza di queste
+    liste.
+
+    **Sulle domande di ordinamento e di abbinamento la mescolata è già
+    avvenuta qui.** ``steps`` sono i passi in ordine sparso e ``right`` la
+    colonna di destra rimescolata: l'ordine giusto è la chiave, quindi
+    mandarlo com'è scritto vorrebbe dire consegnare la risposta insieme alla
+    domanda. Il server non si segna quale mescolata ha spedito, come non si
+    segna quali domande ha estratto, ed è per questo che la consegna rimanda
+    indietro il testo degli elementi e non la loro posizione (vedi
+    ``SimulationAnswerPayload``).
 
     ``position`` vuol dire due cose diverse a seconda di chi chiede, e in
     entrambi i casi vuol dire "in che ordine si legge": per chi svolge il
@@ -1121,6 +1147,13 @@ class SimulationQuestionResponse(BaseModel):
     position: int
     text: str
     options: list[str] = []
+    # I passi da rimettere in ordine, mescolati
+    steps: list[str] = []
+    # Le due colonne da accoppiare: la sinistra come è scritta, la destra
+    # mescolata. Sono due liste e non una di coppie proprio perché le coppie
+    # sono la chiave
+    left: list[str] = []
+    right: list[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -1128,13 +1161,20 @@ class SimulationQuestionResponse(BaseModel):
 class SimulationQuestionAdminResponse(SimulationQuestionResponse):
     """La stessa domanda con le chiavi, per chi la deve rivedere.
 
-    Le due chiavi viaggiano insieme e se ne legge una sola, quella del tipo
-    del test: l'indice dell'alternativa corretta, oppure la traccia di quello
-    che una risposta scritta deve dire.
+    Le chiavi viaggiano tutte insieme e se ne legge una sola, quella del tipo
+    del test: l'indice dell'alternativa corretta, la traccia di quello che
+    una risposta scritta deve dire, i passi nell'ordine giusto, le coppie
+    esatte.
+
+    Qui l'ordinamento arriva **in ordine**, al contrario che nello schema da
+    cui eredita: chi rivede la domanda deve leggere la chiave, non provare a
+    indovinarla.
     """
 
     correct_option: int | None = None
     expected_answer: str = ""
+    ordered_steps: list[str] | None = None
+    pairs: list[SimulationPair] | None = None
     explanation: str
     source_chunks: list[int] | None = None
 
@@ -1269,6 +1309,8 @@ class SimulationQuestionPayload(BaseModel):
     options: list[str] | None = None
     correct_option: int | None = None
     expected_answer: str = ""
+    ordered_steps: list[str] | None = None
+    pairs: list[SimulationPair] | None = None
     explanation: str = ""
 
     @field_validator("options")
@@ -1281,6 +1323,38 @@ class SimulationQuestionPayload(BaseModel):
             raise ValueError(
                 f"Le alternative devono essere da {SIMULATION_MIN_OPTIONS} a "
                 f"{SIMULATION_MAX_OPTIONS}."
+            )
+        return cleaned
+
+    @field_validator("ordered_steps")
+    @classmethod
+    def validate_ordered_steps(cls, v: list[str] | None) -> list[str] | None:
+        """Quanti sono i passi, non se sono finiti.
+
+        Un passo ancora vuoto passa di qui, come un'alternativa vuota: è
+        quello che permette di fermarsi a metà di una domanda senza perderla.
+        A pretendere che sia finita è la pubblicazione.
+        """
+        if v is None:
+            return None
+        cleaned = [s.strip() for s in v]
+        if not SIMULATION_MIN_ITEMS <= len(cleaned) <= SIMULATION_MAX_ITEMS:
+            raise ValueError(
+                f"I passi da ordinare devono essere da {SIMULATION_MIN_ITEMS} a "
+                f"{SIMULATION_MAX_ITEMS}."
+            )
+        return cleaned
+
+    @field_validator("pairs")
+    @classmethod
+    def validate_pairs(cls, v: list[SimulationPair] | None) -> list[SimulationPair] | None:
+        if v is None:
+            return None
+        cleaned = [SimulationPair(left=p.left.strip(), right=p.right.strip()) for p in v]
+        if not SIMULATION_MIN_ITEMS <= len(cleaned) <= SIMULATION_MAX_ITEMS:
+            raise ValueError(
+                f"Le coppie da abbinare devono essere da {SIMULATION_MIN_ITEMS} a "
+                f"{SIMULATION_MAX_ITEMS}."
             )
         return cleaned
 
@@ -1316,11 +1390,20 @@ class SimulationQuestionsPayload(BaseModel):
 
 
 class SimulationAnswerPayload(BaseModel):
-    """La risposta data a una domanda: quale opzione o cosa ha scritto.
+    """La risposta data a una domanda: quale opzione, cosa ha scritto, in
+    che ordine ha messo i passi o come ha accoppiato le due colonne.
 
-    Un campo per tipo di test, e se ne riempie uno solo. Vuoti entrambi
-    significa lasciata in bianco, che è una cosa che si può fare in tutti e
-    due i casi.
+    Un campo per tipo di test, e se ne riempie uno solo. Vuoti tutti
+    significa lasciata in bianco, che è una cosa che si può fare in ogni
+    tipo.
+
+    **Ordinamento e abbinamento rimandano il testo degli elementi e non la
+    loro posizione.** Il server ha mescolato la domanda al momento
+    dell'estrazione e non si è segnato come, esattamente come non si è
+    segnato quali domande aveva estratto: un indice riferito a una mescolata
+    che nessuno ha conservato non vorrebbe dire niente. Il testo invece si
+    confronta con la chiave, ed è la stessa scelta di ``_submitted_questions``,
+    dove è il payload a dire cosa era stato consegnato.
     """
 
     question_id: UUID
@@ -1331,6 +1414,13 @@ class SimulationAnswerPayload(BaseModel):
     # apposta: serve a fermare un client che manda un megabyte, non a dire a
     # chi risponde quanto può scrivere.
     answer_text: str | None = Field(default=None, max_length=5000)
+    # I passi nell'ordine in cui li ha disposti, come testo. Il tetto è quello
+    # della domanda: una lista più lunga non è una risposta a questa domanda
+    ordered_steps: list[str] | None = Field(default=None, max_length=SIMULATION_MAX_ITEMS)
+    # Le coppie che ha formato. Una coppia lasciata a metà non si manda: chi
+    # non ha abbinato una voce l'ha lasciata in bianco, e le voci in bianco
+    # sono quelle che non compaiono qui
+    pairs: list[SimulationPair] | None = Field(default=None, max_length=SIMULATION_MAX_ITEMS)
     # Quanto ci ha messo, misurato dal browser da quando la domanda è
     # comparsa: è quello che fa scendere il valore di una risposta corretta
     # (vedi simulation_scoring). Assente vale come il tempo massimo, non come
@@ -1348,8 +1438,8 @@ class SimulationSubmitRequest(BaseModel):
 class SimulationAnswerResult(BaseModel):
     """Com'è andata una singola domanda, con la sua correzione.
 
-    Uno schema solo per i due tipi di test, con i campi dell'altro vuoti:
-    l'esito si legge nella stessa pagina, e due schemi vorrebbero dire due
+    Uno schema solo per tutti i tipi di test, con i campi degli altri vuoti:
+    l'esito si legge nella stessa pagina, e più schemi vorrebbero dire più
     pagine che devono restare uguali a mano.
     """
 
@@ -1371,12 +1461,27 @@ class SimulationAnswerResult(BaseModel):
     # campo suo, perché è già `points`: un numero solo, non due che devono
     # restare d'accordo.
     feedback: str = ""
+    # Come ha disposto i passi e qual era l'ordine giusto, sulle domande di
+    # ordinamento. Le due liste stanno affiancate nell'esito, ed è lì che si
+    # vede quale passo era fuori posto.
+    given_steps: list[str] = []
+    correct_steps: list[str] = []
+    # Le stesse due cose sulle domande di abbinamento: le coppie che ha
+    # formato e quelle giuste
+    given_pairs: list[SimulationPair] = []
+    correct_pairs: list[SimulationPair] = []
+    # Quanti elementi ha indovinato su quanti erano: è il numero da cui
+    # escono i punti, e va scritto accanto a loro perché "0,7" non dice cosa
+    # sia andato storto mentre "4 su 6" sì. Zero su zero sugli altri tipi
+    matched_count: int = 0
+    item_count: int = 0
     is_correct: bool
     # Quanto ci è voluto e quanto è valso: i punti sono da 1 a 0,1 su una
     # risposta corretta, 0 sulle altre. Il tempo torna indietro insieme ai
     # punti perché un numero più basso di 1 senza il tempo accanto sembra un
-    # errore di correzione. Su una risposta aperta il tempo non c'è e i punti
-    # sono il giudizio: lì è il commento a spiegarli.
+    # errore di correzione. Il tempo c'è solo sulle domande a scelta multipla,
+    # che sono le sole ad avere il cronometro: sulle altre i punti li spiegano
+    # il commento del giudice oppure gli elementi indovinati.
     elapsed_ms: int | None = None
     points: float = 0.0
     explanation: str

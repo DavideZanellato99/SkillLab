@@ -3,7 +3,7 @@ import type { Simulation } from '../services/simulations'
 import PrimaryButton from './PrimaryButton'
 import SimulationAttemptsList from './SimulationAttemptsList'
 import Spinner from './Spinner'
-import { QUESTION_SECONDS, STEP_SECONDS } from './simulationFormat'
+import { isTimed, kindHint, QUESTION_SECONDS, STEP_SECONDS } from './simulationFormat'
 
 /* Quello che si legge prima di cominciare: le regole del test e i propri
  * tentativi passati.
@@ -21,11 +21,11 @@ import { QUESTION_SECONDS, STEP_SECONDS } from './simulationFormat'
  * indietro e che il tempo scaduto valga come sbagliata cambia il modo di
  * rispondere, quindi si sanno alla prima domanda e non alla terza.
  *
- * I due tipi di test hanno regole diverse e questa pagina le dice diverse.
- * Su un test a risposta aperta il cronometro non c'è e i punti dipendono da
- * quanto la risposta è completa: chi si aspettasse trenta secondi
- * risponderebbe di corsa senza motivo, e chi si aspettasse un giudizio
- * secco non capirebbe uno 0,6. */
+ * I quattro tipi di test hanno regole diverse e questa pagina le dice
+ * diverse. Il cronometro ce l'ha solo la scelta multipla: chi se lo
+ * aspettasse altrove risponderebbe di corsa senza motivo. E su tre tipi su
+ * quattro una risposta può essere giusta a metà, che è la cosa che va detta
+ * prima: chi si aspettasse un giudizio secco non capirebbe uno 0,6. */
 
 function Rule({ children }: { children: React.ReactNode }) {
   return (
@@ -51,8 +51,18 @@ export default function SimulationIntro({
   const { data: attempts = [] } = useMyAttempts(simulation.id)
 
   const total = simulation.question_count
-  const isOpen = simulation.kind === 'open'
+  const kind = simulation.kind
+  const isOpen = kind === 'open'
+  const timed = isTimed(kind)
   const isManual = simulation.source === 'manual'
+  /* Cosa si legge nell'esito, che dipende dal tipo: è la riga in fondo alle
+   * regole, quella che dice cosa si porta a casa. */
+  const recap: Record<typeof kind, string> = {
+    multiple: 'le risposte corrette e quelle fornite',
+    open: 'gli elementi attesi nella risposta e quelli mancanti',
+    ordering: 'la sequenza corretta accanto a quella indicata',
+    matching: 'le associazioni corrette accanto a quelle indicate',
+  }
 
   return (
     <>
@@ -60,23 +70,41 @@ export default function SimulationIntro({
         <h2 className="mb-4 font-heading text-base font-semibold text-slate-100">Come funziona</h2>
         <ul className="flex list-none flex-col gap-2.5">
           <Rule>
-            {total} domande {isOpen ? 'a risposta aperta' : 'a risposta multipla'}, presentate una
-            alla volta: la domanda successiva compare dopo la conferma della precedente.
+            {total} domande, presentate una alla volta: la domanda successiva compare dopo la
+            conferma della precedente. {kindHint(kind)}.
           </Rule>
+          {!timed && (
+            <Rule>
+              Non è previsto un limite di tempo.{' '}
+              {isOpen
+                ? 'Formula la risposta con parole tue e rileggila prima di procedere: la durata non incide sul punteggio.'
+                : 'Verifica la disposizione prima di procedere: la durata non incide sul punteggio.'}
+            </Rule>
+          )}
           {isOpen ? (
-            <>
-              <Rule>
-                Non è previsto un limite di tempo. Formula la risposta con parole tue e rileggila
-                prima di procedere: la durata non incide sul punteggio.
-              </Rule>
-              <Rule>
-                <span className="text-slate-100">
-                  Il punteggio dipende dalla completezza della risposta.
-                </span>{' '}
-                Ogni domanda vale fino a un punto e viene valutata in proporzione agli elementi
-                effettivamente indicati. Una risposta non fornita vale zero.
-              </Rule>
-            </>
+            <Rule>
+              <span className="text-slate-100">
+                Il punteggio dipende dalla completezza della risposta.
+              </span>{' '}
+              Ogni domanda vale fino a un punto e viene valutata in proporzione agli elementi
+              effettivamente indicati. Una risposta non fornita vale zero.
+            </Rule>
+          ) : kind === 'ordering' ? (
+            <Rule>
+              <span className="text-slate-100">
+                Il punteggio dipende dai passi collocati al posto giusto.
+              </span>{' '}
+              Ogni domanda vale fino a un punto: quattro passi su cinque nella posizione corretta
+              valgono otto decimi. Una domanda non affrontata vale zero.
+            </Rule>
+          ) : kind === 'matching' ? (
+            <Rule>
+              <span className="text-slate-100">
+                Il punteggio dipende dalle associazioni corrette.
+              </span>{' '}
+              Ogni domanda vale fino a un punto: quattro associazioni su cinque valgono otto decimi.
+              Le voci lasciate senza abbinamento valgono zero.
+            </Rule>
           ) : (
             <>
               <Rule>
@@ -111,11 +139,8 @@ export default function SimulationIntro({
               : 'Le domande sono state ricavate da un documento aziendale, e verificate da una persona prima della pubblicazione.'}
           </Rule>
           <Rule>
-            L'esito viene mostrato al termine: il riepilogo riporta{' '}
-            {isOpen
-              ? 'gli elementi attesi nella risposta e quelli mancanti'
-              : 'le risposte corrette e quelle fornite'}{' '}
-            e {isManual ? 'la spiegazione di ogni domanda' : 'gli estratti del documento'}, domanda
+            L'esito viene mostrato al termine: il riepilogo riporta {recap[kind]} e{' '}
+            {isManual ? 'la spiegazione di ogni domanda' : 'gli estratti del documento'}, domanda
             per domanda.
           </Rule>
         </ul>

@@ -60,17 +60,33 @@ SIMULATION_STATUS_DRAFT = "draft"
 SIMULATION_STATUS_PUBLISHED = "published"
 ALL_SIMULATION_STATUSES = [SIMULATION_STATUS_DRAFT, SIMULATION_STATUS_PUBLISHED]
 
-# Come si risponde a un test: scegliendo fra alternative o scrivendo.
+# Come si risponde a un test: scegliendo fra alternative, scrivendo,
+# rimettendo dei passi in ordine o accoppiando due colonne.
 #
 # Il tipo sta sulla simulazione e non sulla singola domanda, quindi un test è
-# tutto dell'una forma o tutto dell'altra. Le due si svolgono in modi troppo
+# tutto dell'una forma o tutto dell'altra. Le forme si svolgono in modi troppo
 # diversi per stare nella stessa pagina: le multiple hanno un cronometro e si
-# correggono da sole, le aperte no. Chi vuole verificare le stesse procedure
-# in entrambi i modi carica due volte lo stesso documento, che costa una
+# correggono da sole, le altre no. Chi vuole verificare le stesse procedure
+# in più modi carica due volte lo stesso documento, che costa una
 # generazione e non un disegno.
+#
+# I due tipi aggiunti dopo verificano quello che una crocetta non raggiunge:
+# l'ordinamento chiede la **sequenza** di una procedura, che è dove gli
+# operatori sbagliano davvero (tutti sanno che il cliente va identificato,
+# pochi sanno che va fatto prima di aprire la pratica), e l'abbinamento
+# chiede le **corrispondenze**, cioè le tabelle dei documenti aziendali
+# (casistica, importo, ufficio competente), che a crocette diventano quattro
+# domande dove ne basterebbe una.
 SIMULATION_KIND_MULTIPLE = "multiple"
 SIMULATION_KIND_OPEN = "open"
-ALL_SIMULATION_KINDS = [SIMULATION_KIND_MULTIPLE, SIMULATION_KIND_OPEN]
+SIMULATION_KIND_ORDERING = "ordering"
+SIMULATION_KIND_MATCHING = "matching"
+ALL_SIMULATION_KINDS = [
+    SIMULATION_KIND_MULTIPLE,
+    SIMULATION_KIND_OPEN,
+    SIMULATION_KIND_ORDERING,
+    SIMULATION_KIND_MATCHING,
+]
 
 # Chi scrive le domande: il modello a partire da un documento, oppure il
 # docente, una per una.
@@ -108,6 +124,23 @@ SIMULATION_OPTION_COUNT = 4
 # si legge più su un telefono.
 SIMULATION_MIN_OPTIONS = 2
 SIMULATION_MAX_OPTIONS = 6
+
+# Quanti elementi ha una domanda di ordinamento o di abbinamento.
+#
+# Sono gli stessi due limiti delle alternative, per la stessa ragione: sotto
+# i tre non c'è niente da riordinare (due passi si indovinano metà delle
+# volte) e sopra i sei la domanda non si trascina più su un telefono. Il
+# minimo è tre e non due perché qui non si sceglie, si dispone: con due
+# elementi il caso vale mezzo punto.
+SIMULATION_MIN_ITEMS = 3
+SIMULATION_MAX_ITEMS = 6
+
+# Quanti elementi scrive il modello quando genera una domanda di ordinamento
+# o di abbinamento. Sta in mezzo all'intervallo consentito: cinque passi sono
+# una procedura intera senza diventare un esercizio di memoria, e cinque
+# coppie coprono una tabella senza costringere il modello a inventare la
+# quinta riga.
+SIMULATION_GENERATED_ITEMS = 5
 
 # Le tinte fra cui si sceglie il colore di una categoria di avatar. Un elenco
 # chiuso e non un colore libero: la pastiglia è disegnata da classi Tailwind
@@ -882,6 +915,27 @@ class TechnicalSimulation(Authored, Base):
         return self.kind == SIMULATION_KIND_OPEN
 
     @property
+    def is_ordering(self) -> bool:
+        return self.kind == SIMULATION_KIND_ORDERING
+
+    @property
+    def is_matching(self) -> bool:
+        return self.kind == SIMULATION_KIND_MATCHING
+
+    @property
+    def is_timed(self) -> bool:
+        """Se le domande di questo test hanno il cronometro.
+
+        Solo la scelta multipla ce l'ha. Trenta secondi bastano a scegliere
+        una lettera, non a scrivere una procedura né a trascinare sei passi
+        nell'ordine giusto, e un tempo tarato male rende un tipo ingiocabile
+        invece che difficile. Il posto che comanda resta ``question_points``,
+        che i punti li assegna: questa proprietà serve a chi deve dire come
+        si svolge il test prima che cominci.
+        """
+        return self.kind == SIMULATION_KIND_MULTIPLE
+
+    @property
     def is_manual(self) -> bool:
         return self.source == SIMULATION_SOURCE_MANUAL
 
@@ -949,8 +1003,8 @@ class SimulationQuestion(Base):
     corregge prima di pubblicare, perché un test che vale come verifica non
     può contenere una domanda che nessun umano ha mai guardato.
 
-    Le colonne della chiave sono due e se ne riempie una sola, a seconda del
-    ``kind`` della simulazione a cui la domanda appartiene:
+    Le colonne della chiave sono quattro e se ne riempie una sola, a seconda
+    del ``kind`` della simulazione a cui la domanda appartiene:
 
     - a scelta multipla, ``options`` è la lista delle alternative nell'ordine
       in cui si mostrano e ``correct_option`` l'indice di quella giusta. Le
@@ -960,7 +1014,20 @@ class SimulationQuestion(Base):
       dire per essere considerata giusta. Non è una soluzione da confrontare
       parola per parola: è la traccia contro cui il modello giudica quello
       che l'utente ha scritto, ed è anche quello che gli si mostra nell'esito
-      accanto alla propria risposta.
+      accanto alla propria risposta;
+    - di ordinamento, ``ordered_steps`` sono i passi **nell'ordine giusto**,
+      che è la chiave stessa: chi risponde li riceve mescolati e il confronto
+      è fra due liste. Salvarli in ordine e mescolarli alla consegna delle
+      domande è l'unico modo di non avere una seconda colonna che dice la
+      stessa cosa in un altro modo;
+    - di abbinamento, ``pairs`` sono le coppie giuste, ognuna un oggetto
+      ``{"left": "", "right": ""}``. La colonna di sinistra si mostra
+      nell'ordine in cui è scritta, quella di destra mescolata.
+
+    Le due liste nuove sono JSON e non due tabelle: sono da tre a sei righe
+    che si leggono, si scrivono e si buttano sempre insieme alla domanda, e
+    nessuna query le cerca per conto loro. È la stessa ragione per cui
+    ``options`` è JSON da sempre.
 
     Il tipo non sta qui perché non è una proprietà della domanda: sta sulla
     simulazione, che è quello che decide come si svolge il test.
@@ -990,6 +1057,12 @@ class SimulationQuestion(Base):
     options = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
     correct_option = Column(Integer, nullable=True)
     expected_answer = Column(Text, nullable=False, default="")
+    # I passi nell'ordine giusto, che è la chiave di una domanda di
+    # ordinamento: chi risponde li riceve mescolati
+    ordered_steps = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
+    # Le coppie giuste di una domanda di abbinamento, come
+    # [{"left": "", "right": ""}]
+    pairs = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
     explanation = Column(Text, nullable=False, default="")
     source_chunks = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
 

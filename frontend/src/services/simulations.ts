@@ -1,5 +1,6 @@
 /* Simulatore tecnico: test ricavati da un documento aziendale, a scelta
- * multipla o a risposta aperta. Le simulazioni appartengono a
+ * multipla, a risposta aperta, di ordinamento o di abbinamento. Le
+ * simulazioni appartengono a
  * un'organizzazione, quindi qui non c'è nessun filtro da replicare: il server
  * serve a ciascuno quelle che può vedere, e al super admin tutte.
  *
@@ -15,9 +16,22 @@ import type { Authored } from './authorship'
 export type SimulationStatus = 'draft' | 'published'
 
 /* Come si risponde a un test, per tutte le sue domande: scegliendo fra le
- * alternative, oppure scrivendo. Si decide alla creazione e non si cambia
- * più, perché le domande nascono già così. */
-export type SimulationKind = 'multiple' | 'open'
+ * alternative, scrivendo, rimettendo dei passi in ordine o accoppiando due
+ * colonne. Si decide alla creazione e non si cambia più, perché le domande
+ * nascono già così.
+ *
+ * I due tipi in fondo verificano quello che una crocetta non raggiunge: la
+ * sequenza di una procedura, che è dove si sbaglia davvero, e le
+ * corrispondenze delle tabelle aziendali. Il cronometro ce l'ha solo la
+ * scelta multipla: trenta secondi bastano a scegliere una lettera, non a
+ * disporre sei passi. */
+export type SimulationKind = 'multiple' | 'open' | 'ordering' | 'matching'
+
+/** Una coppia di una domanda di abbinamento: la voce e il suo abbinato. */
+export interface SimulationPair {
+  left: string
+  right: string
+}
 
 /* Chi ha scritto le domande: il modello leggendo un documento, oppure il
  * docente una per una. Anche questo si decide alla creazione: una scritta a
@@ -42,6 +56,13 @@ export const QUESTION_COUNT = 10
 export const MIN_OPTIONS = 2
 export const MAX_OPTIONS = 6
 
+/* Quanti elementi ha una domanda di ordinamento o di abbinamento, il gemello
+ * di SIMULATION_MIN_ITEMS e SIMULATION_MAX_ITEMS. Il minimo è tre e non due
+ * perché qui non si sceglie, si dispone: con due elementi il caso vale mezzo
+ * punto. Quelle generate ne hanno cinque. */
+export const MIN_ITEMS = 3
+export const MAX_ITEMS = 6
+
 /** Quante domande servono per pubblicare, il gemello di `required_pool`.
  *
  * Il serbatoio pieno alla generazione non costa niente, cinquanta domande
@@ -55,15 +76,26 @@ export interface SimulationQuestion {
   id: string
   position: number
   text: string
-  /** Vuoto sui test a risposta aperta, dove non c'è niente da scegliere. */
+  /** Vuoto ovunque tranne che sui test a scelta multipla. */
   options: string[]
+  /* I passi da rimettere in ordine, già mescolati dal server: l'ordine
+   * giusto è la chiave e non esce di là. */
+  steps: string[]
+  /** Le due colonne da accoppiare: la destra arriva mescolata. */
+  left: string[]
+  right: string[]
 }
 
 export interface SimulationQuestionAdmin extends SimulationQuestion {
-  /** null sui test a risposta aperta. */
+  /** null fuori dai test a scelta multipla. */
   correct_option: number | null
   /** La traccia con cui una risposta scritta viene giudicata. */
   expected_answer: string
+  /* I passi nell'ordine giusto: qui la chiave si rilegge, non si indovina,
+   * al contrario di `steps` che il server manda mescolati. */
+  ordered_steps: string[] | null
+  /** Le coppie giuste di una domanda di abbinamento. */
+  pairs: SimulationPair[] | null
   explanation: string
   /** I passaggi del documento da cui la domanda nasce. */
   source_chunks: number[] | null
@@ -121,12 +153,26 @@ export interface SimulationAnswerResult {
   expected_answer: string
   /** Le due righe con cui il modello motiva i punti di una risposta aperta. */
   feedback: string
+  /** Come aveva disposto i passi, e qual era l'ordine giusto. */
+  given_steps: string[]
+  correct_steps: string[]
+  /** Come aveva accoppiato le due colonne, e quali erano le coppie giuste. */
+  given_pairs: SimulationPair[]
+  correct_pairs: SimulationPair[]
+  /* Quanti elementi ha indovinato su quanti erano: è il numero da cui
+   * escono i punti su ordinamento e abbinamento, e va letto accanto a loro
+   * perché "0,7" non dice cosa sia andato storto mentre "4 su 6" sì. Zero
+   * su zero sugli altri tipi. */
+  matched_count: number
+  item_count: number
   is_correct: boolean
-  /** Quanto ci è voluto: null sulle aperte, dove non c'è cronometro. */
+  /** Quanto ci è voluto: null fuori dalla scelta multipla, la sola col
+   *  cronometro. */
   elapsed_ms: number | null
   /* Su una domanda a scelta multipla: da 1 a 0,1 se la risposta è giusta, 0
    * se è sbagliata o in bianco. Su una aperta: quanto la risposta è
-   * completa, da 0 a 1. */
+   * completa. Su ordinamento e abbinamento: la quota di elementi al posto
+   * giusto. Sempre da 0 a 1, ed è per questo che i voti si confrontano. */
   points: number
   explanation: string
   /** Il testo dei passaggi del documento su cui la domanda si fonda. */
@@ -158,23 +204,33 @@ export interface SimulationAttempt extends SimulationAttemptSummary {
 }
 
 /* Una risposta data. Un campo per tipo di test e se ne manda uno solo:
- * l'indice dell'opzione scelta, oppure quello che è stato scritto. Vuoti
- * entrambi vuol dire lasciata in bianco. */
+ * l'indice dell'opzione scelta, quello che è stato scritto, l'ordine in cui
+ * i passi sono stati disposti, le coppie formate. Vuoti tutti vuol dire
+ * lasciata in bianco.
+ *
+ * Ordinamento e abbinamento rimandano il **testo** degli elementi e non la
+ * loro posizione: il server ha mescolato la domanda quando l'ha spedita e
+ * non si è segnato come, quindi un indice riferito a quella mescolata non
+ * vorrebbe dire niente. */
 export interface SimulationAnswerPayload {
   question_id: string
   selected_option?: number | null
   answer_text?: string | null
+  ordered_steps?: string[] | null
+  pairs?: SimulationPair[] | null
   /** Da quando la domanda è comparsa a quando è stata consegnata. Solo
-   * sulle domande a scelta multipla: le aperte non hanno cronometro. */
+   * sulle domande a scelta multipla, che sono le sole col cronometro. */
   elapsed_ms?: number
 }
 
 export interface SimulationQuestionPayload {
   text: string
-  /** Assenti sulle domande aperte. */
+  /** Ognuna piena solo sul tipo che la usa, null sugli altri. */
   options: string[] | null
   correct_option: number | null
   expected_answer: string
+  ordered_steps: string[] | null
+  pairs: SimulationPair[] | null
   explanation: string
 }
 

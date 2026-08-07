@@ -1,21 +1,27 @@
 import { MAX_OPTIONS, MIN_OPTIONS } from '../services/simulations'
-import type { SimulationQuestionPayload } from '../services/simulations'
+import type { SimulationKind, SimulationQuestionPayload } from '../services/simulations'
 import { textareaCls } from './Field'
 import { PlusIcon, TrashIcon } from './icons'
+import SimulationPairsEditor from './SimulationPairsEditor'
+import SimulationStepsEditor from './SimulationStepsEditor'
 import { optionLabel } from './simulationFormat'
 import Tooltip from './Tooltip'
 
 /* Una domanda in revisione: il testo, la chiave e la spiegazione che leggerà
  * chi sbaglia.
  *
- * La chiave è una cosa diversa nei due tipi di test, e questo componente ne
- * mostra una sola. Su una domanda a scelta multipla sono le alternative, e la
- * corretta si sceglie cliccando la sua lettera invece che da una tendina a
- * parte: la tendina lascerebbe scrivere "corretta: C" con la C vuota, mentre
- * così la scelta vive addosso all'alternativa che indica.
+ * La chiave è una cosa diversa in ognuno dei quattro tipi di test, e questo
+ * componente ne mostra una sola, quella del tipo. Su una domanda a scelta
+ * multipla sono le alternative, e la corretta si sceglie cliccando la sua
+ * lettera invece che da una tendina a parte: la tendina lascerebbe scrivere
+ * "corretta: C" con la C vuota, mentre così la scelta vive addosso
+ * all'alternativa che indica.
  * Su una domanda aperta è la traccia della risposta attesa, che è il metro
  * con cui il modello giudicherà quello che l'operatore scrive: qui il super
  * admin non sta correggendo un refuso, sta scrivendo la regola del voto.
+ * Sulle altre due è un elenco che si scrive già risolto, i passi in sequenza
+ * o le coppie accoppiate, e sta in un componente suo perché non somiglia a
+ * niente di quello che c'è qui.
  *
  * Quante siano le alternative lo decide chi scrive, da due a sei, domanda per
  * domanda: il modello ne scrive quattro, ma una domanda a mano può averne due
@@ -27,8 +33,8 @@ import Tooltip from './Tooltip'
 interface SimulationQuestionEditorProps {
   index: number
   question: SimulationQuestionPayload
-  /** Il test è a risposta aperta: al posto delle alternative, la traccia. */
-  open?: boolean
+  /** Il tipo del test, che decide quale chiave si scrive. */
+  kind: SimulationKind
   onChange: (question: SimulationQuestionPayload) => void
   /** Toglie la domanda dal serbatoio. Assente dove il serbatoio è fisso. */
   onRemove?: () => void
@@ -38,7 +44,7 @@ interface SimulationQuestionEditorProps {
 export default function SimulationQuestionEditor({
   index,
   question,
-  open = false,
+  kind,
   onChange,
   onRemove,
   disabled = false,
@@ -107,7 +113,21 @@ export default function SimulationQuestionEditor({
         />
       </div>
 
-      {open ? (
+      {kind === 'ordering' ? (
+        <SimulationStepsEditor
+          index={index}
+          steps={question.ordered_steps ?? []}
+          onChange={(ordered_steps) => onChange({ ...question, ordered_steps })}
+          disabled={disabled}
+        />
+      ) : kind === 'matching' ? (
+        <SimulationPairsEditor
+          index={index}
+          pairs={question.pairs ?? []}
+          onChange={(pairs) => onChange({ ...question, pairs })}
+          disabled={disabled}
+        />
+      ) : kind === 'open' ? (
         <div className="mb-3">
           <label
             className="mb-1 block text-xs font-medium tracking-wide text-slate-400"

@@ -15,14 +15,24 @@ davvero sue e che siano il numero giusto. Una riga in più per ogni test
 iniziato e mai finito sarebbe una tabella di sessioni da far scadere, per un
 test di formazione dove un tentativo esiste solo quando viene consegnato.
 
-**Due modi di rispondere, e due correzioni diverse.** Un test a scelta
-multipla si corregge qui e non nel modello: la risposta esatta è stata decisa
-quando la domanda è nata, riletta da un umano prima della pubblicazione, e da
-quel momento lo stesso test consegnato due volte prende lo stesso voto. Un
-test a risposta aperta non può funzionare così, perché quello che l'utente ha
-scritto qualcuno lo deve leggere: alla consegna parte una chiamata sola che
-giudica tutte le risposte insieme (vedi ``simulation_open_answers``), e il
-giudizio viene congelato nel tentativo perché è stato dato una volta sola.
+**Quattro modi di rispondere, e una sola correzione che chiama un modello.**
+Scelta multipla, ordinamento e abbinamento si correggono qui: le chiavi sono
+state decise quando la domanda è nata, rilette da un umano prima della
+pubblicazione, e da quel momento lo stesso test consegnato due volte prende
+lo stesso voto. Un test a risposta aperta non può funzionare così, perché
+quello che l'utente ha scritto qualcuno lo deve leggere: alla consegna parte
+una chiamata sola che giudica tutte le risposte insieme (vedi
+``simulation_open_answers``), e il giudizio viene congelato nel tentativo
+perché è stato dato una volta sola.
+
+Le tre correzioni deterministiche non danno però lo stesso genere di voto.
+Sulla scelta multipla una risposta è giusta o sbagliata, e a fare la
+differenza è il tempo; su ordinamento e abbinamento una risposta può essere
+giusta **in parte**, e i punti sono la quota di elementi al posto giusto
+(vedi ``matched_points``). È la ragione per cui quei due tipi non hanno il
+cronometro: là il punto si guadagna a pezzi, e toglierne anche col tempo
+vorrebbe dire due scale che si moltiplicano su una domanda dove nessuno
+saprebbe più dire da dove viene il voto.
 
 Quello che l'LLM ha scritto e che arriva a chi ha sbagliato è la spiegazione,
 insieme ai passaggi del documento da cui la domanda viene: è lì che il test
@@ -78,7 +88,8 @@ from simulation_open_answers import judge_open_answers
 from simulation_scoring import (
     attempt_points,
     attempt_score,
-    is_open_answer_correct,
+    is_partially_correct,
+    matched_points,
     open_answer_points,
     question_points,
 )
@@ -281,12 +292,45 @@ def start_attempt(
             # serbatoio: è il numero che si legge accanto alla domanda
             position=position,
             text=q.text,
-            # Vuote su un test a risposta aperta, dove la domanda non ha
-            # alternative: è il tipo del test a dire come si risponde
+            # Ogni tipo riempie la propria lista e lascia vuote le altre: è
+            # il tipo del test a dire come si risponde, non la lunghezza di
+            # queste liste
             options=q.options or [],
+            **_shuffled_items(q),
         )
         for position, q in enumerate(drawn, start=1)
     ]
+
+
+def _shuffled_items(question: SimulationQuestion) -> dict:
+    """Gli elementi di una domanda di ordinamento o di abbinamento, mescolati.
+
+    **La mescolata è la domanda.** I passi sono salvati nell'ordine giusto e
+    le coppie già accoppiate, perché quella è la chiave: mandarli come sono
+    scritti vorrebbe dire consegnare la risposta insieme alla domanda. Si
+    mescola qui, nel momento in cui la domanda esce dal server, come le
+    domande stesse si estraggono qui e non quando la pagina si apre.
+
+    Sull'abbinamento si mescola **solo la colonna di destra**: la sinistra è
+    l'elenco dei casi e il suo ordine non dice niente, mentre rimescolare
+    tutte e due farebbe leggere la stessa domanda in due modi a due persone
+    senza aggiungere niente.
+
+    Il server non si segna quale mescolata ha spedito, e non gli serve: la
+    consegna rimanda il testo degli elementi, non la loro posizione (vedi
+    ``SimulationAnswerPayload``).
+    """
+    steps = [str(s) for s in (question.ordered_steps or [])]
+    if steps:
+        return {"steps": random.sample(steps, len(steps))}
+    pairs = question.pairs or []
+    if pairs:
+        right = [str(p.get("right") or "") for p in pairs]
+        return {
+            "left": [str(p.get("left") or "") for p in pairs],
+            "right": random.sample(right, len(right)),
+        }
+    return {}
 
 
 def _sources(simulation: TechnicalSimulation, ordinals: list[int] | None) -> list[str]:
@@ -341,6 +385,16 @@ def _answer_results(
                 answer_text=entry.get("answer_text"),
                 expected_answer=entry.get("expected_answer", ""),
                 feedback=entry.get("feedback", ""),
+                # Come aveva disposto i passi e come aveva accoppiato le due
+                # colonne, con accanto la chiave: sono nella fotografia come
+                # tutto il resto, quindi una domanda riscritta dopo non può
+                # far apparire fuori posto un passo che era al suo posto
+                given_steps=entry.get("given_steps") or [],
+                correct_steps=entry.get("correct_steps") or [],
+                given_pairs=entry.get("given_pairs") or [],
+                correct_pairs=entry.get("correct_pairs") or [],
+                matched_count=entry.get("matched_count", 0),
+                item_count=entry.get("item_count", 0),
                 is_correct=entry["is_correct"],
                 elapsed_ms=entry.get("elapsed_ms"),
                 points=entry.get("points", float(entry["is_correct"])),
@@ -452,6 +506,118 @@ def _multiple_choice_answers(questions: list[SimulationQuestion], given: dict) -
     return answers
 
 
+def _same_text(a: str, b: str) -> bool:
+    """Se due elementi sono lo stesso, a meno di spazi e maiuscole.
+
+    Il confronto è sul testo e non su un indice perché il server non si è
+    segnato in che ordine aveva spedito gli elementi (vedi
+    ``_shuffled_items``). Perdonare gli spazi doppi e le maiuscole è il
+    minimo indispensabile: quello che torna indietro è il testo che il
+    server stesso ha mandato, quindi un elemento che non combacia qui è un
+    elemento che qualcuno ha riscritto, non uno che un browser ha storpiato.
+    """
+    return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
+
+
+def _ordering_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
+    """La correzione di un test di ordinamento: quanti passi al posto giusto.
+
+    Deterministica come la scelta multipla, e con una differenza sola: qui
+    una risposta può essere giusta a metà, e i punti sono la quota di passi
+    che stanno dove devono stare (vedi ``matched_points``). Una posizione
+    vale l'altra, quindi il numero che finisce nell'esito è "quattro passi su
+    sei", che è anche quello che serve sapere per rimediare.
+
+    Un ordine che non contiene gli stessi passi mandati è 400 e non una
+    risposta sbagliata: significa che il client ha riscritto la domanda,
+    esattamente come un indice fuori intervallo sulla scelta multipla.
+    """
+    answers = []
+    for position, question in enumerate(questions, start=1):
+        answer = given.get(question.id)
+        correct = [str(s) for s in (question.ordered_steps or [])]
+        proposed = [str(s) for s in (answer.ordered_steps or [])] if answer else []
+        if proposed and len(proposed) != len(correct):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Risposta non valida per una delle domande.",
+            )
+        # I passi al posto giusto, confrontando le due liste posizione per
+        # posizione. Una risposta in bianco non ne ha nessuno.
+        # `strict=False` di proposito: una risposta in bianco è più corta
+        # della chiave, e lì la conta si ferma senza che sia un errore
+        matched = sum(
+            1 for mine, right in zip(proposed, correct, strict=False) if _same_text(mine, right)
+        )
+        points = matched_points(matched, len(correct))
+        answers.append(
+            {
+                "question_id": str(question.id),
+                "position": position,
+                "text": question.text,
+                # In bianco resta lista vuota e non l'ordine corretto: chi
+                # non ha risposto e chi ha sbagliato tutto prendono gli stessi
+                # zero punti, ma nell'esito si distinguono
+                "given_steps": proposed,
+                "correct_steps": correct,
+                "matched_count": matched,
+                "item_count": len(correct),
+                "is_correct": is_partially_correct(points),
+                "points": points,
+                "explanation": question.explanation,
+            }
+        )
+    return answers
+
+
+def _matching_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
+    """La correzione di un test di abbinamento: quante coppie indovinate.
+
+    La stessa scala dell'ordinamento, su un'altra chiave: si conta quante
+    voci di sinistra hanno accanto l'abbinato giusto. Le voci che chi
+    rispondeva ha lasciato scoperte semplicemente non arrivano, e valgono
+    come sbagliate senza bisogno di dirlo.
+
+    Non si controlla che gli abbinati proposti siano quelli mandati: chi ne
+    scrive uno inventato ha già sbagliato quella coppia, e rifiutare la
+    consegna intera per una riga storta butterebbe via un test che qualcuno
+    ha appena svolto. È la differenza con l'ordinamento, dove una lista di
+    lunghezza diversa non è una risposta sbagliata ma una domanda diversa.
+    """
+    answers = []
+    for position, question in enumerate(questions, start=1):
+        answer = given.get(question.id)
+        correct = [
+            {"left": str(p.get("left") or ""), "right": str(p.get("right") or "")}
+            for p in (question.pairs or [])
+        ]
+        proposed = (
+            [{"left": p.left, "right": p.right} for p in (answer.pairs or [])] if answer else []
+        )
+        by_left = {" ".join(p["left"].split()).casefold(): p["right"] for p in proposed}
+        matched = sum(
+            1
+            for pair in correct
+            if _same_text(by_left.get(" ".join(pair["left"].split()).casefold(), ""), pair["right"])
+        )
+        points = matched_points(matched, len(correct))
+        answers.append(
+            {
+                "question_id": str(question.id),
+                "position": position,
+                "text": question.text,
+                "given_pairs": proposed,
+                "correct_pairs": correct,
+                "matched_count": matched,
+                "item_count": len(correct),
+                "is_correct": is_partially_correct(points),
+                "points": points,
+                "explanation": question.explanation,
+            }
+        )
+    return answers
+
+
 async def _open_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
     """La correzione di un test a risposta aperta: una chiamata, poi i punti.
 
@@ -513,7 +679,7 @@ async def _open_answers(questions: list[SimulationQuestion], given: dict) -> lis
                 "answer_text": written or None,
                 "expected_answer": question.expected_answer,
                 "feedback": judgement["feedback"] if judgement else "",
-                "is_correct": is_open_answer_correct(earned),
+                "is_correct": is_partially_correct(earned),
                 "points": earned,
                 "explanation": question.explanation,
             }
@@ -557,6 +723,10 @@ async def submit_attempt(
     given = {a.question_id: a for a in payload.answers}
     if simulation.is_open:
         answers = await _open_answers(questions, given)
+    elif simulation.is_ordering:
+        answers = _ordering_answers(questions, given)
+    elif simulation.is_matching:
+        answers = _matching_answers(questions, given)
     else:
         answers = _multiple_choice_answers(questions, given)
 

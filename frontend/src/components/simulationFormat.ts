@@ -69,8 +69,44 @@ export function statusBadgeTone(status: SimulationStatus): string {
  *
  * Il colore invece non sta qui: appartiene al badge, che è l'unico modo in
  * cui il tipo si disegna. */
+const KIND_LABELS: Record<SimulationKind, string> = {
+  multiple: 'Scelta multipla',
+  open: 'Risposta aperta',
+  ordering: 'Ordinamento',
+  matching: 'Abbinamento',
+}
+
 export function kindLabel(kind: SimulationKind): string {
-  return kind === 'open' ? 'Risposta aperta' : 'Scelta multipla'
+  return KIND_LABELS[kind] ?? KIND_LABELS.multiple
+}
+
+/* Come si risponde, in una riga, dove la parola sola non basta: le regole
+ * prima di cominciare e la scheda del test nell'elenco. "Ordinamento" dice
+ * come si chiama il tipo, non cosa si dovrà fare. */
+const KIND_HINTS: Record<SimulationKind, string> = {
+  multiple: 'Una risposta fra le alternative, con il tempo che scorre',
+  open: 'Una risposta scritta di qualche riga, senza limiti di tempo',
+  ordering: "I passi di una procedura da rimettere nell'ordine giusto",
+  matching: 'Due colonne da accoppiare, una voce alla volta',
+}
+
+export function kindHint(kind: SimulationKind): string {
+  return KIND_HINTS[kind] ?? KIND_HINTS.multiple
+}
+
+/* Se le domande di questo tipo hanno il cronometro, il gemello di
+ * `TechnicalSimulation.is_timed`. Solo la scelta multipla: trenta secondi
+ * bastano a scegliere una lettera, non a disporre sei passi, e i punti degli
+ * altri tipi si guadagnano a pezzi invece di scendere col tempo. */
+export function isTimed(kind: SimulationKind): boolean {
+  return kind === 'multiple'
+}
+
+/* Se una domanda di questo tipo può essere giusta a metà. Dove è vero,
+ * accanto ai punti si scrive quanti elementi erano al posto giusto: "0,7"
+ * da solo non dice cosa sia andato storto, "4 su 6" sì. */
+export function hasPartialScore(kind: SimulationKind): boolean {
+  return kind === 'ordering' || kind === 'matching'
 }
 
 /* Chi ha scritto le domande, in una parola.
@@ -87,17 +123,30 @@ export function sourceLabel(source: SimulationSource): string {
   return source === 'manual' ? 'Manuale' : 'IA'
 }
 
-/** Un tipo di test, o tutti e due insieme. */
+/** Un tipo di test, o tutti insieme. */
 export type KindFilter = SimulationKind | 'all'
 
 /* Come si sceglie il tipo di test da guardare, il gemello di `MODE_FILTERS`
  * in ConversationModeBadge: le stesse parole del badge, offerte una seconda
- * volta per filtrare invece che per leggere. Lo usano la dashboard e lo
- * storico di una persona nel report attività. */
+ * volta per filtrare invece che per leggere. Lo usano la dashboard, il
+ * confronto e lo storico di una persona nel report attività.
+ *
+ * Ogni tipo ha la sua voce e non ce n'è una che ne raccoglie più d'uno: i
+ * quattro si correggono con quattro scale diverse, quindi tenerne due
+ * insieme in un filtro vorrebbe dire mettere sulla stessa media un voto
+ * preso a crocette in trenta secondi e uno preso disponendo sei passi senza
+ * fretta. "Tutti" resta in fondo perché è il punto di partenza, non una
+ * quinta scelta.
+ *
+ * L'ordine è quello in cui i tipi sono nati, che è anche quello dal più
+ * usato al meno: chi cerca un filtro trova per primo quello che gli serve
+ * quasi sempre. */
 export const KIND_FILTERS: { value: KindFilter; label: string }[] = [
   { value: 'multiple', label: kindLabel('multiple') },
   { value: 'open', label: kindLabel('open') },
-  { value: 'all', label: 'Entrambi' },
+  { value: 'ordering', label: kindLabel('ordering') },
+  { value: 'matching', label: kindLabel('matching') },
+  { value: 'all', label: 'Tutti' },
 ]
 
 export function formatDateTime(value: string): string {

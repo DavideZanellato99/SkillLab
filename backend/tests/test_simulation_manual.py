@@ -299,7 +299,9 @@ def test_un_test_a_mano_si_svolge_come_gli_altri(user_client, manual_simulation)
     domande = user_client.post(f"/api/simulations/{simulation.id}/start").json()
     assert len(domande) == SIMULATION_QUESTION_COUNT
     for domanda in domande:
-        assert set(domanda) == {"id", "position", "text", "options"}
+        # I campi che servono a mostrare una domanda, uno per tipo di test:
+        # nessuna chiave, come su una simulazione generata
+        assert set(domanda) == {"id", "position", "text", "options", "steps", "left", "right"}
 
 
 def test_chi_svolge_il_test_sa_chi_ha_scritto_le_domande(user_client, manual_simulation):

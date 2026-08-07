@@ -107,6 +107,26 @@ export function PlusIcon(props: IconProps) {
   )
 }
 
+/* Le due frecce con cui un elemento di un elenco cambia posto: nell'editor
+ * di una domanda di ordinamento, e in mano a chi il test lo sta svolgendo.
+ * Semplici punte e non frecce intere, perché stanno in bottoni da 24px in
+ * fila verticale e un'asta le renderebbe due macchie. */
+export function ChevronUpIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <polyline points="18 15 12 9 6 15" />
+    </Svg>
+  )
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <polyline points="6 9 12 15 18 9" />
+    </Svg>
+  )
+}
+
 /* Sagoma con il più accanto: crea un utente, non una cosa qualsiasi. */
 export function UserPlusIcon(props: IconProps) {
   return (

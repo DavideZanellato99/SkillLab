@@ -50,14 +50,16 @@ MIN_POINTS = round(STEP_POINTS, 1)
 # Il punteggio in decimi, la stessa scala delle valutazioni del roleplay.
 GRADE_SCALE = 10
 
-# Da quanti punti in su una risposta aperta si conta fra quelle esatte.
+# Da quanti punti in su una risposta si conta fra quelle esatte, dove i punti
+# non sono zero o uno.
 #
-# Il giudizio del modello è una scala continua, ma accanto al voto resta
-# scritto "quante ne sapeva", e quella è una conta: da qualche parte la riga
-# va tirata. Sei decimi è la sufficienza, la stessa soglia con cui il voto
-# finale si colora a schermo, quindi una domanda conta come saputa quando
-# la risposta varrebbe la sufficienza da sola.
-OPEN_PASS_POINTS = 0.6
+# Vale per le tre forme che ammettono una risposta giusta a metà: il giudizio
+# del modello su una risposta scritta, i passi al posto giusto, le coppie
+# indovinate. Accanto al voto resta scritto "quante ne sapeva", e quella è una
+# conta: da qualche parte la riga va tirata. Sei decimi è la sufficienza, la
+# stessa soglia con cui il voto finale si colora a schermo, quindi una domanda
+# conta come saputa quando da sola varrebbe la sufficienza.
+PASS_POINTS = 0.6
 
 
 def question_points(is_correct: bool, elapsed_ms: int | None) -> float:
@@ -111,15 +113,42 @@ def open_answer_points(quality: float | None) -> float:
     return round(min(max(quality, 0.0), 1.0), 1)
 
 
-def is_open_answer_correct(points: float) -> bool:
-    """Se una risposta aperta conta fra quelle esatte: dalla sufficienza.
+def matched_points(matched: int, total: int) -> float:
+    """I punti di una risposta indovinata a metà: la quota di elementi giusti.
 
-    Si guardano i punti già arrotondati e non il giudizio grezzo, perché i
+    È la scala dell'ordinamento e dell'abbinamento, dove una risposta non è
+    giusta o sbagliata ma giusta *in parte*: quattro passi su sei al posto
+    giusto valgono 0,7 come quattro coppie su sei indovinate. Un elemento
+    vale quanto un altro, ed è voluto: dire che il primo passo di una
+    procedura pesa più dell'ultimo vorrebbe dire scriverlo da qualche parte,
+    domanda per domanda, e nessuno lo farebbe.
+
+    Sull'ordinamento si contano le **posizioni esatte** e non le coppie in
+    ordine relativo. Un passo spostato all'inizio fa scalare tutti gli altri
+    e con questa scala costa caro, il che è un difetto vero; in cambio il
+    numero che finisce nell'esito è "quattro passi su sei al posto giusto",
+    che chi prende un voto basso capisce e sa come rimediare, mentre "dieci
+    coppie su quindici" è un numero che nessuno saprebbe leggere. Fra una
+    scala più giusta e una che si spiega, per un test di formazione vale di
+    più la seconda.
+
+    L'arrotondamento a un decimale è quello delle altre due scale, così i
+    punti di una domanda si leggono uguali in tutti i tipi di test.
+    """
+    if total <= 0:
+        return 0.0
+    return round(min(max(matched, 0), total) / total, 1)
+
+
+def is_partially_correct(points: float) -> bool:
+    """Se una risposta a punti conta fra quelle esatte: dalla sufficienza.
+
+    Si guardano i punti già arrotondati e non il numero grezzo, perché i
     punti sono quello che si legge nell'esito: con la soglia sul numero
     nascosto, una risposta da 0,57 mostrerebbe 0,6 accanto a una crocetta
     rossa, e nessuno saprebbe spiegare perché.
     """
-    return points >= OPEN_PASS_POINTS
+    return points >= PASS_POINTS
 
 
 def attempt_points(points: list[float]) -> float:

@@ -200,7 +200,7 @@ export default function AdminPage() {
       setRuolo('user')
       setOrgId('')
       flashSuccess(
-        `Utente ${created.email} creato con successo! Un'email con la password temporanea è stata inviata via Cognito.`,
+        `Utente ${created.email} creato con successo. Una email con la password temporanea è stata inviata all'indirizzo indicato.`,
       )
     } catch {
       // Il messaggio è nella mutation, la modale resta aperta a mostrarlo
@@ -924,9 +924,9 @@ export default function AdminPage() {
           title="Rinvia Credenziali"
           description={
             <>
-              Cognito invierà a <strong className="text-slate-100">{resendingUser.email}</strong>{' '}
-              una nuova password temporanea via email. Le credenziali attuali smetteranno subito di
-              funzionare e al prossimo accesso l'utente dovrà impostare una nuova password.
+              Verrà inviata a <strong className="text-slate-100">{resendingUser.email}</strong> una
+              nuova password temporanea via email. Le credenziali attuali cesseranno immediatamente
+              di funzionare e al prossimo accesso l'utente dovrà impostare una nuova password.
             </>
           }
           error={

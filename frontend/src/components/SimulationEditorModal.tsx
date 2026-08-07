@@ -201,7 +201,7 @@ export default function SimulationEditorModal({
             ]}
             value={tab}
             onChange={setTab}
-            ariaLabel="Cosa guardare della simulazione"
+            ariaLabel="Sezioni della simulazione"
             className="border-b border-white/6 px-8 py-2"
           />
 
@@ -211,26 +211,26 @@ export default function SimulationEditorModal({
                 <div className="flex flex-col items-center gap-4 py-16 text-center">
                   <p className="text-[0.95rem] text-slate-400">
                     {isManual
-                      ? 'Nessuna domanda ancora. Le scrivi tu, una per una'
-                      : 'Nessuna domanda ancora. Generale dal documento, poi rileggile prima di pubblicare'}
+                      ? 'Nessuna domanda presente. Le domande vanno redatte una per una'
+                      : 'Nessuna domanda presente. Generale dal documento, poi rivedile prima della pubblicazione'}
                   </p>
                   <p className="max-w-md text-sm text-slate-500">
                     {isManual ? (
                       <>
-                        Ogni domanda porta {isOpen ? 'la risposta attesa' : 'le sue alternative'} e
-                        la spiegazione che leggerà chi ha risposto. Ne servono almeno {required}, e
-                        ogni tentativo ne estrarrà {QUESTION_COUNT} a caso: scriverne di più
-                        significa che due prove non sono la stessa fila di domande.
+                        Ogni domanda comprende {isOpen ? 'la risposta attesa' : 'le alternative'} e
+                        la spiegazione mostrata a chi ha risposto. Ne servono almeno {required}, e
+                        ogni tentativo ne estrae {QUESTION_COUNT} a caso: redigerne un numero
+                        maggiore riduce la sovrapposizione fra due prove.
                       </>
                     ) : (
                       <>
-                        La generazione legge il documento, individua gli argomenti verificabili e
-                        scrive {POOL_COUNT} domande{' '}
+                        La generazione analizza il documento, individua gli argomenti verificabili e
+                        redige {POOL_COUNT} domande{' '}
                         {isOpen
                           ? 'con la traccia della risposta attesa'
                           : 'con quattro alternative ciascuna'}
-                        , sui passaggi che li riguardano. Ogni tentativo ne estrarrà{' '}
-                        {QUESTION_COUNT} a caso. Può richiedere qualche minuto.
+                        , sui passaggi che li riguardano. Ogni tentativo ne estrae {QUESTION_COUNT}{' '}
+                        a caso. L'operazione può richiedere qualche minuto.
                       </>
                     )}
                   </p>
@@ -240,7 +240,7 @@ export default function SimulationEditorModal({
                       onClick={addQuestion}
                       disabled={busy}
                     >
-                      Scrivi la prima domanda
+                      Aggiungi la prima domanda
                     </PrimaryButton>
                   )}
                 </div>
@@ -287,7 +287,7 @@ export default function SimulationEditorModal({
               )
             ) : results.length === 0 ? (
               <p className="py-16 text-center text-sm text-slate-500">
-                Nessuno ha ancora svolto questo test
+                Nessun tentativo registrato per questo test
               </p>
             ) : (
               <ul className="flex list-none flex-col gap-2">
@@ -327,7 +327,7 @@ export default function SimulationEditorModal({
 
             {generate.isPending && (
               <p className="text-center text-xs text-slate-500">
-                Il modello sta leggendo il documento e scrivendo le domande. Non chiudere questa
+                Il modello sta analizzando il documento e redigendo le domande. Non chiudere questa
                 finestra.
               </p>
             )}
@@ -338,7 +338,9 @@ export default function SimulationEditorModal({
                   fondo alle domande. */}
               {isManual ? (
                 <span className="text-xs text-slate-500">
-                  {written.length === 1 ? '1 domanda scritta' : `${written.length} domande scritte`}
+                  {written.length === 1
+                    ? '1 domanda inserita'
+                    : `${written.length} domande inserite`}
                   {written.length < required && `, ne servono ${required}`}
                 </span>
               ) : (
@@ -413,9 +415,9 @@ export default function SimulationEditorModal({
                       /* Le domande ci sono tutte ma qualcuna è a metà: dirlo
                        * è l'unico modo perché chi guarda sappia dove
                        * cercare, invece di contare righe che tornano. */
-                      'Completa le domande a metà'
+                      'Completa le domande incomplete'
                     ) : (
-                      `Servono ${required} domande (ce ne sono ${written.length})`
+                      `Servono ${required} domande, attualmente ${written.length}`
                     )}
                   </PrimaryButton>
                 )}

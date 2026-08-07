@@ -35,8 +35,8 @@ export default function SimulationSourceBadge({ source }: { source: SimulationSo
     <Tooltip
       content={
         isManual
-          ? 'Domande scritte a mano da chi ha preparato il test'
-          : 'Domande generate da un modello che ha letto il documento aziendale, e rilette da una persona prima della pubblicazione'
+          ? 'Domande redatte manualmente da chi ha predisposto il test'
+          : 'Domande generate da un modello a partire dal documento aziendale, e verificate da una persona prima della pubblicazione'
       }
     >
       <span className="inline-flex shrink-0 items-center rounded-full border border-white/10 bg-white/4 p-1 text-slate-400">

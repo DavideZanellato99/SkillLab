@@ -260,7 +260,7 @@ export default function TrainingPage() {
         <div className={`${cardCls} mb-8`}>
           <h2 className="mb-1 text-sm font-semibold text-slate-300">Assegna un nuovo percorso</h2>
           <p className="mb-4 text-xs text-slate-500">
-            Scegli lo scenario, gli utenti dell'organizzazione e l'obiettivo da raggiungere.
+            Seleziona lo scenario, gli utenti dell'organizzazione e l'obiettivo da raggiungere.
           </p>
           <div className="flex flex-wrap items-end gap-4">
             <div className="min-w-[240px] flex-1">

@@ -430,7 +430,7 @@ export default function ProfilePage() {
         <div className="mb-6">
           <h2 className="font-heading text-lg font-bold text-slate-100">I Miei Dati Personali</h2>
           <p className="text-[0.85rem] text-slate-500">
-            Scarica una copia di tutto quello che la piattaforma conserva su di te.
+            Scarica una copia di tutti i dati che la piattaforma conserva sul tuo conto.
           </p>
         </div>
 
@@ -440,7 +440,8 @@ export default function ProfilePage() {
           L'archivio contiene il tuo profilo, le trascrizioni complete delle tue conversazioni, le
           valutazioni automatiche, le revisioni dei formatori, gli obiettivi assegnati, gli accessi
           e il registro delle tue attività. Include anche le registrazioni audio delle tue
-          telefonate simulate, quindi può pesare parecchio e richiedere qualche secondo.
+          telefonate simulate, quindi le sue dimensioni possono essere rilevanti e la preparazione
+          richiedere qualche secondo.
         </p>
 
         <PrimaryButton

@@ -591,9 +591,9 @@ export default function OrganizationsPage() {
               </>
             ) : (
               <>
-                Blocchi l'accesso a tutti gli utenti di{' '}
+                L'accesso viene sospeso per tutti gli utenti di{' '}
                 <strong className="text-slate-100">{statusAction.org.name}</strong>: il login viene
-                impedito e le sessioni aperte chiuse subito. È reversibile.
+                impedito e le sessioni aperte chiuse immediatamente. L'operazione è reversibile.
               </>
             )
           }
@@ -623,7 +623,7 @@ export default function OrganizationsPage() {
                   className={`${inputCls} resize-none`}
                   rows={2}
                   maxLength={500}
-                  placeholder="Es. Contratto scaduto, contatta il tuo referente."
+                  placeholder="Es. Contratto scaduto, contattare il proprio referente."
                   value={statusReason}
                   onChange={(e) => setStatusReason(e.target.value)}
                   disabled={statusMutation.isPending}

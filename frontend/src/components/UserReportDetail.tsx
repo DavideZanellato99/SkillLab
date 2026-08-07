@@ -266,7 +266,7 @@ export default function UserReportDetail({
         <FilterTabs<Tab>
           value={tab}
           onChange={setTab}
-          ariaLabel="Prova di cui vedere lo storico"
+          ariaLabel="Tipo di prova da consultare"
           options={[
             {
               value: 'conversations',

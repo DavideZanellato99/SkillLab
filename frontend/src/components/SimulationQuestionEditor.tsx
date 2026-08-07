@@ -121,12 +121,12 @@ export default function SimulationQuestionEditor({
             rows={4}
             value={question.expected_answer}
             onChange={(e) => onChange({ ...question, expected_answer: e.target.value })}
-            placeholder="Cosa deve dire una risposta per essere considerata completa"
+            placeholder="Gli elementi che una risposta deve contenere per essere considerata completa"
             disabled={disabled}
           />
           <p className="mt-1 text-xs text-slate-500">
-            È il metro con cui viene corretta ogni risposta: elenca i punti che devono esserci, non
-            scrivere una bella pagina
+            È il criterio con cui viene corretta ogni risposta: elenca gli elementi richiesti, senza
+            redigere un testo esteso
           </p>
         </div>
       ) : (
@@ -140,7 +140,7 @@ export default function SimulationQuestionEditor({
                   onClick={() => onChange({ ...question, correct_option: optionIndex })}
                   disabled={disabled}
                   aria-pressed={isCorrect}
-                  aria-label={`Segna l'alternativa ${optionLabel(optionIndex)} come corretta`}
+                  aria-label={`Indica l'alternativa ${optionLabel(optionIndex)} come corretta`}
                   className={`flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border text-xs font-bold transition disabled:cursor-not-allowed ${
                     isCorrect
                       ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
@@ -171,14 +171,14 @@ export default function SimulationQuestionEditor({
                   content={
                     options.length <= MIN_OPTIONS
                       ? `Servono almeno ${MIN_OPTIONS} alternative`
-                      : "Togli l'alternativa"
+                      : "Rimuovi l'alternativa"
                   }
                 >
                   <button
                     type="button"
                     onClick={() => removeOption(optionIndex)}
                     disabled={disabled || options.length <= MIN_OPTIONS}
-                    aria-label={`Togli l'alternativa ${optionLabel(optionIndex)} dalla domanda ${index + 1}`}
+                    aria-label={`Rimuovi l'alternativa ${optionLabel(optionIndex)} dalla domanda ${index + 1}`}
                     className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-600 transition hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-600"
                   >
                     <TrashIcon size={13} />
@@ -199,9 +199,7 @@ export default function SimulationQuestionEditor({
             </button>
           )}
           {question.correct_option === null && options.length > 0 && (
-            <p className="mt-1 text-xs text-amber-400/80">
-              Segna quale alternativa è quella corretta
-            </p>
+            <p className="mt-1 text-xs text-amber-400/80">Indica quale alternativa è corretta</p>
           )}
         </div>
       )}
@@ -219,7 +217,7 @@ export default function SimulationQuestionEditor({
           rows={2}
           value={question.explanation}
           onChange={(e) => onChange({ ...question, explanation: e.target.value })}
-          placeholder="Perché la risposta corretta è quella. La legge chi ha appena risposto"
+          placeholder="Perché quella è la risposta corretta. Viene mostrata a chi ha appena risposto"
           disabled={disabled}
         />
       </div>

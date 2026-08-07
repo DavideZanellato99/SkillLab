@@ -51,13 +51,13 @@ function reportColumns(showOrg: boolean): DataTableColumn[] {
       key: 'conversazioni',
       label: 'Conversazioni',
       align: 'center',
-      title: 'Quante ne ha avute nel periodo scelto',
+      title: 'Conversazioni sostenute nel periodo selezionato',
     },
     {
       key: 'simulazioni',
       label: 'Simulazioni',
       align: 'center',
-      title: 'Quante ne ha consegnate nel periodo scelto',
+      title: 'Simulazioni consegnate nel periodo selezionato',
     },
     { key: 'durata', label: 'Durata', align: 'right' },
     { key: 'dettaglio', ariaLabel: 'Dettaglio' },
@@ -124,7 +124,7 @@ export default function UserReportPage() {
     <PageContainer>
       <PageHeader
         title="Report Attività"
-        description="Cosa ha fatto ogni persona: le conversazioni con gli avatar e le simulazioni consegnate."
+        description="Attività di ogni persona: le conversazioni con gli avatar e le simulazioni consegnate."
         actions={
           <div className="flex flex-wrap items-end gap-4">
             <div className="flex flex-col gap-1.5">
@@ -133,7 +133,7 @@ export default function UserReportPage() {
                 value={period}
                 onChange={setPeriod}
                 options={[...PERIOD_OPTIONS]}
-                ariaLabel="Periodo di cui vedere le prove svolte"
+                ariaLabel="Periodo delle prove svolte"
               />
             </div>
             {showOrg && (

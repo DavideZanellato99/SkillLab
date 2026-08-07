@@ -515,7 +515,7 @@ def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool
             italic=not given,
         )
         if answer.expected_answer:
-            body_h += 2 + pdf.note_height(answer.expected_answer, inner_w, label="Cosa doveva dire")
+            body_h += 2 + pdf.note_height(answer.expected_answer, inner_w, label="Elementi attesi")
         if answer.feedback:
             pdf.use(size=9.5)
             body_h += 2 + pdf.measure(answer.feedback, inner_w, 4.7)
@@ -528,10 +528,10 @@ def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool
             pdf.use(size=9, style="I")
             body_h += pdf.measure("Domanda lasciata in bianco.", inner_w, 4.6)
     if answer.explanation:
-        body_h += 2.5 + pdf.note_height(answer.explanation, inner_w, label="Perché")
+        body_h += 2.5 + pdf.note_height(answer.explanation, inner_w, label="Spiegazione")
     if answer.sources:
         body_h += 2 + pdf.note_height(
-            answer.sources, inner_w, label="Cosa dice il documento", italic=True, size=8.5
+            answer.sources, inner_w, label="Estratti dal documento", italic=True, size=8.5
         )
     height = 2 * CARD_PAD_Y + title_h + 2.5 + body_h
 
@@ -568,7 +568,7 @@ def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool
                     width=w,
                     fg=GOOD,
                     bg=GOOD_TINT,
-                    label="Cosa doveva dire",
+                    label="Elementi attesi",
                 )
                 cursor = pdf.get_y()
             if answer.feedback:
@@ -608,7 +608,7 @@ def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool
                 width=w,
                 fg=BODY,
                 bg=SURFACE,
-                label="Perché",
+                label="Spiegazione",
             )
             cursor = pdf.get_y()
         # A schermo i passaggi stanno dietro a un pannello che si apre, sulla
@@ -623,7 +623,7 @@ def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool
                 width=w,
                 fg=VIOLET_DEEP,
                 bg=VIOLET_TINT,
-                label="Cosa dice il documento",
+                label="Estratti dal documento",
                 italic=True,
                 size=8.5,
             )
@@ -683,9 +683,9 @@ def simulation_attempt_pdf(
     # giuste e' una cosa, quanto valevano un'altra, e un sei con otto
     # risposte esatte non si legge senza entrambe.
     reason = (
-        "quanto è completa, e una risposta a metà prende mezzo punto"
+        "proporzionale alla sua completezza: una risposta parziale vale una parte del punto"
         if written
-        else "meno man mano che passa il tempo"
+        else "decrescente con il passare del tempo"
     )
     points = "punto" if earned_points == 1 else "punti"
     _score_block(
@@ -697,7 +697,7 @@ def simulation_attempt_pdf(
         badge_color=_attempt_score_rgb(score),
         notes=[
             f"{_fmt_points(earned_points)} {points} su {question_count}, "
-            f"perché una risposta vale {reason}"
+            f"perché il valore di ogni risposta è {reason}"
         ],
     )
     pdf.space(5)
@@ -708,7 +708,7 @@ def simulation_attempt_pdf(
     # sotto il voto perche' li' il foglio e' gia' aperto e sprecarlo a meta'
     # non darebbe niente in cambio. Una domanda che sfora si prende la pagina
     # dopo, ma quella successiva ricomincia comunque da un foglio suo.
-    pdf.section("Le domande, una per una")
+    pdf.section("Dettaglio delle domande")
     for index, answer in enumerate(answers):
         if index:
             pdf.add_page()

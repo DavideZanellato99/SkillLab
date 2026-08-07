@@ -48,8 +48,8 @@ export default function ComparisonPage() {
         title="Confronto tra i tentativi"
         description={
           canPickUser
-            ? 'Scegli una persona e metti due delle sue prove una accanto all’altra per vedere cosa è cambiato.'
-            : 'Metti due delle tue prove una accanto all’altra per vedere cosa è migliorato.'
+            ? 'Seleziona una persona e affianca due delle sue prove per osservare le differenze.'
+            : 'Affianca due delle tue prove per osservare i progressi.'
         }
       />
 

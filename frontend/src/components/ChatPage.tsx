@@ -657,7 +657,7 @@ export default function ChatPage() {
           </div>
           {conversations.length === 0 ? (
             <p className="py-6 text-center text-[0.8rem] italic text-slate-500">
-              Nessuna conversazione ancora.
+              Nessuna conversazione presente
             </p>
           ) : (
             <ul className="flex list-none flex-col gap-1">
@@ -885,9 +885,9 @@ export default function ChatPage() {
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
                   <span>
-                    <strong className="font-semibold text-slate-100">Chiama</strong> simula una
-                    telefonata: attendi lo squillo e il cliente risponderà al telefono, con la
-                    trascrizione qui in tempo reale.
+                    <strong className="font-semibold text-slate-100">Chiama</strong> avvia una
+                    telefonata simulata: attendi lo squillo e il cliente risponderà, con la
+                    trascrizione riportata qui in tempo reale.
                   </span>
                 </p>
                 <p className="flex items-center gap-4 text-sm leading-normal">
@@ -906,8 +906,8 @@ export default function ChatPage() {
                   </svg>
                   <span>
                     <strong className="font-semibold text-slate-100">Chatta</strong> apre la stessa
-                    simulazione per iscritto: stesso cliente, stesso scenario, solo scritto invece
-                    che parlato.
+                    simulazione in forma scritta: stesso cliente e stesso scenario, in chat anziché
+                    al telefono.
                   </span>
                 </p>
               </div>
@@ -1105,8 +1105,8 @@ export default function ChatPage() {
                   <>Chiusura della chat in corso...</>
                 ) : (
                   <>
-                    💬 Invio manda il messaggio, Shift+Invio va a capo · Premi il pulsante rosso per
-                    terminare
+                    💬 Invio invia il messaggio, Shift+Invio va a capo · Il pulsante rosso termina
+                    la conversazione
                   </>
                 )}
               </p>
@@ -1126,7 +1126,7 @@ export default function ChatPage() {
                   />
                 )}
                 {canStartChat && (
-                  <Tooltip content="Scrivi all’avatar invece di chiamarlo">
+                  <Tooltip content="Avvia una conversazione scritta con l’avatar">
                     <button
                       className="flex h-16 cursor-pointer items-center justify-center gap-2.5 rounded-full border-none bg-gradient-to-br from-violet-600 to-violet-700 px-8 text-base font-semibold text-white shadow-[0_8px_24px_rgba(124,58,237,0.35)] transition hover:scale-[1.05] hover:shadow-[0_10px_28px_rgba(124,58,237,0.5)]"
                       onClick={handleStartChat}
@@ -1152,7 +1152,7 @@ export default function ChatPage() {
               </div>
               <p className="text-center text-xs text-slate-500">
                 {voiceActive ? (
-                  <>Chiamata in corso · premi il pulsante rosso per riagganciare</>
+                  <>Chiamata in corso · il pulsante rosso termina la chiamata</>
                 ) : canStartChat ? (
                   <>Chiama {avatar.name} al telefono, oppure scrivigli in chat</>
                 ) : (

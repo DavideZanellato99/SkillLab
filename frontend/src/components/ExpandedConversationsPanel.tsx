@@ -113,8 +113,8 @@ export default function ExpandedConversationsPanel({
         {visibleConversations.length === 0 ? (
           <p className="py-12 text-center text-[0.85rem] italic text-slate-500">
             {search
-              ? 'Nessuna conversazione corrisponde alla ricerca.'
-              : 'Nessuna conversazione ancora.'}
+              ? 'Nessuna conversazione corrisponde alla ricerca'
+              : 'Nessuna conversazione presente'}
           </p>
         ) : (
           <ul className="flex list-none flex-col gap-2">

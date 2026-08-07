@@ -985,7 +985,7 @@ A schermo
 ([SimulationResult](../frontend/src/components/SimulationResult.tsx)) si vede il
 voto in cima, con accanto quante risposte erano esatte e quanti punti hanno
 fruttato, poi domanda per domanda i punti presi, la spiegazione, e in fondo un
-"Cosa dice il documento" apribile con i passaggi citati. Le spiegazioni
+"Estratti dal documento" apribile con i passaggi citati. Le spiegazioni
 compaiono anche sulle domande andate bene, perché chi ha indovinato senza
 esserne sicuro è esattamente la persona che deve leggerle.
 
@@ -996,8 +996,8 @@ Quello che cambia fra i due tipi è solo il corpo di ogni domanda:
   lasciate in bianco;
 - **a risposta aperta**
   ([SimulationWrittenAnswer](../frontend/src/components/SimulationWrittenAnswer.tsx)),
-  tre riquadri in quest'ordine: quello che ha scritto, cosa doveva dire, la
-  correzione. La traccia sta lì per una ragione precisa: su una scelta multipla
+  tre riquadri in quest'ordine: quello che ha scritto, gli elementi attesi, la
+  valutazione. La traccia sta lì per una ragione precisa: su una scelta multipla
   il voto si verifica da solo, l'alternativa giusta è lì e o era quella o non
   lo era, mentre qui il voto lo ha dato un modello che ha letto un testo. Senza
   il metro con cui è stato misurato, uno 0,6 sarebbe una parola dell'autorità e
@@ -1007,7 +1007,7 @@ Quello che cambia fra i due tipi è solo il corpo di ogni domanda:
 ([simulation_attempt_pdf](../backend/exports.py)) stampa la stessa pagina:
 il voto, e poi domanda per domanda quanto ha valso, cosa è stato risposto,
 perché, e i passaggi del documento. Tre differenze, e sono la carta a
-imporle: i passaggi non stanno dietro un "Cosa dice il documento" da aprire,
+imporle: i passaggi non stanno dietro un "Estratti dal documento" da aprire,
 perché un foglio non si apre, e restano sotto quell'intestazione sola, un
 riquadro per citazione, come le citazioni dentro il pannello a schermo; il
 referto è scritto in terza persona anche

@@ -221,7 +221,7 @@ def test_i_passaggi_del_documento_stanno_sotto_una_intestazione_sola():
     )
 
     text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(blob)).pages)
-    assert text.count("COSA DICE IL DOCUMENTO") == 1
+    assert text.count("ESTRATTI DAL DOCUMENTO") == 1
     for passaggio in passaggi:
         assert passaggio.split(".")[0] in text.replace("\n", " ")
 

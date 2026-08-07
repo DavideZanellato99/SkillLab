@@ -162,7 +162,7 @@ export default function ComparisonSimulations({
   if (attempts.length === 1) {
     return (
       <p className="rounded-2xl border border-white/6 bg-white/4 p-12 text-center text-sm text-slate-500">
-        C’è un solo test consegnato: serve una seconda prova per avere qualcosa da confrontare
+        È stato consegnato un solo test: ne serve un secondo per effettuare un confronto
       </p>
     )
   }
@@ -201,8 +201,9 @@ export default function ComparisonSimulations({
             sa di quel documento, non quanto si sa in generale. */}
         {left && right && !sameSimulation && (
           <p className="mt-4 rounded-xl border border-orange-500/25 bg-orange-500/10 px-4 py-2 text-[0.8rem] text-orange-300">
-            Stai confrontando due test diversi, {left.simulation_title} e {right.simulation_title}:
-            i voti dicono quanto si sa di due documenti, non se si è migliorati.
+            Il confronto riguarda due test diversi, {left.simulation_title} e{' '}
+            {right.simulation_title}: i punteggi misurano la preparazione su due documenti distinti,
+            non l'andamento nel tempo.
           </p>
         )}
       </div>
@@ -218,8 +219,8 @@ export default function ComparisonSimulations({
             <div className={cardCls}>
               <h2 className="text-sm font-semibold text-slate-300">Domanda per domanda</h2>
               <p className="text-xs text-slate-500">
-                Le due prove non hanno nessuna domanda in comune: sono estratte a caso a ogni
-                tentativo, e questa volta non se ne sono incontrate
+                Le due prove non hanno domande in comune: le domande sono estratte a caso a ogni
+                tentativo, e in questo caso non si sono sovrapposte
               </p>
             </div>
           )}
@@ -233,19 +234,17 @@ export default function ComparisonSimulations({
               <p className="text-xs text-slate-500">
                 {questionRows.length}{' '}
                 {questionRows.length === 1
-                  ? 'domanda capitata in tutte e due le prove'
-                  : 'domande capitate in tutte e due le prove'}
+                  ? 'domanda presente in entrambe le prove'
+                  : 'domande presenti in entrambe le prove'}
               </p>
               <p className="mb-4 text-xs text-slate-500">
                 {recovered === 0 && lost === 0
-                  ? 'Le stesse risposte giuste e le stesse sbagliate nelle due prove'
+                  ? 'Le risposte corrette ed errate coincidono nelle due prove'
                   : [
                       recovered > 0
                         ? `${recovered} ${recovered === 1 ? 'domanda recuperata' : 'domande recuperate'}`
                         : '',
-                      lost > 0
-                        ? `${lost} ${lost === 1 ? 'persa per strada' : 'perse per strada'}`
-                        : '',
+                      lost > 0 ? `${lost} ${lost === 1 ? 'domanda persa' : 'domande perse'}` : '',
                     ]
                       .filter(Boolean)
                       .join(', ')}

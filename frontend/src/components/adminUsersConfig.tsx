@@ -86,9 +86,9 @@ export const STATUS_ACTIONS: Record<UserStatus, StatusAction> = {
     icon: <SuspendIcon size={24} stroke="#f59e0b" />,
     description: (email) => (
       <>
-        Blocchi temporaneamente l'accesso di <strong className="text-slate-100">{email}</strong>: il
-        login viene impedito e le sessioni aperte chiuse subito. La sospensione è reversibile, puoi
-        riattivare l'account quando vuoi.
+        L'accesso di <strong className="text-slate-100">{email}</strong> viene sospeso
+        temporaneamente: il login viene impedito e le sessioni aperte chiuse immediatamente. La
+        sospensione è reversibile in qualsiasi momento.
       </>
     ),
     confirmLabel: 'Sospendi Account',
@@ -102,9 +102,9 @@ export const STATUS_ACTIONS: Record<UserStatus, StatusAction> = {
     icon: <DisableIcon size={24} stroke="#ef4444" />,
     description: (email) => (
       <>
-        Disabiliti in modo definitivo <strong className="text-slate-100">{email}</strong>: il login
-        viene bloccato, le sessioni aperte chiuse subito e l'account non potrà più essere
-        riattivato.
+        L'account <strong className="text-slate-100">{email}</strong> viene disabilitato in modo
+        definitivo: il login viene bloccato, le sessioni aperte chiuse immediatamente e l'account
+        non potrà più essere riattivato.
       </>
     ),
     confirmLabel: 'Disabilita Definitivamente',

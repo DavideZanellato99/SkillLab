@@ -31,8 +31,8 @@ export default function SimulationKindBadge({
     <Tooltip
       content={
         isOpen
-          ? 'Test a risposta aperta: si scrive, e i punti dicono quanto la risposta è completa'
-          : 'Test a scelta multipla: una fra le alternative proposte, a tempo'
+          ? 'Test a risposta aperta: si risponde per iscritto, e il punteggio riflette la completezza della risposta'
+          : 'Test a scelta multipla: si seleziona una fra le alternative proposte, entro un tempo massimo'
       }
     >
       <span

@@ -40,7 +40,7 @@ export interface ProfileSection {
 
 /* Insiemi di valori usati più volte nella scheda. */
 const LEVELS = ['Bassa', 'Media', 'Alta']
-const YES_NO = ['No', 'Si, moderato', 'Si, marcato']
+const YES_NO = ['No', 'Sì, moderato', 'Sì, marcato']
 
 /** Le dieci difficoltà, nel formato "n/10" che il modello Avatar espone. */
 export const DIFFICULTY_OPTIONS = Array.from({ length: 10 }, (_, i) => `${i + 1}/10`)
@@ -190,7 +190,7 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
         key: 'TIPO_SCENARIO',
         label: 'Tipo di scenario',
         kind: 'textarea',
-        placeholder: 'Cosa è successo e perché il cliente è coinvolto...',
+        placeholder: "Descrizione dell'accaduto e del coinvolgimento del cliente...",
       },
       {
         key: 'DESCRIZIONE_PROBLEMATICA',

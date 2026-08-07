@@ -87,8 +87,8 @@ export default function SimulationOpenQuestionStep({
       <div className="mt-6 flex items-center justify-between gap-4 border-t border-white/6 pt-5">
         <span className="text-xs text-slate-500">
           {written
-            ? 'Non si torna indietro: quando vai avanti la risposta è consegnata'
-            : 'Rispondi con parole tue, non serve ricopiare il manuale'}
+            ? 'Proseguendo la risposta viene confermata e non è più modificabile'
+            : 'Rispondi con parole tue, senza riprodurre il testo del manuale'}
         </span>
         <PrimaryButton onClick={() => onAnswer(written || null)}>
           {isLast ? 'Consegna il test' : written ? 'Avanti' : 'Salta la domanda'}

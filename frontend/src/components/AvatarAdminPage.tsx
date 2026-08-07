@@ -573,10 +573,10 @@ export default function AvatarAdminPage() {
           isEmpty={visibleAvatars.length === 0}
           emptyMessage={
             statusFilter === STATUS_ARCHIVED && !search && !orgFilter
-              ? 'Nessun avatar archiviato. Gli avatar che elimini finiscono qui, con tutte le loro conversazioni.'
+              ? 'Nessun avatar archiviato. Gli avatar eliminati vengono raccolti qui, con tutte le loro conversazioni'
               : search || orgFilter || statusFilter !== STATUS_ACTIVE
-                ? 'Nessun avatar corrisponde ai filtri.'
-                : 'Nessun avatar presente. Crea il primo con "Nuovo Avatar".'
+                ? 'Nessun avatar corrisponde ai filtri'
+                : 'Nessun avatar presente. Crea il primo con "Nuovo Avatar"'
           }
         >
           {visibleAvatars.map((a) => (
@@ -762,8 +762,8 @@ export default function AvatarAdminPage() {
           {missingEssentials(form.profile).length > 0 && (
             <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-[0.8rem] text-amber-300">
               <strong className="font-semibold">Campi chiave ancora vuoti:</strong>{' '}
-              {missingEssentials(form.profile).join(', ')}. Senza questi l'avatar ha poco su cui
-              reggere il personaggio.
+              {missingEssentials(form.profile).join(', ')}. Senza questi elementi l'avatar dispone
+              di poche informazioni per sostenere il personaggio.
             </div>
           )}
 
@@ -778,7 +778,7 @@ export default function AvatarAdminPage() {
                 id="av-description"
                 className={textareaCls}
                 rows={2}
-                placeholder="Cliente al telefono: la sua carta è stata rifiutata e chiama arrabbiato..."
+                placeholder="Es. Cliente al telefono: la carta è stata rifiutata e chiama in stato di irritazione..."
                 value={form.description}
                 onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                 disabled={isSaving}
@@ -949,7 +949,7 @@ export default function AvatarAdminPage() {
                       type="text"
                       id="av-image"
                       className={inputCls}
-                      placeholder="oppure incolla un URL"
+                      placeholder="oppure inserisci un URL"
                       value={form.imageUrl}
                       onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
                       disabled={isSaving}
@@ -1072,8 +1072,8 @@ export default function AvatarAdminPage() {
           title="Elimina Avatar"
           description={
             <>
-              <strong className="text-slate-100">{deleting.name}</strong> esce dalla galleria degli
-              studenti e non sarà più possibile iniziare nuove sessioni con lui.
+              <strong className="text-slate-100">{deleting.name}</strong> viene rimosso dalla
+              galleria degli studenti e non sarà più possibile avviare nuove sessioni.
               {/* L'eliminazione è logica: dirlo qui evita che sembri una
                   cancellazione di dati e che l'admin si fermi per paura. */}
               <span className="mt-3 block rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-left text-[0.8rem] text-emerald-300">

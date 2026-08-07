@@ -350,8 +350,8 @@ export default function DashboardPage() {
           </svg>
           <h2 className="font-heading text-xl text-slate-100">Nessun dato disponibile</h2>
           <p className="max-w-[420px] text-sm text-slate-500">
-            I grafici appariranno quando le conversazioni con gli avatar verranno valutate, o quando
-            qualcuno svolgerà un test tecnico.
+            I grafici saranno disponibili quando le conversazioni con gli avatar verranno valutate,
+            oppure quando verrà svolto un test tecnico.
           </p>
         </div>
       ) : (
@@ -369,7 +369,7 @@ export default function DashboardPage() {
             ]}
             value={section}
             onChange={setSection}
-            ariaLabel="Prova da guardare"
+            ariaLabel="Tipo di prova da visualizzare"
             className="mb-5 border-b border-white/6 pb-2"
           />
 
@@ -467,8 +467,8 @@ export default function DashboardPage() {
                     <line x1="12" y1="8" x2="12.01" y2="8" />
                   </svg>
                   <span>
-                    Nessuna conversazione ancora valutata. I grafici appariranno quando le sessioni
-                    con gli avatar verranno valutate
+                    Nessuna conversazione ancora valutata. I grafici saranno disponibili quando le
+                    sessioni con gli avatar verranno valutate
                   </span>
                 </div>
               ) : (

@@ -134,7 +134,7 @@ export default function TrainerReviewPanel({
         className={`${inputCls} mb-3 min-h-[80px] resize-y`}
         value={summaryNote}
         onChange={(e) => setSummaryNote(e.target.value)}
-        placeholder="Cosa ha funzionato, cosa rifare la prossima volta..."
+        placeholder="Gli aspetti efficaci e quelli da migliorare nel prossimo tentativo..."
       />
 
       {/* Il voto sta su una riga sua, in linea con la sua etichetta: un
@@ -162,7 +162,7 @@ export default function TrainerReviewPanel({
             ? `Lascia vuoto per confermare il ${aiScore.toLocaleString('it-IT', {
                 maximumFractionDigits: 1,
               })} automatico.`
-            : 'Non c’è una valutazione automatica: questo sarà il solo voto.'}
+            : 'Non è presente una valutazione automatica: questo sarà il solo voto.'}
         </span>
       </div>
 
@@ -179,7 +179,7 @@ export default function TrainerReviewPanel({
             className={`${inputCls} min-h-[68px] resize-y`}
             value={overrideReason}
             onChange={(e) => setOverrideReason(e.target.value)}
-            placeholder="Perché il punteggio automatico non andava bene..."
+            placeholder="Le ragioni per cui il punteggio automatico non è adeguato..."
           />
         </div>
       )}

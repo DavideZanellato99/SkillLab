@@ -118,7 +118,7 @@ function AnswerRow({
 
       {answer.explanation && (
         <div className="rounded-xl border border-white/6 bg-white/3 px-4 py-3">
-          <p className="mb-1 text-xs font-semibold tracking-wide text-slate-400">Perché</p>
+          <p className="mb-1 text-xs font-semibold tracking-wide text-slate-400">Spiegazione</p>
           <p className="text-[0.85rem] leading-relaxed text-slate-300">{answer.explanation}</p>
         </div>
       )}
@@ -126,7 +126,7 @@ function AnswerRow({
       {answer.sources.length > 0 && (
         <details className="mt-2 group">
           <summary className="cursor-pointer list-none text-xs font-medium text-violet-400 transition hover:text-violet-300">
-            Cosa dice il documento
+            Estratti dal documento
           </summary>
           <div className="mt-2 flex flex-col gap-2">
             {answer.sources.map((source, index) => (
@@ -167,11 +167,11 @@ export default function SimulationResult({ attempt, actions, own = true }: Simul
               risposta a metà ne prende una parte: sono due motivi diversi
               per lo stesso scarto, e chi legge merita quello giusto. */}
           <p className="mt-1 text-[0.8rem] text-slate-500">
-            {formatScore(attempt.earned_points)} punti su {attempt.question_count}, perché una
-            risposta vale{' '}
+            {formatScore(attempt.earned_points)} punti su {attempt.question_count}, perché il valore
+            di ogni risposta{' '}
             {written
-              ? 'quanto è completa, e una risposta a metà prende metà punto'
-              : 'meno man mano che passa il tempo'}
+              ? 'è proporzionale alla sua completezza: una risposta parziale vale una parte del punto'
+              : 'diminuisce con il passare del tempo'}
           </p>
         </div>
         <Badge tone={scoreBadgeTone(attempt.score)} className="!px-4 !py-1.5 !text-base">

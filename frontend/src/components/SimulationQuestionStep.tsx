@@ -186,8 +186,8 @@ export default function SimulationQuestionStep({
       <div className="mt-6 flex items-center justify-between gap-4 border-t border-white/6 pt-5">
         <span className="text-xs text-slate-500">
           {selected === null
-            ? 'Se il tempo finisce, la domanda resta in bianco e conta come sbagliata'
-            : 'Puoi cambiare risposta finché non vai avanti, ma il tempo continua a correre'}
+            ? 'Allo scadere del tempo la domanda resta in bianco ed equivale a una risposta errata'
+            : 'La selezione è modificabile fino alla conferma, ma il tempo continua a scorrere'}
         </span>
         <PrimaryButton onClick={() => answer(selected)}>
           {isLast ? 'Consegna il test' : selected === null ? 'Salta la domanda' : 'Avanti'}

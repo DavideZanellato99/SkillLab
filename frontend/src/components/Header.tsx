@@ -29,7 +29,7 @@ export default function Header({ totalAvatars, totalCategories }: HeaderProps) {
 
         <p className="mx-auto max-w-[600px] animate-fade-in-up text-[clamp(1rem,2vw,1.2rem)] font-light leading-relaxed text-slate-400 [animation-delay:0.2s]">
           Ogni avatar è un interlocutore simulato con personalità, emozioni e uno scenario da
-          affrontare. Scegli con chi allenarti e chiamalo.
+          affrontare. Seleziona l'interlocutore con cui esercitarti e avvia la chiamata.
         </p>
 
         <div className="mb-8 mt-6 flex animate-fade-in-up justify-center gap-12 px-8 py-6 [animation-delay:0.4s] max-md:gap-6">

@@ -100,7 +100,9 @@ describe('DashboardSimulations, filtro per tipo', () => {
     const soloMultiple = rows.filter((r) => r.simulation_kind === 'multiple')
     render(<DashboardSimulations rows={soloMultiple} selectedUserId="" kindFilter="open" />)
 
-    expect(screen.getByText(/Cambia tipo per vedere i dati disponibili/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Seleziona un altro tipo per visualizzare i dati disponibili/),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/ancora consegnato/)).not.toBeInTheDocument()
   })
 

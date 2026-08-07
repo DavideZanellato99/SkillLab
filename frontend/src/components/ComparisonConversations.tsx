@@ -172,8 +172,7 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
   if (attempts.length === 1) {
     return (
       <p className="rounded-2xl border border-white/6 bg-white/4 p-12 text-center text-sm text-slate-500">
-        C’è un solo tentativo valutato: serve una seconda conversazione per avere qualcosa da
-        confrontare
+        È stato valutato un solo tentativo: ne serve un secondo per effettuare un confronto
       </p>
     )
   }
@@ -210,8 +209,8 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
             impedirlo. */}
         {differentScenarios && (
           <p className="mt-4 rounded-xl border border-orange-500/25 bg-orange-500/10 px-4 py-2 text-[0.8rem] text-orange-300">
-            Stai confrontando due scenari diversi, {left.avatar_name} e {right.avatar_name}: i
-            punteggi non sono confrontabili alla pari, perché la difficoltà del cliente cambia.
+            Il confronto riguarda due scenari diversi, {left.avatar_name} e {right.avatar_name}: i
+            punteggi non sono direttamente comparabili, perché la difficoltà del cliente varia.
           </p>
         )}
       </div>

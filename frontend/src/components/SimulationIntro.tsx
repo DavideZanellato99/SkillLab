@@ -60,42 +60,46 @@ export default function SimulationIntro({
         <h2 className="mb-4 font-heading text-base font-semibold text-slate-100">Come funziona</h2>
         <ul className="flex list-none flex-col gap-2.5">
           <Rule>
-            {total} domande {isOpen ? 'a risposta aperta' : 'a risposta multipla'}, una alla volta:
-            la successiva compare quando hai risposto alla precedente.
+            {total} domande {isOpen ? 'a risposta aperta' : 'a risposta multipla'}, presentate una
+            alla volta: la domanda successiva compare dopo la conferma della precedente.
           </Rule>
           {isOpen ? (
             <>
               <Rule>
-                Non c'è tempo limite. Scrivi la risposta con parole tue e rileggila prima di andare
-                avanti: quanto ci metti non toglie punti.
+                Non è previsto un limite di tempo. Formula la risposta con parole tue e rileggila
+                prima di procedere: la durata non incide sul punteggio.
               </Rule>
               <Rule>
-                <span className="text-slate-100">Conta quanto la risposta è completa.</span> Ogni
-                domanda vale fino a un punto, e ne prende una parte se dice solo una parte di quello
-                che serviva. Una risposta lasciata in bianco vale zero.
+                <span className="text-slate-100">
+                  Il punteggio dipende dalla completezza della risposta.
+                </span>{' '}
+                Ogni domanda vale fino a un punto e viene valutata in proporzione agli elementi
+                effettivamente indicati. Una risposta non fornita vale zero.
               </Rule>
             </>
           ) : (
             <>
               <Rule>
-                Hai {QUESTION_SECONDS} secondi per ogni domanda. Allo scadere si passa avanti con la
-                risposta che hai selezionato, o in bianco se non ne hai scelta nessuna.
+                Ogni domanda ha un tempo massimo di {QUESTION_SECONDS} secondi. Allo scadere viene
+                registrata la risposta selezionata, oppure una risposta in bianco se non è stata
+                effettuata alcuna scelta.
               </Rule>
               <Rule>
-                <span className="text-slate-100">Conta anche quanto ci metti.</span> Una risposta
-                giusta vale un punto se arriva subito, e un decimo in meno ogni {STEP_SECONDS}{' '}
-                secondi che passano, fino a un minimo di 0,1. Una risposta sbagliata vale zero
-                comunque.
+                <span className="text-slate-100">Il punteggio tiene conto anche del tempo.</span>{' '}
+                Una risposta corretta vale un punto se immediata, con una riduzione di un decimo
+                ogni {STEP_SECONDS} secondi, fino a un minimo di 0,1. Una risposta errata vale zero
+                in ogni caso.
               </Rule>
             </>
           )}
           <Rule>
-            Non si torna indietro su una domanda già consegnata, e in bianco vale come sbagliata.
+            Non è possibile tornare a una domanda già confermata, e una risposta in bianco equivale
+            a una risposta errata.
           </Rule>
           <Rule>
-            <span className="text-slate-100">Le domande cambiano a ogni tentativo.</span> Sono
-            estratte a caso quando premi il pulsante, quindi rifare il test non vuol dire rispondere
-            di nuovo alle stesse.
+            <span className="text-slate-100">Le domande cambiano a ogni tentativo.</span> Vengono
+            estratte in modo casuale all'avvio del test, quindi ripeterlo non comporta la
+            ripresentazione delle stesse domande.
           </Rule>
           {/* Da dove vengono le domande, che non cambia come si risponde ma
               cambia cosa si ha davanti: una spiegazione che rimanda al
@@ -103,16 +107,16 @@ export default function SimulationIntro({
               test. */}
           <Rule>
             {isManual
-              ? 'Le domande e le spiegazioni le ha scritte chi prepara i test.'
-              : 'Le domande sono state ricavate da un documento aziendale, e rilette da una persona prima della pubblicazione.'}
+              ? 'Le domande e le relative spiegazioni sono state redatte da chi predispone i test.'
+              : 'Le domande sono state ricavate da un documento aziendale, e verificate da una persona prima della pubblicazione.'}
           </Rule>
           <Rule>
-            Come è andata lo scopri alla fine: il riepilogo mostra{' '}
+            L'esito viene mostrato al termine: il riepilogo riporta{' '}
             {isOpen
-              ? 'cosa avrebbe dovuto dire la tua risposta, cosa le è mancato'
-              : 'le risposte corrette, le tue'}{' '}
-            e {isManual ? 'la spiegazione di ogni domanda' : 'cosa dice il documento'}, domanda per
-            domanda.
+              ? 'gli elementi attesi nella risposta e quelli mancanti'
+              : 'le risposte corrette e quelle fornite'}{' '}
+            e {isManual ? 'la spiegazione di ogni domanda' : 'gli estratti del documento'}, domanda
+            per domanda.
           </Rule>
         </ul>
 

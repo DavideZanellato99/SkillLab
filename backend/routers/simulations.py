@@ -486,12 +486,12 @@ async def _open_answers(questions: list[SimulationQuestion], given: dict) -> lis
         # riprovare senza aver perso quello che ha scritto.
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="La correzione non è riuscita. Le tue risposte non sono perse: riprova.",
+            detail="La correzione non è riuscita. Le risposte non sono andate perse: ripeti la consegna.",
         )
     if len(judgements) < len(to_judge):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="La correzione è arrivata incompleta. Le tue risposte non sono perse: riprova.",
+            detail="La correzione è risultata incompleta. Le risposte non sono andate perse: ripeti la consegna.",
         )
 
     answers = []

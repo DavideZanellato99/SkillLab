@@ -41,7 +41,7 @@ export default function SimulationWrittenAnswer({
       {answer.expected_answer && (
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3">
           <p className="mb-1 text-xs font-semibold tracking-wide text-emerald-400/80">
-            Cosa doveva dire
+            Elementi attesi
           </p>
           <p className="whitespace-pre-line text-[0.85rem] leading-relaxed text-emerald-100/90">
             {answer.expected_answer}
@@ -51,7 +51,7 @@ export default function SimulationWrittenAnswer({
 
       {answer.feedback && (
         <div className="rounded-xl border border-white/6 bg-white/3 px-4 py-3">
-          <p className="mb-1 text-xs font-semibold tracking-wide text-slate-400">La correzione</p>
+          <p className="mb-1 text-xs font-semibold tracking-wide text-slate-400">Valutazione</p>
           <p className="text-[0.85rem] leading-relaxed text-slate-300">{answer.feedback}</p>
         </div>
       )}

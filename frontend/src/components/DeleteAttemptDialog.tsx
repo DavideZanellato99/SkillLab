@@ -53,8 +53,8 @@ export default function DeleteAttemptDialog({
           Stai per eliminare il tentativo su{' '}
           <strong className="text-slate-100">{simulationTitle}</strong> (
           {kindLabel(simulationKind).toLowerCase()}) del {formatDateTime(attemptedAt)}, con tutte le
-          risposte date e il voto preso. La simulazione resta e si può rifare. L'operazione non è
-          reversibile.
+          risposte fornite e il punteggio ottenuto. La simulazione resta disponibile e può essere
+          ripetuta. L'operazione non è reversibile.
         </>
       }
       error={mutation.error instanceof Error ? mutation.error.message : undefined}

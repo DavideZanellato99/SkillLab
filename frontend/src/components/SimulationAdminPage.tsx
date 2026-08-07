@@ -82,7 +82,7 @@ export default function SimulationAdminPage() {
     <PageContainer>
       <PageHeader
         title="Gestione Simulazioni"
-        description="Crea i test tecnici da un documento o scrivendo le domande, e assegnali a un'organizzazione."
+        description="Crea i test tecnici a partire da un documento o redigendo le domande, e assegnali a un'organizzazione."
         actions={
           <PrimaryButton icon={<PlusIcon size={16} />} onClick={() => setCreating(true)}>
             Nuova Simulazione
@@ -97,7 +97,7 @@ export default function SimulationAdminPage() {
           columns={COLUMNS}
           isEmpty={filtered.length === 0}
           emptyMessage={
-            search ? 'Nessuna simulazione corrisponde alla ricerca' : 'Nessuna simulazione ancora'
+            search ? 'Nessuna simulazione corrisponde alla ricerca' : 'Nessuna simulazione presente'
           }
           searchValue={search}
           onSearchChange={setSearch}
@@ -198,8 +198,8 @@ export default function SimulationAdminPage() {
           description={
             <>
               La simulazione <strong>{toDelete.title}</strong> verrà eliminata con le sue domande e
-              tutti i tentativi già svolti. L'operazione è definitiva. Per toglierla di mezzo
-              lasciando i risultati al loro posto, ritirala invece di eliminarla.
+              tutti i tentativi già svolti. L'operazione è definitiva. Per renderla non più
+              disponibile conservando i risultati, ritirala invece di eliminarla.
             </>
           }
           error={remove.isError ? (remove.error as Error).message : undefined}

@@ -102,7 +102,7 @@ def start_voice_session(
         if conversation.ended_at is not None:
             raise HTTPException(
                 status_code=409,
-                detail="Questa conversazione è terminata: avviane una nuova per parlare ancora con l'avatar.",
+                detail="Questa conversazione è terminata: avviane una nuova per proseguire al telefono con l'avatar.",
             )
     else:
         # Only a brand new call is blocked on an archived avatar: a call

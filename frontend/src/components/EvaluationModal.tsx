@@ -183,8 +183,8 @@ export default function EvaluationModal({
             </div>
             {onRetryScenario && (
               <p className="text-center text-[0.72rem] text-slate-500">
-                Nuovo tentativo con {avatarName}, la prossima valutazione mostrerà i progressi
-                rispetto a questa.
+                Avvia un nuovo tentativo con {avatarName}: la prossima valutazione riporterà i
+                progressi rispetto a questa.
               </p>
             )}
           </div>
@@ -197,11 +197,11 @@ export default function EvaluationModal({
             htmlFor="conversation-title"
             className="mb-1 block font-heading text-[0.95rem] font-bold text-slate-100"
           >
-            Dai un nome a questa conversazione
+            Assegna un nome a questa conversazione
           </label>
           <p className="mb-3 text-[0.8rem] leading-normal text-slate-500">
-            La chiamata è conclusa e non può essere ripresa. Le abbiamo dato un nome automatico,
-            cambialo se preferisci ritrovarla con un altro.
+            La chiamata è conclusa e non può essere ripresa. Le è stato assegnato un nome
+            automatico, modificabile per ritrovarla più facilmente.
           </p>
           <div className="flex gap-2 max-[480px]:flex-col">
             <input

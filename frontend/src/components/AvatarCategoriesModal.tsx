@@ -166,7 +166,7 @@ export default function AvatarCategoriesModal({
         }
         iconWrapperCls="border border-violet-600/25 bg-violet-600/10"
         title="Categorie avatar"
-        description="Ogni organizzazione ha le sue: qui si creano, si rinominano e si colorano."
+        description="Ogni organizzazione ha le proprie categorie: qui si creano, si rinominano e si personalizzano nel colore."
       />
 
       <div className={`${fieldCls} mb-6`}>
@@ -190,7 +190,7 @@ export default function AvatarCategoriesModal({
 
       {!selectedOrgId ? (
         <p className="mb-6 text-[0.85rem] text-slate-500">
-          Scegli un'organizzazione per vedere le sue categorie
+          Seleziona un'organizzazione per visualizzarne le categorie
         </p>
       ) : isLoading ? (
         <LoadingState message="Caricamento categorie..." />
@@ -227,7 +227,7 @@ export default function AvatarCategoriesModal({
               <Tooltip
                 content={
                   c.avatar_count
-                    ? 'Prima sposta gli avatar in un’altra categoria'
+                    ? 'Sposta prima gli avatar in un’altra categoria'
                     : 'Elimina la categoria'
                 }
               >

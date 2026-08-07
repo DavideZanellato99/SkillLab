@@ -68,7 +68,7 @@ export default function PersonaPromptPreview({ profile, onClose }: Props) {
             Anteprima del prompt
           </h2>
           <p className="text-[0.8rem] text-slate-500">
-            Quello che l'avatar riceve davvero da questa scheda.
+            Il contenuto che l'avatar riceve effettivamente da questa scheda.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -108,8 +108,8 @@ export default function PersonaPromptPreview({ profile, onClose }: Props) {
         <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-[0.8rem] text-amber-300">
           <strong className="font-semibold">Campi compilati ma ignorati:</strong>{' '}
           {preview.ignored_fields.map(fieldLabel).join(', ')}. Contengono un marcatore di vuoto (per
-          esempio "/" oppure "n/d"): l'avatar non li vedrà mai, quindi tanto vale lasciarli davvero
-          vuoti.
+          esempio "/" oppure "n/d"): l'avatar non li riceve, quindi è preferibile lasciarli
+          effettivamente vuoti.
         </div>
       )}
 

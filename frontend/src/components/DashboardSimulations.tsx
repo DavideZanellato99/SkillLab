@@ -222,8 +222,8 @@ export default function DashboardSimulations({
     return (
       <Notice>
         {rows.length > 0 && kindFilter !== 'all'
-          ? `Nessun test ${kindLabel(kindFilter).toLowerCase()} fra quelli consegnati. Cambia tipo per vedere i dati disponibili`
-          : 'Nessun test tecnico ancora consegnato. I grafici appariranno quando le simulazioni pubblicate verranno svolte'}
+          ? `Nessun test ${kindLabel(kindFilter).toLowerCase()} fra quelli consegnati. Seleziona un altro tipo per visualizzare i dati disponibili`
+          : 'Nessun test tecnico ancora consegnato. I grafici saranno disponibili quando le simulazioni pubblicate verranno svolte'}
       </Notice>
     )
   }
@@ -284,7 +284,7 @@ export default function DashboardSimulations({
       <div className={`${cardCls} mb-6`}>
         <h3 className="text-sm font-semibold text-slate-300">Media per simulazione</h3>
         <p className="mb-4 text-xs text-slate-500">
-          Voto medio di ogni test, dal più ostico al più riuscito
+          Voto medio di ogni test, dal più critico al migliore
         </p>
         <div className="flex flex-col gap-2.5">
           {simulationAvgs.map((s) => (

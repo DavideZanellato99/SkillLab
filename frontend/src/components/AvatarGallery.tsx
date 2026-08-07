@@ -61,7 +61,7 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
     if (isError) {
       addToast(
         'Errore di connessione',
-        'Impossibile contattare il server. Verifica che il backend sia in esecuzione.',
+        'Impossibile contattare il server. Verifica la connessione e riprova.',
         'error',
       )
     }
@@ -111,7 +111,7 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
       ) : avatars.length === 0 ? (
         <div className="animate-fade-in p-16 text-center">
           <div className="mb-4 animate-float text-5xl">🎭</div>
-          <p className="text-lg text-slate-500">Nessun avatar trovato in questa categoria.</p>
+          <p className="text-lg text-slate-500">Nessun avatar presente in questa categoria</p>
         </div>
       ) : (
         <div className={gridCls} id="avatar-grid">

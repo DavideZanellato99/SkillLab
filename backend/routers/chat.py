@@ -482,7 +482,7 @@ async def send_chat_message(
         if conversation.ended_at is not None:
             raise HTTPException(
                 status_code=409,
-                detail="Questa conversazione è terminata: avviane una nuova per scrivere ancora all'avatar.",
+                detail="Questa conversazione è terminata: avviane una nuova per proseguire in chat con l'avatar.",
             )
         prior_messages = (
             db.query(ChatMessage)

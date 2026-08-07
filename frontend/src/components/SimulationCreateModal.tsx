@@ -36,8 +36,8 @@ const KIND_OPTIONS = [
 
 const KIND_HINTS: Record<SimulationKind, string> = {
   multiple:
-    'Alternative per domanda, trenta secondi ciascuna. Si corregge da sé, e conta anche la prontezza.',
-  open: "Si risponde scrivendo, senza tempo limite. Alla consegna un modello legge le risposte e assegna i punti in base a quanto sono complete, quindi l'esito arriva dopo qualche secondo.",
+    'Quattro alternative per domanda, con un tempo massimo di trenta secondi ciascuna. La correzione è automatica e il punteggio tiene conto anche della rapidità.',
+  open: "Si risponde in forma scritta, senza limite di tempo. Alla consegna un modello valuta le risposte e assegna il punteggio in base alla loro completezza, quindi l'esito richiede qualche secondo.",
 }
 
 const SOURCE_OPTIONS = [
@@ -46,8 +46,8 @@ const SOURCE_OPTIONS = [
 ]
 
 const SOURCE_HINTS: Record<SimulationSource, string> = {
-  ai: `Il modello legge il documento e scrive ${POOL_COUNT} domande con la loro spiegazione. Le rileggi e le correggi prima di pubblicare.`,
-  manual: `Scrivi tu le domande, le risposte e la spiegazione, nel pannello che si apre subito dopo. Ne servono almeno ${QUESTION_COUNT}, che sono quante ne riceve chi svolge il test.`,
+  ai: `Il modello analizza il documento e redige ${POOL_COUNT} domande con la relativa spiegazione, da rivedere e correggere prima della pubblicazione.`,
+  manual: `Le domande, le risposte e le spiegazioni si redigono nel pannello che si apre subito dopo. Ne servono almeno ${QUESTION_COUNT}, pari al numero che riceve chi svolge il test.`,
 }
 
 interface SimulationCreateModalProps {
@@ -118,7 +118,7 @@ export default function SimulationCreateModal({
         description={
           fromDocument
             ? 'Carica il documento da cui ricavare le domande.'
-            : 'Le domande le scrivi tu, nel passaggio successivo.'
+            : 'Le domande si redigono nel passaggio successivo.'
         }
         className="mb-6"
       />
@@ -169,8 +169,8 @@ export default function SimulationCreateModal({
           hint={
             <span className="text-xs text-slate-500">
               {fromDocument
-                ? 'Nomina il documento nel suo insieme: le domande nascono da tutto quello che contiene, non da una sola casistica.'
-                : 'Nomina la materia nel suo insieme: chi svolge il test riceve dieci domande a caso fra tutte quelle che scriverai.'}
+                ? "Indica il documento nel suo insieme: le domande derivano dall'intero contenuto, non da una singola casistica."
+                : `Indica la materia nel suo insieme: chi svolge il test riceve ${QUESTION_COUNT} domande estratte a caso fra quelle disponibili.`}
             </span>
           }
         >
@@ -190,7 +190,7 @@ export default function SimulationCreateModal({
           htmlFor="simulation-description"
           hint={
             <span className="text-xs text-slate-500">
-              Facoltativa. La legge chi apre il test, prima di iniziarlo.
+              Facoltativa. Viene mostrata a chi apre il test, prima di iniziarlo.
             </span>
           }
         >
@@ -213,8 +213,8 @@ export default function SimulationCreateModal({
             label="Documento"
             hint={
               <span className="text-xs text-slate-500">
-                PDF, DOCX, TXT o Markdown, fino a 10 MB. Un PDF di pagine scansionate non contiene
-                testo e non può essere letto.
+                PDF, DOCX, TXT o Markdown, fino a 10 MB. Un PDF composto da pagine scansionate non
+                contiene testo e non può essere elaborato.
               </span>
             }
           >

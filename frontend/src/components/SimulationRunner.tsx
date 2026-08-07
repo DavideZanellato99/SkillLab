@@ -198,8 +198,8 @@ export default function SimulationRunner() {
       <PageContainer>
         <PageHeader title={simulation.title} description="Simulazione non ancora svolgibile." />
         <div className="rounded-2xl border border-white/6 bg-gray-900/60 p-16 text-center text-slate-500 backdrop-blur-md">
-          <p className="mb-1 text-[0.95rem]">Questa simulazione non ha ancora domande</p>
-          <p className="text-sm">Sarà svolgibile appena chi la gestisce le avrà preparate</p>
+          <p className="mb-1 text-[0.95rem]">Questa simulazione non contiene ancora domande</p>
+          <p className="text-sm">Sarà disponibile appena chi la gestisce le avrà predisposte</p>
         </div>
         <Link to="/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
           Torna all'elenco
@@ -215,8 +215,8 @@ export default function SimulationRunner() {
         description={
           started
             ? isOpen
-              ? 'Rispondi con parole tue, il riepilogo arriva alla fine.'
-              : 'Rispondi entro il tempo, il riepilogo arriva alla fine.'
+              ? 'Rispondi con parole tue, il riepilogo viene mostrato al termine.'
+              : 'Rispondi entro il tempo previsto, il riepilogo viene mostrato al termine.'
             : simulation.description ||
               `${simulation.question_count} domande ${isOpen ? 'a risposta aperta' : 'a risposta multipla'}, una alla volta.`
         }
@@ -248,7 +248,7 @@ export default function SimulationRunner() {
             }
           />
           <p className="mb-4 text-[0.85rem] text-slate-400">
-            Le tue risposte non sono andate perse: riprova la consegna.
+            Le risposte non sono andate perse: ripeti la consegna.
           </p>
           <PrimaryButton onClick={() => send(answers)}>Riprova la consegna</PrimaryButton>
         </>
@@ -282,7 +282,7 @@ export default function SimulationRunner() {
               message={
                 start.error instanceof Error
                   ? start.error.message
-                  : 'Non è stato possibile cominciare il test.'
+                  : 'Non è stato possibile avviare il test.'
               }
             />
           )}

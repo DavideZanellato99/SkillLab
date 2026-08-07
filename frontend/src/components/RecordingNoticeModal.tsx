@@ -76,7 +76,7 @@ export default function RecordingNoticeModal({ onAccept, onClose }: RecordingNot
           </span>
           <span className="mt-1 text-[0.78rem] text-slate-500">
             Puoi scaricare o far cancellare questi dati in qualsiasi momento dalla pagina Profilo.
-            Se preferisci non essere registrato, annulla: puoi allenarti in modalità chat scritta.
+            Se preferisci non essere registrato, annulla e utilizza la modalità chat scritta.
           </span>
         </span>
       }

@@ -166,8 +166,10 @@ Le convenzioni del file:
 
 ## Chi tiene lo stato dell'utente
 
-`AuthContext` ([frontend/src/contexts/AuthContext.tsx](../frontend/src/contexts/AuthContext.tsx))
+`AuthProvider` ([frontend/src/contexts/AuthProvider.tsx](../frontend/src/contexts/AuthProvider.tsx))
 tiene in memoria il profilo, e nient'altro. Non il token, che non può vedere.
+Chi lo legge non passa dal context: usa
+[useAuth](../frontend/src/hooks/useAuth.ts), come per ogni altro dato.
 
 All'avvio della pagina non c'è modo di sapere se la sessione è viva guardando i
 cookie, perché sono `HttpOnly`: si chiede al backend con `GET /api/auth/me`, e

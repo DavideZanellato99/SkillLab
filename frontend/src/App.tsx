@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
-import { useAuth } from './contexts/AuthContext'
+import { useAuth } from './hooks/useAuth'
 import Navbar from './components/Navbar'
 import Header from './components/Header'
 import AvatarGallery from './components/AvatarGallery'

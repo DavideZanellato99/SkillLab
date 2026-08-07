@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { saveBlob } from '../services/api'
 import { fetchMyDataExport } from '../services/profile'
 import { useUpdateMyProfile, useChangeMyPassword } from '../hooks/useProfile'

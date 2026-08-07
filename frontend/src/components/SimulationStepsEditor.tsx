@@ -1,6 +1,7 @@
 import { MAX_ITEMS, MIN_ITEMS } from '../services/simulations'
 import { PlusIcon, TrashIcon } from './icons'
-import MoveControls, { moved } from './MoveControls'
+import MoveControls from './MoveControls'
+import { moved } from './listOrder'
 import Tooltip from './Tooltip'
 
 /* La chiave di una domanda di ordinamento: i passi nella sequenza corretta.

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { fetchVoicePreview } from '../services/admin'
 import type { AdminAvatar, AdminAvatarPayload } from '../services/admin'
 import {

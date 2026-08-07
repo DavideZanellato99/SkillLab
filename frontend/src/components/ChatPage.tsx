@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { isAdmin } from '../services/auth'
 import type { ChatMessage, ChatConversationSummary, EvaluationCitation } from '../services/api'
 import { getAvatarImageUrl } from '../services/api'

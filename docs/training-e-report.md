@@ -204,7 +204,7 @@ l'ordine delle voci è quello in cui i tipi sono nati, che è anche quello dal
 più usato al meno.
 
 Le opzioni dei due gruppi non vivono nella dashboard: stanno accanto alla
-parola che il badge mostra (`MODE_FILTERS` in `ConversationModeBadge`,
+parola che il badge mostra (`MODE_FILTERS` in `conversationMode`,
 `KIND_FILTERS` in `simulationFormat`), perché anche lo storico del report
 attività fa le stesse due domande e due elenchi separati finirebbero per
 offrire scelte diverse nelle due schermate. I default invece restano qui, e
@@ -358,7 +358,7 @@ attiva**, e cambiano con lei: di una conversazione si chiede il canale
 tutti), e sono due domande che all'altra metà non si
 possono nemmeno fare. Le opzioni sono le stesse della dashboard e stanno
 scritte una volta sola, accanto alla parola che il badge mostra: `MODE_FILTERS`
-in [ConversationModeBadge](../frontend/src/components/ConversationModeBadge.tsx)
+in [conversationMode](../frontend/src/components/conversationMode.ts)
 e `KIND_FILTERS` in
 [simulationFormat](../frontend/src/components/simulationFormat.ts). Anche qui
 **la prova si cerca con la stessa parola del badge**: chi legge "Chat" su una

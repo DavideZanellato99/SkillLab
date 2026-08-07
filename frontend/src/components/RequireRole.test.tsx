@@ -7,7 +7,7 @@ import type { AuthUser, RoleName } from '../services/auth'
 
 let currentUser: AuthUser | null = null
 
-vi.mock('../contexts/AuthContext', () => ({
+vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ user: currentUser }),
 }))
 

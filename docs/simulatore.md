@@ -135,6 +135,7 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationOrderingStep.tsx](../frontend/src/components/SimulationOrderingStep.tsx) | Una domanda di ordinamento: i passi mescolati e le frecce per disporli |
 | [frontend/src/components/SimulationMatchingStep.tsx](../frontend/src/components/SimulationMatchingStep.tsx) | Una domanda di abbinamento: le due colonne e una tendina per riga |
 | [frontend/src/components/MoveControls.tsx](../frontend/src/components/MoveControls.tsx) | Le due frecce che spostano un elemento, condivise fra l'editor e lo svolgimento |
+| [frontend/src/components/listOrder.ts](../frontend/src/components/listOrder.ts) | Il calcolo dietro le frecce: lo stesso elenco con un elemento in un'altra posizione |
 | [frontend/src/components/SimulationWrittenAnswer.tsx](../frontend/src/components/SimulationWrittenAnswer.tsx) | Nell'esito: la risposta scritta, la traccia attesa, la correzione |
 | [frontend/src/components/SimulationItemsAnswer.tsx](../frontend/src/components/SimulationItemsAnswer.tsx) | Nell'esito: la sequenza disposta e le coppie formate, con accanto la chiave |
 | [frontend/src/components/SimulationKindBadge.tsx](../frontend/src/components/SimulationKindBadge.tsx) | La targhetta del tipo, l'unico modo in cui si disegna, ovunque compaia un test |

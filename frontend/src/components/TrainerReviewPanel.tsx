@@ -4,7 +4,7 @@ import {
   useSaveConversationReview,
   useDeleteConversationReview,
 } from '../hooks/useConversationReview'
-import { hasReviewContent } from './TrainerReviewNote'
+import { hasReviewContent } from './trainerReview'
 import { CloseIcon } from './icons'
 
 /* Il modulo con cui il docente scrive la propria revisione.

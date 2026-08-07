@@ -20,7 +20,7 @@ La direzione è sempre questa e non si salta un passo:
 | [components/](../frontend/src/components/) | Pagine e pezzi di interfaccia | Nessun `fetch`, nessuna chiave di cache |
 | [hooks/](../frontend/src/hooks/) | Un hook per ogni lettura e per ogni scrittura | Qui vivono `useQuery` e `useMutation`, e le invalidazioni |
 | [services/](../frontend/src/services/) | I tipi e le funzioni che chiamano gli endpoint | Niente React |
-| [contexts/](../frontend/src/contexts/) | Solo `AuthContext` | Lo stato dell'utente, che serve ovunque |
+| [contexts/](../frontend/src/contexts/) | Solo `AuthProvider` e il suo context | Lo stato dell'utente, che serve ovunque, letto con `useAuth` |
 
 **Un componente non chiama mai un endpoint da solo.** Il motivo non è
 l'eleganza: una chiamata scritta dentro un componente non ha cache, non si
@@ -112,8 +112,9 @@ Comandi e gate di qualità stanno in [contributing.md](contributing.md).
 
 ## Lo stato dell'utente
 
-`AuthContext` tiene il profilo in memoria e nient'altro: il token è in un
-cookie `HttpOnly` che JavaScript non vede.
+`AuthProvider` tiene il profilo in memoria e nient'altro: il token è in un
+cookie `HttpOnly` che JavaScript non vede. Le schermate lo leggono con
+[useAuth](../frontend/src/hooks/useAuth.ts).
 
 Ci sta appeso anche l'auto logout per inattività
 ([useIdleLogout](../frontend/src/hooks/useIdleLogout.ts)): trenta minuti senza

@@ -12,7 +12,7 @@
  * risponderebbe con un numero che riguarda tutt'altro. */
 
 import { Fragment, useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import type { ConversationReport, SimulationAttemptReport } from '../services/admin'
 import { useUsersReport } from '../hooks/useReports'
 import { useOrganizations } from '../hooks/useOrganizations'

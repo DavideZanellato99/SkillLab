@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { SimulationQuestion } from '../services/simulations'
-import MoveControls, { moved } from './MoveControls'
+import MoveControls from './MoveControls'
+import { moved } from './listOrder'
 import PrimaryButton from './PrimaryButton'
 
 /* Una domanda di ordinamento: i passi arrivano mescolati e si rimettono in

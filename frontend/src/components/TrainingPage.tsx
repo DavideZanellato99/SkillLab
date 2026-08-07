@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { isAdmin, isSuperAdmin } from '../services/auth'
 import { useOrganizations } from '../hooks/useOrganizations'
 import {
@@ -48,7 +48,7 @@ interface AssignableAvatar {
 
 const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
 
-export const STATUS_META: Record<AssignmentStatus, { label: string; cls: string }> = {
+const STATUS_META: Record<AssignmentStatus, { label: string; cls: string }> = {
   active: { label: 'In corso', cls: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' },
   overdue: { label: 'Scaduto', cls: 'border-red-500/30 bg-red-500/10 text-red-400' },
   completed: {

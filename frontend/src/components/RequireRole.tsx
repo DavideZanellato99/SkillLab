@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import { Navigate } from 'react-router'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { isAdmin, isSuperAdmin, type AuthUser } from '../services/auth'
 
 /**

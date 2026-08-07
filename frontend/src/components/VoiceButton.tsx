@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { startVoiceSession, uploadRecording } from '../services/voice'
 import { VoiceCall } from '../services/voiceCall'
 import { startRingback, type Ringback } from '../services/ringtone'

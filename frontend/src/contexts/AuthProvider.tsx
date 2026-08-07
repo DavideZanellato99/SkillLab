@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import {
   type AuthUser,
   type AuthResult,
@@ -9,24 +9,8 @@ import {
   isNewPasswordRequired,
   fetchCurrentUser,
 } from '../services/auth'
+import { AuthContext, type AuthContextType } from './authContext'
 import { useIdleLogout } from '../hooks/useIdleLogout'
-
-// =====================================================
-//  CONTEXT TYPE
-// =====================================================
-
-interface AuthContextType {
-  user: AuthUser | null
-  isAuthenticated: boolean
-  isLoading: boolean
-  login: (email: string, password: string) => Promise<AuthResult>
-  completeNewPassword: (email: string, newPassword: string, session: string) => Promise<void>
-  logout: () => void
-  /** Replace the in-memory user profile — used after a self-service profile edit. */
-  updateUser: (user: AuthUser) => void
-}
-
-const AuthContext = createContext<AuthContextType | null>(null)
 
 // =====================================================
 //  PROVIDER
@@ -117,16 +101,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-// =====================================================
-//  HOOK
-// =====================================================
-
-export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
 }

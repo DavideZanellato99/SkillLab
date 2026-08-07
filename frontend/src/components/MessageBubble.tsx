@@ -10,7 +10,8 @@
 
 import type { ChatMessage, MessageAnnotation } from '../services/api'
 import MessageAnnotationNote from './MessageAnnotationNote'
-import MessageEmotions, { splitEmotionTag } from './MessageEmotions'
+import MessageEmotions from './MessageEmotions'
+import { splitEmotionTag } from './emotionTag'
 import { formatTime } from './chatFormat'
 
 interface MessageBubbleProps {

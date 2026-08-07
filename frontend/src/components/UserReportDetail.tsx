@@ -27,8 +27,9 @@ import type {
   UserActivityReport,
 } from '../services/admin'
 import { categoryBadgeClasses } from './categoryStyles'
-import ConversationModeBadge, { conversationModeLabel, MODE_FILTERS } from './ConversationModeBadge'
-import type { ModeFilter } from './ConversationModeBadge'
+import ConversationModeBadge from './ConversationModeBadge'
+import { conversationModeLabel, MODE_FILTERS } from './conversationMode'
+import type { ModeFilter } from './conversationMode'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import FilterTabs from './FilterTabs'

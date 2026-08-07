@@ -18,7 +18,7 @@ const startVoiceSession = vi.fn().mockResolvedValue({
   conversation_id: 'conv-1',
 })
 
-vi.mock('../contexts/AuthContext', () => ({
+vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ user: { id: 'utente-1' } }),
 }))
 

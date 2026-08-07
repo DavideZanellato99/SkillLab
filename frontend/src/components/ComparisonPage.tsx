@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { isAdmin } from '../services/auth'
 import { useAttempts, useComparableUsers, useSimulationAttempts } from '../hooks/useComparison'
 import ComparisonConversations from './ComparisonConversations'

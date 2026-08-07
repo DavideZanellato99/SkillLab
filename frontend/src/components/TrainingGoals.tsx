@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { useMyAssignments } from '../hooks/useTraining'
-import { AssignmentStatusBadge } from './TrainingPage'
+import AssignmentStatusBadge from './AssignmentStatusBadge'
 import { categoryBadgeClasses } from './categoryStyles'
 import Badge from './Badge'
 

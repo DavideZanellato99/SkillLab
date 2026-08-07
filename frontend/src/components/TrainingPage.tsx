@@ -10,7 +10,9 @@ import {
 } from '../hooks/useTraining'
 import { useAvatars } from '../hooks/useAvatars'
 import { useAdminAvatars } from '../hooks/useAdminAvatars'
-import type { TrainingAssignment, AssignmentStatus } from '../services/training'
+import type { TrainingAssignment } from '../services/training'
+import AssignmentStatusBadge from './AssignmentStatusBadge'
+import { STATUS_META } from './assignmentStatus'
 import DataTable, { Td, Tr } from './DataTable'
 import SearchSelect from './SearchSelect'
 import Select from './Select'
@@ -47,30 +49,6 @@ interface AssignableAvatar {
 }
 
 const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
-
-const STATUS_META: Record<AssignmentStatus, { label: string; cls: string }> = {
-  active: { label: 'In corso', cls: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' },
-  overdue: { label: 'Scaduto', cls: 'border-red-500/30 bg-red-500/10 text-red-400' },
-  completed: {
-    label: 'Completato',
-    cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-  },
-  completed_late: {
-    label: 'Completato in ritardo',
-    cls: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
-  },
-}
-
-export function AssignmentStatusBadge({ status }: { status: AssignmentStatus }) {
-  const meta = STATUS_META[status]
-  return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[0.72rem] font-semibold ${meta.cls}`}
-    >
-      {meta.label}
-    </span>
-  )
-}
 
 function formatScore(score: number): string {
   return score.toLocaleString('it-IT', { maximumFractionDigits: 1 })

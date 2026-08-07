@@ -54,6 +54,19 @@ organizzazione: un utente che digita l'indirizzo a mano si prende un 403 dal
 server, non una pagina vuota dal browser. Vedi
 [organizzazioni-e-ruoli.md](organizzazioni-e-ruoli.md).
 
+**Le pagine di amministrazione si scaricano solo entrandoci.** Le due righe
+`admin` e `super admin` della tabella sono import dinamici (`lazy`), il resto
+no: sono otto schermate dense di tabelle e modali, e con un import normale
+finivano nel primo file che il browser scarica, addosso anche a chi apre
+l'applicazione solo per fare una telefonata di prova. L'attesa mentre il file
+arriva è quella di `LoadingState`, la stessa che le pagine mostrano già
+aspettando i propri dati. Il confine è quello dei permessi, non una misura di
+comodo: se una schermata admin viene usata anche altrove, quel pezzo va
+estratto in un file suo (è il caso di
+[AssignmentStatusBadge](../frontend/src/components/AssignmentStatusBadge.tsx),
+che la home mostra sugli obiettivi), altrimenti l'import statico se la
+riporta dietro tutta.
+
 ## I componenti condivisi
 
 Prima di scrivere una schermata nuova si guarda cosa c'è già. Quasi tutta

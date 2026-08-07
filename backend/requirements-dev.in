@@ -22,7 +22,11 @@
 
 pytest
 pytest-cov
-httpx
+# Il client HTTP con cui `TestClient` di Starlette parla con l'app. Da
+# starlette 1.x è httpx2: con il vecchio httpx (che resta comunque installato,
+# è una dipendenza di openai) il client funziona ancora ma ogni run di pytest
+# si apre con un avviso di deprecazione.
+httpx2
 ruff
 mypy
 pip-audit

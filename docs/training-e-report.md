@@ -69,7 +69,12 @@ stanno attorno.
 **Dove si vedono.** Lo studente li trova in cima alla home
 ([TrainingGoals](../frontend/src/components/TrainingGoals.tsx)), gli
 amministratori in `/admin/training`
-([TrainingPage](../frontend/src/components/TrainingPage.tsx)).
+([TrainingPage](../frontend/src/components/TrainingPage.tsx)). A che punto è un
+percorso lo dice la stessa targhetta nei due posti
+([AssignmentStatusBadge](../frontend/src/components/AssignmentStatusBadge.tsx)),
+che vive in un file suo: la pagina di amministrazione si scarica solo entrandoci
+(vedi [frontend.md](frontend.md)), e una targhetta presa da lì se la sarebbe
+riportata dietro tutta sulla home di chiunque.
 
 ## Le notifiche
 

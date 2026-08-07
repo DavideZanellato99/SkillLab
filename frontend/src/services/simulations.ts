@@ -8,7 +8,7 @@
  * motivo per cui `SimulationQuestion` e `SimulationQuestionAdmin` sono due
  * tipi diversi e non uno con dei campi opzionali. */
 
-import { apiFetch } from './api'
+import { apiFetch, apiFetchBlob } from './api'
 import type { Authored } from './authorship'
 
 /** In bozza esiste solo per il super admin, pubblicata la vede la sua org. */
@@ -208,6 +208,11 @@ export const fetchMyAttempts = (simulationId: string) =>
 
 export const fetchAttempt = (attemptId: string) =>
   apiFetch<SimulationAttempt>(`/api/simulations/attempts/${attemptId}`)
+
+/** L'esito di un test in PDF, per chi l'ha svolto e per chi lo corregge:
+ *  l'endpoint è uno solo perché lo è già la lettura del tentativo. */
+export const fetchAttemptPdf = (attemptId: string) =>
+  apiFetchBlob(`/api/simulations/attempts/${attemptId}/pdf`)
 
 /** Tutti i tentativi su una simulazione (admin del tenant). */
 export const fetchSimulationResults = (simulationId: string) =>

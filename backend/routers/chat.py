@@ -695,6 +695,59 @@ def get_conversation_evaluation(
     return _evaluation_response(db, conversation, evaluation) if evaluation else None
 
 
+def evaluation_pdf_response(
+    db: Session,
+    conversation: ChatConversation,
+    evaluation: ConversationEvaluation,
+    operator: User,
+) -> Response:
+    """The stored evaluation as a PDF download.
+
+    Shared by the two ways of asking for it: the student downloading their
+    own report and an admin downloading it from the conversation detail.
+    Who may ask changes, the document does not. `operator` is always the
+    person who held the conversation, not whoever clicked: it is their name
+    that goes on the sheet handed to the trainer.
+    """
+    avatar = db.query(Avatar).filter(Avatar.id == conversation.avatar_id).first()
+    data = evaluation.result or {}
+    review = _review_of(db, conversation.id)
+    annotations = reviews.annotations_of(db, conversation.id)
+    # La trascrizione chiude il documento: il giudizio si legge accanto a
+    # quello che giudica, o resta un numero da prendere per buono.
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.conversation_id == conversation.id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+    pdf = evaluation_pdf(
+        operator_name=f"{operator.nome} {operator.cognome}".strip() or operator.email,
+        avatar_name=avatar.name if avatar else "",
+        conversation_title=conversation.title,
+        mode=conversation.mode,
+        conversation_at=conversation.created_at,
+        evaluated_at=evaluation.updated_at,
+        overall_score=evaluation.overall_score,
+        summary=data.get("summary", ""),
+        criteria=data.get("criteria") or [],
+        previous=_previous_attempt(db, conversation),
+        review=reviews.review_response(review, annotations, evaluation.overall_score),
+        annotations=_annotations_for_pdf(db, annotations),
+        messages=[
+            {"role": m.role, "content": m.content, "created_at": m.created_at} for m in messages
+        ],
+    )
+
+    # ASCII-only filename derived from the conversation title
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", conversation.title).strip("-").lower() or "conversazione"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="valutazione-{slug}.pdf"'},
+    )
+
+
 @router.get("/conversation/{conversation_id}/evaluation/pdf")
 def download_evaluation_pdf(
     conversation_id: UUID,
@@ -720,29 +773,4 @@ def download_evaluation_pdf(
             status_code=404, detail="Questa conversazione non ha ancora una valutazione."
         )
 
-    avatar = db.query(Avatar).filter(Avatar.id == conversation.avatar_id).first()
-    data = evaluation.result or {}
-    review = _review_of(db, conversation.id)
-    annotations = reviews.annotations_of(db, conversation.id)
-    pdf = evaluation_pdf(
-        operator_name=f"{current_user.nome} {current_user.cognome}".strip() or current_user.email,
-        avatar_name=avatar.name if avatar else "",
-        conversation_title=conversation.title,
-        mode=conversation.mode,
-        conversation_at=conversation.created_at,
-        evaluated_at=evaluation.updated_at,
-        overall_score=evaluation.overall_score,
-        summary=data.get("summary", ""),
-        criteria=data.get("criteria") or [],
-        previous=_previous_attempt(db, conversation),
-        review=reviews.review_response(review, annotations, evaluation.overall_score),
-        annotations=_annotations_for_pdf(db, annotations),
-    )
-
-    # ASCII-only filename derived from the conversation title
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", conversation.title).strip("-").lower() or "conversazione"
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="valutazione-{slug}.pdf"'},
-    )
+    return evaluation_pdf_response(db, conversation, evaluation, current_user)

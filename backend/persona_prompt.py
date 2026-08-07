@@ -61,6 +61,7 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
             ("NAZIONALITA", "Nazionalità"),
             ("LINGUA_MADRE", "Lingua madre"),
             ("CITTA_RESIDENZA", "Città di residenza"),
+            ("INDIRIZZO_RESIDENZA", "Indirizzo di residenza"),
             ("STATO_CIVILE", "Stato civile"),
             ("NOME_CONIUGE", "Nome del coniuge"),
             ("PROFESSIONE_CONIUGE", "Professione del coniuge"),

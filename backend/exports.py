@@ -1,26 +1,53 @@
-"""File exports: the PDF of a single evaluation and the Excel of the
-evaluations report.
+"""File exports: the PDF of a single evaluation, the PDF of a simulation
+attempt and the Excel of the evaluations report.
 
 Pure builders: plain data in, file bytes out. No DB and no FastAPI here,
 so both are unit-testable and the endpoints stay thin.
 
-The PDF uses the core Helvetica font, which is latin-1 only: everything
-that reaches a page goes through _latin(), because the evaluation text
-comes from an LLM and can carry typographic quotes and other characters
-outside latin-1 that would otherwise raise at render time.
+Come sono vestiti i due PDF sta in pdf_kit: colori, caratteri e riquadri
+sono il design dell'applicazione tradotto su carta, e tenerli separati
+lascia qui soltanto cosa raccontano i due referti.
 """
 
+import re
+from collections.abc import Sequence
 from datetime import datetime
 from io import BytesIO
 
-from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from openai_service import EVALUATION_CRITERIA
-from schemas import ConversationReviewResponse, EvaluationReportRow, PreviousAttempt
+from pdf_kit import (
+    BAD,
+    BAD_TINT,
+    BODY,
+    CARD_PAD_X,
+    CARD_PAD_Y,
+    FAINT,
+    GOOD,
+    GOOD_TINT,
+    HAIRLINE,
+    HEAD_FONT,
+    INK,
+    MUTED,
+    SURFACE,
+    VIOLET,
+    VIOLET_DEEP,
+    VIOLET_EDGE,
+    VIOLET_TINT,
+    Report,
+    Rgb,
+    tinted,
+)
+from schemas import (
+    ConversationReviewResponse,
+    EvaluationReportRow,
+    PreviousAttempt,
+    SimulationAnswerResult,
+)
 
 # Compact criterion names for the spreadsheet header (the full labels are
 # sentences); keys are the ones of openai_service.EVALUATION_CRITERIA and
@@ -35,32 +62,23 @@ CRITERION_SHORT_LABELS = {
 }
 
 MODE_LABELS = {"voice": "Chiamata", "text": "Chat"}
+KIND_LABELS = {"open": "Risposta aperta", "multiple": "Scelta multipla"}
 
-# Print-friendly variants of the app's score colors (emerald/orange/red)
-_SCORE_GOOD = (5, 150, 105)
+# Le soglie dei colori del voto, gli stessi della dashboard.
 _SCORE_MID = (234, 88, 12)
-_SCORE_BAD = (220, 38, 38)
-_SLATE = (71, 85, 105)
-_LIGHT = (100, 116, 139)
-_VIOLET = (109, 40, 217)
 
 
-def _score_rgb(score: float) -> tuple[int, int, int]:
+def _score_rgb(score: float) -> Rgb:
     if score >= 7:
-        return _SCORE_GOOD
+        return GOOD
     if score >= 5:
         return _SCORE_MID
-    return _SCORE_BAD
+    return BAD
 
 
 def _score_hex(score: float) -> str:
     red, green, blue = _score_rgb(score)
     return f"{red:02X}{green:02X}{blue:02X}"
-
-
-def _latin(text: object) -> str:
-    """Best-effort projection onto latin-1, the charset of the core fonts."""
-    return str(text).encode("latin-1", "replace").decode("latin-1")
 
 
 def _fmt_score(score: float) -> str:
@@ -71,7 +89,231 @@ def _fmt_date(value: datetime) -> str:
     return value.strftime("%d/%m/%Y %H:%M")
 
 
-# ── PDF of a single evaluation ────────────────────────
+def _fmt_time(value: datetime) -> str:
+    return value.strftime("%H:%M")
+
+
+def _spoken(content: str) -> str:
+    """Il testo di un messaggio senza la coda che descrive il tono.
+
+    Le battute di una chiamata arrivano da Hume con le emozioni in fondo
+    fra graffe, che a schermo diventano la riga "Tono" sotto la bolla. Sulla
+    carta quelle parole sono termini inglesi grezzi in mezzo a una
+    trascrizione italiana, e la trascrizione serve a rileggere cosa è stato
+    detto: restano fuori.
+    """
+    return re.sub(r"\s*\{[^{}]+\}\s*$", "", content).strip()
+
+
+# ── Il referto di una valutazione ─────────────────────
+
+
+def _score_block(
+    pdf: Report,
+    *,
+    label: str,
+    score: float,
+    color: Rgb,
+    badge: str = "",
+    badge_color: Rgb | None = None,
+    notes: Sequence[str] = (),
+    summary: str = "",
+) -> None:
+    """Il voto in grande, la targhetta del confronto accanto e sotto le righe
+    che dicono come e' venuto fuori.
+
+    Lo condividono i due referti: una conversazione valutata e un test
+    consegnato arrivano da strade diverse ma finiscono nello stesso numero,
+    e sulla carta quel numero deve avere la stessa faccia.
+    """
+    inner_w = pdf.content_w - 2 * CARD_PAD_X - 1.6
+    notes_h = 0.0
+    pdf.use(size=8.5)
+    for note in notes:
+        notes_h += pdf.measure(note, inner_w, 4.4)
+    summary_h = 0.0
+    if summary:
+        pdf.use(size=9.5)
+        summary_h = pdf.measure(summary, inner_w, 4.9) + 2.5
+    height = 2 * CARD_PAD_Y + 4.8 + 12 + notes_h + summary_h
+    with pdf.card(height, accent=color) as (x, y, w):
+        pdf.use(font=HEAD_FONT, size=8, color=MUTED)
+        pdf.set_char_spacing(0.5)
+        pdf.cell(w, 4.8, pdf.safe(label.upper()))
+        pdf.set_char_spacing(0)
+        if badge:
+            accent = badge_color or color
+            pdf.pill(badge, right=x + w, y=y + 0.6, fg=accent, bg=tinted(accent))
+        pdf.set_xy(x, y + 4.8)
+        pdf.use(font=HEAD_FONT, size=26, color=color)
+        number = _fmt_score(score)
+        pdf.cell(pdf.get_string_width(number) + 1.8, 12, number)
+        pdf.use(size=11, color=FAINT)
+        pdf.cell(20, 12, "/ 10")
+        cursor = y + 16.8
+        pdf.use(size=8.5, color=MUTED)
+        for note in notes:
+            pdf.set_xy(x, cursor)
+            pdf.multi_cell(inner_w, 4.4, pdf.safe(note), new_x=XPos.LEFT, new_y=YPos.NEXT)
+            cursor = pdf.get_y()
+        if summary:
+            pdf.set_xy(x, cursor + 2.5)
+            pdf.use(size=9.5, color=BODY)
+            pdf.multi_cell(inner_w, 4.9, pdf.safe(summary), new_x=XPos.LEFT, new_y=YPos.NEXT)
+
+
+def _review_card(pdf: Report, review: ConversationReviewResponse) -> None:
+    """Il verdetto del docente, in violetto come tutto cio' che a schermo
+    viene da una persona e non dalla macchina."""
+    inner_w = pdf.content_w - 2 * CARD_PAD_X - 1.6
+    reason = (review.override_reason or "").strip()
+    note = (review.summary_note or "").strip()
+    pdf.use(size=9.5, style="B")
+    reason_h = pdf.measure(reason, inner_w, 4.7) if reason else 0.0
+    pdf.use(size=9.5)
+    note_h = pdf.measure(note, inner_w, 4.7) if note else 0.0
+    gap = 2.5 if reason and note else 0.0
+    height = 2 * CARD_PAD_Y + 5 + reason_h + gap + note_h
+    with pdf.card(height, fill=VIOLET_TINT, border=VIOLET_EDGE, accent=VIOLET) as (x, y, w):
+        pdf.use(font=HEAD_FONT, size=8, color=VIOLET_DEEP)
+        pdf.set_char_spacing(0.4)
+        pdf.cell(w, 5, pdf.safe(f"REVISIONE DEL DOCENTE  ·  {review.reviewer_name}"))
+        pdf.set_char_spacing(0)
+        cursor = y + 5
+        if reason:
+            pdf.set_xy(x, cursor)
+            pdf.use(size=9.5, style="B", color=VIOLET_DEEP)
+            pdf.multi_cell(inner_w, 4.7, pdf.safe(reason), new_x=XPos.LEFT, new_y=YPos.NEXT)
+            cursor = pdf.get_y() + gap
+        if note:
+            pdf.set_xy(x, cursor)
+            pdf.use(size=9.5, color=BODY)
+            pdf.multi_cell(inner_w, 4.7, pdf.safe(note), new_x=XPos.LEFT, new_y=YPos.NEXT)
+
+
+def _criterion_card(pdf: Report, criterion: dict, previous: PreviousAttempt | None) -> None:
+    """Un criterio: titolo, voto, barra, peso e le parole del formatore."""
+    score = float(criterion.get("score", 0) or 0)
+    color = _score_rgb(score)
+    title = str(criterion.get("label") or criterion.get("key") or "")
+    comment = str(criterion.get("comment") or "").strip()
+    suggestions = str(criterion.get("suggestions") or "").strip()
+
+    sub = f"Peso {criterion.get('weight', '')}%"
+    if previous:
+        before = previous.criteria_scores.get(str(criterion.get("key", "")))
+        if before is not None:
+            delta = round(score - before, 1)
+            sign = "+" if delta > 0 else ""
+            sub += f"  ·  tentativo precedente {_fmt_score(before)} ({sign}{_fmt_score(delta)})"
+
+    inner_w = pdf.content_w - 2 * CARD_PAD_X
+    pdf.use(size=10.5, style="B")
+    title_h = pdf.measure(title, inner_w - 24, 5.2)
+    pdf.use(size=9.5)
+    comment_h = pdf.measure(comment, inner_w, 4.7) + 1.5 if comment else 0.0
+    suggestions_h = (
+        pdf.note_height(suggestions, inner_w, label="Spunti di miglioramento") + 2.5
+        if suggestions
+        else 0.0
+    )
+    height = 2 * CARD_PAD_Y + title_h + 5.4 + 4.6 + comment_h + suggestions_h
+
+    with pdf.card(height) as (x, y, w):
+        pdf.use(size=10.5, style="B", color=INK)
+        pdf.multi_cell(w - 24, 5.2, pdf.safe(title), new_x=XPos.LEFT, new_y=YPos.NEXT)
+        pdf.pill(
+            f"{_fmt_score(score)} / 10",
+            right=x + w,
+            y=y + 0.2,
+            fg=color,
+            bg=tinted(color),
+            size=8.5,
+        )
+        pdf.bar(x, y + title_h + 2, w, score / 10, color)
+        pdf.set_xy(x, y + title_h + 5.4)
+        pdf.use(size=8.5, color=MUTED)
+        pdf.cell(w, 4.6, pdf.safe(sub))
+        cursor = y + title_h + 10
+        if comment:
+            pdf.set_xy(x, cursor)
+            pdf.use(size=9.5, color=BODY)
+            pdf.multi_cell(w, 4.7, pdf.safe(comment), new_x=XPos.LEFT, new_y=YPos.NEXT)
+            cursor = pdf.get_y() + 1.5
+        if suggestions:
+            pdf.set_xy(x, cursor + 1)
+            pdf.note(
+                suggestions,
+                x=x,
+                width=w,
+                fg=VIOLET_DEEP,
+                bg=VIOLET_TINT,
+                label="Spunti di miglioramento",
+            )
+
+
+def _annotation_card(pdf: Report, annotation: dict) -> None:
+    """Una nota appuntata a una battuta, con sopra la battuta stessa.
+
+    Senza la riga su cui sta, un appunto come "qui dovevi chiedere il codice
+    cliente" sulla carta non indica niente.
+    """
+    preview = str(annotation.get("message_preview") or "").strip()
+    note = str(annotation.get("note") or "").strip()
+    reviewer = str(annotation.get("reviewer_name") or "").strip()
+    inner_w = pdf.content_w - 2 * CARD_PAD_X - 1.6
+    quote_h = pdf.note_height(preview, inner_w, italic=True, size=8.5) + 2.5 if preview else 0.0
+    pdf.use(size=9.5)
+    note_h = pdf.measure(note, inner_w, 4.7)
+    height = 2 * CARD_PAD_Y + quote_h + note_h + (4.4 if reviewer else 0)
+    with pdf.card(height, accent=VIOLET) as (x, y, w):
+        cursor = y
+        if preview:
+            pdf.set_xy(x, cursor)
+            pdf.note(f"«{preview}»", x=x, width=w, fg=MUTED, bg=SURFACE, italic=True, size=8.5)
+            cursor = pdf.get_y() + 2.5
+        pdf.set_xy(x, cursor)
+        pdf.use(size=9.5, color=BODY)
+        pdf.multi_cell(w, 4.7, pdf.safe(note), new_x=XPos.LEFT, new_y=YPos.NEXT)
+        if reviewer:
+            pdf.use(size=8, color=FAINT)
+            pdf.multi_cell(w, 4.4, pdf.safe(reviewer), new_x=XPos.LEFT, new_y=YPos.NEXT)
+
+
+def _bubble(pdf: Report, *, speaker: str, when: str, said: str, is_operator: bool) -> None:
+    """Una battuta come si vede in chat: l'operatore a destra in violetto,
+    l'avatar a sinistra sul grigio chiaro."""
+    pad = 3.4
+    max_w = pdf.content_w * 0.84
+    pdf.use(size=9.5)
+    # La bolla è larga quanto la battuta, fino a un massimo: il millimetro in
+    # più è il margine con cui `multi_cell` decide di andare a capo, e senza
+    # quello una frase corta si spezzerebbe a una parola dalla fine.
+    box_w = min(max_w, max(pdf.get_string_width(pdf.safe(said)) + 2 * pad + 2.5, 32))
+    text_h = pdf.measure(said, box_w - 2 * pad, 4.7)
+    height = text_h + 2 * 3.2
+    pdf.keep_together(height + 4.6)
+
+    pdf.use(size=7.8, style="B", color=VIOLET if is_operator else MUTED)
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(
+        pdf.content_w,
+        4.4,
+        pdf.safe(f"{speaker}{when}"),
+        align="R" if is_operator else "L",
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
+    )
+    left = pdf.w - pdf.r_margin - box_w if is_operator else pdf.l_margin
+    fill = VIOLET_TINT if is_operator else SURFACE
+    border = VIOLET_EDGE if is_operator else HAIRLINE
+    bubble = pdf.card(
+        height, fill=fill, border=border, width=box_w, left=left, pad_x=pad, pad_y=3.2
+    )
+    with bubble as (_x, _y, w):
+        pdf.use(size=9.5, color=BODY)
+        pdf.multi_cell(w, 4.7, pdf.safe(said), new_x=XPos.LEFT, new_y=YPos.NEXT)
+    pdf.set_x(pdf.l_margin)
 
 
 def evaluation_pdf(
@@ -88,6 +330,7 @@ def evaluation_pdf(
     previous: PreviousAttempt | None,
     review: ConversationReviewResponse | None = None,
     annotations: list[dict] | None = None,
+    messages: list[dict] | None = None,
 ) -> bytes:
     """One evaluation as an A4 PDF the operator can hand to the trainer.
 
@@ -101,209 +344,375 @@ def evaluation_pdf(
     machine's original next to it rather than in its place. `annotations`
     are the notes pinned to single messages, each a dict with `note`,
     `message_preview` and `reviewer_name`.
+
+    `messages` is the transcript, each a dict with `role`, `content` and
+    `created_at`: it closes the document on its own pages, because it is
+    what the verdict is about and a correction that cannot be checked
+    against what was actually said is a number to be taken on trust.
     """
     override = review.override_score if review else None
     final = override if override is not None else overall_score
-    pdf = FPDF(format="A4")
-    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf = Report(title="Valutazione della conversazione", subtitle="training con avatar")
     pdf.add_page()
-    page_w = pdf.w - pdf.l_margin - pdf.r_margin
 
-    def line(height: float = 4) -> None:
-        pdf.set_y(pdf.get_y() + height)
+    # Chi ha parlato con chi, su che canale e quando
+    pdf.meta(
+        [
+            ("Operatore", operator_name),
+            ("Avatar", avatar_name),
+            ("Conversazione", conversation_title),
+            ("Canale", MODE_LABELS.get(mode, mode)),
+            ("Data", _fmt_date(conversation_at)),
+            ("Valutata il", _fmt_date(evaluated_at)),
+        ]
+    )
+    pdf.space(5)
 
-    # Header
-    pdf.set_font("helvetica", "B", 17)
-    pdf.set_text_color(15, 23, 42)
-    pdf.cell(0, 9, "Valutazione della conversazione", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", "", 9)
-    pdf.set_text_color(*_LIGHT)
-    pdf.cell(0, 5, "SkillLab - training con avatar", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    line(4)
-
-    # Context block: who, with whom, on which channel and when
-    rows = [
-        ("Operatore", operator_name),
-        ("Avatar", avatar_name),
-        ("Conversazione", conversation_title),
-        ("Canale", MODE_LABELS.get(mode, mode)),
-        ("Data conversazione", _fmt_date(conversation_at)),
-        ("Valutazione generata il", _fmt_date(evaluated_at)),
-    ]
-    for label, value in rows:
-        pdf.set_font("helvetica", "", 9.5)
-        pdf.set_text_color(*_LIGHT)
-        pdf.cell(44, 5.4, _latin(label))
-        pdf.set_font("helvetica", "B", 9.5)
-        pdf.set_text_color(*_SLATE)
-        pdf.cell(0, 5.4, _latin(value), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    line(5)
-
-    # Overall score
-    pdf.set_font("helvetica", "", 9)
-    pdf.set_text_color(*_LIGHT)
-    pdf.cell(0, 5, "PUNTEGGIO COMPLESSIVO", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("helvetica", "B", 24)
-    pdf.set_text_color(*_score_rgb(final))
-    pdf.cell(0, 11, _latin(f"{_fmt_score(final)} / 10"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    notes: list[str] = []
     if override is not None:
-        pdf.set_font("helvetica", "", 9)
-        pdf.set_text_color(*_LIGHT)
-        pdf.cell(
-            0,
-            5,
-            _latin(
-                f"Punteggio corretto dal docente - la valutazione automatica "
-                f"assegnava {_fmt_score(overall_score)} / 10"
-            ),
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
+        notes.append(
+            f"Punteggio corretto dal docente, la valutazione automatica assegnava "
+            f"{_fmt_score(overall_score)} / 10"
         )
+    badge, badge_color = "", None
     if previous:
         delta = round(final - previous.overall_score, 1)
         sign = "+" if delta > 0 else ""
-        pdf.set_font("helvetica", "", 9)
-        pdf.set_text_color(*_LIGHT)
-        pdf.cell(
-            0,
-            5,
-            _latin(
-                f"Rispetto al tentativo precedente «{previous.title}» del "
-                f"{_fmt_date(previous.conversation_at)}: {sign}{_fmt_score(delta)} "
-                f"(era {_fmt_score(previous.overall_score)})"
-            ),
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
+        badge = f"{sign}{_fmt_score(delta)} sul tentativo precedente"
+        badge_color = GOOD if delta > 0 else BAD if delta < 0 else MUTED
+        notes.append(
+            f"Tentativo precedente «{previous.title}» del "
+            f"{_fmt_date(previous.conversation_at)}: {_fmt_score(previous.overall_score)} / 10"
         )
-    if summary:
-        line(2)
-        pdf.set_font("helvetica", "", 10)
-        pdf.set_text_color(*_SLATE)
-        pdf.multi_cell(0, 5, _latin(summary), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    line(5)
+    _score_block(
+        pdf,
+        label="Punteggio complessivo",
+        score=final,
+        color=_score_rgb(final),
+        badge=badge,
+        badge_color=badge_color,
+        notes=notes,
+        summary=summary,
+    )
+    pdf.space(5)
 
-    # The trainer's review, above the machine's reasoning: whoever reads
-    # this page has to meet the human verdict before the six criteria that
-    # the human may well have overruled.
+    # La revisione del docente sta sopra il ragionamento della macchina: chi
+    # legge deve incontrare il verdetto umano prima dei sei criteri che
+    # quell'umano puo' benissimo aver smentito.
     if review and (review.summary_note or review.override_reason):
-        pdf.set_font("helvetica", "", 9)
-        pdf.set_text_color(*_LIGHT)
+        _review_card(pdf, review)
+        pdf.space(5)
+
+    pdf.section("Criteri di valutazione")
+    for criterion in criteria:
+        _criterion_card(pdf, criterion, previous)
+        pdf.space(3.5)
+
+    if annotations:
+        pdf.space(2)
+        pdf.section("Note del docente sulla trascrizione")
+        for annotation in annotations:
+            _annotation_card(pdf, annotation)
+            pdf.space(3.5)
+
+    # La conversazione per intero, su pagine sue: chi legge il referto ha
+    # davanti prima il giudizio e poi quello di cui parla, e le due cose non
+    # si mescolano perché una si consegna e l'altra si consulta.
+    if messages:
+        pdf.add_page()
+        pdf.section("Trascrizione della conversazione")
+        pdf.use(size=8.5, color=MUTED)
         pdf.cell(
             0,
-            5,
-            _latin(f"REVISIONE DEL DOCENTE - {review.reviewer_name}"),
+            4.6,
+            pdf.safe(f"{operator_name} con {avatar_name}"),
             new_x=XPos.LMARGIN,
             new_y=YPos.NEXT,
         )
-        pdf.set_fill_color(243, 240, 255)
-        if review.override_reason:
-            pdf.set_font("helvetica", "B", 9.5)
-            pdf.set_text_color(*_VIOLET)
-            pdf.multi_cell(
-                0,
-                4.8,
-                _latin(f"Motivo della correzione: {review.override_reason}"),
-                fill=True,
-                new_x=XPos.LMARGIN,
-                new_y=YPos.NEXT,
+        pdf.space(2)
+        for message in messages:
+            said = _spoken(str(message.get("content") or ""))
+            if not said:
+                continue
+            is_operator = message.get("role") == "user"
+            at = message.get("created_at")
+            _bubble(
+                pdf,
+                speaker=operator_name if is_operator else avatar_name,
+                when=f"  ·  {_fmt_time(at)}" if isinstance(at, datetime) else "",
+                said=said,
+                is_operator=is_operator,
             )
-        if review.summary_note:
-            pdf.set_font("helvetica", "", 9.5)
-            pdf.set_text_color(*_SLATE)
-            pdf.multi_cell(
-                0,
-                4.8,
-                _latin(review.summary_note),
-                fill=True,
-                new_x=XPos.LMARGIN,
-                new_y=YPos.NEXT,
-            )
-        line(5)
+            pdf.space(2.5)
 
-    # Criteria
-    for criterion in criteria:
-        score = float(criterion.get("score", 0) or 0)
-        pdf.set_font("helvetica", "B", 11)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(page_w - 26, 6.5, _latin(criterion.get("label", criterion.get("key", ""))))
-        pdf.set_text_color(*_score_rgb(score))
-        pdf.cell(
-            26,
-            6.5,
-            _latin(f"{_fmt_score(score)} / 10"),
-            align="R",
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
+    return bytes(pdf.output())
+
+
+# ── Il referto di un test consegnato ──────────────────
+
+
+def _attempt_score_rgb(score: float) -> Rgb:
+    """The simulator's own thresholds, the school ones its badge uses.
+
+    Not `_score_rgb`: a grade that is amber on screen and orange on paper is
+    a grade that has to be read twice.
+    """
+    if score >= 8:
+        return GOOD
+    if score >= 6:
+        return _SCORE_MID
+    return BAD
+
+
+def _fmt_points(points: float) -> str:
+    """Points as the result page writes them: 1, 0,4 — no trailing zero."""
+    return f"{points:g}".replace(".", ",")
+
+
+def _fmt_elapsed(elapsed_ms: int) -> str:
+    """How long an answer took, the way the result page says it: "8,2s"."""
+    return f"{round(elapsed_ms / 100) / 10:g}".replace(".", ",") + "s"
+
+
+def _option_rows(answer: SimulationAnswerResult) -> list[tuple[str, Rgb, str]]:
+    """Le opzioni come si vedevano, ognuna col suo colore e la sua targhetta.
+
+    Sulla carta non c'e' un verde da leggere al volo, quindi "corretta" e
+    "risposta data" stanno scritte accanto alla lettera.
+    """
+    rows = []
+    for index, option in enumerate(answer.options):
+        is_right = index == answer.correct_option
+        is_given = index == answer.selected_option
+        color = GOOD if is_right else BAD if is_given else BODY
+        marks = []
+        if is_right:
+            marks.append("corretta")
+        if is_given:
+            marks.append("risposta data")
+        rows.append((f"{chr(65 + index)}.  {option}", color, ", ".join(marks)))
+    return rows
+
+
+def _question_card(pdf: Report, answer: SimulationAnswerResult, *, written: bool) -> None:
+    """Una domanda: cosa chiedeva, cosa e' stato risposto, quanto e' valsa."""
+    color = GOOD if answer.is_correct else BAD
+    title = f"{answer.position}.  {answer.text}"
+    earned = f"{_fmt_points(answer.points)} p."
+    if answer.elapsed_ms is not None:
+        earned += f"  ·  {_fmt_elapsed(answer.elapsed_ms)}"
+
+    inner_w = pdf.content_w - 2 * CARD_PAD_X - 1.6
+    pdf.use(size=10.5, style="B")
+    title_h = pdf.measure(title, inner_w - 30, 5.2)
+    body_h = 0.0
+    if written:
+        given = (answer.answer_text or "").strip()
+        body_h += pdf.note_height(
+            given or "Domanda lasciata in bianco.",
+            inner_w,
+            label="Risposta data",
+            italic=not given,
         )
+        if answer.expected_answer:
+            body_h += 2 + pdf.note_height(answer.expected_answer, inner_w, label="Cosa doveva dire")
+        if answer.feedback:
+            pdf.use(size=9.5)
+            body_h += 2 + pdf.measure(answer.feedback, inner_w, 4.7)
+    else:
+        pdf.use(size=9.5)
+        for text, _, mark in _option_rows(answer):
+            mark_w = _mark_width(pdf, mark)
+            body_h += pdf.measure(text, inner_w - mark_w, 4.9) + 1.2
+        if answer.selected_option is None:
+            pdf.use(size=9, style="I")
+            body_h += pdf.measure("Domanda lasciata in bianco.", inner_w, 4.6)
+    if answer.explanation:
+        body_h += 2.5 + pdf.note_height(answer.explanation, inner_w, label="Perché")
+    if answer.sources:
+        body_h += 2 + pdf.note_height(
+            answer.sources, inner_w, label="Cosa dice il documento", italic=True, size=8.5
+        )
+    height = 2 * CARD_PAD_Y + title_h + 2.5 + body_h
 
-        # Score bar
-        bar_y = pdf.get_y() + 1
-        pdf.set_fill_color(226, 232, 240)
-        pdf.rect(pdf.l_margin, bar_y, page_w, 1.6, "F")
-        pdf.set_fill_color(*_score_rgb(score))
-        pdf.rect(pdf.l_margin, bar_y, page_w * max(0.0, min(1.0, score / 10)), 1.6, "F")
-        pdf.set_y(bar_y + 3.6)
-
-        # Weight and, when available, the previous attempt's score
-        sub = f"Peso {criterion.get('weight', '')}%"
-        if previous:
-            prev_score = previous.criteria_scores.get(str(criterion.get("key", "")))
-            if prev_score is not None:
-                delta = round(score - prev_score, 1)
-                sign = "+" if delta > 0 else ""
-                sub += (
-                    f" - tentativo precedente {_fmt_score(prev_score)} ({sign}{_fmt_score(delta)})"
+    with pdf.card(height, accent=color) as (x, y, w):
+        pdf.use(size=10.5, style="B", color=INK)
+        pdf.multi_cell(w - 30, 5.2, pdf.safe(title), new_x=XPos.LEFT, new_y=YPos.NEXT)
+        pdf.pill(
+            earned,
+            right=x + w,
+            y=y + 0.2,
+            fg=color,
+            bg=GOOD_TINT if answer.is_correct else BAD_TINT,
+            size=8.5,
+        )
+        cursor = y + title_h + 2.5
+        if written:
+            given = (answer.answer_text or "").strip()
+            pdf.set_xy(x, cursor)
+            pdf.note(
+                given or "Domanda lasciata in bianco.",
+                x=x,
+                width=w,
+                fg=BODY if given else MUTED,
+                bg=SURFACE,
+                label="Risposta data",
+                italic=not given,
+            )
+            cursor = pdf.get_y()
+            if answer.expected_answer:
+                pdf.set_xy(x, cursor + 2)
+                pdf.note(
+                    answer.expected_answer,
+                    x=x,
+                    width=w,
+                    fg=GOOD,
+                    bg=GOOD_TINT,
+                    label="Cosa doveva dire",
                 )
-        pdf.set_font("helvetica", "", 8.5)
-        pdf.set_text_color(*_LIGHT)
-        pdf.cell(0, 4.5, _latin(sub), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
-        comment = str(criterion.get("comment") or "").strip()
-        if comment:
-            pdf.set_font("helvetica", "", 9.5)
-            pdf.set_text_color(*_SLATE)
-            pdf.multi_cell(0, 4.8, _latin(comment), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-
-        suggestions = str(criterion.get("suggestions") or "").strip()
-        if suggestions:
-            line(1.5)
-            pdf.set_font("helvetica", "", 9.5)
-            pdf.set_text_color(*_VIOLET)
-            pdf.set_fill_color(243, 240, 255)
-            pdf.multi_cell(
-                0,
-                4.8,
-                _latin(f"Spunti di miglioramento: {suggestions}"),
-                fill=True,
-                new_x=XPos.LMARGIN,
-                new_y=YPos.NEXT,
+                cursor = pdf.get_y()
+            if answer.feedback:
+                pdf.set_xy(x, cursor + 2)
+                pdf.use(size=9.5, color=BODY)
+                pdf.multi_cell(w, 4.7, pdf.safe(answer.feedback), new_x=XPos.LEFT, new_y=YPos.NEXT)
+                cursor = pdf.get_y()
+        else:
+            for text, option_color, mark in _option_rows(answer):
+                mark_w = _mark_width(pdf, mark)
+                pdf.set_xy(x, cursor)
+                pdf.use(size=9.5, style="B" if mark else "", color=option_color)
+                pdf.multi_cell(w - mark_w, 4.9, pdf.safe(text), new_x=XPos.LEFT, new_y=YPos.NEXT)
+                row_h = pdf.get_y() - cursor
+                if mark:
+                    pdf.pill(
+                        mark,
+                        right=x + w,
+                        y=cursor + 0.2,
+                        fg=option_color,
+                        bg=tinted(option_color),
+                        size=7.5,
+                    )
+                cursor += row_h + 1.2
+            if answer.selected_option is None:
+                pdf.set_xy(x, cursor)
+                pdf.use(size=9, style="I", color=MUTED)
+                pdf.multi_cell(
+                    w, 4.6, "Domanda lasciata in bianco.", new_x=XPos.LEFT, new_y=YPos.NEXT
+                )
+                cursor = pdf.get_y()
+        if answer.explanation:
+            pdf.set_xy(x, cursor + 2.5)
+            pdf.note(
+                answer.explanation,
+                x=x,
+                width=w,
+                fg=BODY,
+                bg=SURFACE,
+                label="Perché",
             )
-        line(5)
-
-    # The trainer's notes on single lines, each quoting the message it was
-    # pinned to: without the line it sits on, a note like "here you should
-    # have asked for the customer code" points at nothing on paper.
-    if annotations:
-        pdf.set_font("helvetica", "", 9)
-        pdf.set_text_color(*_LIGHT)
-        pdf.cell(0, 5, "NOTE DEL DOCENTE SULLA TRASCRIZIONE", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        line(1)
-        for annotation in annotations:
-            preview = str(annotation.get("message_preview") or "").strip()
-            if preview:
-                pdf.set_font("helvetica", "I", 9)
-                pdf.set_text_color(*_LIGHT)
-                pdf.multi_cell(0, 4.6, _latin(f'"{preview}"'), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.set_font("helvetica", "", 9.5)
-            pdf.set_text_color(*_SLATE)
-            pdf.multi_cell(
-                0,
-                4.8,
-                _latin(str(annotation.get("note", ""))),
-                new_x=XPos.LMARGIN,
-                new_y=YPos.NEXT,
+            cursor = pdf.get_y()
+        # A schermo i passaggi stanno dietro a un pannello che si apre, sulla
+        # carta stanno semplicemente li', perche' un foglio non si apre. Sotto
+        # un'intestazione sola, come nel pannello: una domanda puo' fondarsi
+        # su piu' punti del manuale, e sono citazioni della stessa cosa.
+        if answer.sources:
+            pdf.set_xy(x, cursor + 2)
+            pdf.note(
+                answer.sources,
+                x=x,
+                width=w,
+                fg=VIOLET_DEEP,
+                bg=VIOLET_TINT,
+                label="Cosa dice il documento",
+                italic=True,
+                size=8.5,
             )
-            line(3)
+            cursor = pdf.get_y()
+
+
+def _mark_width(pdf: Report, mark: str) -> float:
+    """Lo spazio che la targhetta di un'opzione toglie al testo dell'opzione."""
+    if not mark:
+        return 0.0
+    pdf.use(size=7.5, style="B")
+    return pdf.get_string_width(mark) + 8
+
+
+def simulation_attempt_pdf(
+    *,
+    operator_name: str,
+    operator_email: str,
+    simulation_title: str,
+    kind: str,
+    submitted_at: datetime,
+    correct_count: int,
+    question_count: int,
+    earned_points: float,
+    score: float,
+    answers: list[SimulationAnswerResult],
+) -> bytes:
+    """A submitted test as an A4 PDF, question by question.
+
+    The same page the result screen shows, on paper: the grade, then for
+    every question what was answered, what it was worth, why, and the
+    passage of the document the question comes from. The two kinds of test
+    differ only in the body of a question — the options with the right one
+    marked, or the written answer next to the expected one — exactly as on
+    screen.
+
+    Written in the third person even when it is the student downloading it:
+    a sheet that says "you" cannot be handed to anybody else, and being
+    handed over is what this document is for.
+    """
+    written = kind == "open"
+    pdf = Report(title="Esito del test", subtitle="simulatore tecnico")
+    pdf.add_page()
+
+    pdf.meta(
+        [
+            ("Operatore", operator_name),
+            ("Email", operator_email),
+            ("Test", simulation_title),
+            ("Tipo", KIND_LABELS.get(kind, kind)),
+            ("Consegnato il", _fmt_date(submitted_at)),
+        ]
+    )
+    pdf.space(5)
+
+    # Il voto, e sotto le due conte che lo spiegano: quante risposte sono
+    # giuste e' una cosa, quanto valevano un'altra, e un sei con otto
+    # risposte esatte non si legge senza entrambe.
+    reason = (
+        "quanto è completa, e una risposta a metà prende mezzo punto"
+        if written
+        else "meno man mano che passa il tempo"
+    )
+    points = "punto" if earned_points == 1 else "punti"
+    _score_block(
+        pdf,
+        label="Voto",
+        score=score,
+        color=_attempt_score_rgb(score),
+        badge=f"{correct_count} su {question_count} corrette",
+        badge_color=_attempt_score_rgb(score),
+        notes=[
+            f"{_fmt_points(earned_points)} {points} su {question_count}, "
+            f"perché una risposta vale {reason}"
+        ],
+    )
+    pdf.space(5)
+
+    # Una domanda per foglio, dalla seconda in poi. Un test si rilegge una
+    # domanda alla volta, e trovarsi la correzione di quella dopo sotto gli
+    # occhi mentre si sta ancora leggendo questa non aiuta; la prima resta
+    # sotto il voto perche' li' il foglio e' gia' aperto e sprecarlo a meta'
+    # non darebbe niente in cambio. Una domanda che sfora si prende la pagina
+    # dopo, ma quella successiva ricomincia comunque da un foglio suo.
+    pdf.section("Le domande, una per una")
+    for index, answer in enumerate(answers):
+        if index:
+            pdf.add_page()
+        _question_card(pdf, answer, written=written)
 
     return bytes(pdf.output())
 

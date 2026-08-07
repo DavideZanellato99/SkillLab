@@ -21,6 +21,7 @@ import VoiceButton from './VoiceButton'
 import CallRecordingPlayer from './CallRecordingPlayer'
 import type { CallRecordingPlayerHandle } from './CallRecordingPlayer'
 import EvaluationModal from './EvaluationModal'
+import ConversationDetailModal from './ConversationDetailModal'
 import MessageBubble from './MessageBubble'
 import ExpandedConversationsPanel from './ExpandedConversationsPanel'
 import Tooltip from './Tooltip'
@@ -69,6 +70,9 @@ export default function ChatPage() {
   const evaluateMutation = useEvaluateConversation()
   const { mutate: runEvaluation } = evaluateMutation
   const [showEvaluation, setShowEvaluation] = useState(false)
+  // Rileggere la conversazione: trascrizione e valutazione affiancate,
+  // la stessa schermata da cui un docente la corregge.
+  const [showDetail, setShowDetail] = useState(false)
   // True only for the modal opened by a session that just ended (call or
   // chat): there the conversation must be named before it can be dismissed
   const [isPostSession, setIsPostSession] = useState(false)
@@ -819,11 +823,7 @@ export default function ChatPage() {
               <Tooltip content="Rivedi la valutazione della conversazione">
                 <button
                   className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400 transition hover:-translate-y-px hover:bg-cyan-500/20"
-                  onClick={() => {
-                    evaluateMutation.reset()
-                    setIsPostSession(false)
-                    setShowEvaluation(true)
-                  }}
+                  onClick={() => setShowDetail(true)}
                 >
                   <svg
                     width="14"
@@ -1171,6 +1171,24 @@ export default function ChatPage() {
             </>
           )}
         </div>
+
+        {/* Rileggere la conversazione: la stessa schermata della dashboard,
+            senza i comandi della revisione, che non sono di chi la riceve */}
+        {showDetail && currentConversationId && currentMode && (
+          <ConversationDetailModal
+            scope="own"
+            row={{
+              conversation_id: currentConversationId,
+              mode: currentMode,
+              user_nome: user?.nome ?? '',
+              user_cognome: user?.cognome ?? '',
+              user_email: user?.email ?? '',
+              avatar_name: avatar.name,
+              conversation_at: conversationData?.created_at ?? new Date().toISOString(),
+            }}
+            onClose={() => setShowDetail(false)}
+          />
+        )}
 
         {/* Post-call evaluation */}
         {showEvaluation && (

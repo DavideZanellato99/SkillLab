@@ -57,6 +57,7 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
       { key: 'NAZIONALITA', label: 'Nazionalità' },
       { key: 'LINGUA_MADRE', label: 'Lingua madre' },
       { key: 'CITTA_RESIDENZA', label: 'Città di residenza' },
+      { key: 'INDIRIZZO_RESIDENZA', label: 'Indirizzo di residenza' },
       { key: 'STATO_CIVILE', label: 'Stato civile' },
       { key: 'NOME_CONIUGE', label: 'Nome del coniuge' },
       { key: 'PROFESSIONE_CONIUGE', label: 'Professione del coniuge' },

@@ -44,14 +44,17 @@ consegna, altrimenti il test lo risolverebbe la scheda di rete.
 """
 
 import random
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session, selectinload
 
 import audit
-from auth_dependency import get_current_admin, get_current_user, resolve_admin_scope
+from auth_dependency import get_current_super_admin, get_current_user, resolve_admin_scope
 from database import get_db
+from exports import simulation_attempt_pdf
 from models import (
     ROLE_ORGANIZATION_ADMIN,
     ROLE_SUPER_ADMIN,
@@ -603,53 +606,120 @@ def list_my_attempts(
     return [_attempt_response(a) for a in attempts]
 
 
+def _readable_attempt_or_404(db: Session, attempt_id: UUID, user: User) -> SimulationAttempt:
+    """Un tentativo che `user` può leggere, o 404.
+
+    Lo leggono chi lo ha svolto e gli amministratori del tenant a cui
+    appartiene **chi lo ha svolto**: è la stessa regola con cui un docente
+    rilegge la conversazione di un suo studente. Un tentativo che non si può
+    leggere è indistinguibile da uno che non esiste.
+
+    L'organizzazione che conta è quella della persona e non quella della
+    simulazione, come nel report che elenca i tentativi e nella cancellazione
+    che li toglie (vedi ``routers.admin``). Le due coincidono quasi sempre,
+    perché un test si svolge solo dentro la propria organizzazione, ma non
+    dopo che il super admin ha spostato qualcuno di tenant: lì il tentativo
+    resta attaccato alla simulazione di prima, e prendere quella come
+    riferimento significava far leggere nome ed email di una persona
+    all'amministratore dell'organizzazione che ha appena lasciato, mentre a
+    quello dell'organizzazione dove adesso sta il dettaglio rispondeva 404 di
+    una riga che il suo report gli mostrava.
+    """
+    attempt = db.query(SimulationAttempt).filter(SimulationAttempt.id == attempt_id).first()
+    if not attempt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentativo non trovato.")
+    is_owner = attempt.user_id == user.id
+    is_admin_of_tenant = False
+    if user.ruolo in (ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN):
+        scope = resolve_admin_scope(user)
+        # `attempt.user` è None solo se la persona è stata cancellata, e allora
+        # il tentativo non è di nessun tenant: resta al super admin.
+        taker_org = attempt.user.organization_id if attempt.user else None
+        is_admin_of_tenant = scope is None or scope == taker_org
+    if not is_owner and not is_admin_of_tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentativo non trovato.")
+    return attempt
+
+
 @router.get("/attempts/{attempt_id}", response_model=SimulationAttemptResponse)
 def get_attempt(
     attempt_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Un tentativo con la sua correzione.
-
-    Lo legge chi lo ha svolto, e gli amministratori del tenant a cui la
-    simulazione appartiene: è la stessa regola con cui un docente rilegge la
-    conversazione di un suo studente.
-    """
-    attempt = db.query(SimulationAttempt).filter(SimulationAttempt.id == attempt_id).first()
-    if not attempt:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentativo non trovato.")
-    simulation = attempt.simulation
-    is_owner = attempt.user_id == current_user.id
-    is_admin_of_tenant = False
-    if current_user.ruolo in (ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN):
-        scope = resolve_admin_scope(current_user)
-        is_admin_of_tenant = scope is None or scope == simulation.organization_id
-    if not is_owner and not is_admin_of_tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentativo non trovato.")
+    """Un tentativo con la sua correzione."""
+    attempt = _readable_attempt_or_404(db, attempt_id, current_user)
     return {
         **_attempt_response(attempt),
-        "answers": _answer_results(simulation, attempt.answers),
+        "answers": _answer_results(attempt.simulation, attempt.answers),
     }
+
+
+@router.get("/attempts/{attempt_id}/pdf")
+def download_attempt_pdf(
+    attempt_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """L'esito di un test come PDF, da consegnare al formatore.
+
+    Un endpoint solo per tutti e due i lettori, perché la lettura del
+    tentativo è già una sola: la pagina che si scarica è quella che si sta
+    guardando, e chi non può guardarla non può nemmeno stamparla.
+    """
+    attempt = _readable_attempt_or_404(db, attempt_id, current_user)
+    simulation = attempt.simulation
+    pdf = simulation_attempt_pdf(
+        operator_name=_user_name(attempt.user),
+        operator_email=attempt.user.email if attempt.user else "",
+        simulation_title=simulation.title,
+        kind=simulation.kind,
+        submitted_at=attempt.created_at,
+        correct_count=attempt.correct_count,
+        question_count=attempt.question_count,
+        earned_points=attempt.earned_points or 0.0,
+        score=attempt.score,
+        answers=_answer_results(simulation, attempt.answers),
+    )
+
+    # Nome del file in solo ASCII, ricavato dal titolo del test
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", simulation.title).strip("-").lower() or "test"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="test-{slug}.pdf"'},
+    )
 
 
 @router.get("/{simulation_id}/results", response_model=list[SimulationAttemptSummary])
 def list_simulation_results(
     simulation_id: UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_super_admin),
 ):
-    """Tutti i tentativi su una simulazione, per gli amministratori.
+    """Tutti i tentativi su una simulazione, per il super admin.
 
-    Un organization admin li vede solo per le simulazioni della propria
-    organizzazione, che è la stessa cosa che dire "solo dei propri utenti":
-    una simulazione appartiene a un tenant e i suoi tentativi anche.
+    È l'unico punto che guarda una prova **dal lato del test** invece che dal
+    lato della persona: la dashboard e il report rispondono a "come sta
+    andando Mario", questo elenco risponde a "è venuto bene questo test?".
+    Dodici dieci di fila dicono che le domande sono troppo facili, nessuna
+    sufficienza dice che una è scritta male, ed è il riscontro che chiude il
+    ciclo carica, genera, rileggi, pubblica. Per questo sta accanto alle
+    domande, nella stessa modale: si legge il risultato e si corregge la
+    domanda nella linguetta di fianco.
+
+    **Solo il super admin**, che è l'unico a scrivere le simulazioni e
+    l'unico ad avere la pagina da cui questo si apre. Il ruolo dichiarato
+    qui e il ruolo che serve per arrivarci devono essere lo stesso: quando
+    il primo è più largo del secondo, quello che conta è il primo, perché
+    l'indirizzo si digita anche senza un pulsante che ci porti. Il giorno in
+    cui un organization admin avrà una pagina dei propri test, questo
+    tornerà a ``get_current_admin`` e i tentativi andranno filtrati per
+    l'organizzazione di **chi li ha svolti** (come in
+    ``_readable_attempt_or_404``): la simulazione non basta a dirlo, perché
+    chi trasloca di tenant si porta dietro i propri tentativi.
     """
     simulation = get_visible_or_404(db, current_admin, simulation_id, include_drafts=True)
-    scope = resolve_admin_scope(current_admin)
-    if scope is not None and simulation.organization_id != scope:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Simulazione non trovata."
-        )
     attempts = (
         db.query(SimulationAttempt)
         .filter(SimulationAttempt.simulation_id == simulation.id)

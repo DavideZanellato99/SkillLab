@@ -47,7 +47,7 @@ from models import (
     TechnicalSimulation,
     User,
 )
-from routers.chat import _evaluation_response
+from routers.chat import _evaluation_response, evaluation_pdf_response
 from schemas import (
     AdminConversationDetail,
     AdminUserResponse,
@@ -580,6 +580,46 @@ def conversation_detail(
             evaluation.overall_score if evaluation else None,
         ),
     )
+
+
+@router.get("/conversations/{conversation_id}/evaluation/pdf")
+def download_conversation_evaluation_pdf(
+    conversation_id: UUID,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """The same evaluation PDF the student can download, from the detail modal.
+
+    Scope rules are those of `conversation_detail`: a conversation outside
+    the admin's organization does not exist. The document is byte for byte
+    the student's own, the operator on the sheet being the person who held
+    the conversation, not the admin who asked for it.
+    """
+    conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
+        )
+    _conversation_in_scope_or_404(db, conversation, resolve_admin_scope(current_admin))
+
+    evaluation = (
+        db.query(ConversationEvaluation)
+        .filter(ConversationEvaluation.conversation_id == conversation_id)
+        .first()
+    )
+    if not evaluation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Questa conversazione non ha ancora una valutazione.",
+        )
+
+    owner = db.query(User).filter(User.id == conversation.user_id).first()
+    if not owner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversazione non trovata."
+        )
+
+    return evaluation_pdf_response(db, conversation, evaluation, owner)
 
 
 @router.delete("/conversations/{conversation_id}", response_model=MessageResponse)

@@ -178,4 +178,92 @@ Due dettagli che sembrano piccoli:
 | [EvaluationReport](../frontend/src/components/EvaluationReport.tsx) | Il referto: voto, sintesi, i sei criteri con commenti, suggerimenti e citazioni cliccabili |
 | [TrainerReviewPanel](../frontend/src/components/TrainerReviewPanel.tsx) | Il pannello con cui il docente scrive la revisione |
 | [MessageAnnotationEditor](../frontend/src/components/MessageAnnotationEditor.tsx) | Le note appuntate su un messaggio della trascrizione |
-| PDF | `GET .../evaluation/pdf`, generato da [exports.py](../backend/exports.py). Solo il proprietario. Porta lo stesso contenuto dello schermo, e le note del docente col messaggio a cui erano appuntate, perché sulla carta non c'è una trascrizione accanto a cui stare |
+| [ConversationDetailModal](../frontend/src/components/ConversationDetailModal.tsx) | Trascrizione e valutazione affiancate: la schermata da cui un docente corregge e da cui chi ha parlato rilegge |
+| [MessageAnnotationNote](../frontend/src/components/MessageAnnotationNote.tsx) | Una nota del docente in sola lettura, sotto la riga di cui parla |
+| [PdfDownloadButton](../frontend/src/components/PdfDownloadButton.tsx) | Il pulsante che scarica un referto in PDF, qui e nel simulatore: chi lo ospita gli passa la funzione che carica il file |
+| [ModalDeleteButton](../frontend/src/components/ModalDeleteButton.tsx) | Il cestino accanto al PDF, con cui un admin butta via la prova che sta leggendo. Ha la forma del pulsante qui sopra, perché sono le due cose che si fanno a una prova chiusa, e il rosso solo al passaggio del mouse |
+| PDF | Generato da [exports.py](../backend/exports.py), vestito da [pdf_kit.py](../backend/pdf_kit.py). Porta lo stesso contenuto dello schermo e, su pagine sue in fondo, la trascrizione della conversazione |
+
+Il documento è uno solo, gli endpoint che lo servono sono due, perché sono due
+le persone che possono chiederlo. `GET /api/chat/conversation/{id}/evaluation/pdf`
+risponde solo al proprietario, come ogni altra lettura della conversazione;
+`GET /api/admin/conversations/{id}/evaluation/pdf` risponde all'admin che apre
+il dettaglio in dashboard, con le regole di scope della sua organizzazione. Il
+corpo lo costruiscono con la stessa funzione, e l'operatore stampato sul foglio
+è sempre chi ha tenuto la conversazione, mai chi ha premuto il pulsante.
+
+### Come è fatto il foglio
+
+Il referto è il design dell'applicazione portato su carta, e sta tutto in
+[pdf_kit.py](../backend/pdf_kit.py): la banda in gradiente violetto-ciano in
+testa alla prima pagina, i riquadri arrotondati con il filetto colorato a
+sinistra, le targhette dei punteggi, le barre, il violetto per tutto quello che
+scrive una persona invece della macchina. `exports.py` decide cosa dice il
+documento, `pdf_kit` come si presenta, e la stessa divisione vale per l'esito di
+un test nel simulatore.
+
+Due scelte che spiegano il resto:
+
+- **I caratteri sono quelli dell'app** (Outfit per i titoli, Inter per il testo)
+  e stanno in [backend/fonts/](../backend/fonts/), sottoinsieme latino di quelli
+  che il browser prende da Google Fonts, con la loro licenza OFL accanto. Il PDF
+  nasce sul server, dove non c'è nessun Google Fonts da interrogare, e i
+  caratteri incorporati sono anche il motivo per cui virgolette caporali, accenti
+  e trattini lunghi di un testo scritto da un LLM arrivano sulla pagina come
+  sono, invece di finire schiacciati sul latin-1 dei font di sistema. Quello che
+  resta fuori dal sottoinsieme, un'emoji per esempio, viene tolto invece che
+  disegnato come un quadratino vuoto.
+- **Un blocco non si spezza a metà fra due pagine.** Ogni riquadro si misura
+  prima di essere disegnato (il fondo va sotto al testo, e in un PDF sotto vuol
+  dire prima), e se non ci sta nello spazio rimasto comincia dalla pagina dopo.
+  Questo lascia ogni tanto del bianco in fondo a una pagina: è il prezzo di un
+  criterio, o di una domanda, che si legge sempre intero.
+
+La trascrizione ricalca la chat: chi ha parlato a destra in violetto, l'avatar a
+sinistra sul grigio chiaro, con nome e ora sopra ogni bolla.
+
+### La stessa schermata per due lettori
+
+`ConversationDetailModal` ha una prop `scope`, e sono le sole quattro cose che
+cambiano fra un docente che corregge e chi rilegge una conversazione sua:
+
+| | `admin` | `own` |
+| --- | --- | --- |
+| Da dove arrivano i dati | `GET /api/admin/conversations/{id}`, che porta trascrizione, valutazione e revisione insieme | Le due letture che uno studente può fare, composte da [useOwnConversationDetail](../frontend/src/hooks/useOwnConversationDetail.ts) |
+| Chi compare in testa | Il nome di chi ha parlato | Solo l'avatar: a se stessi non ci si presenta |
+| La revisione | Si scrive, col pannello e le note sui messaggi | Si legge e basta |
+| Il cestino | In testa accanto al PDF, se chi ha aperto la schermata passa `onDeleted` | Mai: cancellarsi lo storico non è un gesto che l'app concede |
+
+Il resto è identico apposta, per la stessa ragione dei test consegnati: chi
+corregge deve leggere esattamente quello che legge chi è stato corretto. Le due
+letture stanno dietro due hook e uno dei due resta sempre spento, perché un hook
+non si può chiamare a seconda dei casi.
+
+**Il permesso di eliminare arriva da chi apre la schermata**, cioè dalla
+presenza di `onDeleted`, e non da un controllo di ruolo fatto qui: la
+dashboard e il report attività sono schermate di amministrazione, quindi chi
+ci arriva è un super admin o l'organization admin di quella gente, e il server
+rifiuta comunque una conversazione fuori dalla propria organizzazione. Quella
+funzione serve anche a chiudere la schermata su una conversazione che non
+esiste più: gli elenchi sotto si rileggono da soli per invalidazione, questa
+no. Cosa sparisce e con quali regole sta in
+[training-e-report.md](training-e-report.md), che è la pagina da cui la stessa
+conferma si apre anche dalla riga.
+
+A fine chiamata la modale resta invece
+[EvaluationModal](../frontend/src/components/EvaluationModal.tsx), che è un
+altro momento: lì la valutazione sta ancora nascendo, si dà il nome alla
+conversazione e si può ripartire con lo stesso scenario, e la trascrizione è
+tutta sullo schermo dietro. Il pulsante in testa alla chat, quello che rilegge
+una conversazione già chiusa, apre il dettaglio.
+
+**Il documento si chiude sulla conversazione.** Prima il giudizio, poi, da una
+pagina nuova, la trascrizione per intero: una correzione che non si può
+confrontare con quello che è stato detto è un numero da prendere per buono, e
+questo è il foglio che uno studente porta a una contestazione. Le due parti non
+si mescolano perché una si consegna e l'altra si consulta. Delle battute di una
+chiamata resta fuori la coda fra graffe con cui Hume descrive il tono, che a
+schermo diventa la riga "Tono" sotto la bolla: sulla carta sarebbero termini
+inglesi grezzi in mezzo a una trascrizione italiana. Le note del docente
+restano dove sono, sopra la trascrizione, ognuna col messaggio a cui era
+appuntata.

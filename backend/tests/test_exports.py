@@ -1,14 +1,21 @@
 """Export endpoints: the evaluations report as a formatted .xlsx.
 
 The PDF of a single evaluation is covered in test_chat.py, next to the
-rest of the conversation lifecycle it belongs to.
+rest of the conversation lifecycle it belongs to. Qui restano le prove sul
+costruttore puro, che non ha bisogno di passare da un endpoint.
 """
 
+from datetime import UTC, datetime
 from io import BytesIO
+from uuid import uuid4
 
 from openpyxl import load_workbook
+from pypdf import PdfReader
 
+from exports import evaluation_pdf, simulation_attempt_pdf
 from models import ChatConversation, ConversationEvaluation
+from pdf_kit import Report
+from schemas import SimulationAnswerResult
 
 
 def _seed_evaluated_conversation(db_session, user, avatar) -> ChatConversation:
@@ -98,3 +105,129 @@ def test_a_corrected_score_is_what_the_export_reports(
 
 def test_export_is_admin_only(user_client):
     assert user_client.get("/api/admin/evaluations-report/export").status_code == 403
+
+
+# ── Il PDF, dove i caratteri incorporati fanno la differenza ──────────
+
+
+def test_il_referto_regge_i_caratteri_di_un_testo_italiano():
+    """Le virgolette caporali e gli accenti arrivano sulla pagina come sono.
+
+    Il testo di una valutazione lo scrive un LLM: prima dei caratteri
+    incorporati finiva schiacciato sul latin-1, e « » ed em dash diventavano
+    punti interrogativi.
+    """
+    blob = evaluation_pdf(
+        operator_name="Mario Rossi",
+        avatar_name="Anna",
+        conversation_title="Reclamo «carta bloccata» — primo tentativo",
+        mode="voice",
+        conversation_at=datetime.now(UTC),
+        evaluated_at=datetime.now(UTC),
+        overall_score=7.5,
+        summary="L'operatore ha detto «capisco» al momento giusto.",
+        criteria=[
+            {
+                "key": "empatia",
+                "label": "Empatia",
+                "weight": 15,
+                "score": 7.5,
+                "comment": "Tono adeguato — nessuna forzatura.",
+                "suggestions": "Riconosci l'emozione prima della procedura.",
+            }
+        ],
+        previous=None,
+        messages=[{"role": "user", "content": "Buongiorno, sono Mario 😀", "created_at": None}],
+    )
+
+    assert blob.startswith(b"%PDF")
+
+
+def test_una_risposta_lunghissima_non_sfonda_la_pagina():
+    """Una risposta scritta può arrivare a cinquemila caratteri.
+
+    Più di quanto stia in una pagina: la scheda rinuncia alla cornice e il
+    testo continua sulla pagina dopo, invece di finire oltre il piede.
+    """
+    lunga = "Verifico l'identità del cliente e apro la contestazione a sistema. " * 75
+
+    blob = simulation_attempt_pdf(
+        operator_name="Mario Rossi",
+        operator_email="mario@esempio.it",
+        simulation_title="Procedura di rimborso",
+        kind="open",
+        submitted_at=datetime.now(UTC),
+        correct_count=1,
+        question_count=1,
+        earned_points=1.0,
+        score=6.0,
+        answers=[
+            SimulationAnswerResult(
+                question_id=uuid4(),
+                position=1,
+                text="Descrivi la procedura di rimborso.",
+                answer_text=lunga[:5000],
+                expected_answer="Verifica, contestazione, blocco, comunicazione dei tempi.",
+                feedback="Completa ma ripetitiva.",
+                is_correct=True,
+                points=1,
+                elapsed_ms=180000,
+                explanation="",
+            )
+        ],
+    )
+
+    assert blob.startswith(b"%PDF")
+    assert blob.count(b"/Type /Page\n") > 1
+
+
+def test_i_passaggi_del_documento_stanno_sotto_una_intestazione_sola():
+    """Una domanda può fondarsi su più punti del manuale.
+
+    Sono citazioni della stessa cosa e stanno sotto un titolo solo, come nel
+    pannello a schermo, invece di ripetere l'intestazione sopra ognuna.
+    """
+    passaggi = [
+        "L'identificazione richiede due elementi anagrafici.",
+        "Per le operazioni dispositive se ne aggiunge un terzo.",
+        "Lo sblocco della carta è un'operazione dispositiva.",
+    ]
+
+    blob = simulation_attempt_pdf(
+        operator_name="Mario Rossi",
+        operator_email="mario@esempio.it",
+        simulation_title="Sblocco carta",
+        kind="multiple",
+        submitted_at=datetime.now(UTC),
+        correct_count=1,
+        question_count=1,
+        earned_points=1.0,
+        score=10.0,
+        answers=[
+            SimulationAnswerResult(
+                question_id=uuid4(),
+                position=1,
+                text="Quale verifica va fatta prima di sbloccare una carta?",
+                options=["Due elementi", "Tre elementi"],
+                correct_option=1,
+                selected_option=1,
+                is_correct=True,
+                points=1,
+                elapsed_ms=8000,
+                explanation="Servono tre elementi.",
+                sources=passaggi,
+            )
+        ],
+    )
+
+    text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(blob)).pages)
+    assert text.count("COSA DICE IL DOCUMENTO") == 1
+    for passaggio in passaggi:
+        assert passaggio.split(".")[0] in text.replace("\n", " ")
+
+
+def test_i_caratteri_senza_glifo_restano_fuori_dalla_pagina():
+    """Un'emoji nel commento non deve diventare un quadratino vuoto."""
+    report = Report(title="Prova", subtitle="prova")
+
+    assert report.safe("Bravo 😀 così «bene»") == "Bravo  così «bene»"

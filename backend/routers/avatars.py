@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from auth_dependency import get_current_user
 from database import get_db
@@ -14,7 +14,6 @@ from schemas import (
     AvatarResponse,
     MessageResponse,
     SelectionCreate,
-    SelectionResponse,
 )
 
 router = APIRouter(prefix="/api/avatars", tags=["avatars"])
@@ -182,29 +181,11 @@ def select_avatar(
     )
 
 
-@router.get("/selections/all", response_model=list[SelectionResponse])
-def get_selections(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get all avatar selections."""
-    # joinedload pulls each selection's avatar in the same query instead of
-    # one lookup per row, and the counts come from a single grouped query.
-    selections = (
-        db.query(UserSelection)
-        .options(joinedload(UserSelection.avatar))
-        .order_by(UserSelection.selected_at.desc())
-        .limit(50)
-        .all()
-    )
-
-    counts = _selection_counts(db, [sel.avatar_id for sel in selections])
-    return [
-        SelectionResponse(
-            id=sel.id,
-            avatar_id=sel.avatar_id,
-            selected_at=sel.selected_at,
-            avatar=_avatar_response(sel.avatar, counts.get(sel.avatar_id, 0)),
-        )
-        for sel in selections
-    ]
+# Le selezioni si scrivono e si contano, non si sfogliano: non c'è nessun
+# endpoint che le elenchi. Ce n'era uno, e serviva a niente perché nessuna
+# schermata lo chiamava, ma rispondeva le ultime cinquanta di tutta la
+# piattaforma senza filtro: chiunque leggeva così gli avatar privati degli
+# altri tenant. Quello che se ne fa qui è il contatore di `_selection_counts`,
+# che vive dentro una lista di avatar già ristretta a chi guarda, e la copia
+# personale dell'articolo 15 (vedi `personal_data`), che è per definizione
+# solo la propria.

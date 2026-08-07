@@ -8,6 +8,10 @@ progress of an assigned goal and to the dashboard, because a correction
 that stopped at the modal would be decoration.
 """
 
+from io import BytesIO
+
+from pypdf import PdfReader
+
 from models import (
     ChatConversation,
     ChatMessage,
@@ -40,6 +44,16 @@ def _seed_conversation(db_session, user, avatar, *, score=6.0, evaluated=True):
         )
     db_session.flush()
     return conversation
+
+
+def _pdf_text(content: bytes) -> str:
+    """Il testo di un PDF appena scaricato.
+
+    Un referto che dice "%PDF" e poi è vuoto passerebbe qualunque controllo
+    sul tipo del file: quello che va verificato è cosa c'è scritto dentro.
+    """
+    reader = PdfReader(BytesIO(content))
+    return "\n".join(page.extract_text() for page in reader.pages)
 
 
 def _messages(db_session, conversation):
@@ -414,7 +428,93 @@ def test_the_pdf_carries_the_correction(
 
     act_as(standard_user)
     response = client.get(f"/api/chat/conversation/{conversation.id}/evaluation/pdf")
+    text = _pdf_text(response.content)
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
+    # Il voto grande e' quello corretto, con quello della macchina accanto:
+    # e' il foglio che uno studente porta a una contestazione.
+    assert "8,0 / 10" in text
+    assert "Contesto non colto dalla macchina." in text
+    assert "Presentazione incompleta." in text
+
+
+def test_the_pdf_carries_the_transcript(user_client, db_session, standard_user, make_avatar):
+    """Il giudizio si legge accanto a quello che giudica.
+
+    Le battute di una chiamata arrivano con il tono fra graffe in fondo:
+    quello resta fuori, perché sono termini inglesi grezzi in mezzo a una
+    trascrizione italiana.
+    """
+    conversation = _seed_conversation(db_session, standard_user, make_avatar())
+    db_session.add(
+        ChatMessage(
+            conversation_id=conversation.id,
+            role="user",
+            content="Le controllo subito la pratica. {calmness, slight amusement}",
+        )
+    )
+    db_session.flush()
+
+    response = user_client.get(f"/api/chat/conversation/{conversation.id}/evaluation/pdf")
+    text = _pdf_text(response.content)
+
+    assert "TRASCRIZIONE DELLA CONVERSAZIONE" in text
+    assert "Buongiorno." in text
+    assert "Salve." in text
+    assert "Le controllo subito la pratica." in text
+    assert "slight amusement" not in text
+
+
+def test_an_admin_downloads_the_pdf_of_someone_elses_conversation(
+    admin_client, db_session, standard_user, make_avatar
+):
+    """Il referto scaricato dal dettaglio in dashboard è quello dello studente.
+
+    L'admin non è il proprietario della conversazione, quindi l'endpoint
+    dello studente gli resterebbe chiuso: passa dal proprio, e il documento
+    che ne esce è lo stesso.
+    """
+    conversation = _seed_conversation(db_session, standard_user, make_avatar())
+
+    response = admin_client.get(f"/api/admin/conversations/{conversation.id}/evaluation/pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "valutazione-clienti-1.pdf" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
+
+
+def test_a_conversation_without_evaluation_has_no_pdf_for_the_admin(
+    admin_client, db_session, standard_user, make_avatar
+):
+    conversation = _seed_conversation(db_session, standard_user, make_avatar(), evaluated=False)
+
+    response = admin_client.get(f"/api/admin/conversations/{conversation.id}/evaluation/pdf")
+
+    assert response.status_code == 404
+
+
+def test_an_org_admin_cannot_download_another_tenants_pdf(
+    org_admin_client, db_session, make_avatar
+):
+    other = Organization(name="Tenant vicino", slug="tenant-pdf")
+    db_session.add(other)
+    db_session.flush()
+    foreign_user = _make_user_in(db_session, other)
+    foreign_avatar = make_avatar(organization_id=other.id)
+    conversation = _seed_conversation(db_session, foreign_user, foreign_avatar)
+
+    response = org_admin_client.get(f"/api/admin/conversations/{conversation.id}/evaluation/pdf")
+
+    assert response.status_code == 404
+
+
+def test_a_student_cannot_use_the_admin_pdf_endpoint(
+    user_client, db_session, standard_user, make_avatar
+):
+    conversation = _seed_conversation(db_session, standard_user, make_avatar())
+
+    response = user_client.get(f"/api/admin/conversations/{conversation.id}/evaluation/pdf")
+
+    assert response.status_code == 403

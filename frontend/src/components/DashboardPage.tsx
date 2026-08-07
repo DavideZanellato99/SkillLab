@@ -742,6 +742,9 @@ export default function DashboardPage() {
           row={detailRow}
           onClose={() => setDetailRow(null)}
           onReviewSaved={() => void refetch()}
+          /* Eliminata di lì: la schermata si chiude su una conversazione che
+             non c'è più, la tabella sotto si rilegge da sola. */
+          onDeleted={() => setDetailRow(null)}
         />
       )}
     </PageContainer>

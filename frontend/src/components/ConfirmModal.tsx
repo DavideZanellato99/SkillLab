@@ -36,6 +36,9 @@ interface ConfirmModalProps {
   /** Blocca la conferma anche fuori dall'attesa: serve alle azioni che
    *  chiedono prima qualcosa in `children` (es. riscrivere il nome). */
   confirmDisabled?: boolean
+  /** Sopra la modale da cui l'azione è partita, quando parte da dentro una:
+   *  la conferma è l'ultima cosa comparsa e va letta sopra il resto. */
+  elevated?: boolean
   onConfirm: () => void
   onClose: () => void
   /** Campi che l'azione chiede prima di procedere (motivo, conferma del
@@ -54,12 +57,13 @@ export default function ConfirmModal({
   confirmClassName,
   isPending,
   confirmDisabled = false,
+  elevated = false,
   onConfirm,
   onClose,
   children,
 }: ConfirmModalProps) {
   return (
-    <ModalShell onClose={onClose} locked={isPending}>
+    <ModalShell onClose={onClose} locked={isPending} elevated={elevated}>
       <ModalHeader
         icon={icon}
         iconWrapperCls={iconWrapperCls}

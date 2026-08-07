@@ -464,6 +464,15 @@ export const deleteAdminConversation = (conversationId: string) =>
   })
 
 /**
+ * Il PDF della valutazione di una conversazione altrui, con le regole di
+ * scope di fetchAdminConversation: è lo stesso documento che scarica chi ha
+ * tenuto la conversazione, chiesto da un altro endpoint perché quello dello
+ * studente serve solo il proprietario.
+ */
+export const fetchAdminEvaluationPdf = (conversationId: string) =>
+  apiFetchBlob(`/api/admin/conversations/${conversationId}/evaluation/pdf`)
+
+/**
  * The evaluations report as a formatted .xlsx file, same admin scope rules
  * as fetchEvaluationsReport.
  */

@@ -100,6 +100,8 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [backend/simulation_scoring.py](../backend/simulation_scoring.py) | Quanto vale una risposta: la scala che scende col tempo e quella del giudizio |
 | [backend/routers/admin_simulations.py](../backend/routers/admin_simulations.py) | Il ciclo di vita lato super admin: caricamento, generazione, revisione, pubblicazione |
 | [backend/routers/simulations.py](../backend/routers/simulations.py) | Lo svolgimento e le due correzioni |
+| [backend/exports.py](../backend/exports.py) | Il referto in PDF di un tentativo consegnato |
+| [backend/pdf_kit.py](../backend/pdf_kit.py) | Come è vestito quel referto: colori, caratteri e riquadri, gli stessi della valutazione ([valutazione.md](valutazione.md#come-è-fatto-il-foglio)) |
 | [backend/models.py:653-848](../backend/models.py#L653-L848) | Le quattro tabelle |
 | [frontend/src/services/simulations.ts](../frontend/src/services/simulations.ts) | I tipi e le chiamate HTTP |
 | [frontend/src/hooks/useSimulations.ts](../frontend/src/hooks/useSimulations.ts) | Gli hook TanStack Query |
@@ -111,6 +113,7 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationSourceBadge.tsx](../frontend/src/components/SimulationSourceBadge.tsx) | La targhetta dell'origine, che le sta sempre accanto: domande di un modello o di una persona |
 | [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, le alternative, la chiave, la spiegazione |
 | [frontend/src/components/simulationFormat.ts](../frontend/src/components/simulationFormat.ts) | Come si scrivono voti, punti e tempi, i nomi dei tipi, e la copia della scala che si legge durante la domanda |
+| [frontend/src/components/PdfDownloadButton.tsx](../frontend/src/components/PdfDownloadButton.tsx) | Il pulsante che scarica un referto in PDF, condiviso con le valutazioni |
 
 ## Il flusso in un colpo d'occhio
 
@@ -1000,6 +1003,33 @@ Quello che cambia fra i due tipi è solo il corpo di ogni domanda:
   il metro con cui è stato misurato, uno 0,6 sarebbe una parola dell'autorità e
   non una correzione.
 
+**Lo stesso esito su carta.** `GET /api/simulations/attempts/{id}/pdf`
+([simulation_attempt_pdf](../backend/exports.py)) stampa la stessa pagina:
+il voto, e poi domanda per domanda quanto ha valso, cosa è stato risposto,
+perché, e i passaggi del documento. Tre differenze, e sono la carta a
+imporle: i passaggi non stanno dietro un "Cosa dice il documento" da aprire,
+perché un foglio non si apre, e restano sotto quell'intestazione sola, un
+riquadro per citazione, come le citazioni dentro il pannello a schermo; il
+referto è scritto in terza persona anche
+quando è lo studente a scaricarlo, perché un foglio che dà del tu non si può
+consegnare a nessun altro, ed essere consegnato è il motivo per cui esiste;
+e **ogni domanda sta su un foglio suo**, dalla seconda in poi. Un test si
+rilegge una domanda alla volta, e avere sotto gli occhi la correzione della
+prossima mentre si sta ancora leggendo questa non serve a niente. La prima
+resta sotto il voto, dove il foglio è già aperto, e una domanda la cui
+correzione sfora si prende anche la pagina dopo, ma quella successiva
+ricomincia comunque da capo.
+
+Come è vestito il foglio, e cosa succede quando una risposta è più lunga di
+una pagina, sta in [valutazione.md](valutazione.md#come-è-fatto-il-foglio):
+i due referti condividono [pdf_kit.py](../backend/pdf_kit.py).
+
+L'endpoint è **uno solo per tutti e due i lettori**, a differenza del PDF
+della valutazione (vedi [valutazione.md](valutazione.md)): lì lo studente e
+l'admin passano da due strade perché la conversazione si legge da due strade,
+qui la lettura del tentativo è già una sola, e chi non può guardarlo non
+può nemmeno stamparlo.
+
 ### Rileggere un proprio tentativo
 
 L'esito non vive solo nell'attimo della consegna. Sotto le regole del test,
@@ -1019,11 +1049,13 @@ accavallavano e confrontare due prove voleva dire cercarle. Le corrette
 compaiono qui e nella pillola non ci stavano, ma sono la differenza fra un 6
 preso rispondendo piano e un 6 preso sbagliando.
 
-È la stessa modale che gli amministratori aprono dalla dashboard, con la sola
-prop `own` a cambiare: con `own` l'esito è scritto in seconda persona ("la tua
-risposta") e l'intestazione non ripete nome e indirizzo di chi legge. Il
-componente è uno perché la pagina deve essere una: chi corregge legge esattamente
-quello che legge chi ha sbagliato.
+È la stessa modale che gli amministratori aprono dalla dashboard, e con `own`
+cambiano tre cose: l'esito è scritto in seconda persona ("la tua risposta"),
+l'intestazione non ripete nome e indirizzo di chi legge, e in testa non c'è il
+cestino, perché un tentativo lo elimina chi corregge e non chi lo ha svolto
+(vedi [training-e-report.md](training-e-report.md)). Il componente è uno
+perché la pagina deve essere una: chi corregge legge esattamente quello che
+legge chi ha sbagliato.
 
 **Ognuno vede solo i propri.** L'elenco dei tentativi arriva già filtrato
 sull'utente che chiede, e il tentativo singolo lo serve solo a chi lo ha svolto o
@@ -1037,13 +1069,24 @@ pulsante può aprire soltanto quello che il server gli manderebbe comunque.
 | Endpoint | Chi | Cosa |
 | --- | --- | --- |
 | `GET /api/simulations/{id}/attempts` | L'utente | I propri tentativi su quella simulazione, dal più recente: è l'elenco "Tentativi passati" sotto le regole del test |
-| `GET /api/simulations/attempts/{id}` | Chi lo ha svolto, o un admin del tenant a cui la simulazione appartiene | Un tentativo con la sua correzione completa. È quello che si apre cliccando una riga nella dashboard o un proprio tentativo passato |
-| `GET /api/simulations/{id}/results` | Admin | Tutti i tentativi su una simulazione. Un organization admin li vede solo per le simulazioni della propria organizzazione, che è la stessa cosa che dire "solo dei propri utenti" |
+| `GET /api/simulations/attempts/{id}` | Chi lo ha svolto, o un admin del tenant a cui **chi lo ha svolto** appartiene | Un tentativo con la sua correzione completa. È quello che si apre cliccando una riga nella dashboard o un proprio tentativo passato |
+| `GET /api/simulations/{id}/results` | Super admin | Tutti i tentativi su una simulazione: è la linguetta "Risultati" accanto alle domande, e guarda la prova dal lato del test invece che da quello della persona. Serve a chi le domande le ha scritte, quindi sta dietro lo stesso ruolo della pagina che la apre |
 | `GET /api/admin/simulations-report` | Admin | Tutti i tentativi in un colpo solo, chi li ha svolti e come è andata: è la sezione del simulatore nella dashboard (vedi [training-e-report.md](training-e-report.md)) |
 | `GET /api/comparison/simulation-attempts` | L'utente, o un admin per una persona del proprio ambito | I test consegnati da una persona sola, dal più vecchio, con le risposte: è la linguetta del simulatore nella pagina di confronto |
 
 Chi non ha diritto di leggere un tentativo riceve 404 e non 403: l'esistenza
 stessa della riga non è un'informazione da dare.
+
+**L'organizzazione che decide è sempre quella di chi ha svolto il test**, mai
+quella della simulazione, e vale per tutte e cinque le righe qui sopra oltre
+che per la cancellazione. Le due coincidono quasi sempre, perché un test si
+svolge solo dentro la propria organizzazione, ma si separano appena il super
+admin sposta qualcuno di tenant: il tentativo resta attaccato alla simulazione
+di prima, e la regola giusta è quella che segue la persona, come già facevano
+il report e il confronto. Scegliere la simulazione avrebbe voluto dire far
+leggere nome ed email di chi se n'è andato all'organizzazione che ha lasciato,
+e negare il dettaglio a quella dove adesso sta, che intanto se lo trovava
+elencato nel proprio report.
 
 Nel confronto fra due tentativi si appaiano **solo le domande capitate in tutte
 e due**: con l'estrazione a caso ogni prova ha la sua fila, e una domanda vista

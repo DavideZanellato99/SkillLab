@@ -34,13 +34,6 @@ export interface AvatarCategory {
   color: string
 }
 
-export interface UserSelection {
-  id: string
-  avatar_id: string
-  selected_at: string
-  avatar: Avatar
-}
-
 export interface MessageResponse {
   message: string
   success: boolean

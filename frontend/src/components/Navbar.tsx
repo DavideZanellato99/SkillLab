@@ -216,32 +216,6 @@ export default function Navbar() {
               </svg>
               Avatar Gallery
             </Link>
-            {isAuthenticated && isAdmin(user) && (
-              <Link
-                to="/admin/training"
-                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isTrainingPage
-                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="12" r="6" />
-                  <circle cx="12" cy="12" r="2" />
-                </svg>
-                Percorsi
-              </Link>
-            )}
             {/* Per tutti: le simulazioni della propria organizzazione, e
                 tutte quante per il super admin. */}
             {isAuthenticated && (
@@ -268,6 +242,32 @@ export default function Navbar() {
                   <path d="M8 16h8" />
                 </svg>
                 Simulatore Tecnico
+              </Link>
+            )}
+            {isAuthenticated && isAdmin(user) && (
+              <Link
+                to="/admin/training"
+                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
+                  isTrainingPage
+                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
+                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
+                }`}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+                Percorsi
               </Link>
             )}
             {/* Per tutti: lo studente confronta i propri tentativi, un

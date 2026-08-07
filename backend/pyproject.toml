@@ -78,6 +78,7 @@ warn_redundant_casts = true
 files = [
     "conversation_titles.py",
     "exports.py",
+    "pdf_kit.py",
     "persona_prompt.py",
     "schemas.py",
 ]

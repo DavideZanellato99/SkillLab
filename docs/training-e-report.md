@@ -256,22 +256,30 @@ delle risposte scritte (vedi [simulatore.md](simulatore.md)).
 Il dettaglio di una conversazione vista da un admin
 (`GET /api/admin/conversations/{id}`) porta trascrizione, valutazione e
 revisione insieme, ed è da lì che parte la correzione descritta in
-[valutazione.md](valutazione.md).
+[valutazione.md](valutazione.md). In testa alla modale c'è il referto in PDF
+(`GET /api/admin/conversations/{id}/evaluation/pdf`), lo stesso file che scarica
+chi ha tenuto la conversazione, nella posizione che ha nel dettaglio di un test
+consegnato: in fondo alla valutazione si vedrebbe solo arrivando in fondo a
+leggerla. Il posto lo ha lasciato la registrazione, che è salita sopra la
+trascrizione perché è la stessa conversazione detta a voce.
 
 Il gesto è lo stesso nella metà scritta: il clic su una riga della tabella dei
 test apre il tentativo per intero
 ([SimulationAttemptModal](../frontend/src/components/SimulationAttemptModal.tsx)),
 che ricarica le risposte da `GET /api/simulations/attempts/{id}` perché nel
 report ci sono il voto e i conteggi ma non le risposte, e sono quelle il motivo
-per cui si apre. La pagina è la stessa che lo studente vede subito dopo aver
+per cui si apre. Anche da lì il referto si scarica in PDF, come dal dettaglio
+di una conversazione. La pagina è la stessa che lo studente vede subito dopo aver
 consegnato ([SimulationResult](../frontend/src/components/SimulationResult.tsx)),
 in terza persona invece che in seconda: chi corregge deve leggere esattamente
 quello che leggerà chi ha sbagliato.
 
 **L'esportazione.** `GET /api/admin/evaluations-report/export` produce un foglio
 di calcolo con le stesse righe che si vedono a schermo
-([exports.py](../backend/exports.py), che genera anche il PDF del referto).
-Come ogni altra lettura, i voti sono quelli finali.
+([exports.py](../backend/exports.py), che genera anche i due PDF, quello di una
+valutazione e quello di un test consegnato, vestiti da
+[pdf_kit.py](../backend/pdf_kit.py)). Come ogni altra lettura, i voti sono
+quelli finali.
 
 ## Il report attività
 
@@ -396,15 +404,52 @@ dentro resterebbe confinata al riquadro. Dentro la riga, il cestino è un
 bersaglio separato dal resto: aprire e cancellare sono due gesti sulla stessa
 riga, ed è lì che si confondono.
 
+**Le due prove si buttano anche da aperte.** Il cestino non è solo sulla riga:
+sta anche in testa alla schermata che apre una prova per intero, accanto al
+referto in PDF, e sono le due sole cose che si fanno a una prova già chiusa.
+Chi ha appena letto una trascrizione fino in fondo è già dentro la
+conversazione che vuole togliere, e chiuderla per andare a cercarne la riga è
+il modo in cui si finisce per cancellare quella sbagliata. Il cestino compare
+solo a chi è arrivato lì da una schermata di amministrazione: chi rilegge una
+prova sua non lo vede, e non avrebbe l'endpoint per usarlo.
+
+La conferma è **la stessa da tutti e due i posti**
+([DeleteConversationDialog](../frontend/src/components/DeleteConversationDialog.tsx)
+e [DeleteAttemptDialog](../frontend/src/components/DeleteAttemptDialog.tsx)):
+dentro c'è la chiamata, quello che va detto prima di premere e l'errore se il
+server rifiuta, quindi la frase che spiega cosa sparisce esiste una volta
+sola. Da dentro una modale la conferma si apre `elevated`, cioè sopra: è
+l'ultima cosa comparsa, e la prova da cancellare resta lì dietro da rileggere
+finché non si preme.
+
+Perché una modale possa aprirsi da dentro un'altra,
+[ModalShell](../frontend/src/components/ModalShell.tsx) esce in fondo alla
+pagina attraverso un portal: il pannello che la ospita sfoca lo sfondo, e un
+antenato che sfoca diventa il riferimento di tutto quello che sta dentro,
+quindi è lo stesso motivo per cui le modali della tabella stanno fuori dal
+dettaglio. Chi le montava già a livello di pagina non se ne accorge, era già
+lì che finivano.
+
 **Anche una simulazione si cancella da qui**
 (`DELETE /api/admin/simulation-attempts/{id}`), gemello della cancellazione di
-una conversazione e per la stessa ragione: le due prove si tolgono dallo
-stesso posto, e una prova cancellabile solo se è una conversazione lascerebbe
-lì per sempre il test aperto per sbaglio o svolto da chi non doveva. Sparisce
-il **tentativo**, cioè la fotografia di quelle dieci risposte, e la
-simulazione resta lì da rifare: la conferma lo scrive, perché è tutta lì la
-differenza. Lo scope è l'organizzazione di chi ha svolto il test, come nel
-report che lo elenca.
+una conversazione (`DELETE /api/admin/conversations/{id}`) e per la stessa
+ragione: le due prove si tolgono dallo stesso posto, e una prova cancellabile
+solo se è una conversazione lascerebbe lì per sempre il test aperto per
+sbaglio o svolto da chi non doveva. Sparisce il **tentativo**, cioè la
+fotografia di quelle dieci risposte, e la simulazione resta lì da rifare: la
+conferma lo scrive, perché è tutta lì la differenza. Lo scope è
+l'organizzazione di chi ha svolto il test, come nel report che lo elenca.
+
+**Eliminare è degli amministratori**, tutti e due gli endpoint: il super admin
+su tutte le organizzazioni, l'organization admin sulla propria, e fuori dal
+proprio tenant la prova non esiste, cioè risponde 404 come per un id
+inventato. Un utente normale prende 403 e non ha nessun endpoint per
+cancellarsi lo storico: cancellare le proprie prove male non è un modo di
+allenarsi, e quello che l'interessato può ottenere sui propri dati passa dalle
+strade del GDPR (vedi [gdpr.md](gdpr.md)). Di una conversazione se ne va anche
+tutto quello che le sta attaccato, cioè trascrizione, valutazione e revisione:
+il commento di un docente su qualcosa che non si può più rileggere non
+servirebbe a nessuno.
 
 Lato server è una lettura sola ([admin.py](../backend/routers/admin.py)) con
 due query separate, una per prova: chi non usa il simulatore non deve pagare

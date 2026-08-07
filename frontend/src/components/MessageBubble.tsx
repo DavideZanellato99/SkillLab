@@ -9,6 +9,7 @@
  * messaggio: è lì che va letta, accanto alla riga di cui parla. */
 
 import type { ChatMessage, MessageAnnotation } from '../services/api'
+import MessageAnnotationNote from './MessageAnnotationNote'
 import MessageEmotions, { splitEmotionTag } from './MessageEmotions'
 import { formatTime } from './chatFormat'
 
@@ -72,16 +73,7 @@ export default function MessageBubble({
             {formatTime(message.created_at)}
           </span>
         </div>
-        {annotation && (
-          <div className="mt-1.5 rounded-xl border border-violet-500/25 bg-violet-500/8 px-3 py-2">
-            <span className="mb-0.5 block text-[0.68rem] font-semibold uppercase tracking-wide text-violet-300">
-              Nota di {annotation.reviewer_name}
-            </span>
-            <p className="whitespace-pre-wrap break-words text-[0.8rem] leading-relaxed text-slate-300">
-              {annotation.note}
-            </p>
-          </div>
-        )}
+        {annotation && <MessageAnnotationNote annotation={annotation} />}
       </div>
     </div>
   )

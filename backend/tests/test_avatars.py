@@ -64,3 +64,18 @@ def test_persona_sheet_is_never_exposed(user_client, make_avatar):
 def test_get_missing_avatar_is_404(user_client):
     response = user_client.get("/api/avatars/00000000-0000-0000-0000-000000000000")
     assert response.status_code == 404
+
+
+def test_nessuna_rotta_elenca_le_selezioni(user_client):
+    """Le selezioni si scrivono e si contano, non si sfogliano.
+
+    Ce n'era una che le elencava senza nessun filtro, quindi rispondeva le
+    ultime della piattaforma intera: gli avatar privati di ogni tenant, letti
+    da chiunque avesse un account. Il conto degli avatar visibili e la copia
+    personale dell'articolo 15 bastano a tutti e due gli usi legittimi.
+    """
+    from main import app
+
+    rotte = {getattr(r, "path", "") for r in app.routes}
+    assert not [p for p in rotte if "selection" in p and p != "/api/avatars/select"]
+    assert user_client.get("/api/avatars/selections/all").status_code == 404

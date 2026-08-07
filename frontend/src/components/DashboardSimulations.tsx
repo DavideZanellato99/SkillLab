@@ -378,7 +378,13 @@ export default function DashboardSimulations({
       </DataTable>
 
       {openAttemptId && (
-        <SimulationAttemptModal attemptId={openAttemptId} onClose={() => setOpenAttemptId(null)} />
+        <SimulationAttemptModal
+          attemptId={openAttemptId}
+          onClose={() => setOpenAttemptId(null)}
+          /* Eliminato di lì: la schermata si chiude su un tentativo che non
+             c'è più, la tabella sotto si rilegge da sola. */
+          onDeleted={() => setOpenAttemptId(null)}
+        />
       )}
     </>
   )

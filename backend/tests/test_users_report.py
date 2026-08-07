@@ -207,6 +207,79 @@ def test_un_org_admin_non_vede_i_tentativi_di_un_altro_tenant(
     assert all(row["simulation_count"] == 0 for row in response.json())
 
 
+def test_una_conversazione_si_elimina_con_tutto_quello_che_le_sta_attaccato(
+    admin_client, db_session, standard_user, organization, make_avatar
+):
+    """Se ne va la conversazione e con lei trascrizione, valutazione e
+    revisione: quello che resta sarebbe il commento di un docente su qualcosa
+    che non si può più rileggere."""
+    conversation = _conversation(db_session, standard_user, make_avatar(), score=6.0, messages=4)
+    db_session.add(
+        ConversationReview(
+            conversation_id=conversation.id,
+            reviewer_id=standard_user.id,
+            summary_note="Da rivedere in aula.",
+        )
+    )
+    db_session.flush()
+
+    response = admin_client.delete(f"/api/admin/conversations/{conversation.id}")
+
+    assert response.status_code == 200
+    assert db_session.get(ChatConversation, conversation.id) is None
+    assert (
+        db_session.query(ChatMessage).filter(ChatMessage.conversation_id == conversation.id).count()
+        == 0
+    )
+    assert (
+        db_session.query(ConversationEvaluation)
+        .filter(ConversationEvaluation.conversation_id == conversation.id)
+        .count()
+        == 0
+    )
+    riga = _row_of(admin_client.get("/api/admin/users-report"), standard_user)
+    assert riga["conversation_count"] == 0
+
+
+def test_un_org_admin_non_elimina_la_conversazione_di_un_altro_tenant(
+    org_admin_client, db_session, make_avatar
+):
+    """Fuori dal proprio tenant la conversazione non esiste, come il
+    tentativo: stessa risposta che riceverebbe per un id inventato."""
+    altrove = Organization(name="Altrove", slug=f"altrove-{uuid.uuid4().hex[:8]}")
+    db_session.add(altrove)
+    db_session.flush()
+    estraneo = User(
+        cognito_sub=f"test-{uuid.uuid4()}",
+        email="estraneo3@test.invalid",
+        nome="Estraneo",
+        cognome="Altrove",
+        role_id=ensure_roles(db_session)[ROLE_USER].id,
+        organization_id=altrove.id,
+    )
+    db_session.add(estraneo)
+    db_session.flush()
+    conversation = _conversation(db_session, estraneo, make_avatar(), score=6.0)
+
+    response = org_admin_client.delete(f"/api/admin/conversations/{conversation.id}")
+
+    assert response.status_code == 404
+    assert db_session.get(ChatConversation, conversation.id) is not None
+
+
+def test_un_utente_normale_non_elimina_conversazioni(
+    user_client, db_session, standard_user, make_avatar
+):
+    """Nemmeno le proprie: cancellarsi lo storico non è un gesto che l'app
+    concede a chi si allena."""
+    conversation = _conversation(db_session, standard_user, make_avatar(), score=6.0)
+
+    response = user_client.delete(f"/api/admin/conversations/{conversation.id}")
+
+    assert response.status_code == 403
+    assert db_session.get(ChatConversation, conversation.id) is not None
+
+
 def test_un_tentativo_si_elimina_e_la_simulazione_resta(
     admin_client, db_session, standard_user, organization
 ):

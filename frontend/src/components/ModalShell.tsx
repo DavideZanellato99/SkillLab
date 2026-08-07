@@ -8,9 +8,18 @@
  * qui e sono gli stessi per tutte.
  *
  * Durante un'azione in corso (`locked`) né lo sfondo né la X chiudono:
- * un'operazione che sta scrivendo sul server non va interrotta a metà. */
+ * un'operazione che sta scrivendo sul server non va interrotta a metà.
+ *
+ * Il pannello esce in fondo alla pagina attraverso un portal, come il
+ * tooltip. Serve alle modali che si aprono da dentro un'altra modale, cioè
+ * alle conferme di eliminazione della trascrizione e del tentativo: il
+ * pannello che le ospita sfoca lo sfondo, e un antenato che sfoca diventa il
+ * riferimento di tutto quello che sta dentro, quindi una schermata intera
+ * aperta lì resterebbe confinata a quel riquadro. Chi la monta già a livello
+ * di pagina non se ne accorge: era già lì che finiva. */
 
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { CloseIcon } from './icons'
 
 const SIZES = {
@@ -78,7 +87,7 @@ export default function ModalShell({
   closeLabel = 'Chiudi',
   children,
 }: ModalShellProps) {
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 ${elevated ? 'z-[300] bg-black/70' : 'z-[200] bg-black/60'} flex animate-fade-in items-center justify-center p-4 backdrop-blur-lg [animation-duration:0.2s]`}
       onClick={() => !locked && onClose()}
@@ -99,7 +108,8 @@ export default function ModalShell({
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

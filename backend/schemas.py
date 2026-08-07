@@ -93,17 +93,6 @@ class SelectionCreate(BaseModel):
     avatar_id: UUID
 
 
-class SelectionResponse(BaseModel):
-    """Schema for selection API responses."""
-
-    id: UUID
-    avatar_id: UUID
-    selected_at: datetime
-    avatar: AvatarResponse
-
-    model_config = {"from_attributes": True}
-
-
 # --- Chat Schemas (voice conversation transcripts) ---
 
 

@@ -15,8 +15,6 @@ import { Fragment, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import type { ConversationReport, SimulationAttemptReport } from '../services/admin'
 import { useUsersReport } from '../hooks/useReports'
-import { useDeleteConversation } from '../hooks/useConversations'
-import { useDeleteSimulationAttempt } from '../hooks/useSimulations'
 import { useOrganizations } from '../hooks/useOrganizations'
 import {
   isAdmin,
@@ -30,17 +28,15 @@ import Select from './Select'
 import FilterTabs from './FilterTabs'
 import LoadingState from './LoadingState'
 import { PageContainer, PageHeader } from './PageLayout'
-import ConfirmModal from './ConfirmModal'
 import ConversationDetailModal from './ConversationDetailModal'
 import type { ConversationDetailTarget } from './ConversationDetailModal'
+import DeleteAttemptDialog from './DeleteAttemptDialog'
+import DeleteConversationDialog from './DeleteConversationDialog'
 import SimulationAttemptModal from './SimulationAttemptModal'
 import UserReportDetail from './UserReportDetail'
-import { TrashIcon } from './icons'
 import { matchesSearch } from './tableSearch'
 import type { DataTableColumn } from './DataTable'
 import Badge from './Badge'
-import { kindLabel } from './simulationFormat'
-import { formatDateTime } from './lastAccess'
 import { formatDuration, PERIOD_OPTIONS } from './reportFormat'
 import type { PeriodValue } from './reportFormat'
 
@@ -99,8 +95,6 @@ export default function UserReportPage() {
     error,
     refetch,
   } = useUsersReport(orgFilter, period === 'all' ? undefined : Number(period), isAdmin(user))
-  const deleteMutation = useDeleteConversation()
-  const deleteAttemptMutation = useDeleteSimulationAttempt()
 
   const visibleReport = report.filter((u) =>
     matchesSearch(
@@ -117,28 +111,14 @@ export default function UserReportPage() {
     ...organizations.map((o) => ({ value: o.id, label: o.name })),
   ]
 
-  /* L'eliminazione invalida il report, che si rilegge dal server: prima i
+  /* L'eliminazione, la sua conferma e cosa va detto prima di premere stanno
+   * nei due dialoghi: da qui si dice solo cosa si sta per eliminare. È la
+   * stessa conferma che si legge dalla schermata che apre una prova per
+   * intero, e la frase che spiega cosa sparisce non va scritta due volte.
+   *
+   * L'eliminazione invalida il report, che si rilegge dal server: prima i
    * conteggi e la durata totale della riga venivano ricalcolati qui a mano,
    * cioè si riscriveva lato client una somma che il server fa già. */
-  const handleConfirmDeleteConversation = async () => {
-    if (!deletingConversation) return
-    try {
-      await deleteMutation.mutateAsync(deletingConversation.id)
-      setDeletingConversation(null)
-    } catch {
-      // Il messaggio resta nella mutation, la modale lo mostra
-    }
-  }
-
-  const handleConfirmDeleteAttempt = async () => {
-    if (!deletingAttempt) return
-    try {
-      await deleteAttemptMutation.mutateAsync(deletingAttempt.id)
-      setDeletingAttempt(null)
-    } catch {
-      // Il messaggio resta nella mutation, la modale lo mostra
-    }
-  }
 
   return (
     <PageContainer>
@@ -292,14 +272,8 @@ export default function UserReportPage() {
                             conversation_at: conversation.created_at,
                           })
                         }
-                        onDeleteConversation={(conversation) => {
-                          deleteMutation.reset()
-                          setDeletingConversation(conversation)
-                        }}
-                        onDeleteAttempt={(attempt) => {
-                          deleteAttemptMutation.reset()
-                          setDeletingAttempt(attempt)
-                        }}
+                        onDeleteConversation={setDeletingConversation}
+                        onDeleteAttempt={setDeletingAttempt}
                       />
                     </Td>
                   </tr>
@@ -311,7 +285,11 @@ export default function UserReportPage() {
       )}
 
       {openAttemptId && (
-        <SimulationAttemptModal attemptId={openAttemptId} onClose={() => setOpenAttemptId(null)} />
+        <SimulationAttemptModal
+          attemptId={openAttemptId}
+          onClose={() => setOpenAttemptId(null)}
+          onDeleted={() => setOpenAttemptId(null)}
+        />
       )}
 
       {/* La conversazione per intero: trascrizione, valutazione e la
@@ -325,61 +303,34 @@ export default function UserReportPage() {
              mostrando: senza rileggerlo, il docente corregge e continua a
              vedere il numero di prima. */
           onReviewSaved={() => void refetch()}
+          /* Le due prove si possono anche buttare da aperte, ed è lo stesso
+             gesto del cestino sulla riga: chi ha appena letto la
+             trascrizione è già dentro la conversazione che vuole togliere,
+             e non deve richiuderla per cercarne la riga. */
+          onDeleted={() => setOpenConversation(null)}
         />
       )}
 
-      {/* Modal Conferma Eliminazione Conversazione */}
+      {/* Le due conferme di eliminazione, le stesse che si aprono dal
+          cestino in testa alle schermate qui sopra. */}
       {deletingConversation && (
-        <ConfirmModal
-          icon={<TrashIcon size={24} stroke="#ef4444" />}
-          iconWrapperCls="border border-red-500/25 bg-red-500/10"
-          title="Elimina Conversazione"
-          description={
-            <>
-              Stai per eliminare la conversazione con{' '}
-              <strong className="text-slate-100">{deletingConversation.avatar_name}</strong> del{' '}
-              {formatDateTime(deletingConversation.created_at)}, incluse tutte le sue trascrizioni e
-              valutazioni. L'operazione non è reversibile.
-            </>
-          }
-          error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
-          confirmLabel="Elimina Definitivamente"
-          pendingLabel="Eliminazione..."
-          confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
-          isPending={deleteMutation.isPending}
-          onConfirm={handleConfirmDeleteConversation}
+        <DeleteConversationDialog
+          conversationId={deletingConversation.id}
+          avatarName={deletingConversation.avatar_name}
+          conversationAt={deletingConversation.created_at}
           onClose={() => setDeletingConversation(null)}
+          onDeleted={() => setDeletingConversation(null)}
         />
       )}
 
-      {/* Modal Conferma Eliminazione Tentativo. Dice che sparisce il
-          tentativo e non la simulazione: la differenza è tutta lì, e chi
-          conferma deve saperla prima. */}
       {deletingAttempt && (
-        <ConfirmModal
-          icon={<TrashIcon size={24} stroke="#ef4444" />}
-          iconWrapperCls="border border-red-500/25 bg-red-500/10"
-          title="Elimina Tentativo"
-          description={
-            <>
-              Stai per eliminare il tentativo su{' '}
-              <strong className="text-slate-100">{deletingAttempt.simulation_title}</strong> (
-              {kindLabel(deletingAttempt.simulation_kind).toLowerCase()}) del{' '}
-              {formatDateTime(deletingAttempt.created_at)}, con tutte le risposte date e il voto
-              preso. La simulazione resta e si può rifare. L'operazione non è reversibile.
-            </>
-          }
-          error={
-            deleteAttemptMutation.error instanceof Error
-              ? deleteAttemptMutation.error.message
-              : undefined
-          }
-          confirmLabel="Elimina Definitivamente"
-          pendingLabel="Eliminazione..."
-          confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
-          isPending={deleteAttemptMutation.isPending}
-          onConfirm={handleConfirmDeleteAttempt}
+        <DeleteAttemptDialog
+          attemptId={deletingAttempt.id}
+          simulationTitle={deletingAttempt.simulation_title}
+          simulationKind={deletingAttempt.simulation_kind}
+          attemptedAt={deletingAttempt.created_at}
           onClose={() => setDeletingAttempt(null)}
+          onDeleted={() => setDeletingAttempt(null)}
         />
       )}
     </PageContainer>

@@ -41,6 +41,7 @@ condivisa per area:
 | Categorie degli avatar | `get_categories` in [avatars.py](../backend/routers/avatars.py) | Come sopra. Il legame con l'avatar è una chiave esterna composta che porta con sé il tenant, così cambiare categoria non può spostare l'avatar di organizzazione (vedi [avatar-e-persona.md](avatar-e-persona.md)) |
 | Simulazioni | `visible_query` in [simulations.py](../backend/routers/simulations.py) | Come sopra, più le bozze escluse fuori dall'amministrazione |
 | Conversazioni | `_owned_conversation_or_404` in [chat.py](../backend/routers/chat.py) | Solo le proprie, sempre |
+| Tentativi | `_readable_attempt_or_404` in [simulations.py](../backend/routers/simulations.py) | I propri, e per un admin quelli di chi sta nella sua organizzazione |
 
 ## 404 e non 403
 
@@ -75,6 +76,14 @@ flowchart TD
 
 È la stessa cosa che dire "un docente rilegge il lavoro dei propri studenti, e
 di nessun altro".
+
+Il proprietario è sempre **la persona**, mai la riga a cui la prova è
+attaccata: un tentativo appartiene all'organizzazione di chi lo ha svolto e
+non a quella della simulazione, come una conversazione appartiene a quella di
+chi ha parlato e non a quella dell'avatar. La differenza si vede solo dopo che
+il super admin ha spostato qualcuno di tenant, ed è esattamente il momento in
+cui deve valere: le prove seguono la persona, e chi ha lasciato
+un'organizzazione smette di essere leggibile da chi la amministra.
 
 ## Le organizzazioni
 

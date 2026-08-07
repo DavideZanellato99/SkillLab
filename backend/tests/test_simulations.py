@@ -524,16 +524,113 @@ def test_un_admin_legge_i_tentativi_del_proprio_tenant(
     ).json()
 
     act_as(org_admin_user)
-    risultati = client.get(f"/api/simulations/{simulation.id}/results").json()
-    assert [r["id"] for r in risultati] == [esito["id"]]
     assert client.get(f"/api/simulations/attempts/{esito['id']}").status_code == 200
 
 
-def test_un_admin_non_legge_i_risultati_di_un_altro_tenant(
-    org_admin_client, make_simulation, other_organization
+def test_i_risultati_di_un_test_li_legge_solo_il_super_admin(
+    client, act_as, make_simulation, standard_user, org_admin_user, super_admin_user
 ):
-    altrui = make_simulation(organization_id=other_organization.id)
-    assert org_admin_client.get(f"/api/simulations/{altrui.id}/results").status_code == 404
+    """L'elenco per test sta dietro la pagina che lo apre, che è del super admin.
+
+    Guarda una prova dal lato del test e non della persona, e serve a chi le
+    domande le ha scritte. Un organization admin non ha quella pagina, quindi
+    non deve avere nemmeno la rotta: un permesso più largo del corridoio che
+    ci porta è un permesso che conta lo stesso, perché l'indirizzo si digita.
+    """
+    simulation = make_simulation()
+    act_as(standard_user)
+    esito = client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True)},
+    ).json()
+
+    act_as(org_admin_user)
+    assert client.get(f"/api/simulations/{simulation.id}/results").status_code == 403
+
+    act_as(super_admin_user)
+    risultati = client.get(f"/api/simulations/{simulation.id}/results").json()
+    assert [r["id"] for r in risultati] == [esito["id"]]
+
+
+def test_chi_ha_traslocato_di_tenant_se_lo_porta_dietro_il_tentativo(
+    db_session, client, act_as, make_simulation, standard_user, org_admin_user, other_organization
+):
+    """Il tentativo segue la persona, non la simulazione su cui è stato svolto.
+
+    Le due organizzazioni coincidono sempre, tranne dopo che il super admin
+    ha spostato qualcuno: lì l'admin dell'organizzazione lasciata non deve
+    più leggere nome ed email di chi se n'è andato. La lettura e la
+    cancellazione rispondono la stessa cosa, che è il punto: prima una
+    diceva 200 e l'altra 404 sulla stessa riga.
+    """
+    simulation = make_simulation()
+    act_as(standard_user)
+    esito = client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True)},
+    ).json()
+
+    standard_user.organization_id = other_organization.id
+    db_session.flush()
+
+    act_as(org_admin_user)
+    assert client.get(f"/api/simulations/attempts/{esito['id']}").status_code == 404
+    assert client.get(f"/api/simulations/attempts/{esito['id']}/pdf").status_code == 404
+    assert client.delete(f"/api/admin/simulation-attempts/{esito['id']}").status_code == 404
+
+
+# ── Il PDF di un tentativo ────────────────────────────────────────────
+
+
+def test_il_pdf_di_un_tentativo_lo_scarica_chi_lo_ha_svolto(user_client, make_simulation):
+    simulation = make_simulation()
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True)},
+    ).json()
+
+    response = user_client.get(f"/api/simulations/attempts/{esito['id']}/pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "test-sblocco-carta-di-credito.pdf" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")
+
+
+def test_il_pdf_di_un_tentativo_lo_scarica_anche_chi_corregge(
+    client, act_as, make_simulation, standard_user, org_admin_user
+):
+    """Stesso endpoint dello studente: la lettura del tentativo e' gia' una sola."""
+    simulation = make_simulation()
+    act_as(standard_user)
+    esito = client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=False)},
+    ).json()
+
+    act_as(org_admin_user)
+    response = client.get(f"/api/simulations/attempts/{esito['id']}/pdf")
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"%PDF")
+
+
+def test_il_pdf_del_tentativo_di_un_altro_non_si_scarica(
+    db_session, client, act_as, make_simulation, standard_user, super_admin_user
+):
+    simulation = make_simulation()
+    attempt = SimulationAttempt(
+        simulation_id=simulation.id,
+        user_id=super_admin_user.id,
+        correct_count=1,
+        question_count=3,
+        answers=[],
+    )
+    db_session.add(attempt)
+    db_session.flush()
+
+    act_as(standard_user)
+    assert client.get(f"/api/simulations/attempts/{attempt.id}/pdf").status_code == 404
 
 
 # ── Il report della dashboard ─────────────────────────────────────────
@@ -898,3 +995,21 @@ def test_il_giudizio_resta_nella_fotografia_del_tentativo(
     assert riletto["score"] == 8.0
     assert riletto["answers"][0]["expected_answer"] == "Deve dire la cosa 1."
     assert riletto["answers"][0]["feedback"] == "Manca una condizione."
+
+
+def test_il_pdf_di_un_test_a_risposta_aperta_porta_le_risposte_scritte(
+    user_client, make_open_simulation, giudice
+):
+    """Il ramo scritto del referto: quello che ha risposto e la traccia."""
+    giudice(quality=0.5)
+    simulation = make_open_simulation()
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _written(simulation)},
+    ).json()
+
+    response = user_client.get(f"/api/simulations/attempts/{esito['id']}/pdf")
+
+    assert response.status_code == 200
+    assert "test-procedura-di-rimborso.pdf" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")

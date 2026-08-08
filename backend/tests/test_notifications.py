@@ -16,28 +16,11 @@ from models import (
     ConversationReview,
     MessageAnnotation,
     NotificationRead,
-    TrainingAssignment,
 )
 
 
 def _naive(value: datetime) -> datetime:
     return value.astimezone(UTC).replace(tzinfo=None)
-
-
-def _assign(db_session, user, avatar, *, target=7.0, due_in_days=None):
-    assignment = TrainingAssignment(
-        user_id=user.id,
-        avatar_id=avatar.id,
-        target_score=target,
-        due_at=(
-            _naive(datetime.now(UTC) + timedelta(days=due_in_days))
-            if due_in_days is not None
-            else None
-        ),
-    )
-    db_session.add(assignment)
-    db_session.flush()
-    return assignment
 
 
 def _evaluated_conversation(db_session, user, avatar, *, score=8.0):
@@ -61,35 +44,100 @@ def _kinds(response):
     return [i["kind"] for i in response.json()["items"]]
 
 
-# ── Obiettivi ─────────────────────────────────────────
+# ── Percorsi ──────────────────────────────────────────
+#
+# La scadenza di una tappa nasce dal suo sblocco (vedi
+# ``TrainingPathStep.due_days``): per farla passare si retrodata
+# l'assegnazione, che per la prima tappa è il momento in cui si è aperta.
 
 
-def test_an_assigned_goal_is_announced(user_client, db_session, standard_user, make_avatar):
-    avatar = make_avatar(name="Mario Rossi")
-    _assign(db_session, standard_user, avatar, target=7.0)
+def _overdue(make_assigned_path, user, avatar, *, target=7.0):
+    """Un percorso la cui prima tappa è scaduta ieri."""
+    return make_assigned_path(
+        user,
+        [{"avatar": avatar, "target": target, "due_days": 1}],
+        created_at=_naive(datetime.now(UTC) - timedelta(days=2)),
+    )
+
+
+def test_an_assigned_path_is_announced(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    make_assigned_path(
+        standard_user, [{"avatar": make_avatar(name="Mario Rossi")}], title="Onboarding"
+    )
 
     body = user_client.get("/api/notifications").json()
 
     assert body["unread"] == 1
     item = body["items"][0]
     assert item["kind"] == "assignment.assigned"
-    assert "Mario Rossi" in item["body"]
-    assert "7" in item["body"]
+    assert "Onboarding" in item["body"]
     assert item["read"] is False
 
 
-def test_a_deadline_three_days_out_is_announced(
-    user_client, db_session, standard_user, make_avatar
+def test_an_unlocked_step_is_announced(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    _assign(db_session, standard_user, make_avatar(), due_in_days=2)
+    """La prima tappa non lo è: l'ha già detto l'assegnazione."""
+    first = make_avatar(name="Mario Rossi")
+    second = make_avatar(name="Luisa Bianchi")
+    make_assigned_path(standard_user, [{"avatar": first}, {"avatar": second}])
+    assert "assignment.unlocked" not in _kinds(user_client.get("/api/notifications"))
+
+    _evaluated_conversation(db_session, standard_user, first, score=8.0)
+
+    items = user_client.get("/api/notifications").json()["items"]
+    unlocked = next(i for i in items if i["kind"] == "assignment.unlocked")
+    assert "Luisa Bianchi" in unlocked["body"]
+
+
+def test_a_locked_step_announces_nothing(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    """Una scadenza per una tappa che non si può cominciare sarebbe una data
+    da temere senza motivo."""
+    make_assigned_path(
+        standard_user,
+        [
+            {"avatar": make_avatar(name="Mario Rossi")},
+            {"avatar": make_avatar(name="Luisa Bianchi"), "due_days": 1},
+        ],
+        created_at=_naive(datetime.now(UTC) - timedelta(days=10)),
+    )
+
+    kinds = _kinds(user_client.get("/api/notifications"))
+
+    assert "assignment.due_soon" not in kinds
+    assert kinds.count("assignment.overdue") == 0
+
+
+def test_a_completed_path_is_announced(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    avatar = make_avatar()
+    make_assigned_path(standard_user, [{"avatar": avatar, "target": 7.0}], title="Onboarding")
+    _evaluated_conversation(db_session, standard_user, avatar, score=8.0)
+
+    kinds = _kinds(user_client.get("/api/notifications"))
+
+    assert "assignment.completed" in kinds
+
+
+def test_a_deadline_three_days_out_is_announced(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_days": 2}])
 
     kinds = _kinds(user_client.get("/api/notifications"))
 
     assert "assignment.due_soon" in kinds
 
 
-def test_a_distant_deadline_is_not_announced(user_client, db_session, standard_user, make_avatar):
-    _assign(db_session, standard_user, make_avatar(), due_in_days=30)
+def test_a_distant_deadline_is_not_announced(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_days": 30}])
 
     kinds = _kinds(user_client.get("/api/notifications"))
 
@@ -97,23 +145,25 @@ def test_a_distant_deadline_is_not_announced(user_client, db_session, standard_u
     assert "assignment.overdue" not in kinds
 
 
-def test_a_passed_deadline_is_announced(user_client, db_session, standard_user, make_avatar):
-    _assign(db_session, standard_user, make_avatar(), due_in_days=-1)
+def test_a_passed_deadline_is_announced(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    _overdue(make_assigned_path, standard_user, make_avatar())
 
     kinds = _kinds(user_client.get("/api/notifications"))
 
     assert "assignment.overdue" in kinds
-    # Scaduto e "sta per scadere" si escludono: sono due stati dello stesso
-    # obiettivo, non due notizie diverse
+    # Scaduto e "sta per scadere" si escludono: sono due stati della stessa
+    # tappa, non due notizie diverse
     assert "assignment.due_soon" not in kinds
 
 
 def test_reaching_the_target_silences_the_deadline(
-    user_client, db_session, standard_user, make_avatar
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
     """La notifica non viene cancellata da nessuno: smette di essere vera."""
     avatar = make_avatar()
-    _assign(db_session, standard_user, avatar, target=7.0, due_in_days=-1)
+    _overdue(make_assigned_path, standard_user, avatar)
     assert "assignment.overdue" in _kinds(user_client.get("/api/notifications"))
 
     _evaluated_conversation(db_session, standard_user, avatar, score=8.0)
@@ -121,22 +171,22 @@ def test_reaching_the_target_silences_the_deadline(
     assert "assignment.overdue" not in _kinds(user_client.get("/api/notifications"))
 
 
-def test_moving_the_deadline_forward_silences_the_warning(
-    user_client, db_session, standard_user, make_avatar
+def test_giving_a_step_more_days_silences_the_warning(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    assignment = _assign(db_session, standard_user, make_avatar(), due_in_days=1)
+    assignment = make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_days": 1}])
     assert "assignment.due_soon" in _kinds(user_client.get("/api/notifications"))
 
-    assignment.due_at = _naive(datetime.now(UTC) + timedelta(days=40))
+    assignment.path.steps[0].due_days = 40
     db_session.flush()
 
     assert "assignment.due_soon" not in _kinds(user_client.get("/api/notifications"))
 
 
-def test_a_deleted_assignment_takes_its_notifications_with_it(
-    user_client, db_session, standard_user, make_avatar
+def test_a_withdrawn_path_takes_its_notifications_with_it(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    assignment = _assign(db_session, standard_user, make_avatar(), due_in_days=-1)
+    assignment = _overdue(make_assigned_path, standard_user, make_avatar())
     assert user_client.get("/api/notifications").json()["unread"] == 2
 
     db_session.delete(assignment)
@@ -163,7 +213,7 @@ def test_a_published_review_is_announced(user_client, db_session, standard_user,
 
     assert item["kind"] == "review.published"
     assert "Clienti 1" in item["body"]
-    assert item["link"] == f"/chat/{conversation.avatar_id}?conversation={conversation.id}"
+    assert item["link"] == f"/app/chat/{conversation.avatar_id}?conversation={conversation.id}"
 
 
 def test_an_annotation_alone_is_announced(user_client, db_session, standard_user, make_avatar):
@@ -209,8 +259,10 @@ def test_a_revised_review_becomes_unread_again(user_client, db_session, standard
 # ── Lettura ───────────────────────────────────────────
 
 
-def test_marking_one_as_read(user_client, db_session, standard_user, make_avatar):
-    _assign(db_session, standard_user, make_avatar(), due_in_days=-1)
+def test_marking_one_as_read(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    _overdue(make_assigned_path, standard_user, make_avatar())
     items = user_client.get("/api/notifications").json()["items"]
     assert len(items) == 2
 
@@ -220,8 +272,10 @@ def test_marking_one_as_read(user_client, db_session, standard_user, make_avatar
     assert [i["read"] for i in body["items"]] == [True, False]
 
 
-def test_marking_everything_as_read(user_client, db_session, standard_user, make_avatar):
-    _assign(db_session, standard_user, make_avatar(), due_in_days=-1)
+def test_marking_everything_as_read(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    _overdue(make_assigned_path, standard_user, make_avatar())
 
     body = user_client.post("/api/notifications/read", json={}).json()
 
@@ -230,10 +284,10 @@ def test_marking_everything_as_read(user_client, db_session, standard_user, make
 
 
 def test_the_read_mark_is_not_moved_by_a_second_call(
-    user_client, db_session, standard_user, make_avatar
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
     """Registra la prima volta che l'utente l'ha vista, non l'ultima."""
-    _assign(db_session, standard_user, make_avatar())
+    make_assigned_path(standard_user, [{"avatar": make_avatar()}])
     user_client.post("/api/notifications/read", json={})
     first = db_session.query(NotificationRead).one().read_at
 
@@ -246,11 +300,11 @@ def test_the_read_mark_is_not_moved_by_a_second_call(
 
 
 def test_notifications_are_strictly_first_person(
-    client, act_as, db_session, standard_user, org_admin_user, make_avatar
+    client, act_as, db_session, standard_user, org_admin_user, make_avatar, make_assigned_path
 ):
     """L'admin che apre la propria campanella non legge quella dei suoi
     studenti: l'endpoint risponde sempre e solo sul chiamante."""
-    _assign(db_session, standard_user, make_avatar())
+    make_assigned_path(standard_user, [{"avatar": make_avatar()}])
 
     act_as(org_admin_user)
     assert client.get("/api/notifications").json()["items"] == []

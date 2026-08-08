@@ -46,7 +46,7 @@ questo documento e firmare l'accordo art. 28.
 | **Trascrizione della conversazione** | `chat_messages.content` | Prodotta dallo speech to text, oppure digitata in modalità chat |
 | **Valutazione automatica della prestazione** | `conversation_evaluations.result`, `.overall_score` | Generata da un modello linguistico |
 | Revisione umana e annotazioni del formatore | `conversation_reviews`, `message_annotations` | Scritte da un formatore |
-| Obiettivi di formazione assegnati | `training_assignments` | Assegnati da un amministratore |
+| Percorsi di formazione assegnati | `training_path_assignments` | Assegnati da un amministratore. Le tappe di cui sono fatti stanno sul percorso, che è dell'organizzazione e non della persona |
 | Indirizzo IP e User-Agent | `token_session`, `audit_logs` | Raccolti a ogni accesso e a ogni azione |
 | Registro delle azioni compiute | `audit_logs` | Scritto dal middleware a ogni richiesta che modifica qualcosa |
 | Email di chi ha creato o modificato una riga | `users`, `organizations`, `avatars`, `technical_simulations`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`) |
@@ -108,7 +108,7 @@ organizzazione. Un amministratore non vede mai fuori dal proprio tenant.
 
 **Intervento umano.** Un formatore può correggere il voto assegnando un
 `override_score` con la motivazione obbligatoria, e la correzione diventa il
-voto ufficiale ovunque: report, obiettivi, dashboard, export
+voto ufficiale ovunque: report, tappe dei percorsi, dashboard, export
 (`backend/reviews.py`, `final_score`). Viene conservato anche il punteggio
 che l'AI aveva dato al momento della revisione, così una correzione resta
 leggibile anche se la valutazione viene rigenerata dopo.
@@ -190,8 +190,8 @@ non logica.
 
 | Diritto | Come è soddisfatto |
 | --- | --- |
-| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, obiettivi, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
-| **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni e obiettivi, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
+| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
+| **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni e percorsi assegnati, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
 | **Rettifica** (art. 16) | L'utente modifica da solo nome e cognome; l'email la cambia un amministratore |
 | **Intervento umano** (art. 22) | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4) |
 | **Opposizione, limitazione** | Da gestire contrattualmente con il titolare: non esistono nel software |

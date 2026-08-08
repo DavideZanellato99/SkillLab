@@ -562,7 +562,7 @@ export default function ChatPage() {
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-slate-500">
           <p className="mb-4 text-base text-red-400">Impossibile caricare i dati dell'avatar.</p>
           <Link
-            to="/"
+            to="/app"
             className="text-sm text-violet-400 no-underline transition-colors hover:text-slate-100"
           >
             ← Torna alla Gallery
@@ -747,7 +747,7 @@ export default function ChatPage() {
 
         {/* Back to Gallery */}
         <Link
-          to="/"
+          to="/app"
           className="flex items-center gap-2 border-t border-white/6 px-6 py-4 text-[0.85rem] font-medium text-slate-400 no-underline transition hover:bg-white/8 hover:text-slate-100"
           id="back-to-gallery"
         >

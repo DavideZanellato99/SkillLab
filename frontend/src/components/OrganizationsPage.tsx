@@ -430,7 +430,7 @@ export default function OrganizationsPage() {
             <div className="flex items-center justify-end gap-3">
               <span>{viewingOrg.user_count}</span>
               <Link
-                to={`/admin?organization_id=${viewingOrg.id}`}
+                to={`/app/admin?organization_id=${viewingOrg.id}`}
                 onClick={closeDetail}
                 className={detailLinkCls}
               >
@@ -442,7 +442,7 @@ export default function OrganizationsPage() {
             <div className="flex items-center justify-end gap-3">
               <span>{viewingOrg.avatar_count}</span>
               <Link
-                to={`/admin/avatars?organization_id=${viewingOrg.id}`}
+                to={`/app/admin/avatars?organization_id=${viewingOrg.id}`}
                 onClick={closeDetail}
                 className={detailLinkCls}
               >

@@ -219,11 +219,20 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
         "simulation.attempt", "Simulazione svolta", "simulation", "simulation_id"
     ),
     # Percorsi di training
+    ("POST", "/api/training/paths"): AuditAction(
+        "training.path_create", "Percorso creato", "training_path"
+    ),
+    ("PUT", "/api/training/paths/{path_id}"): AuditAction(
+        "training.path_update", "Percorso modificato", "training_path", "path_id"
+    ),
+    ("DELETE", "/api/training/paths/{path_id}"): AuditAction(
+        "training.path_delete", "Percorso eliminato", "training_path", "path_id"
+    ),
     ("POST", "/api/training/assignments"): AuditAction(
-        "training.assign", "Obiettivo assegnato", "assignment"
+        "training.assign", "Percorso assegnato", "assignment"
     ),
     ("DELETE", "/api/training/assignments/{assignment_id}"): AuditAction(
-        "training.delete", "Obiettivo eliminato", "assignment", "assignment_id"
+        "training.delete", "Percorso ritirato", "assignment", "assignment_id"
     ),
 }
 

@@ -138,7 +138,7 @@ def final_score(ai_score, review):
 ```
 
 **Tutto** quello che legge un punteggio passa di qui: il referto dello
-studente, il progresso di un obiettivo assegnato, i grafici del cruscotto, il
+studente, il progresso di una tappa di un percorso, i grafici del cruscotto, il
 PDF, il foglio di calcolo, il confronto fra tentativi. Qualunque cosa saltasse
 questa funzione mostrerebbe un voto allo studente e ne conterebbe un altro
 verso il suo obiettivo.

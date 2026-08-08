@@ -56,7 +56,8 @@ from models import (
     SimulationAttempt,
     TechnicalSimulation,
     TokenSession,
-    TrainingAssignment,
+    TrainingPath,
+    TrainingPathAssignment,
     User,
     UserSelection,
 )
@@ -69,14 +70,16 @@ _USER_OWNED = (
     UserSelection,
     TokenSession,
     NotificationRead,
-    TrainingAssignment,
+    TrainingPathAssignment,
     SimulationAttempt,
 )
 
 # Every table that names the person who created or last modified the row
 # (the `Authored` mixin). These rows are not about the user and they stay:
-# only the signature on them is anonymised.
-_AUTHORED = (User, Organization, Avatar, TechnicalSimulation)
+# only the signature on them is anonymised. A training path is one of them:
+# it is a model the organization keeps, not something about the person who
+# composed it.
+_AUTHORED = (User, Organization, Avatar, TechnicalSimulation, TrainingPath)
 
 
 def erase_conversations(db: Session, conversation_ids: Sequence[UUID]) -> int:

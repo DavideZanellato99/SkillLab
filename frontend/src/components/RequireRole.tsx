@@ -25,9 +25,9 @@ interface RequireRoleProps {
 
 /**
  * Route level role gate. On a role mismatch (typed URL, stale bookmark,
- * role downgraded while the tab was open) it bounces to the home page with
- * `replace`, so the blocked URL leaves no history entry to go back to and
- * its existence is never confirmed.
+ * role downgraded while the tab was open) it bounces to `/app`, the home of
+ * the signed in area, with `replace`, so the blocked URL leaves no history
+ * entry to go back to and its existence is never confirmed.
  *
  * This is UX only: the real enforcement lives in the backend dependencies
  * (`get_current_admin` / `get_current_super_admin`), which answer 403.
@@ -36,7 +36,7 @@ export default function RequireRole({ access, children }: RequireRoleProps) {
   const { user } = useAuth()
 
   if (!ACCESS_CHECKS[access](user)) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/app" replace />
   }
 
   return children

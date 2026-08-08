@@ -34,7 +34,7 @@ from models import (
     ChatMessage,
     ConversationEvaluation,
     Organization,
-    TrainingAssignment,
+    TrainingPathAssignment,
     User,
     UserSelection,
 )
@@ -421,7 +421,14 @@ def test_a_suspension_without_a_reason_stays_empty(admin_client, organization):
 
 
 def test_delete_takes_the_whole_tenant_with_it(
-    admin_client, cognito, db_session, organization, standard_user, make_avatar, super_admin_user
+    admin_client,
+    cognito,
+    db_session,
+    organization,
+    standard_user,
+    make_avatar,
+    make_assigned_path,
+    super_admin_user,
 ):
     """Every table that hangs off a tenant, in one irreversible sweep."""
     avatar = make_avatar()
@@ -439,13 +446,8 @@ def test_delete_takes_the_whole_tenant_with_it(
         )
     )
     db_session.add(UserSelection(user_id=standard_user.id, avatar_id=avatar.id))
-    db_session.add(
-        TrainingAssignment(
-            user_id=standard_user.id,
-            avatar_id=avatar.id,
-            assigned_by_id=super_admin_user.id,
-            target_score=8.0,
-        )
+    make_assigned_path(
+        standard_user, [{"avatar": avatar, "target": 8.0}], assigned_by=super_admin_user
     )
     db_session.flush()
 
@@ -479,7 +481,9 @@ def test_delete_takes_the_whole_tenant_with_it(
     )
     assert db_session.query(UserSelection).filter(UserSelection.user_id == user_id).count() == 0
     assert (
-        db_session.query(TrainingAssignment).filter(TrainingAssignment.user_id == user_id).count()
+        db_session.query(TrainingPathAssignment)
+        .filter(TrainingPathAssignment.user_id == user_id)
+        .count()
         == 0
     )
 

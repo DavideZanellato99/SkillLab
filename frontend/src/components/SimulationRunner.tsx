@@ -84,7 +84,7 @@ export default function SimulationRunner() {
         <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-6 text-center text-[0.9rem] text-red-300">
           {error instanceof Error ? error.message : 'Simulazione non trovata.'}
         </div>
-        <Link to="/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
+        <Link to="/app/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
           Torna all'elenco
         </Link>
       </PageContainer>
@@ -195,7 +195,7 @@ export default function SimulationRunner() {
           actions={
             <>
               <PrimaryButton onClick={restart}>Riprova il test</PrimaryButton>
-              <Link to="/simulatore" className={linkBtnCls}>
+              <Link to="/app/simulatore" className={linkBtnCls}>
                 Torna all'elenco
               </Link>
             </>
@@ -213,7 +213,7 @@ export default function SimulationRunner() {
           <p className="mb-1 text-[0.95rem]">Questa simulazione non contiene ancora domande</p>
           <p className="text-sm">Sarà disponibile appena chi la gestisce le avrà predisposte</p>
         </div>
-        <Link to="/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
+        <Link to="/app/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
           Torna all'elenco
         </Link>
       </PageContainer>
@@ -234,7 +234,7 @@ export default function SimulationRunner() {
         }
         actions={
           started ? undefined : (
-            <Link to="/simulatore" className={linkBtnCls}>
+            <Link to="/app/simulatore" className={linkBtnCls}>
               Torna all'elenco
             </Link>
           )

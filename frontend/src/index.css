@@ -36,6 +36,9 @@
   --animate-typing-bounce: typing-bounce 1.4s infinite ease-in-out;
   --animate-voice-pulse: voice-pulse 1.8s ease-in-out infinite;
   --animate-voice-blink: voice-blink 1.4s ease-in-out infinite;
+  /* Le macchie di luce del sito pubblico: lentissime, perché devono dare
+     l'impressione che la pagina sia viva senza mai attirare lo sguardo. */
+  --animate-aurora: aurora 22s ease-in-out infinite alternate;
 
   @keyframes fade-in {
     from {
@@ -199,6 +202,17 @@
     }
     50% {
       opacity: 0.3;
+    }
+  }
+  @keyframes aurora {
+    0% {
+      transform: translate3d(-6%, -4%, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(6%, 3%, 0) scale(1.12);
+    }
+    100% {
+      transform: translate3d(-3%, 5%, 0) scale(1.05);
     }
   }
 }

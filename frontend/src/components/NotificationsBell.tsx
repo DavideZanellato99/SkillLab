@@ -23,6 +23,27 @@ const ICONS: Record<NotificationKind, { path: React.ReactNode; cls: string }> = 
       </>
     ),
   },
+  /* Il lucchetto che si apre: una tappa è diventata il proprio turno. */
+  'assignment.unlocked': {
+    cls: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
+    path: (
+      <>
+        <rect x="3" y="11" width="18" height="11" rx="2" />
+        <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+      </>
+    ),
+  },
+  /* La spunta dentro il cerchio: il percorso è finito, tutte le tappe sono
+   * chiuse. È l'unica notifica che non chiede di fare qualcosa. */
+  'assignment.completed': {
+    cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+    path: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <polyline points="8 12 11 15 16 9" />
+      </>
+    ),
+  },
   'assignment.due_soon': {
     cls: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
     path: (

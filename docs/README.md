@@ -14,7 +14,7 @@ alle singole funzionalità.
 | --- | --- |
 | [architettura.md](architettura.md) | I pezzi del sistema e chi parla con chi, cosa succede all'avvio del backend, i servizi esterni |
 | [comunicazione-frontend-backend.md](comunicazione-frontend-backend.md) | Le tre forme in cui il browser parla col server (HTTP, SSE, WebSocket), i cookie, il rinnovo della sessione, la cache lato client |
-| [frontend.md](frontend.md) | Com'è organizzata l'app React: rotte, ruoli, hook, componenti e le convenzioni da rispettare |
+| [frontend.md](frontend.md) | Com'è organizzata l'app React: rotte, ruoli, hook, componenti, il sito pubblico che si vede prima dell'accesso, e le convenzioni da rispettare |
 | [dati-e-schema.md](dati-e-schema.md) | Le tabelle, come lo schema si aggiorna da solo all'avvio, la paternità delle righe |
 
 ## Chi entra e cosa può vedere
@@ -33,7 +33,7 @@ alle singole funzionalità.
 | [chiamata-vocale.md](chiamata-vocale.md) | La telefonata dal microfono all'audio di risposta: STT, LLM, TTS, turni, registrazione |
 | [chat-testuale.md](chat-testuale.md) | Il canale scritto, lo streaming della risposta, la fine di una conversazione |
 | [valutazione.md](valutazione.md) | Il giudizio dell'AI sui sei criteri, la revisione del docente, il voto che conta |
-| [training-e-report.md](training-e-report.md) | Percorsi assegnati, notifiche, confronto fra tentativi, cruscotti, report per persona ed esportazioni |
+| [training-e-report.md](training-e-report.md) | Percorsi a tappe, notifiche, confronto fra tentativi, cruscotti, report per persona ed esportazioni |
 | [simulatore.md](simulatore.md) | Il test tecnico, ricavato da un documento aziendale o scritto a mano dal docente: il serbatoio di domande, le dieci estratte a ogni tentativo, la correzione |
 
 ## Come gira davvero

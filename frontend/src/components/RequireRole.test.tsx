@@ -15,14 +15,15 @@ function signedInAs(ruolo: RoleName) {
   currentUser = { ruolo } as AuthUser
 }
 
-/** Lands on a guarded route; the home page stands in for the redirect target. */
+/** Lands on a guarded route; `/app`, the home of the signed in area, stands
+ *  in for the redirect target. */
 function renderGuardedRoute(access: RouteAccess) {
   render(
-    <MemoryRouter initialEntries={['/riservata']}>
+    <MemoryRouter initialEntries={['/app/riservata']}>
       <Routes>
-        <Route path="/" element={<p>Home</p>} />
+        <Route path="/app" element={<p>Home</p>} />
         <Route
-          path="/riservata"
+          path="/app/riservata"
           element={
             <RequireRole access={access}>
               <p>Contenuto riservato</p>

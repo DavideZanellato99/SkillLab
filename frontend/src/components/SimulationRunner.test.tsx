@@ -128,9 +128,9 @@ function renderRunner() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/simulatore/sim-1']}>
+      <MemoryRouter initialEntries={['/app/simulatore/sim-1']}>
         <Routes>
-          <Route path="/simulatore/:simulationId" element={<SimulationRunner />} />
+          <Route path="/app/simulatore/:simulationId" element={<SimulationRunner />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,

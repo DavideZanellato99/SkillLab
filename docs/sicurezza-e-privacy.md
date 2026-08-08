@@ -46,7 +46,7 @@ Le righe portano anche email, ruolo e organizzazione **fotografati**: il
 registro deve restare leggibile dopo che l'account è stato cancellato, o smette
 di essere un registro.
 
-Il super admin lo legge da `/admin/logs`
+Il super admin lo legge da `/app/admin/logs`
 ([routers/audit_logs.py](../backend/routers/audit_logs.py)), con i filtri per
 azione, utente e periodo.
 

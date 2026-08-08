@@ -643,6 +643,26 @@ def _backfill_simulation_points() -> None:
         )
 
 
+def _drop_legacy_training_assignments() -> None:
+    """Portare via gli obiettivi singoli, sostituiti dai percorsi a tappe.
+
+    Un obiettivo era una riga sola, un utente su un avatar. Ora un percorso
+    è un modello riusabile con tappe numerate che si sbloccano una dopo
+    l'altra (vedi ``TrainingPath``), e una tappa può anche essere un test
+    tecnico: la vecchia riga non è un percorso di una tappa, perché non ha
+    né il percorso a cui appartenere né il tipo di bersaglio, e tenerla
+    vuol dire tenere in vita due modelli che rispondono alla stessa
+    domanda.
+
+    Le chiavi di lettura delle notifiche che quegli obiettivi avevano
+    prodotto restano in ``notification_reads`` e non corrispondono più a
+    niente, che è esattamente il caso innocuo che quella tabella mette in
+    conto (vedi ``NotificationRead``).
+    """
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS training_assignments"))
+
+
 def _index_audit_logs() -> None:
     """Index the audit trail the way it is read.
 
@@ -683,6 +703,7 @@ def run_startup_migrations() -> None:
     _backfill_last_login()
     _backfill_authorship()
     _backfill_simulation_points()
+    _drop_legacy_training_assignments()
     _index_audit_logs()
 
 

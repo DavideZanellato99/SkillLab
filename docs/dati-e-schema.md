@@ -41,7 +41,7 @@ valgono su tutte le righe. Tutto in
 | --- | --- |
 | `avatars` | La persona simulata, con la sua scheda in `profile` |
 | `avatar_categories` | Come un'organizzazione raggruppa i propri avatar: nome e colore. Vedi [avatar-e-persona.md](avatar-e-persona.md) |
-| `training_assignments` | Un obiettivo assegnato a una persona su un avatar |
+| `training_paths`, `training_path_steps`, `training_path_assignments` | I percorsi a tappe, descritti in [training-e-report.md](training-e-report.md) |
 | `notification_reads` | L'unica cosa che si salva delle notifiche: cosa è già stato letto |
 | `technical_simulations`, `simulation_chunks`, `simulation_questions`, `simulation_attempts` | Il simulatore tecnico, descritto in [simulatore.md](simulatore.md) |
 | `audit_logs` | Il registro delle azioni |

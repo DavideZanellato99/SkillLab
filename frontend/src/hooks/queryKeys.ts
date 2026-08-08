@@ -70,12 +70,17 @@ export const queryKeys = {
   },
   training: {
     all: ['training'] as const,
-    /** Percorsi assegnati, visti da un admin. */
-    assignments: (organizationId?: string) =>
-      ['training', 'assignments', organizationId ?? '__all__'] as const,
+    /** I percorsi componibili, cioè i modelli fatti di tappe. */
+    paths: (organizationId?: string) => ['training', 'paths', organizationId ?? '__all__'] as const,
+    /** Percorsi affidati alle persone, visti da un admin. */
+    assignments: (organizationId?: string, pathId?: string) =>
+      ['training', 'assignments', organizationId ?? '__all__', pathId ?? '__all__'] as const,
     /** I percorsi di chi sta guardando, per la striscia in home. */
     mine: ['training', 'mine'] as const,
-    /** Chi può ricevere un avatar come obiettivo. */
+    /** Di cosa può essere fatta una tappa, in un'organizzazione. */
+    assignableContent: (organizationId: string) =>
+      ['training', 'assignable-content', organizationId] as const,
+    /** Chi può ricevere un percorso. */
     assignableUsers: (organizationId: string) =>
       ['training', 'assignable-users', organizationId] as const,
   },

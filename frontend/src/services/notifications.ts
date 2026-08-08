@@ -1,7 +1,7 @@
 /* Notifiche dell'utente corrente.
  *
- * Nessuna di queste è memorizzata: il server le ricava ogni volta dagli
- * obiettivi assegnati e dalle revisioni del docente (vedi
+ * Nessuna di queste è memorizzata: il server le ricava ogni volta dalle
+ * tappe dei percorsi assegnati e dalle revisioni del docente (vedi
  * backend/notifications.py). Di conseguenza una notifica che ha smesso di
  * essere vera, per esempio una scadenza spostata in avanti, sparisce da
  * sola alla lettura successiva, e qui non c'è nessuna cache da invalidare
@@ -12,7 +12,12 @@
 import { apiFetch } from './api'
 
 export type NotificationKind =
-  'assignment.assigned' | 'assignment.due_soon' | 'assignment.overdue' | 'review.published'
+  | 'assignment.assigned'
+  | 'assignment.unlocked'
+  | 'assignment.completed'
+  | 'assignment.due_soon'
+  | 'assignment.overdue'
+  | 'review.published'
 
 export interface AppNotification {
   /** Identità stabile dell'evento: è a questa che si riferisce la lettura. */

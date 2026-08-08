@@ -24,7 +24,7 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
     card.appendChild(ripple)
     setTimeout(() => ripple.remove(), 600)
 
-    navigate(`/chat/${avatar.id}`)
+    navigate(`/app/chat/${avatar.id}`)
   }
 
   return (
@@ -39,7 +39,7 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          navigate(`/chat/${avatar.id}`)
+          navigate(`/app/chat/${avatar.id}`)
         }
       }}
     >

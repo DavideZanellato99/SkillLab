@@ -335,50 +335,196 @@ class ConversationEvaluationResponse(BaseModel):
     updated_at: datetime
 
 
-# Derived state of a training assignment (see routers/training.py)
+# Stato ricavato di una tappa e del percorso che la contiene (vedi
+# ``training_progress``). "locked" è solo di una tappa: un percorso è aperto
+# finché ha una tappa da fare, quale sia lo dice la tappa stessa.
+ASSIGNMENT_STATUS_LOCKED = "locked"
 ASSIGNMENT_STATUS_ACTIVE = "active"
 ASSIGNMENT_STATUS_OVERDUE = "overdue"
 ASSIGNMENT_STATUS_COMPLETED = "completed"
 ASSIGNMENT_STATUS_COMPLETED_LATE = "completed_late"
 
+# Le due forme di tappa, ripetute qui perché sono anche un valore che esce
+# dall'API: ``training_progress`` le usa per attaccare una prova alla tappa,
+# il frontend per sapere se una tappa apre una chat o un test.
+STEP_KIND_AVATAR = "avatar"
+STEP_KIND_SIMULATION = "simulation"
 
-class TrainingAssignmentCreate(BaseModel):
-    """Super admin request: assign one avatar as a goal to one or more users."""
 
-    avatar_id: UUID
-    user_ids: list[UUID] = Field(min_length=1)
+class TrainingPathStepInput(BaseModel):
+    """Una tappa come la compone chi scrive il percorso.
+
+    Uno dei due bersagli e uno solo: la stessa regola che il vincolo scrive
+    sulla tabella, ripetuta qui perché una richiesta malformata deve
+    fermarsi al confine con un messaggio leggibile, non a metà transazione
+    con un errore del database.
+    """
+
+    avatar_id: UUID | None = None
+    simulation_id: UUID | None = None
     target_score: float = Field(ge=1, le=10)
-    due_at: datetime | None = None
+    # Giorni concessi dallo sblocco della tappa. Vedi ``TrainingPathStep``
+    # per perché non è una data.
+    due_days: int | None = Field(default=None, ge=1, le=365)
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> "TrainingPathStepInput":
+        if (self.avatar_id is None) == (self.simulation_id is None):
+            raise ValueError("Una tappa punta a un avatar oppure a una simulazione.")
+        return self
 
 
-class TrainingAssignmentResponse(BaseModel):
-    """One assigned goal with its progress, derived from the evaluations.
+class TrainingPathWrite(BaseModel):
+    """Il percorso come si crea e come si riscrive.
 
-    status: "active" (still open), "overdue" (deadline passed without
-    reaching the target), "completed", or "completed_late" (target reached
-    after the deadline). Only conversations opened after the assignment
-    count: attempts, best_score and achieved_at all follow that rule.
+    Le tappe arrivano tutte insieme e nell'ordine in cui devono stare: sono
+    la forma del percorso, non una collezione da modificare una alla volta,
+    e mandarle intere è anche quello che permette di riordinarle senza un
+    endpoint apposta.
+
+    ``organization_id`` lo nomina solo il super admin; all'organization
+    admin il server impone il proprio tenant e ignora quello che chiede.
+    """
+
+    title: str = Field(min_length=1, max_length=150)
+    description: str | None = None
+    organization_id: UUID | None = None
+    steps: list[TrainingPathStepInput] = Field(min_length=1)
+
+
+class TrainingPathStepResponse(BaseModel):
+    """Una tappa con il nome del suo bersaglio, per chi la legge.
+
+    Il percorso porta gli id, ma un elenco di id non si legge: il nome
+    dell'avatar o il titolo del test viaggia con la tappa così nessuna
+    schermata deve andarseli a cercare con una seconda chiamata.
     """
 
     id: UUID
+    # Posto nella fila, da 1 e senza buchi: è la numerazione dell'elenco
+    # ordinato, non la colonna ``position`` (vedi ``TrainingPathStep``)
+    position: int
+    # "avatar" o "simulation"
+    kind: str
+    target_score: float
+    due_days: int | None = None
+    # Il bersaglio: uno dei due gruppi è pieno, l'altro resta vuoto
+    avatar_id: UUID | None = None
+    avatar_name: str | None = None
+    avatar_category: str | None = None
+    # La tinta della categoria, così la targhetta è dello stesso colore che
+    # ha nel catalogo invece di uno indovinato dal nome.
+    avatar_category_color: str = DEFAULT_AVATAR_CATEGORY_COLOR
+    simulation_id: UUID | None = None
+    simulation_title: str | None = None
+    # Come si risponde al test: "multiple", "open", "ordering", "matching"
+    simulation_kind: str | None = None
+
+
+class TrainingPathResponse(BaseModel):
+    """Un percorso nell'elenco di chi lo governa: le tappe e quanti lo hanno."""
+
+    id: UUID
+    organization_id: UUID
+    organization_name: str
+    title: str
+    description: str | None = None
+    steps: list[TrainingPathStepResponse]
+    # Quante persone lo stanno percorrendo, per sapere cosa si tocca
+    # modificandolo
+    assigned_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class TrainingPathAssignmentCreate(BaseModel):
+    """Affida un percorso a una o più persone."""
+
+    path_id: UUID
+    user_ids: list[UUID] = Field(min_length=1)
+
+
+class TrainingStepProgressResponse(TrainingPathStepResponse):
+    """Una tappa vista da chi la sta percorrendo, con il suo stato.
+
+    status: "locked" (la tappa prima non è ancora superata), "active",
+    "overdue" (i giorni concessi sono passati), "completed" o
+    "completed_late". Contano solo le prove svolte dopo lo sblocco, e
+    ``attempts``, ``best_score`` e ``achieved_at`` seguono tutti quella
+    regola.
+    """
+
+    status: str
+    # Da quando la tappa conta, e la scadenza che ne discende: entrambe
+    # assenti finché la tappa è chiusa
+    unlocked_at: datetime | None = None
+    due_at: datetime | None = None
+    attempts: int = 0
+    best_score: float | None = None
+    achieved_at: datetime | None = None
+
+
+class TrainingPathAssignmentResponse(BaseModel):
+    """Un percorso affidato a una persona, con il progresso di ogni tappa.
+
+    Una sola risposta per le due schermate che la leggono, quella
+    dell'amministratore e la home di chi si allena: è lo stesso fatto, e due
+    schemi finirebbero per raccontarlo in modo diverso.
+    """
+
+    id: UUID
+    path_id: UUID
+    path_title: str
+    path_description: str | None = None
     user_id: UUID
     user_name: str
     user_email: str
     organization_id: UUID | None = None
     organization_name: str | None = None
-    avatar_id: UUID
-    avatar_name: str
-    avatar_category: str
-    # La tinta della categoria, così la targhetta è dello stesso colore che
-    # ha nel catalogo invece di uno indovinato dal nome.
-    avatar_category_color: str = DEFAULT_AVATAR_CATEGORY_COLOR
-    target_score: float
-    due_at: datetime | None = None
     created_at: datetime
+    # Lo stato del percorso intero: "active", "overdue", "completed" o
+    # "completed_late"
     status: str
-    attempts: int
-    best_score: float | None = None
-    achieved_at: datetime | None = None
+    steps: list[TrainingStepProgressResponse]
+    completed_steps: int = 0
+    # La posizione (da 1) della tappa da fare adesso, assente a percorso finito
+    current_position: int | None = None
+
+
+class AssignableAvatar(BaseModel):
+    """Un avatar che può diventare una tappa."""
+
+    id: UUID
+    name: str
+    category: str
+    category_color: str = DEFAULT_AVATAR_CATEGORY_COLOR
+
+
+class AssignableSimulation(BaseModel):
+    """Un test tecnico che può diventare una tappa."""
+
+    id: UUID
+    title: str
+    # Come si risponde: "multiple", "open", "ordering", "matching"
+    kind: str
+
+
+class AssignableContentResponse(BaseModel):
+    """Di cosa può essere fatta una tappa, in un'organizzazione sola.
+
+    Le due liste arrivano insieme perché insieme si scelgono: chi compone un
+    percorso decide tappa per tappa se la prossima è una conversazione o un
+    test, e due chiamate separate vorrebbero dire due momenti in cui
+    l'elenco può essere di un tenant diverso da quello che si sta guardando.
+
+    Ci sono solo avatar attivi e simulazioni pubblicate: una tappa su una
+    bozza, o su un avatar archiviato, sarebbe una tappa che nessuno potrebbe
+    mai superare, e siccome le tappe dopo di lei si sbloccano solo quando è
+    chiusa, bloccherebbe il percorso intero.
+    """
+
+    avatars: list[AssignableAvatar]
+    simulations: list[AssignableSimulation]
 
 
 class ChatConversationSummary(BaseModel):

@@ -180,16 +180,19 @@ def test_admin_list_hides_the_archive_unless_asked(admin_client, make_avatar):
     assert by_id[str(kept.id)]["deleted_at"] is None
 
 
-def test_training_goal_cannot_target_an_archived_avatar(admin_client, standard_user, make_avatar):
+def test_a_training_step_cannot_target_an_archived_avatar(
+    admin_client, organization, standard_user, make_avatar
+):
+    """Una tappa che nessuno può superare terrebbe chiuse tutte quelle dopo."""
     avatar = make_avatar(name="Obiettivo Impossibile")
     assert admin_client.delete(f"/api/admin/avatars/{avatar.id}").status_code == 200
 
     response = admin_client.post(
-        "/api/training/assignments",
+        "/api/training/paths",
         json={
-            "avatar_id": str(avatar.id),
-            "user_ids": [str(standard_user.id)],
-            "target_score": 7.0,
+            "title": "Impossibile",
+            "organization_id": str(organization.id),
+            "steps": [{"avatar_id": str(avatar.id), "target_score": 7.0}],
         },
     )
     assert response.status_code == 409

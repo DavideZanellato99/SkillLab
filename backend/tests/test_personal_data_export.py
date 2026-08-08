@@ -19,13 +19,12 @@ from models import (
     ConversationEvaluation,
     ConversationRecording,
     ConversationReview,
-    TrainingAssignment,
 )
 
 _ANSWER_KEY = "IL-CLIENTE-STA-MENTENDO-SUL-GUASTO"
 
 
-def _seed(db_session, user, avatar, *, with_audio=True) -> ChatConversation:
+def _seed(db_session, user, avatar, make_assigned_path, *, with_audio=True) -> ChatConversation:
     conversation = ChatConversation(
         user_id=user.id, avatar_id=avatar.id, title="Reclamo bolletta", mode="voice"
     )
@@ -52,9 +51,11 @@ def _seed(db_session, user, avatar, *, with_audio=True) -> ChatConversation:
                 override_score=7.5,
                 override_reason="Ha gestito bene l'escalation.",
             ),
-            TrainingAssignment(user_id=user.id, avatar_id=avatar.id, target_score=8.0),
         ]
     )
+    # Un percorso affidato: nell'archivio è la parte che dice cosa alla
+    # persona era stato chiesto di fare, non solo cosa ha fatto.
+    make_assigned_path(user, [{"avatar": avatar, "target": 8.0}])
     if with_audio:
         db_session.add(
             ConversationRecording(
@@ -86,9 +87,9 @@ def _data(archive: zipfile.ZipFile) -> dict:
 
 
 def test_the_archive_holds_the_data_the_readme_and_the_audio(
-    user_client, db_session, standard_user, make_avatar
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    _seed(db_session, standard_user, make_avatar())
+    _seed(db_session, standard_user, make_avatar(), make_assigned_path)
 
     archive = _download(user_client)
     names = archive.namelist()
@@ -106,9 +107,9 @@ def test_the_archive_holds_the_data_the_readme_and_the_audio(
 
 
 def test_the_export_carries_the_transcript_and_every_verdict(
-    user_client, db_session, standard_user, make_avatar
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    _seed(db_session, standard_user, make_avatar())
+    _seed(db_session, standard_user, make_avatar(), make_assigned_path)
 
     data = _data(_download(user_client))
     conversation = data["conversazioni"][0]
@@ -119,13 +120,13 @@ def test_the_export_carries_the_transcript_and_every_verdict(
     assert conversation["valutazione_automatica"]["punteggio_complessivo"] == 6.5
     assert conversation["revisione_del_formatore"]["voto_corretto"] == 7.5
     assert conversation["revisione_del_formatore"]["formatore"] == "Anna Formatrice"
-    assert data["obiettivi_assegnati"][0]["punteggio_obiettivo"] == 8.0
+    assert data["percorsi_assegnati"][0]["tappe"][0]["punteggio_obiettivo"] == 8.0
 
 
 def test_the_export_carries_the_account_and_the_activity(
-    user_client, db_session, standard_user, make_avatar
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    _seed(db_session, standard_user, make_avatar())
+    _seed(db_session, standard_user, make_avatar(), make_assigned_path)
 
     # La prima esportazione è essa stessa un'attività registrata, e la
     # seconda la ritrova: il registro di una richiesta viene scritto dal
@@ -144,7 +145,7 @@ def test_an_account_with_nothing_still_gets_a_valid_archive(user_client, standar
     data = _data(_download(user_client))
 
     assert data["conversazioni"] == []
-    assert data["obiettivi_assegnati"] == []
+    assert data["percorsi_assegnati"] == []
     assert data["account"]["email"] == standard_user.email
 
 
@@ -152,7 +153,7 @@ def test_an_account_with_nothing_still_gets_a_valid_archive(user_client, standar
 
 
 def test_the_persona_sheet_never_leaves_the_server(
-    user_client, db_session, standard_user, make_avatar
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
     """The sheet holds hidden objectives and the real cause of the problem.
 
@@ -160,7 +161,7 @@ def test_the_persona_sheet_never_leaves_the_server(
     check is on the raw bytes of the whole archive, not on one field.
     """
     avatar = make_avatar(name="Giulia Bianchi", SEGRETO=_ANSWER_KEY, OBIETTIVO_NASCOSTO=_ANSWER_KEY)
-    _seed(db_session, standard_user, avatar)
+    _seed(db_session, standard_user, avatar, make_assigned_path)
 
     response = user_client.get("/api/auth/me/export")
     assert response.status_code == 200
@@ -173,10 +174,10 @@ def test_the_persona_sheet_never_leaves_the_server(
 
 
 def test_the_export_holds_nobody_elses_conversations(
-    user_client, db_session, standard_user, org_admin_user, make_avatar
+    user_client, db_session, standard_user, org_admin_user, make_avatar, make_assigned_path
 ):
     avatar = make_avatar()
-    _seed(db_session, standard_user, avatar)
+    _seed(db_session, standard_user, avatar, make_assigned_path)
     stranger = ChatConversation(
         user_id=org_admin_user.id, avatar_id=avatar.id, title="Roba di un altro", mode="text"
     )

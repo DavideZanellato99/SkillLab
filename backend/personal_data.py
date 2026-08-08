@@ -35,7 +35,7 @@ import zipfile
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 import audit
 import reviews
@@ -49,7 +49,9 @@ from models import (
     SimulationAttempt,
     TechnicalSimulation,
     TokenSession,
-    TrainingAssignment,
+    TrainingPath,
+    TrainingPathAssignment,
+    TrainingPathStep,
     User,
     UserSelection,
 )
@@ -74,8 +76,8 @@ esportato il {data}.
 
   dati.json          Tutti i dati in formato strutturato: il tuo profilo, le
                      conversazioni con le trascrizioni complete, le
-                     valutazioni automatiche, le revisioni dei formatori, gli
-                     obiettivi assegnati, i test tecnici svolti con le tue
+                     valutazioni automatiche, le revisioni dei formatori, i
+                     percorsi assegnati, i test tecnici svolti con le tue
                      risposte, gli accessi e il registro delle tue attività.
 
   {cartella}/   Le registrazioni audio delle tue telefonate simulate,
@@ -233,21 +235,45 @@ def _conversations(db: Session, user: User) -> tuple[list[dict], dict[UUID, str]
 
 
 def _assignments(db: Session, user: User) -> list[dict]:
+    """I percorsi affidati alla persona, con le tappe di cui sono fatti.
+
+    Le tappe ci sono per intero e non solo il titolo del percorso: sono
+    l'obiettivo vero, cioè quello che alla persona è stato chiesto di fare,
+    e un elenco di titoli non lo direbbe. Lo stato non c'è, perché non è un
+    dato conservato: si ricava dalle prove, che sono già altrove
+    nell'archivio.
+    """
     rows = (
-        db.query(TrainingAssignment, Avatar)
-        .outerjoin(Avatar, Avatar.id == TrainingAssignment.avatar_id)
-        .filter(TrainingAssignment.user_id == user.id)
-        .order_by(TrainingAssignment.created_at.asc())
+        db.query(TrainingPathAssignment)
+        .options(
+            selectinload(TrainingPathAssignment.path)
+            .selectinload(TrainingPath.steps)
+            .selectinload(TrainingPathStep.avatar),
+            selectinload(TrainingPathAssignment.path)
+            .selectinload(TrainingPath.steps)
+            .selectinload(TrainingPathStep.simulation),
+        )
+        .filter(TrainingPathAssignment.user_id == user.id)
+        .order_by(TrainingPathAssignment.created_at.asc())
         .all()
     )
     return [
         {
-            "avatar": avatar.name if avatar else None,
-            "punteggio_obiettivo": assignment.target_score,
-            "scadenza": _at(assignment.due_at),
+            "percorso": assignment.path.title,
+            "descrizione": assignment.path.description,
             "assegnato_il": _at(assignment.created_at),
+            "tappe": [
+                {
+                    "numero": position,
+                    "avatar": step.avatar.name if step.avatar else None,
+                    "simulazione": step.simulation.title if step.simulation else None,
+                    "punteggio_obiettivo": step.target_score,
+                    "giorni_concessi": step.due_days,
+                }
+                for position, step in enumerate(assignment.path.steps, start=1)
+            ],
         }
-        for assignment, avatar in rows
+        for assignment in rows
     ]
 
 
@@ -362,7 +388,7 @@ def _payload(db: Session, user: User) -> tuple[dict, dict[UUID, str]]:
         "esportato_il": datetime.now(UTC).isoformat(),
         "account": _account(user),
         "conversazioni": conversations,
-        "obiettivi_assegnati": _assignments(db, user),
+        "percorsi_assegnati": _assignments(db, user),
         "simulazioni_tecniche": _simulation_attempts(db, user),
         "avatar_selezionati": _selections(db, user),
         "sessioni_di_accesso": _sessions(db, user),

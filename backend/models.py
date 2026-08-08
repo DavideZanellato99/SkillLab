@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     Column,
     DateTime,
     Float,
@@ -759,49 +760,159 @@ class ConversationRecording(Base):
         return f"<ConversationRecording(conversation_id={self.conversation_id}, size_bytes={self.size_bytes})>"
 
 
-class TrainingAssignment(Base):
-    """A training goal assigned to a user: reach target_score with one
-    avatar, optionally within a deadline.
+class TrainingPath(Authored, Base):
+    """Un percorso di training: tappe numerate da superare in ordine.
 
-    Completion is never stored: it is derived at read time from the
-    evaluations of the conversations the user opened AFTER the assignment
-    was created (see routers/training.py), so re-judging or deleting a
-    conversation can never leave a stale completion flag behind. The DB
-    cascades take the assignment away with its user or its avatar.
+    È un modello e non un'assegnazione: si compone una volta ("Onboarding
+    vendite", tre tappe) e si affida a quanti utenti si vuole. Correggere
+    l'obiettivo di una tappa vale per tutti quelli che il percorso ce
+    l'hanno, che è il motivo per cui il percorso esiste come riga a sé
+    invece di essere copiato addosso a ogni allievo.
+
+    Il tenant è la regola di sempre: un percorso appartiene a una sola
+    organizzazione, e le sue tappe possono puntare solo a roba di quella
+    (lo impone ``routers/training``, che è anche l'unico posto da cui le
+    tappe si scrivono).
     """
 
-    __tablename__ = "training_assignments"
+    __tablename__ = "training_paths"
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    avatar_id = Column(
-        Uuid, ForeignKey("avatars.id", ondelete="CASCADE"), nullable=False, index=True
+    organization_id = Column(
+        Uuid, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    # Admin who handed out the goal (informational)
-    assigned_by_id = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    target_score = Column(Float, nullable=False)
-    due_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    title = Column(String(150), nullable=False)
+    description = Column(Text, nullable=True)
 
-    user = relationship("User", foreign_keys=[user_id])
+    organization = relationship("Organization")
+    # Le tappe si leggono sempre in ordine e non esistono senza il percorso:
+    # ``delete-orphan`` è quello che permette di riscriverle tutte a ogni
+    # modifica invece di inseguire quale è cambiata.
+    steps = relationship(
+        "TrainingPathStep",
+        back_populates="path",
+        cascade="all, delete-orphan",
+        order_by="TrainingPathStep.position",
+    )
+    assignments = relationship(
+        "TrainingPathAssignment",
+        back_populates="path",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self):
+        return f"<TrainingPath(id={self.id}, title='{self.title}')>"
+
+
+class TrainingPathStep(Base):
+    """Una tappa di un percorso: un obiettivo su un avatar o su un test.
+
+    Le due colonne del bersaglio sono alternative fra loro e il vincolo lo
+    impone: una tappa è una conversazione con un avatar oppure un test
+    tecnico da superare, mai le due cose insieme e mai nessuna delle due.
+    È la stessa forma che hanno le chiavi di ``SimulationQuestion``, dove
+    ogni tipo riempie la propria colonna e lascia stare le altre.
+
+    ``due_days`` sono i giorni concessi **da quando la tappa si sblocca**, e
+    non una data: su un modello riusabile una data assoluta sarebbe già
+    scaduta al secondo utente a cui il percorso viene affidato, e la tappa
+    numero tre non si può nemmeno datare, perché quando si sbloccherà
+    dipende da quanto ci mette chi la sta percorrendo.
+    """
+
+    __tablename__ = "training_path_steps"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    path_id = Column(
+        Uuid, ForeignKey("training_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Il posto nella fila, da 1. Chi legge il percorso numera per posizione
+    # nell'elenco ordinato e non per questo valore: un avatar cancellato si
+    # porta via la sua tappa, e la fila si richiude senza buchi da spiegare.
+    position = Column(Integer, nullable=False)
+    avatar_id = Column(
+        Uuid, ForeignKey("avatars.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    simulation_id = Column(
+        Uuid,
+        ForeignKey("technical_simulations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    # Il voto da raggiungere, da 1 a 10, sulla stessa scala nei due casi:
+    # una valutazione e un test consegnato si leggono già in decimi.
+    target_score = Column(Float, nullable=False)
+    # Giorni dallo sblocco entro cui la tappa andrebbe chiusa, o NULL
+    due_days = Column(Integer, nullable=True)
+
+    path = relationship("TrainingPath", back_populates="steps")
     avatar = relationship("Avatar")
+    simulation = relationship("TechnicalSimulation")
+
+    __table_args__ = (
+        UniqueConstraint("path_id", "position", name="uq_training_path_step_position"),
+        CheckConstraint(
+            "(avatar_id IS NULL) <> (simulation_id IS NULL)",
+            name="ck_training_path_step_one_target",
+        ),
+    )
 
     def __repr__(self):
         return (
-            f"<TrainingAssignment(id={self.id}, user_id={self.user_id}, "
-            f"avatar_id={self.avatar_id}, target_score={self.target_score})>"
+            f"<TrainingPathStep(path_id={self.path_id}, position={self.position}, "
+            f"avatar_id={self.avatar_id}, simulation_id={self.simulation_id})>"
         )
+
+
+class TrainingPathAssignment(Base):
+    """Un percorso affidato a una persona.
+
+    Non tiene nessuno stato: dove è arrivato chi lo sta percorrendo si
+    ricava in lettura dalle prove che ha svolto (vedi
+    ``training_progress``), per la stessa ragione di sempre. Una spunta
+    salvata sopravviverebbe alla conversazione cancellata che l'aveva
+    prodotta, e una tappa sbloccata resterebbe sbloccata dopo che il
+    docente ha rifatto il giudizio che la chiudeva.
+
+    La data di assegnazione non è informativa: è il momento da cui la prima
+    tappa conta, quindi l'allenamento fatto prima non sblocca niente.
+
+    Lo stesso percorso non si affida due volte alla stessa persona: sarebbe
+    due volte la stessa fila di tappe, con due progressi identici da
+    leggere.
+    """
+
+    __tablename__ = "training_path_assignments"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    path_id = Column(
+        Uuid, ForeignKey("training_paths.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Chi l'ha affidato (informativo)
+    assigned_by_id = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+
+    path = relationship("TrainingPath", back_populates="assignments")
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("path_id", "user_id", name="uq_training_path_assignment_user"),
+    )
+
+    def __repr__(self):
+        return f"<TrainingPathAssignment(path_id={self.path_id}, user_id={self.user_id})>"
 
 
 class NotificationRead(Base):
     """Marks one notification as already read by the user it was for.
 
-    The notifications themselves are never stored. A goal assigned, a
-    deadline coming up, a deadline gone by, a trainer publishing a review:
-    they are all facts already in the database, and copying them into rows
-    would create exactly the stale flags the rest of the app refuses to keep
-    (see TrainingAssignment). Extend a deadline, or reach the target, and a
-    stored "scaduto" would sit there contradicting the goal it describes.
+    The notifications themselves are never stored. A path assigned, a step
+    unlocking, its deadline coming up or going by, a trainer publishing a
+    review: they are all facts already in the database, and copying them
+    into rows would create exactly the stale flags the rest of the app
+    refuses to keep (see TrainingPathAssignment). Reach the target, and a
+    stored "scaduto" would sit there contradicting the step it describes.
     Derived at read time they simply stop being true, with nothing to clean
     up.
 

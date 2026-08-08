@@ -17,7 +17,7 @@ function SimulationCard({ simulation }: { simulation: Simulation }) {
   const done = simulation.attempt_count > 0
   return (
     <Link
-      to={`/simulatore/${simulation.id}`}
+      to={`/app/simulatore/${simulation.id}`}
       className="group flex flex-col gap-3 rounded-2xl border border-white/6 bg-gray-900/60 p-5 no-underline backdrop-blur-md transition hover:-translate-y-px hover:border-violet-600/50 hover:bg-violet-600/8"
     >
       <div className="flex items-start justify-between gap-3">

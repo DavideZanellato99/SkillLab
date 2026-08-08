@@ -343,23 +343,16 @@ def test_an_annotation_of_another_tenant_cannot_be_deleted(
 # ── Il voto corretto è il voto ────────────────────────
 
 
-def test_a_corrected_score_completes_an_assigned_goal(
-    client, act_as, db_session, standard_user, super_admin_user, make_avatar
+def test_a_corrected_score_passes_a_training_step(
+    client, act_as, db_session, standard_user, super_admin_user, make_avatar, make_assigned_path
 ):
-    """Uno studente a cui è stato detto 8 non deve trovare l'obiettivo
-    ancora aperto perché la macchina aveva detto 6."""
+    """Uno studente a cui è stato detto 8 non deve trovare la tappa ancora
+    aperta perché la macchina aveva detto 6."""
     avatar = make_avatar()
-    act_as(super_admin_user)
-    client.post(
-        "/api/training/assignments",
-        json={
-            "avatar_id": str(avatar.id),
-            "user_ids": [str(standard_user.id)],
-            "target_score": 7.0,
-        },
-    )
+    make_assigned_path(standard_user, [{"avatar": avatar, "target": 7.0}])
     # Solo le conversazioni aperte dopo l'assegnazione contano
     conversation = _seed_conversation(db_session, standard_user, avatar, score=6.0)
+    act_as(super_admin_user)
     assert client.get("/api/training/assignments").json()[0]["status"] == "active"
 
     client.put(
@@ -369,7 +362,7 @@ def test_a_corrected_score_completes_an_assigned_goal(
 
     listed = client.get("/api/training/assignments").json()[0]
     assert listed["status"] == "completed"
-    assert listed["best_score"] == 8.0
+    assert listed["steps"][0]["best_score"] == 8.0
 
 
 def test_the_dashboard_reports_the_corrected_score(

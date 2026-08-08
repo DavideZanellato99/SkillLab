@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
-import { OPEN_LOGIN_EVENT } from './LandingPage'
+import { OPEN_LOGIN_EVENT } from './public/openLogin'
+import { PublicNavLinks, PublicNavMenu } from './public/PublicNav'
 import {
   isNewPasswordRequired,
   isSuperAdmin,
@@ -31,14 +32,15 @@ const menuItemCls =
 
 export default function Navbar() {
   const location = useLocation()
-  const isHome = location.pathname === '/'
-  const isDashboardPage = location.pathname === '/admin/dashboard'
-  const isTrainingPage = location.pathname === '/admin/training'
-  const isComparisonPage = location.pathname === '/confronto'
+  const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth()
+
+  const isHome = location.pathname === '/app'
+  const isDashboardPage = location.pathname === '/app/admin/dashboard'
+  const isTrainingPage = location.pathname === '/app/admin/training'
+  const isComparisonPage = location.pathname === '/app/confronto'
   /* Anche mentre si svolge un test la voce resta accesa: la pagina del
      singolo test è dentro il simulatore, non accanto. */
-  const isSimulationPage = location.pathname.startsWith('/simulatore')
-  const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth()
+  const isSimulationPage = location.pathname.startsWith('/app/simulatore')
 
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authStep, setAuthStep] = useState<AuthStep>('login')
@@ -68,7 +70,8 @@ export default function Navbar() {
     setShowConfirmNewPassword(false)
   }
 
-  // The landing page CTAs ask to open the login modal via this event
+  /* I pulsanti delle pagine pubbliche chiedono di aprire la modale con
+     questo evento: la modale vive qui, e loro non la conoscono. */
   useEffect(() => {
     const openLogin = () => {
       setEmail('')
@@ -158,9 +161,11 @@ export default function Navbar() {
         id="navbar"
       >
         <div className="flex h-full w-full items-center justify-between px-4">
-          {/* Logo */}
+          {/* Logo. Porta a casa propria, che è la home pubblica per chi sta
+              leggendo il sito e la galleria degli avatar per chi è
+              collegato: sono due indirizzi distinti, e il logo è lo stesso. */}
           <Link
-            to="/"
+            to={isAuthenticated ? '/app' : '/'}
             className="group flex items-center gap-2 text-slate-100 no-underline transition hover:scale-[1.03]"
             id="navbar-logo"
           >
@@ -189,38 +194,47 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Center nav links */}
-          <div className="flex items-center gap-1 max-md:hidden" id="navbar-links">
-            <Link
-              to="/"
-              className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                isHome
-                  ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                  : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-              }`}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+          {/* Center nav links.
+              Prima dell'accesso lo stesso posto ospita le sezioni del sito
+              pubblico: sono cinque e hanno bisogno di più larghezza, quindi
+              spariscono un gradino prima, dove il menu compatto le riprende. */}
+          <div
+            className={`flex items-center gap-1 ${isAuthenticated ? 'max-md:hidden' : 'max-lg:hidden'}`}
+            id="navbar-links"
+          >
+            {!isAuthenticated && <PublicNavLinks />}
+            {isAuthenticated && (
+              <Link
+                to="/app"
+                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
+                  isHome
+                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
+                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
+                }`}
               >
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-              </svg>
-              Avatar Gallery
-            </Link>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                </svg>
+                Avatar Gallery
+              </Link>
+            )}
             {/* Per tutti: le simulazioni della propria organizzazione, e
                 tutte quante per il super admin. */}
             {isAuthenticated && (
               <Link
-                to="/simulatore"
+                to="/app/simulatore"
                 className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
                   isSimulationPage
                     ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
@@ -246,7 +260,7 @@ export default function Navbar() {
             )}
             {isAuthenticated && isAdmin(user) && (
               <Link
-                to="/admin/training"
+                to="/app/admin/training"
                 className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
                   isTrainingPage
                     ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
@@ -274,7 +288,7 @@ export default function Navbar() {
                 admin quelli delle persone del proprio tenant. */}
             {isAuthenticated && (
               <Link
-                to="/confronto"
+                to="/app/confronto"
                 className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
                   isComparisonPage
                     ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
@@ -300,7 +314,7 @@ export default function Navbar() {
             )}
             {isAuthenticated && isAdmin(user) && (
               <Link
-                to="/admin/dashboard"
+                to="/app/admin/dashboard"
                 className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
                   isDashboardPage
                     ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
@@ -383,7 +397,7 @@ export default function Navbar() {
                       </div>
                       <div className="my-1 h-px bg-white/6" />
                       <Link
-                        to="/profile"
+                        to="/app/profile"
                         className={menuItemCls}
                         onClick={() => setShowUserMenu(false)}
                       >
@@ -406,7 +420,7 @@ export default function Navbar() {
                         <>
                           {isSuperAdmin(user) && (
                             <Link
-                              to="/admin"
+                              to="/app/admin"
                               className={menuItemCls}
                               onClick={() => setShowUserMenu(false)}
                             >
@@ -430,7 +444,7 @@ export default function Navbar() {
                           )}
                           {isSuperAdmin(user) && (
                             <Link
-                              to="/admin/organizations"
+                              to="/app/admin/organizations"
                               className={menuItemCls}
                               onClick={() => setShowUserMenu(false)}
                             >
@@ -456,7 +470,7 @@ export default function Navbar() {
                           )}
                           {isSuperAdmin(user) && (
                             <Link
-                              to="/admin/avatars"
+                              to="/app/admin/avatars"
                               className={menuItemCls}
                               onClick={() => setShowUserMenu(false)}
                             >
@@ -480,7 +494,7 @@ export default function Navbar() {
                           )}
                           {isSuperAdmin(user) && (
                             <Link
-                              to="/admin/simulations"
+                              to="/app/admin/simulations"
                               className={menuItemCls}
                               onClick={() => setShowUserMenu(false)}
                             >
@@ -502,7 +516,7 @@ export default function Navbar() {
                             </Link>
                           )}
                           <Link
-                            to="/admin/report"
+                            to="/app/admin/report"
                             className={menuItemCls}
                             onClick={() => setShowUserMenu(false)}
                           >
@@ -524,7 +538,7 @@ export default function Navbar() {
                           </Link>
                           {isSuperAdmin(user) && (
                             <Link
-                              to="/admin/logs"
+                              to="/app/admin/logs"
                               className={menuItemCls}
                               onClick={() => setShowUserMenu(false)}
                             >
@@ -574,30 +588,34 @@ export default function Navbar() {
                 </div>
               </>
             ) : (
-              /* Not authenticated — show login button */
-              <button
-                className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1.5 text-[0.82rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 hover:shadow-[0_4px_12px_rgba(124,58,237,0.15)]"
-                onClick={() => {
-                  resetForm()
-                  setShowAuthModal(true)
-                }}
-                id="auth-trigger-btn"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              /* Prima dell'accesso: il menu compatto delle sezioni pubbliche
+                 e il pulsante che apre la modale */
+              <>
+                <PublicNavMenu />
+                <button
+                  className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1.5 text-[0.82rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 hover:shadow-[0_4px_12px_rgba(124,58,237,0.15)]"
+                  onClick={() => {
+                    resetForm()
+                    setShowAuthModal(true)
+                  }}
+                  id="auth-trigger-btn"
                 >
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-                Accedi
-              </button>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  Accedi
+                </button>
+              </>
             )}
           </div>
         </div>

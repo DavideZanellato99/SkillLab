@@ -1,5 +1,8 @@
 dist/
 coverage/
 static/
-public/
+# Le risorse servite così come sono. La barra iniziale non è decorativa:
+# senza, la regola prendeva anche src/components/public, cioè il sito
+# pubblico, che invece è codice e va formattato come il resto.
+/public/
 package-lock.json

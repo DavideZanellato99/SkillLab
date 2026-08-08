@@ -8,6 +8,10 @@
 import type { AssignmentStatus } from '../services/training'
 
 export const STATUS_META: Record<AssignmentStatus, { label: string; cls: string }> = {
+  /* Solo di una tappa, mai di un percorso: quello resta in corso finché ha
+   * qualcosa da fare. Grigia e senza accento, perché è l'unico stato in cui
+   * non c'è niente da fare. */
+  locked: { label: 'Bloccata', cls: 'border-white/10 bg-white/4 text-slate-500' },
   active: { label: 'In corso', cls: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' },
   overdue: { label: 'Scaduto', cls: 'border-red-500/30 bg-red-500/10 text-red-400' },
   completed: {

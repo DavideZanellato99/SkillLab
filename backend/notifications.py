@@ -1,9 +1,9 @@
 """What the platform has to tell a user, derived from what it already knows.
 
-Four things happen to a student while nobody is looking: a goal is handed
-out, its deadline gets close, the deadline passes, a trainer publishes a
-review of one of their conversations. Until now each was discovered by
-chance, on the next login.
+Things happen to a student while nobody is looking: a path is handed out, a
+step of it unlocks, its deadline gets close, the deadline passes, the last
+step closes, a trainer publishes a review of one of their conversations.
+Until now each was discovered by chance, on the next login.
 
 None of them is stored as a notification. They are all read out of the rows
 that already describe them, exactly like the progress of a training
@@ -36,18 +36,23 @@ from models import (
     ConversationReview,
     MessageAnnotation,
     NotificationRead,
-    TrainingAssignment,
+    TrainingPathAssignment,
     User,
 )
 from schemas import (
     ASSIGNMENT_STATUS_ACTIVE,
+    ASSIGNMENT_STATUS_COMPLETED,
+    ASSIGNMENT_STATUS_COMPLETED_LATE,
+    ASSIGNMENT_STATUS_LOCKED,
     ASSIGNMENT_STATUS_OVERDUE,
 )
 
 # Kinds, which are also what the UI picks an icon by
 KIND_ASSIGNED = "assignment.assigned"
+KIND_UNLOCKED = "assignment.unlocked"
 KIND_DUE_SOON = "assignment.due_soon"
 KIND_OVERDUE = "assignment.overdue"
+KIND_PATH_COMPLETED = "assignment.completed"
 KIND_REVIEW = "review.published"
 
 # How early a deadline starts being announced. Three days is enough to do
@@ -68,7 +73,10 @@ class NotificationItem:
     # "when it was generated": these are generated on every request.
     at: datetime
     read: bool
-    # Where clicking it takes the user, or None when there is nowhere to go
+    # Where clicking it takes the user, or None when there is nowhere to go.
+    # Sono percorsi del frontend, e stanno tutti sotto `/app`: chi legge una
+    # notifica ha una sessione aperta, quindi la destinazione è sempre
+    # dentro l'area collegata.
     link: str | None = None
 
 
@@ -99,22 +107,34 @@ def _fmt_score(score: float) -> str:
     return f"{score:.1f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
+def _step_target(step) -> str:
+    """Di cosa parla una tappa: il nome dell'avatar o il titolo del test."""
+    return step.avatar_name or step.simulation_title or ""
+
+
 def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
-    """The goals of a user, and whatever their deadline currently says.
+    """The paths of a user, and whatever their current step says.
 
     The status comes from routers/training, imported here rather than
     reimplemented: "completed" has one definition in this codebase and a
     second copy of it would eventually disagree with the page the student
     reads.
+
+    Le tappe chiuse e quelle ancora bloccate non producono niente: le prime
+    non chiedono più nulla, le seconde non si possono nemmeno cominciare, e
+    annunciare una scadenza per una tappa a cui non si è arrivati sarebbe
+    una data da temere senza motivo. Quello che si racconta è il percorso
+    quando arriva, la tappa quando si apre, la sua scadenza mentre è aperta
+    e il percorso quando si chiude.
     """
     # Local import: routers/training pulls in the whole FastAPI stack, and
     # this module is also used by plain queries in the tests.
-    from routers.training import _responses
+    from routers.training import _assignment_responses, _loaded_assignments
 
     assignments = (
-        db.query(TrainingAssignment)
-        .filter(TrainingAssignment.user_id == user.id)
-        .order_by(TrainingAssignment.created_at.desc())
+        _loaded_assignments(db)
+        .filter(TrainingPathAssignment.user_id == user.id)
+        .order_by(TrainingPathAssignment.created_at.desc())
         .all()
     )
     if not assignments:
@@ -122,63 +142,108 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
 
     now = _now()
     items: list[NotificationItem] = []
-    for response in _responses(db, assignments):
-        avatar = response.avatar_name
-        target = _fmt_score(response.target_score)
+    for response in _assignment_responses(db, assignments):
+        path = response.path_title
+        total = len(response.steps)
 
         items.append(
             NotificationItem(
                 key=f"{KIND_ASSIGNED}:{response.id}",
                 kind=KIND_ASSIGNED,
-                title="Nuovo obiettivo di training",
-                body=f"Devi raggiungere {target} su 10 con {avatar}.",
+                title="Nuovo percorso di training",
+                body=(
+                    f"«{path}» ti è stato assegnato: {total} "
+                    f"{'tappa' if total == 1 else 'tappe'} da superare in ordine."
+                ),
                 at=_naive(response.created_at),
                 read=False,
-                link="/",
+                link="/app",
             )
         )
 
-        if response.due_at is None:
-            continue
-        due_at = _naive(response.due_at)
-
-        # Un obiettivo già raggiunto non ha più una scadenza da temere,
-        # nemmeno se la data passa: lo status lo dice già.
-        if response.status == ASSIGNMENT_STATUS_ACTIVE:
-            opens_at = due_at - timedelta(days=DUE_SOON_DAYS)
-            if opens_at <= now:
-                items.append(
-                    NotificationItem(
-                        key=f"{KIND_DUE_SOON}:{response.id}",
-                        kind=KIND_DUE_SOON,
-                        title="Un obiettivo sta per scadere",
-                        body=(
-                            f"{avatar} scade il {_fmt_date(due_at)} e non hai "
-                            f"ancora raggiunto {target}."
-                        ),
-                        # Datata a quando è entrata nella finestra, non alla
-                        # scadenza: altrimenti si ordinerebbe nel futuro,
-                        # sopra a tutto il resto.
-                        at=opens_at,
-                        read=False,
-                        link="/",
-                    )
-                )
-        elif response.status == ASSIGNMENT_STATUS_OVERDUE:
+        if response.status in (ASSIGNMENT_STATUS_COMPLETED, ASSIGNMENT_STATUS_COMPLETED_LATE):
+            # Il percorso è finito: l'ultima tappa chiusa è il momento in cui
+            # lo è diventato, e non c'è nessuna scadenza di cui parlare.
+            closed_at = max(_naive(s.achieved_at) for s in response.steps)
             items.append(
                 NotificationItem(
-                    key=f"{KIND_OVERDUE}:{response.id}",
-                    kind=KIND_OVERDUE,
-                    title="Obiettivo scaduto",
-                    body=(
-                        f"La scadenza per {avatar} era il {_fmt_date(due_at)}. "
-                        "Puoi ancora riprovare."
-                    ),
-                    at=due_at,
+                    key=f"{KIND_PATH_COMPLETED}:{response.id}",
+                    kind=KIND_PATH_COMPLETED,
+                    title="Percorso completato",
+                    body=f"Hai superato tutte le tappe di «{path}».",
+                    at=closed_at,
                     read=False,
-                    link="/",
+                    link="/app",
                 )
             )
+            continue
+
+        for step in response.steps:
+            if step.status == ASSIGNMENT_STATUS_LOCKED:
+                continue
+            target = _fmt_score(step.target_score)
+            what = _step_target(step)
+
+            # La prima tappa si apre insieme al percorso, e l'ha già
+            # annunciata l'assegnazione: dirlo due volte nello stesso
+            # istante sarebbe la stessa notizia scritta in due modi.
+            if step.position > 1 and step.unlocked_at is not None:
+                items.append(
+                    NotificationItem(
+                        key=f"{KIND_UNLOCKED}:{response.id}:{step.id}",
+                        kind=KIND_UNLOCKED,
+                        title="Nuova tappa sbloccata",
+                        body=(
+                            f"Tappa {step.position} di «{path}»: ora tocca a {what}, "
+                            f"obiettivo {target} su 10."
+                        ),
+                        at=_naive(step.unlocked_at),
+                        read=False,
+                        link="/app",
+                    )
+                )
+
+            if step.due_at is None:
+                continue
+            due_at = _naive(step.due_at)
+
+            # Una tappa già superata non ha più una scadenza da temere,
+            # nemmeno se la data passa: lo status lo dice già.
+            if step.status == ASSIGNMENT_STATUS_ACTIVE:
+                opens_at = due_at - timedelta(days=DUE_SOON_DAYS)
+                if opens_at <= now:
+                    items.append(
+                        NotificationItem(
+                            key=f"{KIND_DUE_SOON}:{response.id}:{step.id}",
+                            kind=KIND_DUE_SOON,
+                            title="Una tappa sta per scadere",
+                            body=(
+                                f"{what} scade il {_fmt_date(due_at)} e non hai "
+                                f"ancora raggiunto {target}."
+                            ),
+                            # Datata a quando è entrata nella finestra, non alla
+                            # scadenza: altrimenti si ordinerebbe nel futuro,
+                            # sopra a tutto il resto.
+                            at=opens_at,
+                            read=False,
+                            link="/app",
+                        )
+                    )
+            elif step.status == ASSIGNMENT_STATUS_OVERDUE:
+                items.append(
+                    NotificationItem(
+                        key=f"{KIND_OVERDUE}:{response.id}:{step.id}",
+                        kind=KIND_OVERDUE,
+                        title="Tappa scaduta",
+                        body=(
+                            f"La scadenza per {what} era il {_fmt_date(due_at)}. "
+                            "Puoi ancora riprovare."
+                        ),
+                        at=due_at,
+                        read=False,
+                        link="/app",
+                    )
+                )
 
     return items
 
@@ -231,7 +296,7 @@ def _review_items(db: Session, user: User) -> list[NotificationItem]:
             body=f"«{conversation.title}» con {avatar_name} ha un commento del docente.",
             at=touched[conversation.id],
             read=False,
-            link=f"/chat/{conversation.avatar_id}?conversation={conversation.id}",
+            link=f"/app/chat/{conversation.avatar_id}?conversation={conversation.id}",
         )
         for conversation, avatar_name in rows
     ]

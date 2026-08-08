@@ -74,6 +74,9 @@ from models import (
     Avatar,
     AvatarCategory,
     Organization,
+    TrainingPath,
+    TrainingPathAssignment,
+    TrainingPathStep,
     User,
 )
 
@@ -278,6 +281,57 @@ def make_category(db_session, organization):
         db_session.add(category)
         db_session.flush()
         return category
+
+    return _factory
+
+
+@pytest.fixture
+def make_assigned_path(db_session, organization):
+    """Factory che semina un percorso già affidato a una persona.
+
+    Sta qui e non nei singoli test perché un percorso assegnato serve a
+    quattro suite diverse (notifiche, cancellazione di un tenant, diritto
+    all'oblio, esportazione dei dati) e nessuna di quelle sta verificando
+    come si compone: se lo ricostruissero a mano, il giorno in cui una
+    tappa cambia forma sarebbero quattro posti da correggere.
+
+    Le tappe si passano come dizionari, uno per tappa e nell'ordine in cui
+    devono stare: ``{"avatar": ..., "target": 7.0, "due_days": 3}`` oppure
+    ``{"simulation": ..., "target": 6.0}``. Il posto in fila lo mette la
+    factory, che è l'unica cosa che chi semina non deve stare a contare.
+
+    ``created_at`` si può retrodatare: è il momento da cui la prima tappa
+    conta, quindi è anche l'unico modo di far passare i giorni concessi
+    senza aspettarli davvero.
+    """
+
+    def _factory(user, steps, *, title="Percorso di test", assigned_by=None, created_at=None):
+        path = TrainingPath(
+            organization_id=user.organization_id or organization.id,
+            title=title,
+        )
+        path.steps = [
+            TrainingPathStep(
+                position=position,
+                avatar_id=getattr(step.get("avatar"), "id", None),
+                simulation_id=getattr(step.get("simulation"), "id", None),
+                target_score=step.get("target", 7.0),
+                due_days=step.get("due_days"),
+            )
+            for position, step in enumerate(steps, start=1)
+        ]
+        db_session.add(path)
+        db_session.flush()
+        assignment = TrainingPathAssignment(
+            path_id=path.id,
+            user_id=user.id,
+            assigned_by_id=getattr(assigned_by, "id", None),
+        )
+        if created_at is not None:
+            assignment.created_at = created_at
+        db_session.add(assignment)
+        db_session.flush()
+        return assignment
 
     return _factory
 

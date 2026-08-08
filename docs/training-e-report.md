@@ -1,65 +1,130 @@
 # Percorsi, notifiche e report
 
-Quello che sta attorno all'esercizio: gli obiettivi che un docente assegna, gli
-avvisi che ne derivano, il confronto fra i propri tentativi e i cruscotti di
-chi guarda una classe.
+Quello che sta attorno all'esercizio: i percorsi che un docente compone e
+assegna, gli avvisi che ne derivano, il confronto fra i propri tentativi e i
+cruscotti di chi guarda una classe.
 
 Tutte queste cose hanno in comune una scelta: **niente stato salvato**. Il
-completamento di un obiettivo, le notifiche e i numeri dei cruscotti si
+completamento di una tappa, le notifiche e i numeri dei cruscotti si
 ricalcolano a ogni lettura dalle righe che li descrivono già.
 
-## I percorsi assegnati
+## I percorsi
 
-Un obiettivo è una frase sola: "raggiungi 7 con Mario Rossi", con una scadenza
-facoltativa. Sta in [routers/training.py](../backend/routers/training.py).
+Un percorso è una **sequenza numerata di tappe**, e ogni tappa è un obiettivo
+su un avatar oppure su una simulazione tecnica: "arriva a 7 con Mario Rossi,
+poi passa il test sulle procedure di cassa con almeno 6". La successiva si
+apre solo quando quella prima di lei è stata superata. Sta in
+[routers/training.py](../backend/routers/training.py).
 
-**Chi assegna.** Entrambi i ruoli di amministrazione. Un organization admin è
-chi insegna davvero ai propri studenti, e far passare ogni obiettivo dal super
-admin metterebbe in mezzo un estraneo al corso. A confinarlo è il tenant, come
-sempre: parte solo da un avatar della propria organizzazione, e siccome un
-obiettivo finisce sempre su utenti dell'organizzazione dell'avatar, i suoi
-allievi possono essere solo i suoi.
+Prima era un obiettivo solo, un utente su un avatar. Andava bene finché
+allenarsi voleva dire una conversazione; non sapeva dire "prima parla con
+questo cliente, poi dimostra di conoscere la procedura", che è come si insegna
+davvero un mestiere. Le vecchie righe non sono state convertite: una di quelle
+non è un percorso di una tappa, perché non ha né il percorso a cui appartenere
+né il tipo di bersaglio, e la migrazione porta via la tabella
+([startup_migrations.py](../backend/startup_migrations.py)).
 
-**Chi può riceverlo.** L'elenco delle persone assegnabili sta accanto alla
-creazione, di proposito: il selettore e il controllo che rifiuta una richiesta
-sbagliata devono condividere una sola definizione, invece di lasciarne una
-copia nel frontend che col tempo si scosta. Sono gli utenti attivi di quel
-tenant, super admin escluso perché non appartiene a nessuno.
+**Un percorso è un modello, non una copia per allievo.** Si compone una volta
+e si affida a quante persone si vuole; correggere l'obiettivo di una tappa
+vale subito per tutti quelli che lo stanno percorrendo, ed è esattamente il
+motivo per cui esiste come riga a sé. Il progresso non ne soffre perché non è
+salvato da nessuna parte: si rilegge dalle tappe che ci sono adesso.
+
+Le tre tabelle ([models.py](../backend/models.py)):
+
+| Tabella | Cosa tiene |
+| --- | --- |
+| `training_paths` | Il percorso: titolo, descrizione, tenant |
+| `training_path_steps` | Una tappa: posto nella fila, bersaglio, obiettivo, giorni concessi |
+| `training_path_assignments` | Il percorso affidato a una persona, e quando |
+
+Sulla tappa il bersaglio è **una colonna o l'altra**, mai tutte e due e mai
+nessuna, e a imporlo è un vincolo sulla tabella: è la stessa forma delle
+chiavi di una domanda di simulazione, dove ogni tipo riempie la propria
+colonna e lascia stare le altre (vedi [simulatore.md](simulatore.md)).
+
+**I giorni concessi non sono una data.** Contano da quando la tappa si
+sblocca, e non da quando il percorso è stato affidato: su un modello riusabile
+una data assoluta sarebbe già passata per il secondo allievo, e la tappa
+numero tre non si può nemmeno datare, perché quando si aprirà dipende da
+quanto ci mette chi la sta percorrendo.
+
+**Chi compone e chi assegna.** Entrambi i ruoli di amministrazione. Un
+organization admin è chi insegna davvero ai propri studenti, e far passare
+ogni percorso dal super admin metterebbe in mezzo un estraneo al corso. A
+confinarlo è il tenant, come sempre: il percorso è di una sola organizzazione,
+le sue tappe possono puntare solo agli avatar e ai test di quella, e si affida
+solo a utenti di quella.
+
+**Di cosa può essere fatta una tappa** lo dice `GET /assignable-content`: gli
+avatar non archiviati e le simulazioni pubblicate del tenant. Sta accanto alla
+validazione che rifiuta una tappa sbagliata, per la stessa ragione per cui ci
+sta `assignable-users`: il selettore e il controllo devono condividere una
+definizione sola, invece che il frontend ne tenga una copia libera di
+divergere. Una bozza o un avatar archiviato prendono **409 e non 404**: quelli
+esistono, e chi compone il percorso li sta guardando nel proprio pannello,
+solo non sono qualcosa che si possa svolgere. E una tappa che nessuno può
+superare non è un dettaglio, perché terrebbe chiuse tutte quelle dopo di lei.
+
+**Chi può ricevere un percorso.** Gli utenti attivi di quel tenant, super
+admin escluso perché non appartiene a nessuno. Lo stesso percorso non si
+affida due volte alla stessa persona, e chi ce l'ha già viene **lasciato
+stare** invece che far fallire la richiesta: selezionare tutta
+l'organizzazione e assegnare ai tre nuovi arrivati è il gesto normale, e un
+errore su tutto costringerebbe a spuntare a mano chi c'era già.
 
 ### Il progresso, ricavato in lettura
 
-Un obiettivo è completato quando **una conversazione valutata, con
-quell'avatar, aperta dopo la creazione dell'obiettivo**, raggiunge il
-punteggio richiesto.
+Una tappa è superata quando **una prova svolta dopo il suo sblocco** raggiunge
+il punteggio richiesto. La prova è una conversazione valutata con l'avatar
+della tappa, oppure un test tecnico consegnato se la tappa è una simulazione;
+in entrambi i casi il voto è in decimi, che è quello che permette alle due
+forme di stare sulla stessa scala e sotto la stessa barra.
 
 ```mermaid
 flowchart TD
-    A[conversazioni valutate<br/>della coppia utente + avatar] --> B[si tengono solo quelle<br/>aperte dopo l'assegnazione]
+    A[la prima tappa si apre<br/>quando il percorso è affidato] --> B[prove di quel bersaglio,<br/>solo quelle dopo lo sblocco]
     B --> C{una raggiunge<br/>il bersaglio?}
-    C -->|no| D{c'è una scadenza<br/>ed è passata?}
-    C -->|sì| E{l'ha raggiunto<br/>entro la scadenza?}
-    E -->|sì| F[completato]
-    E -->|no| G[completato in ritardo]
-    D -->|sì| H[scaduto]
-    D -->|no| I[attivo]
+    C -->|no| D{i giorni concessi<br/>sono passati?}
+    C -->|sì| E{raggiunto entro<br/>i giorni concessi?}
+    E -->|sì| F[superata]
+    E -->|no| G[superata in ritardo]
+    D -->|sì| H[scaduta]
+    D -->|no| I[in corso]
+    F --> J[la tappa dopo si apre<br/>da questo momento]
+    G --> J
+    H --> K[le tappe dopo<br/>restano bloccate]
+    I --> K
 ```
 
-Due conseguenze volute:
+Tre conseguenze volute:
 
-- **l'allenamento fatto prima non completa un obiettivo**. L'obiettivo è
-  qualcosa da fare, non un premio per quello che c'era già;
+- **l'allenamento fatto prima non supera niente**, né quello precedente
+  all'assegnazione né quello fatto mentre la tappa era ancora chiusa. Una
+  tappa è qualcosa da fare quando è il suo turno, non un premio per quello che
+  c'era già;
+- **il blocco vive dentro il percorso, non sulla risorsa**. L'avatar e il test
+  restano aperti a tutti dalla galleria e dalla pagina delle simulazioni: il
+  percorso decide in che ordine le prove contano, non cosa si può aprire. Un
+  lucchetto vero toglierebbe l'allenamento libero su quelle risorse a chi il
+  percorso ce l'ha, e lo stesso avatar può stare in due percorsi a due
+  posizioni diverse;
 - **niente resta appeso**. Cancellare una conversazione o rifarne il giudizio
-  non può lasciare in giro una spunta vecchia, perché non c'è nessuna spunta
-  salvata.
+  non può lasciare in giro una spunta vecchia né una tappa sbloccata da un
+  fatto che non è più vero, perché non c'è nessuna spunta salvata.
 
-Il punteggio usato è quello **finale**, correzione del docente compresa: uno
-studente a cui è stato detto 7.5 non deve trovarsi l'obiettivo ancora aperto
-perché la macchina aveva detto 6. Vedi [valutazione.md](valutazione.md).
+Il punteggio di una conversazione è quello **finale**, correzione del docente
+compresa: uno studente a cui è stato detto 7.5 non deve trovarsi la tappa
+ancora aperta perché la macchina aveva detto 6 (vedi
+[valutazione.md](valutazione.md)). Quello di un test è il voto congelato sul
+tentativo, che nessuno corregge a mano (vedi [simulatore.md](simulatore.md)).
 
-Le letture sono fatte con una query sola per tutta la pagina, e il taglio per
-obiettivo (solo le conversazioni successive alla sua creazione) avviene in
-Python, perché due obiettivi possono condividere la stessa coppia utente e
-avatar.
+Le letture sono fatte con **due query per tutta la pagina**, una per forma di
+prova, e il taglio per tappa avviene in Python: lo sblocco dipende dalla tappa
+prima, e due percorsi possono chiedere lo stesso avatar in posizioni diverse.
+Restano due query separate come ovunque nell'applicazione, così un percorso di
+soli avatar non paga la scansione dei tentativi di simulazione per scoprire
+che non ne ha.
 
 La derivazione sta in [training_progress.py](../backend/training_progress.py)
 e non nel router che la mostra: è una regola, non una risposta HTTP, e da lì
@@ -67,35 +132,67 @@ si legge per intero senza attraversare le rotte, i permessi e gli audit che le
 stanno attorno.
 
 **Dove si vedono.** Lo studente li trova in cima alla home
-([TrainingGoals](../frontend/src/components/TrainingGoals.tsx)), gli
-amministratori in `/admin/training`
-([TrainingPage](../frontend/src/components/TrainingPage.tsx)). A che punto è un
-percorso lo dice la stessa targhetta nei due posti
+([TrainingGoals](../frontend/src/components/TrainingGoals.tsx)), con le tappe
+tutte in vista: quella aperta porta alla chat o al test, quelle dopo hanno il
+lucchetto e il tooltip che dice come si aprono, quelle chiuse la spunta.
+Sapere cosa viene dopo è metà del motivo per cui un percorso è una fila invece
+di obiettivi sparsi.
+
+Gli amministratori stanno in `/app/admin/training`
+([TrainingPage](../frontend/src/components/TrainingPage.tsx)), **due linguette
+perché sono due domande**: di cosa sono fatti i percorsi, e a che punto è la
+propria gente. Prima era una schermata sola, dove il form di assegnazione
+stava sopra la tabella e ogni assegnazione ricominciava dalla scelta
+dell'avatar; comporre e seguire sono due lavori, e si fanno in due momenti
+diversi della settimana. Nella tabella la riga dice quante tappe sono chiuse e
+qual è quella aperta, e la fila intera si apre solo sulla riga che interessa:
+sei tappe per venti persone tutte insieme sono una tabella che non si legge.
+
+La fila di tappe è disegnata da un componente solo
+([PathStepsTrail](../frontend/src/components/PathStepsTrail.tsx)), usato dalle
+due schermate: è il disegno a raccontare la regola, e due copie finirebbero
+per dirla in due modi. Quello che cambia fra i due posti è se una tappa si può
+aprire, perché la chat e il test sono di chi il percorso lo sta facendo. A che
+punto è una tappa lo dice la stessa targhetta
 ([AssignmentStatusBadge](../frontend/src/components/AssignmentStatusBadge.tsx)),
-che vive in un file suo: la pagina di amministrazione si scarica solo entrandoci
-(vedi [frontend.md](frontend.md)), e una targhetta presa da lì se la sarebbe
-riportata dietro tutta sulla home di chiunque.
+che vive in un file suo: la pagina di amministrazione si scarica solo
+entrandoci (vedi [frontend.md](frontend.md)), e una targhetta presa da lì se la
+sarebbe riportata dietro tutta sulla home di chiunque.
+
+**Assegnare fa una domanda sola**
+([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)): chi deve
+percorrerlo. Le persone si cercano per nome o per email e si spuntano tutte
+insieme, e il "seleziona tutti" segue la ricerca, perché è l'unico modo in cui
+quel bottone risponde a quello che si sta guardando.
 
 ## Le notifiche
 
-Quattro cose succedono a uno studente mentre non sta guardando: gli viene
-assegnato un obiettivo, la scadenza si avvicina, la scadenza passa, un docente
-pubblica una revisione di una sua conversazione. Prima venivano scoperte per
-caso, al login successivo.
+Cose che succedono a uno studente mentre non sta guardando: gli viene
+assegnato un percorso, una tappa si apre, la sua scadenza si avvicina, la
+scadenza passa, l'ultima tappa si chiude, un docente pubblica una revisione di
+una sua conversazione. Prima venivano scoperte per caso, al login successivo.
 
 Nessuna di queste è **salvata** come notifica
 ([notifications.py](../backend/notifications.py)): si ricavano dalle righe che
-già le descrivono. Una notifica salvata è una copia che invecchia: sposta una
-scadenza e un "scaduto" salvato continua ad annunciare una cosa che non è più
-vera; cancella un obiettivo e la sua notifica gli sopravvive. Derivate,
+già le descrivono. Una notifica salvata è una copia che invecchia: allunga i
+giorni di una tappa e un "scaduto" salvato continua ad annunciare una cosa che
+non è più vera; ritira un percorso e la sua notifica gli sopravvive. Derivate,
 smettono semplicemente di essere prodotte.
 
 | Tipo | Quando |
 | --- | --- |
-| `assignment.assigned` | Un obiettivo è stato assegnato |
-| `assignment.due_soon` | La scadenza è entro tre giorni |
-| `assignment.overdue` | La scadenza è passata e l'obiettivo non è raggiunto |
+| `assignment.assigned` | Un percorso è stato assegnato |
+| `assignment.unlocked` | Una tappa si è aperta |
+| `assignment.due_soon` | La scadenza della tappa aperta è entro tre giorni |
+| `assignment.overdue` | La scadenza è passata e la tappa non è superata |
+| `assignment.completed` | L'ultima tappa è stata superata |
 | `review.published` | Un docente ha pubblicato o rivisto una revisione |
+
+**Le tappe bloccate non annunciano niente**, e nemmeno quelle già chiuse: le
+prime non si possono cominciare, e una scadenza per qualcosa a cui non si è
+arrivati sarebbe una data da temere senza motivo. Anche la prima tappa non
+annuncia il proprio sblocco: l'ha già detto l'assegnazione, nello stesso
+istante.
 
 L'unica cosa scritta è **cosa è già stato letto** (`notification_reads`), perché
 quello è il solo fatto che nessuna query può ricostruire.
@@ -108,7 +205,7 @@ letta, perché lo studente quella versione non l'ha davvero vista.
 
 ## Il confronto fra tentativi
 
-`/confronto` ([ComparisonPage](../frontend/src/components/ComparisonPage.tsx)),
+`/app/confronto` ([ComparisonPage](../frontend/src/components/ComparisonPage.tsx)),
 servito da [routers/comparison.py](../backend/routers/comparison.py).
 
 Uno studente vede i propri tentativi e quelli di nessun altro. Un admin sceglie
@@ -159,10 +256,10 @@ Tre schermate per chi amministra, tutte confinate dallo stesso `resolve_admin_sc
 
 | Schermata | Endpoint | Cosa mostra |
 | --- | --- | --- |
-| `/admin/dashboard` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie |
-| `/admin/dashboard` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte |
-| `/admin/report` | `GET /api/admin/users-report` | Una riga per persona: le due prove svolte, apribili e cancellabili una a una |
-| `/admin` | `GET /api/admin/users` | La tabella degli utenti, filtrata e paginata |
+| `/app/admin/dashboard` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie |
+| `/app/admin/dashboard` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte |
+| `/app/admin/report` | `GET /api/admin/users-report` | Una riga per persona: le due prove svolte, apribili e cancellabili una a una |
+| `/app/admin` | `GET /api/admin/users` | La tabella degli utenti, filtrata e paginata |
 
 **La dashboard e il report rispondono a due domande diverse**, ed è quello che
 li tiene separati invece di farne due viste della stessa cosa. La dashboard
@@ -299,7 +396,7 @@ quelli finali.
 
 ## Il report attività
 
-`/admin/report`
+`/app/admin/report`
 ([UserReportPage](../frontend/src/components/UserReportPage.tsx)): una riga per
 persona, e su quella riga tutto quello che quella persona ha fatto.
 
@@ -320,10 +417,10 @@ un conteggio farebbe leggere due cose diverse come se fossero una, e una media
 sul gruppo la scrive già la dashboard. La riga risponde a quanto e a cosa, il
 dettaglio a com'è andata.
 
-Gli obiettivi assegnati non compaiono qui: hanno già la loro schermata in
-`/admin/training`, dove si vedono uno per uno con la scadenza e il progresso,
-e un "2 su 3" in questa riga sarebbe la stessa cosa detta peggio. L'ultimo
-accesso, allo stesso modo, resta nella tabella degli utenti in `/admin`, che è
+I percorsi assegnati non compaiono qui: hanno già la loro schermata in
+`/app/admin/training`, dove si vedono tappa per tappa con i giorni concessi e il
+progresso, e un "2 su 3" in questa riga sarebbe la stessa cosa detta peggio. L'ultimo
+accesso, allo stesso modo, resta nella tabella degli utenti in `/app/admin`, che è
 dove si guarda lo stato di un account e non cosa ci si è fatto dentro.
 
 **I voti dello storico sono quelli finali**, correzione del docente compresa,

@@ -33,7 +33,6 @@ from models import (
     SimulationAttempt,
     TechnicalSimulation,
     TokenSession,
-    TrainingAssignment,
     User,
     UserSelection,
     VoiceSessionRecord,
@@ -50,7 +49,9 @@ _SEEDED_TABLES = {
     "user_selections",
     "token_session",
     "notification_reads",
-    "training_assignments",
+    "training_paths",
+    "training_path_steps",
+    "training_path_assignments",
     "chat_conversations",
     "audit_logs",
     "conversation_reviews",
@@ -86,7 +87,7 @@ def _columns_about_a_user():
     return found
 
 
-def _seed_everything(db_session, victim: User, other: User, avatar) -> None:
+def _seed_everything(db_session, victim: User, other: User, avatar, make_assigned_path) -> None:
     """Give `victim` a row in every table that can be about them.
 
     Including one as somebody else's trainer: the review and the note they
@@ -137,14 +138,7 @@ def _seed_everything(db_session, victim: User, other: User, avatar) -> None:
     )
     db_session.add(UserSelection(user_id=victim.id, avatar_id=avatar.id))
     db_session.add(NotificationRead(user_id=victim.id, key="assignment.overdue:x"))
-    db_session.add(
-        TrainingAssignment(
-            user_id=victim.id,
-            avatar_id=avatar.id,
-            assigned_by_id=victim.id,
-            target_score=8.0,
-        )
-    )
+    make_assigned_path(victim, [{"avatar": avatar, "target": 8.0}], assigned_by=victim)
 
     # Un test tecnico consegnato: la fotografia porta le risposte che la
     # persona ha dato, quindi è materiale suo quanto una trascrizione
@@ -260,9 +254,15 @@ def _delete_account(admin_client, db_session, user_id) -> None:
 
 
 def test_deleting_an_account_leaves_no_column_pointing_at_it(
-    admin_client, cognito, db_session, org_admin_user, standard_user, make_avatar
+    admin_client,
+    cognito,
+    db_session,
+    org_admin_user,
+    standard_user,
+    make_avatar,
+    make_assigned_path,
 ):
-    _seed_everything(db_session, org_admin_user, standard_user, make_avatar())
+    _seed_everything(db_session, org_admin_user, standard_user, make_avatar(), make_assigned_path)
     victim_id, victim_email = org_admin_user.id, org_admin_user.email
     assert _rows_pointing_at(db_session, victim_id), "il seed non ha scritto niente"
 
@@ -273,7 +273,13 @@ def test_deleting_an_account_leaves_no_column_pointing_at_it(
 
 
 def test_the_session_rows_go_with_the_account(
-    admin_client, cognito, db_session, org_admin_user, standard_user, make_avatar
+    admin_client,
+    cognito,
+    db_session,
+    org_admin_user,
+    standard_user,
+    make_avatar,
+    make_assigned_path,
 ):
     """The regression this module was written for.
 
@@ -281,7 +287,7 @@ def test_the_session_rows_go_with_the_account(
     and has no foreign key to hang a cascade on, so it used to outlive the
     person it described.
     """
-    _seed_everything(db_session, org_admin_user, standard_user, make_avatar())
+    _seed_everything(db_session, org_admin_user, standard_user, make_avatar(), make_assigned_path)
     victim_id = org_admin_user.id
     assert db_session.query(TokenSession).filter(TokenSession.user_id == victim_id).count() == 1
 
@@ -291,9 +297,15 @@ def test_the_session_rows_go_with_the_account(
 
 
 def test_the_recording_and_the_transcript_go_too(
-    admin_client, cognito, db_session, org_admin_user, standard_user, make_avatar
+    admin_client,
+    cognito,
+    db_session,
+    org_admin_user,
+    standard_user,
+    make_avatar,
+    make_assigned_path,
 ):
-    _seed_everything(db_session, org_admin_user, standard_user, make_avatar())
+    _seed_everything(db_session, org_admin_user, standard_user, make_avatar(), make_assigned_path)
     victim_id = org_admin_user.id
     conversation_id = (
         db_session.query(ChatConversation.id).filter(ChatConversation.user_id == victim_id).scalar()
@@ -317,11 +329,17 @@ def test_the_recording_and_the_transcript_go_too(
 
 
 def test_the_audit_trail_keeps_naming_the_deleted_account(
-    admin_client, cognito, db_session, org_admin_user, standard_user, make_avatar
+    admin_client,
+    cognito,
+    db_session,
+    org_admin_user,
+    standard_user,
+    make_avatar,
+    make_assigned_path,
 ):
     """The FK is nulled, the email snapshot stays: a registry that forgot
     who acted would stop being a registry. It expires on its own clock."""
-    _seed_everything(db_session, org_admin_user, standard_user, make_avatar())
+    _seed_everything(db_session, org_admin_user, standard_user, make_avatar(), make_assigned_path)
     victim_id, victim_email = org_admin_user.id, org_admin_user.email
 
     _delete_account(admin_client, db_session, victim_id)
@@ -332,11 +350,17 @@ def test_the_audit_trail_keeps_naming_the_deleted_account(
 
 
 def test_the_trainers_verdict_on_someone_else_survives_signed(
-    admin_client, cognito, db_session, org_admin_user, standard_user, make_avatar
+    admin_client,
+    cognito,
+    db_session,
+    org_admin_user,
+    standard_user,
+    make_avatar,
+    make_assigned_path,
 ):
     """A student contesting a grade has the right to know who signed it,
     so the name snapshot outlives the trainer's account."""
-    _seed_everything(db_session, org_admin_user, standard_user, make_avatar())
+    _seed_everything(db_session, org_admin_user, standard_user, make_avatar(), make_assigned_path)
     victim_id = org_admin_user.id
     reviewed_id = (
         db_session.query(ChatConversation.id)
@@ -366,9 +390,15 @@ def test_the_trainers_verdict_on_someone_else_survives_signed(
 
 
 def test_the_other_user_keeps_their_own_data(
-    admin_client, cognito, db_session, org_admin_user, standard_user, make_avatar
+    admin_client,
+    cognito,
+    db_session,
+    org_admin_user,
+    standard_user,
+    make_avatar,
+    make_assigned_path,
 ):
-    _seed_everything(db_session, org_admin_user, standard_user, make_avatar())
+    _seed_everything(db_session, org_admin_user, standard_user, make_avatar(), make_assigned_path)
     victim_id, survivor_id = org_admin_user.id, standard_user.id
 
     _delete_account(admin_client, db_session, victim_id)

@@ -53,7 +53,7 @@ spostargli il gruppo di nascosto.
 
 ## La scheda persona
 
-La riempie a mano il super admin da `/admin/avatars`
+La riempie a mano il super admin da `/app/admin/avatars`
 ([AvatarAdminPage](../frontend/src/components/AvatarAdminPage.tsx)), ed è
 organizzata in sezioni:
 

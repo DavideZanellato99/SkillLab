@@ -15,9 +15,12 @@ import type { AuthUser } from './auth'
 
 /**
  * "locked": la tappa prima non è ancora superata, quindi questa non conta
- * nemmeno. "active": aperta. "overdue": i giorni concessi sono passati.
- * "completed": obiettivo raggiunto. "completed_late": raggiunto dopo la
- * scadenza.
+ * nemmeno. "active": aperta. "overdue": la data è passata. "completed":
+ * obiettivo raggiunto. "completed_late": raggiunto dopo la scadenza.
+ *
+ * Lo stato dice se la tappa è in tempo, non se si può cominciare: una tappa
+ * ancora chiusa la cui data è passata risponde "overdue", e a dire che non è
+ * aperta resta `unlocked_at` vuoto (vedi `isStepLocked`).
  *
  * Solo una tappa può essere "locked": un percorso è aperto finché ha una
  * tappa da fare, e quale sia lo dice la tappa stessa.
@@ -32,8 +35,8 @@ export interface PathStepInput {
   avatar_id?: string | null
   simulation_id?: string | null
   target_score: number
-  /** Giorni concessi da quando la tappa si sblocca, non una data. */
-  due_days?: number | null
+  /** Entro quando va chiusa, ISO 8601 con il fuso di chi la scrive. */
+  due_at?: string | null
 }
 
 /** Una tappa come la si legge, con il nome del suo bersaglio già risolto. */
@@ -43,7 +46,8 @@ export interface PathStep {
   position: number
   kind: StepKind
   target_score: number
-  due_days: number | null
+  /** Entro quando va chiusa, o null se la tappa non scade. */
+  due_at: string | null
   avatar_id: string | null
   avatar_name: string | null
   avatar_category: string | null
@@ -57,10 +61,9 @@ export interface PathStep {
 /** Una tappa vista da chi la sta percorrendo. */
 export interface StepProgress extends PathStep {
   status: AssignmentStatus
-  /** Da quando la tappa conta, e la scadenza che ne discende: entrambe
-   *  assenti finché è bloccata. */
+  /** Da quando la tappa conta, assente finché è bloccata. La scadenza no:
+   *  è scritta sulla tappa e la porta già `PathStep`. */
   unlocked_at: string | null
-  due_at: string | null
   /** Prove svolte dopo lo sblocco. */
   attempts: number
   best_score: number | null
@@ -93,6 +96,8 @@ export interface PathAssignment {
   organization_id: string | null
   organization_name: string | null
   created_at: string
+  /** Chi l'ha affidato, assente quando quell'account non c'è più. */
+  assigned_by_name: string | null
   status: AssignmentStatus
   steps: StepProgress[]
   completed_steps: number

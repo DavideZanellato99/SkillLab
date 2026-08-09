@@ -16,6 +16,7 @@
  * valori si spostano, e la tappa due si ritroverebbe il tipo della tre. */
 
 import type { PathStep, PathStepInput, StepKind } from '../services/training'
+import { fromLocalInputValue, toLocalInputValue } from './instant'
 
 export interface PathStepDraft {
   kind: StepKind
@@ -23,7 +24,8 @@ export interface PathStepDraft {
   avatarId: string | null
   simulationId: string | null
   targetScore: number
-  dueDays: number | null
+  /** La scadenza come la scrive il campo: ora locale, o vuota se non scade. */
+  dueAt: string | null
 }
 
 /** L'obiettivo di partenza di una tappa nuova: la sufficienza piena. */
@@ -35,7 +37,7 @@ export function emptyDraft(): PathStepDraft {
     avatarId: null,
     simulationId: null,
     targetScore: DEFAULT_TARGET,
-    dueDays: null,
+    dueAt: null,
   }
 }
 
@@ -46,7 +48,7 @@ export function draftFromStep(step: PathStep): PathStepDraft {
     avatarId: step.avatar_id,
     simulationId: step.simulation_id,
     targetScore: step.target_score,
-    dueDays: step.due_days,
+    dueAt: step.due_at ? toLocalInputValue(step.due_at) : null,
   }
 }
 
@@ -73,6 +75,6 @@ export function toStepInput(draft: PathStepDraft): PathStepInput {
     avatar_id: draft.kind === 'avatar' ? draft.avatarId : null,
     simulation_id: draft.kind === 'simulation' ? draft.simulationId : null,
     target_score: draft.targetScore,
-    due_days: draft.dueDays,
+    due_at: draft.dueAt ? fromLocalInputValue(draft.dueAt) : null,
   }
 }

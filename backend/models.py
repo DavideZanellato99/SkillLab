@@ -813,11 +813,12 @@ class TrainingPathStep(Base):
     È la stessa forma che hanno le chiavi di ``SimulationQuestion``, dove
     ogni tipo riempie la propria colonna e lascia stare le altre.
 
-    ``due_days`` sono i giorni concessi **da quando la tappa si sblocca**, e
-    non una data: su un modello riusabile una data assoluta sarebbe già
-    scaduta al secondo utente a cui il percorso viene affidato, e la tappa
-    numero tre non si può nemmeno datare, perché quando si sbloccherà
-    dipende da quanto ci mette chi la sta percorrendo.
+    ``due_at`` è il momento entro cui la tappa va chiusa, data e ora scritte
+    quando si compone il percorso: una scadenza a calendario, uguale per
+    chiunque percorra quel percorso, che vale anche mentre la tappa è ancora
+    bloccata. Chi affida un percorso vecchio ne trova le date già passate, ed
+    è la conseguenza voluta di una scadenza fissata a calendario: il percorso
+    si riscrive con le date nuove prima di affidarlo di nuovo.
     """
 
     __tablename__ = "training_path_steps"
@@ -842,8 +843,8 @@ class TrainingPathStep(Base):
     # Il voto da raggiungere, da 1 a 10, sulla stessa scala nei due casi:
     # una valutazione e un test consegnato si leggono già in decimi.
     target_score = Column(Float, nullable=False)
-    # Giorni dallo sblocco entro cui la tappa andrebbe chiusa, o NULL
-    due_days = Column(Integer, nullable=True)
+    # Data e ora entro cui la tappa andrebbe chiusa, o NULL se non scade
+    due_at = Column(DateTime, nullable=True)
 
     path = relationship("TrainingPath", back_populates="steps")
     avatar = relationship("Avatar")
@@ -889,12 +890,16 @@ class TrainingPathAssignment(Base):
         Uuid, ForeignKey("training_paths.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    # Chi l'ha affidato (informativo)
+    # Chi l'ha affidato: il nome finisce sotto gli occhi di chi lo percorre,
+    # perché un percorso che compare da solo non si sa a chi chiedere. Resta
+    # nullable perché l'account di chi lo ha assegnato può essere cancellato,
+    # e il percorso vale lo stesso anche senza più una firma.
     assigned_by_id = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     path = relationship("TrainingPath", back_populates="assignments")
     user = relationship("User", foreign_keys=[user_id])
+    assigned_by = relationship("User", foreign_keys=[assigned_by_id])
 
     __table_args__ = (
         UniqueConstraint("path_id", "user_id", name="uq_training_path_assignment_user"),

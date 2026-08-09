@@ -29,16 +29,16 @@ export const litInputWrapperCls = `group ${inputWrapperCls}`
 export const litIconCls =
   'shrink-0 text-slate-500 transition-colors group-focus-within:text-violet-400'
 
-/** Un'area di testo, che il riquadro non contiene: il bordo è già suo. */
-export const textareaCls =
-  'w-full resize-y rounded-xl border border-white/6 bg-slate-800/50 px-4 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-violet-600 focus:shadow-[0_0_0_3px_rgba(124,58,237,0.1)] disabled:cursor-not-allowed disabled:opacity-50'
+/* Un campo che porta il proprio bordo, senza il riquadro: lo usano gli input
+ * che non stanno dentro `TextInput` (una data, un numero, un titolo) e le aree
+ * di testo. È lo stesso vestito di `Select` e di `SearchSelect`, perché due
+ * campi affiancati nello stesso form con due fondi diversi si leggono come due
+ * cose diverse quando sono la stessa. */
+export const formInputCls =
+  'rounded-xl border border-white/6 bg-slate-800/50 px-4 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 hover:border-white/12 focus:border-violet-600 focus:shadow-[0_0_0_3px_rgba(124,58,237,0.1)] disabled:cursor-not-allowed disabled:opacity-50'
 
-/* I campi che stanno dentro una card, e non in un form, hanno il fondo
- * chiaro delle card invece di quello scuro dei form: si appoggiano a un
- * pannello già scuro, e col fondo dei form sparirebbero dentro. Li usano
- * TrainingPage, TrainerReviewPanel e MessageAnnotationEditor. */
-export const cardInputCls =
-  'rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-600 focus:bg-violet-600/8'
+/** Un'area di testo, che il riquadro non contiene: il bordo è già suo. */
+export const textareaCls = `w-full resize-y ${formInputCls}`
 
 interface FieldProps {
   /** Etichetta sopra il campo; assente per i campi che si spiegano da soli. */

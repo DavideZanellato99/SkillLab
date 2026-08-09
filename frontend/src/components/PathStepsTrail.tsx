@@ -1,30 +1,32 @@
-import { Link } from 'react-router'
 import type { StepProgress } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
-import Tooltip from './Tooltip'
 import { CheckIcon, LockIcon } from './icons'
 import {
   formatScore,
-  formatShortDate,
+  formatShortDeadline,
+  isStepLocked,
   stepKindLabel,
-  stepLink,
   stepProgress,
   stepTarget,
 } from './trainingFormat'
 
-/* La fila delle tappe di un percorso, numerate e in ordine.
+/* La fila delle tappe di un percorso, numerate e in ordine, per chi lo
+ * guarda da fuori.
  *
- * Un componente solo per i due posti in cui si legge: la scheda di chi
- * amministra e la home di chi si allena. Il disegno è quello che racconta la
- * regola, cioè che si va avanti una tappa per volta, e due copie
- * finirebbero per dirla in due modi.
+ * È la vista di chi amministra: nella tabella delle assegnazioni una riga si
+ * apre e mostra a che punto è quella persona, tappa per tappa. Nessuna di
+ * queste tappe si può cominciare da qui, e non è una limitazione tecnica: la
+ * chat e il test sono di chi il percorso lo sta facendo.
  *
- * Quello che cambia fra i due posti è se una tappa si può aprire: da
- * amministratore no, perché la chat e il test sono di chi il percorso lo sta
- * facendo. Il numero della tappa è la sua posizione nella fila: chiusa porta
- * la spunta, ancora chiusa il lucchetto, ed è l'unico segno che serve per
- * capire dove si è arrivati senza leggere niente.
- */
+ * Chi il percorso ce l'ha lo legge invece come mappa (vedi PathTrailMap), che
+ * è la stessa regola detta a chi deve camminarla: lì le tappe si aprono, e a
+ * dire quale sia il proprio turno è dove finisce la luce sul sentiero. Fino a
+ * che i due posti condividevano questa fila, la differenza era una proprietà
+ * `interactive` che spegneva metà del componente.
+ *
+ * Il numero della tappa è la sua posizione: chiusa porta la spunta, ancora
+ * chiusa il lucchetto, ed è l'unico segno che serve per capire dove si è
+ * arrivati senza leggere niente. */
 
 const numberBaseCls =
   'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[0.78rem] font-bold tabular-nums'
@@ -38,9 +40,18 @@ function StepNumber({ step }: { step: StepProgress }) {
       </span>
     )
   }
-  if (step.status === 'locked') {
+  // Il lucchetto anche quando la data è già passata: la tappa è in ritardo e
+  // insieme non ancora cominciabile, e il rosso dice la prima cosa senza
+  // togliere la seconda.
+  if (isStepLocked(step)) {
     return (
-      <span className={`${numberBaseCls} border-white/10 bg-white/4 text-slate-600`}>
+      <span
+        className={`${numberBaseCls} ${
+          step.status === 'overdue'
+            ? 'border-red-500/40 bg-red-500/15 text-red-400'
+            : 'border-white/10 bg-white/4 text-slate-600'
+        }`}
+      >
         <LockIcon size={13} />
       </span>
     )
@@ -58,13 +69,17 @@ function StepNumber({ step }: { step: StepProgress }) {
   )
 }
 
-function StepRow({ step, interactive }: { step: StepProgress; interactive: boolean }) {
+function StepRow({ step }: { step: StepProgress }) {
   const target = stepTarget(step)
-  const locked = step.status === 'locked'
+  const locked = isStepLocked(step)
   const progress = stepProgress(step)
 
-  const body = (
-    <>
+  return (
+    <li
+      className={`flex items-start gap-3 rounded-xl px-3 py-2.5 ${
+        locked ? 'bg-white/2' : 'bg-white/4'
+      }`}
+    >
       <StepNumber step={step} />
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -84,13 +99,8 @@ function StepRow({ step, interactive }: { step: StepProgress; interactive: boole
               {formatScore(step.target_score)}/10
             </strong>
           </span>
-          {step.due_at ? (
-            <span className="text-slate-500">entro il {formatShortDate(step.due_at)}</span>
-          ) : (
-            step.due_days !== null &&
-            locked && (
-              <span className="text-slate-500">{step.due_days} giorni una volta aperta</span>
-            )
+          {step.due_at && (
+            <span className="text-slate-500">entro il {formatShortDeadline(step.due_at)}</span>
           )}
           {!locked && (
             <span className="tabular-nums text-slate-400">
@@ -125,49 +135,15 @@ function StepRow({ step, interactive }: { step: StepProgress; interactive: boole
       <span className="shrink-0 self-start">
         <AssignmentStatusBadge status={step.status} />
       </span>
-    </>
-  )
-
-  const rowCls = `flex items-start gap-3 rounded-xl px-3 py-2.5 ${
-    locked ? 'bg-white/2' : 'bg-white/4'
-  }`
-
-  // Una tappa chiusa non si apre, e il tooltip dice perché invece di
-  // lasciare un bersaglio che non risponde al clic.
-  if (!interactive) return <li className={rowCls}>{body}</li>
-  if (locked) {
-    return (
-      <li>
-        <Tooltip content="Si sblocca superando la tappa precedente">
-          <div className={`${rowCls} cursor-not-allowed`}>{body}</div>
-        </Tooltip>
-      </li>
-    )
-  }
-  return (
-    <li>
-      <Link
-        to={stepLink(step)}
-        className={`${rowCls} no-underline transition hover:bg-violet-600/10`}
-      >
-        {body}
-      </Link>
     </li>
   )
 }
 
-export default function PathStepsTrail({
-  steps,
-  interactive = false,
-}: {
-  steps: StepProgress[]
-  /** Le tappe aperte portano alla chat o al test: solo per chi le percorre. */
-  interactive?: boolean
-}) {
+export default function PathStepsTrail({ steps }: { steps: StepProgress[] }) {
   return (
     <ol className="flex flex-col gap-2">
       {steps.map((step) => (
-        <StepRow key={step.id} step={step} interactive={interactive} />
+        <StepRow key={step.id} step={step} />
       ))}
     </ol>
   )

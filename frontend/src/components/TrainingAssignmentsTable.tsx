@@ -7,7 +7,7 @@ import Tooltip from './Tooltip'
 import { STATUS_META } from './assignmentStatus'
 import { ChevronDownIcon, ChevronUpIcon, TrashIcon } from './icons'
 import { matchesSearch } from './tableSearch'
-import { formatDate, stepTarget } from './trainingFormat'
+import { formatDate, formatDeadline, stepTarget } from './trainingFormat'
 
 /* Chi sta percorrendo cosa, e a che punto è.
  *
@@ -115,7 +115,7 @@ export default function TrainingAssignmentsTable({
                     </span>
                     {current.due_at && (
                       <span className="block text-[0.72rem] text-slate-500">
-                        entro il {formatDate(current.due_at)}
+                        entro il {formatDeadline(current.due_at)}
                       </span>
                     )}
                   </>

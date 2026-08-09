@@ -1,14 +1,17 @@
+import { useId } from 'react'
+
 import type { AssignableContent, StepKind } from '../services/training'
-import MoveControls from './MoveControls'
+import KebabMenu from './KebabMenu'
+import type { KebabMenuItem } from './KebabMenu'
 import SearchSelect from './SearchSelect'
 import Tooltip from './Tooltip'
-import { TrashIcon } from './icons'
-import { cardInputCls } from './Field'
+import { ChevronDownIcon, ChevronUpIcon, InfoIcon, TrashIcon } from './icons'
+import { formInputCls, labelCls } from './Field'
 import type { PathStepDraft } from './pathStepDraft'
 import { draftTarget } from './pathStepDraft'
 
-/* Una tappa mentre la si compone: cosa chiede, a chi, con che obiettivo e in
- * quanti giorni.
+/* Una tappa mentre la si compone: cosa chiede, a chi, con che obiettivo ed
+ * entro quando.
  *
  * Il tipo si sceglie prima del bersaglio e non dopo, perché è quello che
  * decide fra quali cose si sta cercando: un elenco unico di avatar e test
@@ -21,9 +24,21 @@ import { draftTarget } from './pathStepDraft'
  * "conversazione" ritrova l'avatar che aveva già scelto, e al salvataggio
  * parte comunque il solo bersaglio del tipo attivo.
  *
- * I giorni sono facoltativi e sono giorni, non una data: partono da quando la
- * tappa si sblocca, e quando succederà dipende da quanto ci mette chi la sta
- * percorrendo (vedi il backend, ``TrainingPathStep``). */
+ * La scadenza è facoltativa ed è una data con l'ora, sul calendario: vale
+ * per chiunque percorra il percorso e corre anche mentre la tappa è ancora
+ * chiusa, quindi un percorso vecchio va ridatato prima di affidarlo di nuovo
+ * (vedi il backend, `TrainingPathStep`).
+ *
+ * Le tappe sono righe di una tabella e non schede una sotto l'altra: sono
+ * tutte fatte delle stesse quattro cose, e in colonne allineate si leggono
+ * tenendo l'occhio fermo. Le intestazioni stanno in cima una volta sola
+ * (`PathStepsHeader`), quindi le righe non ripetono nessuna etichetta e le
+ * azioni di riga si raccolgono in un menu, che di larghezza ne chiede una
+ * colonna sola.
+ *
+ * Sotto i 1024px le colonne non ci starebbero: la riga torna a essere una
+ * scheda impilata e le etichette dei campi ricompaiono, visto che lì
+ * l'intestazione non c'è. È lo stesso markup, riordinato da `lg:contents`. */
 
 const KINDS = [
   { value: 'avatar', label: 'Conversazione' },
@@ -31,7 +46,33 @@ const KINDS = [
 ] as const
 
 const kindBtnCls =
-  'cursor-pointer rounded-lg border-none px-3 py-1 text-[0.78rem] font-medium transition disabled:cursor-not-allowed disabled:opacity-50'
+  'cursor-pointer rounded-lg border-none px-2.5 py-1 text-[0.75rem] font-medium transition disabled:cursor-not-allowed disabled:opacity-50'
+
+/* Le colonne della tabella, in un posto solo perché l'intestazione e le righe
+ * si disallineerebbero al primo che qualcuno ritocca senza toccare l'altra. */
+const gridCls =
+  'lg:grid lg:grid-cols-[1.75rem_13.25rem_minmax(0,1fr)_5.5rem_11rem_2rem] lg:items-center lg:gap-3'
+
+/** Le intestazioni delle colonne, che le righe non ripetono. */
+export function PathStepsHeader() {
+  return (
+    <div className={`hidden pb-1 ${gridCls}`}>
+      <span />
+      <span className={labelCls}>Tipo</span>
+      <span className={labelCls}>Bersaglio</span>
+      <span className={labelCls}>Obiettivo</span>
+      <span className={`flex items-center gap-1 ${labelCls}`}>
+        Entro
+        <Tooltip content="Facoltativa: senza data la tappa non scade. L'ora è quella locale.">
+          <span tabIndex={0} className="cursor-help text-slate-500 outline-none">
+            <InfoIcon size={12} />
+          </span>
+        </Tooltip>
+      </span>
+      <span />
+    </div>
+  )
+}
 
 export default function PathStepEditor({
   step,
@@ -54,6 +95,9 @@ export default function PathStepEditor({
 }) {
   const kind = step.kind
   const targetValue = draftTarget(step) ?? ''
+  // Le tappe sono più d'una nella stessa finestra: gli id dei campi devono
+  // essere diversi, o l'etichetta di una punterebbe al campo di un'altra.
+  const fieldId = useId()
 
   const options =
     kind === 'avatar'
@@ -71,13 +115,42 @@ export default function PathStepEditor({
         : { ...step, simulationId: value || null },
     )
 
-  return (
-    <li className="flex gap-3 rounded-xl border border-white/6 bg-gray-950/40 p-3">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-violet-600/30 bg-violet-600/10 text-xs font-bold tabular-nums text-violet-400">
-        {index + 1}
-      </span>
+  const menuItems: KebabMenuItem[] = [
+    {
+      key: 'up',
+      label: 'Sposta in alto',
+      icon: <ChevronUpIcon />,
+      onSelect: () => onMove(index - 1),
+      disabled: disabled || index === 0,
+      disabledReason: index === 0 ? 'È già la prima tappa' : undefined,
+    },
+    {
+      key: 'down',
+      label: 'Sposta in basso',
+      icon: <ChevronDownIcon />,
+      onSelect: () => onMove(index + 1),
+      disabled: disabled || index === total - 1,
+      disabledReason: index === total - 1 ? 'È già l’ultima tappa' : undefined,
+    },
+    {
+      key: 'remove',
+      label: 'Rimuovi la tappa',
+      icon: <TrashIcon />,
+      danger: true,
+      onSelect: onRemove,
+      disabled: disabled || total <= 1,
+      disabledReason: total <= 1 ? 'Un percorso ha almeno una tappa' : undefined,
+    },
+  ]
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+  return (
+    <li
+      className={`flex flex-col gap-2 rounded-xl border border-white/6 bg-gray-950/40 p-3 ${gridCls} lg:rounded-none lg:border-x-0 lg:border-b lg:border-t-0 lg:border-white/6 lg:bg-transparent lg:p-0 lg:py-2 lg:last:border-b-0`}
+    >
+      <div className="flex items-center gap-2 lg:contents">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-violet-600/30 bg-violet-600/10 text-xs font-bold tabular-nums text-violet-400">
+          {index + 1}
+        </span>
         <div className="flex items-center gap-1 rounded-lg bg-white/4 p-0.5" role="group">
           {KINDS.map((option) => (
             <button
@@ -96,70 +169,53 @@ export default function PathStepEditor({
             </button>
           ))}
         </div>
-
-        <SearchSelect
-          value={targetValue}
-          onChange={setTarget}
-          options={options}
-          placeholder={kind === 'avatar' ? 'Cerca un avatar...' : 'Cerca un test...'}
-          emptyHint="Da scegliere"
-        />
-
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-slate-400">Obiettivo (1-10)</span>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              step={0.5}
-              disabled={disabled}
-              value={step.targetScore}
-              onChange={(e) => onChange({ ...step, targetScore: Number(e.target.value) })}
-              className={`${cardInputCls} w-[110px]`}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-slate-400">Giorni concessi</span>
-            <input
-              type="number"
-              min={1}
-              max={365}
-              disabled={disabled}
-              value={step.dueDays ?? ''}
-              placeholder="nessuno"
-              onChange={(e) =>
-                onChange({ ...step, dueDays: e.target.value ? Number(e.target.value) : null })
-              }
-              className={`${cardInputCls} w-[130px]`}
-            />
-          </label>
-          <span className="pb-2 text-xs text-slate-500">da quando la tappa si sblocca</span>
-        </div>
       </div>
 
-      <div className="flex shrink-0 flex-col items-center gap-1">
-        <MoveControls
-          label={`tappa ${index + 1}`}
-          onUp={() => onMove(index - 1)}
-          onDown={() => onMove(index + 1)}
-          canMoveUp={index > 0}
-          canMoveDown={index < total - 1}
-          disabled={disabled}
-        />
-        {/* `wrap` perché al minimo il bottone si disabilita, e un bottone
-            disabilitato non emette eventi mouse: senza involucro il tooltip
-            che spiega il perché non comparirebbe. */}
-        <Tooltip wrap content={total <= 1 ? 'Un percorso ha almeno una tappa' : 'Rimuovi la tappa'}>
-          <button
-            type="button"
-            onClick={onRemove}
-            disabled={disabled || total <= 1}
-            aria-label={`Rimuovi la tappa ${index + 1}`}
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-slate-600 transition hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-600"
-          >
-            <TrashIcon size={13} />
-          </button>
+      <SearchSelect
+        value={targetValue}
+        onChange={setTarget}
+        options={options}
+        variant="field"
+        placeholder={kind === 'avatar' ? 'Cerca un avatar...' : 'Cerca un test...'}
+      />
+
+      <div className="flex items-end gap-2 lg:contents">
+        <div className="flex flex-1 flex-col gap-1 lg:block">
+          {/* L'etichetta è quella della colonna, che sopra i 1024px sta in
+              cima alla tabella: qui resta per chi legge la scheda impilata,
+              e l'`aria-label` la sostituisce quando è nascosta. */}
+          <label htmlFor={`${fieldId}-score`} className={`${labelCls} lg:hidden`}>
+            Obiettivo (1-10)
+          </label>
+          <input
+            id={`${fieldId}-score`}
+            type="number"
+            min={1}
+            max={10}
+            step={0.5}
+            disabled={disabled}
+            aria-label="Obiettivo (1-10)"
+            value={step.targetScore}
+            onChange={(e) => onChange({ ...step, targetScore: Number(e.target.value) })}
+            className={`${formInputCls} w-full`}
+          />
+        </div>
+        <div className="flex flex-1 flex-col gap-1 lg:block">
+          <label htmlFor={`${fieldId}-due`} className={`${labelCls} lg:hidden`}>
+            Da completare entro
+          </label>
+          <input
+            id={`${fieldId}-due`}
+            type="datetime-local"
+            disabled={disabled}
+            aria-label="Da completare entro"
+            value={step.dueAt ?? ''}
+            onChange={(e) => onChange({ ...step, dueAt: e.target.value || null })}
+            className={`${formInputCls} w-full`}
+          />
+        </div>
+        <Tooltip wrap content="Altre azioni">
+          <KebabMenu label={`Azioni della tappa ${index + 1}`} items={menuItems} />
         </Tooltip>
       </div>
     </li>

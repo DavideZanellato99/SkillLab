@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useAssignableContent, useCreatePath, useUpdatePath } from '../hooks/useTraining'
 import type { TrainingPath } from '../services/training'
-import Field, { cardInputCls, textareaCls } from './Field'
+import Field, { formInputCls, textareaCls } from './Field'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import ModalShell, { ModalHeader } from './ModalShell'
-import PathStepEditor from './PathStepEditor'
+import PathStepEditor, { PathStepsHeader } from './PathStepEditor'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
 import Spinner from './Spinner'
@@ -108,7 +108,7 @@ export default function TrainingPathEditorModal({
   }
 
   return (
-    <ModalShell onClose={onClose} locked={isSaving} size="sheet" padding="md">
+    <ModalShell onClose={onClose} locked={isSaving} size="xl" padding="md">
       <ModalHeader
         icon={<PlusIcon size={24} stroke="#a78bfa" />}
         iconWrapperCls="border border-violet-500/30 bg-violet-500/10"
@@ -124,7 +124,7 @@ export default function TrainingPathEditorModal({
         <Field label="Titolo" htmlFor="path-title">
           <input
             id="path-title"
-            className={cardInputCls}
+            className={`${formInputCls} w-full`}
             value={title}
             disabled={isSaving}
             onChange={(e) => setTitle(e.target.value)}
@@ -180,41 +180,47 @@ export default function TrainingPathEditorModal({
           <span className="mb-2 block text-xs font-medium tracking-wide text-slate-400">
             Tappe, nell'ordine in cui si superano
           </span>
-          {isLoadingContent || !content ? (
-            <LoadingState message="Caricamento del catalogo..." variant="modal" />
-          ) : (
-            <>
-              <ol className="flex flex-col gap-2">
-                {steps.map((step, index) => (
-                  <PathStepEditor
-                    key={index}
-                    step={step}
-                    index={index}
-                    total={steps.length}
-                    content={content}
-                    disabled={isSaving}
-                    onChange={(next) => setStep(index, next)}
-                    onMove={(to) => setSteps((prev) => moved(prev, index, to))}
-                    onRemove={() => setSteps((prev) => prev.filter((_, i) => i !== index))}
-                  />
-                ))}
-              </ol>
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={() => setSteps((prev) => [...prev, emptyDraft()])}
-                className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition hover:bg-white/5 hover:text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <PlusIcon size={13} />
-                Aggiungi tappa
-              </button>
-              {content.avatars.length === 0 && content.simulations.length === 0 && (
-                <p className="mt-2 text-[0.82rem] text-slate-500">
-                  Questa organizzazione non ha ancora avatar attivi né test pubblicati
-                </p>
-              )}
-            </>
-          )}
+          {/* Il riquadro tiene insieme intestazione, tappe e "aggiungi": senza,
+              le righe senza card di sopra i 1024px si confonderebbero con i
+              campi del percorso che le stanno sopra. */}
+          <div className="rounded-xl border border-white/6 p-3">
+            {isLoadingContent || !content ? (
+              <LoadingState message="Caricamento del catalogo..." variant="modal" />
+            ) : (
+              <>
+                <PathStepsHeader />
+                <ol className="flex flex-col gap-2 lg:gap-0">
+                  {steps.map((step, index) => (
+                    <PathStepEditor
+                      key={index}
+                      step={step}
+                      index={index}
+                      total={steps.length}
+                      content={content}
+                      disabled={isSaving}
+                      onChange={(next) => setStep(index, next)}
+                      onMove={(to) => setSteps((prev) => moved(prev, index, to))}
+                      onRemove={() => setSteps((prev) => prev.filter((_, i) => i !== index))}
+                    />
+                  ))}
+                </ol>
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => setSteps((prev) => [...prev, emptyDraft()])}
+                  className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition hover:bg-white/5 hover:text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <PlusIcon size={13} />
+                  Aggiungi tappa
+                </button>
+                {content.avatars.length === 0 && content.simulations.length === 0 && (
+                  <p className="mt-2 text-[0.82rem] text-slate-500">
+                    Questa organizzazione non ha ancora avatar attivi né test pubblicati
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {error && <FormError message={error} />}

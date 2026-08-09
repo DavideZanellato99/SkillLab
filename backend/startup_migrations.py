@@ -202,6 +202,17 @@ def _add_columns() -> None:
         conn.execute(
             text("ALTER TABLE simulation_questions ALTER COLUMN correct_option DROP NOT NULL")
         )
+        # La scadenza di una tappa diventa una data e un'ora a calendario, al
+        # posto dei giorni che partivano dallo sblocco (vedi
+        # ``TrainingPathStep``). I giorni non si possono convertire in una
+        # data: dicevano "tre giorni da quando si apre", e quando quella
+        # tappa si aprirà dipende da chi la sta percorrendo. Le tappe di
+        # prima restano quindi senza scadenza, che è l'unica cosa vera che si
+        # può dire di loro, e chi governa il percorso ci scrive le date.
+        conn.execute(
+            text("ALTER TABLE training_path_steps ADD COLUMN IF NOT EXISTS due_at TIMESTAMP")
+        )
+        conn.execute(text("ALTER TABLE training_path_steps DROP COLUMN IF EXISTS due_days"))
 
 
 def _add_authorship_columns() -> None:

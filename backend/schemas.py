@@ -1,6 +1,6 @@
 """Pydantic schemas for request/response validation."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -363,9 +363,23 @@ class TrainingPathStepInput(BaseModel):
     avatar_id: UUID | None = None
     simulation_id: UUID | None = None
     target_score: float = Field(ge=1, le=10)
-    # Giorni concessi dallo sblocco della tappa. Vedi ``TrainingPathStep``
-    # per perché non è una data.
-    due_days: int | None = Field(default=None, ge=1, le=365)
+    # Data e ora entro cui la tappa va chiusa, facoltativa: senza, la tappa
+    # non scade mai. Vedi ``TrainingPathStep``.
+    due_at: datetime | None = None
+
+    @field_validator("due_at")
+    @classmethod
+    def _naive_utc(cls, value: datetime | None) -> datetime | None:
+        """Il fuso del browser via, come su ogni colonna temporale dello schema.
+
+        Chi compone il percorso sceglie un'ora nel proprio fuso e il browser
+        la manda con il suo scarto: senza questo passaggio finirebbe nella
+        colonna così com'è, e il confronto con un momento senza fuso
+        solleverebbe al primo percorso letto.
+        """
+        if value is None or value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)
 
     @model_validator(mode="after")
     def _exactly_one_target(self) -> "TrainingPathStepInput":
@@ -407,7 +421,8 @@ class TrainingPathStepResponse(BaseModel):
     # "avatar" o "simulation"
     kind: str
     target_score: float
-    due_days: int | None = None
+    # Entro quando va chiusa, o assente se la tappa non scade
+    due_at: datetime | None = None
     # Il bersaglio: uno dei due gruppi è pieno, l'altro resta vuoto
     avatar_id: UUID | None = None
     avatar_name: str | None = None
@@ -448,17 +463,20 @@ class TrainingStepProgressResponse(TrainingPathStepResponse):
     """Una tappa vista da chi la sta percorrendo, con il suo stato.
 
     status: "locked" (la tappa prima non è ancora superata), "active",
-    "overdue" (i giorni concessi sono passati), "completed" o
-    "completed_late". Contano solo le prove svolte dopo lo sblocco, e
-    ``attempts``, ``best_score`` e ``achieved_at`` seguono tutti quella
-    regola.
+    "overdue" (la data è passata), "completed" o "completed_late". Contano
+    solo le prove svolte dopo lo sblocco, e ``attempts``, ``best_score`` e
+    ``achieved_at`` seguono tutti quella regola.
+
+    Lo stato dice se la tappa è in tempo, non se si può cominciare: una
+    tappa ancora chiusa la cui data è passata risponde "overdue", e a dire
+    che non è aperta resta ``unlocked_at`` vuoto.
     """
 
     status: str
-    # Da quando la tappa conta, e la scadenza che ne discende: entrambe
-    # assenti finché la tappa è chiusa
+    # Da quando la tappa conta, assente finché è chiusa. La scadenza invece
+    # la porta già ``TrainingPathStepResponse``: è scritta sulla tappa e non
+    # dipende dallo sblocco.
     unlocked_at: datetime | None = None
-    due_at: datetime | None = None
     attempts: int = 0
     best_score: float | None = None
     achieved_at: datetime | None = None
@@ -482,6 +500,9 @@ class TrainingPathAssignmentResponse(BaseModel):
     organization_id: UUID | None = None
     organization_name: str | None = None
     created_at: datetime
+    # Chi l'ha affidato, assente quando quell'account non c'è più: nome e
+    # cognome già composti, perché è una firma da leggere e non un'anagrafica
+    assigned_by_name: str | None = None
     # Lo stato del percorso intero: "active", "overdue", "completed" o
     # "completed_late"
     status: str

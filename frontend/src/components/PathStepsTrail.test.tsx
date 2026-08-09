@@ -1,21 +1,20 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 
 import type { StepProgress } from '../services/training'
 import PathStepsTrail from './PathStepsTrail'
 
-/* La fila di tappe è il posto in cui la regola dello sblocco si vede: quello
- * che questi test tengono fermo è che una tappa chiusa non offra una strada
- * per cominciarla, perché è l'unico modo in cui il disegno può contraddire
- * il server. */
+/* Questa fila è la vista di chi amministra: quello che i test tengono fermo è
+ * che dica a che punto è ogni tappa, e che non offra nessuna strada per
+ * cominciarne una, perché la chat e il test sono di chi il percorso lo sta
+ * facendo (lui li apre dalla mappa, vedi PathStepPanel). */
 
 const step = (
   over: Partial<StepProgress> & Pick<StepProgress, 'id' | 'position'>,
 ): StepProgress => ({
   kind: 'avatar',
   target_score: 7,
-  due_days: null,
+  due_at: null,
   avatar_id: `a${over.position}`,
   avatar_name: `Avatar ${over.position}`,
   avatar_category: 'Clienti',
@@ -25,7 +24,6 @@ const step = (
   simulation_kind: null,
   status: 'locked',
   unlocked_at: null,
-  due_at: null,
   attempts: 0,
   best_score: null,
   achieved_at: null,
@@ -38,16 +36,18 @@ const trail = [
   step({ id: '3', position: 3 }),
 ]
 
-const renderTrail = (interactive: boolean) =>
-  render(
-    <MemoryRouter>
-      <PathStepsTrail steps={trail} interactive={interactive} />
-    </MemoryRouter>,
-  )
+/* Una tappa chiusa che la sua data ha già superato: lo stato dice il
+ * ritardo, lo sblocco vuoto dice che non si è ancora aperta. */
+const lockedAndLate = step({
+  id: '4',
+  position: 4,
+  status: 'overdue',
+  due_at: '2020-01-01T12:00:00',
+})
 
 describe('PathStepsTrail', () => {
   it('mostra ogni tappa con il proprio stato', () => {
-    renderTrail(false)
+    render(<PathStepsTrail steps={trail} />)
 
     expect(screen.getByText('Avatar 1')).toBeInTheDocument()
     expect(screen.getByText('Completato')).toBeInTheDocument()
@@ -55,17 +55,16 @@ describe('PathStepsTrail', () => {
     expect(screen.getByText('Bloccata')).toBeInTheDocument()
   })
 
-  it('porta alla prova solo dalle tappe già aperte', () => {
-    renderTrail(true)
-
-    const links = screen.getAllByRole('link')
-    // La bloccata non è fra questi: si apre superando quella prima di lei
-    expect(links.map((l) => l.getAttribute('href'))).toEqual(['/app/chat/a1', '/app/chat/a2'])
-  })
-
   it('non apre niente per chi le sta solo guardando', () => {
-    renderTrail(false)
+    render(<PathStepsTrail steps={trail} />)
 
     expect(screen.queryAllByRole('link')).toHaveLength(0)
+  })
+
+  it('dice il ritardo di una tappa che non si è ancora aperta', () => {
+    render(<PathStepsTrail steps={[lockedAndLate]} />)
+
+    expect(screen.getByText('Scaduto')).toBeInTheDocument()
+    expect(screen.getByText(/entro il/)).toBeInTheDocument()
   })
 })

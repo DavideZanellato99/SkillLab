@@ -43,6 +43,7 @@ portasse un link dipendeva da chi lo apriva.
 | --- | --- | --- |
 | `/app` | autenticato | Galleria degli avatar, con sopra i propri obiettivi |
 | `/app/chat/:avatarId` | autenticato | Chiamata e chat con un avatar |
+| `/app/percorsi`, `/app/percorsi/:assignmentId` | autenticato | I propri percorsi di training, e il singolo come mappa |
 | `/app/confronto` | autenticato | Confronto fra i propri tentativi (per un admin, quelli di una persona del proprio tenant) |
 | `/app/simulatore`, `/app/simulatore/:id` | autenticato | Elenco dei test tecnici e svolgimento |
 | `/app/profile` | autenticato | Profilo, password, export dei propri dati |
@@ -167,7 +168,7 @@ l'impaginazione dell'app è fatta di questi pezzi:
 | [DataTable](../frontend/src/components/DataTable.tsx) | Tabella, intestazione, righe, ricerca e paginazione. Le righe per pagina sono le stesse ovunque e la pagina non le sceglie |
 | [Tooltip](../frontend/src/components/Tooltip.tsx) | Ogni spiegazione al passaggio del mouse. Vive in un portal, quindi non lo taglia il bordo di una tabella o di una modale, e di suo non aggiunge nodi al DOM: clona il figlio e gli aggancia gli eventi |
 | [Badge](../frontend/src/components/Badge.tsx), [Spinner](../frontend/src/components/Spinner.tsx), [Toast](../frontend/src/components/Toast.tsx), [FormError](../frontend/src/components/FormError.tsx), [LoadingState](../frontend/src/components/LoadingState.tsx) | I pezzi piccoli ricorrenti |
-| [Field](../frontend/src/components/Field.tsx), [Select](../frontend/src/components/Select.tsx), [SearchSelect](../frontend/src/components/SearchSelect.tsx) | I campi dei form, con le classi già decise |
+| [Field](../frontend/src/components/Field.tsx), [Select](../frontend/src/components/Select.tsx), [SearchSelect](../frontend/src/components/SearchSelect.tsx) | I campi dei form, con le classi già decise. `SearchSelect` ha due varianti: come filtro la scelta sta in una chip accanto al campo di ricerca, come campo di un form (`variant="field"`) la chip prende il posto del campo, che torna quando si toglie la scelta |
 
 Questi file esistono quasi tutti perché la stessa cosa era stata ricopiata in
 otto o undici posti, e nelle copie i valori avevano cominciato a divergere

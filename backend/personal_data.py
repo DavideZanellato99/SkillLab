@@ -268,7 +268,7 @@ def _assignments(db: Session, user: User) -> list[dict]:
                     "avatar": step.avatar.name if step.avatar else None,
                     "simulazione": step.simulation.title if step.simulation else None,
                     "punteggio_obiettivo": step.target_score,
-                    "giorni_concessi": step.due_days,
+                    "scadenza": _at(step.due_at),
                 }
                 for position, step in enumerate(assignment.path.steps, start=1)
             ],

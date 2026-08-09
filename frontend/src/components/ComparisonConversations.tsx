@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { Attempt } from '../services/comparison'
+import ComparisonEmpty from './ComparisonEmpty'
+import ComparisonFilterBar, { ComparisonWarnings } from './ComparisonFilterBar'
 import ConversationModeBadge from './ConversationModeBadge'
 import Select from './Select'
+import { conversationModeLabel, MODE_FILTERS } from './conversationMode'
+import type { ModeFilter } from './conversationMode'
+import { ANY, filterOptions, matchesFilter, pickPair, survivingFilter } from './comparisonFilters'
 import { Delta } from './scoreCharts'
 import { cardCls, formatScore, scoreBarColor, scoreTextColor } from './scoreFormat'
 import { formatDate } from './lastAccess'
@@ -10,7 +15,11 @@ import { formatDate } from './lastAccess'
  * all'altra, con lo scarto dei voti e quello di ogni criterio.
  *
  * I punteggi mostrati sono quelli finali, correzione del docente inclusa,
- * altrimenti il confronto contraddirebbe la pagella. */
+ * altrimenti il confronto contraddirebbe la pagella.
+ *
+ * Si sceglie fra le prove che i due filtri lasciano passare, il canale e lo
+ * scenario: una telefonata e una chat scritta non si giudicano nello stesso
+ * modo, e i sei criteri sono tarati sulla difficoltà di quel cliente. */
 
 function attemptLabel(attempt: Attempt): string {
   return `${formatDate(attempt.conversation_at)} · ${attempt.title} · ${formatScore(
@@ -101,36 +110,60 @@ function AttemptPanel({ attempt, baseline }: { attempt: Attempt; baseline: Attem
 }
 
 export default function ComparisonConversations({ attempts }: { attempts: Attempt[] }) {
-  /* Il confronto proposto è primo contro ultimo: è quello che si vuole
-   * vedere quasi sempre. Le due scelte sono modificabili, ma quando i
-   * tentativi cambiano (si è scelta un'altra persona) una selezione che non
-   * appartiene più a questi tentativi torna al default: tenerla mostrerebbe
-   * un confronto vuoto senza dire perché. */
+  /* Prima si restringe, poi si sceglie. I due filtri partono aperti: chi
+   * arriva qui vuole vedere cosa ha fatto, e nascondergli metà delle proprie
+   * prove per prudenza sarebbe una risposta incompleta. */
+  const [modeFilter, setModeFilter] = useState<ModeFilter>(ANY)
+  const [pickedAvatarId, setPickedAvatarId] = useState(ANY)
   const [pickedLeftId, setPickedLeftId] = useState('')
   const [pickedRightId, setPickedRightId] = useState('')
 
-  const belongs = (id: string) => attempts.some((a) => a.conversation_id === id)
-  const leftId = belongs(pickedLeftId)
-    ? pickedLeftId
-    : attempts.length > 1
-      ? attempts[0].conversation_id
-      : ''
-  const rightId = belongs(pickedRightId)
-    ? pickedRightId
-    : attempts.length > 0
-      ? attempts[attempts.length - 1].conversation_id
-      : ''
+  /* Gli scenari fra cui scegliere sono quelli del canale scelto, non tutti:
+   * un cliente affrontato solo al telefono, offerto mentre si guardano le
+   * chat, porta a una lista vuota e a nient'altro. */
+  const byMode = useMemo(
+    () => attempts.filter((a) => matchesFilter(modeFilter, a.mode)),
+    [attempts, modeFilter],
+  )
+  const avatarOptions = useMemo(
+    () =>
+      filterOptions(
+        byMode,
+        (a) => a.avatar_id,
+        (a) => a.avatar_name,
+        'Tutti gli scenari',
+      ),
+    [byMode],
+  )
+  const avatarFilter = survivingFilter(avatarOptions, pickedAvatarId)
+
+  const filtered = useMemo(
+    () => byMode.filter((a) => matchesFilter(avatarFilter, a.avatar_id)),
+    [byMode, avatarFilter],
+  )
+
+  /* Il confronto proposto è primo contro ultimo, fra quelli rimasti. Le due
+   * scelte sono modificabili, ma quando i tentativi cambiano (si è scelta
+   * un'altra persona, o si è stretto un filtro) una selezione che non
+   * appartiene più a questa lista torna al default: tenerla mostrerebbe un
+   * confronto vuoto senza dire perché. */
+  const { leftId, rightId } = pickPair(
+    filtered,
+    (a) => a.conversation_id,
+    pickedLeftId,
+    pickedRightId,
+  )
 
   const left = useMemo(
-    () => attempts.find((a) => a.conversation_id === leftId) ?? null,
-    [attempts, leftId],
+    () => filtered.find((a) => a.conversation_id === leftId) ?? null,
+    [filtered, leftId],
   )
   const right = useMemo(
-    () => attempts.find((a) => a.conversation_id === rightId) ?? null,
-    [attempts, rightId],
+    () => filtered.find((a) => a.conversation_id === rightId) ?? null,
+    [filtered, rightId],
   )
 
-  const attemptOptions = attempts.map((a) => ({
+  const attemptOptions = filtered.map((a) => ({
     value: a.conversation_id,
     label: attemptLabel(a),
   }))
@@ -159,21 +192,31 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
     }))
   }, [left, right])
 
-  const differentScenarios = !!left && !!right && left.avatar_id !== right.avatar_id
+  /* Confrontare due prove di specie diversa si può, ma va detto: i criteri
+   * sono tarati sulla difficoltà di quel cliente, e al telefono e in chat non
+   * si risponde nello stesso modo. Dirlo è più utile che impedirlo, ed è
+   * quello che resta da fare quando i filtri sono aperti. */
+  const warnings =
+    left && right
+      ? [
+          left.avatar_id !== right.avatar_id
+            ? `Il confronto riguarda due scenari diversi, ${left.avatar_name} e ${right.avatar_name}: i punteggi non sono direttamente comparabili, perché la difficoltà del cliente varia.`
+            : '',
+          left.mode !== right.mode
+            ? `Il confronto riguarda due canali diversi, ${conversationModeLabel(left.mode)} e ${conversationModeLabel(right.mode)}: al telefono e in chat si risponde in modi diversi, e i punteggi non sono direttamente comparabili.`
+            : '',
+        ].filter(Boolean)
+      : []
 
   if (attempts.length === 0) {
-    return (
-      <p className="rounded-2xl border border-white/6 bg-white/4 p-12 text-center text-sm text-slate-500">
-        Nessuna conversazione valutata da confrontare
-      </p>
-    )
+    return <ComparisonEmpty>Nessuna conversazione valutata da confrontare</ComparisonEmpty>
   }
 
   if (attempts.length === 1) {
     return (
-      <p className="rounded-2xl border border-white/6 bg-white/4 p-12 text-center text-sm text-slate-500">
+      <ComparisonEmpty>
         È stato valutato un solo tentativo: ne serve un secondo per effettuare un confronto
-      </p>
+      </ComparisonEmpty>
     )
   }
 
@@ -184,6 +227,18 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
           confinato qui dentro e i pannelli che seguono nel DOM ci passerebbero
           sopra. Alzando il contenitore, tutto il suo contenuto viene con lui. */}
       <div className={`${cardCls} relative z-20 mb-8`}>
+        <ComparisonFilterBar
+          kindLabel="Modalità"
+          kindValue={modeFilter}
+          kindOptions={MODE_FILTERS}
+          onKindChange={setModeFilter}
+          targetId="conversation-avatar"
+          targetLabel="Scenario"
+          targetValue={avatarFilter}
+          targetOptions={avatarOptions}
+          onTargetChange={setPickedAvatarId}
+        />
+
         <div className="flex flex-wrap items-end gap-4">
           <div className="min-w-[240px] flex-1">
             <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="left">
@@ -204,16 +259,19 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
           </div>
         </div>
 
-        {/* Confrontare due scenari diversi si può, ma i criteri sono tarati
-            sulla difficoltà di quel cliente: dirlo è più utile che
-            impedirlo. */}
-        {differentScenarios && (
-          <p className="mt-4 rounded-xl border border-orange-500/25 bg-orange-500/10 px-4 py-2 text-[0.8rem] text-orange-300">
-            Il confronto riguarda due scenari diversi, {left.avatar_name} e {right.avatar_name}: i
-            punteggi non sono direttamente comparabili, perché la difficoltà del cliente varia.
-          </p>
-        )}
+        <ComparisonWarnings messages={warnings} />
       </div>
+
+      {/* I filtri restano sopra anche quando non lasciano passare niente: il
+          riquadro dice cosa è successo, e quello con cui rimediare è a un
+          gesto invece che dietro un ricaricamento della pagina. */}
+      {filtered.length < 2 && (
+        <ComparisonEmpty>
+          {filtered.length === 0
+            ? 'Nessuna conversazione corrisponde ai filtri scelti'
+            : 'I filtri scelti lasciano una sola conversazione: ne serve una seconda per effettuare un confronto'}
+        </ComparisonEmpty>
+      )}
 
       {left && right && (
         <>

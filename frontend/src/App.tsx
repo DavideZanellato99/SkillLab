@@ -6,7 +6,8 @@ import Header from './components/Header'
 import AvatarGallery from './components/AvatarGallery'
 import ChatPage from './components/ChatPage'
 import ComparisonPage from './components/ComparisonPage'
-import TrainingGoals from './components/TrainingGoals'
+import MyPathsPage from './components/MyPathsPage'
+import PathMapPage from './components/PathMapPage'
 import SimulationsPage from './components/SimulationsPage'
 import SimulationRunner from './components/SimulationRunner'
 import ProfilePage from './components/ProfilePage'
@@ -62,7 +63,6 @@ function HomePage() {
     <>
       <Header totalAvatars={totalAvatars} totalCategories={totalCategories} />
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 pb-12 max-md:p-4">
-        <TrainingGoals />
         <AvatarGallery onStatsUpdate={handleStatsUpdate} />
       </main>
     </>
@@ -131,6 +131,27 @@ function App() {
                   element={
                     <RequireRole access="authenticated">
                       <ProfilePage />
+                    </RequireRole>
+                  }
+                />
+                {/* I propri percorsi: l'elenco, e il singolo come mappa.
+                    Sono di chiunque sia collegato, admin compresi, perché
+                    riceverne uno non dipende dal ruolo: il server risponde
+                    con quelli di chi chiede, e chi non ne ha trova la
+                    sezione vuota. */}
+                <Route
+                  path="percorsi"
+                  element={
+                    <RequireRole access="authenticated">
+                      <MyPathsPage />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="percorsi/:assignmentId"
+                  element={
+                    <RequireRole access="authenticated">
+                      <PathMapPage />
                     </RequireRole>
                   }
                 />

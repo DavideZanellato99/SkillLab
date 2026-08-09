@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PathStep, StepProgress } from '../services/training'
-import { stepKindLabel, stepLink, stepProgress, stepTarget } from './trainingFormat'
+import { isStepLocked, stepKindLabel, stepLink, stepProgress, stepTarget } from './trainingFormat'
 
 /* Le due forme di tappa si leggono e si aprono in modo diverso, e sono le
  * uniche due strade che questo file conosce: qui si fissa che una tappa non
@@ -13,7 +13,7 @@ const avatarStep: PathStep = {
   position: 1,
   kind: 'avatar',
   target_score: 7,
-  due_days: null,
+  due_at: null,
   avatar_id: 'a1',
   avatar_name: 'Mario Rossi',
   avatar_category: 'Clienti',
@@ -40,7 +40,6 @@ const progressOf = (step: PathStep, extra: Partial<StepProgress>): StepProgress 
   ...step,
   status: 'active',
   unlocked_at: '2026-01-01T00:00:00',
-  due_at: null,
   attempts: 0,
   best_score: null,
   achieved_at: null,
@@ -87,5 +86,19 @@ describe('quanto manca a superare una tappa', () => {
     })
 
     expect(stepProgress(locked)).toBe(0)
+  })
+
+  it('resta zero su una tappa chiusa che la sua data ha superato', () => {
+    /* Lì lo stato dice "scaduta", quindi a sapere che la tappa non si è
+     * ancora aperta resta solo lo sblocco. */
+    const lockedAndLate = progressOf(avatarStep, {
+      status: 'overdue',
+      unlocked_at: null,
+      due_at: '2020-01-01T12:00:00',
+      best_score: 9,
+    })
+
+    expect(isStepLocked(lockedAndLate)).toBe(true)
+    expect(stepProgress(lockedAndLate)).toBe(0)
   })
 })

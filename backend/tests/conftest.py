@@ -296,13 +296,14 @@ def make_assigned_path(db_session, organization):
     tappa cambia forma sarebbero quattro posti da correggere.
 
     Le tappe si passano come dizionari, uno per tappa e nell'ordine in cui
-    devono stare: ``{"avatar": ..., "target": 7.0, "due_days": 3}`` oppure
-    ``{"simulation": ..., "target": 6.0}``. Il posto in fila lo mette la
-    factory, che è l'unica cosa che chi semina non deve stare a contare.
+    devono stare: ``{"avatar": ..., "target": 7.0, "due_at": <datetime>}``
+    oppure ``{"simulation": ..., "target": 6.0}``. Il posto in fila lo mette
+    la factory, che è l'unica cosa che chi semina non deve stare a contare.
 
     ``created_at`` si può retrodatare: è il momento da cui la prima tappa
-    conta, quindi è anche l'unico modo di far passare i giorni concessi
-    senza aspettarli davvero.
+    conta, quindi è il modo di far svolgere una prova prima dello sblocco
+    senza aspettare davvero. La scadenza invece non dipende da lui: è una
+    data, e per farla passare la si scrive nel passato.
     """
 
     def _factory(user, steps, *, title="Percorso di test", assigned_by=None, created_at=None):
@@ -316,7 +317,7 @@ def make_assigned_path(db_session, organization):
                 avatar_id=getattr(step.get("avatar"), "id", None),
                 simulation_id=getattr(step.get("simulation"), "id", None),
                 target_score=step.get("target", 7.0),
-                due_days=step.get("due_days"),
+                due_at=step.get("due_at"),
             )
             for position, step in enumerate(steps, start=1)
         ]

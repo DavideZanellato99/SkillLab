@@ -87,7 +87,7 @@ def _step_fields(step: TrainingPathStep, position: int) -> dict:
         "position": position,
         "kind": kind,
         "target_score": step.target_score,
-        "due_days": step.due_days,
+        "due_at": step.due_at,
     }
     if kind == STEP_KIND_AVATAR:
         avatar = step.avatar
@@ -130,6 +130,16 @@ def _path_response(path: TrainingPath, assigned_count: int = 0) -> TrainingPathR
     )
 
 
+def _display_name(user: User) -> str:
+    """Come si chiama una persona nelle risposte: nome e cognome, o l'email.
+
+    L'email è il ripiego e non la regola: un account appena creato può non
+    avere ancora l'anagrafica, e una riga senza nessun nome non si sa di chi
+    sia.
+    """
+    return f"{user.nome} {user.cognome}".strip() or user.email
+
+
 def _assignment_responses(
     db: Session, assignments: list[TrainingPathAssignment]
 ) -> list[TrainingPathAssignmentResponse]:
@@ -147,18 +157,20 @@ def _assignment_responses(
                 path_title=path.title,
                 path_description=path.description,
                 user_id=user.id,
-                user_name=f"{user.nome} {user.cognome}".strip() or user.email,
+                user_name=_display_name(user),
                 user_email=user.email,
                 organization_id=user.organization_id,
                 organization_name=user.organization_name,
                 created_at=assignment.created_at,
+                assigned_by_name=(
+                    _display_name(assignment.assigned_by) if assignment.assigned_by else None
+                ),
                 status=progress.status,
                 steps=[
                     TrainingStepProgressResponse(
                         **_step_fields(step, index),
                         status=step_progress.status,
                         unlocked_at=step_progress.unlocked_at,
-                        due_at=step_progress.due_at,
                         attempts=step_progress.attempts,
                         best_score=step_progress.best_score,
                         achieved_at=step_progress.achieved_at,
@@ -186,6 +198,7 @@ def _loaded_assignments(db: Session):
     """
     return db.query(TrainingPathAssignment).options(
         selectinload(TrainingPathAssignment.user),
+        selectinload(TrainingPathAssignment.assigned_by),
         selectinload(TrainingPathAssignment.path)
         .selectinload(TrainingPath.steps)
         .selectinload(TrainingPathStep.avatar),
@@ -260,7 +273,7 @@ def _build_steps(
         step = TrainingPathStep(
             position=position,
             target_score=round(item.target_score, 1),
-            due_days=item.due_days,
+            due_at=item.due_at,
         )
         if item.avatar_id is not None:
             avatar = (

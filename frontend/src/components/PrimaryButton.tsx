@@ -20,6 +20,12 @@ const VARIANTS = {
     'w-full px-4 py-2 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0',
 } as const
 
+/* Le stesse classi per un elemento che bottone non è: l'azione principale di
+ * una schermata a volte è andare da qualche parte, e un `Link` di react-router
+ * deve restare un link (tasto centrale, «apri in una scheda nuova») pur avendo
+ * l'aspetto dell'azione che apre. */
+export const primaryActionCls = `${baseCls} ${VARIANTS.action} no-underline`
+
 interface PrimaryButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: keyof typeof VARIANTS
   /** Icona a sinistra dell'etichetta. */

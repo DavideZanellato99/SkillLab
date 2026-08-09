@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PathStep } from '../services/training'
+import { toLocalInputValue } from './instant'
 import {
   draftFromStep,
   draftTarget,
@@ -12,14 +13,17 @@ import {
 /* Il tipo di una tappa in composizione non si deduce dagli id, e questi test
  * lo tengono fermo: dedurlo faceva tornare "test tecnico" a "conversazione"
  * nell'istante in cui lo si sceglieva, perché in quel momento nessun test è
- * ancora stato scelto e tutti e due i campi sono vuoti. */
+ * ancora stato scelto e tutti e due i campi sono vuoti.
+ *
+ * L'altro passaggio che qui si fissa è la scadenza, che cambia forma due
+ * volte: in UTC sul server, nell'ora di chi la scrive dentro il campo. */
 
 const simulationStep: PathStep = {
   id: 's1',
   position: 1,
   kind: 'simulation',
   target_score: 6,
-  due_days: 5,
+  due_at: '2026-03-04T15:30:00',
   avatar_id: null,
   avatar_name: null,
   avatar_category: null,
@@ -51,8 +55,20 @@ describe('la bozza di una tappa', () => {
       avatarId: null,
       simulationId: 'x1',
       targetScore: 6,
-      dueDays: 5,
+      dueAt: toLocalInputValue('2026-03-04T15:30:00'),
     })
+  })
+
+  it('riporta la scadenza in UTC quando la manda al server', () => {
+    /* Il campo parla nell'ora di chi compone il percorso e non scrive il
+     * fuso: senza il passaggio, le 15:30 di Roma diventerebbero le 15:30 in
+     * colonna, cioè un'ora e mezza in più di quelle date davvero. */
+    const draft = { ...emptyDraft(), avatarId: 'a1', dueAt: '2026-03-04T15:30' }
+
+    const sent = toStepInput(draft).due_at as string
+    expect(sent.endsWith('Z')).toBe(true)
+    // E riletto torna al minuto che era stato scritto, non a un altro
+    expect(toLocalInputValue(sent)).toBe('2026-03-04T15:30')
   })
 
   it('manda al server il solo bersaglio del tipo attivo', () => {
@@ -64,20 +80,20 @@ describe('la bozza di una tappa', () => {
       avatarId: 'a1',
       simulationId: 'x1',
       targetScore: 8,
-      dueDays: null,
+      dueAt: null,
     }
 
     expect(toStepInput(indeciso)).toEqual({
       avatar_id: null,
       simulation_id: 'x1',
       target_score: 8,
-      due_days: null,
+      due_at: null,
     })
     expect(toStepInput({ ...indeciso, kind: 'avatar' })).toEqual({
       avatar_id: 'a1',
       simulation_id: null,
       target_score: 8,
-      due_days: null,
+      due_at: null,
     })
   })
 })

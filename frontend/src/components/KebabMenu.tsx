@@ -7,7 +7,14 @@ import { createPortal } from 'react-dom'
  * non viene tagliata dai contenitori overflow della tabella.
  *
  * La navigazione da tastiera segue lo stesso schema del Select: il focus resta
- * sul pulsante e la voce attiva è indicata da aria-activedescendant. */
+ * sul pulsante e la voce attiva è indicata da aria-activedescendant.
+ *
+ * La tendina è larga quanto la sua voce più lunga, fra un minimo che le
+ * impedisce di diventare una fessura e un massimo oltre il quale il motivo di
+ * una voce bloccata va a capo invece di stirare il menu. Prima era una misura
+ * fissa buona per il menu più ricco, e attorno a tre voci brevi restava mezzo
+ * vuota. La larghezza vera si legge dopo il render, insieme all'altezza:
+ * servono a portare il bordo destro del menu su quello del pulsante. */
 
 export interface KebabMenuItem {
   key: string
@@ -30,7 +37,13 @@ interface KebabMenuProps {
   buttonClassName?: string
 }
 
-const MENU_WIDTH = 248
+/* L'aspetto del pulsante ⋮ nelle tabelle: quadrato come gli altri bottoni di
+ * riga, con l'accento viola al passaggio. È il default perché il menu si
+ * chiama allo stesso modo dappertutto, e chi ha altri bottoni accanto a cui
+ * allinearsi passa le proprie classi. */
+export const kebabBtnCls =
+  'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-40'
+
 const GAP = 6
 const EDGE_PAD = 8
 
@@ -40,7 +53,7 @@ const itemCls = (item: KebabMenuItem, isActive: boolean) => {
   return `cursor-pointer ${isActive ? 'bg-white/8 text-slate-100' : 'text-slate-300'}`
 }
 
-export default function KebabMenu({ items, label, buttonClassName = '' }: KebabMenuProps) {
+export default function KebabMenu({ items, label, buttonClassName = kebabBtnCls }: KebabMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
@@ -75,15 +88,13 @@ export default function KebabMenu({ items, label, buttonClassName = '' }: KebabM
     const rect = btnRef.current?.getBoundingClientRect()
     if (!rect) return
     const height = menuRef.current?.offsetHeight ?? 0
+    const width = menuRef.current?.offsetWidth ?? 0
     const openUp =
       rect.bottom + GAP + height > window.innerHeight - EDGE_PAD &&
       rect.top - GAP - height > EDGE_PAD
     setPos({
       top: openUp ? rect.top - GAP - height : rect.bottom + GAP,
-      left: Math.min(
-        Math.max(EDGE_PAD, rect.right - MENU_WIDTH),
-        window.innerWidth - MENU_WIDTH - EDGE_PAD,
-      ),
+      left: Math.min(Math.max(EDGE_PAD, rect.right - width), window.innerWidth - width - EDGE_PAD),
     })
   }, [isOpen])
 
@@ -179,10 +190,9 @@ export default function KebabMenu({ items, label, buttonClassName = '' }: KebabM
             style={{
               top: pos?.top ?? 0,
               left: pos?.left ?? 0,
-              width: MENU_WIDTH,
               visibility: pos ? 'visible' : 'hidden',
             }}
-            className="fixed z-[1000] animate-menu-in rounded-xl border border-white/6 bg-gray-900/95 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
+            className="fixed z-[1000] w-max min-w-[9rem] max-w-[min(18rem,calc(100vw-1rem))] animate-menu-in rounded-xl border border-white/6 bg-gray-900/95 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
           >
             {items.map((item, i) => (
               <button

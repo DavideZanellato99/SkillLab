@@ -1,7 +1,7 @@
 import type { TrainingPath } from '../services/training'
 import Tooltip from './Tooltip'
 import { PencilIcon, TrashIcon, UserPlusIcon } from './icons'
-import { formatScore, stepKindLabel, stepTarget } from './trainingFormat'
+import { formatScore, formatShortDeadline, stepKindLabel, stepTarget } from './trainingFormat'
 
 /* Un percorso nell'elenco di chi lo governa: com'è fatto e quanti lo stanno
  * percorrendo.
@@ -94,7 +94,7 @@ export default function TrainingPathCard({
               </span>
               <span className="block text-[0.68rem] text-slate-500">
                 {stepKindLabel(step)} · obiettivo {formatScore(step.target_score)}
-                {step.due_days !== null && ` · ${step.due_days} giorni`}
+                {step.due_at && ` · entro il ${formatShortDeadline(step.due_at)}`}
               </span>
             </span>
           </li>

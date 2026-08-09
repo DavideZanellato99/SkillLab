@@ -572,11 +572,7 @@ export default function AdminPage() {
                         </button>
                       </Tooltip>
                       <Tooltip wrap content="Altre azioni">
-                        <KebabMenu
-                          label={`Altre azioni per ${u.email}`}
-                          items={menuItems}
-                          buttonClassName={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
-                        />
+                        <KebabMenu label={`Altre azioni per ${u.email}`} items={menuItems} />
                       </Tooltip>
                     </div>
                   </Td>

@@ -176,6 +176,73 @@ export function MenuIcon(props: IconProps) {
   )
 }
 
+/* Le due forme in cui si può presentare una tappa di un percorso: parlare con
+ * qualcuno o rispondere a delle domande. Stanno una accanto all'altra perché
+ * sulla mappa si leggono per differenza, in una pastiglia da 12px appesa al
+ * nodo: contano le sagome, non i dettagli. */
+export function ChatIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M21 11.5a8.38 8.38 0 0 1-9 8.5 9.79 9.79 0 0 1-4-.9L3 21l1.9-5a9.79 9.79 0 0 1-.9-4 8.38 8.38 0 0 1 8.5-9 8.5 8.5 0 0 1 8.5 8.5z" />
+    </IconBase>
+  )
+}
+
+export function ChecklistIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M9 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4" />
+      <path d="m9 7 2 2 4-4" />
+      <path d="M8 16h8" />
+    </IconBase>
+  )
+}
+
+/* Il meno che sta accanto al più fra i comandi della mappa: rimpicciolire e
+ * ingrandire sono lo stesso gesto in due versi, quindi sono lo stesso disegno
+ * meno un tratto. */
+export function MinusIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </IconBase>
+  )
+}
+
+/** I cerchi concentrici del bersaglio: dove si è adesso, sulla mappa. */
+export function TargetIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </IconBase>
+  )
+}
+
+/** Il ritorno all'elenco da cui si è aperta una cosa sola. */
+export function ArrowLeftIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </IconBase>
+  )
+}
+
+/* La "i" accanto a un'etichetta: quello che ci sarebbe da sapere sul campo
+ * sta nel tooltip che l'icona apre, e non in una riga di testo sotto che
+ * occuperebbe spazio anche quando nessuno se lo sta chiedendo. */
+export function InfoIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="11" x2="12" y2="16" />
+      <line x1="12" y1="8" x2="12" y2="8" />
+    </IconBase>
+  )
+}
+
 export function ResendIcon(props: IconProps) {
   return (
     <IconBase {...props}>

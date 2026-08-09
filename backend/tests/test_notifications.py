@@ -46,17 +46,21 @@ def _kinds(response):
 
 # ── Percorsi ──────────────────────────────────────────
 #
-# La scadenza di una tappa nasce dal suo sblocco (vedi
-# ``TrainingPathStep.due_days``): per farla passare si retrodata
-# l'assegnazione, che per la prima tappa è il momento in cui si è aperta.
+# La scadenza di una tappa è una data scritta sulla tappa (vedi
+# ``TrainingPathStep.due_at``): per farla passare la si mette nel passato,
+# senza dover retrodatare niente altro.
+
+
+def _in(days: float) -> datetime:
+    """Un momento a distanza di giorni da adesso, nel verso che si chiede."""
+    return _naive(datetime.now(UTC) + timedelta(days=days))
 
 
 def _overdue(make_assigned_path, user, avatar, *, target=7.0):
     """Un percorso la cui prima tappa è scaduta ieri."""
     return make_assigned_path(
         user,
-        [{"avatar": avatar, "target": target, "due_days": 1}],
-        created_at=_naive(datetime.now(UTC) - timedelta(days=2)),
+        [{"avatar": avatar, "target": target, "due_at": _in(-1)}],
     )
 
 
@@ -92,24 +96,43 @@ def test_an_unlocked_step_is_announced(
     assert "Luisa Bianchi" in unlocked["body"]
 
 
-def test_a_locked_step_announces_nothing(
+def test_a_locked_step_still_in_time_announces_nothing(
     user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    """Una scadenza per una tappa che non si può cominciare sarebbe una data
-    da temere senza motivo."""
+    """Una scadenza che deve ancora arrivare, su una tappa che non si può
+    cominciare, sarebbe una data da temere senza motivo."""
     make_assigned_path(
         standard_user,
         [
             {"avatar": make_avatar(name="Mario Rossi")},
-            {"avatar": make_avatar(name="Luisa Bianchi"), "due_days": 1},
+            {"avatar": make_avatar(name="Luisa Bianchi"), "due_at": _in(2)},
         ],
-        created_at=_naive(datetime.now(UTC) - timedelta(days=10)),
     )
 
     kinds = _kinds(user_client.get("/api/notifications"))
 
     assert "assignment.due_soon" not in kinds
     assert kinds.count("assignment.overdue") == 0
+
+
+def test_a_locked_step_past_its_date_is_announced(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    """La data sta sul calendario e passa anche a tappa chiusa: il ritardo
+    c'è davvero, e si dice come uscirne invece di dire "riprova"."""
+    make_assigned_path(
+        standard_user,
+        [
+            {"avatar": make_avatar(name="Mario Rossi")},
+            {"avatar": make_avatar(name="Luisa Bianchi"), "due_at": _in(-1)},
+        ],
+    )
+
+    items = user_client.get("/api/notifications").json()["items"]
+
+    overdue = next(i for i in items if i["kind"] == "assignment.overdue")
+    assert "Luisa Bianchi" in overdue["body"]
+    assert "superi la tappa 1" in overdue["body"]
 
 
 def test_a_completed_path_is_announced(
@@ -127,7 +150,7 @@ def test_a_completed_path_is_announced(
 def test_a_deadline_three_days_out_is_announced(
     user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_days": 2}])
+    make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_at": _in(2)}])
 
     kinds = _kinds(user_client.get("/api/notifications"))
 
@@ -137,7 +160,7 @@ def test_a_deadline_three_days_out_is_announced(
 def test_a_distant_deadline_is_not_announced(
     user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_days": 30}])
+    make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_at": _in(30)}])
 
     kinds = _kinds(user_client.get("/api/notifications"))
 
@@ -171,13 +194,13 @@ def test_reaching_the_target_silences_the_deadline(
     assert "assignment.overdue" not in _kinds(user_client.get("/api/notifications"))
 
 
-def test_giving_a_step_more_days_silences_the_warning(
+def test_moving_a_deadline_further_out_silences_the_warning(
     user_client, db_session, standard_user, make_avatar, make_assigned_path
 ):
-    assignment = make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_days": 1}])
+    assignment = make_assigned_path(standard_user, [{"avatar": make_avatar(), "due_at": _in(1)}])
     assert "assignment.due_soon" in _kinds(user_client.get("/api/notifications"))
 
-    assignment.path.steps[0].due_days = 40
+    assignment.path.steps[0].due_at = _in(40)
     db_session.flush()
 
     assert "assignment.due_soon" not in _kinds(user_client.get("/api/notifications"))

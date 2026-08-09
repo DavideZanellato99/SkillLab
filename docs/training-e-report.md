@@ -35,7 +35,7 @@ Le tre tabelle ([models.py](../backend/models.py)):
 | Tabella | Cosa tiene |
 | --- | --- |
 | `training_paths` | Il percorso: titolo, descrizione, tenant |
-| `training_path_steps` | Una tappa: posto nella fila, bersaglio, obiettivo, giorni concessi |
+| `training_path_steps` | Una tappa: posto nella fila, bersaglio, obiettivo, scadenza |
 | `training_path_assignments` | Il percorso affidato a una persona, e quando |
 
 Sulla tappa il bersaglio è **una colonna o l'altra**, mai tutte e due e mai
@@ -43,11 +43,17 @@ nessuna, e a imporlo è un vincolo sulla tabella: è la stessa forma delle
 chiavi di una domanda di simulazione, dove ogni tipo riempie la propria
 colonna e lascia stare le altre (vedi [simulatore.md](simulatore.md)).
 
-**I giorni concessi non sono una data.** Contano da quando la tappa si
-sblocca, e non da quando il percorso è stato affidato: su un modello riusabile
-una data assoluta sarebbe già passata per il secondo allievo, e la tappa
-numero tre non si può nemmeno datare, perché quando si aprirà dipende da
-quanto ci mette chi la sta percorrendo.
+**La scadenza è una data con l'ora, scritta quando si compone il percorso.**
+Sta sul calendario, quindi è la stessa per chiunque percorra quel percorso e
+corre anche mentre la tappa è ancora chiusa: si legge da subito, e a dire che
+la tappa non si è ancora aperta resta lo sblocco. È facoltativa, e una tappa
+senza data non scade mai.
+
+La conseguenza voluta di una data a calendario è che **un percorso vecchio va
+ridatato prima di affidarlo di nuovo**: le sue tappe hanno i termini decisi
+allora, e per chi lo riceve oggi sono già passati. Il percorso resta un
+modello riusabile in tutto il resto, e riscrivere le date è una passata sola
+nel form di composizione.
 
 **Chi compone e chi assegna.** Entrambi i ruoli di amministrazione. Un
 organization admin è chi insegna davvero ai propri studenti, e far passare
@@ -85,8 +91,8 @@ forme di stare sulla stessa scala e sotto la stessa barra.
 flowchart TD
     A[la prima tappa si apre<br/>quando il percorso è affidato] --> B[prove di quel bersaglio,<br/>solo quelle dopo lo sblocco]
     B --> C{una raggiunge<br/>il bersaglio?}
-    C -->|no| D{i giorni concessi<br/>sono passati?}
-    C -->|sì| E{raggiunto entro<br/>i giorni concessi?}
+    C -->|no| D{la data della tappa<br/>è passata?}
+    C -->|sì| E{raggiunto entro<br/>la data della tappa?}
     E -->|sì| F[superata]
     E -->|no| G[superata in ritardo]
     D -->|sì| H[scaduta]
@@ -96,6 +102,16 @@ flowchart TD
     H --> K[le tappe dopo<br/>restano bloccate]
     I --> K
 ```
+
+**Scaduta e aperta sono due cose diverse.** Il diagramma racconta una tappa
+aperta, ma la data corre anche sulle altre: una tappa ancora chiusa il cui
+termine è passato risponde `overdue`, e il percorso con lei. Non è un modo di
+dire che si può cominciare, perché a dirlo è `unlocked_at`, che resta vuoto:
+lo stato dice se la tappa è in tempo, lo sblocco se è il suo turno. Nel
+frontend a tenerle separate è
+[`isStepLocked`](../frontend/src/components/trainingFormat.ts), che guarda lo
+sblocco e non lo stato, così nessuna schermata offre una strada dentro una
+tappa che il percorso non ha ancora aperto.
 
 Tre conseguenze volute:
 
@@ -131,12 +147,99 @@ e non nel router che la mostra: è una regola, non una risposta HTTP, e da lì
 si legge per intero senza attraversare le rotte, i permessi e gli audit che le
 stanno attorno.
 
-**Dove si vedono.** Lo studente li trova in cima alla home
-([TrainingGoals](../frontend/src/components/TrainingGoals.tsx)), con le tappe
-tutte in vista: quella aperta porta alla chat o al test, quelle dopo hanno il
-lucchetto e il tooltip che dice come si aprono, quelle chiuse la spunta.
-Sapere cosa viene dopo è metà del motivo per cui un percorso è una fila invece
-di obiettivi sparsi.
+**Dove si vedono.** Chi un percorso ce l'ha lo apre da `/app/percorsi`
+([MyPathsPage](../frontend/src/components/MyPathsPage.tsx)), che è l'elenco dei
+propri, e da lì entra nel singolo
+([PathMapPage](../frontend/src/components/PathMapPage.tsx)). La voce in barra è
+di **chiunque sia collegato**, admin compresi: ricevere un percorso non dipende
+dal ruolo, e comporne uno è un altro mestiere, che sta nel menu di
+amministrazione.
+
+**Ogni percorso porta la firma di chi l'ha affidato**, nome e cognome e data,
+in coda alla scheda dell'elenco e sotto il titolo nella mappa
+([assignedByLabel](../frontend/src/components/trainingFormat.ts)). Un percorso
+che compare da solo non dice a chi chiedere, e la data è quella da cui la prima
+tappa conta, quindi le due cose stanno sulla stessa riga. Il nome arriva già
+composto dal server (`assigned_by_name`) e manca quando quell'account è stato
+cancellato, perché `assigned_by_id` va a NULL: in quel caso resta la sola data,
+dato che il percorso è comunque arrivato in un giorno preciso.
+
+Il singolo percorso è disegnato come una **mappa**
+([PathTrailMap](../frontend/src/components/PathTrailMap.tsx)): le tappe sono
+nodi su un sentiero che scende serpeggiando, e il tratto già camminato è
+acceso, mentre il resto della strada è appena accennato. La fila di righe
+rispondeva
+alla domanda di chi guarda venti assegnazioni in una tabella; qui la domanda è
+una sola e diversa, «a che punto sono io», e la risposta è dove finisce la
+luce. Sapere cosa viene dopo resta metà del motivo per cui un percorso è una
+fila, quindi si vedono tutte le tappe, lucchetti compresi.
+
+**Un tratto si accende quando la tappa a cui porta si sblocca**, cioè
+nell'istante in cui si supera quella prima di lei: chiusa la tappa 1 si
+illumina la strada dalla 1 alla 2, e non un centimetro oltre. A percorso appena
+affidato il sentiero è tutto spento.
+
+A tenere quella promessa è una **maschera che taglia il sentiero a un'altezza**
+([litUntil](../frontend/src/components/pathMapLayout.ts)), non una frazione
+della sua lunghezza. La differenza non è di stile: la larghezza del disegno è
+stirata per riempire la finestra, quindi le distanze lungo la curva valgono una
+cosa nel disegno e un'altra sullo schermo, e il primo taglio, fatto con un
+tratteggio normalizzato da `pathLength`, ballava fra le due misure al punto che
+il fondo del sentiero risultava acceso a percorso appena cominciato. Il
+sentiero però scende sempre, e una riga orizzontale lo stiramento non la tocca.
+
+**La mappa ha una finestra sua, e non è la pagina.** Il sentiero scorre dentro
+il proprio riquadro, si trascina col mouse, e i comandi in alto lo
+rimpiccioliscono fino a farlo stare tutto sotto gli occhi: guardare cosa viene
+fra sei tappe è un gesto, non un viaggio in fondo alla pagina che si porta via
+anche il pannello. Da qualunque punto si torna alla tappa di adesso con un
+bottone solo, e all'apertura la finestra ci è già sopra.
+
+La riduzione **rifà il conto delle posizioni** invece di rimpicciolire con un
+`transform` il disegno già fatto: a stringersi sono le distanze fra le tappe,
+mentre la larghezza è una percentuale e resta quella della finestra, che è
+l'unica direzione in cui una mappa di questa forma può mostrare più cose. Sotto
+una certa misura i nomi sotto ai nodi non ci stanno più e vengono tolti, non
+lasciati illeggibili: restano nel tooltip e nell'etichetta che legge lo
+screen reader.
+
+Un nodo porta il numero e il nome, perché è quanto serve per capire dove si è;
+l'obiettivo, la scadenza, i tentativi e il bottone che apre la chat o il test
+stanno nel riquadro della tappa
+([PathStepPanel](../frontend/src/components/PathStepPanel.tsx)). **Anche una
+tappa bloccata si sceglie**, e il riquadro risponde con il motivo per cui non
+si può ancora cominciare invece che con un bottone: quella tappa esiste ed è la
+prossima.
+
+**La pagina si apre sulla sola mappa, e il riquadro arriva scegliendo un
+nodo** ([PathStepDrawer](../frontend/src/components/PathStepDrawer.tsx)). La
+domanda con cui si entra in un percorso è dove si è arrivati, e a quella il
+sentiero risponde da solo, con la luce che si ferma e l'alone attorno alla
+tappa di adesso: il dettaglio è una seconda domanda, e prima che la si faccia
+una colonna fissa lasciava al disegno un terzo di schermo senza dire niente in
+più. Il riquadro si posa sul bordo destro della mappa invece che al centro
+dello schermo, perché non è un discorso a parte, e sceglierne un'altra ne
+cambia il contenuto senza chiudere niente. Si toglie di mezzo dal bottone, con
+Esc, ricliccando il nodo da cui lo si è aperto, e su schermo stretto, dove
+sale dal basso come un foglio, anche toccando fuori.
+
+Aprendolo **la mappa gli fa posto invece di sparirci sotto**: il sentiero si
+scosta dal centro fin quasi al bordo, quindi un pannello appoggiato lì
+coprirebbe le tappe di destra, cioè metà di quelle che si guardano mentre lo
+si legge. Le posizioni sono percentuali della larghezza, e restringere il
+riquadro della mappa ricompone il sentiero invece di tagliarlo.
+
+Dove il sentiero non ci sta (l'elenco) il percorso si riduce a un anello di
+avanzamento
+([PathProgressRing](../frontend/src/components/PathProgressRing.tsx)) e a una
+fila di trattini colorati
+([PathStepDots](../frontend/src/components/PathStepDots.tsx)): quante tappe
+sono, in che ordine e a che punto, senza i nomi.
+
+La home è solo la galleria degli avatar. Prima aveva in cima una striscia con i
+percorsi aperti, perché era l'unico posto in cui i percorsi esistevano; adesso
+che hanno una sezione loro, quel promemoria è un doppione di ciò che sta a un
+clic nella barra, e chi arriva in home ci arriva per scegliere un avatar.
 
 Gli amministratori stanno in `/app/admin/training`
 ([TrainingPage](../frontend/src/components/TrainingPage.tsx)), **due linguette
@@ -148,12 +251,12 @@ diversi della settimana. Nella tabella la riga dice quante tappe sono chiuse e
 qual è quella aperta, e la fila intera si apre solo sulla riga che interessa:
 sei tappe per venti persone tutte insieme sono una tabella che non si legge.
 
-La fila di tappe è disegnata da un componente solo
-([PathStepsTrail](../frontend/src/components/PathStepsTrail.tsx)), usato dalle
-due schermate: è il disegno a raccontare la regola, e due copie finirebbero
-per dirla in due modi. Quello che cambia fra i due posti è se una tappa si può
-aprire, perché la chat e il test sono di chi il percorso lo sta facendo. A che
-punto è una tappa lo dice la stessa targhetta
+La fila di tappe della tabella
+([PathStepsTrail](../frontend/src/components/PathStepsTrail.tsx)) non apre
+niente, e non è una limitazione tecnica: la chat e il test sono di chi il
+percorso lo sta facendo, e lui li apre dalla propria mappa. Finché i due posti
+condividevano questa fila, la differenza era una proprietà che ne spegneva
+metà. A che punto è una tappa lo dice la stessa targhetta
 ([AssignmentStatusBadge](../frontend/src/components/AssignmentStatusBadge.tsx)),
 che vive in un file suo: la pagina di amministrazione si scarica solo
 entrandoci (vedi [frontend.md](frontend.md)), e una targhetta presa da lì se la
@@ -174,9 +277,10 @@ una sua conversazione. Prima venivano scoperte per caso, al login successivo.
 
 Nessuna di queste è **salvata** come notifica
 ([notifications.py](../backend/notifications.py)): si ricavano dalle righe che
-già le descrivono. Una notifica salvata è una copia che invecchia: allunga i
-giorni di una tappa e un "scaduto" salvato continua ad annunciare una cosa che
-non è più vera; ritira un percorso e la sua notifica gli sopravvive. Derivate,
+già le descrivono. Una notifica salvata è una copia che invecchia: sposta
+in avanti la data di una tappa e un "scaduto" salvato continua ad annunciare
+una cosa che non è più vera; ritira un percorso e la sua notifica gli
+sopravvive. Derivate,
 smettono semplicemente di essere prodotte.
 
 | Tipo | Quando |
@@ -188,14 +292,21 @@ smettono semplicemente di essere prodotte.
 | `assignment.completed` | L'ultima tappa è stata superata |
 | `review.published` | Un docente ha pubblicato o rivisto una revisione |
 
-**Le tappe bloccate non annunciano niente**, e nemmeno quelle già chiuse: le
-prime non si possono cominciare, e una scadenza per qualcosa a cui non si è
-arrivati sarebbe una data da temere senza motivo. Anche la prima tappa non
-annuncia il proprio sblocco: l'ha già detto l'assegnazione, nello stesso
-istante.
+**Le tappe già chiuse non annunciano niente**, e nemmeno quelle bloccate
+finché sono in tempo: una scadenza che deve ancora arrivare, per qualcosa a
+cui non si è arrivati, sarebbe una data da temere senza motivo. Quando invece
+la data di una tappa bloccata è passata il ritardo c'è davvero e viene detto,
+con la differenza che al posto di "puoi ancora riprovare" si legge quale tappa
+va superata per aprirla. Anche la prima tappa non annuncia il proprio sblocco:
+l'ha già detto l'assegnazione, nello stesso istante.
 
 L'unica cosa scritta è **cosa è già stato letto** (`notification_reads`), perché
 quello è il solo fatto che nessuna query può ricostruire.
+
+**Ogni voce porta alla mappa del percorso di cui parla**, non alla home: una
+notifica dice qualcosa di preciso ("la tappa 3 si è aperta"), e lasciare a chi
+la legge il compito di ritrovare quale percorso fosse è metà del motivo per cui
+esiste.
 
 Ogni voce porta una chiave stabile che la identifica fra una richiesta e
 l'altra, così il segno di lettura continua a corrispondere. La chiave di una
@@ -232,6 +343,61 @@ modi di dire la stessa cosa.
 | --- | --- | --- |
 | Conversazioni | [ComparisonConversations](../frontend/src/components/ComparisonConversations.tsx) | I sei criteri della valutazione, appaiati per chiave |
 | Test tecnici | [ComparisonSimulations](../frontend/src/components/ComparisonSimulations.tsx) | Le domande capitate in tutte e due le prove, appaiate per id: quali sbagli sono stati recuperati e quali persi |
+
+### Prima si restringe, poi si sceglie
+
+Due prove si affiancano per capire se una persona è migliorata, e quella lettura
+regge solo fra prove della stessa specie: una telefonata e una chat scritta non
+si giudicano allo stesso modo, e nemmeno un test a crocette e uno a risposta
+aperta, che sono corretti da due scale diverse. Senza filtri le due tendine
+offrono tutto quello che quella persona ha fatto, e la prima cosa che capita di
+scegliere è proprio il paio che non si legge.
+
+Sopra le due tendine sta quindi una barra di filtri,
+[ComparisonFilterBar](../frontend/src/components/ComparisonFilterBar.tsx), uguale
+nelle due metà e sempre con le stesse due voci: **la specie della prova** a
+linguette, perché ha poche voci fisse e la scelta corrente va letta senza aprire
+niente, e **il bersaglio** in una tendina, perché è un elenco lungo quanto le
+cose fatte da quella persona.
+
+| Metà | Linguette | Tendina |
+| --- | --- | --- |
+| Conversazioni | Il canale, con `MODE_FILTERS` | Lo scenario, cioè l'avatar |
+| Test tecnici | Il tipo di test, con `KIND_FILTERS` | Il test |
+
+I due elenchi di linguette sono gli stessi che filtrano la dashboard e lo
+storico di una persona, non due gemelli scritti a parte: le tre schermate
+offrono così le stesse scelte con le stesse parole.
+
+Le tre regole che il filtro applica stanno in
+[comparisonFilters.ts](../frontend/src/components/comparisonFilters.ts), perché
+le due metà le condividono e scritte due volte prima o poi divergono:
+
+- **le voci del bersaglio si ricavano dalle prove che esistono davvero**, e solo
+  da quelle già passate per il primo filtro (`filterOptions`): uno scenario
+  affrontato unicamente al telefono, offerto mentre si guardano le chat, porta a
+  una lista vuota e a nient'altro;
+- **un filtro che le prove rimaste non sostengono più torna aperto**
+  (`survivingFilter`), invece di restare selezionato su una combinazione che non
+  ha niente dentro;
+- **la coppia proposta è la prima contro l'ultima fra le rimaste** (`pickPair`),
+  e la scelta di chi guarda vale finché appartiene ancora alla lista: quando non
+  ci appartiene più, perché si è cambiata persona o si è stretto un filtro,
+  tenerla mostrerebbe un confronto vuoto senza dire perché.
+
+I filtri **partono aperti**. Chi arriva qui vuole vedere cosa ha fatto, e
+nascondergli metà delle proprie prove per prudenza sarebbe una risposta
+incompleta. Affiancare due prove di specie diversa resta quindi possibile, e in
+quel caso la pagina lo dice con un avviso invece di impedirlo, **uno per
+ragione**: due scenari diversi e due canali diversi sono due cose da sapere, e
+la seconda non deve sparire dietro la prima.
+
+Quando i filtri lasciano meno di due prove la barra resta a schermo e il
+riquadro dice che sono stati i filtri, non che non c'è niente
+([ComparisonEmpty](../frontend/src/components/ComparisonEmpty.tsx) distingue le
+tre ragioni per cui un confronto non si può fare): è l'unica delle tre a cui chi
+guarda può rimediare sul momento, e il filtro da allargare deve restare a
+portata di mano.
 
 Il dettaglio domanda per domanda **compare solo fra due prove sullo stesso
 test**, e le domande si appaiano per id e mai per posizione: una domanda
@@ -308,9 +474,11 @@ più usato al meno.
 Le opzioni dei due gruppi non vivono nella dashboard: stanno accanto alla
 parola che il badge mostra (`MODE_FILTERS` in `conversationMode`,
 `KIND_FILTERS` in `simulationFormat`), perché anche lo storico del report
-attività fa le stesse due domande e due elenchi separati finirebbero per
-offrire scelte diverse nelle due schermate. I default invece restano qui, e
-sono una decisione di questa pagina.
+attività e la barra del confronto fanno le stesse due domande, e tre elenchi
+separati finirebbero per offrire scelte diverse nelle tre schermate. I default
+invece restano qui, e sono una decisione di questa pagina: la dashboard parte
+dalle chiamate perché una media che mescola i due canali è ambigua, il confronto
+parte da tutto perché lì si guarda cosa una persona ha fatto.
 
 La scelta **sta a monte di tutto**: KPI, andamento, medie per test e confronto
 fra utenti partono dalle righe già ristrette, perché una media che mescola due
@@ -418,7 +586,7 @@ sul gruppo la scrive già la dashboard. La riga risponde a quanto e a cosa, il
 dettaglio a com'è andata.
 
 I percorsi assegnati non compaiono qui: hanno già la loro schermata in
-`/app/admin/training`, dove si vedono tappa per tappa con i giorni concessi e il
+`/app/admin/training`, dove si vedono tappa per tappa con la scadenza e il
 progresso, e un "2 su 3" in questa riga sarebbe la stessa cosa detta peggio. L'ultimo
 accesso, allo stesso modo, resta nella tabella degli utenti in `/app/admin`, che è
 dove si guarda lo stato di un account e non cosa ci si è fatto dentro.

@@ -375,11 +375,7 @@ export default function OrganizationsPage() {
                       </button>
                     </Tooltip>
                     <Tooltip wrap content="Altre azioni">
-                      <KebabMenu
-                        label={`Altre azioni per ${o.name}`}
-                        items={menuItems}
-                        buttonClassName={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
-                      />
+                      <KebabMenu label={`Altre azioni per ${o.name}`} items={menuItems} />
                     </Tooltip>
                   </div>
                 </Td>

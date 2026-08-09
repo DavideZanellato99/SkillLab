@@ -17,10 +17,11 @@ scadenza. Quindi:
   fatto prima dell'assegnazione non superava un obiettivo. L'avatar e il
   test restano liberi da galleria e pagina delle simulazioni, ma il
   percorso li conta solo dal suo turno;
-- **la scadenza di una tappa nasce con lo sblocco**, perché è lì che le sue
-  giornate cominciano a scorrere (vedi ``TrainingPathStep.due_days``): una
-  data assoluta scritta sul modello sarebbe già passata per il secondo
-  allievo a cui il percorso viene affidato.
+- **la scadenza invece non aspetta lo sblocco**: è una data a calendario
+  scritta sulla tappa quando si compone il percorso (vedi
+  ``TrainingPathStep.due_at``), quindi vale anche su una tappa ancora
+  chiusa. Una tappa bloccata la cui data è passata è scaduta, e lo è
+  davvero: chi doveva arrivarci in tempo non ci è arrivato.
 
 Niente di tutto questo è salvato, come per il resto dell'applicazione: una
 tappa che risulta sbloccata perché il giudizio della precedente è stato poi
@@ -34,7 +35,7 @@ stanno attorno.
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -83,16 +84,17 @@ def _proof_key(user_id: UUID, step: TrainingPathStep) -> ProofKey:
 
 @dataclass(frozen=True)
 class StepProgress:
-    """Una tappa vista da chi la sta percorrendo, senza niente di salvato."""
+    """Una tappa vista da chi la sta percorrendo, senza niente di salvato.
+
+    La scadenza non è qui: è scritta sulla tappa e la si legge da lì, uguale
+    per chiunque percorra quel percorso. Qui sta solo quello che cambia da
+    una persona all'altra, cioè lo stato che dalla scadenza discende.
+    """
 
     status: str
     # Quando la tappa si è aperta, cioè da quando le sue prove contano.
     # None finché la tappa precedente non è stata superata.
     unlocked_at: datetime | None
-    # Sblocco più i giorni concessi, se ce ne sono. None su una tappa ancora
-    # chiusa: una scadenza per qualcosa che non si può nemmeno cominciare
-    # sarebbe una data da temere senza motivo.
-    due_at: datetime | None
     # Prove svolte dopo lo sblocco
     attempts: int
     best_score: float | None
@@ -231,11 +233,17 @@ def _step_progress(
     now: datetime,
 ) -> StepProgress:
     """Una tappa, dato il momento in cui si è aperta e le prove di quel bersaglio."""
+    due_at = _naive(step.due_at) if step.due_at is not None else None
+    expired = due_at is not None and now > due_at
+
     if unlocked_at is None:
+        # Chiusa: nessuna prova conta ancora, ma il calendario corre lo
+        # stesso, quindi la sua data si legge e può già essere passata. Lo
+        # sblocco resta a None, ed è da lì che si sa che non si può ancora
+        # cominciare: lo stato dice se è in tempo, non se è aperta.
         return StepProgress(
-            status=ASSIGNMENT_STATUS_LOCKED,
+            status=ASSIGNMENT_STATUS_OVERDUE if expired else ASSIGNMENT_STATUS_LOCKED,
             unlocked_at=None,
-            due_at=None,
             attempts=0,
             best_score=None,
             achieved_at=None,
@@ -248,12 +256,11 @@ def _step_progress(
         (at for at, score in relevant if score >= step.target_score),
         default=None,
     )
-    due_at = unlocked_at + timedelta(days=step.due_days) if step.due_days else None
 
     if achieved_at is not None:
         late = due_at is not None and achieved_at > due_at
         status = ASSIGNMENT_STATUS_COMPLETED_LATE if late else ASSIGNMENT_STATUS_COMPLETED
-    elif due_at is not None and now > due_at:
+    elif expired:
         status = ASSIGNMENT_STATUS_OVERDUE
     else:
         status = ASSIGNMENT_STATUS_ACTIVE
@@ -261,7 +268,6 @@ def _step_progress(
     return StepProgress(
         status=status,
         unlocked_at=unlocked_at,
-        due_at=due_at,
         attempts=len(relevant),
         best_score=best_score,
         achieved_at=achieved_at,

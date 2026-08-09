@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConversationEvaluation, EvaluationCitation } from '../services/api'
 import { fetchEvaluationPdf } from '../services/api'
 import EvaluationReport from './EvaluationReport'
+import { formInputCls } from './Field'
 import PdfDownloadButton from './PdfDownloadButton'
 import Spinner from './Spinner'
 import ModalShell from './ModalShell'
@@ -206,7 +207,7 @@ export default function EvaluationModal({
           <div className="flex gap-2 max-[480px]:flex-col">
             <input
               id="conversation-title"
-              className="min-w-0 flex-1 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-600 focus:bg-violet-600/8"
+              className={`${formInputCls} min-w-0 flex-1`}
               value={title}
               maxLength={120}
               autoFocus

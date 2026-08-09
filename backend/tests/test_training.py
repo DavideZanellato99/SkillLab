@@ -4,13 +4,13 @@ Niente di quello che questi test controllano è salvato: lo stato di una
 tappa e quello del percorso si ricavano a ogni lettura. Quindi qui si
 fissa la derivazione, che è la parte che può sbagliare in silenzio: la fila
 si apre una tappa per volta, contano solo le prove svolte dopo lo sblocco,
-i giorni concessi partono da lì e non dall'assegnazione, e una tappa si
-supera parlando con un avatar o consegnando un test a seconda di come è
-fatta.
+la scadenza invece sta sul calendario e passa anche a tappa chiusa, e una
+tappa si supera parlando con un avatar o consegnando un test a seconda di
+come è fatta.
 """
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 from auth_dependency import ensure_roles
 from models import (
@@ -106,17 +106,26 @@ def _seed_simulation_attempt(db_session, user, simulation, score, submitted_at=N
     return attempt
 
 
-def _avatar_step(avatar, target=7.0, due_days=None) -> dict:
+def _in(days: float) -> str:
+    """Una scadenza a distanza di giorni da adesso, come la manda il browser.
+
+    Con il fuso attaccato, che è la forma in cui arriva davvero: il server
+    lo toglie riportando il momento a UTC (vedi ``TrainingPathStepInput``).
+    """
+    return (datetime.now(UTC) + timedelta(days=days)).isoformat()
+
+
+def _avatar_step(avatar, target=7.0, due_at=None) -> dict:
     step = {"avatar_id": str(avatar.id), "target_score": target}
-    if due_days is not None:
-        step["due_days"] = due_days
+    if due_at is not None:
+        step["due_at"] = due_at
     return step
 
 
-def _simulation_step(simulation, target=6.0, due_days=None) -> dict:
+def _simulation_step(simulation, target=6.0, due_at=None) -> dict:
     step = {"simulation_id": str(simulation.id), "target_score": target}
-    if due_days is not None:
-        step["due_days"] = due_days
+    if due_at is not None:
+        step["due_at"] = due_at
     return step
 
 
@@ -382,53 +391,87 @@ def test_a_below_target_proof_counts_without_passing(
     assert listed["steps"][0]["best_score"] == 6.0
 
 
-# ── I giorni concessi, che partono dallo sblocco ──────
+# ── La scadenza, che sta sul calendario ───────────────
 
 
-def test_the_deadline_of_a_step_starts_when_it_unlocks(
+def test_the_date_is_read_back_in_utc(admin_client, organization, make_avatar):
+    """Il browser manda l'ora del proprio fuso, la colonna la tiene in UTC.
+
+    Senza il passaggio, chi compone il percorso da Roma alle 18 scriverebbe
+    18 anche nella colonna, e la tappa scadrebbe due ore dopo il momento che
+    ha scelto.
+    """
+    wanted = datetime.now(UTC) + timedelta(days=3)
+    rome = wanted.astimezone(timezone(timedelta(hours=2)))
+
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(make_avatar(category="clienti"), 7.0, rome.isoformat())],
+    )
+
+    stored = datetime.fromisoformat(path["steps"][0]["due_at"]).replace(tzinfo=UTC)
+    assert abs((stored - wanted).total_seconds()) < 1
+
+
+def test_a_step_keeps_its_date_while_it_is_still_locked(
     admin_client, db_session, organization, standard_user, make_avatar
 ):
-    """La seconda tappa ha i suoi giorni da quando si apre, non da prima.
+    """La data è scritta sulla tappa, non ricavata dal suo sblocco.
 
-    Su un modello riusabile una data assoluta sarebbe già passata per il
-    secondo allievo, e la tappa in fondo non si potrebbe nemmeno datare.
+    Quindi si legge da subito, uguale per chiunque percorra il percorso, e
+    non aspetta che la tappa prima sia stata superata.
     """
     first = make_avatar(name="Mario Rossi", category="clienti")
     second = make_avatar(name="Luisa Bianchi", category="clienti")
     path = _create_path(
         admin_client,
         organization,
-        [_avatar_step(first, 7.0), _avatar_step(second, 7.0, due_days=5)],
+        [_avatar_step(first, 7.0), _avatar_step(second, 7.0, _in(5))],
     )
     created = _assign(admin_client, path, standard_user)
-    # Finché la tappa è chiusa non ha nessuna scadenza: sarebbe una data da
-    # temere per qualcosa che non si può nemmeno cominciare.
-    assert created["steps"][1]["due_at"] is None
 
-    _seed_evaluated_conversation(db_session, standard_user, first, 7.5)
-    listed = _reload(admin_client, created["id"])
+    assert created["steps"][1]["status"] == "locked"
+    assert created["steps"][1]["unlocked_at"] is None
+    assert created["steps"][1]["due_at"] == path["steps"][1]["due_at"]
 
-    unlocked = datetime.fromisoformat(listed["steps"][1]["unlocked_at"])
-    due = datetime.fromisoformat(listed["steps"][1]["due_at"])
-    assert (due - unlocked).days == 5
+
+def test_a_locked_step_past_its_date_is_overdue_without_opening(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """Scaduta è una cosa, aperta è un'altra.
+
+    Lo stato dice se la tappa è in tempo, e una data passata è un ritardo
+    vero anche su una tappa a cui non si è arrivati. Che non si possa
+    ancora cominciare lo dice lo sblocco, che resta vuoto, e il percorso
+    indica come tappa corrente sempre la prima non superata.
+    """
+    first = make_avatar(name="Mario Rossi", category="clienti")
+    second = make_avatar(name="Luisa Bianchi", category="clienti")
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(first, 7.0), _avatar_step(second, 7.0, _in(-1))],
+    )
+
+    created = _assign(admin_client, path, standard_user)
+
+    assert [s["status"] for s in created["steps"]] == ["active", "overdue"]
+    assert created["steps"][1]["unlocked_at"] is None
+    assert created["steps"][1]["attempts"] == 0
+    assert created["status"] == "overdue"
+    assert created["current_position"] == 1
 
 
 def test_an_expired_step_is_overdue_and_so_is_its_path(
     admin_client, db_session, organization, standard_user, make_avatar
 ):
     avatar = make_avatar(category="clienti")
-    path = _create_path(admin_client, organization, [_avatar_step(avatar, 9.5, due_days=1)])
-    created = _assign(admin_client, path, standard_user)
-    # L'assegnazione retrodatata è il solo modo di far passare i giorni
-    # concessi: la scadenza nasce dallo sblocco, che per la prima tappa è
-    # il momento in cui il percorso è stato affidato.
-    assignment = db_session.query(TrainingPathAssignment).filter_by(id=created["id"]).one()
-    assignment.created_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=3)
-    db_session.flush()
+    path = _create_path(admin_client, organization, [_avatar_step(avatar, 9.5, _in(-1))])
 
-    listed = _reload(admin_client, created["id"])
-    assert listed["steps"][0]["status"] == "overdue"
-    assert listed["status"] == "overdue"
+    created = _assign(admin_client, path, standard_user)
+    assert created["steps"][0]["status"] == "overdue"
+    assert created["status"] == "overdue"
 
     # Raggiunto dopo la scadenza: chiuso, ma in ritardo, e il percorso lo dice
     _seed_evaluated_conversation(db_session, standard_user, avatar, 9.6)
@@ -459,6 +502,33 @@ def test_user_sees_own_paths_only(
     assert mine[0]["path_title"] == "Onboarding"
     assert mine[0]["steps"][0]["avatar_id"] == str(avatar.id)
     assert mine[0]["steps"][0]["status"] == "active"
+
+
+def test_user_sees_who_assigned_the_path(
+    user_client, db_session, standard_user, org_admin_user, make_avatar, make_assigned_path
+):
+    """Il percorso porta la firma di chi l'ha affidato, e sopravvive alla sua cancellazione.
+
+    Un percorso che compare da solo nella pagina di chi si allena non dice a
+    chi chiedere: il nome è quello che lo rende un incarico invece di un
+    compito comparso dal nulla. Senza più quell'account resta comunque il
+    percorso, quindi il campo torna vuoto invece di far fallire la risposta.
+    """
+    org_admin_user.nome, org_admin_user.cognome = "Anna", "Bianchi"
+    make_assigned_path(
+        standard_user,
+        [{"avatar": make_avatar(category="clienti"), "target": 7.0}],
+        assigned_by=org_admin_user,
+    )
+
+    mine = user_client.get("/api/training/assignments/me").json()
+    assert mine[0]["assigned_by_name"] == "Anna Bianchi"
+
+    db_session.query(TrainingPathAssignment).one().assigned_by_id = None
+    db_session.flush()
+
+    mine = user_client.get("/api/training/assignments/me").json()
+    assert mine[0]["assigned_by_name"] is None
 
 
 def test_composing_and_assigning_are_admin_only(user_client, organization, standard_user):

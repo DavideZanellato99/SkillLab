@@ -1,13 +1,23 @@
 import { useMemo, useState } from 'react'
 import type { SimulationComparisonAttempt } from '../services/comparison'
+import ComparisonEmpty from './ComparisonEmpty'
+import ComparisonFilterBar, { ComparisonWarnings } from './ComparisonFilterBar'
 import Select from './Select'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
+import { KIND_FILTERS, kindLabel } from './simulationFormat'
+import type { KindFilter } from './simulationFormat'
+import { ANY, filterOptions, matchesFilter, pickPair, survivingFilter } from './comparisonFilters'
 import { Delta } from './scoreCharts'
 import { cardCls, formatScore, scoreTextColor } from './scoreFormat'
 import { formatDate } from './lastAccess'
 
 /* La metà scritta del confronto: due test consegnati, uno accanto all'altro.
+ *
+ * Si sceglie fra le prove che i due filtri lasciano passare, il tipo e il
+ * test: i quattro tipi si correggono con quattro scale diverse, quindi un
+ * dieci preso a crocette e un dieci preso a risposte scritte non sono lo
+ * stesso dieci.
  *
  * Cambia cosa c'è sotto i due voti. Là i sei criteri di una valutazione, qui
  * le domande: rifare lo stesso test serve a sapere quali sbagli si sono
@@ -93,33 +103,49 @@ export default function ComparisonSimulations({
 }: {
   attempts: SimulationComparisonAttempt[]
 }) {
-  /* Come per le conversazioni: si propone il primo contro l'ultimo, e una
-   * scelta che non appartiene più a questi tentativi torna al default. */
+  /* Come per le conversazioni: prima si restringe, poi si sceglie, e i due
+   * filtri partono aperti. */
+  const [kindFilter, setKindFilter] = useState<KindFilter>(ANY)
+  const [pickedSimulationId, setPickedSimulationId] = useState(ANY)
   const [pickedLeftId, setPickedLeftId] = useState('')
   const [pickedRightId, setPickedRightId] = useState('')
 
-  const belongs = (id: string) => attempts.some((a) => a.attempt_id === id)
-  const leftId = belongs(pickedLeftId)
-    ? pickedLeftId
-    : attempts.length > 1
-      ? attempts[0].attempt_id
-      : ''
-  const rightId = belongs(pickedRightId)
-    ? pickedRightId
-    : attempts.length > 0
-      ? attempts[attempts.length - 1].attempt_id
-      : ''
+  /* I test fra cui scegliere sono quelli del tipo scelto: un test a risposta
+   * aperta, offerto mentre si guardano le crocette, non ha nessun tentativo
+   * da mostrare. */
+  const byKind = useMemo(
+    () => attempts.filter((a) => matchesFilter(kindFilter, a.simulation_kind)),
+    [attempts, kindFilter],
+  )
+  const simulationOptions = useMemo(
+    () =>
+      filterOptions(
+        byKind,
+        (a) => a.simulation_id,
+        (a) => a.simulation_title,
+        'Tutti i test',
+      ),
+    [byKind],
+  )
+  const simulationFilter = survivingFilter(simulationOptions, pickedSimulationId)
+
+  const filtered = useMemo(
+    () => byKind.filter((a) => matchesFilter(simulationFilter, a.simulation_id)),
+    [byKind, simulationFilter],
+  )
+
+  const { leftId, rightId } = pickPair(filtered, (a) => a.attempt_id, pickedLeftId, pickedRightId)
 
   const left = useMemo(
-    () => attempts.find((a) => a.attempt_id === leftId) ?? null,
-    [attempts, leftId],
+    () => filtered.find((a) => a.attempt_id === leftId) ?? null,
+    [filtered, leftId],
   )
   const right = useMemo(
-    () => attempts.find((a) => a.attempt_id === rightId) ?? null,
-    [attempts, rightId],
+    () => filtered.find((a) => a.attempt_id === rightId) ?? null,
+    [filtered, rightId],
   )
 
-  const attemptOptions = attempts.map((a) => ({ value: a.attempt_id, label: attemptLabel(a) }))
+  const attemptOptions = filtered.map((a) => ({ value: a.attempt_id, label: attemptLabel(a) }))
 
   const sameSimulation = !!left && !!right && left.simulation_id === right.simulation_id
 
@@ -151,19 +177,30 @@ export default function ComparisonSimulations({
   const recovered = questionRows.filter((r) => !r.left && r.right).length
   const lost = questionRows.filter((r) => r.left && !r.right).length
 
+  /* Due test diversi si possono confrontare, ma il voto dice quanto si sa di
+   * quel documento, non quanto si sa in generale; e due tipi diversi sono
+   * due correzioni diverse prima ancora che due documenti. */
+  const warnings =
+    left && right
+      ? [
+          left.simulation_id !== right.simulation_id
+            ? `Il confronto riguarda due test diversi, ${left.simulation_title} e ${right.simulation_title}: i punteggi misurano la preparazione su due documenti distinti, non l'andamento nel tempo.`
+            : '',
+          left.simulation_kind !== right.simulation_kind
+            ? `Il confronto riguarda due tipi di test diversi, ${kindLabel(left.simulation_kind)} e ${kindLabel(right.simulation_kind)}: i due voti nascono da due correzioni diverse e non sono direttamente comparabili.`
+            : '',
+        ].filter(Boolean)
+      : []
+
   if (attempts.length === 0) {
-    return (
-      <p className="rounded-2xl border border-white/6 bg-white/4 p-12 text-center text-sm text-slate-500">
-        Nessun test tecnico da confrontare
-      </p>
-    )
+    return <ComparisonEmpty>Nessun test tecnico da confrontare</ComparisonEmpty>
   }
 
   if (attempts.length === 1) {
     return (
-      <p className="rounded-2xl border border-white/6 bg-white/4 p-12 text-center text-sm text-slate-500">
+      <ComparisonEmpty>
         È stato consegnato un solo test: ne serve un secondo per effettuare un confronto
-      </p>
+      </ComparisonEmpty>
     )
   }
 
@@ -172,6 +209,18 @@ export default function ComparisonSimulations({
       {/* `relative z-20` per la stessa ragione dell'altra metà: il blur apre
           un contesto di impilamento e le tendine dei Select ci restano dentro. */}
       <div className={`${cardCls} relative z-20 mb-8`}>
+        <ComparisonFilterBar
+          kindLabel="Tipo di test"
+          kindValue={kindFilter}
+          kindOptions={KIND_FILTERS}
+          onKindChange={setKindFilter}
+          targetId="simulation-target"
+          targetLabel="Test"
+          targetValue={simulationFilter}
+          targetOptions={simulationOptions}
+          onTargetChange={setPickedSimulationId}
+        />
+
         <div className="flex flex-wrap items-end gap-4">
           <div className="min-w-[240px] flex-1">
             <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="sim-left">
@@ -197,16 +246,18 @@ export default function ComparisonSimulations({
           </div>
         </div>
 
-        {/* Due test diversi si possono confrontare, ma il voto dice quanto si
-            sa di quel documento, non quanto si sa in generale. */}
-        {left && right && !sameSimulation && (
-          <p className="mt-4 rounded-xl border border-orange-500/25 bg-orange-500/10 px-4 py-2 text-[0.8rem] text-orange-300">
-            Il confronto riguarda due test diversi, {left.simulation_title} e{' '}
-            {right.simulation_title}: i punteggi misurano la preparazione su due documenti distinti,
-            non l'andamento nel tempo.
-          </p>
-        )}
+        <ComparisonWarnings messages={warnings} />
       </div>
+
+      {/* Come nell'altra metà: i filtri restano sopra anche quando non
+          lasciano passare niente, così si allargano sul posto. */}
+      {filtered.length < 2 && (
+        <ComparisonEmpty>
+          {filtered.length === 0
+            ? 'Nessun test corrisponde ai filtri scelti'
+            : 'I filtri scelti lasciano un solo test: ne serve un secondo per effettuare un confronto'}
+        </ComparisonEmpty>
+      )}
 
       {left && right && (
         <>

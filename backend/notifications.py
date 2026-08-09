@@ -120,12 +120,13 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
     second copy of it would eventually disagree with the page the student
     reads.
 
-    Le tappe chiuse e quelle ancora bloccate non producono niente: le prime
-    non chiedono più nulla, le seconde non si possono nemmeno cominciare, e
-    annunciare una scadenza per una tappa a cui non si è arrivati sarebbe
-    una data da temere senza motivo. Quello che si racconta è il percorso
-    quando arriva, la tappa quando si apre, la sua scadenza mentre è aperta
-    e il percorso quando si chiude.
+    Le tappe chiuse non producono niente, non chiedono più nulla. Quelle
+    ancora bloccate parlano solo quando la loro data è già passata: prima di
+    allora annunciare la scadenza di una tappa a cui non si è arrivati
+    sarebbe una data da temere senza motivo, dopo è un ritardo che c'è
+    davvero e va detto. Quello che si racconta è quindi il percorso quando
+    arriva, la tappa quando si apre, la sua scadenza mentre è aperta o
+    quando è passata, e il percorso quando si chiude.
     """
     # Local import: routers/training pulls in the whole FastAPI stack, and
     # this module is also used by plain queries in the tests.
@@ -142,6 +143,10 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
 
     now = _now()
     items: list[NotificationItem] = []
+    # Ogni voce porta alla mappa del percorso di cui parla, e non alla home:
+    # una notifica dice qualcosa di preciso ("la tappa 3 si è aperta"), e
+    # lasciare a chi la legge il compito di ritrovare quale percorso fosse
+    # è metà del motivo per cui esiste.
     for response in _assignment_responses(db, assignments):
         path = response.path_title
         total = len(response.steps)
@@ -157,7 +162,7 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
                 ),
                 at=_naive(response.created_at),
                 read=False,
-                link="/app",
+                link=f"/app/percorsi/{response.id}",
             )
         )
 
@@ -173,7 +178,7 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
                     body=f"Hai superato tutte le tappe di «{path}».",
                     at=closed_at,
                     read=False,
-                    link="/app",
+                    link=f"/app/percorsi/{response.id}",
                 )
             )
             continue
@@ -199,7 +204,7 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
                         ),
                         at=_naive(step.unlocked_at),
                         read=False,
-                        link="/app",
+                        link=f"/app/percorsi/{response.id}",
                     )
                 )
 
@@ -226,7 +231,7 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
                             # sopra a tutto il resto.
                             at=opens_at,
                             read=False,
-                            link="/app",
+                            link=f"/app/percorsi/{response.id}",
                         )
                     )
             elif step.status == ASSIGNMENT_STATUS_OVERDUE:
@@ -237,11 +242,18 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
                         title="Tappa scaduta",
                         body=(
                             f"La scadenza per {what} era il {_fmt_date(due_at)}. "
-                            "Puoi ancora riprovare."
+                            + (
+                                "Puoi ancora riprovare."
+                                if step.unlocked_at is not None
+                                # Scaduta senza essersi mai aperta: dire
+                                # "riprova" manderebbe su una tappa che il
+                                # percorso non lascia ancora cominciare.
+                                else f"Si apre quando superi la tappa {step.position - 1}."
+                            )
                         ),
                         at=due_at,
                         read=False,
-                        link="/app",
+                        link=f"/app/percorsi/{response.id}",
                     )
                 )
 

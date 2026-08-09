@@ -36,7 +36,9 @@ export default function Navbar() {
 
   const isHome = location.pathname === '/app'
   const isDashboardPage = location.pathname === '/app/admin/dashboard'
-  const isTrainingPage = location.pathname === '/app/admin/training'
+  /* Anche dentro la mappa di un percorso la voce resta accesa: il singolo
+     percorso è dentro i propri percorsi, non accanto. */
+  const isPathsPage = location.pathname.startsWith('/app/percorsi')
   const isComparisonPage = location.pathname === '/app/confronto'
   /* Anche mentre si svolge un test la voce resta accesa: la pagina del
      singolo test è dentro il simulatore, non accanto. */
@@ -258,11 +260,15 @@ export default function Navbar() {
                 Simulatore Tecnico
               </Link>
             )}
-            {isAuthenticated && isAdmin(user) && (
+            {/* I propri percorsi, per tutti. La composizione e le assegnazioni
+                sono un altro mestiere e stanno nel menu di amministrazione:
+                un admin che riceve un percorso lo percorre da qui come
+                chiunque altro. */}
+            {isAuthenticated && (
               <Link
-                to="/app/admin/training"
+                to="/app/percorsi"
                 className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isTrainingPage
+                  isPathsPage
                     ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
                     : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
                 }`}
@@ -515,6 +521,31 @@ export default function Navbar() {
                               Gestione Simulazioni
                             </Link>
                           )}
+                          {/* Comporre i percorsi e assegnarli: sta qui e non
+                              in barra perché è il lavoro di chi insegna, non
+                              di chi si allena, e la voce in barra ora porta
+                              ai propri. */}
+                          <Link
+                            to="/app/admin/training"
+                            className={menuItemCls}
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <circle cx="12" cy="12" r="6" />
+                              <circle cx="12" cy="12" r="2" />
+                            </svg>
+                            Gestione Percorsi
+                          </Link>
                           <Link
                             to="/app/admin/report"
                             className={menuItemCls}

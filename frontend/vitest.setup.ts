@@ -27,6 +27,14 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {}
 }
 
+/* E `scrollTo` su un elemento, che la mappa dei percorsi chiama per portare
+ * al centro la tappa di adesso (vedi PathTrailMap). Come sopra: in jsdom non
+ * c'è niente da scorrere, e quello che il test guarda è cosa viene disegnato,
+ * non dove si è fermata la finestra. */
+if (!Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => {}
+}
+
 afterEach(() => {
   cleanup()
 })

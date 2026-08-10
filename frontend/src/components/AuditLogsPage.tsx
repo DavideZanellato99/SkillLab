@@ -13,7 +13,7 @@ import type { DataTableColumn } from './DataTable'
 import { fieldCls, labelCls } from './Field'
 import FormError from './FormError'
 
-/* Registro delle attivitÃ : ogni azione che modifica qualcosa, di qualunque
+/* Registro delle attività: ogni azione che modifica qualcosa, di qualunque
  * utente e di qualunque ruolo. Pagina riservata al super admin, il backend
  * risponde 403 a chiunque altro. In sola lettura: il registro non si
  * modifica e non si cancella, scade e basta. */
@@ -42,8 +42,8 @@ function formatDateTime(value: string): string {
   })
 }
 
-/** Verde se Ã¨ andata a buon fine, ambra se Ã¨ stata rifiutata, rosso se il
- * server Ã¨ andato in errore. */
+/** Verde se è andata a buon fine, ambra se è stata rifiutata, rosso se il
+ * server è andato in errore. */
 function statusClasses(status: number): string {
   if (status < 300) return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
   if (status < 500) return 'border-amber-500/25 bg-amber-500/10 text-amber-400'
@@ -57,9 +57,9 @@ function summarize(log: AuditLog): string {
     const parts = Object.entries(log.details)
       .filter(([, value]) => value !== null && value !== '')
       .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
-    if (parts.length) return parts.join(' Â· ')
+    if (parts.length) return parts.join(' · ')
   }
-  return log.resource_id ?? 'â€”'
+  return log.resource_id ?? '—'
 }
 
 export default function AuditLogsPage() {
@@ -72,7 +72,7 @@ export default function AuditLogsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [search, setSearch] = useState('')
-  // La ricerca interroga il server, non solo le righe giÃ  caricate: senza
+  // La ricerca interroga il server, non solo le righe già caricate: senza
   // il rinvio partirebbe una richiesta per ogni tasto premuto.
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -82,7 +82,7 @@ export default function AuditLogsPage() {
     return () => clearTimeout(timer)
   }, [search])
 
-  /* I filtri fanno parte della chiave di cache: cambiarne uno Ã¨ una domanda
+  /* I filtri fanno parte della chiave di cache: cambiarne uno è una domanda
    * diversa, quindi la finestra riparte da capo invece di sovrascrivere le
    * righe di prima. */
   const {
@@ -107,8 +107,8 @@ export default function AuditLogsPage() {
   return (
     <PageContainer width="wide">
       <PageHeader
-        title="Registro AttivitÃ "
-        description="Tutte le azioni compiute sulla piattaforma, da qualunque utente e con qualunque ruolo. Il registro Ã¨ in sola lettura, le righe scadono automaticamente e non possono essere eliminate."
+        title="Registro Attività"
+        description="Tutte le azioni compiute sulla piattaforma, da qualunque utente e con qualunque ruolo. Il registro è in sola lettura, le righe scadono automaticamente e non possono essere eliminate."
       />
 
       <div className="mb-8 flex flex-wrap items-end gap-4">
@@ -224,7 +224,7 @@ export default function AuditLogsPage() {
                     <Td>
                       <div className="flex flex-col">
                         <span className="text-[0.85rem] font-semibold text-slate-100">
-                          {log.user_email || 'â€”'}
+                          {log.user_email || '—'}
                         </span>
                         {log.user_role && (
                           <span
@@ -237,7 +237,7 @@ export default function AuditLogsPage() {
                     </Td>
                     <Td>
                       <span className="text-[0.85rem] text-slate-300">
-                        {log.organization_name ?? 'â€”'}
+                        {log.organization_name ?? '—'}
                       </span>
                     </Td>
                     <Td>
@@ -285,12 +285,12 @@ export default function AuditLogsPage() {
                           <dt className="text-slate-500">Risorsa</dt>
                           <dd className="break-all font-mono text-slate-300">
                             {log.resource_type ? `${log.resource_type} ` : ''}
-                            {log.resource_id ?? 'â€”'}
+                            {log.resource_id ?? '—'}
                           </dd>
                           <dt className="text-slate-500">Indirizzo IP</dt>
-                          <dd className="font-mono text-slate-300">{log.client_ip || 'â€”'}</dd>
+                          <dd className="font-mono text-slate-300">{log.client_ip || '—'}</dd>
                           <dt className="text-slate-500">Browser</dt>
-                          <dd className="break-all text-slate-400">{log.user_agent || 'â€”'}</dd>
+                          <dd className="break-all text-slate-400">{log.user_agent || '—'}</dd>
                           {log.details && (
                             <>
                               <dt className="text-slate-500">Dettagli</dt>

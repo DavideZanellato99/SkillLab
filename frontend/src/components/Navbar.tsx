@@ -24,14 +24,14 @@ export default function Navbar() {
   const isHome = location.pathname === '/app'
   const isDashboardPage = location.pathname === '/app/admin/dashboard'
   /* Anche dentro la mappa di un percorso la voce resta accesa: il singolo
-     percorso Ã¨ dentro i propri percorsi, non accanto. */
+     percorso è dentro i propri percorsi, non accanto. */
   const isPathsPage = location.pathname.startsWith('/app/percorsi')
   const isComparisonPage = location.pathname === '/app/confronto'
   /* Anche mentre si svolge un test la voce resta accesa: la pagina del
-     singolo test Ã¨ dentro il simulatore, non accanto. */
+     singolo test è dentro il simulatore, non accanto. */
   const isSimulationPage = location.pathname.startsWith('/app/simulatore')
 
-  /* Aperta o chiusa, niente di piÃ¹: quello che c'Ã¨ dentro (i campi, il passo
+  /* Aperta o chiusa, niente di più: quello che c'è dentro (i campi, il passo
      del cambio password, l'errore) vive in AuthModal, che nasce alla sua
      apertura e muore alla sua chiusura. */
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -57,9 +57,9 @@ export default function Navbar() {
         id="navbar"
       >
         <div className="flex h-full w-full items-center justify-between px-4">
-          {/* Logo. Porta a casa propria, che Ã¨ la home pubblica per chi sta
-              leggendo il sito e la galleria degli avatar per chi Ã¨
-              collegato: sono due indirizzi distinti, e il logo Ã¨ lo stesso. */}
+          {/* Logo. Porta a casa propria, che è la home pubblica per chi sta
+              leggendo il sito e la galleria degli avatar per chi è
+              collegato: sono due indirizzi distinti, e il logo è lo stesso. */}
           <Link
             to={isAuthenticated ? '/app' : '/'}
             className="group flex items-center gap-2 text-slate-100 no-underline transition hover:scale-[1.03]"
@@ -92,7 +92,7 @@ export default function Navbar() {
 
           {/* Center nav links.
               Prima dell'accesso lo stesso posto ospita le sezioni del sito
-              pubblico: sono cinque e hanno bisogno di piÃ¹ larghezza, quindi
+              pubblico: sono cinque e hanno bisogno di più larghezza, quindi
               spariscono un gradino prima, dove il menu compatto le riprende. */}
           <div
             className={`flex items-center gap-1 ${isAuthenticated ? 'max-md:hidden' : 'max-lg:hidden'}`}
@@ -244,7 +244,7 @@ export default function Navbar() {
           {/* Right side */}
           <div className="flex items-center gap-4" id="navbar-actions">
             {isAuthenticated && user ? (
-              /* Authenticated â€” show user menu */
+              /* Authenticated — show user menu */
               <>
                 <NotificationsBell />
                 <div className="relative">
@@ -416,7 +416,7 @@ export default function Navbar() {
                             </Link>
                           )}
                           {/* Comporre i percorsi e assegnarli: sta qui e non
-                              in barra perchÃ© Ã¨ il lavoro di chi insegna, non
+                              in barra perché è il lavoro di chi insegna, non
                               di chi si allena, e la voce in barra ora porta
                               ai propri. */}
                           <Link
@@ -459,7 +459,7 @@ export default function Navbar() {
                               <line x1="12" y1="20" x2="12" y2="4" />
                               <line x1="6" y1="20" x2="6" y2="14" />
                             </svg>
-                            Report AttivitÃ 
+                            Report Attività
                           </Link>
                           {isSuperAdmin(user) && (
                             <Link
@@ -482,7 +482,7 @@ export default function Navbar() {
                                 <line x1="8" y1="13" x2="16" y2="13" />
                                 <line x1="8" y1="17" x2="13" y2="17" />
                               </svg>
-                              Registro AttivitÃ 
+                              Registro Attività
                             </Link>
                           )}
                         </>

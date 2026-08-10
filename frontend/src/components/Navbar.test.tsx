@@ -171,7 +171,7 @@ describe('menu di chi è entrato', () => {
     await apriMenu()
 
     expect(screen.queryByRole('link', { name: /Gestione/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Report Attivit/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Report Attività/ })).not.toBeInTheDocument()
   })
 
   /* Un org admin governa le persone del proprio tenant: compone percorsi e
@@ -183,11 +183,11 @@ describe('menu di chi è entrato', () => {
     await apriMenu()
 
     expect(screen.getByRole('link', { name: /Gestione Percorsi/ })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Report Attivit/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Report Attività/ })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Gestione Utenti/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Gestione Organizzazioni/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Gestione Avatar/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Registro Attivit/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Registro Attività/ })).not.toBeInTheDocument()
   })
 
   it('a un super admin offre tutto', async () => {
@@ -201,8 +201,8 @@ describe('menu di chi è entrato', () => {
       /Gestione Avatar/,
       /Gestione Simulazioni/,
       /Gestione Percorsi/,
-      /Report Attivit/,
-      /Registro Attivit/,
+      /Report Attività/,
+      /Registro Attività/,
     ]) {
       expect(screen.getByRole('link', { name: voce })).toBeInTheDocument()
     }

@@ -1,17 +1,30 @@
 /* Banner di conferma dei form: icona + messaggio, il gemello verde di
  * FormError. Prima era il componente locale SuccessBox di ProfilePage,
  * estratto qui perché la coppia errore/conferma va tenuta insieme: chi
- * aggiunge un form nuovo trova entrambi i banner nello stesso posto. */
+ * aggiunge un form nuovo trova entrambi i banner nello stesso posto.
+ *
+ * Stesse due misure del gemello (vedi bannerStyles): `form` dentro una
+ * modale, `page` in cima a una schermata. Il verde invece è lo stesso nelle
+ * due misure, quindi qui non serve una tabella di tinte come nel rosso. */
 
-const formSuccessCls =
-  'mb-4 flex animate-fade-in-up items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-[0.82rem] text-emerald-400 [animation-duration:0.2s]'
+import type { BannerVariant } from './bannerStyles'
+import { bannerBaseCls, bannerSizeCls } from './bannerStyles'
 
-export default function FormSuccess({ message }: { message: string }) {
+const successToneCls = 'items-center border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+
+export default function FormSuccess({
+  message,
+  variant = 'form',
+}: {
+  message: string
+  variant?: BannerVariant
+}) {
+  const iconSize = variant === 'page' ? 18 : 16
   return (
-    <div className={formSuccessCls} role="status">
+    <div className={`${bannerBaseCls} ${bannerSizeCls[variant]} ${successToneCls}`} role="status">
       <svg
-        width="16"
-        height="16"
+        width={iconSize}
+        height={iconSize}
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"

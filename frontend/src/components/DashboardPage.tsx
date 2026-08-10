@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { fetchEvaluationsReportXlsx } from '../services/admin'
 import { useEvaluationsReport, useSimulationsReport } from '../hooks/useReports'
@@ -23,6 +23,7 @@ import TabBar from './TabBar'
 import Spinner from './Spinner'
 import LoadingState from './LoadingState'
 import { PageContainer, PageHeader } from './PageLayout'
+import FormError from './FormError'
 import { KpiCard, MeterRow, TrendChart } from './scoreCharts'
 import {
   cardCls,
@@ -91,12 +92,12 @@ export default function DashboardPage() {
   const [selectedUserId, setSelectedUserId] = useState('')
   const [section, setSection] = useState<DashboardSection>('conversazioni')
   /* I due selettori (le opzioni stanno in MODE_FILTERS e KIND_FILTERS, che
-   * anche il report attività usa) scopano l'intera metà in cui vivono: ogni
-   * conteggio, media e grafico parte dalle righe già ristrette.
+   * anche il report attivitÃ  usa) scopano l'intera metÃ  in cui vivono: ogni
+   * conteggio, media e grafico parte dalle righe giÃ  ristrette.
    *
-   * Due default diversi, e non è una svista. Il canale parte dalle chiamate
-   * perché al telefono e in chat non si è valutati alla pari e mescolarli
-   * darebbe una media ambigua. Il tipo parte da "Tutti" perché i tipi di
+   * Due default diversi, e non Ã¨ una svista. Il canale parte dalle chiamate
+   * perchÃ© al telefono e in chat non si Ã¨ valutati alla pari e mescolarli
+   * darebbe una media ambigua. Il tipo parte da "Tutti" perchÃ© i tipi di
    * test sono quattro e tre di loro sono arrivati dopo il primo: un default
    * che ne mostrasse uno solo terrebbe nascosta la maggior parte della
    * dashboard a chi non sa che il selettore esiste. */
@@ -114,7 +115,7 @@ export default function DashboardPage() {
     refetch,
   } = useEvaluationsReport(orgFilter, isAdmin(user))
 
-  /* L'altra metà della pagina. È una query a parte e non un campo in più
+  /* L'altra metÃ  della pagina. Ãˆ una query a parte e non un campo in piÃ¹
    * della prima: le due prove hanno una riga per volta ciascuna, e chi non
    * usa il simulatore non deve pagare la scansione dei tentativi dentro la
    * lettura delle valutazioni. */
@@ -126,16 +127,16 @@ export default function DashboardPage() {
 
   const isLoading = isLoadingEvaluations || isLoadingSimulations
 
-  /* L'errore mostrato è quello del caricamento, o quello dell'esportazione se
-   * è lei a essere andata storta: sono due modi di non avere il report. */
+  /* L'errore mostrato Ã¨ quello del caricamento, o quello dell'esportazione se
+   * Ã¨ lei a essere andata storta: sono due modi di non avere il report. */
   const error =
     exportError ||
     (loadError instanceof Error ? loadError.message : '') ||
     (simulationsError instanceof Error ? simulationsError.message : '')
 
   /* Excel del report: stesse righe della dashboard (stesso scope server
-   * per organizzazione), i filtri più fini li offre il foglio stesso.
-   * Resta fuori da TanStack perché produce un file da salvare, non uno
+   * per organizzazione), i filtri piÃ¹ fini li offre il foglio stesso.
+   * Resta fuori da TanStack perchÃ© produce un file da salvare, non uno
    * stato da tenere in cache. */
   const handleExportXlsx = async () => {
     if (isExporting) return
@@ -310,25 +311,7 @@ export default function DashboardPage() {
         }
       />
 
-      {error && (
-        <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <FormError message={error} variant="page" />}
 
       {isLoading ? (
         <LoadingState message="Caricamento dashboard..." />
@@ -352,16 +335,16 @@ export default function DashboardPage() {
           <h2 className="font-heading text-xl text-slate-100">Nessun dato disponibile</h2>
           <p className="max-w-[420px] text-sm text-slate-500">
             I grafici saranno disponibili quando le conversazioni con gli avatar verranno valutate,
-            oppure quando verrà svolto un test tecnico.
+            oppure quando verrÃ  svolto un test tecnico.
           </p>
         </div>
       ) : (
         <>
           {/* Le due prove non si guardano insieme: una linguetta per volta,
-           * perché "come parlano" e "cosa sanno" sono due domande e mescolarne
+           * perchÃ© "come parlano" e "cosa sanno" sono due domande e mescolarne
            * i grafici in una colonna sola li farebbe leggere come un seguito
            * l'uno dell'altro. I filtri restano di sopra: valgono per
-           * entrambe, e ritrovarli al loro posto cambiando linguetta è quello
+           * entrambe, e ritrovarli al loro posto cambiando linguetta Ã¨ quello
            * che tiene insieme la pagina. */}
           <TabBar
             items={[
@@ -374,7 +357,7 @@ export default function DashboardPage() {
             className="mb-5 border-b border-white/6 pb-2"
           />
 
-          {/* Riga filtri: scopa tutto ciò che sta sotto */}
+          {/* Riga filtri: scopa tutto ciÃ² che sta sotto */}
           <div className="mb-6 flex items-center gap-3 max-lg:flex-wrap">
             <label
               htmlFor="dashboard-user-filter"
@@ -391,8 +374,8 @@ export default function DashboardPage() {
               emptyHint="Tutti gli utenti"
               className="w-full max-w-[440px]"
             />
-            {/* Ogni metà ha il proprio selettore di prova, nello stesso posto
-                della barra: il canale di là, il tipo di test di qua. Sono la
+            {/* Ogni metÃ  ha il proprio selettore di prova, nello stesso posto
+                della barra: il canale di lÃ , il tipo di test di qua. Sono la
                 stessa domanda ("quale delle due sto guardando") fatta su due
                 cose diverse, quindi non possono essere un selettore solo. */}
             {section === 'conversazioni' ? (
@@ -424,7 +407,7 @@ export default function DashboardPage() {
 
           {section === 'conversazioni' && (
             <>
-              {/* Il canale può non avere nessuna conversazione: senza questo avviso
+              {/* Il canale puÃ² non avere nessuna conversazione: senza questo avviso
                * i KPI a zero si leggerebbero come un errore di caricamento. */}
               {rows.length > 0 && scopedRows.length === 0 && (
                 <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
@@ -486,7 +469,7 @@ export default function DashboardPage() {
                             <span className="text-lg font-medium text-slate-500"> /10</span>
                           </>
                         ) : (
-                          '—'
+                          'â€”'
                         )}
                       </p>
                     </KpiCard>
@@ -495,7 +478,7 @@ export default function DashboardPage() {
                         {filtered.length}
                       </p>
                     </KpiCard>
-                    <KpiCard label="Criterio più forte">
+                    <KpiCard label="Criterio piÃ¹ forte">
                       {bestCriterion ? (
                         <>
                           <Tooltip content={bestCriterion.label} truncateOnly>
@@ -511,10 +494,10 @@ export default function DashboardPage() {
                           </p>
                         </>
                       ) : (
-                        <p className="text-2xl text-slate-500">—</p>
+                        <p className="text-2xl text-slate-500">â€”</p>
                       )}
                     </KpiCard>
-                    <KpiCard label="Criterio più debole">
+                    <KpiCard label="Criterio piÃ¹ debole">
                       {worstCriterion ? (
                         <>
                           <Tooltip content={worstCriterion.label} truncateOnly>
@@ -530,7 +513,7 @@ export default function DashboardPage() {
                           </p>
                         </>
                       ) : (
-                        <p className="text-2xl text-slate-500">—</p>
+                        <p className="text-2xl text-slate-500">â€”</p>
                       )}
                     </KpiCard>
                   </div>
@@ -540,7 +523,7 @@ export default function DashboardPage() {
                     <h2 className="text-sm font-semibold text-slate-300">Andamento nel tempo</h2>
                     <p className="mb-4 text-xs text-slate-500">
                       Media giornaliera del voto complessivo {MODE_SUFFIX[modeFilter]}
-                      {selectedUserId ? ', per l’utente selezionato' : ''}
+                      {selectedUserId ? ', per lâ€™utente selezionato' : ''}
                     </p>
                     {trendPoints.length > 0 ? (
                       <TrendChart points={trendPoints} />
@@ -687,21 +670,21 @@ export default function DashboardPage() {
                                     {formatScore(crit.score)}
                                   </span>
                                 ) : (
-                                  <span className="text-slate-600">—</span>
+                                  <span className="text-slate-600">â€”</span>
                                 )}
                               </Td>
                             )
                           })}
                           <Td align="right">
-                            {/* Il voto in colonna è quello che conta: se un docente
+                            {/* Il voto in colonna Ã¨ quello che conta: se un docente
                         l'ha corretto va detto, altrimenti la tabella
                         sembrerebbe contraddire la valutazione automatica.
 
-                        L'etichetta è fuori dal flusso (absolute): la cella è
+                        L'etichetta Ã¨ fuori dal flusso (absolute): la cella Ã¨
                         centrata in verticale, quindi una seconda riga vera
                         alzerebbe il numero. Riservare lo spazio in tutte le
                         celle allineava i voti fra loro ma spostava l'intera
-                        colonna rispetto a quelle dei criteri; così invece il
+                        colonna rispetto a quelle dei criteri; cosÃ¬ invece il
                         numero non si muove di un pixel, con o senza
                         correzione. */}
                             <span
@@ -743,8 +726,8 @@ export default function DashboardPage() {
           row={detailRow}
           onClose={() => setDetailRow(null)}
           onReviewSaved={() => void refetch()}
-          /* Eliminata di lì: la schermata si chiude su una conversazione che
-             non c'è più, la tabella sotto si rilegge da sola. */
+          /* Eliminata di lÃ¬: la schermata si chiude su una conversazione che
+             non c'Ã¨ piÃ¹, la tabella sotto si rilegge da sola. */
           onDeleted={() => setDetailRow(null)}
         />
       )}

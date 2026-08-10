@@ -699,6 +699,38 @@ def _index_audit_logs() -> None:
         )
 
 
+def _index_conversations() -> None:
+    """Indicizzare conversazioni e messaggi nel modo in cui si leggono.
+
+    Su un database nuovo li fa create_all a partire dai modelli; qui le
+    tabelle esistono già, e senza queste righe resterebbero con i vecchi
+    indici a una colonna sola. Le forme sono due, e sono le uniche due che
+    l'applicazione usa: le conversazioni di una persona dalla più recente, e
+    i messaggi di una conversazione in ordine di tempo.
+
+    I due indici a una colonna se ne vanno subito dopo: sono il prefisso dei
+    nuovi, quindi non rispondono a niente che i nuovi non risolvano già, e
+    tenerli vorrebbe dire pagarli a ogni messaggio scritto. Vanno via dopo la
+    creazione e non prima, così una replica interrotta a metà lascia sempre
+    almeno un indice buono al posto suo.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_chat_conversations_user_created "
+                "ON chat_conversations (user_id, created_at)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_chat_messages_conversation_created "
+                "ON chat_messages (conversation_id, created_at)"
+            )
+        )
+        conn.execute(text("DROP INDEX IF EXISTS ix_chat_conversations_user_id"))
+        conn.execute(text("DROP INDEX IF EXISTS ix_chat_messages_conversation_id"))
+
+
 def run_startup_migrations() -> None:
     """Run every idempotent startup migration, in dependency order."""
     _add_columns()
@@ -716,6 +748,7 @@ def run_startup_migrations() -> None:
     _backfill_simulation_points()
     _drop_legacy_training_assignments()
     _index_audit_logs()
+    _index_conversations()
 
 
 @contextmanager

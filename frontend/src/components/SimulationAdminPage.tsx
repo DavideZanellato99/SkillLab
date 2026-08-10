@@ -18,6 +18,7 @@ import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import { formatDate } from './lastAccess'
 import { kindLabel, sourceLabel, statusBadgeTone, statusLabel } from './simulationFormat'
+import { iconActionCls as actionBtnCls } from './IconButton'
 
 /* La gestione delle simulazioni tecniche, riservata al super admin.
  *
@@ -36,9 +37,6 @@ const COLUMNS = [
   { key: 'creazione', label: 'Data Creazione' },
   { key: 'actions', label: 'Azioni', align: 'right' as const },
 ]
-
-const actionBtnCls =
-  'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40'
 
 export default function SimulationAdminPage() {
   const { data: simulations = [], isLoading } = useAdminSimulations()

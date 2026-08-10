@@ -31,11 +31,9 @@ import { categoryBadgeClasses } from './categoryStyles'
 import { TrashIcon, PencilIcon, PlusIcon } from './icons'
 import Tooltip from './Tooltip'
 import { fieldCls, labelCls, inputWrapperCls, inputCls } from './Field'
+import { iconActionCls as actionBtnCls } from './IconButton'
 
 const DEFAULT_COLOR = 'violet'
-
-const actionBtnCls =
-  'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition disabled:cursor-not-allowed disabled:opacity-40'
 
 interface AvatarCategoriesModalProps {
   /** L'organizzazione da cui partire, se la pagina ne ha una in mano. */

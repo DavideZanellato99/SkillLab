@@ -57,6 +57,16 @@ sessione è morta davvero, e la pagina si ricarica finendo sulla schermata di
 accesso. Un ciclo di ritentativi terrebbe l'utente su una pagina che non
 funziona senza dirglielo.
 
+Anche **il rinnovo è uno solo**, per tutta l'applicazione: l'access token
+scade mentre una pagina ha già diverse richieste in volo, quindi i 401
+arrivano insieme, e uno per ciascuno vorrebbe dire altrettante chiamate a
+Cognito nello stesso istante per ottenere la stessa identica cosa. Cognito le
+limita, e basta che una venga rifiutata perché chi la stava aspettando finisca
+sul ramo del reload con una sessione ancora buona. Chi arriva mentre il
+rinnovo è in volo aspetta quello (`refreshSession` in
+[auth.ts](../frontend/src/services/auth.ts)), e alla scadenza successiva ne
+riparte uno nuovo.
+
 **5. Gli errori.** Il corpo dell'errore viene aperto per estrarne il campo
 `detail`, che è quello che FastAPI riempie con i messaggi in italiano scritti
 negli endpoint. Il componente riceve quindi un `Error` con dentro la frase da
@@ -64,6 +74,12 @@ mostrare, non uno stato numerico da tradurre.
 
 Per i file c'è `apiFetchBlob`, che è lo stesso giro con la risposta letta come
 `Blob`: lo usano le registrazioni delle chiamate e i PDF delle valutazioni.
+Consegnarlo al browser è `saveBlob`, e le due righe che sembrano di troppo
+sono le due che lo fanno funzionare ovunque: il link va attaccato al documento
+prima del click, e il suo URL va revocato più tardi, non nello stesso istante.
+Firefox e Safari risolvono il download un attimo dopo l'evento, quindi con la
+revoca immediata il file non arriva e nessuno se ne accorge finché non prova
+su un browser diverso dal proprio.
 
 ---
 

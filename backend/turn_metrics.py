@@ -3,7 +3,7 @@
 One TurnTimer per assistant turn records monotonic marks as the turn moves
 through the pipeline, so a sluggish reply can be attributed to the stage
 that actually caused it instead of guessed at. Marks are plain floats and
-the only I/O is one print when the turn's first audio is out, so nothing
+the only I/O is one log line when the turn's first audio is out, so nothing
 here sits on the audio hot path.
 
 Two numbers carry most of the perceived delay:
@@ -22,6 +22,7 @@ backend. It excludes the browser's own playback cushion
 (PLAYBACK_CUSHION_SECS in voiceCall.ts), which adds a further fixed amount.
 """
 
+import logging
 import os
 import time
 from statistics import median
@@ -29,6 +30,8 @@ from statistics import median
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # I due interruttori della diagnostica. Valori ammessi e significato stanno
 # nel .env del backend, che è l'unico posto dove sono scritti: qui si legge
@@ -134,7 +137,7 @@ class TurnTimer:
 
 
 class CallMetrics:
-    """Collects the turns of one call and prints a summary on hang-up."""
+    """Collects the turns of one call and logs a summary on hang-up."""
 
     def __init__(self):
         self._turns: list[TurnTimer] = []
@@ -148,7 +151,7 @@ class CallMetrics:
             self._cancelled += 1
         else:
             self._turns.append(timer)
-        print(timer.format_line())
+        logger.info(timer.format_line())
 
     def report(self) -> None:
         if not LATENCY_LOG_ENABLED or not self._turns:
@@ -183,4 +186,4 @@ class CallMetrics:
                 f"[LATENCY]   primo turno   {first.total_ms:>6.0f}ms   "
                 f"contro {later:.0f}ms di mediana sui successivi"
             )
-        print("\n".join(lines))
+        logger.info("\n".join(lines))

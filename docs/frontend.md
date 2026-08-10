@@ -167,7 +167,9 @@ l'impaginazione dell'app è fatta di questi pezzi:
 | [ConfirmModal](../frontend/src/components/ConfirmModal.tsx) | Le conferme, comprese quelle distruttive. Con `elevated` sta sopra la modale da cui l'azione è partita |
 | [DataTable](../frontend/src/components/DataTable.tsx) | Tabella, intestazione, righe, ricerca e paginazione. Le righe per pagina sono le stesse ovunque e la pagina non le sceglie |
 | [Tooltip](../frontend/src/components/Tooltip.tsx) | Ogni spiegazione al passaggio del mouse. Vive in un portal, quindi non lo taglia il bordo di una tabella o di una modale, e di suo non aggiunge nodi al DOM: clona il figlio e gli aggancia gli eventi |
-| [Badge](../frontend/src/components/Badge.tsx), [Spinner](../frontend/src/components/Spinner.tsx), [Toast](../frontend/src/components/Toast.tsx), [FormError](../frontend/src/components/FormError.tsx), [LoadingState](../frontend/src/components/LoadingState.tsx) | I pezzi piccoli ricorrenti |
+| [IconButton](../frontend/src/components/IconButton.tsx) | Il bottoncino quadrato delle azioni di una riga. Il tooltip fa parte del bottone e non gli sta attorno, così un'icona senza parole non può restare senza nome; su un bottone bloccato il tooltip viene avvolto da solo, altrimenti il motivo del blocco non comparirebbe proprio a chi ne ha bisogno |
+| [FormError](../frontend/src/components/FormError.tsx) e [FormSuccess](../frontend/src/components/FormSuccess.tsx) | I due esiti, in due misure: `form` dentro una modale, `page` la fascia in cima a una schermata |
+| [Badge](../frontend/src/components/Badge.tsx), [Spinner](../frontend/src/components/Spinner.tsx), [Toast](../frontend/src/components/Toast.tsx), [LoadingState](../frontend/src/components/LoadingState.tsx) | I pezzi piccoli ricorrenti |
 | [Field](../frontend/src/components/Field.tsx), [Select](../frontend/src/components/Select.tsx), [SearchSelect](../frontend/src/components/SearchSelect.tsx) | I campi dei form, con le classi già decise. `SearchSelect` ha due varianti: come filtro la scelta sta in una chip accanto al campo di ricerca, come campo di un form (`variant="field"`) la chip prende il posto del campo, che torna quando si toglie la scelta |
 
 Questi file esistono quasi tutti perché la stessa cosa era stata ricopiata in
@@ -179,7 +181,38 @@ stessa in tutta l'app, deve stare scritta una volta.
 
 - **File piccoli.** Una schermata complessa si spezza: la pagina, la modale di
   creazione, quella di dettaglio, l'editor di un pezzo. Il simulatore è un
-  esempio: sei file, ognuno con un compito.
+  esempio: sei file, ognuno con un compito. Il criterio non è la lunghezza, è
+  di quante cose parla il file: la barra in cima all'app si teneva addosso
+  tutto il form di accesso, cioè undici stati che con le voci di menu non
+  c'entravano niente, e ora quello vive in
+  [AuthModal](../frontend/src/components/AuthModal.tsx).
+- **Una modale nasce quando si apre.** Renderla solo mentre serve, invece di
+  tenerla montata e nascosta, fa sì che i suoi campi ripartano vuoti da soli:
+  il `reset` che nessuno si ricorda di aggiornare quando si aggiunge un campo
+  diventa il montaggio del componente.
+- **Una pagina orchestra, non disegna.** Le tre pagine più grosse sono ridotte
+  a questo: [AdminPage](../frontend/src/components/AdminPage.tsx) tiene
+  l'elenco e le conferme e affida a un file per pezzo i filtri, la riga e le
+  modali; [AvatarAdminPage](../frontend/src/components/AvatarAdminPage.tsx) fa
+  lo stesso con la scheda persona;
+  [ChatPage](../frontend/src/components/ChatPage.tsx) tiene solo ciò che
+  riguarda entrambi i canali e lascia il resto alla colonna, alla barra in
+  fondo e alle bolle. Il segno che un pezzo è al posto giusto è che il suo
+  stato lo segue: gli undici campi di una scheda stanno dove la scheda si
+  disegna, non nella pagina che la apre.
+- **Un comportamento con uno stato suo diventa un hook**, non un altro gruppo
+  di `useState` nella pagina: la chat scritta
+  ([useTextChat](../frontend/src/hooks/useTextChat.ts)), la rinomina di una
+  conversazione ([useConversationRename](../frontend/src/hooks/useConversationRename.ts)),
+  le citazioni della pagella ([useCitationNavigation](../frontend/src/hooks/useCitationNavigation.ts)),
+  il messaggio di conferma a tempo ([useFlashMessage](../frontend/src/hooks/useFlashMessage.ts)).
+  Il guadagno non è la lunghezza: è che quello stato si può provare da solo,
+  come fa il test di `useTextChat` con il rientro di un messaggio che il
+  server non ha mai ricevuto.
+- **Le regole di un form che il server non conosce stanno in un modulo
+  puro**, non dentro il gestore del submit: le tre della scheda avatar vivono
+  in [avatarForm.ts](../frontend/src/components/avatarForm.ts), dove si
+  leggono in fila e si verificano senza montare niente.
 - **Il testo è in italiano** e senza trattini: si usano le virgole.
 - **Gli stati vuoti non finiscono col punto.** Il punto resta negli errori e
   nelle descrizioni.
@@ -207,6 +240,13 @@ girano con Vitest. Non coprono tutto per principio: coprono quello che si
 rompe in silenzio, cioè le funzioni pure di formattazione, il gate dei ruoli, e
 la macchina della chiamata vocale ([voiceCall.test.ts](../frontend/src/services/voiceCall.test.ts)),
 dove uno stato sbagliato non dà errore, dà una telefonata che non funziona.
+
+Lo stesso criterio vale per i pezzi estratti da una pagina: si prova quello
+che ha una regola dentro, non quello che ha solo del markup. Le regole della
+scheda avatar, il rientro di un messaggio che il server non ha ricevuto
+([useTextChat.test.tsx](../frontend/src/hooks/useTextChat.test.tsx)), i tre
+stati della barra in fondo alla chat, le protezioni sull'account proprio e su
+quello di sistema.
 
 Comandi e gate di qualità stanno in [contributing.md](contributing.md).
 

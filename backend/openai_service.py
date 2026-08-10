@@ -9,6 +9,7 @@ latency-sensitive. The persona prompt building lives in persona_prompt
 """
 
 import json
+import logging
 import os
 from collections.abc import Callable
 
@@ -24,6 +25,8 @@ from persona_prompt import (
 )
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL")
@@ -192,19 +195,21 @@ async def eval_json_completion[T](
             )
         except Exception as e:
             if not _is_retryable(e):
-                print(f"[ERROR] OpenAI {what} fallita ({model}): {e}")
+                logger.exception("OpenAI %s fallita (%s)", what, model)
                 raise RuntimeError(f"Errore nella generazione: {what}: {e!s}")
-            print(f"[WARN] Modello {model} non disponibile per {what}: {str(e)[:120]}")
+            logger.warning("Modello %s non disponibile per %s: %s", model, what, str(e)[:120])
             last_error = e
             continue
         try:
             return normalize(json.loads(response.choices[0].message.content or ""))
         except (json.JSONDecodeError, TypeError, ValueError, IndexError, KeyError) as e:
             # JSON malformato o incompleto: si prova il modello successivo
-            print(f"[WARN] Risposta non valida da {model} per {what}, provo il successivo: {e}")
+            logger.warning(
+                "Risposta non valida da %s per %s, provo il successivo: %s", model, what, e
+            )
             last_error = e
 
-    print(f"[ERROR] {what}: fallita su tutti i modelli OpenAI: {last_error}")
+    logger.error("%s: fallita su tutti i modelli OpenAI: %s", what, last_error)
     raise RuntimeError(f"Errore nella generazione: {what}: {last_error!s}")
 
 
@@ -232,7 +237,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
             max_retries=_EVAL_MAX_RETRIES,
         ).embeddings.create(model=OPENAI_EMBEDDING_MODEL, input=texts)
     except Exception as e:
-        print(f"[ERROR] OpenAI embeddings falliti: {e}")
+        logger.exception("OpenAI embeddings falliti")
         raise RuntimeError(f"Errore nell'indicizzazione del documento: {e!s}")
     # L'API non promette di rispondere in ordine, ma numera ogni vettore
     return [item.embedding for item in sorted(response.data, key=lambda d: d.index)]
@@ -285,7 +290,7 @@ async def prewarm_roleplay(avatar_profile: dict) -> None:
             **_completion_kwargs(OPENAI_MODEL),
         )
     except Exception as e:
-        print(f"[WARN] Prewarm OpenAI non riuscito: {str(e)[:120]}")
+        logger.warning("Prewarm OpenAI non riuscito: %s", str(e)[:120])
 
 
 async def stream_avatar_response(
@@ -323,12 +328,14 @@ async def stream_avatar_response(
         except Exception as e:
             # Once text has been emitted we can't switch model mid-response
             if started or not _is_retryable(e):
-                print(f"[ERROR] OpenAI streaming call failed ({model}): {e}")
+                logger.exception("Streaming OpenAI fallito (%s)", model)
                 raise RuntimeError(f"Errore nella comunicazione con OpenAI: {e!s}")
-            print(f"[WARN] Modello {model} non disponibile, provo il successivo: {str(e)[:120]}")
+            logger.warning(
+                "Modello %s non disponibile, provo il successivo: %s", model, str(e)[:120]
+            )
             last_error = e
 
-    print(f"[ERROR] Tutti i modelli OpenAI non disponibili: {last_error}")
+    logger.error("Tutti i modelli OpenAI non disponibili: %s", last_error)
     raise RuntimeError(f"Errore nella comunicazione con OpenAI: {last_error!s}")
 
 

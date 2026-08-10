@@ -1,14 +1,14 @@
-/* Il report attività: una riga per persona, e su quella riga tutto quello
+﻿/* Il report attivitÃ : una riga per persona, e su quella riga tutto quello
  * che quella persona ha fatto.
  *
- * La domanda è diversa da quella della dashboard: là si guarda un gruppo e
+ * La domanda Ã¨ diversa da quella della dashboard: lÃ  si guarda un gruppo e
  * si cerca una media, qui si guarda una persona alla volta e si cerca cosa
  * ha fatto. Per questo le due prove (le conversazioni con gli avatar e le
  * simulazioni) stanno sulla stessa riga: chi ha solo svolto simulazioni, con
  * i soli conteggi delle conversazioni, sembrerebbe fermo.
  *
- * I voti stanno una riga più sotto, nello storico che si apre: qui la
- * domanda è quanto una persona si è allenata, e una media in tabella la
+ * I voti stanno una riga piÃ¹ sotto, nello storico che si apre: qui la
+ * domanda Ã¨ quanto una persona si Ã¨ allenata, e una media in tabella la
  * risponderebbe con un numero che riguarda tutt'altro. */
 
 import { Fragment, useState } from 'react'
@@ -28,6 +28,7 @@ import Select from './Select'
 import FilterTabs from './FilterTabs'
 import LoadingState from './LoadingState'
 import { PageContainer, PageHeader } from './PageLayout'
+import FormError from './FormError'
 import ConversationDetailModal from './ConversationDetailModal'
 import type { ConversationDetailTarget } from './ConversationDetailModal'
 import DeleteAttemptDialog from './DeleteAttemptDialog'
@@ -64,10 +65,10 @@ function reportColumns(showOrg: boolean): DataTableColumn[] {
   ]
 }
 
-/** Quante prove nel periodo. Zero è un trattino e non uno zero in evidenza:
- * è un'assenza, e non la merita. */
+/** Quante prove nel periodo. Zero Ã¨ un trattino e non uno zero in evidenza:
+ * Ã¨ un'assenza, e non la merita. */
 function CountCell({ count }: { count: number }) {
-  if (count === 0) return <span className="text-[0.8rem] text-slate-600">—</span>
+  if (count === 0) return <span className="text-[0.8rem] text-slate-600">â€”</span>
   return (
     <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
       {count}
@@ -112,19 +113,19 @@ export default function UserReportPage() {
   ]
 
   /* L'eliminazione, la sua conferma e cosa va detto prima di premere stanno
-   * nei due dialoghi: da qui si dice solo cosa si sta per eliminare. È la
+   * nei due dialoghi: da qui si dice solo cosa si sta per eliminare. Ãˆ la
    * stessa conferma che si legge dalla schermata che apre una prova per
    * intero, e la frase che spiega cosa sparisce non va scritta due volte.
    *
    * L'eliminazione invalida il report, che si rilegge dal server: prima i
    * conteggi e la durata totale della riga venivano ricalcolati qui a mano,
-   * cioè si riscriveva lato client una somma che il server fa già. */
+   * cioÃ¨ si riscriveva lato client una somma che il server fa giÃ . */
 
   return (
     <PageContainer>
       <PageHeader
-        title="Report Attività"
-        description="Attività di ogni persona: le conversazioni con gli avatar e le simulazioni consegnate."
+        title="Report AttivitÃ "
+        description="AttivitÃ  di ogni persona: le conversazioni con gli avatar e le simulazioni consegnate."
         actions={
           <div className="flex flex-wrap items-end gap-4">
             <div className="flex flex-col gap-1.5">
@@ -158,27 +159,14 @@ export default function UserReportPage() {
       />
 
       {error && (
-        <div className="mb-8 flex animate-fade-in-up items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300 [animation-duration:0.2s]">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <span>{error instanceof Error ? error.message : 'Impossibile caricare il report.'}</span>
-        </div>
+        <FormError
+          message={error instanceof Error ? error.message : 'Impossibile caricare il report.'}
+          variant="page"
+        />
       )}
 
       {isLoading ? (
-        <LoadingState message="Caricamento report attività..." />
+        <LoadingState message="Caricamento report attivitÃ ..." />
       ) : (
         <DataTable
           columns={columns}
@@ -204,7 +192,7 @@ export default function UserReportPage() {
                       </div>
                       <div className="flex min-w-0 flex-col">
                         <span className="truncate font-semibold text-slate-100">
-                          {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}
+                          {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : 'â€”'}
                         </span>
                         <span className="truncate text-xs text-slate-500">{u.email}</span>
                       </div>
@@ -215,7 +203,7 @@ export default function UserReportPage() {
                       {u.organization_name ? (
                         <span className="text-[0.85rem] text-slate-300">{u.organization_name}</span>
                       ) : (
-                        <span className="text-[0.75rem] italic text-slate-500">—</span>
+                        <span className="text-[0.75rem] italic text-slate-500">â€”</span>
                       )}
                     </Td>
                   )}
@@ -293,19 +281,19 @@ export default function UserReportPage() {
       )}
 
       {/* La conversazione per intero: trascrizione, valutazione e la
-          revisione che il docente può scrivere di lì. È la stessa schermata
-          della dashboard, perché è la stessa cosa che si va a leggere. */}
+          revisione che il docente puÃ² scrivere di lÃ¬. Ãˆ la stessa schermata
+          della dashboard, perchÃ© Ã¨ la stessa cosa che si va a leggere. */}
       {openConversation && (
         <ConversationDetailModal
           row={openConversation}
           onClose={() => setOpenConversation(null)}
-          /* Correggere un voto di lì cambia il voto che questo elenco sta
+          /* Correggere un voto di lÃ¬ cambia il voto che questo elenco sta
              mostrando: senza rileggerlo, il docente corregge e continua a
              vedere il numero di prima. */
           onReviewSaved={() => void refetch()}
-          /* Le due prove si possono anche buttare da aperte, ed è lo stesso
+          /* Le due prove si possono anche buttare da aperte, ed Ã¨ lo stesso
              gesto del cestino sulla riga: chi ha appena letto la
-             trascrizione è già dentro la conversazione che vuole togliere,
+             trascrizione Ã¨ giÃ  dentro la conversazione che vuole togliere,
              e non deve richiuderla per cercarne la riga. */
           onDeleted={() => setOpenConversation(null)}
         />

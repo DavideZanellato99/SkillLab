@@ -7,6 +7,7 @@ import ComparisonSimulations from './ComparisonSimulations'
 import Select from './Select'
 import TabBar from './TabBar'
 import LoadingState from './LoadingState'
+import FormError from './FormError'
 import { PageContainer, PageHeader } from './PageLayout'
 import { cardCls } from './scoreFormat'
 
@@ -54,9 +55,12 @@ export default function ComparisonPage() {
       />
 
       {loadError && (
-        <div className="mb-8 rounded-xl border border-red-500/30 bg-red-500/10 px-6 py-4 text-sm text-red-300">
-          {loadError instanceof Error ? loadError.message : 'Impossibile caricare i tentativi.'}
-        </div>
+        <FormError
+          message={
+            loadError instanceof Error ? loadError.message : 'Impossibile caricare i tentativi.'
+          }
+          variant="page"
+        />
       )}
 
       {/* La persona sta sopra le linguette perché non cambia passando da una

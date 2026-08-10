@@ -1,155 +1,49 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { OPEN_LOGIN_EVENT } from './public/openLogin'
 import { PublicNavLinks, PublicNavMenu } from './public/PublicNav'
 import {
-  isNewPasswordRequired,
   isSuperAdmin,
   isAdmin,
   ROLE_LABELS,
   ROLE_BADGE_CLASSES,
-  PASSWORD_MIN_LENGTH,
-  PASSWORD_RULES,
-  getUnmetPasswordRules,
   getInitials,
 } from '../services/auth'
+import AuthModal from './AuthModal'
 import NotificationsBell from './NotificationsBell'
-import PasswordToggle from './PasswordToggle'
-import Spinner from './Spinner'
 import Badge from './Badge'
-import ModalShell from './ModalShell'
-import PrimaryButton from './PrimaryButton'
-import { fieldCls, labelCls, inputCls, litInputWrapperCls, litIconCls } from './Field'
 
-type AuthStep = 'login' | 'new-password'
-
-/* Nella modale di accesso ogni campo ha la sua icona, che si accende col
- * bordo quando il campo riceve il fuoco: da qui il riquadro nella variante
- * `group`. Il resto degli stili è quello di tutti i form dell'app. */
 const menuItemCls =
   'flex w-full cursor-pointer items-center gap-2 rounded-lg border-none bg-transparent p-2 text-left text-[0.82rem] font-medium text-slate-400 no-underline transition hover:bg-white/8 hover:text-slate-100'
 
 export default function Navbar() {
   const location = useLocation()
-  const { user, isAuthenticated, login, completeNewPassword, logout } = useAuth()
+  const { user, isAuthenticated, logout } = useAuth()
 
   const isHome = location.pathname === '/app'
   const isDashboardPage = location.pathname === '/app/admin/dashboard'
   /* Anche dentro la mappa di un percorso la voce resta accesa: il singolo
-     percorso è dentro i propri percorsi, non accanto. */
+     percorso Ã¨ dentro i propri percorsi, non accanto. */
   const isPathsPage = location.pathname.startsWith('/app/percorsi')
   const isComparisonPage = location.pathname === '/app/confronto'
   /* Anche mentre si svolge un test la voce resta accesa: la pagina del
-     singolo test è dentro il simulatore, non accanto. */
+     singolo test Ã¨ dentro il simulatore, non accanto. */
   const isSimulationPage = location.pathname.startsWith('/app/simulatore')
 
+  /* Aperta o chiusa, niente di piÃ¹: quello che c'Ã¨ dentro (i campi, il passo
+     del cambio password, l'errore) vive in AuthModal, che nasce alla sua
+     apertura e muore alla sua chiusura. */
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [authStep, setAuthStep] = useState<AuthStep>('login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmNewPassword, setConfirmNewPassword] = useState('')
-  const [cognitoSession, setCognitoSession] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errorMessage, setErrorMessage] = useState('')
   const [showUserMenu, setShowUserMenu] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
-
-  const resetForm = () => {
-    setEmail('')
-    setPassword('')
-    setNewPassword('')
-    setConfirmNewPassword('')
-    setCognitoSession('')
-    setAuthStep('login')
-    setErrorMessage('')
-    setIsSubmitting(false)
-    setShowPassword(false)
-    setShowNewPassword(false)
-    setShowConfirmNewPassword(false)
-  }
 
   /* I pulsanti delle pagine pubbliche chiedono di aprire la modale con
      questo evento: la modale vive qui, e loro non la conoscono. */
   useEffect(() => {
-    const openLogin = () => {
-      setEmail('')
-      setPassword('')
-      setNewPassword('')
-      setConfirmNewPassword('')
-      setCognitoSession('')
-      setAuthStep('login')
-      setErrorMessage('')
-      setIsSubmitting(false)
-      setShowPassword(false)
-      setShowNewPassword(false)
-      setShowConfirmNewPassword(false)
-      setShowAuthModal(true)
-    }
+    const openLogin = () => setShowAuthModal(true)
     window.addEventListener(OPEN_LOGIN_EVENT, openLogin)
     return () => window.removeEventListener(OPEN_LOGIN_EVENT, openLogin)
   }, [])
-
-  const closeModal = () => {
-    setShowAuthModal(false)
-    resetForm()
-  }
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMessage('')
-    setIsSubmitting(true)
-
-    try {
-      const result = await login(email, password)
-
-      if (isNewPasswordRequired(result)) {
-        // Cognito requires password change
-        setCognitoSession(result.session)
-        setAuthStep('new-password')
-        setPassword('')
-      } else {
-        // Login successful
-        closeModal()
-      }
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Errore durante il login.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  const handleNewPassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setErrorMessage('')
-
-    if (newPassword !== confirmNewPassword) {
-      setErrorMessage('Le password non coincidono.')
-      return
-    }
-
-    const unmetRules = getUnmetPasswordRules(newPassword)
-    if (unmetRules.length > 0) {
-      setErrorMessage(
-        `La password non soddisfa i requisiti: ${unmetRules.join(', ').toLowerCase()}.`,
-      )
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      await completeNewPassword(email, newPassword, cognitoSession)
-      closeModal()
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Errore durante il cambio password.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
 
   const handleLogout = () => {
     logout()
@@ -163,9 +57,9 @@ export default function Navbar() {
         id="navbar"
       >
         <div className="flex h-full w-full items-center justify-between px-4">
-          {/* Logo. Porta a casa propria, che è la home pubblica per chi sta
-              leggendo il sito e la galleria degli avatar per chi è
-              collegato: sono due indirizzi distinti, e il logo è lo stesso. */}
+          {/* Logo. Porta a casa propria, che Ã¨ la home pubblica per chi sta
+              leggendo il sito e la galleria degli avatar per chi Ã¨
+              collegato: sono due indirizzi distinti, e il logo Ã¨ lo stesso. */}
           <Link
             to={isAuthenticated ? '/app' : '/'}
             className="group flex items-center gap-2 text-slate-100 no-underline transition hover:scale-[1.03]"
@@ -198,7 +92,7 @@ export default function Navbar() {
 
           {/* Center nav links.
               Prima dell'accesso lo stesso posto ospita le sezioni del sito
-              pubblico: sono cinque e hanno bisogno di più larghezza, quindi
+              pubblico: sono cinque e hanno bisogno di piÃ¹ larghezza, quindi
               spariscono un gradino prima, dove il menu compatto le riprende. */}
           <div
             className={`flex items-center gap-1 ${isAuthenticated ? 'max-md:hidden' : 'max-lg:hidden'}`}
@@ -350,7 +244,7 @@ export default function Navbar() {
           {/* Right side */}
           <div className="flex items-center gap-4" id="navbar-actions">
             {isAuthenticated && user ? (
-              /* Authenticated — show user menu */
+              /* Authenticated â€” show user menu */
               <>
                 <NotificationsBell />
                 <div className="relative">
@@ -522,7 +416,7 @@ export default function Navbar() {
                             </Link>
                           )}
                           {/* Comporre i percorsi e assegnarli: sta qui e non
-                              in barra perché è il lavoro di chi insegna, non
+                              in barra perchÃ© Ã¨ il lavoro di chi insegna, non
                               di chi si allena, e la voce in barra ora porta
                               ai propri. */}
                           <Link
@@ -565,7 +459,7 @@ export default function Navbar() {
                               <line x1="12" y1="20" x2="12" y2="4" />
                               <line x1="6" y1="20" x2="6" y2="14" />
                             </svg>
-                            Report Attività
+                            Report AttivitÃ 
                           </Link>
                           {isSuperAdmin(user) && (
                             <Link
@@ -588,7 +482,7 @@ export default function Navbar() {
                                 <line x1="8" y1="13" x2="16" y2="13" />
                                 <line x1="8" y1="17" x2="13" y2="17" />
                               </svg>
-                              Registro Attività
+                              Registro AttivitÃ 
                             </Link>
                           )}
                         </>
@@ -625,10 +519,7 @@ export default function Navbar() {
                 <PublicNavMenu />
                 <button
                   className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1.5 text-[0.82rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 hover:shadow-[0_4px_12px_rgba(124,58,237,0.15)]"
-                  onClick={() => {
-                    resetForm()
-                    setShowAuthModal(true)
-                  }}
+                  onClick={() => setShowAuthModal(true)}
                   id="auth-trigger-btn"
                 >
                   <svg
@@ -657,292 +548,7 @@ export default function Navbar() {
         <div className="fixed inset-0 z-[99]" onClick={() => setShowUserMenu(false)} />
       )}
 
-      {/* Auth Modal */}
-      {showAuthModal && (
-        <ModalShell onClose={closeModal}>
-          {/* Modal header */}
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <defs>
-                  <linearGradient id="authLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#7c3aed" />
-                    <stop offset="100%" stopColor="#06b6d4" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                  stroke="url(#authLogoGrad)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-
-            {authStep === 'login' ? (
-              <>
-                <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                  Bentornato!
-                </h2>
-                <p className="text-[0.85rem] text-slate-500">Accedi per continuare su SkillLab</p>
-              </>
-            ) : (
-              <>
-                <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-                  Imposta nuova password
-                </h2>
-                <p className="text-[0.85rem] text-slate-500">
-                  La tua password temporanea è scaduta. Scegline una nuova per continuare.
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* Error message */}
-          {errorMessage && (
-            <div
-              className="mb-4 flex animate-fade-in-up items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300 [animation-duration:0.2s]"
-              id="auth-error"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="mt-px shrink-0 text-red-500"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* Login Form */}
-          {authStep === 'login' && (
-            <form className="flex flex-col gap-4" onSubmit={handleLogin} id="auth-form">
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="auth-email">
-                  Email
-                </label>
-                <div className={litInputWrapperCls}>
-                  <svg
-                    className={litIconCls}
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="2" y="4" width="20" height="16" rx="2" />
-                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                  </svg>
-                  <input
-                    type="text"
-                    id="auth-email"
-                    className={inputCls}
-                    placeholder="nome@esempio.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    autoComplete="username"
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="auth-password">
-                  Password
-                </label>
-                <div className={litInputWrapperCls}>
-                  <svg
-                    className={litIconCls}
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="auth-password"
-                    className={inputCls}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={1}
-                    autoComplete="current-password"
-                    disabled={isSubmitting}
-                  />
-                  <PasswordToggle
-                    visible={showPassword}
-                    onToggle={() => setShowPassword((v) => !v)}
-                    disabled={isSubmitting}
-                    controls="auth-password"
-                  />
-                </div>
-              </div>
-
-              <PrimaryButton
-                type="submit"
-                variant="submit"
-                className="mt-1"
-                id="auth-submit-btn"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Spinner variant="button" />
-                    Accesso in corso...
-                  </>
-                ) : (
-                  'Accedi'
-                )}
-              </PrimaryButton>
-            </form>
-          )}
-
-          {/* New Password Form */}
-          {authStep === 'new-password' && (
-            <form
-              className="flex flex-col gap-4"
-              onSubmit={handleNewPassword}
-              id="auth-new-password-form"
-            >
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="auth-new-password">
-                  Nuova Password
-                </label>
-                <div className={litInputWrapperCls}>
-                  <svg
-                    className={litIconCls}
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    id="auth-new-password"
-                    className={inputCls}
-                    placeholder="Inserisci la nuova password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={PASSWORD_MIN_LENGTH}
-                    autoComplete="new-password"
-                    disabled={isSubmitting}
-                  />
-                  <PasswordToggle
-                    visible={showNewPassword}
-                    onToggle={() => setShowNewPassword((v) => !v)}
-                    disabled={isSubmitting}
-                    controls="auth-new-password"
-                  />
-                </div>
-              </div>
-
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="auth-confirm-new-password">
-                  Conferma Nuova Password
-                </label>
-                <div className={litInputWrapperCls}>
-                  <svg
-                    className={litIconCls}
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
-                  <input
-                    type={showConfirmNewPassword ? 'text' : 'password'}
-                    id="auth-confirm-new-password"
-                    className={inputCls}
-                    placeholder="Conferma la nuova password"
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    required
-                    minLength={PASSWORD_MIN_LENGTH}
-                    autoComplete="new-password"
-                    disabled={isSubmitting}
-                  />
-                  <PasswordToggle
-                    visible={showConfirmNewPassword}
-                    onToggle={() => setShowConfirmNewPassword((v) => !v)}
-                    disabled={isSubmitting}
-                    controls="auth-confirm-new-password"
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/6 bg-white/3 px-4 py-2">
-                <p className="mb-1 text-xs font-semibold text-slate-400">Requisiti password:</p>
-                <ul className="flex list-none flex-col gap-1">
-                  {PASSWORD_RULES.map((rule) => {
-                    const met = rule.test(newPassword)
-                    return (
-                      <li
-                        key={rule.label}
-                        className={`text-xs transition-colors ${met ? 'text-emerald-500' : 'text-slate-500'}`}
-                      >
-                        <span className="mr-2">{met ? '●' : '○'}</span>
-                        {rule.label}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-
-              <PrimaryButton
-                type="submit"
-                variant="submit"
-                className="mt-1"
-                id="auth-new-password-submit"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Spinner variant="button" />
-                    Aggiornamento...
-                  </>
-                ) : (
-                  'Imposta Password'
-                )}
-              </PrimaryButton>
-            </form>
-          )}
-        </ModalShell>
-      )}
+      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
     </>
   )
 }

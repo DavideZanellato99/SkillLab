@@ -70,7 +70,7 @@ temporanea. Al primo accesso Cognito risponde con la sfida
 
 I requisiti sono controllati **due volte di proposito**: nel backend
 (`validate_password_strength`) e nella lista che l'utente vede mentre scrive
-nel [Navbar](../frontend/src/components/Navbar.tsx). Entrambi devono
+nella [modale di accesso](../frontend/src/components/AuthModal.tsx). Entrambi devono
 rispecchiare la policy del pool Cognito, che è la sola a decidere davvero:
 dodici caratteri, maiuscola, minuscola, numero e un simbolo fra quelli che
 Cognito riconosce come tali.

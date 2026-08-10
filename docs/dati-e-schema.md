@@ -146,6 +146,19 @@ dichiarata nel modello non è la prova che il database vero ce l'abbia: la
 cancellazione svuota ogni tabella con una istruzione esplicita, elencata in
 [erasure.py](../backend/erasure.py).
 
+**Gli indici seguono la domanda, non la colonna.** Le tabelle che crescono
+senza fine si leggono sempre nello stesso modo, quindi l'indice porta dentro
+anche la data con cui si ordina: il registro per utente e per azione dal più
+recente, le conversazioni di una persona dalla più recente, i messaggi di una
+conversazione in ordine di tempo. Dove nasce un composito, l'indice sulla sola
+prima colonna viene tolto: è il suo prefisso, non risponde a niente di nuovo e
+si farebbe pagare a ogni riga scritta. Un indice ha due posti in cui esistere,
+il modello per i database nuovi e
+[startup_migrations.py](../backend/startup_migrations.py) per quelli che
+esistono già, e devono dire la stessa cosa: se ne accorge
+[test_schema_indexes.py](../backend/tests/test_schema_indexes.py), perché
+nient'altro se ne accorgerebbe finché le righe non sono tante.
+
 ## Il pool di connessioni
 
 Configurato a mano in [database.py](../backend/database.py), perché i default

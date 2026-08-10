@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const refreshSession = vi.fn()
 vi.mock('./auth', () => ({ refreshSession: () => refreshSession() }))
 
-import { apiFetch, getAvatarImageUrl } from './api'
+import { apiFetch, getAvatarImageUrl, saveBlob } from './api'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -75,5 +75,46 @@ describe('apiFetch', () => {
     expect(refreshSession).toHaveBeenCalledOnce()
     expect(data).toEqual({ id: 'ok' })
     expect(fetch).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('saveBlob', () => {
+  beforeEach(() => {
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:test'),
+      revokeObjectURL: vi.fn(),
+    })
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  /* Il download non parte se il link non è nel documento (Firefox) o se
+   * l'URL viene revocato prima che il browser lo risolva (Firefox, Safari):
+   * due modi silenziosi di non scaricare niente, che nessuno vede finché
+   * non prova su un browser diverso dal proprio. */
+  it("tiene l'URL vivo dopo il click e lo revoca dopo", () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      expect(this.isConnected).toBe(true)
+      expect(this.download).toBe('report.pdf')
+    })
+
+    saveBlob(new Blob(['x']), 'report.pdf')
+
+    expect(click).toHaveBeenCalledOnce()
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    // E nessun link lasciato in giro nel documento
+    expect(document.querySelector('a')).toBeNull()
+
+    vi.runAllTimers()
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test')
+
+    click.mockRestore()
   })
 })

@@ -65,6 +65,25 @@ export function LockIcon(props: IconProps) {
   )
 }
 
+/* La busta del campo email e lo scudo della password da confermare, le due
+ * icone dei campi della modale di accesso. */
+export function MailIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </IconBase>
+  )
+}
+
+export function ShieldIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </IconBase>
+  )
+}
+
 export function CheckIcon(props: IconProps) {
   return (
     <IconBase {...props}>

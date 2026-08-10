@@ -5,6 +5,7 @@ cookies: JavaScript can never read them (XSS mitigation). The browser
 attaches them automatically; the frontend only sees the user profile.
 """
 
+import logging
 import re
 from datetime import UTC, datetime, timedelta
 
@@ -52,6 +53,8 @@ from token_sessions import (
     session_anchor_matches,
 )
 from user_fields import clean_name_or_400, find_user_by_email
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -139,7 +142,26 @@ def _bind_fresh_token(db: Session, access_token: str, http_request: Request, use
         claims = verify_access_token(access_token)
         bind_access_token(db, claims, http_request, user_id)
     except RuntimeError as e:
-        print(f"[ERROR] Session binding non registrato: {e}")
+        logger.error("Session binding non registrato: %s", e)
+
+
+def _revoke_refresh_upstream(refresh_token: str, where: str) -> None:
+    """Kill the refresh token on Cognito, without letting the failure surface.
+
+    Called from the two places that end a session for good, the logout and
+    every rejected refresh, and best-effort in both: the caller has already
+    decided that this session is over and is clearing the cookies for it, so
+    a Cognito outage must not turn that into an error the browser sees. What
+    it costs is a refresh token that stays valid upstream until it expires,
+    which is why the failure is worth a line of its own in the log.
+
+    `where` says which of the two callers it was, so the line reads the same
+    way the code does.
+    """
+    try:
+        revoke_refresh_token(refresh_token)
+    except RuntimeError as e:
+        logger.error("%s: revoca del refresh token fallita: %s", where, e)
 
 
 def _refuse_locked_out(user: User, http_request: Request) -> None:
@@ -232,7 +254,7 @@ def login(
     except RuntimeError as e:
         _email_limiter.record_failure(email_key)
         _ip_limiter.record_failure(ip_key)
-        print(f"[WARN] Login fallito per '{email_key}': {e}")
+        logger.warning("Login fallito per '%s': %s", email_key, e)
         # Only the attempted email is recorded, never why it failed: the
         # reason is what would let the registry enumerate valid accounts.
         audit.log_action(
@@ -265,7 +287,7 @@ def login(
     if not user:
         # Auth passed but the user has no DB row: same generic 401 — a
         # dedicated message would confirm the credentials were correct
-        print(f"[WARN] Login: utente Cognito senza riga nel DB: '{email_key}'")
+        logger.warning("Login: utente Cognito senza riga nel DB: '%s'", email_key)
         audit.log_action(
             audit.LOGIN_FAILED,
             http_request,
@@ -361,7 +383,7 @@ def refresh_access_token(request: Request, response: Response, db: Session = Dep
         # server log. Cookies must be cleared on the error response
         # itself: headers on the injected Response are dropped when an
         # HTTPException is raised
-        print(log_message)
+        logger.warning(log_message)
         error = JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Sessione scaduta. Effettua nuovamente il login."},
@@ -386,55 +408,43 @@ def refresh_access_token(request: Request, response: Response, db: Session = Dep
 
         if old_claims and old_claims.get("jti"):
             if is_jti_revoked(db, old_claims.get("jti"), old_claims.get("origin_jti")):
-                try:
-                    revoke_refresh_token(refresh_token)
-                except RuntimeError as e:
-                    print(f"[ERROR] Refresh: revoca del refresh token fallita: {e}")
-                return _rejected("[WARN] Refresh rifiutato: sessione già revocata (pre-check).")
+                _revoke_refresh_upstream(refresh_token, "Refresh")
+                return _rejected("Refresh rifiutato: sessione già revocata (pre-check).")
 
             if not access_binding_matches(db, old_claims, request):
                 revoke_jtis(db, revocation_entries(old_claims))
-                try:
-                    revoke_refresh_token(refresh_token)
-                except RuntimeError as e:
-                    print(f"[ERROR] Refresh: revoca del refresh token fallita: {e}")
+                _revoke_refresh_upstream(refresh_token, "Refresh")
                 return _rejected(
-                    "[WARN] Refresh rifiutato: contesto diverso dal binding del vecchio "
+                    "Refresh rifiutato: contesto diverso dal binding del vecchio "
                     f"access token (ip={client_ip(request)})"
                 )
 
     try:
         result = refresh_tokens(refresh_token)
     except RuntimeError as e:
-        return _rejected(f"[WARN] Refresh token non valido: {e}")
+        return _rejected(f"Refresh token non valido: {e}")
 
     access_token = result["access_token"]
     try:
         claims = verify_access_token(access_token)
     except RuntimeError as e:
-        return _rejected(f"[WARN] Refresh: access token emesso non verificabile: {e}")
+        return _rejected(f"Refresh: access token emesso non verificabile: {e}")
 
     if claims.get("jti"):
         # A denylisted session (logout or binding violation) must not mint
         # new tokens: reject and revoke the refresh token upstream too
         if is_jti_revoked(db, claims.get("jti"), claims.get("origin_jti")):
-            try:
-                revoke_refresh_token(refresh_token)
-            except RuntimeError as e:
-                print(f"[ERROR] Refresh: revoca del refresh token fallita: {e}")
-            return _rejected("[WARN] Refresh rifiutato: sessione revocata.")
+            _revoke_refresh_upstream(refresh_token, "Refresh")
+            return _rejected("Refresh rifiutato: sessione revocata.")
 
         if not session_anchor_matches(db, claims, request):
             # Context mismatch (or session never bound): kill everything —
             # denylist the fresh token + session anchor and revoke the
             # refresh token upstream on Cognito
             revoke_jtis(db, revocation_entries(claims))
-            try:
-                revoke_refresh_token(refresh_token)
-            except RuntimeError as e:
-                print(f"[ERROR] Refresh: revoca del refresh token fallita: {e}")
+            _revoke_refresh_upstream(refresh_token, "Refresh")
             return _rejected(
-                "[WARN] Refresh rifiutato: contesto client diverso da quello della sessione "
+                "Refresh rifiutato: contesto client diverso da quello della sessione "
                 f"(ip={client_ip(request)})"
             )
 
@@ -493,10 +503,7 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     """
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
     if refresh_token:
-        try:
-            revoke_refresh_token(refresh_token)
-        except RuntimeError as e:
-            print(f"[ERROR] Logout: revoca del refresh token fallita: {e}")
+        _revoke_refresh_upstream(refresh_token, "Logout")
 
     access_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
     claims: dict | None = None
@@ -506,8 +513,8 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
         except RuntimeError:
             # Invalid/expired access token: already unusable, nothing to deny
             pass
-        except Exception as e:
-            print(f"[ERROR] Logout: denylist del jti fallita: {e}")
+        except Exception:
+            logger.exception("Logout: denylist del jti fallita")
 
     # Only a logout with a still-readable token names its author. With an
     # expired one nobody can be identified, and a row with no actor would

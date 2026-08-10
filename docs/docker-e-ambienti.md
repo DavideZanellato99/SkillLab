@@ -155,6 +155,15 @@ macchina. Frontend e Caddy li hanno scritti nel compose, perché non cambiano:
 nginx serve file già compilati e il suo lavoro non cresce col numero di
 chiamate.
 
+**Quello che il backend scrive** passa tutto dal `logging` di Python, nessuna
+riga esclusa: ogni riga porta l'ora, il livello e il modulo che l'ha scritta, e
+un errore porta con sé la traccia della sua eccezione invece del solo messaggio.
+Il formato lo imposta [main.py](../backend/main.py) all'avvio e `LOG_LEVEL` ne
+governa la soglia, quindi una `print` sparsa nel codice sarebbe una riga fuori
+da entrambi: senza il livello a cui appartiene, e visibile anche quando si è
+chiesto di alzare la soglia. Su un'installazione che si fa una volta e non si
+tocca più, i log sono l'unico testimone che resta.
+
 **I log** hanno un tetto uguale per tutti: driver `local`, 100 MB per file e 20
 file, cioè al massimo 2 GB per container. Il driver di serie non cancella mai
 niente, e il disco pieno non ferma solo chi scriveva: ferma anche Postgres, che

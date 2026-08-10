@@ -516,7 +516,7 @@ class ChatConversation(Base):
     __tablename__ = "chat_conversations"
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
     avatar_id = Column(Uuid, ForeignKey("avatars.id"), nullable=False, index=True)
     # Always set: a new conversation is born with a "<Category> <n>" default
     # (see conversation_titles) that the owner can rename, never blank
@@ -534,6 +534,15 @@ class ChatConversation(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
+
+    # Le conversazioni di una persona si leggono sempre dalla più recente:
+    # la lista nella chat, il confronto, i report, la prova precedente sullo
+    # stesso scenario. Con la sola colonna dell'utente il database prendeva
+    # tutte le sue righe e le ordinava ogni volta; qui la data sta già
+    # nell'indice, quindi le legge nell'ordine giusto e si ferma dopo quelle
+    # che servono. Sostituisce l'indice sulla sola `user_id`, che era il suo
+    # prefisso e quindi non aggiungeva niente a spese di ogni scrittura.
+    __table_args__ = (Index("ix_chat_conversations_user_created", "user_id", "created_at"),)
 
     # Relationships
     user = relationship("User", back_populates="conversations")
@@ -1313,11 +1322,21 @@ class ChatMessage(Base):
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
     conversation_id = Column(
-        Uuid, ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False, index=True
+        Uuid, ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False
     )
     role = Column(String(20), nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+
+    # Un messaggio si legge sempre dentro la sua conversazione e in ordine di
+    # tempo: la trascrizione, la storia che il modello riceve a ogni battuta,
+    # e il conteggio con primo e ultimo istante da cui il report ricava la
+    # durata. Le due colonne insieme danno al database tutto quello che
+    # quelle domande chiedono senza passare dalle righe. Come sopra, prende
+    # il posto dell'indice sulla sola `conversation_id`.
+    __table_args__ = (
+        Index("ix_chat_messages_conversation_created", "conversation_id", "created_at"),
+    )
 
     # Relationships
     conversation = relationship("ChatConversation", back_populates="messages")

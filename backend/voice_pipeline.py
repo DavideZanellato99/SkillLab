@@ -26,6 +26,7 @@ import asyncio
 import base64
 import contextlib
 import json
+import logging
 import os
 import time
 import uuid
@@ -59,6 +60,8 @@ from turn_metrics import (
     TurnTimer,
 )
 from voice_sessions import VoiceSession
+
+logger = logging.getLogger(__name__)
 
 _LLM_FALLBACK_LINE = "Mi dispiace, ho avuto un problema tecnico. Puoi ripetere?"
 
@@ -106,8 +109,8 @@ def _persist_message(conversation_id: str, role: str, content: str) -> None:
         if conversation:
             conversation.updated_at = datetime.now(UTC)
         db.commit()
-    except Exception as e:
-        print(f"[ERROR] Persistenza messaggio vocale fallita: {e}")
+    except Exception:
+        logger.exception("Persistenza messaggio vocale fallita")
     finally:
         db.close()
 
@@ -126,8 +129,8 @@ def _mark_conversation_ended(conversation_id: str) -> None:
         if conversation and conversation.ended_at is None:
             conversation.ended_at = datetime.now(UTC)
             db.commit()
-    except Exception as e:
-        print(f"[ERROR] Chiusura conversazione fallita: {e}")
+    except Exception:
+        logger.exception("Chiusura conversazione fallita")
     finally:
         db.close()
 
@@ -201,7 +204,7 @@ class VoicePipeline:
         # Conferma che i parametri della VAD partano davvero nell'URL, cioè
         # che il valore messo nel .env sia quello con cui la STT sta girando.
         if STT_DEBUG_ENABLED:
-            print(f"[STT-URL] {stt_ws_url()}", flush=True)
+            logger.info("[STT-URL] %s", stt_ws_url())
         try:
             async with (
                 websockets.connect(
@@ -247,8 +250,8 @@ class VoicePipeline:
                     await asyncio.gather(prewarm, *tasks, return_exceptions=True)
         except RuntimeError as e:
             await self._send_json({"type": "error", "message": str(e)})
-        except Exception as e:
-            print(f"[ERROR] Pipeline vocale interrotta: {e}")
+        except Exception:
+            logger.exception("Pipeline vocale interrotta")
             await self._send_json(
                 {"type": "error", "message": "La chiamata si è interrotta per un errore tecnico."}
             )
@@ -318,10 +321,12 @@ class VoicePipeline:
                     else "n/d"
                 )
                 _txt = (event.get("text") or "").strip()
-                print(
-                    f"[STT-RAW] {message_type} | dal_last_partial={_gap} | "
-                    f'len={len(_txt)} | "{_txt[-60:]}"',
-                    flush=True,
+                logger.info(
+                    '[STT-RAW] %s | dal_last_partial=%s | len=%s | "%s"',
+                    message_type,
+                    _gap,
+                    len(_txt),
+                    _txt[-60:],
                 )
 
             if message_type == "partial_transcript":
@@ -379,7 +384,7 @@ class VoicePipeline:
 
             elif "error" in message_type or message_type in _FATAL_STT_ERRORS:
                 detail = event.get("error") or message_type
-                print(f"[ERROR] ElevenLabs STT: {message_type}: {detail}")
+                logger.error("ElevenLabs STT: %s: %s", message_type, detail)
                 if message_type in _FATAL_STT_ERRORS:
                     await self._send_json(
                         {
@@ -425,7 +430,7 @@ class VoicePipeline:
                 self._active_context = None
                 await self._send_json({"type": "speaking_end"})
             elif event_type == "error":
-                print(f"[ERROR] Cartesia TTS: {event.get('message')}")
+                logger.error("Cartesia TTS: %s", event.get("message"))
                 self._speaking = False
                 self._active_context = None
                 await self._send_json({"type": "speaking_end"})
@@ -539,7 +544,10 @@ class VoicePipeline:
                         await self._speak(context_id, word_buffer[: cut + 1], more_coming=True)
                         word_buffer = word_buffer[cut + 1 :]
             except RuntimeError as e:
-                print(f"[ERROR] LLM voce: {e}")
+                # La causa vera l'ha già scritta openai_service con il suo
+                # stacktrace: qui interessa che questo turno ha risposto con
+                # la battuta di ripiego invece che con l'avatar.
+                logger.error("LLM voce: %s", e)
                 if not full_text:
                     full_text = _LLM_FALLBACK_LINE
                     self._turn_text = full_text

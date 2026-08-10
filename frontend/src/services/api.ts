@@ -400,14 +400,27 @@ export const fetchConversationEvaluation = (conversationId: string) =>
 export const fetchEvaluationPdf = (conversationId: string) =>
   apiFetchBlob(`/api/chat/conversation/${conversationId}/evaluation/pdf`)
 
+/**
+ * Quanto l'URL del file resta valido dopo il click. Revocarlo subito lo
+ * toglie da sotto ai browser che risolvono il download un istante dopo
+ * l'evento (Firefox, Safari), dove il file semplicemente non arriva. Il
+ * ritardo non costa memoria in più: il blob è già tutto in RAM, l'ha
+ * scaricato apiFetchBlob.
+ */
+const DOWNLOAD_URL_LIFETIME_MS = 60_000
+
 /** Hand a fetched file to the browser as a download. */
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
   link.download = filename
+  // Attaccato al documento prima del click: un link staccato dal DOM non
+  // scarica niente su Firefox.
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS)
 }
 
 // =====================================================

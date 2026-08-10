@@ -172,16 +172,42 @@ export async function completeNewPassword(
 }
 
 /**
- * Rotate the access token cookie using the refresh token cookie.
- * Returns false when the session can't be renewed.
+ * Il rinnovo in corso, se ce n'è uno. Chi arriva mentre è in volo aspetta
+ * quello invece di aprirne un altro (vedi `refreshSession`).
  */
-export async function refreshSession(): Promise<boolean> {
+let refreshInFlight: Promise<boolean> | null = null
+
+async function rotateAccessToken(): Promise<boolean> {
   try {
     await authFetch('/api/auth/refresh')
     return true
   } catch {
     return false
   }
+}
+
+/**
+ * Rotate the access token cookie using the refresh token cookie.
+ * Returns false when the session can't be renewed.
+ *
+ * Uno alla volta per tutta l'applicazione. L'access token scade mentre la
+ * pagina ha già cinque richieste in volo, quindi i 401 arrivano insieme:
+ * senza questo, ognuno di loro aprirebbe il proprio rinnovo, cioè cinque
+ * chiamate a Cognito nello stesso istante per ottenere la stessa cosa.
+ * Cognito le limita, e basta che una venga rifiutata perché chi la stava
+ * aspettando si ritrovi buttato fuori da una sessione ancora valida.
+ *
+ * La promessa si azzera appena finisce, quindi il rinnovo successivo (un'ora
+ * dopo, alla scadenza seguente) riparte davvero invece di riusare l'esito
+ * vecchio.
+ */
+export function refreshSession(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = rotateAccessToken().finally(() => {
+      refreshInFlight = null
+    })
+  }
+  return refreshInFlight
 }
 
 /**

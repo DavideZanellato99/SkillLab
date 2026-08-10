@@ -66,6 +66,14 @@ def test_un_argomento_troppo_grosso_si_spezza():
     assert _totale(batches) == 50
 
 
+def test_senza_argomenti_o_senza_domande_non_si_chiama_nessuno():
+    """Non capita su un documento vero, ed è il motivo per cui va provato: se
+    il piano vuoto non fosse previsto qui, sarebbe una chiamata al modello
+    con zero argomenti da leggere."""
+    assert _plan_batches(0, 50) == []
+    assert _plan_batches(10, 0) == []
+
+
 def test_le_domande_scritte_identiche_due_volte_cadono():
     """Due chiamate non si vedono fra loro, quindi la stessa domanda può
     uscire due volte: nel serbatoio sarebbe una domanda che l'estrazione

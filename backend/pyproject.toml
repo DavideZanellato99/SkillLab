@@ -110,7 +110,8 @@ omit = [
 
 [tool.coverage.report]
 show_missing = true
-# Starting floor — raise it as the suite grows. A high bar on day one would
-# just block every PR.
-fail_under = 40
+# Il pavimento sale con la suite. Sta sotto la copertura reale di qualche
+# punto di proposito: serve a far vedere una caduta, non a bloccare una
+# modifica che sposta qualche riga.
+fail_under = 80
 

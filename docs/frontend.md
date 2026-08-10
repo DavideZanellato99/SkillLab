@@ -248,6 +248,20 @@ scheda avatar, il rientro di un messaggio che il server non ha ricevuto
 stati della barra in fondo alla chat, le protezioni sull'account proprio e su
 quello di sistema.
 
+Sotto ci sono tre altri strati, che si rompono in silenzio per motivi loro.
+I servizi in [services/](../frontend/src/services/) sono involucri sottili
+attorno ad `apiFetch`, e quello che i loro test fissano è l'indirizzo, il
+verbo e come i filtri diventano parametri: un nome di parametro che diverge
+dal backend non fa rumore, restituisce semplicemente la lista sbagliata. Gli
+hook in [hooks/](../frontend/src/hooks/) portano le chiavi di cache e le
+invalidazioni, dove l'errore tipico è una scrittura che non fa rileggere
+qualcosa e lascia a schermo dati vecchi che sembrano attuali
+([queryKeys.test.ts](../frontend/src/hooks/queryKeys.test.ts) controlla anche
+che due domande diverse non finiscano nella stessa voce di cache). Le
+schermate si provano da chi le usa: cosa vede un ruolo e cosa no, cosa dice
+una pagina quando non c'è niente da mostrare, e cosa succede quando una
+scrittura viene rifiutata.
+
 Comandi e gate di qualità stanno in [contributing.md](contributing.md).
 
 ## Lo stato dell'utente

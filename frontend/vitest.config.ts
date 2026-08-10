@@ -23,13 +23,15 @@ export default defineConfig({
         'src/services/voiceCall.ts',
         'src/services/voice.ts',
       ],
-      // Ratchet floor, not a target: today the suite covers ~2% of src, the
-      // gate only stops regressions. Raise these as real tests get written.
+      // Pavimento, non traguardo: sono i valori raggiunti meno un paio di
+      // punti di margine, così il cancello ferma le regressioni senza
+      // scattare per un ramo in più aggiunto insieme al codice. Vanno alzati
+      // quando la copertura sale davvero.
       thresholds: {
-        statements: 2,
-        branches: 1.8,
-        functions: 1.3,
-        lines: 2,
+        statements: 56,
+        branches: 45,
+        functions: 56,
+        lines: 58,
       },
     },
   },

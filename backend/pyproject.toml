@@ -46,8 +46,11 @@ extend-immutable-calls = [
 # lightweight migrations run before the routers are imported. E402 is the
 # intended shape here, not a mistake.
 "main.py" = ["E402"]
-# Tests use assert and reuse fixture names as arguments.
-"tests/*" = ["B011", "S101"]
+# Tests use assert and reuse fixture names as arguments. S105-S107 (stringhe
+# che sembrano credenziali) sono spente qui perché nei test
+# dell'autenticazione le credenziali finte sono il soggetto: nomi di rotta
+# come "/api/auth/change-password" e password di prova inventate sul posto.
+"tests/*" = ["B011", "S101", "S105", "S106", "S107"]
 # assign_voices is a CLI script: print IS its user interface.
 "assign_voices.py" = ["T201"]
 # Modules that still use print() as their logging. Tracked as tech debt
@@ -113,5 +116,5 @@ show_missing = true
 # Il pavimento sale con la suite. Sta sotto la copertura reale di qualche
 # punto di proposito: serve a far vedere una caduta, non a bloccare una
 # modifica che sposta qualche riga.
-fail_under = 80
+fail_under = 90
 

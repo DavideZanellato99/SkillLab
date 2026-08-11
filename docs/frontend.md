@@ -151,7 +151,7 @@ dell'applicazione a chi non le ha ancora viste, quindi una funzionalità nuova
 che non passa di lì lo lascia indietro senza che nessuno se ne accorga: chi
 lavora all'applicazione non esce dalla propria sessione per guardare la
 vetrina. Vale la stessa regola dei documenti in `docs/`, e il promemoria è la
-prova in [smoke.test.tsx](../frontend/src/components/public/smoke.test.tsx),
+prova in [smoke.test.tsx](../frontend/tests/components/public/smoke.test.tsx),
 che verifica soltanto che le cinque pagine si aprano.
 
 ## I componenti condivisi
@@ -235,16 +235,18 @@ stessa in tutta l'app, deve stare scritta una volta.
 
 ## I test
 
-Convivono con il codice, con lo stesso nome e il suffisso `.test.ts(x)`, e
-girano con Vitest. Non coprono tutto per principio: coprono quello che si
-rompe in silenzio, cioè le funzioni pure di formattazione, il gate dei ruoli, e
-la macchina della chiamata vocale ([voiceCall.test.ts](../frontend/src/services/voiceCall.test.ts)),
+Stanno in [frontend/tests/](../frontend/tests/), fuori da `src/`, con le
+stesse sottocartelle del codice (`components/`, `hooks/`, `services/`,
+`contexts/`), il nome del file che provano e il suffisso `.test.ts(x)`. Girano
+con Vitest. Non coprono tutto per principio: coprono quello che si rompe in
+silenzio, cioè le funzioni pure di formattazione, il gate dei ruoli, e la
+macchina della chiamata vocale ([voiceCall.test.ts](../frontend/tests/services/voiceCall.test.ts)),
 dove uno stato sbagliato non dà errore, dà una telefonata che non funziona.
 
 Lo stesso criterio vale per i pezzi estratti da una pagina: si prova quello
 che ha una regola dentro, non quello che ha solo del markup. Le regole della
 scheda avatar, il rientro di un messaggio che il server non ha ricevuto
-([useTextChat.test.tsx](../frontend/src/hooks/useTextChat.test.tsx)), i tre
+([useTextChat.test.tsx](../frontend/tests/hooks/useTextChat.test.tsx)), i tre
 stati della barra in fondo alla chat, le protezioni sull'account proprio e su
 quello di sistema.
 
@@ -256,7 +258,7 @@ dal backend non fa rumore, restituisce semplicemente la lista sbagliata. Gli
 hook in [hooks/](../frontend/src/hooks/) portano le chiavi di cache e le
 invalidazioni, dove l'errore tipico è una scrittura che non fa rileggere
 qualcosa e lascia a schermo dati vecchi che sembrano attuali
-([queryKeys.test.ts](../frontend/src/hooks/queryKeys.test.ts) controlla anche
+([queryKeys.test.ts](../frontend/tests/hooks/queryKeys.test.ts) controlla anche
 che due domande diverse non finiscano nella stessa voce di cache). Le
 schermate si provano da chi le usa: cosa vede un ruolo e cosa no, cosa dice
 una pagina quando non c'è niente da mostrare, e cosa succede quando una

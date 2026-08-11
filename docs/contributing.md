@@ -101,7 +101,7 @@ Postgres all'avvio): usa il database `skilllab_test` sul Postgres di
 ```bash
 npm ci
 npm run lint        # oxlint
-npm run build       # tsc + vite (fa anche il type check)
+npm run build       # tsc + vite (fa anche il type check, test compresi)
 npm run test        # vitest
 ```
 

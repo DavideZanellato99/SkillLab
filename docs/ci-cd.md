@@ -109,7 +109,7 @@ autenticata.
 | Dove | Con cosa | Cosa coprono |
 | --- | --- | --- |
 | [backend/tests/](../backend/tests/) | pytest, con soglia di copertura | Permessi e confini del tenant, conservazione e cancellazione, il simulatore, l'accesso in tutte le sue vie storte, il legame fra un token e il browser che se lo è fatto emettere, e il giro dei modelli di riserva quando OpenAI non risponde |
-| Accanto ai file del frontend, con suffisso `.test.ts(x)` | Vitest, con soglia di copertura | Funzioni pure di formattazione, il gate dei ruoli, la macchina della chiamata vocale, gli indirizzi che i servizi chiamano, le chiavi di cache e le invalidazioni degli hook, e quello che ogni ruolo vede in una schermata |
+| [frontend/tests/](../frontend/tests/) | Vitest, con soglia di copertura | Funzioni pure di formattazione, il gate dei ruoli, la macchina della chiamata vocale, gli indirizzi che i servizi chiamano, le chiavi di cache e le invalidazioni degli hook, e quello che ogni ruolo vede in una schermata |
 
 Il `conftest.py` del backend riempie con dei segnaposto tutte le variabili
 obbligatorie, così l'unica cosa che va davvero configurata per far girare la

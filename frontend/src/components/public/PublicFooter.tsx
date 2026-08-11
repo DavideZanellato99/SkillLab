@@ -75,7 +75,7 @@ export default function PublicFooter() {
             Accedi alla piattaforma
           </button>
           <p className="text-[0.85rem] leading-relaxed text-slate-500">
-            L&apos;accesso è riservato alle organizzazioni clienti
+            L&apos;accesso avviene con le credenziali fornite dal proprio amministratore
           </p>
         </div>
       </div>

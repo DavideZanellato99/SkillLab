@@ -120,7 +120,7 @@ export default function RoleplayPage() {
 
       <CtaSection
         title="Accedi alla piattaforma"
-        text="Gli scenari disponibili sono quelli configurati dalla propria organizzazione e si aprono dal catalogo."
+        text="Gli scenari configurati si aprono dal catalogo."
       />
     </PublicPage>
   )

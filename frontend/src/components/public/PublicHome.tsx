@@ -112,7 +112,7 @@ export default function PublicHome() {
 
       <CtaSection
         title="Accedi alla piattaforma"
-        text="L'accesso è riservato alle organizzazioni clienti, con le credenziali fornite dal proprio amministratore."
+        text="L'accesso avviene con le credenziali fornite dal proprio amministratore."
       />
     </PublicPage>
   )

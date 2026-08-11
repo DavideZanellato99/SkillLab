@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -179,11 +179,11 @@ describe('tastiera', () => {
     renderMenu()
 
     await userEvent.click(puntini())
-    window.dispatchEvent(new Event('scroll', { bubbles: true }))
+    act(() => {
+      window.dispatchEvent(new Event('scroll'))
+    })
 
-    expect(await screen.findByRole('button', { name: /Altre azioni/ })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    )
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(puntini()).toHaveAttribute('aria-expanded', 'false')
   })
 })

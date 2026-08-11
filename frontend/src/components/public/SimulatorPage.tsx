@@ -33,7 +33,7 @@ const PREPARATION = [
   },
   {
     title: 'Pubblicazione',
-    text: "Il test diventa disponibile agli utenti dell'organizzazione, che possono svolgerlo tutte le volte necessarie.",
+    text: 'Il test diventa disponibile al personale, che può svolgerlo tutte le volte necessarie.',
   },
 ]
 
@@ -106,7 +106,7 @@ export default function SimulatorPage() {
 
       <CtaSection
         title="Accedi alla piattaforma"
-        text="I test disponibili sono quelli pubblicati dalla propria organizzazione e si aprono dall'elenco delle simulazioni."
+        text="I test pubblicati si aprono dall'elenco delle simulazioni."
         label="Accedi"
       />
     </PublicPage>

@@ -28,7 +28,7 @@ import {
 const CYCLE = [
   {
     title: 'Configurazione',
-    text: "Gli amministratori predispongono gli interlocutori simulati e i test a partire dalle procedure dell'organizzazione.",
+    text: "Gli interlocutori simulati e i test vengono predisposti a partire dalle procedure dell'organizzazione.",
   },
   {
     title: 'Attività formativa',
@@ -44,17 +44,10 @@ const ROLES = [
   [
     'Personale in formazione',
     'Catalogo degli scenari, obiettivi assegnati, storico personale e confronto fra i propri tentativi',
-    'I dati di altri utenti',
   ],
   [
     'Formatori',
-    'Prove della propria organizzazione, revisione delle valutazioni, obiettivi, cruscotti e report',
-    'I contenuti di altre organizzazioni',
-  ],
-  [
-    'Amministratori',
-    'Organizzazioni, account, avatar, simulazioni tecniche e registro delle attività',
-    'Profilo riservato alla gestione della piattaforma',
+    'Prove del personale seguito, revisione delle valutazioni, obiettivi, cruscotti e report',
   ],
 ]
 
@@ -103,10 +96,10 @@ export default function PlatformPage() {
 
       <Section
         kicker="Ruoli"
-        title="Tre profili, perimetri distinti"
+        title="Due profili, perimetri distinti"
         description="Ogni profilo accede alle sole informazioni di propria competenza."
       >
-        <SpecTable head={['Profilo', 'Funzioni disponibili', 'Ambito escluso']} rows={ROLES} />
+        <SpecTable head={['Profilo', 'Funzioni disponibili']} rows={ROLES} />
       </Section>
 
       <Section
@@ -122,13 +115,12 @@ export default function PlatformPage() {
             Gli scenari riproducono la casistica reale e i test derivano dalle procedure già in uso.
           </FeatureCard>
           <FeatureCard icon={<UsersIcon />} title="Gestione degli account">
-            Account creati dagli amministratori, con sospensione e disattivazione a effetto
-            immediato.
+            Creazione, sospensione e disattivazione degli account, con effetto immediato
+            sull&apos;accesso.
           </FeatureCard>
-          <FeatureCard span="half" icon={<ShieldIcon />} title="Separazione fra organizzazioni">
-            Avatar, test, conversazioni e account appartengono a una singola organizzazione. Ogni
-            categoria di dato ha un periodo di conservazione dichiarato, al termine del quale viene
-            eliminata, e ogni utente può scaricare i propri dati dalla pagina di profilo.
+          <FeatureCard span="half" icon={<ShieldIcon />} title="Conservazione e portabilità">
+            Ogni categoria di dato ha un periodo di conservazione dichiarato, al termine del quale
+            viene eliminata, e ogni utente può scaricare i propri dati dalla pagina di profilo.
           </FeatureCard>
           <FeatureCard span="half" accent icon={<PersonIcon />} title="Intervento umano garantito">
             Il punteggio assegnato automaticamente può essere rettificato da un formatore, con
@@ -140,7 +132,7 @@ export default function PlatformPage() {
 
       <CtaSection
         title="Accedi alla piattaforma"
-        text="Le organizzazioni clienti accedono con le credenziali fornite dal proprio amministratore."
+        text="L'accesso avviene con le credenziali fornite dal proprio amministratore."
       />
     </PublicPage>
   )

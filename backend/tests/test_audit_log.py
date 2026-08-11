@@ -163,6 +163,88 @@ def test_registry_window_is_bounded(
     assert len(page["items"]) == 2
 
 
+def test_registry_filters_by_organization(
+    admin_client, act_as, standard_user, super_admin_user, make_avatar, organization
+):
+    """The tenant is stamped on the row when the action happens, so filtering
+    by it still finds the actions of someone who has moved since."""
+    avatar = make_avatar()
+    act_as(standard_user)
+    admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    act_as(super_admin_user)
+
+    page = admin_client.get(
+        "/api/admin/audit-logs", params={"organization_id": str(organization.id)}
+    ).json()
+    assert [i["action"] for i in page["items"]] == ["avatar.select"]
+
+    other = admin_client.get(
+        "/api/admin/audit-logs", params={"organization_id": str(uuid.uuid4())}
+    ).json()
+    assert other["total"] == 0
+
+
+def test_registry_filters_by_date_range(
+    admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
+):
+    """The column is naive UTC and the client sends an ISO datetime with its
+    offset: without dropping it the comparison would raise instead of
+    filtering."""
+    from datetime import UTC, datetime, timedelta
+
+    avatar = make_avatar()
+    act_as(standard_user)
+    admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    act_as(super_admin_user)
+    now = datetime.now(UTC)
+
+    inside = admin_client.get(
+        "/api/admin/audit-logs",
+        params={
+            "date_from": (now - timedelta(hours=1)).isoformat(),
+            "date_to": (now + timedelta(hours=1)).isoformat(),
+        },
+    ).json()
+    assert inside["total"] >= 1
+
+    before = admin_client.get(
+        "/api/admin/audit-logs", params={"date_to": (now - timedelta(days=1)).isoformat()}
+    ).json()
+    assert before["total"] == 0
+
+
+def test_registry_search_spans_the_columns_that_name_things(
+    admin_client, act_as, standard_user, super_admin_user, make_avatar
+):
+    """One box for the four columns anyone would type into: who acted, which
+    tenant, which route, which row."""
+    avatar = make_avatar()
+    act_as(standard_user)
+    admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    act_as(super_admin_user)
+
+    by_email = admin_client.get(
+        "/api/admin/audit-logs", params={"q": standard_user.email[:12]}
+    ).json()
+    assert by_email["total"] == 1
+
+    by_path = admin_client.get("/api/admin/audit-logs", params={"q": "avatars/select"}).json()
+    assert by_path["total"] == 1
+
+    # L'identificativo della riga toccata: lo porta chi ce l'ha nel percorso
+    admin_client.put(f"/api/admin/users/{standard_user.id}", json={"nome": "Cercato"})
+    by_resource = admin_client.get(
+        "/api/admin/audit-logs", params={"q": str(standard_user.id)}
+    ).json()
+    assert by_resource["total"] == 1
+    assert by_resource["items"][0]["action"] == "user.update"
+
+    assert admin_client.get("/api/admin/audit-logs", params={"q": "  "}).json()["total"] >= 1
+    assert (
+        admin_client.get("/api/admin/audit-logs", params={"q": "mai-scritto"}).json()["total"] == 0
+    )
+
+
 def test_actions_catalogue_is_static(admin_client):
     """The filter offers every action, including ones nobody performed yet."""
     options = admin_client.get("/api/admin/audit-logs/actions").json()

@@ -288,10 +288,16 @@ def update_avatar(
     avatar.name = name
     avatar.description = payload.description
     avatar.voice_id = (payload.voice_id or "").strip() or None
-    avatar.organization_id = _resolve_avatar_org_or_400(db, payload.organization_id)
-    # Dopo l'organizzazione, e con quella nuova: cambiare tenant a un avatar
-    # significa dargli una categoria di quel tenant, mai tenersi la vecchia.
-    avatar.category_id = _resolve_category_or_400(db, payload.category_id, avatar.organization_id)
+    # Con l'organizzazione nuova ma prima di assegnarla: cambiare tenant a un
+    # avatar significa dargli una categoria di quel tenant, mai tenersi la
+    # vecchia. Assegnare per prima l'organizzazione lascerebbe l'avatar
+    # incoerente per il tempo della query qui sotto, che con il suo autoflush
+    # lo scriverebbe così: tenant nuovo e categoria vecchia, cioè la coppia
+    # che la chiave esterna composta rifiuta.
+    organization_id = _resolve_avatar_org_or_400(db, payload.organization_id)
+    category_id = _resolve_category_or_400(db, payload.category_id, organization_id)
+    avatar.organization_id = organization_id
+    avatar.category_id = category_id
     avatar.profile = payload.profile
 
     # Explicit URL wins; an emptied field keeps the current image, unless

@@ -28,10 +28,10 @@ export default defineConfig({
       // scattare per un ramo in più aggiunto insieme al codice. Vanno alzati
       // quando la copertura sale davvero.
       thresholds: {
-        statements: 56,
-        branches: 45,
-        functions: 56,
-        lines: 58,
+        statements: 65,
+        branches: 55,
+        functions: 64,
+        lines: 67,
       },
     },
   },

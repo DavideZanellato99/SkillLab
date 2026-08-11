@@ -504,7 +504,7 @@ export default function OrganizationsPage() {
                 <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
               </svg>
             }
-            title="{editing === 'new' ? 'Crea Nuova Organizzazione' : `Modifica ${editing.name}`}"
+            title={editing === 'new' ? 'Crea Nuova Organizzazione' : `Modifica ${editing.name}`}
             description={<>Lo slug è generato automaticamente dal nome se lasciato vuoto.</>}
             className="mb-8"
           />

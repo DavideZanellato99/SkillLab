@@ -116,5 +116,5 @@ show_missing = true
 # Il pavimento sale con la suite. Sta sotto la copertura reale di qualche
 # punto di proposito: serve a far vedere una caduta, non a bloccare una
 # modifica che sposta qualche riga.
-fail_under = 90
+fail_under = 93
 

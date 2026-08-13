@@ -104,11 +104,16 @@ export default function RoleplayPage() {
       >
         <PillList items={PROFILE_SECTIONS} />
         <div className="mt-8 grid grid-cols-6 gap-5">
-          <FeatureCard span="half" icon={<PersonIcon />} title="Coerenza del ruolo">
+          <FeatureCard span="third" icon={<PersonIcon />} title="Redazione assistita">
+            La scheda si compila per intero oppure si ottiene in bozza descrivendo il caso, o
+            partendo da una conversazione già avvenuta. La proposta viene poi rivista e corretta
+            prima della pubblicazione.
+          </FeatureCard>
+          <FeatureCard span="third" icon={<PersonIcon />} title="Coerenza del ruolo">
             L&apos;avatar non fornisce suggerimenti e non assume il ruolo di assistente: il
             comportamento resta coerente con il profilo assegnato.
           </FeatureCard>
-          <FeatureCard span="half" icon={<EyeIcon />} title="Informativa preventiva">
+          <FeatureCard span="third" icon={<EyeIcon />} title="Informativa preventiva">
             Prima della prima simulazione vocale viene presentata un&apos;informativa su
             registrazione, trascrizione e valutazione automatica della prestazione.
             <div className="mt-4">

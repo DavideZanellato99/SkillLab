@@ -203,6 +203,40 @@ def test_un_ritratto_indicato_a_mano_vince_sul_segnaposto(
     assert os.listdir(ritratti_in_una_cartella_temporanea) == []
 
 
+def test_un_ritratto_ospitato_altrove_viene_rifiutato(
+    admin_client, organization, make_category, ritratti_in_una_cartella_temporanea
+):
+    """Non si vedrebbe, e non deve nemmeno esistere.
+
+    Non si vedrebbe perché la CSP ammette immagini solo dalla propria origine
+    (caddy/Caddyfile), e non deve esistere perché sarebbe una richiesta a un
+    dominio di terzi fatta dal browser di chiunque apra la galleria, cioè il
+    suo indirizzo IP consegnato a qualcuno che non compare in nessuna
+    informativa.
+    """
+    risposta = admin_client.post(
+        AVATARS,
+        json=_payload(organization, make_category(), image_url="https://cdn.esempio.it/mario.png"),
+    )
+
+    assert risposta.status_code == 422
+    assert "carica il file" in str(risposta.json())
+
+
+def test_un_percorso_sulla_propria_origine_passa(
+    admin_client, organization, make_category, ritratti_in_una_cartella_temporanea
+):
+    """Il confine è lo schema dell'indirizzo, non la parola "http": un file
+    che si chiama httpsomething.png non ha niente che non va."""
+    risposta = admin_client.post(
+        AVATARS,
+        json=_payload(organization, make_category(), image_url="/static/avatars/https-mario.png"),
+    )
+
+    assert risposta.status_code == 201
+    assert risposta.json()["image_url"] == "/static/avatars/https-mario.png"
+
+
 def test_svuotare_il_ritratto_non_lo_toglie_a_chi_ce_l_aveva(
     admin_client, organization, make_category, make_avatar
 ):

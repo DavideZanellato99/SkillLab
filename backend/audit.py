@@ -142,6 +142,12 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     ("POST", "/api/admin/avatars/image"): AuditAction(
         "avatar.image_upload", "Immagine avatar caricata", "avatar"
     ),
+    # Non cambia niente nel database, e sta qui lo stesso: è una chiamata a un
+    # fornitore esterno che costa, e quante schede vengono generate e da chi è
+    # il genere di cosa che un registro esiste per dire.
+    ("POST", "/api/admin/avatars/draft"): AuditAction(
+        "avatar.draft", "Scheda persona generata", "avatar"
+    ),
     ("POST", "/api/avatars/select"): AuditAction("avatar.select", "Avatar selezionato", "avatar"),
     # Categorie degli avatar
     ("POST", "/api/admin/avatar-categories"): AuditAction(

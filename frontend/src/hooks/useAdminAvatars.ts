@@ -10,7 +10,7 @@
  * richieste su richiesta esplicita che non lasciano stato da tenere. */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { AdminAvatarPayload } from '../services/admin'
+import type { AdminAvatarPayload, PersonaDraftPayload } from '../services/admin'
 import {
   fetchAdminAvatars,
   createAvatar,
@@ -19,6 +19,7 @@ import {
   restoreAvatar,
   uploadAvatarImage,
   fetchVoices,
+  draftPersona,
 } from '../services/admin'
 import { queryKeys } from './queryKeys'
 
@@ -90,5 +91,17 @@ export function useRestoreAvatar() {
 export function useUploadAvatarImage() {
   return useMutation({
     mutationFn: (file: File) => uploadAvatarImage(file),
+  })
+}
+
+/** Genera una bozza di scheda persona.
+ *
+ * Non invalida niente e non tocca la cache, perché non salva niente: la
+ * bozza è una proposta che torna al form aperto, e diventa un avatar solo se
+ * chi l'ha chiesta la salva. È l'unica scrittura di questo file che non fa
+ * rileggere nessun elenco. */
+export function useDraftPersona() {
+  return useMutation({
+    mutationFn: (payload: PersonaDraftPayload) => draftPersona(payload),
   })
 }

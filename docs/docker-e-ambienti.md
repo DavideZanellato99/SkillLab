@@ -116,6 +116,10 @@ Quattro dettagli del Caddyfile che valgono da soli:
   servire esce dal giro da sola e ci rientra appena torna a esserlo. Senza, il
   bilanciatore continuerebbe a mandarle una chiamata su N. Perché `/health` e
   non la radice sta più sotto, in questa stessa pagina;
+- **gli header di sicurezza**, in un blocco solo e prima delle due strade, così
+  valgono sia per la React sia per l'API sia per i ritratti sotto `/static`.
+  Cosa difendono e quali deroghe ha la CSP di questa applicazione stanno in
+  [sicurezza-e-privacy.md](sicurezza-e-privacy.md);
 - **`X-Forwarded-For` sovrascritto, non accodato**. Il backend legge il primo
   valore per sapere chi sta chiamando, e accodandolo basterebbe che un client
   se lo mandasse da solo per farsi credere un altro indirizzo, aggirando il

@@ -138,12 +138,35 @@ monitoraggio sistematico, dati trattati su larga scala) la **DPIA ex art. 35
 | **ElevenLabs** | L'audio del microfono dell'operatore, in streaming | Durante ogni telefonata simulata |
 | **OpenAI** | Il testo della conversazione (entrambe le parti) e la scheda dell'avatar, senza identità dell'operatore | Ad ogni battuta, e a fine chiamata per la valutazione |
 | **OpenAI** | I documenti caricati per le simulazioni tecniche, senza nessun dato dell'operatore | Al caricamento e alla generazione delle domande, mai durante lo svolgimento di un test |
+| **OpenAI** | Il testo che un amministratore incolla per farsi scrivere la bozza di una scheda persona: un caso raccontato a parole, oppure una conversazione reale **che chi la incolla deve avere già anonimizzato** | Solo quando un amministratore preme "genera la scheda" |
 | **Cartesia** | Il testo generato dell'avatar, per sintetizzarlo in voce | Durante ogni telefonata simulata |
 | **AWS Cognito** | Solo l'indirizzo email, più la password gestita da Cognito | Alla creazione dell'account e a ogni accesso |
 
 Nome e cognome non escono mai dall'infrastruttura di SkillLab: restano nella
 tabella `users` (`backend/cognito_service.py`, `admin_create_user` invia solo
 l'attributo `email`).
+
+**La riga della bozza di scheda è l'unica che dipende da chi la usa.** Tutte
+le altre descrivono dati che l'applicazione manda da sé; qui il contenuto lo
+sceglie un amministratore, incollandolo. Se incolla un caso inventato non
+esce nessun dato personale; se incolla una conversazione vera senza averla
+ripulita, esce quella. Il prodotto fa quello che può, cioè dirlo nel punto in
+cui si incolla e istruire il modello a sostituire comunque i nomi che
+trovasse, ma **la ripulitura è un atto di chi incolla** e va scritta nelle
+istruzioni che il titolare dà ai propri amministratori. Il testo non viene
+salvato da nessuna parte: serve a produrre la bozza e finisce lì
+(`backend/persona_draft.py`).
+
+**L'elenco è chiuso, e il browser non ne aggiunge nessuno.** Le richieste qui
+sopra le fa il server; il browser di chi si allena parla con una sola origine,
+quella dell'applicazione. Fino ad agosto 2026 non era del tutto vero: il foglio
+di stile importava i caratteri Inter e Outfit da `fonts.googleapis.com`, quindi
+ogni pagina aperta consegnava a Google l'indirizzo IP di quella persona, senza
+che comparisse in questa tabella né potesse comparire nell'informativa di
+nessuno. I caratteri ora sono serviti dall'applicazione
+(`frontend/src/index.css`), e a impedire una ricaduta è la
+Content-Security-Policy della sezione 10: un dominio esterno reintrodotto per
+distrazione non verrebbe caricato affatto.
 
 Sono tutti fornitori statunitensi. Per ciascuno vanno verificate e
 documentate: adesione al Data Privacy Framework oppure clausole contrattuali
@@ -267,6 +290,12 @@ strumento di analisi. **Non serve il banner cookie**, basta la menzione
 nell'informativa. Aggiungere analytics o widget esterni cambierebbe questa
 conclusione.
 
+Dalle pagine non parte **nessuna richiesta verso un dominio che non sia
+quello dell'applicazione**, caratteri compresi (sezione 6). Non è solo una
+questione di cookie: una richiesta a un dominio di terzi consegna comunque
+l'indirizzo IP e la pagina da cui parte, e va dichiarata anche quando non
+scrive niente sul dispositivo.
+
 ## 10. Misure di sicurezza (art. 32)
 
 **Autenticazione e sessioni**
@@ -284,6 +313,22 @@ conclusione.
   10 per indirizzo IP in 15 minuti.
 - Un account sospeso o disabilitato, o appartenente a un'organizzazione
   sospesa, viene bloccato a ogni richiesta, non solo al login.
+
+**La pagina nel browser** (`caddy/Caddyfile`, blocco `header`)
+- `Content-Security-Policy` su ogni risposta: il codice può arrivare solo
+  dall'applicazione e i dati possono essere mandati solo all'applicazione.
+  È la misura che limita i danni di un'iniezione, perché il cookie `HttpOnly`
+  protegge il token ma non impedisce a uno script che gira nella pagina di
+  usare la sessione aperta.
+- `X-Content-Type-Options: nosniff` sui file caricati dagli utenti, che sono
+  serviti dalla stessa origine dell'applicazione.
+- `Permissions-Policy`: il microfono lo può chiedere solo l'applicazione,
+  fotocamera e posizione nessuno.
+- `frame-ancestors 'none'` e `Strict-Transport-Security` sui domini veri.
+- Nessuna richiesta a domini di terzi dalle pagine, caratteri compresi
+  (sezione 6).
+- Lo smoke test della CI verifica a ogni giro che questi header ci siano
+  davvero, su tutte e due le strade del proxy.
 
 **Isolamento e accessi**
 - Separazione rigida per organizzazione su ogni endpoint: un amministratore
@@ -360,3 +405,5 @@ titolare (dettagli nella sezione Deploy del README):
 - [ ] Accordo sindacale o autorizzazione dell'Ispettorato ex art. 4 legge
       300/1970
 - [ ] Procedura interna che garantisca l'intervento umano sulle valutazioni
+- [ ] Istruzione ai propri amministratori: una conversazione reale incollata
+      per generare una scheda va anonimizzata prima (sezione 6)

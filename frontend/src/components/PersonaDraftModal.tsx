@@ -1,0 +1,180 @@
+/* Da un caso raccontato a una bozza di scheda persona.
+ *
+ * È il gemello della generazione delle domande di una simulazione: una fonte
+ * scritta da una persona, una passata del modello, e una revisione umana
+ * prima che diventi qualcosa. Qui la revisione è il form che sta dietro
+ * questa modale, dove la bozza arriva campo per campo.
+ *
+ * La modale non salva niente e non decide niente: consegna la scheda a chi
+ * l'ha aperta e si chiude. Cosa tenerne lo decide il form (vedi applyDraft in
+ * avatarForm). */
+
+import { useState } from 'react'
+
+import { useDraftPersona } from '../hooks/useAdminAvatars'
+import type { PersonaDraftSource } from '../services/admin'
+import { DIFFICULTY_OPTIONS } from './avatarProfileConfig'
+import { fieldCls, labelCls, textareaCls } from './Field'
+import FilterTabs from './FilterTabs'
+import FormError from './FormError'
+import ModalShell from './ModalShell'
+import PrimaryButton from './PrimaryButton'
+import Select from './Select'
+import Spinner from './Spinner'
+
+/* Sotto questa lunghezza il server rifiuta, ed è la stessa soglia: da tre
+ * parole il modello inventa uno scenario suo, che è esattamente quello che
+ * chi genera una scheda non vuole. Scritta qui perché il bottone possa
+ * spegnersi prima di partire, invece di far tornare un errore. */
+const MIN_CHARS = 40
+
+const SOURCES: { value: PersonaDraftSource; label: string }[] = [
+  { value: 'descrizione', label: 'Un caso' },
+  { value: 'conversazione', label: 'Una conversazione' },
+]
+
+const HINTS: Record<PersonaDraftSource, string> = {
+  descrizione:
+    "Racconta il caso come lo racconteresti a un collega: chi chiama, cosa è successo davvero e cosa vuoi che l'operatore impari a fare. Il resto della scheda lo inventa il modello attorno a questo.",
+  conversazione:
+    'Incolla una conversazione vera, già ripulita dai dati di chi ci compare. Il modello ricava dal testo come parla il cliente e cosa lo ha portato a scrivere, e inventa solo quello che manca.',
+}
+
+const PLACEHOLDERS: Record<PersonaDraftSource, string> = {
+  descrizione:
+    'Es. Un cliente vede due addebiti uguali sulla carta nello stesso giorno e chiama convinto di essere stato truffato. In realtà è una preautorizzazione di un noleggio auto non ancora stornata. Voglio verificare se l’operatore sa distinguere le due cose senza dare la colpa al cliente.',
+  conversazione:
+    'Operatore: Buongiorno, servizio clienti...\nCliente: Buongiorno, guardi, ho un problema...',
+}
+
+interface Props {
+  /** Il grado già scelto nella scheda, se c'è: la bozza parte da lì. */
+  difficulty: string
+  onClose: () => void
+  /** La bozza pronta, che il form fa entrare nella scheda con le sue regole. */
+  onDrafted: (profile: Record<string, string>) => void
+}
+
+export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Props) {
+  const [source, setSource] = useState<PersonaDraftSource>('descrizione')
+  const [text, setText] = useState('')
+  const [grado, setGrado] = useState(difficulty)
+
+  const draftMutation = useDraftPersona()
+  const isPending = draftMutation.isPending
+  const error = draftMutation.error
+    ? draftMutation.error instanceof Error
+      ? draftMutation.error.message
+      : 'Impossibile generare la scheda.'
+    : ''
+
+  const troppoCorto = text.trim().length < MIN_CHARS
+
+  const generate = async () => {
+    if (troppoCorto) return
+    draftMutation.reset()
+    try {
+      const { profile } = await draftMutation.mutateAsync({
+        text: text.trim(),
+        source,
+        difficulty: grado,
+      })
+      onDrafted(profile)
+    } catch {
+      // Il messaggio è nella mutation, il banner qui sopra lo mostra
+    }
+  }
+
+  return (
+    <ModalShell onClose={onClose} locked={isPending} size="md" padding="md" elevated>
+      <div className="mb-6">
+        <h2 className="mb-1 font-heading text-[1.2rem] font-bold text-slate-100">
+          Genera la scheda
+        </h2>
+        <p className="text-[0.8rem] leading-relaxed text-slate-500">
+          Il modello propone una scheda intera, tu la correggi prima di salvarla. Quello che hai già
+          scritto nel form non viene toccato.
+        </p>
+      </div>
+
+      {error && <FormError message={error} />}
+
+      <div className="flex flex-col gap-4">
+        <div className={fieldCls}>
+          <span className={labelCls}>Da cosa parti</span>
+          <FilterTabs
+            value={source}
+            onChange={(value) => setSource(value)}
+            options={SOURCES}
+            ariaLabel="Da cosa nasce la scheda"
+          />
+          <p className="text-[0.72rem] leading-relaxed text-slate-500">{HINTS[source]}</p>
+        </div>
+
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="draft-text">
+            {source === 'descrizione' ? 'Il caso' : 'La conversazione'}
+          </label>
+          <textarea
+            id="draft-text"
+            className={textareaCls}
+            rows={source === 'descrizione' ? 6 : 10}
+            placeholder={PLACEHOLDERS[source]}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={isPending}
+          />
+          {/* Il conto compare solo finché serve: a soglia superata non è più
+              una cosa da sapere. */}
+          {troppoCorto && text.length > 0 && (
+            <p className="text-[0.7rem] text-slate-500">
+              Ancora {MIN_CHARS - text.trim().length} caratteri: da poche parole il modello si
+              inventa un caso suo.
+            </p>
+          )}
+        </div>
+
+        <div className={fieldCls}>
+          <label className={labelCls} htmlFor="draft-difficulty">
+            Grado di difficoltà
+          </label>
+          <Select
+            id="draft-difficulty"
+            value={grado}
+            onChange={setGrado}
+            options={DIFFICULTY_OPTIONS.map((value) => ({ value, label: value }))}
+            placeholder="Lo decide il modello"
+            disabled={isPending}
+          />
+          <p className="text-[0.7rem] text-slate-500">
+            Un grado alto non rende il problema più difficile da capire, rende il cliente meno
+            paziente e più avaro di informazioni.
+          </p>
+        </div>
+
+        <PrimaryButton
+          type="button"
+          variant="submit"
+          className="mt-2"
+          onClick={generate}
+          disabled={isPending || troppoCorto}
+        >
+          {isPending ? (
+            <>
+              <Spinner variant="button" />
+              Sto scrivendo la scheda...
+            </>
+          ) : (
+            'Genera la bozza'
+          )}
+        </PrimaryButton>
+        {isPending && (
+          <p className="text-center text-[0.72rem] text-slate-500">
+            Ci vuole una ventina di secondi: il modello scrive una settantina di campi che devono
+            stare in piedi insieme
+          </p>
+        )}
+      </div>
+    </ModalShell>
+  )
+}

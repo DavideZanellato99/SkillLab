@@ -213,6 +213,13 @@ stessa in tutta l'app, deve stare scritta una volta.
   puro**, non dentro il gestore del submit: le tre della scheda avatar vivono
   in [avatarForm.ts](../frontend/src/components/avatarForm.ts), dove si
   leggono in fila e si verificano senza montare niente.
+- **Niente domini esterni.** Nessuno script, foglio di stile, carattere o
+  immagine presi da un CDN: tutto quello che la pagina carica arriva
+  dall'origine dell'applicazione, i caratteri Inter e Outfit compresi (vedi il
+  commento in testa a [index.css](../frontend/src/index.css)). Non è una
+  preferenza, ed è imposto dalla Content-Security-Policy: un `@import` verso
+  un dominio di fuori non verrebbe caricato affatto. Il perché sta in
+  [sicurezza-e-privacy.md](sicurezza-e-privacy.md) e in [gdpr.md](gdpr.md).
 - **Il testo è in italiano** e senza trattini: si usano le virgole.
 - **Gli stati vuoti non finiscono col punto.** Il punto resta negli errori e
   nelle descrizioni.

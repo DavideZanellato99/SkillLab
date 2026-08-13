@@ -30,10 +30,13 @@ from models import (
     Organization,
     User,
 )
+from persona_draft import draft_persona
 from persona_prompt import build_persona_prompt, clean_value
 from schemas import (
     AdminAvatarPayload,
     AdminAvatarResponse,
+    AvatarDraftRequest,
+    AvatarDraftResponse,
     AvatarImageResponse,
     AvatarPromptPreviewRequest,
     AvatarPromptPreviewResponse,
@@ -416,6 +419,36 @@ async def upload_avatar_image(
 
     audit.describe(http_request, file=filename, bytes=len(data))
     return AvatarImageResponse(image_url=f"/static/avatars/{filename}")
+
+
+@router.post("/draft", response_model=AvatarDraftResponse)
+async def draft_persona_sheet(
+    payload: AvatarDraftRequest,
+    http_request: Request,
+    current_admin: User = Depends(get_current_super_admin),
+):
+    """Una bozza di scheda persona da un caso raccontato a parole.
+
+    È il gemello della generazione delle domande di una simulazione, e segue
+    lo stesso patto: il modello propone, una persona rilegge, e solo dopo si
+    pubblica. Qui la parte "si pubblica" è il salvataggio dell'avatar, che
+    resta un'altra richiesta: **questa rotta non scrive niente**, restituisce
+    una scheda al form di chi l'ha chiesta.
+
+    Per questo non tocca il database e non ha bisogno di una sessione: entra
+    un testo, esce un dizionario. Nel registro delle azioni ci finisce
+    comunque, perché è una chiamata a un fornitore esterno che costa, e
+    perché sapere quante schede sono state generate e da chi è esattamente il
+    genere di cosa che il registro esiste per dire.
+    """
+    audit.describe(http_request, source=payload.source, characters=len(payload.text))
+    try:
+        profile = await draft_persona(payload.text, payload.source, payload.difficulty)
+    except RuntimeError as e:
+        # Il fornitore non ha risposto, o non ha risposto niente di
+        # utilizzabile: 502, come per la valutazione di una conversazione.
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+    return AvatarDraftResponse(profile=profile)
 
 
 @router.post("/prompt-preview", response_model=AvatarPromptPreviewResponse)

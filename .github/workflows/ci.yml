@@ -167,6 +167,34 @@ jobs:
         # React solo passando dal reverse proxy, come dal browser in
         # produzione.
         run: curl -fsS http://localhost/ >/dev/null
+      - name: Check the security headers are on every road
+        # Gli header stanno in un punto solo (caddy/Caddyfile) proprio perché
+        # non si possano dimenticare su una delle due strade: questo controllo
+        # guarda tutte e due, la React servita da nginx e l'API.
+        #
+        # Serve perché un header che sparisce non fa rumore: la pagina
+        # continua a funzionare esattamente come prima, e la differenza si
+        # vede solo il giorno in cui quell'header serviva davvero.
+        run: |
+          for path in / /api/avatars; do
+            headers=$(curl -sS -o /dev/null -D - "http://localhost$path")
+            for h in content-security-policy x-content-type-options referrer-policy permissions-policy; do
+              if ! echo "$headers" | grep -qi "^$h:"; then
+                echo "$h non c'è su $path"; exit 1
+              fi
+            done
+            # La versione del server non aiuta chi la legge.
+            if echo "$headers" | grep -qi "^server:"; then
+              echo "il server si presenta su $path"; exit 1
+            fi
+            # Qui SITE_ADDRESS è ":80" e si chiama localhost: l'HSTS non deve
+            # uscire, o si porterebbe dietro per un anno tutti i progetti
+            # sulla stessa macchina di chi prova lo stack in locale.
+            if echo "$headers" | grep -qi "^strict-transport-security:"; then
+              echo "HSTS su localhost: la guardia sul dominio non funziona"; exit 1
+            fi
+          done
+          echo "gli header di sicurezza ci sono su tutte e due le strade"
       - name: Check the API is reachable through Caddy
         # L'altra strada del Caddyfile: se il proxy verso le repliche non
         # funzionasse, nginx risponderebbe comunque con la pagina della React

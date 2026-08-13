@@ -8,15 +8,36 @@
    - the imperative .ripple effect used by AvatarCard
 */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+/* I due caratteri dell'applicazione, serviti dalla propria origine e non
+   presi da Google a ogni pagina. Tre motivi, e nessuno dei tre è estetico:
+
+   - una richiesta a un dominio di terzi consegna l'indirizzo IP di chi si
+     allena a quel dominio, per ogni pagina che apre. Fatto di nascosto da un
+     foglio di stile, resta fuori dall'informativa che il cliente scrive ai
+     propri dipendenti (vedi docs/gdpr.md);
+   - la Content-Security-Policy che serve le pagine (vedi caddy/Caddyfile)
+     resta chiusa su 'self': non deve aprire due domini esterni per gli stili
+     e per i file dei caratteri;
+   - un CDN irraggiungibile, o bloccato in una rete aziendale, non deve poter
+     cambiare l'aspetto dell'applicazione.
+
+   Sono le versioni variabili, cioè un file solo per famiglia che copre tutti
+   i pesi da 100 a 900, invece dei dieci file statici dei pesi in uso. Vite li
+   compila dentro dist con il loro hash, e il browser scarica il solo
+   sottoinsieme di caratteri che gli serve. */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/outfit';
 @import 'tailwindcss';
 
 @theme {
   /* Brand */
   --color-night: #0a0e1a; /* app background (slightly bluer than gray-950) */
 
-  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-heading: 'Outfit', 'Inter', ui-sans-serif, sans-serif;
+  /* Il nome con cui i pacchetti variabili si dichiarano è quello con
+     "Variable" in coda; dietro resta il nome semplice, per chi quel
+     carattere ce l'ha installato, e poi il carattere di sistema. */
+  --font-body: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: 'Outfit Variable', 'Outfit', 'Inter Variable', ui-sans-serif, sans-serif;
 
   /* Animations */
   --animate-fade-in: fade-in 0.5s ease-out;

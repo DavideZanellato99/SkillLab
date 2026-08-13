@@ -63,6 +63,72 @@ Descritte per esteso in [autenticazione.md](autenticazione.md), in sintesi:
 | Session binding a IP e User-Agent | Un cookie portato via dal browser del proprietario | [token_sessions.py](../backend/token_sessions.py) |
 | Stato di account e organizzazione a ogni richiesta | Sospensioni che varrebbero solo al login successivo | [auth_dependency.py](../backend/auth_dependency.py) |
 
+## Le difese sulla pagina
+
+Le difese di sopra proteggono la sessione da chi la vuole rubare da fuori.
+Questa protegge dal caso opposto, cioè da codice che gira **dentro** la pagina,
+e nasce da una constatazione: il cookie `HttpOnly` protegge il token, non la
+sessione. Uno script iniettato non può portarsi via il cookie, ma non ne ha
+bisogno: gira nella pagina, e ogni `fetch` che scrive parte col cookie
+attaccato dal browser. Potrebbe leggere le trascrizioni e mandarle altrove, e
+il session binding non se ne accorgerebbe, perché è lo stesso browser dallo
+stesso indirizzo.
+
+Gli header stanno tutti in [caddy/Caddyfile](../caddy/Caddyfile), in un blocco
+solo, perché di lì passa tutto: la React servita da nginx, l'API, e i ritratti
+degli avatar sotto `/static`.
+
+| Header | Contro cosa |
+| --- | --- |
+| `Content-Security-Policy` | Codice caricato da fuori, e dati mandati fuori. `script-src 'self'` toglie il primo, `connect-src 'self'` toglie l'uscita ai secondi |
+| `X-Content-Type-Options: nosniff` | Che il browser decida da sé che un file caricato da un utente è qualcosa di diverso da come è dichiarato |
+| `Referrer-Policy` | Che gli indirizzi, che contengono id di conversazioni e percorsi, finiscano su un sito esterno |
+| `Permissions-Policy` | Che qualcosa di diverso dall'applicazione chieda il microfono |
+| `frame-ancestors 'none'` (dentro la CSP) | Il clickjacking sui gesti distruttivi dell'area di amministrazione |
+| `Strict-Transport-Security` | Il primo collegamento in chiaro, su cui i cookie `Secure` non viaggerebbero |
+
+**Oggi non stanno tappando un buco, ed è giusto dirlo.** Nel frontend non c'è
+nessun `dangerouslySetInnerHTML`, non c'è un renderer di markdown e non c'è
+nessuno script di terze parti, quindi il testo che scrivono le persone e quello
+che scrive il modello passano tutti dall'escaping di React. La CSP serve a
+rendere **non sfruttabile** la falla che nascerebbe il giorno in cui qualcuno,
+per mostrare in grassetto una parola di una valutazione, aggiunge un renderer
+che accetta HTML.
+
+Le quattro deroghe alla policy sono tutte pezzi di questa applicazione, e vanno
+sapute prima di stringerla ancora:
+
+| Deroga | Perché |
+| --- | --- |
+| `script-src blob:` | Il worklet che ricampiona il microfono è scritto inline e caricato da un `blob:` ([voiceCall.ts](../frontend/src/services/voiceCall.ts)). Senza, non parte la chiamata vocale |
+| `media-src blob:` | La registrazione di una chiamata e l'anteprima di una voce si ascoltano da un `blob:` |
+| `style-src 'unsafe-inline'` | Ci sono attributi `style` calcolati (l'anello di avanzamento, la mappa dei percorsi). `style-src-elem` resta chiuso su `'self'`, quindi i fogli di stile veri possono arrivare solo da qui |
+| `img-src data:` | Icone inline |
+
+La riga da guardare per prima toccando la policy è `connect-src 'self'`, perché
+copre anche il **WebSocket** della chiamata, che sta sulla stessa origine: a
+romperla si rompe la telefonata e non la pagina, che è il modo in cui un guasto
+si scopre tardi. Il modo prudente di cambiarla è
+`Content-Security-Policy-Report-Only`, che fa scrivere al browser quello che
+avrebbe bloccato senza bloccarlo.
+
+**HSTS solo su un dominio vero.** Su `localhost` il browser si ricorderebbe per
+un anno di forzare HTTPS su tutto quello che gira lì, compresi gli altri
+progetti sulla stessa macchina di chi prova lo stack in locale.
+
+**I caratteri sono serviti dall'applicazione**, non presi da Google a ogni
+pagina ([index.css](../frontend/src/index.css)). Era l'unica richiesta a un
+dominio di terzi rimasta, e ne toglie tre problemi in uno: l'indirizzo IP di
+chi si allena non arriva più a un fornitore che nessuno ha dichiarato (vedi
+[gdpr.md](gdpr.md)), la CSP resta chiusa su `'self'` per stili e caratteri, e
+un CDN irraggiungibile non può più cambiare l'aspetto dell'applicazione.
+
+Che gli header ci siano davvero, su tutte e due le strade, lo verifica lo smoke
+test della CI a ogni giro: uno che sparisce non fa rumore, perché la pagina
+continua a funzionare esattamente come prima.
+
+## Altre due difese lontane dal login
+
 Due altre difese stanno lontano dal login e vale la pena nominarle:
 
 - **i ritratti degli avatar** vengono riconosciuti dai **byte iniziali** del

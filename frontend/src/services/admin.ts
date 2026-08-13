@@ -258,6 +258,26 @@ export const previewPersonaPrompt = (profile: Record<string, string>, channel: P
     body: { profile, channel },
   })
 
+/** Da dove nasce una bozza di scheda: un caso raccontato, o una conversazione
+ *  vera già anonimizzata da chi la incolla. Sono due lavori diversi per il
+ *  modello, non due modi di dire la stessa cosa (vedi backend/persona_draft). */
+export type PersonaDraftSource = 'descrizione' | 'conversazione'
+
+export interface PersonaDraftPayload {
+  text: string
+  source: PersonaDraftSource
+  /** Facoltativo: se c'è guida la scheda, se manca lo decide il modello. */
+  difficulty?: string
+}
+
+/** Una bozza di scheda persona. Non salva niente: torna al form, e a
+ *  decidere cosa tenerne è la persona che l'ha chiesta. */
+export const draftPersona = (payload: PersonaDraftPayload) =>
+  apiFetch<{ profile: Record<string, string> }>('/api/admin/avatars/draft', {
+    method: 'POST',
+    body: payload,
+  })
+
 export interface VoiceOption {
   id: string
   name: string

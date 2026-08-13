@@ -44,8 +44,8 @@ export function avatarFormFrom(avatar: AdminAvatar): AvatarFormState {
   }
 }
 
-/* Le tre regole che il server non conosce, nell'ordine in cui vanno dette a
- * chi sta compilando. Il nome o il cognome basta uno dei due: certe schede
+/* Le quattro regole che il server non conosce, nell'ordine in cui vanno dette
+ * a chi sta compilando. Il nome o il cognome basta uno dei due: certe schede
  * sono di un cliente di cui si conosce solo il cognome, e pretenderli
  * entrambi vorrebbe dire farne inventare uno. */
 export function avatarFormError(form: AvatarFormState): string {
@@ -58,7 +58,79 @@ export function avatarFormError(form: AvatarFormState): string {
   if (!form.categoryId) {
     return "Seleziona la categoria dell'avatar."
   }
+  if (isExternalImageUrl(form.imageUrl)) {
+    return "Il ritratto deve stare sull'applicazione: carica il file invece di incollare un indirizzo."
+  }
   return ''
+}
+
+/* In quel campo va un percorso di qui, e nient'altro che abbia uno schema
+ * davanti.
+ *
+ * Un ritratto ospitato altrove non si vedrebbe nemmeno, perché la
+ * Content-Security-Policy ammette immagini solo dalla propria origine (vedi
+ * caddy/Caddyfile), e soprattutto sarebbe una richiesta a un dominio di terzi
+ * fatta dal browser di ogni persona che apre la galleria: il suo indirizzo IP
+ * consegnato a qualcuno che nessuno ha dichiarato. È la stessa ragione per
+ * cui i caratteri dell'app non arrivano più da Google (vedi docs/gdpr.md).
+ *
+ * Fuori resta anche un'immagine incollata dentro l'indirizzo stesso, che la
+ * policy mostrerebbe: è una colonna di testo, e un ritratto ci starebbe
+ * dentro per intero. Il file caricato passa invece dal controllo dei byte
+ * iniziali del backend, che ammette solo PNG, JPEG e WebP. */
+export function isExternalImageUrl(imageUrl: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(imageUrl.trim())
+}
+
+export interface DraftMerge {
+  profile: Record<string, string>
+  /** Le chiavi scritte da questa bozza: sono quelle che la prossima potrà sostituire. */
+  draftedKeys: string[]
+  /** Quanti campi ha riempito, per dirlo a chi ha premuto. */
+  written: number
+  /** Quanti ne ha lasciati stare perché scritti a mano. */
+  kept: number
+}
+
+/* Una bozza entra nella scheda senza cancellare il lavoro di nessuno.
+ *
+ * La regola è una sola: la bozza scrive nei campi vuoti e nei campi che
+ * aveva scritto lei, mai in quelli scritti a mano. Le due metà servono a due
+ * cose diverse, e senza la seconda la funzionalità avrebbe un vicolo cieco.
+ *
+ * Senza la prima metà, rigenerare da un caso raccontato meglio non
+ * cambierebbe niente: la scheda è già piena della bozza di prima, e chi non
+ * è soddisfatto dovrebbe svuotare settanta campi a mano per riprovare.
+ * Senza la seconda, una rigenerazione porterebbe via le correzioni appena
+ * fatte, cioè la parte per cui esiste la revisione umana.
+ *
+ * Da qui la memoria di quali chiavi vengono dalla bozza: un campo corretto a
+ * mano esce da quell'elenco (lo toglie chi scrive nel campo, vedi
+ * AvatarFormModal) e da quel momento è intoccabile. */
+export function applyDraft(
+  profile: Record<string, string>,
+  draft: Record<string, string>,
+  draftedKeys: string[],
+): DraftMerge {
+  const dallaBozza = new Set(draftedKeys)
+  const next = { ...profile }
+  const written: string[] = []
+  let kept = 0
+
+  for (const [key, value] of Object.entries(draft)) {
+    const scrittoAMano = Boolean((profile[key] ?? '').trim()) && !dallaBozza.has(key)
+    if (scrittoAMano) {
+      // Contato solo se la bozza aveva qualcosa da dire su quel campo:
+      // "ne ho lasciati stare dodici" deve voler dire dodici proposte
+      // scartate, non dodici caselle che la bozza aveva comunque vuote.
+      if (value.trim()) kept += 1
+      continue
+    }
+    next[key] = value
+    if (value.trim()) written.push(key)
+  }
+
+  return { profile: next, draftedKeys: written, written: written.length, kept }
 }
 
 /** Quello che si manda al server: i campi vuoti viaggiano come null. */

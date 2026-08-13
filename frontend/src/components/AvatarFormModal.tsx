@@ -21,9 +21,16 @@ import { getAvatarImageUrl } from '../services/api'
 import type { AdminAvatar } from '../services/admin'
 import { fetchVoicePreview } from '../services/admin'
 import type { AvatarFormState } from './avatarForm'
-import { avatarFormError, avatarFormFrom, avatarPayload, emptyAvatarForm } from './avatarForm'
+import {
+  applyDraft,
+  avatarFormError,
+  avatarFormFrom,
+  avatarPayload,
+  emptyAvatarForm,
+} from './avatarForm'
 import { ALL_PROFILE_KEYS, countFilled, missingEssentials } from './avatarProfileConfig'
 import AvatarProfileSections from './AvatarProfileSections'
+import PersonaDraftModal from './PersonaDraftModal'
 import { fieldCls, inputCls, inputWrapperCls, labelCls, textareaCls } from './Field'
 import FormError from './FormError'
 import IconButton from './IconButton'
@@ -62,6 +69,15 @@ export default function AvatarFormModal({
   const [voicePreviewError, setVoicePreviewError] = useState('')
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
   const [showPromptPreview, setShowPromptPreview] = useState(false)
+  const [showDraft, setShowDraft] = useState(false)
+  /* Quali campi vengono dalla bozza e non dalle mani di chi compila: è la
+   * memoria che permette di rigenerare senza portare via le correzioni (vedi
+   * applyDraft). Vive qui e non nel form salvato perché riguarda questa
+   * sessione di compilazione e nient'altro: riaprire la scheda di un avatar
+   * salvato la azzera, ed è giusto, perché a quel punto ogni campo è roba
+   * che qualcuno ha deciso di tenere. */
+  const [draftedKeys, setDraftedKeys] = useState<string[]>([])
+  const [draftNotice, setDraftNotice] = useState('')
 
   const createMutation = useCreateAvatar()
   const updateMutation = useUpdateAvatar()
@@ -116,8 +132,26 @@ export default function AvatarFormModal({
     updateMutation.reset()
   }
 
-  const setProfileField = (key: string, value: string) =>
+  /* Toccare un campo lo fa diventare tuo: esce dall'elenco di quelli che
+   * vengono dalla bozza, e da lì in poi una rigenerazione non lo tocca più.
+   * È la metà della regola che protegge le correzioni; l'altra metà, quella
+   * che permette di rigenerare, sta in applyDraft. */
+  const setProfileField = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, profile: { ...prev.profile, [key]: value } }))
+    setDraftedKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : prev))
+  }
+
+  const handleDrafted = (profile: Record<string, string>) => {
+    const merge = applyDraft(form.profile, profile, draftedKeys)
+    setForm((prev) => ({ ...prev, profile: merge.profile }))
+    setDraftedKeys(merge.draftedKeys)
+    setShowDraft(false)
+    setDraftNotice(
+      merge.kept > 0
+        ? `Bozza inserita in ${merge.written} campi. ${merge.kept} li avevi già scritti tu e sono rimasti come stanno.`
+        : `Bozza inserita in ${merge.written} campi. Rileggila prima di salvare: è una proposta, non una scheda finita.`,
+    )
+  }
 
   const handleImageUpload = async (file: File | undefined) => {
     if (!file) return
@@ -208,29 +242,62 @@ export default function AvatarFormModal({
           </strong>{' '}
           ({filledCount} campi su {ALL_PROFILE_KEYS.length})
         </p>
-        <button
-          type="button"
-          className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100"
-          onClick={() => setShowPromptPreview(true)}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {/* Le due cose che si fanno a una scheda senza uscire da qui: farsela
+            scrivere, e leggere cosa ne esce. Nell'ordine in cui capitano. */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-violet-600/30 bg-violet-600/10 px-4 py-2 text-[0.8rem] font-medium text-violet-300 transition hover:bg-violet-600/20 hover:text-violet-200"
+            onClick={() => setShowDraft(true)}
+            disabled={isSaving}
           >
-            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          Anteprima del prompt
-        </button>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z" />
+              <path d="M19 15.5 19.8 17.4 21.7 18.2 19.8 19 19 20.9 18.2 19 16.3 18.2 18.2 17.4 19 15.5Z" />
+            </svg>
+            Genera la scheda
+          </button>
+          <button
+            type="button"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100"
+            onClick={() => setShowPromptPreview(true)}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Anteprima del prompt
+          </button>
+        </div>
       </div>
 
       {formError && <FormError message={formError} />}
+
+      {/* Non è un successo, è un avviso: la scheda adesso è piena di roba che
+          non ha scritto nessuno, e va riletta prima di salvare. */}
+      {draftNotice && (
+        <div className="mb-4 rounded-xl border border-violet-500/25 bg-violet-500/10 px-4 py-2 text-[0.8rem] text-violet-200">
+          {draftNotice}
+        </div>
+      )}
 
       {/* I campi senza cui la simulazione non regge. Un avviso, non un
           blocco: il salvataggio resta possibile perché una scheda si
@@ -462,6 +529,16 @@ export default function AvatarFormModal({
       {/* Anteprima del prompt: legge la scheda in corso, anche non salvata */}
       {showPromptPreview && (
         <PersonaPromptPreview profile={form.profile} onClose={() => setShowPromptPreview(false)} />
+      )}
+
+      {/* La bozza si apre sopra la scheda, e la scheda resta lì dietro: è
+          quello che sta per essere riempito. */}
+      {showDraft && (
+        <PersonaDraftModal
+          difficulty={form.profile.GRADO_DIFFICOLTA ?? ''}
+          onClose={() => setShowDraft(false)}
+          onDrafted={handleDrafted}
+        />
       )}
     </ModalShell>
   )

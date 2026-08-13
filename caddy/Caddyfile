@@ -24,6 +24,78 @@
 {$SITE_ADDRESS} {
 	encode zstd gzip
 
+	# Gli header di sicurezza stanno qui e in nessun altro posto, perché qui
+	# passa tutto: la React servita da nginx, l'API, e i ritratti degli avatar
+	# serviti da /static. Scriverli anche dietro vorrebbe dire due elenchi che
+	# prima o poi non si somigliano più.
+	#
+	# Il senso di questo blocco è uno solo, e vale la pena scriverlo: il
+	# cookie di sessione è HttpOnly, quindi uno script iniettato nella pagina
+	# non può portarselo via, ma non ne ha bisogno. Gira dentro la pagina, e
+	# ogni fetch che scrive parte col cookie attaccato dal browser: potrebbe
+	# leggere le trascrizioni e mandarle altrove senza che il session binding
+	# se ne accorga, perché è lo stesso browser dallo stesso indirizzo. La
+	# CSP è la difesa che si occupa proprio di quel pezzo: 'self' sugli
+	# script toglie il codice di fuori, 'self' su connect-src toglie l'uscita
+	# ai dati.
+	header {
+		# default-src 'self': tutto quello che non è nominato sotto può
+		# venire solo da qui. Le quattro deroghe che seguono sono tutte
+		# pezzi di questa applicazione, e ognuna ha un file che la spiega.
+		#
+		# - script-src blob:  il worklet che ricampiona il microfono è
+		#   scritto inline e caricato da un blob: (frontend/src/services/
+		#   voiceCall.ts). Senza questa deroga non parte il worklet, e
+		#   quindi non parte la chiamata vocale;
+		# - style-src 'unsafe-inline'  ci sono attributi style calcolati
+		#   nel frontend (l'anello di avanzamento, la mappa dei percorsi).
+		#   style-src-elem resta chiuso su 'self', quindi i fogli di stile
+		#   veri possono comunque arrivare solo da qui: la deroga vale per
+		#   gli attributi, che è dove sta il calcolo;
+		# - media-src blob:  la registrazione di una chiamata e l'anteprima
+		#   di una voce si ascoltano da un blob: (CallRecordingPlayer,
+		#   AvatarFormModal);
+		# - img-src data:  le icone inline e i ritratti degli avatar.
+		#
+		# connect-src 'self' copre anche il WebSocket della chiamata, che è
+		# sulla stessa origine (wss://{host}/api/voice/ws): è la riga da
+		# verificare per prima toccando questa policy, perché a romperla si
+		# rompe la telefonata e non la pagina.
+		#
+		# font-src 'self' e nessun dominio esterno: i caratteri sono serviti
+		# da qui (vedi il commento in frontend/src/index.css).
+		Content-Security-Policy "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; font-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+
+		# I ritratti degli avatar sono file caricati da una persona e serviti
+		# dalla stessa origine dell'applicazione. Il backend li riconosce già
+		# dai byte iniziali e ammette solo PNG, JPEG e WebP: questa riga è la
+		# seconda serratura, quella che vale il giorno in cui la prima venisse
+		# allentata, perché impedisce al browser di decidere da sé che un file
+		# è qualcosa di diverso da come è dichiarato.
+		X-Content-Type-Options nosniff
+
+		# Gli indirizzi contengono id di conversazioni e di percorsi. È anche
+		# il default dei browser di oggi: scriverlo lo fissa invece di
+		# ereditarlo.
+		Referrer-Policy strict-origin-when-cross-origin
+
+		# Il microfono è il solo permesso che questa applicazione chiede, e
+		# lo chiede solo lei. Tutto il resto è chiuso: se un giorno la pagina
+		# ospitasse qualcosa di terzi, quel qualcosa non potrebbe domandare
+		# il microfono all'utente.
+		Permissions-Policy "microphone=(self), camera=(), geolocation=(), payment=()"
+
+		# La versione del server non aiuta chi la legge, aiuta chi cerca
+		# installazioni con una versione nota.
+		-Server
+	}
+
+	# HSTS solo su un dominio vero. Su localhost il browser si ricorderebbe
+	# di forzare HTTPS su tutto quello che gira lì, compresi gli altri
+	# progetti sulla stessa macchina, e quel ricordo dura un anno.
+	@dominio not host localhost 127.0.0.1
+	header @dominio Strict-Transport-Security "max-age=31536000"
+
 	# Le due strade che portano al backend: l'API (chiamata vocale compresa,
 	# che è un WebSocket e Caddy inoltra senza doverglielo dire) e le
 	# immagini degli avatar.

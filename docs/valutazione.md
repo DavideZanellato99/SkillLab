@@ -206,8 +206,12 @@ Due scelte che spiegano il resto:
 
 - **I caratteri sono quelli dell'app** (Outfit per i titoli, Inter per il testo)
   e stanno in [backend/fonts/](../backend/fonts/), sottoinsieme latino di quelli
-  che il browser prende da Google Fonts, con la loro licenza OFL accanto. Il PDF
-  nasce sul server, dove non c'è nessun Google Fonts da interrogare, e i
+  che il browser riceve dall'applicazione, con la loro licenza OFL accanto. Sono
+  due copie della stessa famiglia e restano tali: qui servono statiche e in
+  formato TTF perché è quello che il generatore di PDF sa incorporare, mentre al
+  browser vanno le versioni variabili in woff2 servite da `/assets` (vedi il
+  commento in [index.css](../frontend/src/index.css)). Nessuna delle due passa
+  da un dominio esterno, e i
   caratteri incorporati sono anche il motivo per cui virgolette caporali, accenti
   e trattini lunghi di un testo scritto da un LLM arrivano sulla pagina come
   sono, invece di finire schiacciati sul latin-1 dei font di sistema. Quello che

@@ -1,5 +1,6 @@
 """Pydantic schemas for request/response validation."""
 
+import re
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from models import (
     SIMULATION_POOL_COUNT,
     SIMULATION_SOURCE_AI,
 )
+from persona_draft import SOURCE_CONVERSATION, SOURCE_DESCRIPTION, SOURCES
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
 
 
@@ -832,6 +834,32 @@ class AdminAvatarPayload(BaseModel):
     organization_id: UUID
     profile: dict
 
+    @field_validator("image_url")
+    @classmethod
+    def _ritratto_sulla_propria_origine(cls, value: str | None) -> str | None:
+        """In questo campo va un percorso di qui, non un indirizzo.
+
+        Un ritratto ospitato altrove non si vedrebbe nemmeno, perché la
+        Content-Security-Policy ammette immagini solo dalla propria origine
+        (vedi ``caddy/Caddyfile``), e soprattutto sarebbe una richiesta a un
+        dominio di terzi fatta dal browser di ogni persona che apre la
+        galleria: il suo indirizzo IP consegnato a qualcuno che non compare
+        in nessuna informativa.
+
+        Fuori resta anche un'immagine incollata dentro l'indirizzo stesso, che
+        la policy mostrerebbe: questa è una colonna di testo, e un ritratto ci
+        starebbe dentro per intero.
+
+        Il form lo dice già a chi compila; qui la regola vale anche per una
+        richiesta che il form non l'ha attraversato.
+        """
+        if value and re.match(r"^[a-z][a-z0-9+.\-]*:", value.strip(), re.IGNORECASE):
+            raise ValueError(
+                "Il ritratto deve stare sull'applicazione: carica il file invece di "
+                "incollare un indirizzo."
+            )
+        return value
+
 
 class AdminAvatarResponse(AuthorshipResponse):
     """Avatar including the full persona sheet — super admin only."""
@@ -888,6 +916,43 @@ class AvatarImageResponse(BaseModel):
     """Public URL of an image just uploaded for an avatar."""
 
     image_url: str
+
+
+class AvatarDraftRequest(BaseModel):
+    """Il caso da cui ricavare una bozza di scheda persona.
+
+    Il minimo di quaranta caratteri non è burocrazia: da tre parole il modello
+    inventa uno scenario suo, che è esattamente quello che chi genera una
+    scheda non vuole. Il massimo tiene dentro una trascrizione lunga senza
+    lasciar passare un manuale intero incollato per sbaglio.
+    """
+
+    text: str = Field(min_length=40, max_length=20_000)
+    # "descrizione" (un caso raccontato) o "conversazione" (una trascrizione
+    # vera, già anonimizzata da chi la incolla): due lavori diversi per il
+    # modello, vedi persona_draft.
+    source: str = SOURCE_DESCRIPTION
+    # Facoltativo: se c'è guida la scheda, se manca lo decide il modello.
+    difficulty: str = ""
+
+    @field_validator("source")
+    @classmethod
+    def _known_source(cls, value: str) -> str:
+        if value not in SOURCES:
+            raise ValueError(
+                f"Fonte non valida: usa '{SOURCE_DESCRIPTION}' o '{SOURCE_CONVERSATION}'."
+            )
+        return value
+
+
+class AvatarDraftResponse(BaseModel):
+    """La bozza, che è una scheda come un'altra e non è ancora un avatar.
+
+    Torna al form e nient'altro: nessuno l'ha salvata, e a decidere cosa
+    tenerne è la persona che l'ha chiesta.
+    """
+
+    profile: dict
 
 
 class AvatarPromptPreviewRequest(BaseModel):

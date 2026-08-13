@@ -78,6 +78,86 @@ causa del problema e l'obiettivo nascosto, cioè la soluzione dell'esercizio.
 L'API di chi studia la toglie, e l'export dei dati personali la esclude
 esplicitamente.
 
+## La bozza scritta dal modello
+
+Settanta campi compilati a mano sono mezz'ora per ogni scenario nuovo, e non
+è la mezz'ora delle cose che contano: quelle sono lo scenario, la vera causa
+e l'obiettivo nascosto, e si scrivono in cinque minuti. Il resto è inventare
+una data di nascita, la professione del coniuge e sette percentuali di
+personalità che devono stare in piedi insieme.
+
+Da `POST /api/admin/avatars/draft` ([persona_draft.py](../backend/persona_draft.py))
+si ottiene una scheda intera a partire da un caso raccontato a parole. **È lo
+stesso giro del simulatore**: una fonte scritta da una persona, una passata
+del modello di ragionamento, una revisione umana, e solo dopo la
+pubblicazione (vedi [simulatore.md](simulatore.md)). Passa da
+`eval_json_completion`, quindi si porta dietro i modelli di riserva e il tempo
+lungo della valutazione.
+
+**Le due fonti non chiedono la stessa cosa al modello**, e sono due prompt
+diversi perché sono due lavori diversi:
+
+| Fonte | Cosa fa il modello |
+| --- | --- |
+| Un caso raccontato | Inventa attorno al caso un cliente completo, con l'unico vincolo che i dettagli non si contraddicano fra loro |
+| Una conversazione vera, già anonimizzata da chi la incolla | **Ricava** dal testo come parla, cosa lo ha portato a scrivere, cosa lo irrita e cosa ha dichiarato, e inventa solo il contorno |
+
+Nel secondo caso inventare al posto di leggere è l'errore, ed è scritto nel
+prompt insieme all'istruzione di sostituire comunque i nomi che dovessero
+essere rimasti nella trascrizione.
+
+**Qui non si salva niente.** La rotta non tocca il database: entra un testo,
+esce un dizionario che torna al form di chi l'ha chiesto. Una scheda generata
+diventa un avatar solo con il salvataggio, che è un'altra richiesta, esattamente
+come le cinquanta domande di una simulazione non si pubblicano da sole.
+
+**Cosa il modello non può scrivere.** Le chiavi che non appartengono alla
+scheda vengono buttate, le percentuali prendono la forma `60%`, il grado la
+forma `8/10`, i valori a scelta tornano sull'elenco chiuso quando ci
+somigliano. E i marcatori di vuoto valgono vuoto, qui come nel prompt: il
+modello è istruito a lasciare vuoto un campo che non si applica, e la
+normalizzazione è la rete sotto.
+
+Se manca uno fra scenario, vera causa, emozione iniziale e obiettivo nascosto,
+la risposta è **fallita** e si passa al modello di riserva, come per un JSON
+illeggibile. Sono i quattro campi per cui vale la pena generare una scheda:
+consegnarla senza vorrebbe dire farla completare a mano proprio dove costa di
+più.
+
+Che ogni campo generato sia un campo che il prompt del roleplay legge davvero
+non è affidato all'attenzione di chi ne aggiunge uno: lo verifica un test, che
+riempie la scheda di sentinelle e le cerca nel prompt reso su tutti e due i
+canali. L'unica eccezione, dichiarata nel test, è il grado di difficoltà, che
+non entra nel prompt perché non è una cosa che il personaggio sa di sé, è la
+targhetta che lo studente legge in galleria.
+
+### Come la bozza entra nella scheda
+
+Il form riceve la proposta e la fa entrare con una regola sola
+([applyDraft](../frontend/src/components/avatarForm.ts)): **scrive nei campi
+vuoti e in quelli che aveva scritto lei, mai in quelli scritti a mano.**
+
+Le due metà servono a due cose diverse, e senza una delle due la funzionalità
+avrebbe un vicolo cieco. Senza la prima, rigenerare da un caso raccontato
+meglio non cambierebbe niente, perché la scheda è già piena della bozza di
+prima e bisognerebbe svuotare settanta campi a mano per riprovare. Senza la
+seconda, una rigenerazione porterebbe via le correzioni appena fatte, cioè la
+parte per cui la revisione umana esiste.
+
+Da qui la memoria di quali campi vengono dalla bozza, che vive nel form aperto
+e non nel database: toccare un campo lo fa uscire da quell'elenco, e da quel
+momento è intoccabile. Riaprire la scheda di un avatar salvato la azzera, ed è
+giusto, perché a quel punto ogni campo è roba che qualcuno ha deciso di
+tenere.
+
+Dopo l'inserimento il form lo dice con parole precise, quanti campi sono stati
+riempiti e quanti sono stati lasciati stare, e ricorda che è una proposta da
+rileggere. Non è un messaggio di successo: la scheda in quel momento è piena
+di roba che non ha scritto nessuno.
+
+**Il testo che si incolla arriva a OpenAI**, ed è un destinatario in più
+rispetto a prima: vedi [gdpr.md](gdpr.md), sezione 6.
+
 ## Da scheda a prompt
 
 [persona_prompt.py](../backend/persona_prompt.py) è puro templating di

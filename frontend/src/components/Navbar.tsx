@@ -6,6 +6,7 @@ import { PublicNavLinks, PublicNavMenu } from './public/PublicNav'
 import {
   isSuperAdmin,
   isAdmin,
+  isStandardUser,
   ROLE_LABELS,
   ROLE_BADGE_CLASSES,
   getInitials,
@@ -154,11 +155,11 @@ export default function Navbar() {
                 Simulatore Tecnico
               </Link>
             )}
-            {/* I propri percorsi, per tutti. La composizione e le assegnazioni
-                sono un altro mestiere e stanno nel menu di amministrazione:
-                un admin che riceve un percorso lo percorre da qui come
-                chiunque altro. */}
-            {isAuthenticated && (
+            {/* I propri percorsi, per chi si allena. Chi amministra non ne
+                riceve: compone e assegna dalla gestione percorsi, che sta
+                nel menu del profilo, e questa voce porterebbe a una pagina
+                che il suo ruolo non apre. */}
+            {isAuthenticated && isStandardUser(user) && (
               <Link
                 to="/app/percorsi"
                 className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${

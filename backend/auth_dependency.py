@@ -20,6 +20,7 @@ from models import (
     ALL_ROLES,
     ROLE_ORGANIZATION_ADMIN,
     ROLE_SUPER_ADMIN,
+    ROLE_USER,
     Role,
     User,
 )
@@ -200,6 +201,24 @@ def get_current_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Accesso riservato agli amministratori.",
+        )
+    return current_user
+
+
+def get_current_standard_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Il rovescio di `get_current_admin`: solo il ruolo `user`.
+
+    Serve a quello che si riceve invece di comporlo, cioè i percorsi
+    affidati: chi amministra li scrive e li assegna dalla propria sezione, e
+    la sezione di chi li percorre non è sua. È un 403 e non un elenco vuoto,
+    perché "non ne hai" e "non è roba tua" sono due risposte diverse.
+    """
+    if current_user.ruolo != ROLE_USER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sezione riservata agli account utente.",
         )
     return current_user
 

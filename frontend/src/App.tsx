@@ -135,14 +135,15 @@ function App() {
                   }
                 />
                 {/* I propri percorsi: l'elenco, e il singolo come mappa.
-                    Sono di chiunque sia collegato, admin compresi, perché
-                    riceverne uno non dipende dal ruolo: il server risponde
-                    con quelli di chi chiede, e chi non ne ha trova la
-                    sezione vuota. */}
+                    Sono di chi si allena e di nessun altro: chi amministra
+                    li compone e ne segue l'avanzamento dalla gestione
+                    percorsi, e riceverne uno non è previsto, quindi qui
+                    non ha niente da aprire. Il server dice lo stesso, con
+                    un 403 su `/assignments/me`. */}
                 <Route
                   path="percorsi"
                   element={
-                    <RequireRole access="authenticated">
+                    <RequireRole access="user">
                       <MyPathsPage />
                     </RequireRole>
                   }
@@ -150,7 +151,7 @@ function App() {
                 <Route
                   path="percorsi/:assignmentId"
                   element={
-                    <RequireRole access="authenticated">
+                    <RequireRole access="user">
                       <PathMapPage />
                     </RequireRole>
                   }

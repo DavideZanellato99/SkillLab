@@ -122,6 +122,20 @@ describe('dopo essere entrati', () => {
     expect(screen.getByRole('link', { name: /Dashboard/ })).toBeInTheDocument()
   })
 
+  /* I percorsi affidati sono di chi si allena: chi amministra li compone
+   * dalla gestione percorsi e non ne riceve, quindi la voce non c'è. */
+  it('non mostra i percorsi a un org admin', () => {
+    renderNavbar('organization_admin')
+
+    expect(screen.queryByRole('link', { name: /Percorsi/ })).not.toBeInTheDocument()
+  })
+
+  it('non mostra i percorsi a un super admin', () => {
+    renderNavbar('super_admin')
+
+    expect(screen.queryByRole('link', { name: /Percorsi/ })).not.toBeInTheDocument()
+  })
+
   /* La voce resta accesa anche dentro le pagine figlie: il singolo percorso
    * è dentro i propri percorsi, non accanto, e spegnerla lì farebbe sembrare
    * di essere usciti dalla sezione. */

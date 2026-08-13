@@ -531,6 +531,17 @@ def test_user_sees_who_assigned_the_path(
     assert mine[0]["assigned_by_name"] is None
 
 
+def test_the_paths_of_a_user_are_closed_to_an_admin(org_admin_client):
+    """Il rovescio del test qui sotto: la sezione di chi si allena non è di
+    chi amministra. Un 403 e non una lista vuota, così la risposta del
+    server dice la stessa cosa della pagina che non gli si apre."""
+    assert org_admin_client.get("/api/training/assignments/me").status_code == 403
+
+
+def test_the_paths_of_a_user_are_closed_to_the_super_admin(admin_client):
+    assert admin_client.get("/api/training/assignments/me").status_code == 403
+
+
 def test_composing_and_assigning_are_admin_only(user_client, organization, standard_user):
     composed = user_client.post(
         "/api/training/paths",
@@ -672,6 +683,35 @@ def test_the_super_admin_is_never_assignable(
     )
 
     assert str(super_admin_user.id) not in [u["id"] for u in response.json()]
+
+
+def test_an_organization_admin_is_never_assignable(
+    admin_client, org_admin_user, standard_user, organization
+):
+    """Chi amministra compone i percorsi e non li riceve: la sezione dove si
+    percorrono il suo ruolo non la apre, quindi affidargliene uno sarebbe un
+    incarico che nessuno può svolgere. Il selettore lo dice e ``assign_path``
+    lo rifiuta."""
+    listed = admin_client.get(
+        "/api/training/assignable-users", params={"organization_id": str(organization.id)}
+    ).json()
+
+    assert [u["id"] for u in listed] == [str(standard_user.id)]
+    assert str(org_admin_user.id) not in [u["id"] for u in listed]
+
+
+def test_a_path_cannot_be_assigned_to_an_admin(
+    admin_client, organization, org_admin_user, make_avatar
+):
+    path = _create_path(admin_client, organization, [_avatar_step(make_avatar(category="clienti"))])
+
+    response = admin_client.post(
+        "/api/training/assignments",
+        json={"path_id": path["id"], "user_ids": [str(org_admin_user.id)]},
+    )
+
+    assert response.status_code == 400
+    assert admin_client.get("/api/training/assignments").json() == []
 
 
 def test_assignable_users_of_another_tenant_are_not_listed(

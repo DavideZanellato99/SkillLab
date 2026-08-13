@@ -1,17 +1,23 @@
 import type { ReactElement } from 'react'
 import { Navigate } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
-import { isAdmin, isSuperAdmin, type AuthUser } from '../services/auth'
+import { isAdmin, isStandardUser, isSuperAdmin, type AuthUser } from '../services/auth'
 
 /**
- * Minimum role a route requires. Every route in App.tsx declares one
- * explicitly, so a new page can't slip in without an access decision.
+ * Role a route requires. Every route in App.tsx declares one explicitly, so
+ * a new page can't slip in without an access decision.
+ *
+ * Non è una scala: `user` non è il gradino più basso di `admin`, è l'altro
+ * lato. Le pagine di chi si allena sono chiuse a chi amministra tanto
+ * quanto quelle di amministrazione lo sono a chi si allena.
  */
-export type RouteAccess = 'authenticated' | 'admin' | 'super_admin'
+export type RouteAccess = 'authenticated' | 'user' | 'admin' | 'super_admin'
 
 const ACCESS_CHECKS: Record<RouteAccess, (user: AuthUser | null) => boolean> = {
   /** Any logged in user, whatever the role. */
   authenticated: (user) => user !== null,
+  /** Solo il ruolo `user`: quello che si riceve invece di comporlo. */
+  user: isStandardUser,
   /** Super admin or organization admin: read only admin views. */
   admin: isAdmin,
   /** Super admin only: everything that writes tenant wide data. */

@@ -72,8 +72,16 @@ esistono, e chi compone il percorso li sta guardando nel proprio pannello,
 solo non sono qualcosa che si possa svolgere. E una tappa che nessuno può
 superare non è un dettaglio, perché terrebbe chiuse tutte quelle dopo di lei.
 
-**Chi può ricevere un percorso.** Gli utenti attivi di quel tenant, super
-admin escluso perché non appartiene a nessuno. Lo stesso percorso non si
+**Chi può ricevere un percorso.** Gli account attivi di quel tenant che hanno
+il ruolo `user`, cioè chi si allena. I due ruoli di amministrazione restano
+fuori: il super admin perché non appartiene a nessun tenant, l'organization
+admin perché la sezione da cui un percorso si svolge non è sua, e affidargliene
+uno vorrebbe dire scrivere un incarico che il destinatario non può nemmeno
+aprire. La stessa regola vale in `GET /assignable-users`, che alimenta il
+selettore, e in `POST /assignments`, che risponde 400 a un id di
+amministratore. Le assegnazioni finite su un admin prima di questa regola
+restano dove sono, ma non si annunciano più e non si aprono: si ritirano dalla
+gestione percorsi come qualsiasi altra. Lo stesso percorso non si
 affida due volte alla stessa persona, e chi ce l'ha già viene **lasciato
 stare** invece che far fallire la richiesta: selezionare tutta
 l'organizzazione e assegnare ai tre nuovi arrivati è il gesto normale, e un
@@ -151,9 +159,14 @@ stanno attorno.
 ([MyPathsPage](../frontend/src/components/MyPathsPage.tsx)), che è l'elenco dei
 propri, e da lì entra nel singolo
 ([PathMapPage](../frontend/src/components/PathMapPage.tsx)). La voce in barra è
-di **chiunque sia collegato**, admin compresi: ricevere un percorso non dipende
-dal ruolo, e comporne uno è un altro mestiere, che sta nel menu di
-amministrazione.
+**del solo ruolo `user`**: comporre e assegnare è un altro mestiere, sta nel
+menu di amministrazione, e chi lo fa non riceve percorsi. La chiusura è in
+tutti e tre i punti, perché nasconderla in barra non basta: le rotte
+`/app/percorsi` chiedono `access="user"` a
+[RequireRole](../frontend/src/components/RequireRole.tsx), e
+`GET /api/training/assignments/me` passa da `get_current_standard_user`, che a
+un admin risponde **403 e non una lista vuota** — "non ne hai" e "non è roba
+tua" sono due risposte diverse.
 
 **Ogni percorso porta la firma di chi l'ha affidato**, nome e cognome e data,
 in coda alla scheda dell'elenco e sotto il titolo nella mappa

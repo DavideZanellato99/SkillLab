@@ -136,9 +136,11 @@ proposito, e perché.
 
 ## Il lato frontend
 
-Le rotte dichiarano il ruolo minimo con
-[RequireRole](../frontend/src/components/RequireRole.tsx), e su un ruolo
-insufficiente si viene rimandati alla home con `replace`.
+Le rotte dichiarano il ruolo che richiedono con
+[RequireRole](../frontend/src/components/RequireRole.tsx), e su un ruolo che
+non corrisponde si viene rimandati alla home con `replace`. Non è una scala:
+`/app/percorsi` chiede `user`, e i due ruoli di amministrazione ne restano
+fuori quanto uno studente resta fuori dalla dashboard.
 
 Va letto per quello che è: **comodità di navigazione, non sicurezza**. Il
 controllo vero è nelle dipendenze del backend e nei filtri di riga descritti

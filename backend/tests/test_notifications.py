@@ -218,6 +218,22 @@ def test_a_withdrawn_path_takes_its_notifications_with_it(
     assert user_client.get("/api/notifications").json()["items"] == []
 
 
+def test_a_path_left_on_an_admin_announces_nothing(
+    client, act_as, org_admin_user, make_avatar, make_assigned_path
+):
+    """I percorsi sono di chi si allena, e un admin non ne riceve più.
+
+    Le righe rimaste in piedi da prima di questa regola restano nel
+    database, ma non si annunciano: la loro notifica porterebbe a
+    `/app/percorsi`, che il suo ruolo non apre.
+    """
+    make_assigned_path(org_admin_user, [{"avatar": make_avatar()}])
+
+    act_as(org_admin_user)
+
+    assert client.get("/api/notifications").json()["items"] == []
+
+
 # ── Revisione del docente ─────────────────────────────
 
 

@@ -35,12 +35,12 @@ from sqlalchemy.orm import Session, selectinload
 import audit
 from auth_dependency import (
     get_current_admin,
-    get_current_user,
+    get_current_standard_user,
     resolve_admin_scope,
 )
 from database import get_db
 from models import (
-    ROLE_SUPER_ADMIN,
+    ROLE_USER,
     SIMULATION_STATUS_PUBLISHED,
     USER_STATUS_ACTIVE,
     Avatar,
@@ -506,8 +506,12 @@ def assignable_users(
     è assegnabile, invece che il frontend ne tenga una copia libera di
     divergere: un percorso è privato al suo tenant, quindi non si affida
     fuori, e un account sospeso non potrebbe nemmeno accedere per
-    percorrerlo. Il super admin resta fuori perché non appartiene a nessun
-    tenant.
+    percorrerlo.
+
+    Solo il ruolo `user`, cioè chi si allena. Gli amministratori compongono
+    i percorsi e ne seguono l'avanzamento, ma non hanno la sezione in cui
+    percorrerli: affidarne uno a loro vorrebbe dire scrivere un incarico
+    che il destinatario non può nemmeno aprire.
 
     Un organization admin non nomina il tenant: ``resolve_admin_scope`` lo
     fissa al proprio, quindi un `organization_id` che punta altrove viene
@@ -526,7 +530,7 @@ def assignable_users(
         .filter(
             User.organization_id == scope_org_id,
             User.status == USER_STATUS_ACTIVE,
-            Role.name != ROLE_SUPER_ADMIN,
+            Role.name == ROLE_USER,
         )
         .order_by(User.cognome.asc(), User.nome.asc())
         .all()
@@ -539,10 +543,16 @@ def assignable_users(
 
 @router.get("/assignments/me", response_model=list[TrainingPathAssignmentResponse])
 def my_assignments(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_standard_user),
     db: Session = Depends(get_db),
 ):
-    """I percorsi di chi guarda, con il progresso, i più recenti in cima."""
+    """I percorsi di chi guarda, con il progresso, i più recenti in cima.
+
+    Solo per il ruolo `user`: un admin non ne riceve, e la sezione da cui
+    si percorrono non esiste per lui. Chiedere qui è quindi un 403 e non
+    una lista vuota, la stessa risposta che dà la pagina che non gli si
+    apre.
+    """
     assignments = (
         _loaded_assignments(db)
         .filter(TrainingPathAssignment.user_id == current_user.id)
@@ -589,9 +599,11 @@ def assign_path(
 ):
     """Affida un percorso a una o più persone, una riga ciascuna.
 
-    Tutte devono appartenere all'organizzazione del percorso: le sue tappe
-    puntano ad avatar e simulazioni di quel tenant, quindi fuori sarebbe un
-    percorso fatto di cose che l'utente non può nemmeno vedere.
+    Tutte devono avere il ruolo `user` e appartenere all'organizzazione del
+    percorso: le tappe puntano ad avatar e simulazioni di quel tenant,
+    quindi fuori sarebbe un percorso fatto di cose che l'utente non può
+    nemmeno vedere, e su un account amministratore sarebbe un incarico
+    senza la sezione in cui svolgerlo.
 
     Chi ce l'ha già viene lasciato stare invece di essere rifiutato:
     selezionare tutta l'organizzazione e affidare il percorso ai tre nuovi
@@ -605,6 +617,11 @@ def assign_path(
     if len(users) != len(unique_ids):
         raise HTTPException(status_code=404, detail="Uno o più utenti non trovati.")
     for user in users:
+        if user.ruolo != ROLE_USER:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{user.email} amministra: un percorso si affida a chi si allena.",
+            )
         if user.organization_id != path.organization_id:
             raise HTTPException(
                 status_code=400,

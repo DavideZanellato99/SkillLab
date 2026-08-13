@@ -43,7 +43,7 @@ portasse un link dipendeva da chi lo apriva.
 | --- | --- | --- |
 | `/app` | autenticato | Galleria degli avatar, con sopra i propri obiettivi |
 | `/app/chat/:avatarId` | autenticato | Chiamata e chat con un avatar |
-| `/app/percorsi`, `/app/percorsi/:assignmentId` | autenticato | I propri percorsi di training, e il singolo come mappa |
+| `/app/percorsi`, `/app/percorsi/:assignmentId` | user | I propri percorsi di training, e il singolo come mappa |
 | `/app/confronto` | autenticato | Confronto fra i propri tentativi (per un admin, quelli di una persona del proprio tenant) |
 | `/app/simulatore`, `/app/simulatore/:id` | autenticato | Elenco dei test tecnici e svolgimento |
 | `/app/profile` | autenticato | Profilo, password, export dei propri dati |
@@ -51,8 +51,13 @@ portasse un link dipendeva da chi lo apriva.
 | `/app/admin`, `/app/admin/organizations`, `/app/admin/avatars`, `/app/admin/simulations`, `/app/admin/logs` | super admin | Utenti, organizzazioni, avatar, simulazioni, registro |
 
 Il gate è [RequireRole](../frontend/src/components/RequireRole.tsx), che su un
-ruolo insufficiente rimanda a `/app` con `replace`, così l'indirizzo bloccato
-non lascia nemmeno una voce nella cronologia.
+ruolo che non corrisponde rimanda a `/app` con `replace`, così l'indirizzo
+bloccato non lascia nemmeno una voce nella cronologia.
+
+L'accesso non è una scala: `user` non è il gradino più basso di `admin`, è
+l'altro lato. I percorsi affidati sono chiusi a chi amministra esattamente
+come le pagine di amministrazione lo sono a chi si allena, e la voce in barra
+sparisce insieme alla rotta.
 
 I link che il backend mette nelle notifiche
 ([notifications.py](../backend/notifications.py)) sono percorsi di quest'area,

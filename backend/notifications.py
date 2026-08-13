@@ -31,6 +31,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models import (
+    ROLE_USER,
     Avatar,
     ChatConversation,
     ConversationReview,
@@ -128,6 +129,13 @@ def _assignment_items(db: Session, user: User) -> list[NotificationItem]:
     arriva, la tappa quando si apre, la sua scadenza mentre è aperta o
     quando è passata, e il percorso quando si chiude.
     """
+    # I percorsi sono di chi si allena: un admin non ne riceve più, e la
+    # pagina dove si percorrono il suo ruolo non la apre. Le righe rimaste
+    # da prima di questa regola restano nel database senza annunciarsi:
+    # una notifica che porta dove non si può andare è peggio del silenzio.
+    if user.ruolo != ROLE_USER:
+        return []
+
     # Local import: routers/training pulls in the whole FastAPI stack, and
     # this module is also used by plain queries in the tests.
     from routers.training import _assignment_responses, _loaded_assignments

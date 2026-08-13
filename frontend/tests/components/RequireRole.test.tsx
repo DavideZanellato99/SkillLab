@@ -66,6 +66,28 @@ describe('RequireRole', () => {
     expect(screen.getByText('Home')).toBeInTheDocument()
   })
 
+  it('lets a plain user into a user route', () => {
+    signedInAs('user')
+    renderGuardedRoute('user')
+    expect(screen.getByText('Contenuto riservato')).toBeInTheDocument()
+  })
+
+  /* `user` non è il gradino più basso della scala: le pagine di chi si
+     allena, come i percorsi affidati, sono chiuse a chi amministra. */
+  it('redirects an organization admin away from a user route', () => {
+    signedInAs('organization_admin')
+    renderGuardedRoute('user')
+    expect(screen.queryByText('Contenuto riservato')).not.toBeInTheDocument()
+    expect(screen.getByText('Home')).toBeInTheDocument()
+  })
+
+  it('redirects a super admin away from a user route', () => {
+    signedInAs('super_admin')
+    renderGuardedRoute('user')
+    expect(screen.queryByText('Contenuto riservato')).not.toBeInTheDocument()
+    expect(screen.getByText('Home')).toBeInTheDocument()
+  })
+
   it('lets a plain user into an authenticated route', () => {
     signedInAs('user')
     renderGuardedRoute('authenticated')

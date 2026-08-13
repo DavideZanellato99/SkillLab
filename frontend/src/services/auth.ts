@@ -63,6 +63,12 @@ export function isAdmin(user: AuthUser | null): boolean {
   return user?.ruolo === 'super_admin' || user?.ruolo === 'organization_admin'
 }
 
+/* Solo chi si allena: i percorsi affidati sono suoi, e chi amministra li
+ * compone dalla propria sezione senza riceverne. */
+export function isStandardUser(user: AuthUser | null): boolean {
+  return user?.ruolo === 'user'
+}
+
 /** Two-letter initials for an avatar badge (first name + last name); falls back to the email's first letter. */
 export function getInitials(nome: string, cognome: string, email: string): string {
   const initials = `${nome?.trim()?.[0] ?? ''}${cognome?.trim()?.[0] ?? ''}`.toUpperCase()

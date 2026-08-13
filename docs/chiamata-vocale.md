@@ -191,10 +191,20 @@ flowchart TD
     E -->|no| C
 ```
 
-Un turno normale, che finisce con un punto, non paga niente. Il cronometro del
-turno resta ancorato al **primo** commit del gruppo, così la latenza misurata
-comprende anche l'attesa di grazia e non racconta una storia più bella di
-quella vera.
+Un turno normale, che finisce con un punto, non paga niente.
+
+I pezzi si riuniscono con `_join_transcript`, che non si limita a metterci uno
+spazio: ElevenLabs taglia dove arriva al proprio limite, e quel limite non
+guarda dove finiscono le parole, quindi "provvediamo a bloccar" più "li, ne
+riceverà nuovi" con uno spazio in mezzo darebbe al modello una parola che non
+esiste. La cucitura si chiude quando il taglio sembra caduto dentro una parola,
+cioè quando l'ultimo frammento è minuscolo, finisce in consonante e non è una
+delle poche tronche italiane. I frammenti con l'iniziale maiuscola restano
+staccati, così i cognomi non vengono saldati a quello che segue.
+
+Il cronometro del turno resta ancorato al **primo** commit del gruppo, ma il
+tempo in cui l'operatore stava ancora parlando finisce nella voce `attesa` e
+non nell'attesa che gli si attribuisce: vedi [Le misure](#le-misure).
 
 Un commit che arriva mentre un turno è già in volo è invece un **barge in**: il
 turno in corso viene annullato, il contesto Cartesia cancellato, e al browser
@@ -228,16 +238,33 @@ così una risposta lenta si attribuisce invece di indovinarla:
 
 | Segmento | Da dove a dove |
 | --- | --- |
-| `vad` | Ultimo parziale, cioè quando l'operatore ha smesso di parlare, fino al commit |
-| `prep` | Commit fino alla richiesta al modello |
+| `vad` | Ultimo parziale con parole nuove, cioè quando l'operatore ha smesso di parlare, fino al commit |
+| `attesa` | Primo commit del gruppo fino all'ultimo, solo sui turni che la STT ha spezzato |
+| `prep` | Ultimo commit fino alla richiesta al modello |
 | `llm_ttft` | Richiesta fino al primo token. È il pezzo dominante |
 | `tok2tts` | Primo token fino al primo invio alla sintesi |
 | `cartesia` | Invio fino al primo audio ricevuto |
 | `send` | Primo audio fino all'uscita verso il browser |
+| `slot_cartesia` | Primo invio fino alla chiusura del contesto, solo nel riepilogo |
 
-Il numero che riassume tutto è `percepita`, cioè `vad` più il tratto dal commit
-al primo audio. Non comprende il cuscinetto di riproduzione del browser, che
-aggiunge un altro pezzo fisso.
+Il numero che riassume tutto è `percepita`, cioè `vad` più il tratto dall'ultimo
+commit al primo audio. Non comprende il cuscinetto di riproduzione del browser,
+che aggiunge un altro pezzo fisso.
+
+Due dettagli che nascono da misure sbagliate viste sul campo, e che sono il
+motivo per cui queste righe si leggono così:
+
+- **il silenzio si conta dai parziali con parole nuove.** ElevenLabs continua a
+  rimandare lo stesso parziale mentre l'operatore tace già: prendere per buono
+  l'ultimo in ordine di tempo riduceva ogni silenzio misurato alla distanza fra
+  due parziali gemelli, duecento millesimi contro una soglia VAD di un secondo e
+  mezzo;
+- **un turno spezzato ha due orologi.** `commit->audio` parte dal primo commit e
+  dice quanto è costata l'aggregazione da capo a fondo; `risposta` parte
+  dall'ultimo e dice quanto ha lavorato la pipeline. Senza la distinzione, un
+  turno in cui l'operatore ha parlato ininterrottamente per quattordici secondi
+  si presentava come diciassette secondi di ritardo che nessuno ha mai vissuto.
+  `risposta` compare nella riga solo quando i due numeri differiscono.
 
 Si accende con `VOICE_LATENCY_LOG=1` e si aggrega con
 [loadtest/report.py](../loadtest/report.py), che dà mediana, p95 e massimo per
@@ -245,7 +272,35 @@ stadio. Vale anche sul traffico vero, non solo sotto prova.
 
 C'è anche `VOICE_STT_DEBUG`, che stampa il tracciato grezzo della STT: serve a
 tarare la VAD, ma scrive nei log quello che le persone dicono, quindi in
-produzione va spento.
+produzione va spento. Accende anche `[STT-INVIO]`, una riga ogni cinque secondi
+che confronta i secondi di audio spediti a ElevenLabs con quelli trascorsi. È la
+risposta a una domanda che dal solo tracciato non si può sciogliere: quando le
+trascrizioni arrivano in blocco, coprendo mezzo minuto di parlato tutto insieme,
+dice se l'arretrato si è formato da noi o da loro.
+
+### Quante chiamate stanno dentro uno slot Cartesia
+
+`slot_cartesia` è l'unico segmento che non misura un'attesa: misura
+un'occupazione. Va dal primo pezzo di testo mandato alla sintesi alla
+chiusura del contesto, cioè il tempo in cui il turno tiene occupato uno dei
+pochi slot di concorrenza che il piano concede.
+
+Non è la durata dell'audio. Il browser riproduce per quindici secondi quello
+che la sintesi ha prodotto in due, quindi un piano da cinque sintesi
+simultanee regge molte più di cinque conversazioni. Quante, lo dice la riga
+finale del riepilogo:
+
+```
+slot Cartesia occupato il 9.4% della chiamata, cioè circa 11 chiamate per slot
+```
+
+È una media sulla singola chiamata e non tiene conto delle collisioni, quindi
+è un tetto teorico: quando due turni cadono insieme oltre il limite, Cartesia
+risponde `429` invece di accodare, e il dimensionamento vero vuole margine.
+
+I turni interrotti da un barge in vengono conteggiati nella quota, perché lo
+slot lo hanno occupato davvero, ma sono contati a parte perché una sintesi
+tagliata a metà abbassa la mediana.
 
 ### Quanti slot STT stiamo occupando
 

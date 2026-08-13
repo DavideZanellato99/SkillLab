@@ -105,6 +105,82 @@ def test_senza_misura_del_silenzio_resta_il_solo_tempo_della_pipeline():
     assert timer.perceived_ms == 1200.0
 
 
+# ── Il turno spezzato in più commit ───────────────────────────────────
+
+
+def test_il_tempo_in_cui_l_operatore_parlava_non_conta_come_attesa():
+    """Il caso che rendeva illeggibili i log: la STT taglia una frase lunga a
+    metà, l'operatore continua per quattordici secondi e il turno risultava
+    aver fatto aspettare diciassette secondi che nessuno ha mai vissuto."""
+    timer = _turno(vad_ms=900.0, **{MARK_BROWSER_FIRST_AUDIO: 16000.0})
+    timer.held_ms = 14300.0
+
+    # Il totale resta quello che l'aggregazione è costata da capo a fondo
+    assert timer.total_ms == 16000.0
+    # La risposta è quello che la pipeline ha fatto dall'ultimo commit
+    assert timer.reply_ms == 1700.0
+    assert timer.perceived_ms == 2600.0
+
+
+def test_l_attesa_del_gruppo_non_gonfia_anche_il_primo_stadio():
+    """Il tempo trattenuto ha già la sua voce: contarlo pure in prep lo
+    farebbe sembrare tempo speso a preparare la richiesta, e prep è la voce
+    su cui si andrebbe a cercare un collo di bottiglia che non c'è."""
+    # La richiesta al modello parte 40ms dopo l'ultimo commit, che a sua
+    # volta è arrivato tre secondi dopo il primo del gruppo.
+    timer = _turno(
+        **{
+            MARK_LLM_REQUEST: 3040.0,
+            MARK_LLM_FIRST_TOKEN: 3540.0,
+            MARK_BROWSER_FIRST_AUDIO: 5000.0,
+        }
+    )
+    timer.held_ms = 3000.0
+    stadi = timer.segments()
+
+    assert stadi["attesa"] == 3000.0
+    assert stadi["prep"] == 40.0
+    assert stadi["llm_ttft"] == 500.0
+
+
+def test_un_turno_di_un_commit_solo_non_parla_di_attesa():
+    """La stragrande maggioranza dei turni: una voce in più a zero direbbe
+    che c'è stata un'attesa che non c'è stata."""
+    timer = _turno_completo()
+
+    assert "attesa" not in timer.segments()
+    assert timer.reply_ms == timer.total_ms
+
+
+def test_prendere_un_altro_commit_sposta_il_silenzio_su_quello_nuovo():
+    """Il silenzio del primo commit non è mai esistito: lì l'operatore stava
+    ancora parlando, ed è il commit che chiude davvero il turno a dire
+    quanto ha taciuto."""
+    timer = TurnTimer("t1", vad_ms=900.0)
+    timer.hold(320.0)
+
+    assert timer.vad_ms == 320.0
+    assert timer.held_ms > 0
+
+
+def test_la_riga_di_un_turno_spezzato_distingue_attesa_e_risposta():
+    timer = _turno_completo(turn_id="t6", vad_ms=900.0, totale=16000.0)
+    timer.held_ms = 14300.0
+    riga = timer.format_line()
+
+    assert "attesa=14300" in riga
+    assert "commit->audio=16000ms" in riga
+    assert "risposta=1700ms" in riga
+    assert "percepita=2600ms" in riga
+
+
+def test_la_riga_di_un_turno_normale_non_ripete_due_volte_lo_stesso_numero():
+    riga = _turno_completo(totale=900.0).format_line()
+
+    assert "risposta=" not in riga
+    assert "commit->audio=900ms" in riga
+
+
 # ── Gli stadi ─────────────────────────────────────────────────────────
 
 
@@ -242,6 +318,55 @@ def test_una_chiamata_senza_turni_completati_non_scrive_un_riepilogo_vuoto(
     assert caplog.records == []
 
 
+def test_il_riepilogo_parla_di_attesa_solo_se_qualche_turno_e_stato_spezzato(
+    diagnostica_accesa, caplog
+):
+    """Su una chiamata senza tagli le due righe direbbero lo stesso numero,
+    e una mediana calcolata sugli zeri degli altri turni farebbe sembrare
+    che l'aggregazione costi a tutti."""
+    metriche = CallMetrics()
+    metriche.record(_turno_completo(turn_id="t1"))
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "attesa" not in caplog.text
+    assert "risposta" not in caplog.text
+
+
+def test_il_riepilogo_separa_le_due_misure_quando_un_turno_e_stato_spezzato(
+    diagnostica_accesa, caplog
+):
+    metriche = CallMetrics()
+    spezzato = _turno_completo(turn_id="t1", totale=5000.0)
+    spezzato.held_ms = 4000.0
+    metriche.record(spezzato)
+    metriche.record(_turno_completo(turn_id="t2", totale=1000.0))
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "attesa" in caplog.text
+    assert "risposta" in caplog.text
+
+
+def test_il_confronto_col_primo_turno_guarda_la_risposta_non_il_totale(diagnostica_accesa, caplog):
+    """Serve a vedere se il primo turno paga ancora una connessione fredda:
+    se un turno successivo venisse spezzato dalla STT, il suo totale
+    porterebbe nel confronto i secondi in cui l'operatore parlava e il
+    prewarm sembrerebbe rotto."""
+    metriche = CallMetrics()
+    metriche.record(_turno_completo(turn_id="t1", totale=900.0))
+    spezzato = _turno_completo(turn_id="t2", totale=9000.0)
+    spezzato.held_ms = 8100.0
+    metriche.record(spezzato)
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "primo turno      900ms   contro 900ms di mediana" in caplog.text
+
+
 def test_il_silenzio_compare_nel_riepilogo_solo_se_qualcuno_lo_ha_misurato(
     diagnostica_accesa, caplog
 ):
@@ -254,3 +379,115 @@ def test_il_silenzio_compare_nel_riepilogo_solo_se_qualcuno_lo_ha_misurato(
 
     assert "vad " not in caplog.text
     assert "commit->audio" in caplog.text
+
+
+# ── Lo slot di concorrenza della sintesi ──────────────────────────────
+
+
+@pytest.fixture
+def orologio(monkeypatch):
+    """Un tempo che avanza solo quando glielo si dice.
+
+    Qui si misura un'occupazione, non una latenza: senza un orologio fermo
+    il test misurerebbe quanto ci mette la macchina a eseguirlo.
+    """
+    adesso = {"t": 0.0}
+    monkeypatch.setattr(turn_metrics.time, "perf_counter", lambda: adesso["t"])
+    return adesso
+
+
+def test_lo_slot_dura_dal_primo_invio_alla_chiusura(diagnostica_accesa, orologio, caplog):
+    metriche = CallMetrics()
+    metriche.open_tts_slot("ctx")
+    orologio["t"] = 2.0
+    metriche.close_tts_slot("ctx")
+    metriche.record(_turno_completo())
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "slot_cartesia" in caplog.text
+    assert "mediana   2000ms" in caplog.text
+
+
+def test_gli_invii_successivi_non_riaprono_uno_slot_gia_aperto(
+    diagnostica_accesa, orologio, caplog
+):
+    """Il turno manda alla sintesi una parola per volta: se ogni pezzo
+    facesse ripartire il cronometro, resterebbe misurato solo l'ultimo."""
+    metriche = CallMetrics()
+    metriche.open_tts_slot("ctx")
+    orologio["t"] = 1.5
+    metriche.open_tts_slot("ctx")
+    orologio["t"] = 2.0
+    metriche.close_tts_slot("ctx")
+    metriche.record(_turno_completo())
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "mediana   2000ms" in caplog.text
+
+
+def test_la_quota_dice_quante_chiamate_stanno_dentro_uno_slot(diagnostica_accesa, orologio, caplog):
+    """Dieci secondi di sintesi su cento di chiamata: uno slot del piano ne
+    regge una decina, ed è questo il numero da confrontare con il piano,
+    non il numero di chiamate."""
+    metriche = CallMetrics()
+    metriche.open_tts_slot("ctx")
+    orologio["t"] = 10.0
+    metriche.close_tts_slot("ctx")
+    metriche.record(_turno_completo())
+    orologio["t"] = 100.0
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "occupato il 10.0% della chiamata" in caplog.text
+    assert "circa 10 chiamate per slot" in caplog.text
+
+
+def test_i_turni_interrotti_si_contano_a_parte(diagnostica_accesa, orologio, caplog):
+    """Una sintesi tagliata da un barge-in ha occupato lo slot per meno del
+    dovuto: la quota resta vera, la mediana va letta sapendolo."""
+    metriche = CallMetrics()
+    metriche.open_tts_slot("ctx")
+    orologio["t"] = 1.0
+    metriche.close_tts_slot("ctx", interrotto=True)
+    metriche.record(_turno_completo())
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "1 turno interrotto prima della fine della sintesi" in caplog.text
+
+
+def test_chiudere_uno_slot_gia_chiuso_non_conta_niente(diagnostica_accesa, orologio, caplog):
+    """Un barge-in cancella il contesto e poco dopo Cartesia risponde
+    comunque con il suo evento: la seconda chiusura non deve raddoppiare
+    l'occupazione né inventare un turno interrotto in più."""
+    metriche = CallMetrics()
+    metriche.open_tts_slot("ctx")
+    orologio["t"] = 1.0
+    metriche.close_tts_slot("ctx", interrotto=True)
+    orologio["t"] = 5.0
+    metriche.close_tts_slot("ctx")
+    metriche.record(_turno_completo())
+    orologio["t"] = 10.0
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "occupato il 10.0% della chiamata" in caplog.text
+    assert "1 turno interrotto" in caplog.text
+
+
+def test_senza_sintesi_misurate_il_riepilogo_non_parla_di_slot(diagnostica_accesa, caplog):
+    metriche = CallMetrics()
+    metriche.record(_turno_completo())
+
+    with caplog.at_level(logging.INFO, logger="turn_metrics"):
+        metriche.report()
+
+    assert "slot_cartesia" not in caplog.text
+    assert "chiamate per slot" not in caplog.text

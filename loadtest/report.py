@@ -17,8 +17,12 @@ import re
 import statistics
 import sys
 
-RIGA = re.compile(r"commit->audio=(\d+)ms percepita=(\d+)ms")
-SEGMENTO = re.compile(r"\b(prep|llm_ttft|tok2tts|cartesia|send)=(\d+)")
+# "risposta" compare solo sui turni che la STT ha spezzato in più commit, dove
+# il totale comprende anche i secondi in cui l'operatore stava ancora parlando.
+# Va tenuto opzionale: darlo per presente scarterebbe i turni normali, darlo per
+# assente scarterebbe proprio quelli lunghi, cioè i più interessanti.
+RIGA = re.compile(r"commit->audio=(\d+)ms (?:risposta=(\d+)ms )?percepita=(\d+)ms")
+SEGMENTO = re.compile(r"\b(attesa|prep|llm_ttft|tok2tts|cartesia|send)=(\d+)")
 ANNULLATO = "ANNULLATO prima dell'audio"
 
 
@@ -44,6 +48,7 @@ def main() -> None:
         sorgente = sys.stdin
 
     totali: list[float] = []
+    risposte: list[float] = []
     percepite: list[float] = []
     segmenti: dict[str, list[float]] = {}
     annullati = 0
@@ -58,8 +63,13 @@ def main() -> None:
             match = RIGA.search(testo)
             if not match:
                 continue
-            totali.append(float(match.group(1)))
-            percepite.append(float(match.group(2)))
+            totale, risposta, percepita = match.groups()
+            totali.append(float(totale))
+            # Sui turni non spezzati le due misure coincidono, ed è giusto che
+            # entrino entrambe: la mediana della risposta deve restare quella
+            # di tutti i turni, non dei soli turni lunghi.
+            risposte.append(float(risposta if risposta else totale))
+            percepite.append(float(percepita))
             for nome, valore in SEGMENTO.findall(testo):
                 segmenti.setdefault(nome, []).append(float(valore))
 
@@ -69,11 +79,14 @@ def main() -> None:
 
     print(f"\nTurni completati: {len(totali)}   annullati: {annullati}\n")
     print("Per stadio della pipeline:")
-    for nome in ("prep", "llm_ttft", "tok2tts", "cartesia", "send"):
+    for nome in ("attesa", "prep", "llm_ttft", "tok2tts", "cartesia", "send"):
         if nome in segmenti:
             print(_riga(nome, segmenti[nome]))
     print("\nQuello che conta:")
     print(_riga("commit->audio", totali))
+    # Solo se qualche turno è stato spezzato: altrove ripeterebbe la riga sopra
+    if "attesa" in segmenti:
+        print(_riga("risposta", risposte))
     print(_riga("PERCEPITA", percepite))
     print()
 

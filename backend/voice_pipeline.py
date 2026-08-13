@@ -46,7 +46,7 @@ from cartesia_service import (
     tts_ws_url,
 )
 from database import SessionLocal
-from elevenlabs_service import log_stt_concurrency, stt_headers, stt_ws_url
+from elevenlabs_service import STT_SAMPLE_RATE, log_stt_concurrency, stt_headers, stt_ws_url
 from models import ChatConversation, ChatMessage
 from openai_service import prewarm_roleplay, stream_avatar_response
 from turn_metrics import (
@@ -80,6 +80,56 @@ def _looks_complete(text: str) -> bool:
     fire without waiting for a continuation. A mid-utterance forced commit
     lands on a word or comma instead and is held for the grace window."""
     return text.rstrip().endswith((".", "!", "?", "…"))
+
+
+# Italian words that legitimately end in a consonant: articles, prepositions,
+# conjunctions and the handful of adverbs. The list is closed on purpose. Every
+# other consonant-final fragment in Italian is a word cut in half, which is
+# what _join_transcript uses to tell "…bloccar" + "li" from "…per" + "assicurarci".
+_TRONCHE = frozenset(
+    {
+        "il", "un", "del", "dal", "nel", "sul", "col", "al", "qual", "tal", "quel", "bel",
+        "non", "in", "con", "ben", "gran", "per", "pur", "ad", "ed", "od", "or", "ancor",
+    }
+)  # fmt: skip
+
+_VOCALI = "aeiouàèéìòóù"
+
+
+def _join_transcript(previous: str, addition: str) -> str:
+    """Glue two commits of the same spoken turn back together.
+
+    ElevenLabs force-commits a long utterance the moment it hits its own
+    limit, and that limit does not respect word boundaries: "provvediamo a
+    bloccar" + "li, ne riceverà nuovi". Joining those with a space hands the
+    model a word that does not exist, so the seam is closed instead whenever
+    the break looks like it fell inside a word.
+
+    The test is morphological and deliberately conservative: a full Italian
+    word ends in a vowel or is one of the few tronche, so a lowercase
+    consonant-final fragment outside that list is taken as a cut. Capitalised
+    fragments are left alone, which keeps surnames and loanwords ("Rodriguez",
+    "Carabinieri") from being welded to whatever follows.
+    """
+    if not previous:
+        return addition
+    if not addition:
+        return previous
+    tail = previous[-1]
+    head = addition[0]
+    if tail.isalpha() and head.isalpha() and head.islower():
+        last_word = previous.rsplit(" ", 1)[-1]
+        if last_word.islower() and tail.lower() not in _VOCALI and last_word not in _TRONCHE:
+            return previous + addition
+    return f"{previous} {addition}"
+
+
+# PCM16 mono: two bytes per sample. Turns bytes forwarded into seconds of
+# audio, which is what makes the upload comparable to the wall clock.
+_AUDIO_BYTES_PER_SEC = STT_SAMPLE_RATE * 2
+
+# How often the audio upload reports itself while the diagnostics are on.
+_AUDIO_REPORT_SECS = 5.0
 
 
 # STT error types that make the whole call unusable
@@ -163,6 +213,22 @@ class VoicePipeline:
         self._metrics = CallMetrics()
         self._turn_timer: TurnTimer | None = None
         self._last_partial_at: float | None = None
+        # ElevenLabs keeps re-emitting the same partial while the operator is
+        # already silent, so the text goes with the timestamp: a partial that
+        # repeats the previous one is not fresh speech, and letting it move
+        # _last_partial_at would shrink every measured silence to the gap
+        # between two keepalives (200ms against a 1.5s VAD threshold).
+        self._last_partial_text = ""
+        # Audio upload tracking. Transcripts can arrive in a burst that covers
+        # half a minute of speech at once, and from the STT events alone there
+        # is no telling whether the backlog piled up on our side or on
+        # ElevenLabs'. These say how much audio actually left, and when.
+        self._audio_bytes = 0
+        # Il primo frame fa da zero a tutti e due: finché non è arrivato non
+        # c'è una chiamata da confrontare con l'orologio.
+        self._audio_first_at: float | None = None
+        self._audio_reported_at = 0.0
+        self._audio_slowest_send = 0.0
         # Commit aggregation: ElevenLabs may split one spoken turn into several
         # commits, so a non-final commit is buffered here and the turn only
         # fires once the grace window (VOICE_SETTLE_MS) passes without a
@@ -281,6 +347,7 @@ class VoicePipeline:
                 return
             data = message.get("bytes")
             if data:
+                started = time.perf_counter()
                 await self.stt.send(
                     json.dumps(
                         {
@@ -289,6 +356,8 @@ class VoicePipeline:
                         }
                     )
                 )
+                if STT_DEBUG_ENABLED:
+                    self._track_audio_send(len(data), started)
                 continue
             text = message.get("text")
             if not text:
@@ -301,6 +370,39 @@ class VoicePipeline:
             # is the caller and waits for the operator to speak first.
             if event.get("type") == "end":
                 return
+
+    def _track_audio_send(self, nbytes: int, started: float) -> None:
+        """Riassume ogni tanto com'è andato l'invio dell'audio alla STT.
+
+        Serve a dare un nome al colpevole quando le trascrizioni arrivano in
+        blocco: se i secondi di audio spediti stanno al passo con l'orologio,
+        il microfono e questo processo hanno fatto la loro parte e l'arretrato
+        è di ElevenLabs. Se restano indietro, il ritardo è nostro e la send
+        più lenta dice di quanto. Acceso solo con la diagnostica.
+        """
+        now = time.perf_counter()
+        self._audio_slowest_send = max(self._audio_slowest_send, (now - started) * 1000)
+        self._audio_bytes += nbytes
+        if self._audio_first_at is None:
+            self._audio_first_at = started
+            self._audio_reported_at = started
+            return
+        if now - self._audio_reported_at < _AUDIO_REPORT_SECS:
+            return
+        self._audio_reported_at = now
+        inviato = self._audio_bytes / _AUDIO_BYTES_PER_SEC
+        trascorso = now - self._audio_first_at
+        logger.info(
+            "[STT-INVIO] audio inviato %.1fs su %.1fs di chiamata | "
+            "indietro di %.0fms | send più lenta %.0fms",
+            inviato,
+            trascorso,
+            (trascorso - inviato) * 1000,
+            self._audio_slowest_send,
+        )
+        # Azzerata a ogni riga: il massimo dall'inizio della chiamata resta
+        # quello di un singolo intoppo e non direbbe più niente sull'adesso.
+        self._audio_slowest_send = 0.0
 
     # ── STT → turn management ─────────────────────────
 
@@ -334,14 +436,18 @@ class VoicePipeline:
                 text = (event.get("text") or "").strip()
                 if not text:
                     continue
-                # Last sign of speech before the silence the VAD is timing
-                self._last_partial_at = time.perf_counter()
+                # Last sign of *new* speech before the silence the VAD is
+                # timing: an unchanged partial means the operator has already
+                # stopped and the silence is running.
+                if text != self._last_partial_text:
+                    self._last_partial_text = text
+                    self._last_partial_at = time.perf_counter()
                 # More speech after a held commit means the turn is not over:
                 # push the grace window back until the operator actually stops.
                 if self._pending_timer is not None:
                     self._schedule_settle()
                     await self._send_json(
-                        {"type": "user_partial", "text": f"{self._pending_text} {text}".strip()}
+                        {"type": "user_partial", "text": _join_transcript(self._pending_text, text)}
                     )
                 else:
                     await self._send_json({"type": "user_partial", "text": text})
@@ -361,18 +467,22 @@ class VoicePipeline:
                     await self._cancel_turn(notify=True)
                 # Anchor the timer on the first commit of a group so its
                 # commit->audio spans the whole wait, grace window included.
+                # Every later commit is handed to hold(): the group's cost
+                # stays visible while the wait the operator actually sat
+                # through is timed from the commit that really ended the turn.
+                vad_ms = (
+                    (time.perf_counter() - self._last_partial_at) * 1000
+                    if self._last_partial_at is not None
+                    else None
+                )
                 if self._pending_timer is None:
-                    vad_ms = (
-                        (time.perf_counter() - self._last_partial_at) * 1000
-                        if self._last_partial_at is not None
-                        else None
-                    )
                     self._turn_count += 1
                     self._pending_timer = TurnTimer(turn_id=f"#{self._turn_count}", vad_ms=vad_ms)
+                else:
+                    self._pending_timer.hold(vad_ms)
                 self._last_partial_at = None
-                self._pending_text = (
-                    f"{self._pending_text} {text}".strip() if self._pending_text else text
-                )
+                self._last_partial_text = ""
+                self._pending_text = _join_transcript(self._pending_text, text)
                 # Provisional bubble: the words so far, not yet the final turn
                 await self._send_json({"type": "user_partial", "text": self._pending_text})
                 # A commit that ends a sentence is the operator done; one that
@@ -427,11 +537,13 @@ class VoicePipeline:
                         self._metrics.record(timer)
                         self._turn_timer = None
             elif event_type == "done":
+                self._metrics.close_tts_slot(context_id)
                 self._speaking = False
                 self._active_context = None
                 await self._send_json({"type": "speaking_end"})
             elif event_type == "error":
                 logger.error("Cartesia TTS: %s", event.get("message"))
+                self._metrics.close_tts_slot(context_id, interrotto=True)
                 self._speaking = False
                 self._active_context = None
                 await self._send_json({"type": "speaking_end"})
@@ -491,6 +603,7 @@ class VoicePipeline:
         if self._active_context:
             with contextlib.suppress(Exception):
                 await self.tts.send(tts_cancel_message(self._active_context))
+            self._metrics.close_tts_slot(self._active_context, interrotto=True)
             self._active_context = None
             interrupted = True
         if interrupted:
@@ -512,6 +625,9 @@ class VoicePipeline:
         if self._turn_timer is not None:
             self._turn_timer.mark(MARK_TTS_FIRST_SEND)
             self._turn_timer.count_tts_send()
+        # Da qui il contesto occupa uno slot di concorrenza del piano, e lo
+        # tiene finché Cartesia non chiude con "done".
+        self._metrics.open_tts_slot(context_id)
         await self.tts.send(tts_chunk_message(context_id, text, self.voice_id, more_coming))
 
     async def _run_turn(self) -> None:

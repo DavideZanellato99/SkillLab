@@ -26,6 +26,22 @@ def clean_value(profile: dict, key: str) -> str:
     return "" if value.lower() in _EMPTY_MARKERS else value
 
 
+# "Lunghezza media delle risposte: Media" è un'etichetta, e da sola non dice al
+# modello quanto sia lunga una risposta media: senza una misura il turno cresce
+# fino al monologo, che al telefono è il difetto più visibile di tutti, perché
+# l'operatore lo aspetta in silenzio invece di leggerlo a colpo d'occhio. Qui
+# l'etichetta diventa un numero di frasi e un tetto di parole.
+# (frasi, tetto normale, tetto della battuta di apertura)
+_LUNGHEZZA_RISPOSTE = {
+    "breve": ("una frase, al massimo due", "venti parole", "quaranta parole"),
+    "media": ("due o tre frasi", "quaranta parole", "sessanta parole"),
+    "lunga": ("quattro o cinque frasi", "settanta parole", "novanta parole"),
+}
+# Vale anche quando il campo è vuoto: una persona senza indicazione di stile
+# parla come la maggioranza delle persone, non a ruota libera.
+_LUNGHEZZA_PREDEFINITA = "media"
+
+
 def profile_section(profile: dict, entries: list[tuple[str, str]]) -> str:
     """Render '- label: value' lines for the profile keys that have a value."""
     lines = []
@@ -34,6 +50,48 @@ def profile_section(profile: dict, entries: list[tuple[str, str]]) -> str:
         if value:
             lines.append(f"- {label}: {value}")
     return "\n".join(lines)
+
+
+def _regola_lunghezza(profile: dict, is_text: bool) -> tuple[str, str]:
+    """La regola di lunghezza distesa, e la sua versione da regola ferrea.
+
+    La scheda dice l'etichetta, questa funzione dice la misura. Torna due
+    formulazioni della stessa cosa perché il modello segue le REGOLE FERREE
+    più di ogni altra sezione, e una riga secca lì tiene il vincolo in piedi
+    anche a conversazione lunga, quando lo stile scritto in cima si è ormai
+    diluito nella storia.
+    """
+    scelta = clean_value(profile, "LUNGHEZZA_MEDIA_RISPOSTE").lower()
+    frasi, tetto, tetto_apertura = _LUNGHEZZA_RISPOSTE.get(
+        scelta, _LUNGHEZZA_RISPOSTE[_LUNGHEZZA_PREDEFINITA]
+    )
+    turno = "tuo messaggio" if is_text else "tua risposta"
+    un_turno = "un singolo messaggio" if is_text else "una singola risposta"
+    apertura = (
+        "il tuo primo messaggio, quello in cui saluti, ti presenti e dici perché hai scritto"
+        if is_text
+        else "la tua prima battuta, quella in cui saluti, ti presenti e dici perché chiami"
+    )
+    mezzo = (
+        "in una chat di assistenza nessuno manda muri di testo"
+        if is_text
+        else "al telefono nessuno parla da solo per venti secondi di fila"
+    )
+    distesa = (
+        f"La lunghezza è un vincolo, non un'indicazione di massima: ogni {turno} sta in "
+        f"{frasi} e non supera mai le {tetto}. L'unica eccezione è {apertura}, che può arrivare "
+        f"a {tetto_apertura}. "
+        f"Se hai molte cose da dire, dì solo la più importante e lascia che siano le domande "
+        f"dell'operatore a tirare fuori il resto: {mezzo}, e una persona vera si ferma appena ha "
+        "detto il suo punto. "
+        f"Non riepilogare quello che hai già {'scritto' if is_text else 'detto'} e non aggiungere "
+        "una frase di cortesia in coda solo per chiudere il turno."
+    )
+    ferrea = (
+        f"- Non superare MAI le {tetto} in {un_turno}: di norma {frasi}. Se ti resta "
+        "altro da dire, aspetta la domanda dell'operatore invece di dirlo subito."
+    )
+    return distesa, ferrea
 
 
 def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
@@ -188,8 +246,9 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
             "Non essere sempre perfettamente lineare: una persona vera può tornare su un punto "
             "già detto, aggiungere un dettaglio in un messaggio successivo, correggersi, scrivere "
             "'aspetti, forse mi sono spiegato male', oppure chiedere conferma. "
-            "Alterna messaggi brevi a messaggi un po' più articolati quando sei emotivamente "
-            "coinvolto. Evita i monologhi: lascia spazio all'operatore e reagisci a ciò che scrive. "
+            "Alterna messaggi molto brevi a messaggi un po' più articolati quando sei emotivamente "
+            "coinvolto, sempre dentro il limite di lunghezza indicato qui sotto. "
+            "Evita i monologhi: lascia spazio all'operatore e reagisci a ciò che scrive. "
             "Mantieni sempre un realismo da chat: niente tono da chatbot, niente frasi troppo perfette."
         )
         # Verbal tics that only work spoken ("guardi", "senta") are dropped here.
@@ -232,7 +291,8 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
             "Non essere sempre perfettamente lineare: una persona vera può tornare su un punto già "
             "detto, aggiungere un dettaglio dopo, correggersi, dire 'aspetti, forse mi sono spiegato "
             "male', oppure chiedere conferma. "
-            "Alterna risposte brevi a risposte un po' più articolate quando sei emotivamente coinvolto. "
+            "Alterna risposte molto brevi a risposte un po' più articolate quando sei emotivamente "
+            "coinvolto, sempre dentro il limite di lunghezza indicato qui sotto. "
             "Evita monologhi lunghi: lascia spazio all'operatore e reagisci a ciò che dice. "
             "Aspetta sempre che l'operatore abbia finito di parlare prima di rispondere: non "
             "interromperlo e non sovrapporti mentre sta parlando. "
@@ -258,6 +318,8 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
     # is not).
     parlare = "scrivere" if is_text else "parlare"
     detto = "scritto" if is_text else "detto"
+
+    lunghezza_distesa, lunghezza_ferrea = _regola_lunghezza(profile, is_text)
 
     parts = [
         f"Sei {nome} {cognome}, un cliente di una banca. {medium}. "
@@ -341,7 +403,11 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "reali quando non si sentono rassicurati."
         if obiezioni
         else "",
-        f"## STILE DI CONVERSAZIONE\n{stile}\n{regole_stile}" if stile else "",
+        # La sezione esce anche a scheda muta: le regole del mezzo e il limite
+        # di lunghezza non dipendono dai campi compilati.
+        "\n".join(
+            p for p in ["## STILE DI CONVERSAZIONE", stile, regole_stile, lunghezza_distesa] if p
+        ),
         f"## COMPORTAMENTO REALISTICO DURANTE LA {contatto.upper()}\n"
         "Durante tutta la conversazione devi comportarti come una persona reale, non come un personaggio "
         f"che sta eseguendo istruzioni. Reagisci sempre all'ultima cosa {detto} dall'operatore, tenendo "
@@ -359,7 +425,8 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         "Puoi inserire dettagli secondari realistici, anche non indispensabili, purché coerenti con la "
         "scheda: per esempio cosa stavi facendo quando hai notato il problema, perché la cosa ti crea "
         "disagio, che tentativi hai già fatto, cosa ti ha detto eventualmente qualcun altro, che timore "
-        "hai sulle conseguenze. "
+        "hai sulle conseguenze. Uno alla volta però, non tutti nello stesso turno: un dettaglio in più "
+        "vale solo se sta dentro il limite di lunghezza, altrimenti prende il posto della risposta. "
         "Non inventare fatti che contraddicono la scheda. Se manca un dettaglio, puoi improvvisare solo "
         "elementi neutri e coerenti, senza alterare la problematica centrale.",
         "## GESTIONE DELLE INFORMAZIONI\n"
@@ -431,6 +498,7 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
             if obiettivo_nascosto
             else ""
         )
+        + f"{lunghezza_ferrea}\n"
         + "- Non uscire MAI dal personaggio e non rivelare di essere un'intelligenza artificiale o una simulazione.\n"
         + "- Rispondi SEMPRE in italiano.\n"
         + "- Non usare mai markdown, elenchi puntati, titoli o formattazioni nella conversazione con l'operatore.\n"

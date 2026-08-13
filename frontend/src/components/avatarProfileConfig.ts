@@ -210,13 +210,7 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
         kind: 'choice',
         options: ['Breve', 'Media', 'Lunga'],
       },
-      {
-        key: 'VELOCITA_PARLATO',
-        label: 'Velocità del parlato',
-        kind: 'choice',
-        options: LEVELS,
-        hint: 'Usata solo nelle chiamate: in chat non ha un equivalente e viene ignorata.',
-      },
+      { key: 'VELOCITA_PARLATO', label: 'Velocità del parlato', kind: 'choice', options: LEVELS },
       { key: 'USO_IRONIA', label: 'Uso dell’ironia', kind: 'choice', options: YES_NO },
       { key: 'USO_DIALETTO', label: 'Uso del dialetto', kind: 'choice', options: YES_NO },
       {

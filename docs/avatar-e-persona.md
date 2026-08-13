@@ -164,11 +164,36 @@ rispetto a prima: vedi [gdpr.md](gdpr.md), sezione 6.
 stringhe: nessuna chiamata a modelli, nessun accesso al database. Entra la
 scheda, esce il prompt di sistema del roleplay.
 
-Due cose lo governano.
+Tre cose lo governano.
 
 **Solo i campi valorizzati entrano.** `profile_section` scrive una riga
 `- etichetta: valore` per ogni campo che ha un valore, e salta gli altri: un
 prompt con dieci righe vuote insegna al modello che quelle cose non contano.
+
+**Un'etichetta da sola non è un'istruzione.** Vale per la lunghezza delle
+risposte, che è il campo con la conseguenza più visibile: scritto come
+"Lunghezza media delle risposte: Media", lasciava al modello il compito di
+decidere quanto duri una risposta media, e la risposta cresceva fino al
+monologo. Al telefono è il difetto peggiore, perché mezzo minuto di avatar è
+mezzo minuto in cui chi si sta addestrando sta zitto ad ascoltare.
+`_regola_lunghezza` traduce quindi l'etichetta in una misura:
+
+| Scheda | Di norma | Tetto | Prima battuta |
+| --- | --- | --- | --- |
+| Breve | Una frase, al massimo due | Venti parole | Quaranta parole |
+| Media, e ogni scheda che non lo dice | Due o tre frasi | Quaranta parole | Sessanta parole |
+| Lunga | Quattro o cinque frasi | Settanta parole | Novanta parole |
+
+La battuta di apertura ha il tetto doppio perché presentarsi, dire nome e
+cognome ed esporre il motivo della chiamata non sta in una frase.
+
+La regola compare due volte di proposito: distesa nello stile, e in una riga
+secca fra le **regole ferree**. Lo stile scritto in cima si diluisce man mano
+che la conversazione cresce, la regola ferrea sta in fondo al prompt, cioè nel
+punto che il modello pesa di più. Per lo stesso motivo la sezione dello stile
+esce anche a scheda muta: prima viveva appesa ai campi compilati, e un avatar
+senza tratti di conversazione restava senza le regole del mezzo proprio nel
+caso in cui parlava di più.
 
 **Il canale cambia il mezzo, non la persona.** Lo stesso avatar risponde al
 telefono e in chat, e la scheda è la stessa. Cambia solo la cornice:
@@ -179,6 +204,7 @@ telefono e in chat, e la scheda è la stessa. Cambia solo la cornice:
 | Chi apre | L'operatore risponde, poi tocca all'avatar | L'operatore saluta, poi tocca all'avatar |
 | Tratti dello stile | Velocità del parlato inclusa | Velocità del parlato tolta, non vuol dire niente per iscritto |
 | Regole di realismo | Esitazioni, ripetizioni, non sovrapporsi | Messaggi brevi, uno alla volta, niente formattazione |
+| Limite di lunghezza | "Ogni tua risposta sta in…", misurato in parole dette | "Ogni tuo messaggio sta in…", stessa misura |
 | Intercalari | "guardi", "senta", "aspetti un attimo" | Le versioni che funzionano scritte |
 
 In tutti e due i casi **è l'operatore ad aprire**, e c'è una regola esplicita

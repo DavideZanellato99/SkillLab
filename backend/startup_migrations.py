@@ -213,6 +213,12 @@ def _add_columns() -> None:
             text("ALTER TABLE training_path_steps ADD COLUMN IF NOT EXISTS due_at TIMESTAMP")
         )
         conn.execute(text("ALTER TABLE training_path_steps DROP COLUMN IF EXISTS due_days"))
+        # Il secchiello di un limite non è più solo "email" o "ip": adesso ci
+        # sono anche le chiamate al modello, contate per funzione e per
+        # persona (vedi ``llm_limits``), e "llm-valutazione" in dieci
+        # caratteri non ci sta. Allargare basta: la tabella tiene eventi che
+        # scadono da soli, quindi non c'è niente da convertire.
+        conn.execute(text("ALTER TABLE login_attempts ALTER COLUMN scope TYPE VARCHAR(40)"))
 
 
 def _add_authorship_columns() -> None:

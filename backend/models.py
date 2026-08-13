@@ -478,28 +478,34 @@ class TokenSession(Base):
 
 
 class LoginAttempt(Base):
-    """A failed sign-in, counted to slow down password guessing.
+    """An event counted inside a sliding window (see ``rate_limit``).
 
-    Two buckets, told apart by ``scope``: one keyed by email (a single
-    account under attack, even from many addresses) and one keyed by client
-    IP (one client probing many accounts).
+    Two families of buckets, told apart by ``scope``. The login ones count
+    failures: one keyed by email (a single account under attack, even from
+    many addresses) and one keyed by client IP (one client probing many
+    accounts). The ``llm-*`` ones count calls to the model, keyed by user,
+    and there every call counts, because there the damage is the bill and
+    not a guessed password (see ``llm_limits``).
 
     In a table rather than in process memory because a limit that is not the
     same limit for everyone is not a limit: behind a load balancer, four
     replicas counting on their own hand an attacker four times the attempts,
     and not one of the four ever sees the attack whole.
 
-    The rows carry a client IP, so they are personal data with a very short
-    life: whatever falls outside the window is dropped as the failures are
-    counted, and the sweep in ``housekeeping`` collects the leftovers on an
-    install where nobody ever fails a login.
+    The rows carry a client IP or a user id, so they are personal data with a
+    very short life: whatever falls outside the window is dropped as the
+    events are counted, and the sweep in ``housekeeping`` collects the
+    leftovers on an install where nobody ever fails a login.
+
+    The table keeps the name it was born with: renaming it would cost a
+    migration and change nothing for anybody.
     """
 
     __tablename__ = "login_attempts"
     __table_args__ = (Index("ix_login_attempts_bucket", "scope", "key", "created_at"),)
 
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    scope = Column(String(10), nullable=False)
+    scope = Column(String(40), nullable=False)
     key = Column(String(320), nullable=False)
     # Naive UTC, like every comparison this table is read with
     created_at = Column(

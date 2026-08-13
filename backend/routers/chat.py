@@ -22,6 +22,7 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import llm_limits
 import reviews
 from auth_dependency import get_current_user
 from conversation_titles import next_conversation_title
@@ -449,6 +450,10 @@ async def send_chat_message(
     persisted until the reply has fully streamed: a failed generation
     leaves no half exchange in the transcript.
     """
+    # Prima di ogni altra cosa, perché è l'unico controllo che parla del
+    # costo della richiesta e non di cosa contiene.
+    await llm_limits.consume(llm_limits.CHAT, current_user.id)
+
     avatar = (
         _visible_avatars(db.query(Avatar), current_user)
         .filter(Avatar.id == payload.avatar_id)
@@ -597,6 +602,10 @@ async def create_conversation_evaluation(
     model, see openai_service.evaluate_conversation) and store the result.
     Re-running the judgement replaces the previous evaluation.
     """
+    # La chiamata più cara dell'applicazione, e l'unica che si può rifare
+    # sulla stessa conversazione quante volte si vuole.
+    await llm_limits.consume(llm_limits.VALUTAZIONE, current_user.id)
+
     conversation = _owned_conversation_or_404(db, conversation_id, current_user)
 
     messages = (

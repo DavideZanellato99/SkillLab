@@ -111,11 +111,9 @@ _COGNITO_SYMBOLS = set("^$*.[]{}()?-\"!@#%&/\\,><':;|_~`+=")
 # would let an attacker reset it by logging into an account they own.
 _LOGIN_WINDOW_SECONDS = 15 * 60
 _email_limiter = SlidingWindowLimiter(
-    scope="email", max_failures=5, window_seconds=_LOGIN_WINDOW_SECONDS
+    scope="email", max_events=5, window_seconds=_LOGIN_WINDOW_SECONDS
 )
-_ip_limiter = SlidingWindowLimiter(
-    scope="ip", max_failures=10, window_seconds=_LOGIN_WINDOW_SECONDS
-)
+_ip_limiter = SlidingWindowLimiter(scope="ip", max_events=10, window_seconds=_LOGIN_WINDOW_SECONDS)
 
 # Every login failure gets this same message, whatever the real cause
 # (email inesistente, password sbagliata, account non confermato, utente
@@ -252,8 +250,8 @@ def login(
     try:
         result = authenticate(request.email, request.password)
     except RuntimeError as e:
-        _email_limiter.record_failure(email_key)
-        _ip_limiter.record_failure(ip_key)
+        _email_limiter.record(email_key)
+        _ip_limiter.record(ip_key)
         logger.warning("Login fallito per '%s': %s", email_key, e)
         # Only the attempted email is recorded, never why it failed: the
         # reason is what would let the registry enumerate valid accounts.

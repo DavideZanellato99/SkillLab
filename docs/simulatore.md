@@ -285,6 +285,13 @@ metà passaggi indicizzati da uno e metà dall'altro darebbe ricerche
 silenziosamente sbagliate. Se l'embedding fallisce, la richiesta risponde 502 e
 si ritenta.
 
+Anche questa chiamata ha il suo tetto per persona, venti all'ora
+([llm_limits.py](../backend/llm_limits.py)), e viene consumato **dopo** la
+lettura del file: un documento illeggibile è un errore di chi carica e non deve
+consumare il tetto di una chiamata che non è mai partita. È la più economica
+delle chiamate al modello, ma è l'unica il cui prezzo lo decide chi carica,
+perché cresce con il documento.
+
 Ogni passaggio diventa una riga `SimulationChunk` con:
 
 - `ordinal`, la posizione nel documento a partire da 1, che è il numero con cui
@@ -580,6 +587,7 @@ risposte alla consegna:
 | Timeout | 120 secondi per chiamata, non i 20 del roleplay: qui nessuno è in linea, c'è una rotella che gira in una pagina |
 | Ritentativi | 1, quindi al massimo due tentativi per modello |
 | Passaggio al modello di riserva | Solo su sovraccarichi (429, 500, 502, 503) **o su un JSON illeggibile**: un modello che risponde con campi mancanti ha fallito quanto uno che non ha risposto, e il rimedio è lo stesso. Un timeout invece non fa cambiare modello |
+| Tetto per persona | Dieci generazioni all'ora ([llm_limits.py](../backend/llm_limits.py)), e sono sei chiamate ciascuna. Qui il tetto non difende da chi genera, che è un super admin, difende da una pagina lasciata a ripetere la stessa richiesta |
 
 L'unica differenza per la correzione delle risposte aperte è che lì qualcuno
 sta aspettando davvero: non è un super admin davanti a una rotella, è chi ha
@@ -1090,6 +1098,19 @@ di proposito: la traccia è già la sintesi che il super admin ha approvato, e
 dargli anche i passaggi rimetterebbe in discussione la chiave nel momento in
 cui la si applica.
 
+**La risposta la scrive chi sta prendendo il voto**, quindi non entra nel
+prompt così com'è: arriva dentro un recinto che cambia a ogni chiamata e senza
+i marcatori con cui si imita la struttura del blocco, cioè il titolo della
+domanda e le etichette a inizio riga
+([untrusted_text.py](../backend/untrusted_text.py)). Il formato da falsificare
+lo ha già visto chiunque abbia letto una volta il proprio feedback, e
+`### DOMANDA 2` seguito da una traccia inventata era un modo per consegnare al
+correttore una chiave di correzione scritta da chi viene corretto. Lo stesso
+meccanismo difende la valutazione delle conversazioni, ed è raccontato per
+esteso in [valutazione.md](valutazione.md). Domanda e traccia, invece, restano
+com'è: le ha scritte chi ha preparato il test e sono già passate da una
+rilettura umana.
+
 Cosa torna indietro, per posizione: `quality` da 0 a 1 e due righe di
 `feedback`. Il prompt dice esplicitamente cosa **non** deve spostare il voto,
 che è la parte che serve di più: ortografia, forma, parole diverse da quelle
@@ -1102,6 +1123,7 @@ Tre scelte attorno alla chiamata:
 | Caso | Cosa succede | Perché |
 | --- | --- | --- |
 | Risposta in bianco | Non arriva al modello, vale zero | Più veloce, costa meno, ed è l'unico modo di essere certi che chi non scrive niente non prenda niente |
+| Consegne troppo ravvicinate | 429 dal tetto per persona ([llm_limits.py](../backend/llm_limits.py)), venti correzioni all'ora | Un test si consegna una volta, e la correzione è una chiamata a pagamento per consegna. Un tentativo tutto in bianco non consuma niente, perché non chiama nessuno |
 | Il modello non risponde su nessun modello della lista | 502, il tentativo **non** si scrive | Le risposte sono ancora nel browser e il pulsante per riprovare c'è già; scrivere un tentativo mezzo corretto no |
 | Il modello salta una domanda a cui era stato risposto | 502, il tentativo **non** si scrive | Un voto più basso del dovuto per un motivo che chi lo riceve non può né vedere né contestare è peggio di una consegna da ripetere |
 

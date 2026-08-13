@@ -92,7 +92,10 @@ stesso giro del simulatore**: una fonte scritta da una persona, una passata
 del modello di ragionamento, una revisione umana, e solo dopo la
 pubblicazione (vedi [simulatore.md](simulatore.md)). Passa da
 `eval_json_completion`, quindi si porta dietro i modelli di riserva e il tempo
-lungo della valutazione.
+lungo della valutazione, e come le altre chiamate al modello ha un tetto per
+persona, trenta all'ora ([llm_limits.py](../backend/llm_limits.py)): non
+difende dal super admin che genera, difende da una pagina lasciata a ripetere
+la stessa richiesta.
 
 **Le due fonti non chiedono la stessa cosa al modello**, e sono due prompt
 diversi perché sono due lavori diversi:

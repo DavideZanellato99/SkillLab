@@ -25,6 +25,10 @@ from simulation_open_answers import (
     judge_open_answers,
 )
 
+# Il marcatore che recinta la risposta dentro il blocco: qui è fisso e
+# leggibile, in produzione cambia a ogni chiamata (vedi ``untrusted_text``).
+MARCATORE = "<<<recinto>>>"
+
 
 def _voce(position=1, answer_text="Prima si identifica il cliente.") -> dict:
     return {
@@ -39,18 +43,20 @@ def _voce(position=1, answer_text="Prima si identifica il cliente.") -> dict:
 
 
 def test_ogni_domanda_arriva_con_la_traccia_e_la_risposta():
-    testo = _judge_input([_voce(position=3)])
+    testo = _judge_input([_voce(position=3)], MARCATORE)
 
     assert "### DOMANDA 3" in testo
     assert "Traccia della risposta attesa: Identificare il cliente" in testo
-    assert "Risposta dell'operatore: Prima si identifica il cliente." in testo
+    # La risposta sta dentro il recinto, e la riga che la introduce resta
+    assert "Risposta dell'operatore:" in testo
+    assert f"{MARCATORE}\nPrima si identifica il cliente.\n{MARCATORE}" in testo
 
 
 def test_una_risposta_lunghissima_arriva_tagliata():
     """Oltre il tetto non c'è una risposta, c'è un incollaggio del manuale:
     giudicarlo per intero costerebbe token senza cambiare il giudizio, e in
     una consegna da dieci domande li toglierebbe alle altre nove."""
-    testo = _judge_input([_voce(answer_text="x" * (MAX_ANSWER_CHARS + 500))])
+    testo = _judge_input([_voce(answer_text="x" * (MAX_ANSWER_CHARS + 500))], MARCATORE)
 
     assert "x" * MAX_ANSWER_CHARS in testo
     assert "x" * (MAX_ANSWER_CHARS + 1) not in testo
@@ -59,7 +65,7 @@ def test_una_risposta_lunghissima_arriva_tagliata():
 def test_le_domande_arrivano_tutte_nella_stessa_richiesta():
     """Una chiamata sola per il tentativo: dieci chiamate indipendenti
     sarebbero dieci esaminatori diversi sullo stesso test."""
-    testo = _judge_input([_voce(position=1), _voce(position=2)])
+    testo = _judge_input([_voce(position=1), _voce(position=2)], MARCATORE)
 
     assert testo.count("### DOMANDA") == 2
 

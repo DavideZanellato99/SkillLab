@@ -46,7 +46,12 @@ sequenceDiagram
     A-->>B: event done, con lo scambio salvato
 ```
 
-Le cose che vale la pena sapere sono quattro.
+Le cose che vale la pena sapere sono cinque.
+
+**Il tetto viene prima di tutto il resto.** Centoventi messaggi all'ora per
+persona ([llm_limits.py](../backend/llm_limits.py)), cioè tre conversazioni
+intere di fila senza mai sfiorarlo. È il primo controllo dell'endpoint perché
+è l'unico che parla del costo della richiesta invece che di cosa contiene.
 
 **I controlli stanno prima dello stream.** Avatar sconosciuto, conversazione di
 qualcun altro, canale sbagliato, conversazione chiusa: sono errori HTTP

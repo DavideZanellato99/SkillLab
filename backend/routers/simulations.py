@@ -62,6 +62,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session, selectinload
 
 import audit
+import llm_limits
 from auth_dependency import get_current_super_admin, get_current_user, resolve_admin_scope
 from database import get_db
 from exports import simulation_attempt_pdf
@@ -618,7 +619,9 @@ def _matching_answers(questions: list[SimulationQuestion], given: dict) -> list[
     return answers
 
 
-async def _open_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
+async def _open_answers(
+    questions: list[SimulationQuestion], given: dict, user_id: UUID
+) -> list[dict]:
     """La correzione di un test a risposta aperta: una chiamata, poi i punti.
 
     Le risposte in bianco non arrivano al modello. Valgono zero comunque, e
@@ -643,6 +646,10 @@ async def _open_answers(questions: list[SimulationQuestion], given: dict) -> lis
         for position, question in enumerate(questions, start=1)
         if question.id in given and (given[question.id].answer_text or "").strip()
     ]
+    # Solo se c'è davvero qualcosa da far correggere: un test consegnato in
+    # bianco non chiama nessuno e non deve consumare niente.
+    if to_judge:
+        await llm_limits.consume(llm_limits.CORREZIONE, user_id)
 
     try:
         judgements = await judge_open_answers(to_judge)
@@ -722,7 +729,7 @@ async def submit_attempt(
     questions = _submitted_questions(simulation, payload)
     given = {a.question_id: a for a in payload.answers}
     if simulation.is_open:
-        answers = await _open_answers(questions, given)
+        answers = await _open_answers(questions, given, current_user.id)
     elif simulation.is_ordering:
         answers = _ordering_answers(questions, given)
     elif simulation.is_matching:

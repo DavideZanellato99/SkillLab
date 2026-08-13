@@ -21,6 +21,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import audit
+import llm_limits
 from auth_dependency import get_current_super_admin
 from database import get_db
 from models import (
@@ -441,6 +442,8 @@ async def draft_persona_sheet(
     perché sapere quante schede sono state generate e da chi è esattamente il
     genere di cosa che il registro esiste per dire.
     """
+    await llm_limits.consume(llm_limits.BOZZA_SCHEDA, current_admin.id)
+
     audit.describe(http_request, source=payload.source, characters=len(payload.text))
     try:
         profile = await draft_persona(payload.text, payload.source, payload.difficulty)

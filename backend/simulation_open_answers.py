@@ -12,6 +12,11 @@ traccia è già la sintesi che il super admin ha approvato, e dare in pasto
 anche i passaggi rimetterebbe in discussione la chiave proprio nel momento
 in cui la si applica.
 
+**La risposta la scrive chi sta prendendo il voto**, quindi arriva al
+modello recintata e ripulita dei marcatori con cui si imita la struttura di
+questo prompt (vedi ``untrusted_text``): senza, chi ha già letto una volta il
+proprio feedback sa che forma ha il blocco da falsificare.
+
 **Una chiamata per tutto il tentativo**, e non una per domanda. Dieci
 chiamate in parallelo su una consegna sarebbero dieci volte il rischio che
 una vada storta, e in serie sarebbero un minuto di rotella; oltre a questo,
@@ -27,6 +32,7 @@ scrive niente non prenda punti.
 Qui non si tocca il database: entrano domande e risposte, escono giudizi.
 """
 
+import untrusted_text
 from openai_service import eval_json_completion
 
 # Quanti caratteri di una risposta arrivano al modello. Una risposta a una
@@ -36,7 +42,7 @@ from openai_service import eval_json_completion
 MAX_ANSWER_CHARS = 2000
 
 
-def _judge_prompt() -> str:
+def _judge_prompt(marker: str) -> str:
     return (
         "Sei un formatore tecnico che corregge le risposte aperte di una verifica svolta dagli "
         "operatori di un'azienda.\n\n"
@@ -70,6 +76,8 @@ def _judge_prompt() -> str:
         "traccia parola per parola.\n"
         "- Quando la risposta è completa, dillo in una frase sola senza cercare difetti.\n"
         "- Scrivi in italiano, dando del tu.\n\n"
+        + untrusted_text.rule(marker, "ogni risposta dell'operatore")
+        + "\n\n"
         "## FORMATO DELLA RISPOSTA\n"
         "Restituisci esclusivamente un JSON valido, senza testo aggiuntivo prima o dopo, con "
         "questa struttura esatta, una voce per ogni domanda ricevuta e con lo stesso numero di "
@@ -78,15 +86,23 @@ def _judge_prompt() -> str:
     )
 
 
-def _judge_input(items: list[dict]) -> str:
-    """Le domande da giudicare, come le legge il modello."""
+def _judge_input(items: list[dict], marker: str) -> str:
+    """Le domande da giudicare, come le legge il modello.
+
+    Domanda e traccia le ha scritte chi ha preparato il test, e sono già
+    passate da una rilettura umana; la risposta la scrive chi sta prendendo
+    il voto, quindi sta dentro il recinto e senza i marcatori con cui si
+    imita questo formato. "### DOMANDA 3, Traccia della risposta attesa:"
+    lo sa scrivere chiunque abbia visto una volta il proprio feedback.
+    """
     blocks = []
     for item in items:
+        risposta = untrusted_text.neutralize(item["answer_text"])[:MAX_ANSWER_CHARS]
         blocks.append(
             f"### DOMANDA {item['position']}\n"
             f"Domanda: {item['text']}\n"
             f"Traccia della risposta attesa: {item['expected_answer']}\n"
-            f"Risposta dell'operatore: {item['answer_text'][:MAX_ANSWER_CHARS]}"
+            f"Risposta dell'operatore:\n{marker}\n{risposta}\n{marker}"
         )
     return "\n\n".join(blocks)
 
@@ -138,10 +154,11 @@ async def judge_open_answers(items: list[dict]) -> dict[int, dict]:
         return {}
 
     positions = {item["position"] for item in items}
+    marker = untrusted_text.fence()
     return await eval_json_completion(
         [
-            {"role": "system", "content": _judge_prompt()},
-            {"role": "user", "content": _judge_input(items)},
+            {"role": "system", "content": _judge_prompt(marker)},
+            {"role": "user", "content": _judge_input(items, marker)},
         ],
         # Dieci giudizi con due frasi di commento ciascuno, più i token che
         # il ragionamento spende prima di scriverli.

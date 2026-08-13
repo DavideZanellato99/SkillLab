@@ -47,6 +47,7 @@ from sqlalchemy.orm import Session
 
 import audit
 import document_text
+import llm_limits
 from auth_dependency import get_current_super_admin
 from database import get_db
 from models import (
@@ -301,7 +302,7 @@ def _require_document_source(simulation: TechnicalSimulation) -> None:
 
 
 async def _index_document(
-    db: Session, simulation: TechnicalSimulation, filename: str, data: bytes
+    db: Session, simulation: TechnicalSimulation, filename: str, data: bytes, admin_id: UUID
 ) -> None:
     """Legge il documento, lo spezza in passaggi e li indicizza.
 
@@ -330,6 +331,10 @@ async def _index_document(
         )
 
     chunks = split_into_chunks(text)
+    # Dopo la lettura del file e prima della chiamata a pagamento: un
+    # documento illeggibile è un errore di chi carica, e non deve consumare
+    # il tetto di una cosa che non è mai partita.
+    await llm_limits.consume(llm_limits.INDICIZZAZIONE, admin_id)
     try:
         embeddings = await embed_texts(chunks)
     except RuntimeError as e:
@@ -443,7 +448,7 @@ async def create_simulation(
     db.add(simulation)
     db.flush()
     if file is not None and data is not None:
-        await _index_document(db, simulation, file.filename or "documento", data)
+        await _index_document(db, simulation, file.filename or "documento", data, current_admin.id)
     db.commit()
     db.refresh(simulation)
 
@@ -465,7 +470,7 @@ async def replace_document(
     simulation = _get_or_404(db, simulation_id)
     _require_document_source(simulation)
     data = await _read_upload(file)
-    await _index_document(db, simulation, file.filename or "documento", data)
+    await _index_document(db, simulation, file.filename or "documento", data, current_admin.id)
     db.commit()
     db.refresh(simulation)
     audit.describe(http_request, titolo=simulation.title, documento=simulation.document_name)
@@ -494,6 +499,8 @@ async def generate_simulation_questions(
     fretta. I tentativi già consegnati non ne risentono, perché ognuno porta
     con sé la fotografia delle domande che ha ricevuto.
     """
+    await llm_limits.consume(llm_limits.GENERAZIONE_DOMANDE, current_admin.id)
+
     simulation = _get_or_404(db, simulation_id)
     _require_document_source(simulation)
     chunks = simulation.chunks

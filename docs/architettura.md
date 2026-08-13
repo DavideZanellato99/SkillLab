@@ -46,7 +46,7 @@ tabella e non nella memoria del processo:
 | Cosa | Tabella | Perché non in RAM |
 | --- | --- | --- |
 | Sessioni vocali | `voice_sessions` | Il POST che apre la chiamata e il WebSocket che la usa sono due richieste, e finiscono su repliche diverse |
-| Tentativi di accesso falliti | `login_attempts` | Quattro contatori in memoria concederebbero quattro volte i tentativi |
+| Tentativi di accesso falliti, e le chiamate al modello contate per persona | `login_attempts` | Quattro contatori in memoria concederebbero quattro volte i tentativi, e quattro volte le chiamate a pagamento |
 | Token revocati e binding di sessione | `revoked_jti`, `token_session` | Un logout deve valere su tutte le repliche |
 
 L'unica eccezione voluta è il tetto alle chiamate contemporanee

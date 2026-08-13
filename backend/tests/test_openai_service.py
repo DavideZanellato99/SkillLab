@@ -488,7 +488,8 @@ def test_il_prompt_porta_la_scheda_dello_scenario_come_chiave_di_lettura():
             "NOME": "Anna",
             "COGNOME": "Bianchi",
             "DESCRIZIONE_PROBLEMATICA": "La carta è bloccata per tentativi errati.",
-        }
+        },
+        "<<<recinto>>>",
     )
 
     assert "Anna Bianchi" in prompt
@@ -498,7 +499,7 @@ def test_il_prompt_porta_la_scheda_dello_scenario_come_chiave_di_lettura():
 
 
 def test_senza_scheda_il_prompt_resta_valido_e_parla_di_un_cliente_simulato():
-    prompt = _evaluation_prompt({}, channel=CHANNEL_VOICE)
+    prompt = _evaluation_prompt({}, "<<<recinto>>>", channel=CHANNEL_VOICE)
 
     assert "il cliente simulato" in prompt
     # Nessun contesto da mostrare: la sezione non compare invece di comparire vuota

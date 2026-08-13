@@ -21,7 +21,7 @@ valgono su tutte le righe. Tutto in
 | --- | --- |
 | `token_session` | Il contesto (IP e User-Agent) per cui un token è stato emesso |
 | `revoked_jti` | I token uccisi prima della scadenza: logout, binding violato |
-| `login_attempts` | I tentativi di accesso falliti, per il limite a finestra scorrevole |
+| `login_attempts` | Gli eventi contati a finestra scorrevole: i tentativi di accesso falliti e, con uno `scope` che comincia per `llm-`, le chiamate al modello fatte da una persona. Tiene il nome con cui è nata |
 | `voice_sessions` | Una chiamata autorizzata e non ancora aperta, con la sua copia della storia |
 
 **Le conversazioni**

@@ -127,6 +127,42 @@ Che gli header ci siano davvero, su tutte e due le strade, lo verifica lo smoke
 test della CI a ogni giro: uno che sparisce non fa rumore, perché la pagina
 continua a funzionare esattamente come prima.
 
+## Le difese attorno al modello
+
+Le difese di sopra riguardano chi arriva da fuori. Queste riguardano il posto
+in cui il testo di un utente entra in una richiesta a OpenAI, e sono due
+perché i modi di approfittarne sono due: **spostare un voto** e **far pagare
+delle chiamate**.
+
+**Chi viene valutato scrive metà del materiale su cui il voto si decide.** Sia
+la trascrizione di una conversazione sia la risposta aperta di un test
+viaggiano nella stessa richiesta delle istruzioni che dicono come giudicarle,
+quindi una riga scritta nella forma giusta poteva presentarsi al modello come
+istruzione invece che come materiale. Il rimedio sta in
+[untrusted_text.py](../backend/untrusted_text.py) e vale nei due punti in cui
+serve, cioè la valutazione della conversazione e la correzione delle risposte
+aperte: al testo si toglie la forma (il numero di riga, l'etichetta a inizio
+riga, i titoli di sezione), il blocco viene racchiuso in un recinto che cambia
+a ogni chiamata, e il prompt dichiara che quel recinto contiene materiale da
+valutare e mai istruzioni da eseguire. Il ragionamento per esteso, con il
+motivo per cui il roleplay è escluso, sta in
+[valutazione.md](valutazione.md).
+
+**Le chiamate al modello hanno un tetto per persona**
+([llm_limits.py](../backend/llm_limits.py)). Vale per tutte e cinque quelle
+che partono da una richiesta HTTP: chat testuale, valutazione, correzione
+delle risposte aperte, bozza di scheda persona, generazione delle domande. Ogni
+funzione ha il suo secchiello, così finire una chat non lascia senza
+valutazione, e si conta ogni chiamata **iniziata**, perché è quella che si
+paga. Le soglie stanno nel codice come quelle del login, e per lo stesso
+motivo: non sono una scelta di installazione, sono la distanza fra un uso
+intenso e un uso che non è più un uso.
+
+Il vocale un tetto ce l'aveva già, `MAX_CONCURRENT_CALLS`, perché lì la
+capienza è un problema visibile: si vede il giorno stesso, in aula. Quello di
+qui protegge dal guasto opposto, cioè quello che non si vede fino alla
+fattura.
+
 ## Altre due difese lontane dal login
 
 Due altre difese stanno lontano dal login e vale la pena nominarle:

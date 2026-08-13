@@ -122,6 +122,32 @@ def test_la_password_dell_admin_locale_deve_comunque_essere_quella(cognito):
         authenticate("admin", "un'altra password")
 
 
+def test_senza_dev_admin_login_l_admin_locale_non_esiste(cognito, monkeypatch):
+    """Sul server la variabile non c'è, e allora quella coppia è una coppia
+    qualunque: finisce a Cognito, che non la conosce, e viene rifiutata come
+    tutte le altre."""
+    monkeypatch.setattr(cognito_service, "DEV_ADMIN_LOGIN_ENABLED", False)
+    finto = cognito(initiate_auth=_errore("UserNotFoundException"))
+
+    with pytest.raises(RuntimeError):
+        authenticate("admin", "admin")
+
+    assert [nome for nome, _ in finto.chiamate] == ["initiate_auth"]
+
+
+def test_senza_dev_admin_login_il_token_dell_admin_locale_non_vale(jwks, jwt_finto, monkeypatch):
+    """La seconda porta, che conta quanto la prima: se il token finto restasse
+    valido, basterebbe scriverlo nel cookie per entrare senza nemmeno fare
+    l'accesso."""
+    from jose import JWTError
+
+    monkeypatch.setattr(cognito_service, "DEV_ADMIN_LOGIN_ENABLED", False)
+    jwt_finto(JWTError("Firma non valida"))
+
+    with pytest.raises(RuntimeError):
+        verify_access_token("mock-admin-access-token")
+
+
 def test_il_primo_accesso_torna_indietro_con_la_sfida_invece_dei_token(cognito):
     """L'invito è ancora aperto: la password temporanea va sostituita prima
     che esista una sessione."""

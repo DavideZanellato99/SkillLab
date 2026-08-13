@@ -383,10 +383,16 @@ una cancellazione sbagliata ma non dal disco che muore.
   davvero un processo invece di stimarlo.
 - **`VOICE_STT_DEBUG=0` nel `.env` del server.** Accende il tracciato grezzo
   della STT, che scrive nei log le trascrizioni di quello che gli utenti
-  dicono: in locale sta a 1 per tarare la VAD, sul server va a 0. È
-  l'eccezione fra le variabili, perché non ferma l'avvio se manca: vale
+  dicono: in locale sta a 1 per tarare la VAD, sul server va a 0. È una delle
+  due eccezioni fra le variabili, perché non ferma l'avvio se manca: vale
   attivo solo scritto esattamente `1`, e qualunque altra cosa, compresa
   l'assenza, lo lascia spento.
+- **`DEV_ADMIN_LOGIN` spenta nel `.env` del server**, l'altra eccezione, con
+  lo stesso patto. Accesa, la coppia `admin` / `admin` apre un super admin
+  senza passare da Cognito, quindi senza traccia dove la si cercherebbe. Si
+  spegne dopo aver creato e provato un super admin vero, mai prima:
+  spegnendola su un'installazione nuova si resta chiusi fuori
+  ([autenticazione.md](autenticazione.md)).
 
 ### Quando i numeri cresceranno
 

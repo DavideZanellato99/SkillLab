@@ -19,9 +19,11 @@ installazione.
 
    Non esiste un elenco delle variabili, ed è voluto: quelle obbligatorie sono
    dichiarate in modo che l'avvio fallisca dicendo cosa manca, e un messaggio
-   così non può invecchiare, mentre un elenco sì. L'unica a cui fare attenzione
-   è `SITE_ADDRESS`, perché ha un default: dimenticandola il sito parte su
-   `localhost` e dal dominio vero non risponde niente.
+   così non può invecchiare, mentre un elenco sì. Le uniche a cui fare
+   attenzione sono le tre che non fermano l'avvio: `SITE_ADDRESS`, perché ha
+   un default e dimenticandola il sito parte su `localhost` mentre dal dominio
+   vero non risponde niente, e `VOICE_STT_DEBUG` e `DEV_ADMIN_LOGIN`, che vanno
+   spente (vedi più sotto).
 4. Poi:
 
 ```bash
@@ -188,6 +190,10 @@ dell'applicazione, altrimenti ricreano il problema che la pulizia risolve
   davvero un processo invece di stimarlo.
 - **`VOICE_STT_DEBUG=0` sul server**, perché stampa nei log quello che gli
   utenti dicono.
+- **`DEV_ADMIN_LOGIN` spenta sul server.** Accesa, la coppia `admin` / `admin`
+  entra come super admin saltando Cognito. Va spenta **dopo** aver creato un
+  super admin vero e averlo provato, perché è anche l'unico che nasce da solo
+  ([autenticazione.md](autenticazione.md)).
 
 ### Quando i numeri cresceranno
 

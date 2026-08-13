@@ -1,5 +1,6 @@
 """Service for communicating with AWS Cognito for authentication."""
 
+import logging
 import os
 import time
 
@@ -12,6 +13,26 @@ from jose import JWTError, jwt
 import tls_setup  # noqa: F401  (TLS via OS store: must precede the requests/boto3 imports)
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+# L'accesso amministrativo locale, cioè la coppia admin/admin che salta
+# Cognito del tutto (vedi `authenticate`). Serve in sviluppo, dove non si
+# vuole un utente vero su Cognito per aprire l'applicazione, e sul server
+# non deve esistere: chi ne conosce la coppia entra come super admin.
+#
+# Vale acceso solo scritto esattamente "1". Qualunque altro valore, e
+# soprattutto l'assenza della variabile, lo lascia spento: la porta si apre
+# per scelta, mai per dimenticanza. È lo stesso patto di VOICE_STT_DEBUG
+# (vedi turn_metrics), ed è l'unico modo perché un .env incompleto sbagli
+# dalla parte giusta.
+DEV_ADMIN_LOGIN_ENABLED = os.getenv("DEV_ADMIN_LOGIN") == "1"
+
+if DEV_ADMIN_LOGIN_ENABLED:
+    logger.warning(
+        "DEV_ADMIN_LOGIN attivo: la coppia admin/admin apre un accesso super admin "
+        "senza passare da Cognito. Su un server raggiungibile da internet va spenta."
+    )
 
 COGNITO_USER_POOL_ID = os.getenv("COGNITO_USER_POOL_ID", "")
 COGNITO_APP_CLIENT_ID = os.getenv("COGNITO_APP_CLIENT_ID", "")
@@ -56,7 +77,11 @@ def authenticate(email: str, password: str) -> dict:
 
     Raises RuntimeError on failure.
     """
-    if email in ("admin", "admin@admin.com", "admin@skilllab.local") and password == "admin":  # noqa: S105
+    if (
+        DEV_ADMIN_LOGIN_ENABLED
+        and email in ("admin", "admin@admin.com", "admin@skilllab.local")
+        and password == "admin"  # noqa: S105
+    ):
         return {
             "access_token": "mock-admin-access-token",
             "refresh_token": "mock-admin-refresh-token",
@@ -179,7 +204,7 @@ def refresh_tokens(refresh_token: str) -> dict:
     Returns new access token.
     Raises RuntimeError on failure.
     """
-    if refresh_token == "mock-admin-refresh-token":  # noqa: S105
+    if DEV_ADMIN_LOGIN_ENABLED and refresh_token == "mock-admin-refresh-token":  # noqa: S105
         return {
             "access_token": "mock-admin-access-token",
         }
@@ -212,7 +237,7 @@ def revoke_refresh_token(refresh_token: str) -> None:
 
     Raises RuntimeError on failure.
     """
-    if refresh_token == "mock-admin-refresh-token":  # noqa: S105
+    if DEV_ADMIN_LOGIN_ENABLED and refresh_token == "mock-admin-refresh-token":  # noqa: S105
         return
 
     try:
@@ -240,7 +265,7 @@ def verify_access_token(token: str, verify_exp: bool = True) -> dict:
     the OLD access token (jti) for the session-binding pre-check — the
     identifier matters there, not the validity.
     """
-    if token == "mock-admin-access-token":  # noqa: S105
+    if DEV_ADMIN_LOGIN_ENABLED and token == "mock-admin-access-token":  # noqa: S105
         return {
             "sub": "mock-admin-sub-0000-0000-0000",
             "username": "admin",

@@ -40,6 +40,10 @@ os.environ.setdefault("ELEVENLABS_VAD_THRESHOLD", "0.5")
 os.environ.setdefault("ELEVENLABS_STT_WS_URL", "wss://example.invalid/stt")
 os.environ.setdefault("VOICE_LATENCY_LOG", "0")
 os.environ.setdefault("VOICE_STT_DEBUG", "0")
+# L'accesso admin/admin locale, che diverse prove usano per entrare senza
+# Cognito. Acceso qui e non ereditato dall'ambiente: la suite deve dare lo
+# stesso esito sulla macchina di sviluppo e nella pipeline.
+os.environ.setdefault("DEV_ADMIN_LOGIN", "1")
 os.environ.setdefault("MAX_CONCURRENT_CALLS", "20")
 os.environ.setdefault("DB_POOL_SIZE", "5")
 os.environ.setdefault("DB_MAX_OVERFLOW", "15")

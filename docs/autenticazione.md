@@ -192,5 +192,25 @@ delle schede in secondo piano vengono rallentati o congelati dal browser.
 
 Esiste un super admin locale (`admin` / `admin`) che non passa da Cognito e non
 ha `jti`, quindi salta binding e denylist. Serve a lavorare senza un pool
-configurato. Non può cambiare la propria password, e sul server vero non deve
-esistere nessun motivo per usarlo.
+configurato. Non può cambiare la propria password.
+
+**Vive solo dove `DEV_ADMIN_LOGIN` vale esattamente `1`.** Qualunque altro
+valore, e soprattutto l'assenza della variabile, lo spegne: la coppia
+`admin` / `admin` torna a essere una coppia qualunque che Cognito rifiuta, il
+suo token finto non viene più riconosciuto, e l'utente non viene nemmeno
+creato all'avvio. È l'unico patto che rende innocuo un `.env` incompleto, ed
+è lo stesso di `VOICE_STT_DEBUG`: si accende per scelta, mai per
+dimenticanza. All'avvio, se è acceso, il backend lo scrive nei log.
+
+Sul server va spento, perché chi conosce quella coppia entra come super admin
+di tutte le organizzazioni e Cognito non vede passare niente, quindi
+l'accesso non lascia traccia dove verrebbe cercata.
+
+L'ordine però conta, perché è anche l'unico super admin che nasce da solo:
+alla prima installazione si entra con lui, si crea dalla gestione utenti un
+super admin vero, che riceve le credenziali per email da Cognito, si prova
+che entri davvero, e solo allora si porta `DEV_ADMIN_LOGIN` a 0 e si riavvia.
+Spegnendolo prima si resta chiusi fuori dalla propria installazione.
+
+Su un'installazione dove l'utente finto è già stato creato, spegnere la
+variabile non cancella la sua riga: la rende soltanto non spendibile.

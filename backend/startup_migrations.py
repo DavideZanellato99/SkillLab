@@ -23,6 +23,7 @@ from sqlalchemy import or_, text
 
 from auth_dependency import ensure_roles, get_or_create_mock_admin
 from authorship import SYSTEM_ACTOR_EMAIL, UTC_NOW_SQL
+from cognito_service import DEV_ADMIN_LOGIN_ENABLED
 from conversation_titles import next_conversation_title
 from database import Base, SessionLocal, engine
 from models import (
@@ -409,10 +410,18 @@ def _backfill_conversation_titles() -> None:
 
 
 def _seed_roles_and_admin() -> None:
-    """Ensure the system roles and the mock super admin exist."""
+    """Ensure the system roles exist, and the mock super admin where it can log in.
+
+    L'utente finto segue il suo accesso: senza DEV_ADMIN_LOGIN nessuno può
+    autenticarsi come lui (vedi cognito_service), e crearlo lo stesso
+    lascerebbe in elenco un super admin che non è di nessuno. Su
+    un'installazione che lo ha già la riga resta dov'è, questo non la
+    rimuove, semplicemente smette di essere spendibile.
+    """
     with SessionLocal() as db:
         ensure_roles(db)
-        get_or_create_mock_admin(db)
+        if DEV_ADMIN_LOGIN_ENABLED:
+            get_or_create_mock_admin(db)
 
 
 def _backfill_user_organizations() -> None:

@@ -10,6 +10,7 @@ const stato = vi.hoisted(() => ({
   attempts: { data: [] as unknown[], isPending: false, error: null as unknown },
   simulations: { data: [] as unknown[], isPending: false, error: null as unknown },
   chiesto: { subjectId: '' },
+  soggetto: null as Record<string, unknown> | null,
 }))
 vi.mock('../../src/hooks/useComparison', () => ({
   useComparableUsers: (enabled: boolean) => ({ data: enabled ? stato.people : [] }),
@@ -23,7 +24,10 @@ vi.mock('../../src/hooks/useComparison', () => ({
 /* Le due viste hanno i loro test: qui interessa quale delle due la pagina
  * mette davanti, non come disegnano i tentativi. */
 vi.mock('../../src/components/ComparisonConversations', () => ({
-  default: ({ attempts }: { attempts: unknown[] }) => <div>conversazioni: {attempts.length}</div>,
+  default: ({ attempts, subject }: { attempts: unknown[]; subject: Record<string, unknown> }) => {
+    stato.soggetto = subject
+    return <div>conversazioni: {attempts.length}</div>
+  },
 }))
 vi.mock('../../src/components/ComparisonSimulations', () => ({
   default: ({ attempts }: { attempts: unknown[] }) => <div>simulazioni: {attempts.length}</div>,
@@ -76,6 +80,24 @@ describe('scelta della persona', () => {
     await userEvent.click(screen.getByRole('option', { name: 'Marco Bianchi' }))
 
     expect(stato.chiesto.subjectId).toBe('u-2')
+  })
+
+  /* Di chi sono le prove serve alla metà parlata per aprire la trascrizione:
+     le proprie e quelle di un'altra persona si leggono da due endpoint
+     diversi, e l'intestazione dice chi ha parlato. */
+  it('dice alla metà parlata di chi sono le prove', async () => {
+    renderPage('organization_admin')
+    expect(stato.soggetto).toMatchObject({ isSelf: true })
+
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(screen.getByRole('option', { name: 'Marco Bianchi' }))
+
+    expect(stato.soggetto).toMatchObject({
+      isSelf: false,
+      nome: 'Marco',
+      cognome: 'Bianchi',
+      email: 'marco@test.it',
+    })
   })
 })
 

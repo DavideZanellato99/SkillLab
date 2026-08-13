@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ANY,
+  assignRole,
   filterOptions,
   matchesFilter,
-  pickPair,
+  NO_PAIR,
+  resolvePair,
   survivingFilter,
 } from '../../src/components/comparisonFilters'
 
@@ -87,26 +89,48 @@ describe('survivingFilter', () => {
   })
 })
 
-describe('pickPair', () => {
-  it('propone la prima contro l ultima', () => {
-    expect(pickPair(prove, id, '', '')).toEqual({ leftId: 'p1', rightId: 'p3' })
+describe('resolvePair', () => {
+  it('propone la prima contro l ultima, la più vecchia a sinistra', () => {
+    expect(resolvePair(prove, id, NO_PAIR)).toEqual({ leftId: 'p1', rightId: 'p3' })
   })
 
   it('tiene le scelte di chi guarda finché appartengono alla lista', () => {
-    expect(pickPair(prove, id, 'p2', 'p3')).toEqual({ leftId: 'p2', rightId: 'p3' })
+    expect(resolvePair(prove, id, { leftId: 'p2', rightId: 'p3' })).toEqual({
+      leftId: 'p2',
+      rightId: 'p3',
+    })
   })
 
   it('torna alla coppia proposta quando una scelta esce dalla lista', () => {
     const rimaste = prove.filter((p) => p.scenario === 's-anna')
 
-    expect(pickPair(rimaste, id, 'p2', 'p2')).toEqual({ leftId: 'p1', rightId: 'p3' })
+    expect(resolvePair(rimaste, id, { leftId: 'p2', rightId: 'p3' })).toEqual({
+      leftId: 'p1',
+      rightId: 'p3',
+    })
   })
 
-  it('non propone nessuna prova a sinistra quando ne resta una sola', () => {
-    expect(pickPair([prove[0]], id, '', '')).toEqual({ leftId: '', rightId: 'p1' })
+  it('non propone niente quando non resta una coppia', () => {
+    expect(resolvePair([prove[0]], id, NO_PAIR)).toEqual(NO_PAIR)
+    expect(resolvePair([], id, { leftId: 'p1', rightId: 'p3' })).toEqual(NO_PAIR)
+  })
+})
+
+describe('assignRole', () => {
+  const coppia = { leftId: 'p1', rightId: 'p3' }
+
+  it('mette la prova nel posto che si è toccato, al posto di chi c era', () => {
+    expect(assignRole(coppia, 'leftId', 'p2')).toEqual({ leftId: 'p2', rightId: 'p3' })
+    expect(assignRole(coppia, 'rightId', 'p2')).toEqual({ leftId: 'p1', rightId: 'p2' })
   })
 
-  it('non propone niente quando non ne resta nessuna', () => {
-    expect(pickPair([], id, 'p1', 'p3')).toEqual({ leftId: '', rightId: '' })
+  /* Con due prove sole, spostare quella che è già nell'altro posto non può
+     buttarne fuori nessuna: i due si scambiano. */
+  it('scambia i due posti quando si sposta la prova che sta nell altro', () => {
+    expect(assignRole(coppia, 'leftId', 'p3')).toEqual({ leftId: 'p3', rightId: 'p1' })
+  })
+
+  it('non fa niente sul posto che quella prova ha già', () => {
+    expect(assignRole(coppia, 'leftId', 'p1')).toBe(coppia)
   })
 })

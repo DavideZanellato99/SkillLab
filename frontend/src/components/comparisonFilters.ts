@@ -62,29 +62,58 @@ export function survivingFilter(options: SelectOption[], picked: string): string
 }
 
 /**
+ * I due tentativi affiancati: quello da cui si parte e quello con cui si
+ * finisce. I due posti sono distinti e hanno un nome, "prima" e "dopo", e
+ * sono quelli che si leggono a sinistra e a destra in tutta la schermata.
+ */
+export interface Pair {
+  leftId: string
+  rightId: string
+}
+
+/** Il ruolo di una prova nel confronto, cioè in quale dei due posti sta. */
+export type PairRole = keyof Pair
+
+export const NO_PAIR: Pair = { leftId: '', rightId: '' }
+
+/**
  * I due tentativi da affiancare, fra quelli rimasti dopo i filtri.
  *
  * Si propone il primo contro l'ultimo, che è il confronto che si vuole vedere
- * quasi sempre. La scelta di chi guarda vince finché appartiene ancora alla
- * lista: quando non ci appartiene più (si è cambiata persona, o si è stretto
- * un filtro) tenerla mostrerebbe un confronto vuoto senza dire perché.
+ * quasi sempre, e nell'ordine in cui si legge un miglioramento: il più
+ * vecchio a sinistra.
  *
- * Con una prova sola non c'è nessun primo da mettere a sinistra: `leftId`
- * resta vuoto, e chi chiama lo legge come "non c'è niente da confrontare".
+ * La scelta di chi guarda vince finché appartengono entrambe alla lista:
+ * quando una non ci appartiene più (si è cambiata persona, o si è stretto un
+ * filtro) si torna alla coppia proposta, perché tenere la sopravvissuta
+ * accanto a un id che non esiste mostrerebbe mezzo confronto senza dire
+ * perché. Sotto le due prove non c'è niente da affiancare, e la coppia resta
+ * vuota.
  */
-export function pickPair<T>(
-  items: T[],
-  idOf: (item: T) => string,
-  pickedLeft: string,
-  pickedRight: string,
-): { leftId: string; rightId: string } {
+export function resolvePair<T>(items: T[], idOf: (item: T) => string, picked: Pair): Pair {
+  if (items.length < 2) return NO_PAIR
   const belongs = (id: string) => items.some((item) => idOf(item) === id)
-  return {
-    leftId: belongs(pickedLeft) ? pickedLeft : items.length > 1 ? idOf(items[0]) : '',
-    rightId: belongs(pickedRight)
-      ? pickedRight
-      : items.length > 0
-        ? idOf(items[items.length - 1])
-        : '',
+  if (belongs(picked.leftId) && belongs(picked.rightId) && picked.leftId !== picked.rightId) {
+    return picked
   }
+  return { leftId: idOf(items[0]), rightId: idOf(items[items.length - 1]) }
+}
+
+/**
+ * La coppia dopo che si è dato un posto a una prova.
+ *
+ * Il posto lo dice chi sceglie, con il comando che tocca sulla prova, e non
+ * una regola che deve indovinare: la prova toccata prende quel posto e chi
+ * c'era esce dal confronto.
+ *
+ * L'altra prova della coppia, se è proprio quella che si sta spostando, non
+ * esce ma passa al posto rimasto libero. È l'unica cosa sensata da fare con
+ * due prove sole: metterla fuori lascerebbe metà confronto, e tenerla dov'è
+ * significherebbe confrontare una prova con se stessa.
+ */
+export function assignRole(current: Pair, role: PairRole, id: string): Pair {
+  if (current[role] === id) return current
+  const other: PairRole = role === 'leftId' ? 'rightId' : 'leftId'
+  if (current[other] === id) return { ...current, [role]: id, [other]: current[role] } as Pair
+  return { ...current, [role]: id }
 }

@@ -2,11 +2,23 @@ import { useMemo, useState } from 'react'
 import type { Attempt } from '../services/comparison'
 import ComparisonEmpty from './ComparisonEmpty'
 import ComparisonFilterBar, { ComparisonWarnings } from './ComparisonFilterBar'
+import ComparisonOpenButton from './ComparisonOpenButton'
+import ComparisonTimeline from './ComparisonTimeline'
+import ComparisonVerdict from './ComparisonVerdict'
+import ConversationDetailModal from './ConversationDetailModal'
 import ConversationModeBadge from './ConversationModeBadge'
-import Select from './Select'
 import { conversationModeLabel, MODE_FILTERS } from './conversationMode'
 import type { ModeFilter } from './conversationMode'
-import { ANY, filterOptions, matchesFilter, pickPair, survivingFilter } from './comparisonFilters'
+import {
+  ANY,
+  assignRole,
+  filterOptions,
+  matchesFilter,
+  NO_PAIR,
+  resolvePair,
+  survivingFilter,
+} from './comparisonFilters'
+import type { Pair } from './comparisonFilters'
 import { Delta } from './scoreCharts'
 import { cardCls, formatScore, scoreBarColor, scoreTextColor } from './scoreFormat'
 import { formatDate } from './lastAccess'
@@ -19,69 +31,96 @@ import { formatDate } from './lastAccess'
  *
  * Si sceglie fra le prove che i due filtri lasciano passare, il canale e lo
  * scenario: una telefonata e una chat scritta non si giudicano nello stesso
- * modo, e i sei criteri sono tarati sulla difficoltà di quel cliente. */
+ * modo, e i sei criteri sono tarati sulla difficoltà di quel cliente.
+ *
+ * L'ordine di quello che si legge è l'ordine delle domande che ci si fa: di
+ * quanto sono migliorato, su cosa, e infine quali erano le due prove. Il
+ * verdetto in cima, i criteri sotto come suo perché, e il contesto delle due
+ * conversazioni in fondo, dove serve solo a chi vuole risalire ai fatti. */
 
-function attemptLabel(attempt: Attempt): string {
-  return `${formatDate(attempt.conversation_at)} · ${attempt.title} · ${formatScore(
-    attempt.final_score,
-  )}/10`
+interface CriterionRow {
+  key: string
+  label: string
+  left: number | null
+  right: number | null
 }
 
-/** Una colonna del confronto: il tentativo con il suo voto e le sue parole.
+/**
+ * Cosa è cambiato nei sei criteri, in una riga sola sotto il voto.
  *
- *  `baseline` è il tentativo di sinistra, quello rispetto a cui si misura:
- *  la variazione compare quindi solo a destra. Metterla su entrambe le
- *  colonne significherebbe scrivere lo stesso scarto due volte, una col
- *  segno rovesciato, e costringere a chiedersi quale dei due si legge. */
-function AttemptPanel({ attempt, baseline }: { attempt: Attempt; baseline: Attempt | null }) {
-  const delta = baseline ? attempt.final_score - baseline.final_score : null
+ * Il voto complessivo può restare fermo mentre metà dei criteri si muovono in
+ * due direzioni, e questa riga è l'unica cosa che lo dice prima di scendere a
+ * leggere le barre. Si contano solo i criteri che tutte e due le prove hanno:
+ * uno che esiste da una parte sola non è né migliorato né peggiorato.
+ */
+function changeSummary(rows: CriterionRow[]): string | null {
+  const comparable = rows.filter(
+    (row): row is CriterionRow & { left: number; right: number } =>
+      row.left !== null && row.right !== null,
+  )
+  if (comparable.length === 0) return null
+
+  const improved = comparable.filter((row) => row.right > row.left).length
+  const worsened = comparable.filter((row) => row.right < row.left).length
+  const unchanged = comparable.length - improved - worsened
+  if (improved === 0 && worsened === 0) return 'Nessun criterio è cambiato fra le due prove'
+
+  return [
+    improved > 0
+      ? `${improved} ${improved === 1 ? 'criterio migliorato' : 'criteri migliorati'}`
+      : '',
+    worsened > 0
+      ? `${worsened} ${worsened === 1 ? 'criterio peggiorato' : 'criteri peggiorati'}`
+      : '',
+    unchanged > 0
+      ? `${unchanged} ${unchanged === 1 ? 'criterio invariato' : 'criteri invariati'}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
+/** Una delle due prove: da dove viene il voto e cosa ne è stato detto.
+ *
+ *  Il voto grande sta nel verdetto e qui compare in piccolo, accanto al nome:
+ *  scritto due volte in grande, il numero avrebbe fatto cercare la differenza
+ *  fra le due card proprio dove è già stata calcolata. Qui restano le cose che
+ *  il verdetto non può riassumere, cioè le parole della valutazione. */
+function AttemptPanel({
+  role,
+  attempt,
+  onOpen,
+}: {
+  role: string
+  attempt: Attempt
+  onOpen: () => void
+}) {
   const hasWords = attempt.summary || attempt.review_reason || attempt.review_note
 
   return (
-    /* Un pannello per tentativo invece di due blocchi sciolti affiancati:
-       il bordo dice dove finisce una conversazione e comincia l'altra, che
-       è la domanda che si fa chi legge un confronto. */
-    <div className="relative overflow-hidden rounded-2xl border border-white/6 bg-gray-900/60">
-      <div className="flex flex-col items-center gap-1 border-b border-white/6 bg-white/4 px-6 py-5">
-        {/* Nell'angolo e non sotto il punteggio: appiccicata al numero si
-          leggeva come una sua parte. Fuori dal flusso, in più, non serve
-          riservarle spazio nella card senza variazione perché i due voti
-          restino alla stessa altezza. */}
-        {delta !== null && (
-          <span className="absolute right-3 top-3">
-            <Delta value={delta} />
-          </span>
-        )}
-        <span className="flex items-center gap-2 px-4 text-center text-[0.78rem] text-slate-400">
-          {attempt.title}
-          <ConversationModeBadge mode={attempt.mode} />
+    <div className="overflow-hidden rounded-2xl border border-white/6 bg-gray-900/60 p-5">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-white/6 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-slate-400">
+          {role}
         </span>
-        <span className="text-[0.72rem] text-slate-500">
-          {attempt.avatar_name} · {formatDate(attempt.conversation_at)}
+        <span className="text-[0.85rem] text-slate-200">{attempt.title}</span>
+        <ConversationModeBadge mode={attempt.mode} />
+        <span className={`text-[0.85rem] font-bold ${scoreTextColor(attempt.final_score)}`}>
+          {formatScore(attempt.final_score)}
         </span>
-        <div className="mt-1 flex items-baseline gap-1">
-          <span
-            className={`font-heading text-4xl font-bold ${scoreTextColor(attempt.final_score)}`}
-          >
-            {formatScore(attempt.final_score)}
-          </span>
-          <span className="text-base text-slate-500">/ 10</span>
-        </div>
-        {/* Lo spazio della targhetta è riservato anche dove non c'è: le card
-          stanno una accanto all'altra e una riga in più da un lato
-          sposterebbe quel voto rispetto all'altro, che è proprio il
-          confronto che si sta guardando. */}
-        <div className="flex h-5 items-center">
-          {attempt.has_override && (
-            <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[0.68rem] font-semibold text-violet-300">
-              Corretto dal docente · AI {formatScore(attempt.ai_score)}
-            </span>
-          )}
-        </div>
       </div>
+      <p className="text-[0.72rem] text-slate-500">
+        {attempt.avatar_name} · {formatDate(attempt.conversation_at)}
+      </p>
+
+      {attempt.has_override && (
+        <span className="mt-3 inline-flex rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[0.68rem] font-semibold text-violet-300">
+          Corretto dal docente · AI {formatScore(attempt.ai_score)}
+        </span>
+      )}
 
       {hasWords && (
-        <div className="flex flex-col gap-3 p-5">
+        <div className="mt-4 flex flex-col gap-3">
           {attempt.summary && (
             <p className="text-[0.82rem] leading-relaxed text-slate-400">{attempt.summary}</p>
           )}
@@ -105,18 +144,46 @@ function AttemptPanel({ attempt, baseline }: { attempt: Attempt; baseline: Attem
           )}
         </div>
       )}
+
+      <ComparisonOpenButton
+        label="Apri la trascrizione"
+        ariaLabel={`Apri la trascrizione di ${attempt.title} del ${formatDate(attempt.conversation_at)}`}
+        onClick={onOpen}
+      />
     </div>
   )
 }
 
-export default function ComparisonConversations({ attempts }: { attempts: Attempt[] }) {
+/** Di chi sono le prove che si stanno guardando.
+ *
+ *  Serve solo ad aprire la trascrizione: l'intestazione della schermata dice
+ *  chi ha parlato, e `isSelf` dice da dove si legge, perché una conversazione
+ *  propria e quella di un'altra persona arrivano da due endpoint diversi. */
+export interface ComparisonSubject {
+  nome: string
+  cognome: string
+  email: string
+  isSelf: boolean
+}
+
+export default function ComparisonConversations({
+  attempts,
+  subject,
+  onReviewSaved,
+}: {
+  attempts: Attempt[]
+  subject: ComparisonSubject
+  /** Una correzione scritta dalla trascrizione cambia il voto di questa
+   *  pagina, che sta mostrando il precedente. */
+  onReviewSaved?: () => void
+}) {
   /* Prima si restringe, poi si sceglie. I due filtri partono aperti: chi
    * arriva qui vuole vedere cosa ha fatto, e nascondergli metà delle proprie
    * prove per prudenza sarebbe una risposta incompleta. */
   const [modeFilter, setModeFilter] = useState<ModeFilter>(ANY)
   const [pickedAvatarId, setPickedAvatarId] = useState(ANY)
-  const [pickedLeftId, setPickedLeftId] = useState('')
-  const [pickedRightId, setPickedRightId] = useState('')
+  const [picked, setPicked] = useState<Pair>(NO_PAIR)
+  const [openAttempt, setOpenAttempt] = useState<Attempt | null>(null)
 
   /* Gli scenari fra cui scegliere sono quelli del canale scelto, non tutti:
    * un cliente affrontato solo al telefono, offerto mentre si guardano le
@@ -142,36 +209,32 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
     [byMode, avatarFilter],
   )
 
-  /* Il confronto proposto è primo contro ultimo, fra quelli rimasti. Le due
-   * scelte sono modificabili, ma quando i tentativi cambiano (si è scelta
-   * un'altra persona, o si è stretto un filtro) una selezione che non
+  /* Il confronto proposto è la prima contro l'ultima, fra quelle rimaste, e
+   * dalla fila si sposta un posto per volta. Quando i tentativi cambiano (si
+   * è scelta un'altra persona, o si è stretto un filtro) una coppia che non
    * appartiene più a questa lista torna al default: tenerla mostrerebbe un
    * confronto vuoto senza dire perché. */
-  const { leftId, rightId } = pickPair(
-    filtered,
-    (a) => a.conversation_id,
-    pickedLeftId,
-    pickedRightId,
-  )
+  const idOf = (a: Attempt) => a.conversation_id
+  const { leftId, rightId } = resolvePair(filtered, idOf, picked)
 
-  const left = useMemo(
-    () => filtered.find((a) => a.conversation_id === leftId) ?? null,
-    [filtered, leftId],
-  )
+  const left = useMemo(() => filtered.find((a) => idOf(a) === leftId) ?? null, [filtered, leftId])
   const right = useMemo(
-    () => filtered.find((a) => a.conversation_id === rightId) ?? null,
+    () => filtered.find((a) => idOf(a) === rightId) ?? null,
     [filtered, rightId],
   )
 
-  const attemptOptions = filtered.map((a) => ({
-    value: a.conversation_id,
-    label: attemptLabel(a),
+  const entries = filtered.map((a) => ({
+    id: a.conversation_id,
+    when: a.conversation_at,
+    title: a.title,
+    score: a.final_score,
+    badge: <ConversationModeBadge mode={a.mode} iconOnly />,
   }))
 
   /* I criteri dell'uno e dell'altro, appaiati per chiave: una valutazione
    * vecchia può avere criteri che non esistono più, e vanno mostrati
    * comunque invece di sparire dal confronto. */
-  const criteriaRows = useMemo(() => {
+  const criteriaRows = useMemo<CriterionRow[]>(() => {
     if (!left || !right) return []
     const labels = new Map<string, string>()
     const leftScores = new Map<string, number>()
@@ -223,7 +286,7 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
   return (
     <>
       {/* `relative z-20`: il pannello ha backdrop-blur, che apre un contesto
-          di impilamento, quindi lo z-index delle tendine dei Select resta
+          di impilamento, quindi lo z-index della tendina del Select resta
           confinato qui dentro e i pannelli che seguono nel DOM ci passerebbero
           sopra. Alzando il contenitore, tutto il suo contenuto viene con lui. */}
       <div className={`${cardCls} relative z-20 mb-8`}>
@@ -239,25 +302,13 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
           onTargetChange={setPickedAvatarId}
         />
 
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="min-w-[240px] flex-1">
-            <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="left">
-              Prima conversazione
-            </label>
-            <Select id="left" value={leftId} onChange={setPickedLeftId} options={attemptOptions} />
-          </div>
-          <div className="min-w-[240px] flex-1">
-            <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="right">
-              Seconda conversazione
-            </label>
-            <Select
-              id="right"
-              value={rightId}
-              onChange={setPickedRightId}
-              options={attemptOptions}
-            />
-          </div>
-        </div>
+        <ComparisonTimeline
+          label="Conversazioni valutate"
+          entries={entries}
+          leftId={leftId}
+          rightId={rightId}
+          onAssign={(role, id) => setPicked(assignRole({ leftId, rightId }, role, id))}
+        />
 
         <ComparisonWarnings messages={warnings} />
       </div>
@@ -275,27 +326,37 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
 
       {left && right && (
         <>
-          {/* Senza `items-start` i due pannelli si stirano all'altezza
-              della riga, cioè del più alto: le sintesi sono lunghe quanto
-              capita, e due riquadri di altezza diversa affiancati fanno
-              sembrare che a uno dei due manchi qualcosa. */}
-          <div className="mb-8 grid grid-cols-2 gap-6 max-md:grid-cols-1">
-            <AttemptPanel attempt={left} baseline={null} />
-            <AttemptPanel attempt={right} baseline={left} />
-          </div>
+          <ComparisonVerdict
+            before={{
+              score: left.final_score,
+              caption: `${left.avatar_name} · ${formatDate(left.conversation_at)}`,
+            }}
+            after={{
+              score: right.final_score,
+              caption: `${right.avatar_name} · ${formatDate(right.conversation_at)}`,
+            }}
+          >
+            {changeSummary(criteriaRows)}
+          </ComparisonVerdict>
 
-          <div className={cardCls}>
+          <div className={`${cardCls} mb-6`}>
             <h2 className="mb-4 text-sm font-semibold text-slate-300">Punteggi per criterio</h2>
             {/* Le due colonne di barre vanno intestate: senza, si legge un
                 paio di numeri senza sapere quale conversazione è quale, e
-                tocca risalire ai pannelli sopra ogni volta. */}
+                tocca risalire al verdetto ogni volta. Le stesse due parole
+                del verdetto e della fila di scelta, così le tre parti della
+                pagina si chiamano allo stesso modo. */}
             <div className="mb-3 grid grid-cols-2 gap-4 border-b border-white/6 pb-2">
-              {[left, right].map((attempt) => (
+              {[
+                { attempt: left, role: 'Prima' },
+                { attempt: right, role: 'Dopo' },
+              ].map(({ attempt, role }) => (
                 <span
                   key={attempt.conversation_id}
                   className="truncate text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400"
                 >
-                  {attempt.title} · {formatDate(attempt.conversation_at)}
+                  <span className="text-violet-300">{role}</span> · {attempt.title} ·{' '}
+                  {formatDate(attempt.conversation_at)}
                 </span>
               ))}
             </div>
@@ -344,7 +405,47 @@ export default function ComparisonConversations({ attempts }: { attempts: Attemp
               ))}
             </div>
           </div>
+
+          {/* Il contesto in fondo: chi è arrivato fin qui ha già letto di
+              quanto e su cosa, e adesso vuole sapere di quali due prove si
+              stava parlando. Senza `items-start` i due riquadri si stirano
+              all'altezza del più alto, e le sintesi sono lunghe quanto
+              capita. */}
+          <h2 className="mb-3 text-sm font-semibold text-slate-300">Le due conversazioni</h2>
+          <div className="grid grid-cols-2 items-start gap-6 max-md:grid-cols-1">
+            <AttemptPanel role="Prima" attempt={left} onOpen={() => setOpenAttempt(left)} />
+            <AttemptPanel role="Dopo" attempt={right} onOpen={() => setOpenAttempt(right)} />
+          </div>
         </>
+      )}
+
+      {/* Le due trascrizioni non stanno affiancate qui dentro, e non è una
+          dimenticanza: due conversazioni non hanno niente su cui appaiarsi,
+          i turni sono diversi di numero e di ordine, quindi due colonne di
+          messaggi scorrerebbero ognuna per conto suo sotto un verdetto che
+          si vuole leggere per primo. Si aprono invece nella schermata in cui
+          una trascrizione si legge già (`ConversationDetailModal`), che porta
+          con sé i momenti citati dalla valutazione, la registrazione della
+          chiamata e le note del docente. Rifarne una qui sarebbe una seconda
+          trascrizione più povera, e destinata a divergere dalla prima.
+
+          Niente `onDeleted`: questa non è una schermata di amministrazione
+          delle conversazioni, e il cestino compare solo dove lo si passa. */}
+      {openAttempt && (
+        <ConversationDetailModal
+          scope={subject.isSelf ? 'own' : 'admin'}
+          row={{
+            conversation_id: openAttempt.conversation_id,
+            mode: openAttempt.mode,
+            user_nome: subject.nome,
+            user_cognome: subject.cognome,
+            user_email: subject.email,
+            avatar_name: openAttempt.avatar_name,
+            conversation_at: openAttempt.conversation_at,
+          }}
+          onClose={() => setOpenAttempt(null)}
+          onReviewSaved={onReviewSaved}
+        />
       )}
     </>
   )

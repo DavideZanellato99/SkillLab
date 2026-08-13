@@ -335,25 +335,86 @@ contraddirebbe la pagella che lo studente ha in mano.
 **Anche il confronto ha due linguette**, come la dashboard: le conversazioni
 valutate (`GET /api/comparison/attempts`) e i test tecnici
 (`GET /api/comparison/simulation-attempts`), una prova per volta. La persona
-invece si sceglie **una volta sola, sopra le linguette**: è sempre la stessa di
-cui si guardano entrambe, e ripetere il selettore in ciascuna metà sarebbe due
-modi di dire la stessa cosa.
+invece si sceglie **una volta sola, accanto al titolo**: è sempre la stessa di
+cui si guardano entrambe, ripetere il selettore in ciascuna metà sarebbe due
+modi di dire la stessa cosa, e un riquadro suo sopra i filtri faceva tre
+pannelli da attraversare prima di arrivare a un voto.
 
-| Metà | Componente | Cosa c'è sotto i due voti |
+| Metà | Componente | Cosa c'è sotto il verdetto |
 | --- | --- | --- |
 | Conversazioni | [ComparisonConversations](../frontend/src/components/ComparisonConversations.tsx) | I sei criteri della valutazione, appaiati per chiave |
 | Test tecnici | [ComparisonSimulations](../frontend/src/components/ComparisonSimulations.tsx) | Le domande capitate in tutte e due le prove, appaiate per id: quali sbagli sono stati recuperati e quali persi |
+
+### Il verdetto prima del dettaglio
+
+La pagina risponde a "sono migliorato", e quella risposta è un numero solo: in
+cima ai risultati c'è
+[ComparisonVerdict](../frontend/src/components/ComparisonVerdict.tsx), cioè da
+quanto a quanto e di quanto, con sotto una riga che dice **cosa** è cambiato
+(quanti criteri sono migliorati, peggiorati e rimasti fermi, o quante domande
+sono state recuperate e perse). Prima la sottrazione la faceva chi guardava,
+fra due voti che stavano in due card distanti e una targhetta piccola
+nell'angolo della seconda.
+
+Da lì in giù l'ordine è quello delle domande che ci si fa: **di quanto**, poi
+**su cosa** (i criteri o le domande), e infine **quali erano le due prove**, che
+è il contesto in fondo. Il voto di ciascuna prova resta scritto in piccolo
+accanto al suo titolo: in grande, ripetuto, faceva cercare la differenza fra le
+due card proprio dove è già calcolata.
+
+Le quattro parti si chiamano allo stesso modo, **"prima" e "dopo"**: i comandi
+della fila da cui si sceglie, il verdetto, le intestazioni dei criteri e le due
+card in fondo. Sono anche i due posti fra cui si distribuiscono le prove, quindi
+chi tocca "prima" su una prova sa già dove la vedrà comparire.
+
+### Le prove si aprono, non si affiancano
+
+In fondo a ciascuna metà le due card portano un comando
+([ComparisonOpenButton](../frontend/src/components/ComparisonOpenButton.tsx),
+uno solo per tutte e due, perché è lo stesso gesto) che apre la prova per intero
+nella schermata che la sa già mostrare:
+
+| Metà | Cosa apre | Cosa ci si trova |
+| --- | --- | --- |
+| Conversazioni | [ConversationDetailModal](../frontend/src/components/ConversationDetailModal.tsx) | La trascrizione, i momenti citati dalla valutazione, la registrazione della chiamata, le note del docente |
+| Test tecnici | [SimulationAttemptModal](../frontend/src/components/SimulationAttemptModal.tsx) | Le domande come sono state viste, cosa è stato risposto e il passaggio del documento che dice qual era la risposta giusta |
+
+Sul test tecnico serve più che sulle conversazioni: il dettaglio domanda per
+domanda dice **se** una domanda è andata bene o male, e solo per quelle capitate
+in tutte e due le prove, mentre cosa fosse stato risposto sta nel tentativo.
+
+**Affiancarle nella pagina no**, ed è una scelta. I criteri e le domande stanno
+uno accanto all'altro perché hanno una chiave su cui appaiarsi, e si legge la
+stessa riga da due parti; due trascrizioni non ce l'hanno, i turni sono diversi
+di numero, di ordine e di lunghezza, quindi sarebbero due colonne che scorrono
+per conto loro sotto il verdetto, che è quello che si vuole leggere per primo. E
+sarebbe una seconda trascrizione, più povera di quella che esiste, destinata a
+divergerne alla prima modifica.
+
+Da chi guarda dipende **da dove si legge**, e le due metà non si assomigliano su
+questo. Una conversazione propria arriva da `GET /api/chat/conversation/{id}` e
+quella di un'altra persona da `GET /api/admin/conversations/{id}`, quindi la
+pagina passa alla metà parlata chi ha svolto le prove e se è chi sta guardando
+(`scope`). Un tentativo invece si legge da `GET /api/simulations/attempts/{id}`
+in tutti e due i casi, perché quell'endpoint serve già sia chi l'ha svolto sia
+l'admin del suo tenant: lì `isOwn` cambia solo l'intestazione, che a chi rilegge
+il proprio test porta il suo nome.
+
+In nessuna delle due il cestino compare, perché il confronto non passa
+`onDeleted`: non è una schermata di amministrazione delle prove. Una revisione
+scritta dalla trascrizione ricarica invece i tentativi, o il docente
+correggerebbe un voto continuando a leggere il precedente.
 
 ### Prima si restringe, poi si sceglie
 
 Due prove si affiancano per capire se una persona è migliorata, e quella lettura
 regge solo fra prove della stessa specie: una telefonata e una chat scritta non
 si giudicano allo stesso modo, e nemmeno un test a crocette e uno a risposta
-aperta, che sono corretti da due scale diverse. Senza filtri le due tendine
-offrono tutto quello che quella persona ha fatto, e la prima cosa che capita di
+aperta, che sono corretti da due scale diverse. Senza filtri la fila delle prove
+mostra tutto quello che quella persona ha fatto, e la prima cosa che capita di
 scegliere è proprio il paio che non si legge.
 
-Sopra le due tendine sta quindi una barra di filtri,
+Sopra la fila sta quindi una barra di filtri,
 [ComparisonFilterBar](../frontend/src/components/ComparisonFilterBar.tsx), uguale
 nelle due metà e sempre con le stesse due voci: **la specie della prova** a
 linguette, perché ha poche voci fisse e la scelta corrente va letta senza aprire
@@ -380,10 +441,40 @@ le due metà le condividono e scritte due volte prima o poi divergono:
 - **un filtro che le prove rimaste non sostengono più torna aperto**
   (`survivingFilter`), invece di restare selezionato su una combinazione che non
   ha niente dentro;
-- **la coppia proposta è la prima contro l'ultima fra le rimaste** (`pickPair`),
-  e la scelta di chi guarda vale finché appartiene ancora alla lista: quando non
-  ci appartiene più, perché si è cambiata persona o si è stretto un filtro,
-  tenerla mostrerebbe un confronto vuoto senza dire perché.
+- **la coppia proposta è la prima contro l'ultima fra le rimaste**
+  (`resolvePair`), e la scelta di chi guarda vale finché appartengono entrambe
+  alla lista: quando una non ci appartiene più, perché si è cambiata persona o
+  si è stretto un filtro, si torna alla coppia proposta invece di mostrare mezzo
+  confronto senza dire perché.
+
+### La coppia si sceglie dalla fila delle prove
+
+Le due prove si sceglievano da due tendine, e per cambiarne una bisognava aprire
+un elenco di righe tutte uguali fatte di data, titolo e voto, ricordandosi cosa
+c'era nell'altra tendina: la coppia che si stava componendo non era mai visibile
+per intero. Adesso c'è
+[ComparisonTimeline](../frontend/src/components/ComparisonTimeline.tsx): tutte
+le prove rimaste, in ordine di tempo, con la data, il titolo, il voto e la
+targhetta della specie.
+
+**Ogni prova porta i due posti del confronto**, "prima" e "dopo", e si tocca
+quello che le si vuole dare (`assignRole`). I due comandi accesi nella fila sono
+la coppia che si sta guardando, quindi lo stato del confronto si legge dove lo
+si cambia.
+
+Il posto lo dice chi sceglie, e non una regola: una carta sola da toccare
+avrebbe avuto bisogno di decidere per conto suo quale delle due prove in corso
+lasciava il posto, e una regola del genere non si vede, va indovinata al primo
+tocco e ricordata a ogni tocco successivo. Una selezione a due passi, "scegli la
+prima e poi la seconda", avrebbe invece lasciato una prova scelta, l'altra in
+attesa e la pagina a metà.
+
+L'unico caso in cui la coppia si muove da sola è spostare la prova che sta già
+nell'altro posto: i due **si scambiano**, perché con due prove sole metterne una
+fuori lascerebbe mezzo confronto e tenerla dov'è significherebbe confrontare una
+prova con se stessa. I comandi restano visibili sempre e non al passaggio del
+mouse, che su un telefono non avviene mai. Con molte prove la fila scorre invece
+di allungare la pagina, perché quello che conta sta sotto.
 
 I filtri **partono aperti**. Chi arriva qui vuole vedere cosa ha fatto, e
 nascondergli metà delle proprie prove per prudenza sarebbe una risposta
@@ -408,7 +499,11 @@ quando ogni tentativo estrae dieci domande a caso dal serbatoio di cinquanta
 fila che l'altro tentativo non ha avuto, e **si confrontano solo le domande
 capitate in tutte e due**: una vista una volta sola non è né recuperata né
 persa, non è stata chiesta, e le due prove possono non averne nessuna in
-comune, cosa che la pagina dice invece di mostrare una tabella vuota. Le
+comune, cosa che il verdetto dice invece di lasciare una tabella vuota. Le righe
+il cui esito è **cambiato stanno in cima**: sono la ragione per cui un test si
+rifà, e nell'ordine del primo tentativo, che è comunque l'ordine di una fila che
+l'altro non ha avuto, finivano sparse fra quelle che ripetono un esito già
+noto. Le
 risposte viaggiano già con l'elenco dei tentativi invece di aspettare una
 seconda chiamata sui due scelti: sono l'unica cosa che rende confrontabili due
 prove sullo stesso test, che è il motivo per cui uno lo rifà.

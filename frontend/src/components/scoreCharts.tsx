@@ -263,8 +263,12 @@ export function MeterRow({
 
 /* ── Variazione fra due prove ── */
 
-/** Di quanto è cambiato il voto dalla prova di sinistra a quella di destra. */
-export function Delta({ value }: { value: number }) {
+/** Di quanto è cambiato il voto dalla prova di sinistra a quella di destra.
+ *
+ *  In grande quando è la risposta della schermata e non un dettaglio di una
+ *  riga: in cima al confronto è la prima cosa che si guarda, e alla misura
+ *  della targhetta di un criterio si perderebbe accanto ai due voti. */
+export function Delta({ value, size = 'sm' }: { value: number; size?: 'sm' | 'lg' }) {
   const rounded = Math.round(value * 10) / 10
   const cls =
     rounded > 0
@@ -280,7 +284,9 @@ export function Delta({ value }: { value: number }) {
         : '='
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[0.72rem] font-semibold ${cls}`}
+      className={`inline-flex shrink-0 items-center rounded-full border font-semibold ${cls} ${
+        size === 'lg' ? 'px-3.5 py-1.5 text-base' : 'px-2 py-0.5 text-[0.72rem]'
+      }`}
     >
       {label}
     </span>

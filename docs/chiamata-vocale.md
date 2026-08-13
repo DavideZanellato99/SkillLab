@@ -247,6 +247,24 @@ C'è anche `VOICE_STT_DEBUG`, che stampa il tracciato grezzo della STT: serve a
 tarare la VAD, ma scrive nei log quello che le persone dicono, quindi in
 produzione va spento.
 
+### Quanti slot STT stiamo occupando
+
+All'apertura di ogni chiamata
+[log_stt_concurrency](../backend/elevenlabs_service.py) scrive una riga
+`[STT-CONCORRENZA] in uso N su M`, letta dagli header che ElevenLabs
+restituisce nell'handshake. Non ha interruttore e non contiene niente di
+personale, a differenza del tracciato della VAD, quindi resta acceso anche in
+produzione.
+
+Serve perché il tetto del piano non si traduce nel numero di chiamate
+simultanee: la connessione WebSocket occupa uno slot solo mentre il modello
+lavora, e quanto margine resta davvero non si deduce, si misura. Se gli header
+non arrivano, la riga non esce e la chiamata prosegue.
+
+Il vincolo più stretto della pipeline resta comunque Cartesia, che conta sia le
+connessioni aperte, fino a dieci volte il limite del piano, sia le sintesi
+attive nello stesso istante.
+
 ## La registrazione, dopo
 
 Alla chiusura il browser carica l'audio con `POST /api/voice/recording/{id}`.

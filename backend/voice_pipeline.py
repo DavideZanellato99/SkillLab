@@ -46,7 +46,7 @@ from cartesia_service import (
     tts_ws_url,
 )
 from database import SessionLocal
-from elevenlabs_service import stt_headers, stt_ws_url
+from elevenlabs_service import log_stt_concurrency, stt_headers, stt_ws_url
 from models import ChatConversation, ChatMessage
 from openai_service import prewarm_roleplay, stream_avatar_response
 from turn_metrics import (
@@ -220,6 +220,7 @@ class VoicePipeline:
             ):
                 self.stt = stt
                 self.tts = tts
+                log_stt_concurrency(stt)
                 await self._send_json({"type": "ready"})
 
                 # The ring is dead time for the operator, so spend it on the

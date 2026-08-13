@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { useCreateSimulation } from '../hooks/useSimulations'
 import type { Organization } from '../services/organizations'
 import type { SimulationKind, SimulationSource } from '../services/simulations'
-import { QUESTION_COUNT, POOL_COUNT } from '../services/simulations'
 import ModalShell, { ModalHeader } from './ModalShell'
 import Field, { textareaCls, TextInput } from './Field'
 import Select from './Select'
@@ -39,23 +38,10 @@ const KIND_OPTIONS = (['multiple', 'open', 'ordering', 'matching'] as Simulation
   (value) => ({ value, label: kindLabel(value) }),
 )
 
-const KIND_HINTS: Record<SimulationKind, string> = {
-  multiple:
-    'Quattro alternative per domanda, con un tempo massimo di trenta secondi ciascuna. La correzione è automatica e il punteggio tiene conto anche della rapidità.',
-  open: "Si risponde in forma scritta, senza limite di tempo. Alla consegna un modello valuta le risposte e assegna il punteggio in base alla loro completezza, quindi l'esito richiede qualche secondo.",
-  ordering: `Ogni domanda presenta i passi di una procedura in ordine sparso, da ricomporre nella sequenza corretta. La correzione è automatica e assegna un punteggio proporzionale ai passi collocati al posto giusto. Verifica la sequenza di una procedura, che le altre forme non raggiungono.`,
-  matching: `Ogni domanda presenta due colonne da associare, per esempio la casistica e l'ufficio competente. La correzione è automatica e assegna un punteggio proporzionale alle associazioni corrette. È la forma adatta alle tabelle di un documento.`,
-}
-
 const SOURCE_OPTIONS = [
   { value: 'ai', label: 'Generate da un documento' },
   { value: 'manual', label: 'Scritte a mano' },
 ]
-
-const SOURCE_HINTS: Record<SimulationSource, string> = {
-  ai: `Il modello analizza il documento e redige ${POOL_COUNT} domande con la relativa spiegazione, da rivedere e correggere prima della pubblicazione.`,
-  manual: `Le domande, le risposte e le spiegazioni si redigono nel pannello che si apre subito dopo. Ne servono almeno ${QUESTION_COUNT}, pari al numero che riceve chi svolge il test.`,
-}
 
 interface SimulationCreateModalProps {
   organizations: Organization[]
@@ -142,11 +128,7 @@ export default function SimulationCreateModal({
           />
         </Field>
 
-        <Field
-          label="Domande"
-          htmlFor="simulation-source"
-          hint={<span className="text-xs text-slate-500">{SOURCE_HINTS[source]}</span>}
-        >
+        <Field label="Domande" htmlFor="simulation-source">
           <Select
             id="simulation-source"
             value={source}
@@ -156,11 +138,7 @@ export default function SimulationCreateModal({
           />
         </Field>
 
-        <Field
-          label="Tipo di test"
-          htmlFor="simulation-kind"
-          hint={<span className="text-xs text-slate-500">{KIND_HINTS[kind]}</span>}
-        >
+        <Field label="Tipo di test" htmlFor="simulation-kind">
           <Select
             id="simulation-kind"
             value={kind}
@@ -170,17 +148,7 @@ export default function SimulationCreateModal({
           />
         </Field>
 
-        <Field
-          label="Titolo"
-          htmlFor="simulation-title"
-          hint={
-            <span className="text-xs text-slate-500">
-              {fromDocument
-                ? "Indica il documento nel suo insieme: le domande derivano dall'intero contenuto, non da una singola casistica."
-                : `Indica la materia nel suo insieme: chi svolge il test riceve ${QUESTION_COUNT} domande estratte a caso fra quelle disponibili.`}
-            </span>
-          }
-        >
+        <Field label="Titolo" htmlFor="simulation-title">
           <TextInput
             id="simulation-title"
             value={title}
@@ -195,11 +163,7 @@ export default function SimulationCreateModal({
         <Field
           label="Descrizione"
           htmlFor="simulation-description"
-          hint={
-            <span className="text-xs text-slate-500">
-              Facoltativa. Viene mostrata a chi apre il test, prima di iniziarlo.
-            </span>
-          }
+          hint={<span className="text-xs text-slate-500">Facoltativa</span>}
         >
           <textarea
             id="simulation-description"

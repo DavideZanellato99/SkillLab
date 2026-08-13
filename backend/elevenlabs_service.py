@@ -6,12 +6,15 @@ to ElevenLabs' server-side VAD (commit_strategy=vad): a committed
 transcript marks the end of the user's turn.
 """
 
+import logging
 import os
 from urllib.parse import urlencode
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ELEVENLABS_STT_MODEL = os.getenv("ELEVENLABS_STT_MODEL")
@@ -77,3 +80,30 @@ def stt_headers() -> dict:
             "ELEVENLABS_API_KEY non configurata. Aggiungila al file .env del backend."
         )
     return {"xi-api-key": ELEVENLABS_API_KEY}
+
+
+def log_stt_concurrency(connection: object) -> None:
+    """Registra gli slot di concorrenza occupati all'apertura della sessione.
+
+    Il piano dice quante sessioni STT possiamo tenere aperte insieme, ma non
+    quante ne stiamo davvero occupando: la connessione WebSocket consuma uno
+    slot solo mentre il modello lavora, quindi il margine reale non si deduce
+    dal numero di chiamate in corso. Questi due header, che ElevenLabs
+    restituisce nell'handshake, sono l'unica misura diretta che abbiamo, e una
+    riga per chiamata basta a vedere quanto ci si avvicina al tetto.
+    """
+    response = getattr(connection, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return
+    current = headers.get("current-concurrent-requests")
+    maximum = headers.get("maximum-concurrent-requests")
+    if current is None and maximum is None:
+        # Non tornano su tutti i piani, e una riga con due valori vuoti
+        # nel log dà solo l'impressione di aver misurato qualcosa.
+        return
+    logger.info(
+        "[STT-CONCORRENZA] in uso %s su %s",
+        current if current is not None else "?",
+        maximum if maximum is not None else "?",
+    )

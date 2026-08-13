@@ -7,7 +7,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -15,7 +15,7 @@ import housekeeping
 import tls_setup  # noqa: F401
 from audit import AuditMiddleware
 from authorship import AuthorshipMiddleware
-from database import log_connection_budget
+from database import log_connection_budget, replica_health
 from routers.admin import router as admin_router
 from routers.admin_avatar_categories import router as admin_avatar_categories_router
 from routers.admin_avatars import router as admin_avatars_router
@@ -44,6 +44,8 @@ logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
+
+logger = logging.getLogger(__name__)
 
 # Create all database tables, then bring an existing database up to date.
 # create_all only creates missing tables; everything else (added columns,
@@ -129,5 +131,37 @@ app.include_router(voice_router)
 
 @app.get("/")
 def root():
-    """Health check endpoint."""
+    """Il processo è vivo e risponde, e nient'altro.
+
+    È la domanda che si fa a un container per sapere se va riavviato, quindi
+    non tocca il database di proposito: un database irraggiungibile non è una
+    cosa che si risolve riavviando le repliche, e un healthcheck che lo
+    guardasse farebbe risultare malato tutto lo stack per un guasto che sta
+    altrove. La usano l'healthcheck del compose e lo smoke test della CI.
+
+    Se questa replica sia in grado di *servire* una richiesta lo dice invece
+    ``/health``, ed è quello che guarda il proxy per decidere dove mandare le
+    chiamate.
+    """
     return {"status": "ok", "message": "SkillLab Avatar API is running 🚀"}
+
+
+@app.get("/health")
+def health(response: Response):
+    """Questa replica può servire una richiesta che tocca il database.
+
+    Il proxy la interroga ogni dieci secondi e smette di mandare traffico a
+    chi risponde male (vedi ``caddy/Caddyfile``). Quello che rende diverse le
+    due risposte, e il perché di ciascuna, sta in ``database.replica_health``.
+
+    Non è raggiungibile da fuori: il proxy inoltra al backend solo ``/api`` e
+    ``/static``, e questa rotta la chiama sulla porta interna. Quello che
+    scrive nel corpo è comunque materiale da log, non da pagina.
+    """
+    healthy, detail = replica_health()
+    if not healthy:
+        # 503 e non 500: non è un errore di questa richiesta, è questa
+        # replica che chiede di essere lasciata in pace per un momento.
+        response.status_code = 503
+        logger.warning("Controllo di salute negativo: %s", detail)
+    return {"status": "ok" if healthy else "degraded", "detail": detail}

@@ -1,9 +1,11 @@
 /* La colonna di sinistra della chat: chi è l'avatar, come aprire una
  * conversazione nuova, e l'elenco di quelle già avute.
  *
- * L'elenco è sempre completo, senza filtri: la ricerca vive nel pannello
- * espanso, dove c'è lo spazio per mostrare anche l'anteprima di ogni
- * conversazione. */
+ * La ricerca è la stessa del pannello espanso, casella e stato compresi: si
+ * cerca dove si guarda, e chi ha scritto "reclamo" nella colonna ritrova
+ * quelle righe anche espandendo, invece di ricominciare. Quello che il
+ * pannello ha in più resta lo spazio, cioè l'anteprima, i badge e lo stato di
+ * ogni conversazione. */
 
 import { Link } from 'react-router'
 
@@ -11,12 +13,26 @@ import type { Avatar, ChatConversationSummary } from '../services/api'
 import { getAvatarImageUrl } from '../services/api'
 import AvatarBadges from './AvatarBadges'
 import { formatDate } from './chatFormat'
+import SearchInput from './SearchInput'
 import Tooltip from './Tooltip'
 import { TrashIcon } from './icons'
 
+/* Da quante conversazioni in su la casella compare. Sotto questa soglia la
+ * colonna le mostra quasi tutte senza scorrere, e un campo in più sarebbe
+ * solo una cosa da scavalcare per arrivare a una lista che si legge intera.
+ * Con una ricerca scritta resta comunque a vista: restringere l'elenco sotto
+ * la soglia porterebbe via la casella da cui si cancella quello che si è
+ * scritto, lasciando una colonna filtrata senza il filtro. */
+const SEARCH_FROM = 6
+
 interface ChatSidebarProps {
   avatar: Avatar
+  /** Tutte le conversazioni: da qui si decide se la ricerca serve. */
   conversations: ChatConversationSummary[]
+  /** Le righe da mostrare, cioè quelle rimaste dopo la ricerca. */
+  visibleConversations: ChatConversationSummary[]
+  search: string
+  onSearchChange: (value: string) => void
   currentConversationId: string | null
   /** Su schermo stretto la colonna scorre via: questo dice se è a vista. */
   isOpen: boolean
@@ -37,6 +53,9 @@ interface ChatSidebarProps {
 export default function ChatSidebar({
   avatar,
   conversations,
+  visibleConversations,
+  search,
+  onSearchChange,
   currentConversationId,
   isOpen,
   canDelete,
@@ -126,13 +145,23 @@ export default function ChatSidebar({
             </button>
           </Tooltip>
         </div>
-        {conversations.length === 0 ? (
+        {(conversations.length >= SEARCH_FROM || search) && (
+          <SearchInput
+            value={search}
+            onChange={onSearchChange}
+            className="mb-2"
+            ariaLabel="Cerca fra le conversazioni"
+          />
+        )}
+        {visibleConversations.length === 0 ? (
           <p className="py-6 text-center text-[0.8rem] italic text-slate-500">
-            Nessuna conversazione presente
+            {search
+              ? 'Nessuna conversazione corrisponde alla ricerca'
+              : 'Nessuna conversazione presente'}
           </p>
         ) : (
           <ul className="flex list-none flex-col gap-1">
-            {conversations.map((conv) => {
+            {visibleConversations.map((conv) => {
               const isActive = currentConversationId === conv.id
               const isRenaming = renamingId === conv.id
               return (

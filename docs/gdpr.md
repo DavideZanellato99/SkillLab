@@ -11,7 +11,7 @@ codice e non da un questionario. Serve a tre cose:
 Ogni affermazione rimanda al file che la implementa. Se il codice cambia e
 questo documento no, vince il codice: va aggiornato.
 
-Ultimo allineamento al codice: 29 luglio 2026.
+Ultimo allineamento al codice: 13 agosto 2026.
 
 ---
 
@@ -165,6 +165,7 @@ cliente**: se si cambiano lì vanno cambiati anche nell'informativa.
 | Tentativi delle simulazioni tecniche: risposte date e punteggio | 730 giorni | `SIMULATION_ATTEMPT_RETENTION_DAYS` |
 | Registro delle azioni (con IP e User-Agent) | 180 giorni | `AUDIT_LOG_RETENTION_DAYS` |
 | Sessioni di accesso (IP e User-Agent) | Alla scadenza del token: 1 ora, 30 giorni per l'ancora di sessione | non configurabile |
+| Copie di sicurezza del database, che contengono tutto quanto sopra | 7 giorni: 28 dump, uno ogni 6 ore | `BACKUP_KEEP`, `BACKUP_INTERVAL_HOURS` |
 
 L'audio scade per primo di proposito: è il dato più invasivo e dopo il
 debrief non aggiunge nulla alla trascrizione. La conversazione gli
@@ -185,6 +186,20 @@ per una telefonata, l'ultima attività per una chat scritta
 Non serve nessun cron sull'host e non serve riavviare niente: un'installazione
 accesa per mesi applica comunque le finestre. La cancellazione è definitiva,
 non logica.
+
+**Le copie di sicurezza sono la finestra che sta sopra tutte le altre.** Un
+servizio dello stack (`db/backup.sh`) scrive un dump dell'intero database ogni
+sei ore e tiene i ventotto più recenti, cioè sette giorni. Il dump è integrale,
+quindi contiene anche quello che nel database vivo non c'è più: una
+registrazione audio purgata ieri, un tentativo scaduto, un account cancellato
+su richiesta restano nelle copie finché la rotazione non le porta via. La
+finestra dei backup è quindi il **ritardo massimo con cui ogni altra riga di
+questa tabella diventa effettiva**, e come tale va dichiarata nell'informativa
+del cliente insieme alle altre.
+
+Le copie portate fuori dalla macchina (sezione 11) devono avere la stessa
+rotazione e la stessa cifratura, altrimenti quel ritardo non è più di sette
+giorni ma indefinito.
 
 ## 8. Diritti degli interessati
 
@@ -214,6 +229,22 @@ anonimizzata insieme all'account: l'id sparisce e l'email diventa l'etichetta
 "utente eliminato". Un avatar non è un registro e non è il voto di nessuno,
 quindi non c'è motivo per cui debba continuare a portare il nome di chi ha
 chiesto di essere cancellato.
+
+**Quando una cancellazione è completa davvero.** Sul database vivo è
+immediata e definitiva, non logica: finita la richiesta quelle righe non ci
+sono più. Le copie di sicurezza però sono fotografie di prima, quindi
+l'account cancellato oggi continua a esistere nei dump per sette giorni,
+finché la rotazione non li elimina (sezione 7). Due conseguenze da mettere per
+iscritto, perché non si esauriscono nell'istante della richiesta:
+
+- **un ripristino fatto dentro quella finestra riporta indietro anche chi era
+  stato cancellato**, e la cancellazione va quindi rieseguita subito dopo. Vale
+  per l'oblio come per le finestre di conservazione, che sul database
+  ripristinato ripartono dalla fotografia;
+- **l'informativa del cliente deve dichiarare il ritardo**, non solo il
+  diritto: "cancellazione immediata, e comunque entro sette giorni dalle copie
+  di sicurezza" è un'affermazione che si può dimostrare, "cancellazione
+  immediata" da sola no.
 
 ## 9. Trasparenza verso l'interessato
 
@@ -271,6 +302,10 @@ conclusione.
 - Credenziali del database obbligatorie da ambiente, nessun valore di
   default nel repository.
 - Segreti esclusi dall'immagine Docker (`backend/.dockerignore`).
+- Copie del database ogni sei ore, scritte su file temporaneo e rinominate
+  solo a dump riuscito, con rotazione a sette giorni (`db/backup.sh`). È la
+  capacità di ripristino richiesta dall'art. 32.1.c, e il suo limite attuale
+  sta nella sezione 11.
 - Scansioni automatiche settimanali su dipendenze, codice e immagini
   (`.github/workflows/security.yml`: pip-audit, npm audit, Trivy, CodeQL). È
   la verifica periodica delle misure tecniche richiesta dall'art. 32.1.d.
@@ -283,11 +318,20 @@ titolare (dettagli nella sezione Deploy del README):
 - **TLS.** L'applicazione non termina HTTPS, lo deve fare un reverse proxy
   davanti. Non è facoltativo: i cookie sono `Secure`.
 - **Cifratura del disco.** Le registrazioni audio stanno nel volume del
-  database in chiaro. Il volume, o il disco che lo ospita, va cifrato a
-  livello di sistema. Vale anche per i backup.
-- **Backup.** Non ne esistono. Quando verranno fatti dovranno rispettare le
-  stesse finestre di conservazione, altrimenti ricreano il problema che la
-  cancellazione automatica risolve.
+  database in chiaro, e lo stesso vale per i dump che lo copiano. Il volume, o
+  il disco che ospita entrambi, va cifrato a livello di sistema.
+- **Backup fuori dalla macchina.** I dump esistono e ruotano da soli (sezione
+  7), ma restano in `./backups`, cioè sullo stesso disco del database che
+  copiano: proteggono da una cancellazione sbagliata e da un volume perso, non
+  dalla macchina che si rompe. Portarli altrove è a carico di chi installa, e
+  la copia remota va cifrata e ruotata come quella locale, altrimenti ricrea
+  il problema che la cancellazione automatica risolve.
+- **La prova di ripristino.** Un backup mai ripristinato è una promessa, non
+  una misura verificata: è la prova periodica che chiede l'art. 32.1.d, la
+  stessa lettera sotto cui stanno le scansioni di sicurezza. Il comando sta in
+  [deploy-e-scalabilita.md](deploy-e-scalabilita.md) e va eseguito almeno una
+  volta, su un'installazione di prova, prima di dire a un cliente che i suoi
+  dati sono recuperabili.
 
 ## 12. Adempimenti ancora aperti
 
@@ -300,6 +344,10 @@ titolare (dettagli nella sezione Deploy del README):
 - [ ] Verifica documentale su ciascun fornitore extra UE: DPF o clausole
       standard, non conservazione, esclusione dall'addestramento
 - [ ] Valutazione sulla nomina del DPO
+- [ ] Copie di sicurezza portate fuori dalla macchina, cifrate e con la stessa
+      rotazione di quelle locali
+- [ ] Prova di ripristino da un dump, eseguita almeno una volta e rifatta a
+      ogni cambiamento dello schema
 - [ ] Pagine informativa e termini nel prodotto, con i link da landing,
       accesso e piè di pagina
 - [ ] Da valutare: troncamento dell'ultimo ottetto degli IP nel registro

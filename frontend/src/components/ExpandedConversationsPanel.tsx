@@ -6,6 +6,7 @@
 import type React from 'react'
 import type { ChatConversationSummary } from '../services/api'
 import ConversationModeBadge from './ConversationModeBadge'
+import SearchInput from './SearchInput'
 import Tooltip from './Tooltip'
 import { TrashIcon, CloseIcon } from './icons'
 import ModalShell from './ModalShell'
@@ -79,32 +80,18 @@ export default function ExpandedConversationsPanel({
         </button>
       </div>
 
-      {/* Search */}
+      {/* La casella è quella di tutta l'app, non una copia disegnata qui:
+          questa aveva la lente più grande e non aveva la crocetta che svuota,
+          cioè due modi diversi di cercare a due centimetri l'uno dall'altro
+          (la colonna ha la stessa). */}
       {conversations.length > 0 && (
         <div className="border-b border-white/6 px-8 py-4 max-[480px]:px-5">
-          <div className="flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0 text-slate-500"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              className="flex-1 border-none bg-transparent py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500"
-              placeholder="Cerca per nome o contenuto..."
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-          </div>
+          <SearchInput
+            value={search}
+            onChange={onSearchChange}
+            placeholder="Cerca per nome o contenuto..."
+            ariaLabel="Cerca fra le conversazioni"
+          />
         </div>
       )}
 

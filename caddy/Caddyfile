@@ -45,10 +45,17 @@
 			# sia il turno, è chi ne ha meno in corso adesso.
 			lb_policy least_conn
 
-			# Una replica che non risponde esce dal giro da sola e ci rientra
-			# quando torna a rispondere. Senza, il bilanciatore continuerebbe
-			# a mandarle una chiamata su N.
-			health_uri /
+			# Una replica che non è in grado di servire esce dal giro da sola
+			# e ci rientra appena torna a esserlo. Senza, il bilanciatore
+			# continuerebbe a mandarle una chiamata su N.
+			#
+			# /health e non /: la radice dice solo che il processo risponde,
+			# che è la domanda giusta per decidere se riavviare un container
+			# (ed è infatti quella dell'healthcheck del compose), non per
+			# decidere dove mandare una chiamata. /health guarda anche il
+			# database, cioè la sola cosa senza la quale questa replica
+			# risponderebbe di sì e poi fallirebbe ogni richiesta.
+			health_uri /health
 			health_interval 10s
 			health_timeout 5s
 

@@ -112,9 +112,10 @@ Quattro dettagli del Caddyfile che valgono da soli:
 - **`lb_policy least_conn`**, non round robin. Una chiamata vocale tiene la
   connessione aperta per dieci minuti, quindi quello che conta non è di chi sia
   il turno, è chi ne ha meno in corso adesso;
-- **health check attivo**: una replica che smette di rispondere esce dal giro
-  da sola e ci rientra quando torna. Senza, il bilanciatore continuerebbe a
-  mandarle una chiamata su N;
+- **health check attivo su `/health`**: una replica che non è in grado di
+  servire esce dal giro da sola e ci rientra appena torna a esserlo. Senza, il
+  bilanciatore continuerebbe a mandarle una chiamata su N. Perché `/health` e
+  non la radice sta più sotto, in questa stessa pagina;
 - **`X-Forwarded-For` sovrascritto, non accodato**. Il backend legge il primo
   valore per sapere chi sta chiamando, e accodandolo basterebbe che un client
   se lo mandasse da solo per farsi credere un altro indirizzo, aggirando il
@@ -189,6 +190,51 @@ Python e non `curl`, che nell'immagine slim non c'è, e ha un periodo di grazia
 di 60 secondi all'avvio: le repliche si mettono in coda su un lock per
 preparare lo schema, e l'ultima della fila può metterci un po' prima di
 rispondere senza per questo essere malata.
+
+### Due domande di salute, e due rotte
+
+Il backend ne espone due, e la differenza è chi le usa e cosa ne fa
+([main.py](../backend/main.py)):
+
+| Rotta | Cosa risponde | Chi la interroga |
+| --- | --- | --- |
+| `GET /` | Il processo è vivo e sta rispondendo | L'healthcheck del compose e lo smoke test della CI |
+| `GET /health` | Questa replica può servire una richiesta che tocca il database | Caddy, ogni dieci secondi, per decidere dove mandare le chiamate |
+
+La radice **non guarda il database di proposito**. È la domanda che si fa a un
+container per sapere se va riavviato, e un database irraggiungibile non è una
+cosa che si risolve riavviando le repliche: un healthcheck che lo guardasse
+farebbe risultare malato tutto lo stack per un guasto che sta da un'altra
+parte.
+
+`/health` invece guarda proprio quello, perché la domanda del bilanciatore è
+un'altra: non "sei vivo" ma "posso mandarti una chiamata". Una replica che
+risponde alla radice e non ha una connessione al database dice di sì e poi
+fallisce ogni richiesta che le arriva.
+
+Le due risposte negative, in [database.py](../backend/database.py),
+`replica_health`:
+
+- **il pool è esaurito.** Si legge senza aspettare, e viene guardato per
+  primo: col pool pieno chiedere una connessione vorrebbe dire restare in coda
+  fino a `pool_timeout`, cioè dieci secondi, e un controllo che ci mette dieci
+  secondi a dire di stare male è già il guasto che doveva segnalare. Non è "un
+  po' di carico": è lo stato in cui le scritture della trascrizione cominciano
+  a mettersi in coda e a fallire in silenzio;
+- **il database non risponde.** Un `SELECT 1`, e nella risposta finisce il
+  tipo dell'errore e non il messaggio, che di un problema di connessione
+  contiene l'indirizzo del database.
+
+Il caso a cui pensare prima di toccare questa rotta è **tutte le repliche
+insieme**: se il database è giù, o se sono tutte sature, Caddy non ha più
+nessuno a cui mandare e risponde 502. È voluto, ed è la stessa scelta del tetto
+alle chiamate vocali: un'installazione sopra la propria capacità che continua
+ad accettare lavoro lo fa male per tutti, e dirlo è meglio che fingere. La
+saturazione di una sola replica, che è il caso normale, non le fa nemmeno
+troppo male: `least_conn` le stava già mandando meno chiamate delle altre.
+
+`/health` **non è raggiungibile da fuori**: Caddy inoltra al backend solo
+`/api` e `/static`, e questa rotta la chiama sulla porta interna.
 
 ## I backup
 

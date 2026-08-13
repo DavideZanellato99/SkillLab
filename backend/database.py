@@ -143,6 +143,45 @@ def log_connection_budget() -> None:
         )
 
 
+def replica_health() -> tuple[bool, str]:
+    """Se questa replica è in grado di servire una richiesta che tocca il database.
+
+    Serve al controllo di salute che il proxy interroga (vedi ``main`` e
+    ``caddy/Caddyfile``). La domanda non è "il processo risponde", a cui
+    risponde già la radice, ma "questa replica può fare il suo mestiere",
+    che senza database non può.
+
+    **L'ordine dei due controlli non è casuale.** Prima si guarda se nel pool
+    c'è ancora un posto libero, e questo si legge senza aspettare; solo dopo
+    si prende una connessione. Al contrario, con il pool pieno, ``connect``
+    resterebbe in coda fino a ``pool_timeout``, cioè dieci secondi, e un
+    controllo di salute che ci mette dieci secondi a dire di stare male è
+    già il guasto che avrebbe dovuto segnalare.
+
+    **Un pool esaurito è una risposta negativa, e va spiegato perché.** Non è
+    "un po' di carico": è lo stato in cui le scritture della trascrizione
+    cominciano a mettersi in coda e a fallire in silenzio (vedi la nota in
+    testa a questo modulo). Toglierla dal giro per un giro di controllo è
+    esattamente quello che serve, e il bilanciamento davanti lavora già a
+    connessioni attive, quindi una replica satura stava comunque ricevendo
+    meno delle altre. Se lo sono tutte, l'installazione è sopra la propria
+    capacità, e dirlo è meglio che continuare ad accettare lavoro che non si
+    riesce a fare: è la stessa scelta del tetto alle chiamate vocali.
+    """
+    picco = _POOL_SIZE + _MAX_OVERFLOW
+    in_uso = engine.pool.checkedout()
+    if in_uso >= picco:
+        return False, f"pool esaurito: {in_uso} connessioni su {picco}"
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as e:
+        # Il tipo e non il messaggio: questa risposta la legge un proxy, e
+        # l'indirizzo del database non è una cosa da scrivere in giro.
+        return False, f"database irraggiungibile ({type(e).__name__})"
+    return True, f"pool: {in_uso} connessioni in uso su {picco}"
+
+
 def get_db():
     """Dependency that provides a database session per request."""
     db = SessionLocal()

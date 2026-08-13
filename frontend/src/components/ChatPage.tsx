@@ -235,8 +235,10 @@ export default function ChatPage() {
    * pulsante di chiamata per tutto il tempo del caricamento. */
   const currentSummary = conversations.find((conv) => conv.id === currentConversationId)
 
-  // La ricerca vale solo dentro il pannello espanso: la colonna elenca
-  // sempre tutte le conversazioni
+  /* Un filtro solo per i due posti in cui l'elenco compare, la colonna e il
+   * pannello espanso: sono la stessa lista vista da due distanze, e due
+   * ricerche separate vorrebbero dire espandere e ritrovarsi davanti tutte
+   * le conversazioni dopo averne cercata una. */
   const visibleConversations = conversations.filter((conv) =>
     matchesSearch(conversationSearch, conv.title, conv.last_message_preview),
   )
@@ -392,6 +394,9 @@ export default function ChatPage() {
       <ChatSidebar
         avatar={avatar}
         conversations={conversations}
+        visibleConversations={visibleConversations}
+        search={conversationSearch}
+        onSearchChange={setConversationSearch}
         currentConversationId={currentConversationId}
         isOpen={sidebarOpen}
         canDelete={canDeleteConversations}

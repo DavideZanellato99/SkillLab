@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
@@ -29,6 +29,12 @@ const conversazione = (over: Partial<ChatConversationSummary> = {}): ChatConvers
   ...over,
 })
 
+/** Un elenco lungo abbastanza da far comparire la casella di ricerca. */
+const molteConversazioni = (quante = 6) =>
+  Array.from({ length: quante }, (_, i) =>
+    conversazione({ id: `c-${i + 1}`, title: `Clienti ${i + 1}` }),
+  )
+
 function renderSidebar(over: Partial<Parameters<typeof ChatSidebar>[0]> = {}) {
   const azioni = {
     onRenameValueChange: vi.fn(),
@@ -39,19 +45,25 @@ function renderSidebar(over: Partial<Parameters<typeof ChatSidebar>[0]> = {}) {
     onDelete: vi.fn(),
     onNewConversation: vi.fn(),
     onExpand: vi.fn(),
+    onSearchChange: vi.fn(),
   }
+  /* Le righe mostrate sono quelle rimaste dopo la ricerca: chi non la prova
+   * passa la stessa lista due volte, che è il caso senza filtro. */
+  const conversations = over.conversations ?? [conversazione()]
   render(
     <MemoryRouter>
       <ChatSidebar
         avatar={avatar}
-        conversations={[conversazione()]}
         currentConversationId={null}
         isOpen
         canDelete={false}
         renamingId={null}
         renameValue=""
+        search=""
         {...azioni}
         {...over}
+        conversations={conversations}
+        visibleConversations={over.visibleConversations ?? conversations}
       />
     </MemoryRouter>,
   )
@@ -106,6 +118,9 @@ describe('ChatSidebar', () => {
         <ChatSidebar
           avatar={avatar}
           conversations={[conversazione()]}
+          visibleConversations={[conversazione()]}
+          search=""
+          onSearchChange={vi.fn()}
           currentConversationId={null}
           isOpen
           canDelete
@@ -133,6 +148,70 @@ describe('ChatSidebar', () => {
     renderSidebar()
 
     expect(screen.getByRole('link', { name: /Torna alla Gallery/ })).toHaveAttribute('href', '/app')
+  })
+})
+
+/* La colonna è stretta e la ricerca ci sta solo quando serve davvero: è
+ * l'unica parte di questo componente che decide qualcosa da sé. */
+describe('ricerca fra le conversazioni', () => {
+  const casella = () => screen.queryByRole('textbox', { name: 'Cerca fra le conversazioni' })
+
+  it('non compare finché le conversazioni sono poche', () => {
+    renderSidebar({ conversations: molteConversazioni(5) })
+
+    expect(casella()).not.toBeInTheDocument()
+  })
+
+  it('compare quando la lista si allunga', () => {
+    renderSidebar({ conversations: molteConversazioni(6) })
+
+    expect(casella()).toBeInTheDocument()
+  })
+
+  /* Se sparisse col restringersi dell'elenco, la ricerca resterebbe scritta
+   * e non ci sarebbe più il campo da cui cancellarla. */
+  it('resta a vista con una ricerca scritta, anche su pochi risultati', () => {
+    renderSidebar({
+      conversations: molteConversazioni(3),
+      visibleConversations: [conversazione({ title: 'Clienti 2' })],
+      search: 'clienti 2',
+    })
+
+    expect(casella()).toHaveValue('clienti 2')
+  })
+
+  it('elenca solo le conversazioni rimaste', () => {
+    renderSidebar({
+      conversations: molteConversazioni(6),
+      visibleConversations: [conversazione({ id: 'c-2', title: 'Clienti 2' })],
+      search: 'clienti 2',
+    })
+
+    expect(screen.getByText('Clienti 2')).toBeInTheDocument()
+    expect(screen.queryByText('Clienti 1')).not.toBeInTheDocument()
+  })
+
+  it('riporta quello che si scrive a chi tiene il filtro', async () => {
+    const { onSearchChange } = renderSidebar({ conversations: molteConversazioni(6) })
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Cerca fra le conversazioni' }), 'r')
+
+    expect(onSearchChange).toHaveBeenCalledWith('r')
+  })
+
+  /* Una lista vuota per la ricerca e una lista vuota perché non si è ancora
+   * parlato con nessuno sono due notizie diverse. */
+  it('distingue il vuoto della ricerca da quello di partenza', () => {
+    renderSidebar({
+      conversations: molteConversazioni(6),
+      visibleConversations: [],
+      search: 'inesistente',
+    })
+    expect(screen.getByText('Nessuna conversazione corrisponde alla ricerca')).toBeInTheDocument()
+    cleanup()
+
+    renderSidebar({ conversations: [], visibleConversations: [] })
+    expect(screen.getByText('Nessuna conversazione presente')).toBeInTheDocument()
   })
 })
 

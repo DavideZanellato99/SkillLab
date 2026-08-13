@@ -98,6 +98,13 @@ conservazione da dentro l'applicazione invece che da un cron esterno.
 
 **5. `/static`**, che serve i ritratti degli avatar dal disco del backend.
 
+**6. Le due rotte di salute**, fuori da `/api` perché non le chiama mai il
+browser: `GET /` dice che il processo risponde ed è quella dell'healthcheck del
+compose, `GET /health` dice che questa replica ha ancora un posto nel pool e un
+database che risponde, ed è quella su cui il proxy decide dove mandare le
+chiamate. Perché siano due, e cosa succede quando rispondono male tutte
+insieme, sta in [docker-e-ambienti.md](docker-e-ambienti.md).
+
 ## La configurazione
 
 Ogni variabile si legge una volta sola, nel modulo che la riguarda, e **senza

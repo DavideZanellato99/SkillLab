@@ -151,6 +151,17 @@ jobs:
             sleep 2
           done
           echo "backend did not become healthy in time"; exit 1
+      - name: Check the readiness probe Caddy relies on
+        # La rotta su cui il proxy decide dove mandare le chiamate: se
+        # rispondesse male, Caddy non avrebbe nessuna replica sana e tutto il
+        # sito risponderebbe 502. Il controllo di sopra non se ne accorgerebbe,
+        # perché guarda la radice, che il database non lo tocca.
+        #
+        # Dall'interno della rete, come sopra: dal proxy questa rotta non passa
+        # ed è voluto (vedi docs/docker-e-ambienti.md).
+        run: |
+          docker compose -f docker-compose.yml exec -T --index 1 backend python -c "from urllib.request import urlopen; assert urlopen('http://localhost:8000/health').status == 200"
+          echo "la replica si dichiara pronta a servire"
       - name: Check the frontend is served through Caddy
         # Porta 80, non 3000: il frontend non pubblica niente, si arriva alla
         # React solo passando dal reverse proxy, come dal browser in

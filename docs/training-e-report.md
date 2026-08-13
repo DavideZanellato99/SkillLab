@@ -314,6 +314,35 @@ revisione contiene il momento dell'ultima modifica, ed è voluto: un docente che
 rivede il proprio verdetto produce una chiave nuova, quindi una notifica non
 letta, perché lo studente quella versione non l'ha davvero vista.
 
+### La rilettura che non cambia niente
+
+La campanella ricontrolla **ogni due minuti** finché una scheda resta aperta,
+ed è la richiesta più frequente di tutta l'applicazione. Quasi sempre la
+risposta è identica a quella di prima: fra una tappa che si apre e una
+revisione che arriva passano ore, non minuti.
+
+La risposta porta quindi un **ETag**, cioè l'impronta del corpo che la
+compone, e una rilettura che presenta la stessa impronta torna indietro come
+304 senza corpo: il browser rimette in mano all'applicazione quello che ha già,
+e sulla rete non passa nessun JSON. L'impronta si calcola **sul corpo già
+serializzato** e non su una chiave ricavata a parte, perché una chiave a parte
+sarebbe una seconda definizione di "cosa fa cambiare una notifica", da tenere
+allineata a mano con quella vera. Il segno di lettura sta dentro la risposta,
+quindi anche marcare come letto cambia l'impronta.
+
+**Quello che l'ETag non risparmia è il lavoro del database**, ed è giusto
+saperlo: l'impronta si calcola sulla risposta, e la risposta va comunque
+prodotta, cioè le notifiche vanno derivate a ogni richiesta come prima. A
+risparmiare quello servirebbe una domanda più corta da fare prima ("è cambiato
+qualcosa da allora?"), che è di nuovo una seconda definizione della stessa
+cosa, e sarebbe fatta delle stesse tabelle: le notifiche esistono derivate
+proprio per non avere copie che invecchiano.
+
+La risposta viaggia `private, no-cache`: conservabile dal browser, mai riusata
+senza chiedere. Non esiste un intervallo in cui darla per buona senza passare
+di qui, perché cambia anche **senza che nessuno scriva niente**, cioè quando
+una scadenza si avvicina o passa.
+
 ## Il confronto fra tentativi
 
 `/app/confronto` ([ComparisonPage](../frontend/src/components/ComparisonPage.tsx)),

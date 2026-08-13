@@ -114,6 +114,33 @@ solo perché le è stato cambiato il nome.
 Il titolo di partenza è progressivo per categoria ("Reclamo 3"), generato da
 [conversation_titles.py](../backend/conversation_titles.py).
 
+### La ricerca, in due posti che sono uno solo
+
+L'elenco compare in due forme: la colonna della chat
+([ChatSidebar](../frontend/src/components/ChatSidebar.tsx)) e il pannello che
+la espande a schermo intero
+([ExpandedConversationsPanel](../frontend/src/components/ExpandedConversationsPanel.tsx)),
+dove c'è lo spazio per l'anteprima, i badge e lo stato di ogni riga.
+
+**Il filtro è uno solo per tutte e due**, casella e stato compresi: sono la
+stessa lista vista da due distanze, e due ricerche separate vorrebbero dire
+cercare una conversazione nella colonna, espandere per leggerla meglio, e
+ritrovarsi davanti di nuovo tutte le altre. Il taglio lo fa `matchesSearch` di
+[tableSearch.ts](../frontend/src/components/tableSearch.ts), lo stesso
+confronto senza accenti e senza maiuscole delle tabelle di amministrazione, su
+titolo e anteprima dell'ultimo messaggio.
+
+Nella colonna la casella **compare da sei conversazioni in su**: sotto quella
+misura l'elenco si legge intero senza scorrere, e un campo in più sarebbe solo
+qualcosa da scavalcare. Resta però a vista finché una ricerca è scritta, anche
+se i risultati sono pochi, altrimenti restringere l'elenco porterebbe via il
+campo da cui si cancella quello che si è cercato.
+
+Le due liste vuote **non dicono la stessa frase**: "nessuna conversazione
+corrisponde alla ricerca" è una notizia diversa da "nessuna conversazione
+presente", e la seconda al posto della prima si legge come uno storico
+sparito.
+
 ## Cancellare
 
 Il router della chat **non ha** un endpoint di cancellazione. Cancellare una

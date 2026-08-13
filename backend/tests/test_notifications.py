@@ -319,6 +319,86 @@ def test_the_read_mark_is_not_moved_by_a_second_call(
     assert db_session.query(NotificationRead).one().read_at == first
 
 
+# ── L'impronta della risposta ─────────────────────────
+#
+# La campanella ricontrolla ogni due minuti finché una scheda resta aperta, e
+# quasi sempre non è cambiato niente: l'ETag fa tornare quelle riletture
+# senza corpo. Quello che questi test fissano è che l'impronta cambi
+# esattamente quando cambia la risposta, perché un'impronta ferma su una
+# lista che si è mossa è una notifica che non arriva.
+
+
+def test_the_same_list_comes_back_without_a_body(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    _overdue(make_assigned_path, standard_user, make_avatar())
+    first = user_client.get("/api/notifications")
+    etag = first.headers["etag"]
+
+    again = user_client.get("/api/notifications", headers={"If-None-Match": etag})
+
+    assert first.status_code == 200
+    assert again.status_code == 304
+    assert again.content == b""
+    # L'impronta torna anche sul 304: senza, il giro dopo il browser non
+    # avrebbe più niente da presentare e ricomincerebbe a scaricare tutto.
+    assert again.headers["etag"] == etag
+
+
+def test_an_unknown_fingerprint_gets_the_whole_list(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    _overdue(make_assigned_path, standard_user, make_avatar())
+
+    response = user_client.get("/api/notifications", headers={"If-None-Match": '"inventata"'})
+
+    assert response.status_code == 200
+    assert response.json()["items"]
+
+
+def test_reading_a_notification_changes_the_fingerprint(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    """Il segno di lettura è dentro la risposta, quindi ne cambia l'impronta.
+
+    Se non lo facesse, la campanella continuerebbe a mostrare il pallino su
+    notifiche che l'utente ha appena letto da un'altra scheda.
+    """
+    _overdue(make_assigned_path, standard_user, make_avatar())
+    etag = user_client.get("/api/notifications").headers["etag"]
+
+    user_client.post("/api/notifications/read", json={})
+
+    assert user_client.get("/api/notifications", headers={"If-None-Match": etag}).status_code == 200
+
+
+def test_a_new_path_changes_the_fingerprint(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    make_assigned_path(standard_user, [{"avatar": make_avatar()}])
+    etag = user_client.get("/api/notifications").headers["etag"]
+
+    make_assigned_path(standard_user, [{"avatar": make_avatar()}])
+
+    fresh = user_client.get("/api/notifications", headers={"If-None-Match": etag})
+    assert fresh.status_code == 200
+    assert len(fresh.json()["items"]) == 2
+
+
+def test_the_response_is_never_reused_without_asking(
+    user_client, db_session, standard_user, make_avatar, make_assigned_path
+):
+    """Una scadenza che si avvicina non è la scrittura di nessuno: la
+    risposta cambia col tempo, quindi non si può dare per buona senza
+    chiedere, e non è di chi la conserva ma di una persona sola."""
+    make_assigned_path(standard_user, [{"avatar": make_avatar()}])
+
+    headers = user_client.get("/api/notifications").headers
+
+    assert headers["cache-control"] == "private, no-cache"
+    assert "Cookie" in headers["vary"]
+
+
 # ── Confini ───────────────────────────────────────────
 
 

@@ -180,6 +180,23 @@ Le convenzioni del file:
   l'elenco di gestione sia quello di chi la deve svolgere, e quale delle due
   sia in cache in quel momento non lo sa nessuno.
 
+### La cache che sta sotto, quella del browser
+
+Una sola lettura ne usa una seconda, ed è quella delle notifiche
+(`GET /api/notifications`): la campanella ricontrolla ogni due minuti finché
+una scheda resta aperta, e quasi sempre non è cambiato niente. La risposta
+porta quindi un `ETag`, cioè l'impronta del proprio corpo, e `no-cache`, cioè
+"tienila pure, ma non riusarla senza chiedere". Il browser da quel momento
+rilegge da solo in forma condizionale, e quando l'impronta coincide il server
+risponde 304 senza corpo: sulla rete non passa più niente, e
+`apiFetch` non se ne accorge nemmeno, perché è il browser a consegnargli
+quello che aveva già.
+
+Non è una scelta che si estende alle altre letture. Vive qui perché qui c'è un
+sondaggio a orologeria che nessuno può invalidare da una scrittura, e quello
+che risparmia e quello che **non** risparmia (il lavoro del database, che resta
+tutto) stanno in [training-e-report.md](training-e-report.md).
+
 ## Chi tiene lo stato dell'utente
 
 `AuthProvider` ([frontend/src/contexts/AuthProvider.tsx](../frontend/src/contexts/AuthProvider.tsx))

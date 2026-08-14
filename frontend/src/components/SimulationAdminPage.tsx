@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { useAdminSimulations, useDeleteSimulation } from '../hooks/useSimulations'
+import { useAuth } from '../hooks/useAuth'
 import { useOrganizations } from '../hooks/useOrganizations'
+import { isSuperAdmin } from '../services/auth'
 import type { AdminSimulation } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
 import DataTable, { Td, Tr } from './DataTable'
+import type { DataTableColumn } from './DataTable'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
 import Badge from './Badge'
@@ -20,27 +23,41 @@ import { formatDate } from './lastAccess'
 import { kindLabel, sourceLabel, statusBadgeTone, statusLabel } from './simulationFormat'
 import { iconActionCls as actionBtnCls } from './IconButton'
 
-/* La gestione delle simulazioni tecniche, riservata al super admin.
+/* La gestione delle simulazioni tecniche, per entrambi i ruoli di
+ * amministrazione.
  *
  * La tabella si legge come quelle di utenti, organizzazioni e avatar: il clic
  * sulla riga apre la scheda di sola lettura, la matita apre il pannello in cui
  * si generano le domande, si rileggono, si correggono e si pubblica. Il ciclo
  * di vita sta tutto in quel pannello perché è una cosa sola, non cinque
- * schermate. */
+ * schermate.
+ *
+ * È la stessa pagina per tutti e due i ruoli, e la sola differenza è
+ * l'organizzazione: il super admin la legge in colonna e la sceglie quando ne
+ * crea una, un organization admin ha solo la propria e quelle due cose gli
+ * direbbero sempre la stessa parola. A confinarlo è il server. */
 
-const COLUMNS = [
-  { key: 'title', label: 'Simulazione' },
-  { key: 'organization', label: 'Organizzazione' },
-  { key: 'kind', label: 'Tipo' },
-  { key: 'questions', label: 'Domande', align: 'center' as const, compact: true },
-  { key: 'status', label: 'Stato' },
-  { key: 'creazione', label: 'Data Creazione' },
-  { key: 'actions', label: 'Azioni', align: 'right' as const },
-]
+/** Le colonne dipendono dal ruolo: l'organizzazione la vede solo chi ne
+ * amministra più di una. */
+function simulationColumns(showOrg: boolean): DataTableColumn[] {
+  return [
+    { key: 'title', label: 'Simulazione' },
+    ...(showOrg ? [{ key: 'organization', label: 'Organizzazione' } as DataTableColumn] : []),
+    { key: 'kind', label: 'Tipo' },
+    { key: 'questions', label: 'Domande', align: 'center', compact: true },
+    { key: 'status', label: 'Stato' },
+    { key: 'creazione', label: 'Data Creazione' },
+    { key: 'actions', label: 'Azioni', align: 'right' },
+  ]
+}
 
 export default function SimulationAdminPage() {
+  const { user } = useAuth()
+  const showOrg = isSuperAdmin(user)
+  const columns = simulationColumns(showOrg)
+
   const { data: simulations = [], isLoading } = useAdminSimulations()
-  const { data: organizations = [] } = useOrganizations()
+  const { data: organizations = [] } = useOrganizations(showOrg)
   const remove = useDeleteSimulation()
 
   const [search, setSearch] = useState('')
@@ -58,7 +75,7 @@ export default function SimulationAdminPage() {
     matchesSearch(
       search,
       s.title,
-      s.organization_name,
+      showOrg ? s.organization_name : '',
       s.document_name,
       kindLabel(s.kind),
       sourceLabel(s.source),
@@ -80,7 +97,11 @@ export default function SimulationAdminPage() {
     <PageContainer>
       <PageHeader
         title="Gestione Simulazioni"
-        description="Crea i test tecnici a partire da un documento o redigendo le domande, e assegnali a un'organizzazione."
+        description={
+          showOrg
+            ? "Crea i test tecnici a partire da un documento o redigendo le domande, e assegnali a un'organizzazione."
+            : 'Crea i test tecnici a partire da un documento o redigendo le domande.'
+        }
         actions={
           <PrimaryButton icon={<PlusIcon size={16} />} onClick={() => setCreating(true)}>
             Nuova Simulazione
@@ -92,14 +113,18 @@ export default function SimulationAdminPage() {
         <LoadingState message="Caricamento simulazioni..." />
       ) : (
         <DataTable
-          columns={COLUMNS}
+          columns={columns}
           isEmpty={filtered.length === 0}
           emptyMessage={
             search ? 'Nessuna simulazione corrisponde alla ricerca' : 'Nessuna simulazione presente'
           }
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Cerca per titolo, organizzazione o documento..."
+          searchPlaceholder={
+            showOrg
+              ? 'Cerca per titolo, organizzazione o documento...'
+              : 'Cerca per titolo o documento...'
+          }
         >
           {filtered.map((simulation) => (
             <Tr
@@ -121,7 +146,9 @@ export default function SimulationAdminPage() {
                   </span>
                 )}
               </Td>
-              <Td className="text-[0.85rem] text-slate-400">{simulation.organization_name}</Td>
+              {showOrg && (
+                <Td className="text-[0.85rem] text-slate-400">{simulation.organization_name}</Td>
+              )}
               <Td>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <SimulationKindBadge kind={simulation.kind} />
@@ -174,6 +201,7 @@ export default function SimulationAdminPage() {
       {creating && (
         <SimulationCreateModal
           organizations={organizations}
+          defaultOrganizationId={user?.organization_id ?? null}
           onClose={() => setCreating(false)}
           onCreated={(id) => {
             setCreating(false)
@@ -183,10 +211,22 @@ export default function SimulationAdminPage() {
       )}
 
       {/* Dettaglio simulazione (clic sulla riga) */}
-      {viewing && <SimulationDetailModal simulation={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <SimulationDetailModal
+          simulation={viewing}
+          showOrganization={showOrg}
+          onClose={() => setViewing(null)}
+        />
+      )}
 
       {/* Pannello domande e pubblicazione (matita) */}
-      {openId && <SimulationEditorModal simulationId={openId} onClose={() => setOpenId(null)} />}
+      {openId && (
+        <SimulationEditorModal
+          simulationId={openId}
+          showOrganization={showOrg}
+          onClose={() => setOpenId(null)}
+        />
+      )}
 
       {toDelete && (
         <ConfirmModal

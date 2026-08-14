@@ -158,6 +158,21 @@ describe('gestione dei test', () => {
     expect((ultimaChiamata().options.body as FormData).get('file')).toBeNull()
   })
 
+  /* Senza organizzazione il campo non parte proprio: è il caso dell'org
+   * admin, che ne ha una sola, e a metterci la sua è il server. */
+  it('crea senza nominare l organizzazione', async () => {
+    await createSimulation({
+      organizationId: null,
+      title: 'Antiriciclaggio',
+      description: '',
+      kind: 'multiple',
+      source: 'manual',
+      file: null,
+    })
+
+    expect((ultimaChiamata().options.body as FormData).get('organization_id')).toBeNull()
+  })
+
   it('sostituisce il documento', async () => {
     const file = new File(['x'], 'nuova.pdf', { type: 'application/pdf' })
     await replaceSimulationDocument('s-1', file)

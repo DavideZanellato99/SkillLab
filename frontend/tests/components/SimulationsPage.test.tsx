@@ -5,6 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const useSimulations = vi.hoisted(() => vi.fn())
 vi.mock('../../src/hooks/useSimulations', () => ({ useSimulations }))
 
+const sessione = vi.hoisted(() => ({ current: { ruolo: 'user' } }))
+vi.mock('../../src/hooks/useAuth', () => ({ useAuth: () => ({ user: sessione.current }) }))
+
 import type { Simulation } from '../../src/services/simulations'
 import SimulationsPage from '../../src/components/SimulationsPage'
 
@@ -27,7 +30,8 @@ const simulazione = (over: Partial<Simulation> = {}): Simulation => ({
   ...over,
 })
 
-function renderPage(stato: Record<string, unknown>) {
+function renderPage(stato: Record<string, unknown>, ruolo = 'user') {
+  sessione.current = { ruolo }
   useSimulations.mockReturnValue({ isLoading: false, error: null, ...stato })
   render(
     <MemoryRouter>
@@ -37,6 +41,7 @@ function renderPage(stato: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  sessione.current = { ruolo: 'user' }
   useSimulations.mockReset()
 })
 
@@ -47,6 +52,20 @@ describe('SimulationsPage', () => {
     expect(screen.getByRole('heading', { name: 'Normativa antiriciclaggio' })).toBeInTheDocument()
     expect(screen.getByText('10 domande')).toBeInTheDocument()
     expect(screen.getByText('scelta multipla')).toBeInTheDocument()
+  })
+
+  /* La riga sotto la descrizione dice cosa distingue un test dall'altro, e
+   * per chi sta in una sola organizzazione il nome del tenant è la stessa
+   * parola su ogni scheda. Lo legge il super admin, che è l'unico ad averne
+   * davanti di più tenant insieme. */
+  it("nomina l'organizzazione solo al super admin", () => {
+    renderPage({ data: [simulazione()] })
+    expect(screen.queryByText('Banca Esempio')).not.toBeInTheDocument()
+
+    renderPage({ data: [simulazione()] }, 'organization_admin')
+    expect(screen.queryByText('Banca Esempio')).not.toBeInTheDocument()
+
+    renderPage({ data: [simulazione()] }, 'super_admin')
     expect(screen.getByText('Banca Esempio')).toBeInTheDocument()
   })
 

@@ -234,10 +234,13 @@ function App() {
                     </RequireRole>
                   }
                 />
+                {/* I test tecnici li scrive anche chi amministra una sola
+                    organizzazione: è la stessa pagina, ed è il server a
+                    confinarla al proprio tenant. */}
                 <Route
                   path="admin/simulations"
                   element={
-                    <RequireRole access="super_admin">
+                    <RequireRole access="admin">
                       <SimulationAdminPage />
                     </RequireRole>
                   }

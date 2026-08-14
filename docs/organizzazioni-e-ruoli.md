@@ -8,8 +8,8 @@ perché è fatto in un punto solo.
 
 | Ruolo | Organizzazione | Cosa può fare |
 | --- | --- | --- |
-| `super_admin` | Nessuna (`organization_id` NULL) | Sta sopra i tenant. Crea organizzazioni, avatar, simulazioni e utenti, e vede tutto |
-| `organization_admin` | La sua | Amministra la propria: legge le conversazioni e i tentativi dei suoi utenti, assegna percorsi, corregge valutazioni |
+| `super_admin` | Nessuna (`organization_id` NULL) | Sta sopra i tenant. Crea organizzazioni, avatar e utenti, e vede tutto |
+| `organization_admin` | La sua | Amministra la propria: legge le conversazioni e i tentativi dei suoi utenti, compone percorsi, scrive i test tecnici, corregge valutazioni |
 | `user` | La sua | Si allena, e vede solo la propria roba |
 
 Il super admin è l'unico a non avere un'organizzazione, ed è esattamente questo
@@ -39,7 +39,7 @@ condivisa per area:
 | --- | --- | --- |
 | Avatar | `_visible_avatars` in [avatars.py](../backend/routers/avatars.py) | Solo quelli della propria organizzazione, tutti per il super admin |
 | Categorie degli avatar | `get_categories` in [avatars.py](../backend/routers/avatars.py) | Come sopra. Il legame con l'avatar è una chiave esterna composta che porta con sé il tenant, così cambiare categoria non può spostare l'avatar di organizzazione (vedi [avatar-e-persona.md](avatar-e-persona.md)) |
-| Simulazioni | `visible_query` in [simulations.py](../backend/routers/simulations.py) | Come sopra, più le bozze escluse fuori dall'amministrazione |
+| Simulazioni | `visible_query` in [simulations.py](../backend/routers/simulations.py) | Come sopra, più le bozze escluse fuori dall'amministrazione. È la stessa query a servire chi i test li scrive, chiesta con le bozze incluse (vedi [simulatore.md](simulatore.md)) |
 | Conversazioni | `_owned_conversation_or_404` in [chat.py](../backend/routers/chat.py) | Solo le proprie, sempre |
 | Tentativi | `_readable_attempt_or_404` in [simulations.py](../backend/routers/simulations.py) | I propri, e per un admin quelli di chi sta nella sua organizzazione |
 

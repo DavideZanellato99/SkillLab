@@ -534,15 +534,16 @@ def test_un_admin_legge_i_tentativi_del_proprio_tenant(
     assert client.get(f"/api/simulations/attempts/{esito['id']}").status_code == 200
 
 
-def test_i_risultati_di_un_test_li_legge_solo_il_super_admin(
+def test_i_risultati_di_un_test_li_leggono_i_due_ruoli_di_amministrazione(
     client, act_as, make_simulation, standard_user, org_admin_user, super_admin_user
 ):
-    """L'elenco per test sta dietro la pagina che lo apre, che è del super admin.
+    """L'elenco per test sta dietro la pagina che lo apre, che è di chi
+    amministra.
 
     Guarda una prova dal lato del test e non della persona, e serve a chi le
-    domande le ha scritte. Un organization admin non ha quella pagina, quindi
-    non deve avere nemmeno la rotta: un permesso più largo del corridoio che
-    ci porta è un permesso che conta lo stesso, perché l'indirizzo si digita.
+    domande le ha scritte: da quando le scrive anche un organization admin,
+    il riscontro è suo quanto la simulazione. A chi si allena la rotta resta
+    chiusa, come la pagina.
     """
     simulation = make_simulation()
     act_as(standard_user)
@@ -551,12 +552,40 @@ def test_i_risultati_di_un_test_li_legge_solo_il_super_admin(
         json={"answers": _answers(simulation, correct=True)},
     ).json()
 
-    act_as(org_admin_user)
     assert client.get(f"/api/simulations/{simulation.id}/results").status_code == 403
+
+    act_as(org_admin_user)
+    risultati = client.get(f"/api/simulations/{simulation.id}/results").json()
+    assert [r["id"] for r in risultati] == [esito["id"]]
 
     act_as(super_admin_user)
     risultati = client.get(f"/api/simulations/{simulation.id}/results").json()
     assert [r["id"] for r in risultati] == [esito["id"]]
+
+
+def test_i_risultati_di_un_test_saltano_chi_ha_traslocato_di_tenant(
+    db_session, client, act_as, make_simulation, standard_user, org_admin_user, other_organization
+):
+    """Il filtro è sull'organizzazione di chi ha svolto, non su quella della
+    simulazione.
+
+    Le due coincidono sempre, tranne dopo uno spostamento di tenant: lì
+    l'elenco per test mostrerebbe nome ed email di chi se n'è andato a chi
+    amministra l'organizzazione appena lasciata, che è esattamente quello
+    che il dettaglio del tentativo già rifiuta.
+    """
+    simulation = make_simulation()
+    act_as(standard_user)
+    client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True)},
+    )
+
+    standard_user.organization_id = other_organization.id
+    db_session.flush()
+
+    act_as(org_admin_user)
+    assert client.get(f"/api/simulations/{simulation.id}/results").json() == []
 
 
 def test_chi_ha_traslocato_di_tenant_se_lo_porta_dietro_il_tentativo(

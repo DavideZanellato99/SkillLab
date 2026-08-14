@@ -63,7 +63,7 @@ from sqlalchemy.orm import Session, selectinload
 
 import audit
 import llm_limits
-from auth_dependency import get_current_super_admin, get_current_user, resolve_admin_scope
+from auth_dependency import get_current_admin, get_current_user, resolve_admin_scope
 from database import get_db
 from exports import simulation_attempt_pdf
 from models import (
@@ -872,9 +872,9 @@ def download_attempt_pdf(
 def list_simulation_results(
     simulation_id: UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
-    """Tutti i tentativi su una simulazione, per il super admin.
+    """Tutti i tentativi su una simulazione, per chi la amministra.
 
     È l'unico punto che guarda una prova **dal lato del test** invece che dal
     lato della persona: la dashboard e il report rispondono a "come sta
@@ -885,16 +885,18 @@ def list_simulation_results(
     domande, nella stessa modale: si legge il risultato e si corregge la
     domanda nella linguetta di fianco.
 
-    **Solo il super admin**, che è l'unico a scrivere le simulazioni e
-    l'unico ad avere la pagina da cui questo si apre. Il ruolo dichiarato
-    qui e il ruolo che serve per arrivarci devono essere lo stesso: quando
-    il primo è più largo del secondo, quello che conta è il primo, perché
-    l'indirizzo si digita anche senza un pulsante che ci porti. Il giorno in
-    cui un organization admin avrà una pagina dei propri test, questo
-    tornerà a ``get_current_admin`` e i tentativi andranno filtrati per
-    l'organizzazione di **chi li ha svolti** (come in
-    ``_readable_attempt_or_404``): la simulazione non basta a dirlo, perché
-    chi trasloca di tenant si porta dietro i propri tentativi.
+    Il ruolo dichiarato qui e il ruolo che serve per arrivarci sono lo
+    stesso, ed è il motivo per cui questo si è allargato quando si è
+    allargata la pagina che lo apre (vedi ``admin_simulations``): quando il
+    primo è più largo del secondo, quello che conta è il primo, perché
+    l'indirizzo si digita anche senza un pulsante che ci porti.
+
+    I tentativi sono poi filtrati per l'organizzazione di **chi li ha
+    svolti** e non per quella della simulazione, come in
+    ``_readable_attempt_or_404``: la simulazione non basta a dirlo, perché
+    chi trasloca di tenant si porta dietro i propri tentativi, e un elenco
+    per test li mostrerebbe con nome ed email a chi amministra
+    l'organizzazione che quella persona ha appena lasciato.
     """
     simulation = get_visible_or_404(db, current_admin, simulation_id, include_drafts=True)
     attempts = (
@@ -903,4 +905,7 @@ def list_simulation_results(
         .order_by(SimulationAttempt.created_at.desc())
         .all()
     )
+    scope = resolve_admin_scope(current_admin)
+    if scope is not None:
+        attempts = [a for a in attempts if a.user and a.user.organization_id == scope]
     return [_attempt_response(a) for a in attempts]

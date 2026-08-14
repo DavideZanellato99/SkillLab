@@ -47,8 +47,8 @@ portasse un link dipendeva da chi lo apriva.
 | `/app/confronto` | autenticato | Confronto fra i propri tentativi (per un admin, quelli di una persona del proprio tenant) |
 | `/app/simulatore`, `/app/simulatore/:id` | autenticato | Elenco dei test tecnici e svolgimento |
 | `/app/profile` | autenticato | Profilo, password, export dei propri dati |
-| `/app/admin/dashboard`, `/app/admin/training`, `/app/admin/report` | admin | Cruscotti, percorsi a tappe, report per utente |
-| `/app/admin`, `/app/admin/organizations`, `/app/admin/avatars`, `/app/admin/simulations`, `/app/admin/logs` | super admin | Utenti, organizzazioni, avatar, simulazioni, registro |
+| `/app/admin/dashboard`, `/app/admin/training`, `/app/admin/report`, `/app/admin/simulations` | admin | Cruscotti, percorsi a tappe, report per utente, test tecnici |
+| `/app/admin`, `/app/admin/organizations`, `/app/admin/avatars`, `/app/admin/logs` | super admin | Utenti, organizzazioni, avatar, registro |
 
 Il gate è [RequireRole](../frontend/src/components/RequireRole.tsx), che su un
 ruolo che non corrisponde rimanda a `/app` con `replace`, così l'indirizzo

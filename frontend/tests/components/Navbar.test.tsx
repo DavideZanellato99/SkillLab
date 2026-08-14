@@ -188,15 +188,16 @@ describe('menu di chi è entrato', () => {
     expect(screen.queryByRole('link', { name: /Report Attività/ })).not.toBeInTheDocument()
   })
 
-  /* Un org admin governa le persone del proprio tenant: compone percorsi e
-   * legge i report, ma non tocca utenti, organizzazioni, avatar e registro,
-   * che sono del super admin. */
-  it('a un org admin offre percorsi e report, non il resto', async () => {
+  /* Un org admin governa le persone del proprio tenant: compone percorsi,
+   * scrive i test tecnici e legge i report, ma non tocca utenti,
+   * organizzazioni, avatar e registro, che sono del super admin. */
+  it('a un org admin offre percorsi, simulazioni e report, non il resto', async () => {
     renderNavbar('organization_admin')
 
     await apriMenu()
 
     expect(screen.getByRole('link', { name: /Gestione Percorsi/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Gestione Simulazioni/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Report Attività/ })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Gestione Utenti/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Gestione Organizzazioni/ })).not.toBeInTheDocument()

@@ -2,6 +2,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const sessione = vi.hoisted(() => ({
+  current: { ruolo: 'super_admin', organization_id: 'org-1' },
+}))
+vi.mock('../../src/hooks/useAuth', () => ({ useAuth: () => ({ user: sessione.current }) }))
+
 const stato = vi.hoisted(() => ({
   elenco: { data: [] as unknown[], isLoading: false },
 }))
@@ -15,8 +20,12 @@ vi.mock('../../src/hooks/useSimulations', () => ({
   useAdminSimulations: () => stato.elenco,
   useDeleteSimulation: () => elimina,
 }))
+/* Come l'hook vero: senza `enabled` la chiamata non parte, e l'elenco resta
+ * vuoto. È il caso dell'org admin, che le organizzazioni non le legge. */
 vi.mock('../../src/hooks/useOrganizations', () => ({
-  useOrganizations: () => ({ data: [{ id: 'org-1', name: 'Banca Esempio' }] }),
+  useOrganizations: (enabled = true) => ({
+    data: enabled ? [{ id: 'org-1', name: 'Banca Esempio' }] : [],
+  }),
 }))
 
 /* Le tre finestre di questa pagina hanno i loro test: qui conta quale si
@@ -30,8 +39,17 @@ vi.mock('../../src/components/SimulationCreateModal', () => ({
   ),
 }))
 vi.mock('../../src/components/SimulationDetailModal', () => ({
-  default: ({ simulation }: { simulation: { title: string } }) => (
-    <div>scheda: {simulation.title}</div>
+  default: ({
+    simulation,
+    showOrganization,
+  }: {
+    simulation: { title: string; organization_name: string }
+    showOrganization?: boolean
+  }) => (
+    <div>
+      scheda: {simulation.title}
+      {showOrganization && <span> di {simulation.organization_name}</span>}
+    </div>
   ),
 }))
 vi.mock('../../src/components/SimulationEditorModal', () => ({
@@ -63,12 +81,14 @@ const simulazione = (over: Partial<AdminSimulation> = {}): AdminSimulation =>
     ...over,
   }) as AdminSimulation
 
-function renderPage(righe: AdminSimulation[] = [simulazione()]) {
+function renderPage(righe: AdminSimulation[] = [simulazione()], ruolo = 'super_admin') {
+  sessione.current = { ruolo, organization_id: 'org-1' }
   stato.elenco = { data: righe, isLoading: false }
   render(<SimulationAdminPage />)
 }
 
 beforeEach(() => {
+  sessione.current = { ruolo: 'super_admin', organization_id: 'org-1' }
   elimina.mutate.mockReset()
   elimina.isPending = false
   elimina.isError = false
@@ -146,6 +166,23 @@ describe('elenco', () => {
 
     expect(screen.getByText('Caricamento simulazioni...')).toBeInTheDocument()
   })
+
+  it("mostra l'organizzazione al super admin", () => {
+    renderPage()
+
+    expect(screen.getByRole('columnheader', { name: 'Organizzazione' })).toBeInTheDocument()
+    expect(screen.getByText('Banca Esempio')).toBeInTheDocument()
+  })
+
+  /* Un org admin la sua organizzazione la conosce già: la colonna sarebbe la
+   * stessa parola ripetuta su ogni riga. */
+  it('toglie la colonna a un org admin', () => {
+    renderPage([simulazione()], 'organization_admin')
+
+    expect(screen.queryByRole('columnheader', { name: 'Organizzazione' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Banca Esempio')).not.toBeInTheDocument()
+    expect(screen.getByText('Normativa antiriciclaggio')).toBeInTheDocument()
+  })
 })
 
 describe('le due strade di una riga', () => {
@@ -158,6 +195,17 @@ describe('le due strade di una riga', () => {
     await userEvent.click(screen.getByText('Normativa antiriciclaggio'))
 
     expect(screen.getByText('scheda: Normativa antiriciclaggio')).toBeInTheDocument()
+  })
+
+  /* Anche dentro la scheda: a chi ne amministra una sola l'organizzazione non
+   * si ripete, come non si ripete in tabella. */
+  it('non nomina l organizzazione nella scheda di un org admin', async () => {
+    renderPage([simulazione()], 'organization_admin')
+
+    await userEvent.click(screen.getByText('Normativa antiriciclaggio'))
+
+    expect(screen.getByText(/^scheda:/)).toBeInTheDocument()
+    expect(screen.queryByText(/Banca Esempio/)).not.toBeInTheDocument()
   })
 
   it('la matita apre il pannello delle domande', async () => {

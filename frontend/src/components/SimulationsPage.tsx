@@ -1,5 +1,7 @@
 import { Link } from 'react-router'
 import { useSimulations } from '../hooks/useSimulations'
+import { useAuth } from '../hooks/useAuth'
+import { isSuperAdmin } from '../services/auth'
 import type { Simulation } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
 import LoadingState from './LoadingState'
@@ -11,9 +13,20 @@ import { scoreBadgeTone, formatScore, kindLabel } from './simulationFormat'
  *
  * Nessun filtro per organizzazione: il server serve a ciascuno quelle del
  * proprio tenant, e al super admin tutte. Le simulazioni in bozza non
- * arrivano fin qui, stanno nella pagina di gestione. */
+ * arrivano fin qui, stanno nella pagina di gestione.
+ *
+ * Di quale organizzazione sia il test lo legge solo il super admin, che è
+ * l'unico ad avere davanti quelle di più tenant insieme. Chi appartiene a
+ * un'organizzazione sola vedrebbe la stessa parola su ogni scheda, in una
+ * riga che esiste per dire cosa distingue un test dall'altro. */
 
-function SimulationCard({ simulation }: { simulation: Simulation }) {
+function SimulationCard({
+  simulation,
+  showOrganization,
+}: {
+  simulation: Simulation
+  showOrganization: boolean
+}) {
   const done = simulation.attempt_count > 0
   return (
     <Link
@@ -46,8 +59,12 @@ function SimulationCard({ simulation }: { simulation: Simulation }) {
         <span>{kindLabel(simulation.kind).toLowerCase()}</span>
         <span aria-hidden>·</span>
         <SimulationSourceBadge source={simulation.source} />
-        <span aria-hidden>·</span>
-        <span className="truncate">{simulation.organization_name}</span>
+        {showOrganization && (
+          <>
+            <span aria-hidden>·</span>
+            <span className="truncate">{simulation.organization_name}</span>
+          </>
+        )}
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-white/6 pt-3 text-xs">
         <span className="text-slate-500">
@@ -64,6 +81,8 @@ function SimulationCard({ simulation }: { simulation: Simulation }) {
 }
 
 export default function SimulationsPage() {
+  const { user } = useAuth()
+  const showOrganization = isSuperAdmin(user)
   const { data: simulations = [], isLoading, error } = useSimulations()
 
   return (
@@ -89,7 +108,11 @@ export default function SimulationsPage() {
       ) : (
         <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
           {simulations.map((simulation) => (
-            <SimulationCard key={simulation.id} simulation={simulation} />
+            <SimulationCard
+              key={simulation.id}
+              simulation={simulation}
+              showOrganization={showOrganization}
+            />
           ))}
         </div>
       )}

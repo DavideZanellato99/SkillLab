@@ -19,14 +19,21 @@ import type { AdminSimulation } from '../services/simulations'
 
 export default function SimulationDetailModal({
   simulation,
+  showOrganization = true,
   onClose,
 }: {
   simulation: AdminSimulation
+  /** Falso per chi ne amministra una sola: sarebbe la sua, scritta due volte. */
+  showOrganization?: boolean
   onClose: () => void
 }) {
   const required = requiredPool(simulation.source)
   return (
-    <DetailModal onClose={onClose} title={simulation.title} subtitle={simulation.organization_name}>
+    <DetailModal
+      onClose={onClose}
+      title={simulation.title}
+      subtitle={showOrganization ? simulation.organization_name : undefined}
+    >
       <DetailField label="Stato">
         <Badge tone={statusBadgeTone(simulation.status)}>{statusLabel(simulation.status)}</Badge>
       </DetailField>
@@ -35,7 +42,9 @@ export default function SimulationDetailModal({
       <DetailField label="Tipo di test">
         <SimulationKindBadge kind={simulation.kind} />
       </DetailField>
-      <DetailField label="Organizzazione">{simulation.organization_name}</DetailField>
+      {showOrganization && (
+        <DetailField label="Organizzazione">{simulation.organization_name}</DetailField>
+      )}
       {/* Chi ha scritto le domande, e da cosa. Le due righe sono la stessa
           informazione vista da due lati, quindi su un test scritto a mano il
           documento non compare vuoto: non ce n'è uno. */}

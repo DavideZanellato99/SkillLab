@@ -1,4 +1,13 @@
-"""La creazione delle simulazioni tecniche, riservata al super admin.
+"""La creazione delle simulazioni tecniche, per chi amministra.
+
+Entrambi i ruoli di amministrazione scrivono i test, come compongono i
+percorsi (vedi ``routers.training``): un organization admin è chi
+insegna davvero ai propri studenti, e far passare dal super admin ogni
+procedura aziendale da trasformare in test metterebbe in mezzo un estraneo
+al mestiere che si sta insegnando. A confinarlo è il tenant, qui come
+altrove: legge, scrive e pubblica dentro la propria organizzazione e
+nient'altro, e a dirlo è la stessa ``visible_query`` che serve chi i test
+li svolge, chiesta con le bozze incluse.
 
 Il ciclo di vita di una simulazione, in tre momenti distinti e in
 quest'ordine, che è anche il motivo per cui sono tre chiamate e non una:
@@ -11,8 +20,8 @@ quest'ordine, che è anche il motivo per cui sono tre chiamate e non una:
 3. la revisione umana e la pubblicazione.
 
 Separarli non è pignoleria: se fossero un'unica richiesta, un modello lento
-riporterebbe indietro un errore dopo tre minuti lasciando il super admin
-senza niente, documento compreso. Così un caricamento riuscito resta
+riporterebbe indietro un errore dopo tre minuti lasciando chi la sta
+creando senza niente, documento compreso. Così un caricamento riuscito resta
 riuscito, e una generazione che va storta si rilancia da sola.
 
 Il passo 3 è la ragione per cui esiste lo stato di bozza. Le domande le
@@ -48,7 +57,7 @@ from sqlalchemy.orm import Session
 import audit
 import document_text
 import llm_limits
-from auth_dependency import get_current_super_admin
+from auth_dependency import get_current_admin, resolve_admin_scope
 from database import get_db
 from models import (
     ALL_SIMULATION_KINDS,
@@ -68,7 +77,7 @@ from models import (
     User,
 )
 from openai_service import embed_texts
-from routers.simulations import attempt_stats, to_response
+from routers.simulations import attempt_stats, get_visible_or_404, to_response, visible_query
 from schemas import (
     AdminSimulationResponse,
     MessageResponse,
@@ -85,15 +94,38 @@ from simulation_rag import split_into_chunks
 router = APIRouter(prefix="/api/admin/simulations", tags=["admin-simulations"])
 
 
-def _get_or_404(db: Session, simulation_id: UUID) -> TechnicalSimulation:
-    simulation = (
-        db.query(TechnicalSimulation).filter(TechnicalSimulation.id == simulation_id).first()
-    )
-    if not simulation:
+def _scoped_or_404(db: Session, admin: User, simulation_id: UUID) -> TechnicalSimulation:
+    """La simulazione, se questo admin ha diritto di amministrarla.
+
+    È la stessa ``visible_query`` di chi i test li svolge, chiesta con le
+    bozze incluse: un test in bozza esiste solo qui, e chi lo amministra
+    deve vederlo per pubblicarlo. Fuori dal proprio tenant una simulazione
+    non esiste, quindi 404 e non 403: è lo stesso niente che l'elenco
+    mostra.
+    """
+    return get_visible_or_404(db, admin, simulation_id, include_drafts=True)
+
+
+def _target_organization(db: Session, admin: User, requested: UUID | None) -> Organization:
+    """Il tenant a cui una simulazione appartiene, deciso dal server.
+
+    L'organization admin non lo nomina: è il proprio, e quello che chiede
+    viene ignorato invece che obbedito. Il super admin deve nominarlo,
+    perché una simulazione di "tutte le organizzazioni" non esiste: la
+    svolge la gente di un tenant solo, e i suoi tentativi sono loro.
+    """
+    scope_org_id = resolve_admin_scope(admin, requested)
+    if scope_org_id is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Simulazione non trovata."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Specificare l'organizzazione a cui la simulazione appartiene.",
         )
-    return simulation
+    organization = db.query(Organization).filter(Organization.id == scope_org_id).first()
+    if not organization:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Organizzazione non trovata."
+        )
+    return organization
 
 
 def _admin_response(
@@ -309,7 +341,7 @@ async def _index_document(
     Ricaricare un documento cancella i passaggi di prima e non le domande:
     le domande sono il test, e un test non si azzera perché è stata caricata
     una versione aggiornata della procedura. Restano lì, con le loro
-    citazioni che puntano ai passaggi nuovi, ed è il super admin a decidere
+    citazioni che puntano ai passaggi nuovi, ed è chi amministra a decidere
     se rigenerarle.
     """
     try:
@@ -357,11 +389,17 @@ async def _index_document(
 @router.get("", response_model=list[AdminSimulationResponse])
 def list_all_simulations(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
-    """Tutte le simulazioni di tutti i tenant, bozze comprese."""
+    """Le simulazioni che questo admin amministra, bozze comprese.
+
+    Tutte quelle di tutti i tenant per il super admin, quelle della propria
+    organizzazione per un organization admin.
+    """
     simulations = (
-        db.query(TechnicalSimulation).order_by(TechnicalSimulation.created_at.desc()).all()
+        visible_query(db, current_admin, include_drafts=True)
+        .order_by(TechnicalSimulation.created_at.desc())
+        .all()
     )
     stats = attempt_stats(db, current_admin.id, [s.id for s in simulations])
     return [_admin_response(s, len(s.questions), stats.get(s.id)) for s in simulations]
@@ -371,23 +409,23 @@ def list_all_simulations(
 def get_simulation_admin(
     simulation_id: UUID,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """La simulazione con le risposte esatte e il documento da cui nasce."""
-    return _admin_detail(db, _get_or_404(db, simulation_id), current_admin)
+    return _admin_detail(db, _scoped_or_404(db, current_admin, simulation_id), current_admin)
 
 
 @router.post("", response_model=SimulationAdminDetailResponse, status_code=201)
 async def create_simulation(
     http_request: Request,
-    organization_id: UUID = Form(...),
+    organization_id: UUID | None = Form(None),
     title: str = Form(...),
     description: str = Form(""),
     kind: str = Form(SIMULATION_KIND_MULTIPLE),
     source: str = Form(SIMULATION_SOURCE_AI),
     file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """Crea una simulazione, dal documento caricato o vuota da riempire.
 
@@ -403,6 +441,10 @@ async def create_simulation(
     Il tipo si sceglie qui perché è quello che le domande saranno: alternative
     con una giusta, oppure una traccia di risposta attesa. Non si cambia più
     (vedi ``update_simulation``), e nemmeno chi le scrive.
+
+    L'organizzazione la nomina solo il super admin: per un organization
+    admin è la propria, e il campo che arriva non viene guardato (vedi
+    ``_target_organization``).
     """
     title = title.strip()
     if not title:
@@ -418,11 +460,7 @@ async def create_simulation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Origine delle domande non valida: {source}",
         )
-    organization = db.query(Organization).filter(Organization.id == organization_id).first()
-    if not organization:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Organizzazione non trovata."
-        )
+    organization = _target_organization(db, current_admin, organization_id)
 
     manual = source == SIMULATION_SOURCE_MANUAL
     if manual and file is not None:
@@ -438,7 +476,7 @@ async def create_simulation(
     data = None if file is None else await _read_upload(file)
 
     simulation = TechnicalSimulation(
-        organization_id=organization_id,
+        organization_id=organization.id,
         title=title,
         description=description.strip() or None,
         status=SIMULATION_STATUS_DRAFT,
@@ -464,10 +502,10 @@ async def replace_document(
     http_request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """Sostituisce il documento e reindicizza i passaggi."""
-    simulation = _get_or_404(db, simulation_id)
+    simulation = _scoped_or_404(db, current_admin, simulation_id)
     _require_document_source(simulation)
     data = await _read_upload(file)
     await _index_document(db, simulation, file.filename or "documento", data, current_admin.id)
@@ -482,7 +520,7 @@ async def generate_simulation_questions(
     simulation_id: UUID,
     http_request: Request,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """Genera il serbatoio di domande dal documento, sostituendo quello che
     c'era.
@@ -490,7 +528,7 @@ async def generate_simulation_questions(
     Cinquanta domande, non dieci: dieci sono quelle che ogni tentativo
     estrae a caso al momento di cominciare. Se il modello ne restituisce
     meno, quelle che ci sono si scrivono lo stesso e la simulazione resta in
-    bozza, che è il posto in cui il super admin decide se rigenerare o
+    bozza, che è il posto in cui chi amministra decide se rigenerare o
     completare a mano.
 
     Rigenerare riporta la simulazione in bozza anche se era pubblicata: le
@@ -501,7 +539,7 @@ async def generate_simulation_questions(
     """
     await llm_limits.consume(llm_limits.GENERAZIONE_DOMANDE, current_admin.id)
 
-    simulation = _get_or_404(db, simulation_id)
+    simulation = _scoped_or_404(db, current_admin, simulation_id)
     _require_document_source(simulation)
     chunks = simulation.chunks
     if not chunks:
@@ -549,7 +587,7 @@ def update_simulation(
     payload: SimulationUpdateRequest,
     http_request: Request,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """Titolo e descrizione, e nient'altro.
 
@@ -558,7 +596,7 @@ def update_simulation(
     non esistono. Nemmeno il tipo: le domande sono già nate dell'una forma o
     dell'altra, e cambiarlo vorrebbe dire buttarle senza dirlo.
     """
-    simulation = _get_or_404(db, simulation_id)
+    simulation = _scoped_or_404(db, current_admin, simulation_id)
     simulation.title = payload.title.strip()
     simulation.description = (payload.description or "").strip() or None
     db.commit()
@@ -573,9 +611,9 @@ def save_questions(
     payload: SimulationQuestionsPayload,
     http_request: Request,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
-    """Salva le domande riviste dal super admin, in blocco.
+    """Salva le domande riviste da chi amministra, in blocco.
 
     Le righe di prima si cancellano e si riscrivono invece di aggiornarle una
     per una: le domande arrivano già nell'ordine giusto, e riscriverle tutte
@@ -596,7 +634,7 @@ def save_questions(
     alla decima; a pretenderle finite è la pubblicazione (vedi
     ``update_status``).
     """
-    simulation = _get_or_404(db, simulation_id)
+    simulation = _scoped_or_404(db, current_admin, simulation_id)
     for position, question in enumerate(payload.questions, start=1):
         missing = _missing_key(simulation, question)
         if missing:
@@ -606,7 +644,7 @@ def save_questions(
             )
 
     # Le citazioni al documento si conservano dove la domanda è rimasta la
-    # stessa: sono ordinali di passaggi, non qualcosa che il super admin
+    # stessa: sono ordinali di passaggi, non qualcosa che chi amministra
     # possa riscrivere nel form, e perderle a ogni correzione di un refuso
     # toglierebbe a chi sbaglia il rimando alla procedura.
     previous = {q.position: q for q in simulation.questions}
@@ -637,7 +675,7 @@ def update_status(
     payload: SimulationStatusRequest,
     http_request: Request,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """Pubblica la simulazione o la ritira.
 
@@ -657,7 +695,7 @@ def update_status(
     c'è qualcosa che non va, il primo gesto deve poter essere toglierla di
     mezzo.
     """
-    simulation = _get_or_404(db, simulation_id)
+    simulation = _scoped_or_404(db, current_admin, simulation_id)
     if payload.status != SIMULATION_STATUS_DRAFT:
         required = simulation.required_pool
         if len(simulation.questions) < required:
@@ -683,7 +721,7 @@ def delete_simulation(
     simulation_id: UUID,
     http_request: Request,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_super_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """Elimina la simulazione con i suoi passaggi, domande e tentativi.
 
@@ -693,7 +731,7 @@ def delete_simulation(
     ha bisogno che la simulazione esista ancora. Chi vuole solo toglierla di
     mezzo la ritira.
     """
-    simulation = _get_or_404(db, simulation_id)
+    simulation = _scoped_or_404(db, current_admin, simulation_id)
     audit.describe(http_request, titolo=simulation.title)
     db.delete(simulation)
     db.commit()

@@ -1,7 +1,7 @@
 # Il simulatore tecnico, come funziona
 
 Il gemello scritto del roleplay: là si misura come l'operatore gestisce una
-persona, qui se conosce la procedura. Il super admin carica un documento
+persona, qui se conosce la procedura. Chi amministra carica un documento
 aziendale, un modello di ragionamento ne ricava **cinquanta domande**, un umano
 le rilegge, e gli utenti dell'organizzazione svolgono un test di **dieci
 domande estratte a caso** da quelle cinquanta, una alla volta, ottenendo un
@@ -122,7 +122,7 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [backend/simulation_questions.py](../backend/simulation_questions.py) | I prompt e le due passate che producono il serbatoio, dell'uno o dell'altro tipo |
 | [backend/simulation_open_answers.py](../backend/simulation_open_answers.py) | Il giudizio sulle risposte scritte: il prompt e la chiamata sola |
 | [backend/simulation_scoring.py](../backend/simulation_scoring.py) | Quanto vale una risposta: la scala che scende col tempo e quella del giudizio |
-| [backend/routers/admin_simulations.py](../backend/routers/admin_simulations.py) | Il ciclo di vita lato super admin: caricamento, generazione, revisione, pubblicazione |
+| [backend/routers/admin_simulations.py](../backend/routers/admin_simulations.py) | Il ciclo di vita lato amministrazione: caricamento, generazione, revisione, pubblicazione |
 | [backend/routers/simulations.py](../backend/routers/simulations.py) | Lo svolgimento e le due correzioni |
 | [backend/exports.py](../backend/exports.py) | Il referto in PDF di un tentativo consegnato |
 | [backend/pdf_kit.py](../backend/pdf_kit.py) | Come è vestito quel referto: colori, caratteri e riquadri, gli stessi della valutazione ([valutazione.md](valutazione.md#come-è-fatto-il-foglio)) |
@@ -150,7 +150,7 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 
 ```mermaid
 flowchart TD
-    A0[Super admin crea la simulazione: tipo e origine delle domande] --> A1{Chi scrive le domande}
+    A0[Un admin crea la simulazione: tipo e origine delle domande] --> A1{Chi scrive le domande}
     A1 -->|Il modello| A[Carica il documento]
     A1 -->|Il docente| A2[Scrive le domande una per una]
     A2 --> I
@@ -182,17 +182,54 @@ scrivono le domande nel pannello della fase 3, si pubblica. Da lì in poi il
 diagramma è lo stesso.
 
 Le fasi 1, 2 e 3 sono tre chiamate HTTP distinte e non una sola. Il motivo è in
-[admin_simulations.py:1-21](../backend/routers/admin_simulations.py#L1-L21): il
+[admin_simulations.py:12-25](../backend/routers/admin_simulations.py#L12-L25): il
 caricamento dura secondi, la generazione può durare minuti, e se fossero
 un'unica richiesta un modello lento riporterebbe indietro un errore dopo tre
-minuti lasciando il super admin senza niente, documento compreso.
+minuti lasciando chi la sta creando senza niente, documento compreso.
+
+---
+
+## Chi scrive i test
+
+Entrambi i ruoli di amministrazione, come per i percorsi di training: un
+organization admin è chi insegna davvero ai propri studenti, e far passare dal
+super admin ogni procedura aziendale da trasformare in test metterebbe in mezzo
+un estraneo al mestiere che si sta insegnando.
+
+A confinarlo è il tenant, e la regola è quella di sempre, in un punto solo:
+
+| Cosa | Super admin | Organization admin |
+| --- | --- | --- |
+| L'elenco della gestione | Tutte, di tutti i tenant, bozze comprese | Le proprie, bozze comprese |
+| Una simulazione di un altro tenant | La apre | 404, come se non ci fosse |
+| L'organizzazione di una nuova | La sceglie, ed è obbligatoria | Non la nomina: quella che chiede viene ignorata, e il server ci mette la sua |
+| I risultati per test | Tutti i tentativi | Quelli delle persone della sua organizzazione |
+
+Il filtro delle prime tre righe è la stessa
+[visible_query](../backend/routers/simulations.py) che serve chi i test li
+svolge, chiesta con le bozze incluse: non c'è un secondo posto in cui la
+decisione venga presa, quindi non c'è un secondo posto in cui possa essere
+presa diversamente. L'ultima riga invece guarda **l'organizzazione di chi ha
+svolto il tentativo** e non quella della simulazione, come ovunque si legga
+una prova (vedi [organizzazioni-e-ruoli.md](organizzazioni-e-ruoli.md)): le due
+coincidono sempre, tranne dopo che il super admin ha spostato qualcuno di
+tenant, ed è esattamente il momento in cui la differenza deve valere.
+
+La pagina è la stessa per tutti e due, e la sola cosa che cambia è
+l'organizzazione: chi ne amministra una sola non ne vede la colonna in tabella
+e non se la sceglie creando un test, perché sarebbe la stessa parola su ogni
+riga e una tendina con dentro una voce sola.
 
 ---
 
 ## Fase 1, il caricamento del documento
 
 `POST /api/admin/simulations` (multipart: `organization_id`, `title`,
-`description`, `kind`, `source`, `file`), riservato al super admin.
+`description`, `kind`, `source`, `file`), riservato a chi amministra.
+
+`organization_id` lo manda solo il super admin: per un organization admin il
+campo non parte, e a metterci la propria organizzazione è il server (vedi
+[chi scrive i test](#chi-scrive-i-test)).
 
 ### 1.1 Controlli in ingresso
 
@@ -313,7 +350,7 @@ query indicizzata su `simulation_id`. Il ragionamento per esteso è in
 passaggi di prima vengono cancellati, **le domande no**: le domande sono il
 test, e un test non si azzera perché è stata caricata una versione aggiornata
 della procedura. Restano lì con le loro citazioni che ora puntano ai passaggi
-nuovi, ed è il super admin a decidere se rigenerarle.
+nuovi, ed è chi amministra a decidere se rigenerarle.
 
 ---
 
@@ -567,7 +604,7 @@ intera per una riga storta significherebbe dieci domande in meno.
 Alla fine [_without_duplicates](../backend/simulation_questions.py) toglie le
 domande **scritte identiche** da due chiamate diverse (a meno di spazi e
 maiuscole). Cade solo la copia letterale, perché è l'unica di cui si può essere
-certi: due domande vicine ma non uguali restano, le legge il super admin e le
+certi: due domande vicine ma non uguali restano, le legge chi rivede e le
 toglie lui se vuole. Una domanda ripetuta nel serbatoio è peggio di una
 domanda simile, perché l'estrazione potrebbe pescarle tutte e due nello stesso
 tentativo, e chi risponde vedrebbe due volte la stessa cosa.
@@ -587,10 +624,10 @@ risposte alla consegna:
 | Timeout | 120 secondi per chiamata, non i 20 del roleplay: qui nessuno è in linea, c'è una rotella che gira in una pagina |
 | Ritentativi | 1, quindi al massimo due tentativi per modello |
 | Passaggio al modello di riserva | Solo su sovraccarichi (429, 500, 502, 503) **o su un JSON illeggibile**: un modello che risponde con campi mancanti ha fallito quanto uno che non ha risposto, e il rimedio è lo stesso. Un timeout invece non fa cambiare modello |
-| Tetto per persona | Dieci generazioni all'ora ([llm_limits.py](../backend/llm_limits.py)), e sono sei chiamate ciascuna. Qui il tetto non difende da chi genera, che è un super admin, difende da una pagina lasciata a ripetere la stessa richiesta |
+| Tetto per persona | Dieci generazioni all'ora ([llm_limits.py](../backend/llm_limits.py)), e sono sei chiamate ciascuna. Qui il tetto non difende da chi genera, che è chi amministra, difende da una pagina lasciata a ripetere la stessa richiesta |
 
 L'unica differenza per la correzione delle risposte aperte è che lì qualcuno
-sta aspettando davvero: non è un super admin davanti a una rotella, è chi ha
+sta aspettando davvero: non è chi amministra davanti a una rotella, è chi ha
 appena consegnato un test. Il budget è più basso (4096 token, dieci giudizi con
 due frasi di commento ciascuno) e il resto è identico, giro sui modelli di
 riserva compreso.
@@ -627,7 +664,7 @@ scrive il listener di [authorship](../backend/authorship.py) come su ogni
 entità amministrata, ma l'indirizzo di chi prepara i test non serve a chi li
 fa.
 
-Il super admin vede le domande **con le chiavi** (`SimulationQuestionAdminResponse`
+Chi amministra vede le domande **con le chiavi** (`SimulationQuestionAdminResponse`
 aggiunge `correct_option`, `expected_answer`, `ordered_steps`, `pairs`,
 `explanation` e `source_chunks`), più il testo del documento e quante persone
 hanno già svolto il test. Delle chiavi se ne legge una sola, quella del tipo
@@ -641,7 +678,7 @@ stati che non hanno senso. Due dettagli:
 
 - le citazioni al documento si conservano solo dove il testo della domanda in
   quella posizione è rimasto identico. Sono ordinali di passaggi, non qualcosa
-  che il super admin possa riscrivere nel form, e perderle a ogni correzione di
+  che chi amministra possa riscrivere nel form, e perderle a ogni correzione di
   un refuso toglierebbe a chi sbaglia il rimando alla procedura;
 - il validatore Pydantic pretende almeno una domanda e al massimo cinquanta,
   che le alternative, dove ci sono, siano **da due a sei** e nessuna vuota, che
@@ -667,7 +704,7 @@ Su un test a scelta multipla la risposta corretta si sceglie **cliccando la
 lettera dell'alternativa** e non da una tendina a parte: la tendina lascerebbe
 scrivere "corretta: C" con la C vuota. Su uno a risposta aperta c'è una casella
 per la traccia, con scritto sotto che è il metro con cui ogni risposta verrà
-corretta: lì il super admin non sta correggendo un refuso, sta scrivendo la
+corretta: lì chi scrive non sta correggendo un refuso, sta scrivendo la
 regola del voto.
 
 Le alternative si aggiungono e si tolgono dentro la domanda, fra due e sei. La
@@ -743,8 +780,8 @@ qualcosa che non va, il primo gesto deve poter essere toglierla di mezzo. Il
 pulsante di pubblicazione nel pannello salva prima le domande, così quello che
 finisce davanti agli utenti è quello che si sta guardando.
 
-Finché è in bozza, la simulazione esiste solo per il super admin: il filtro sta
-in [visible_query](../backend/routers/simulations.py#L49-L64) e le bozze restano
+Finché è in bozza, la simulazione esiste solo per chi amministra: il filtro sta
+in [visible_query](../backend/routers/simulations.py#L101-L116) e le bozze restano
 fuori ovunque tranne che nelle pagine di amministrazione.
 
 ---
@@ -756,7 +793,9 @@ fuori ovunque tranne che nelle pagine di amministrazione.
 Una regola sola, in `visible_query`: il super admin sta sopra le organizzazioni
 e le vede tutte, chiunque altro vede quelle della propria e nient'altro. Il
 frontend non replica nessun filtro, il server serve a ciascuno quello che può
-vedere.
+vedere. È la stessa query che filtra la gestione, chiesta là con le bozze
+incluse: chi scrive i test e chi li svolge non hanno due confini diversi da
+tenere allineati.
 
 `GET /api/simulations` restituisce l'elenco delle pubblicate, e per ognuna,
 tramite [attempt_stats](../backend/routers/simulations.py), quanti
@@ -766,8 +805,12 @@ persona sono decine, e farsi dare dal database l'ultimo di ogni gruppo
 costerebbe o una query per riga o una window function.
 
 Nella stessa riga arrivano `kind` e `source`, cioè le due targhette: la scheda
-del test nell'elenco dice quante domande sono, come si risponde, se le domande
-vengono da un documento o le ha scritte qualcuno, e di quale organizzazione è.
+del test nell'elenco dice quante domande sono, come si risponde e se le domande
+vengono da un documento o le ha scritte qualcuno. Di quale organizzazione sia
+lo legge il **solo super admin**, che è l'unico ad avere davanti i test di più
+tenant: `organization_name` arriva a tutti nella risposta, perché per chiunque
+altro è la propria, ma su quella riga sarebbe la stessa parola su ogni scheda,
+in un posto che esiste per dire cosa distingue un test dall'altro.
 `source` prosegue poi su ogni tentativo consegnato, come `simulation_source`,
 in tutte e cinque le risposte che portano già `simulation_kind`: l'esito, i
 riepiloghi, il report attività, la dashboard e il confronto. Un tentativo
@@ -929,7 +972,7 @@ Anche qui nessun riscontro durante il percorso.
 ### 4.2.3 Di ordinamento
 
 I passi arrivano già mescolati e si dispongono con le frecce, lo stesso
-[MoveControls](../frontend/src/components/MoveControls.tsx) che il super admin
+[MoveControls](../frontend/src/components/MoveControls.tsx) che chi amministra
 usa per scrivere la chiave. Senza cronometro, come sopra e per la stessa
 ragione, e con la stessa conseguenza scritta nelle regole: ricontrollare prima
 di andare avanti non costa niente.
@@ -1094,7 +1137,7 @@ all'ultima, mentre dieci chiamate indipendenti sono dieci esaminatori diversi.
 Cosa vede il modello, per ogni domanda: il testo, la **traccia della risposta
 attesa** e quello che l'operatore ha scritto (troncato a 2000 caratteri: oltre
 non c'è una risposta, c'è un incollaggio del manuale). Non vede il documento,
-di proposito: la traccia è già la sintesi che il super admin ha approvato, e
+di proposito: la traccia è già la sintesi che chi amministra ha approvato, e
 dargli anche i passaggi rimetterebbe in discussione la chiave nel momento in
 cui la si applica.
 
@@ -1364,7 +1407,7 @@ pulsante può aprire soltanto quello che il server gli manderebbe comunque.
 | --- | --- | --- |
 | `GET /api/simulations/{id}/attempts` | L'utente | I propri tentativi su quella simulazione, dal più recente: è l'elenco "Tentativi passati" sotto le regole del test |
 | `GET /api/simulations/attempts/{id}` | Chi lo ha svolto, o un admin del tenant a cui **chi lo ha svolto** appartiene | Un tentativo con la sua correzione completa. È quello che si apre cliccando una riga nella dashboard o un proprio tentativo passato |
-| `GET /api/simulations/{id}/results` | Super admin | Tutti i tentativi su una simulazione: è la linguetta "Risultati" accanto alle domande, e guarda la prova dal lato del test invece che da quello della persona. Serve a chi le domande le ha scritte, quindi sta dietro lo stesso ruolo della pagina che la apre |
+| `GET /api/simulations/{id}/results` | Admin, e per un organization admin solo i tentativi delle persone della sua organizzazione | Tutti i tentativi su una simulazione: è la linguetta "Risultati" accanto alle domande, e guarda la prova dal lato del test invece che da quello della persona. Serve a chi le domande le ha scritte, quindi sta dietro lo stesso ruolo della pagina che la apre |
 | `GET /api/admin/simulations-report` | Admin | Tutti i tentativi in un colpo solo, chi li ha svolti e come è andata: è la sezione del simulatore nella dashboard (vedi [training-e-report.md](training-e-report.md)) |
 | `GET /api/comparison/simulation-attempts` | L'utente, o un admin per una persona del proprio ambito | I test consegnati da una persona sola, dal più vecchio, con le risposte: è la linguetta del simulatore nella pagina di confronto |
 

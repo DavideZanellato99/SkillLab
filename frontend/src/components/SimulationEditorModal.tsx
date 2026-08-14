@@ -168,11 +168,14 @@ function hasDuplicates(values: string[]): boolean {
 
 interface SimulationEditorModalProps {
   simulationId: string
+  /** Falso per chi ne amministra una sola: sarebbe la sua, su ogni pannello. */
+  showOrganization?: boolean
   onClose: () => void
 }
 
 export default function SimulationEditorModal({
   simulationId,
+  showOrganization = true,
   onClose,
 }: SimulationEditorModalProps) {
   const { data: simulation, isLoading } = useAdminSimulation(simulationId)
@@ -238,10 +241,10 @@ export default function SimulationEditorModal({
                   è mai stato chiesto. Che sia scritto a mano lo dice la
                   targhetta accanto al titolo. */}
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                <span>{simulation.organization_name}</span>
+                {showOrganization && <span>{simulation.organization_name}</span>}
                 {!isManual && (
                   <>
-                    <span aria-hidden>·</span>
+                    {showOrganization && <span aria-hidden>·</span>}
                     <span className="truncate">{simulation.document_name}</span>
                     <span aria-hidden>·</span>
                     <span>{simulation.chunk_count} passaggi indicizzati</span>

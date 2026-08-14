@@ -44,20 +44,24 @@ const SOURCE_OPTIONS = [
 ]
 
 interface SimulationCreateModalProps {
+  /** Le organizzazioni fra cui scegliere: vuoto per l'organization admin. */
   organizations: Organization[]
+  /** Il tenant di chi crea, quando non è il super admin. */
+  defaultOrganizationId?: string | null
   onClose: () => void
   onCreated: (simulationId: string) => void
 }
 
 export default function SimulationCreateModal({
   organizations,
+  defaultOrganizationId = null,
   onClose,
   onCreated,
 }: SimulationCreateModalProps) {
   const create = useCreateSimulation()
   const fileInput = useRef<HTMLInputElement>(null)
 
-  const [organizationId, setOrganizationId] = useState('')
+  const [organizationId, setOrganizationId] = useState(defaultOrganizationId ?? '')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [kind, setKind] = useState<SimulationKind>('multiple')
@@ -65,7 +69,11 @@ export default function SimulationCreateModal({
   const [file, setFile] = useState<File | null>(null)
 
   const fromDocument = source === 'ai'
-  const canSubmit = organizationId && title.trim() && (!fromDocument || file) && !create.isPending
+  /* L'organizzazione la si deve scegliere solo dove c'è da scegliere: senza
+   * il campo è il server a metterci quella di chi sta creando. */
+  const chosenOrganization = organizations.length === 0 || organizationId
+  const canSubmit =
+    chosenOrganization && title.trim() && (!fromDocument || file) && !create.isPending
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,16 +125,21 @@ export default function SimulationCreateModal({
       />
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <Field label="Organizzazione" htmlFor="simulation-org">
-          <Select
-            id="simulation-org"
-            value={organizationId}
-            onChange={setOrganizationId}
-            options={organizations.map((o) => ({ value: o.id, label: o.name }))}
-            placeholder="Scegli l'organizzazione"
-            disabled={create.isPending}
-          />
-        </Field>
+        {/* L'organizzazione la sceglie chi ne amministra più di una. Per un
+            organization admin è la propria, e un campo con un'opzione sola
+            sarebbe una scelta che non è una scelta. */}
+        {organizations.length > 0 && (
+          <Field label="Organizzazione" htmlFor="simulation-org">
+            <Select
+              id="simulation-org"
+              value={organizationId}
+              onChange={setOrganizationId}
+              options={organizations.map((o) => ({ value: o.id, label: o.name }))}
+              placeholder="Scegli l'organizzazione"
+              disabled={create.isPending}
+            />
+          </Field>
+        )}
 
         <Field label="Domande" htmlFor="simulation-source">
           <Select

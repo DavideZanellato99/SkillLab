@@ -288,9 +288,12 @@ export const fetchAdminSimulation = (simulationId: string) =>
  * prendersi minuti, e un modello lento non deve far perdere il documento
  * appena caricato. Quando le domande le scrive il docente il file non c'è, e
  * il server rifiuterebbe una simulazione a mano che ne porta uno.
+ *
+ * L'organizzazione la nomina solo il super admin: per un organization admin
+ * il campo non parte, e a metterci la propria è il server.
  */
 export function createSimulation(payload: {
-  organizationId: string
+  organizationId: string | null
   title: string
   description: string
   kind: SimulationKind
@@ -298,7 +301,7 @@ export function createSimulation(payload: {
   file: File | null
 }) {
   const form = new FormData()
-  form.append('organization_id', payload.organizationId)
+  if (payload.organizationId) form.append('organization_id', payload.organizationId)
   form.append('title', payload.title)
   form.append('description', payload.description)
   form.append('kind', payload.kind)

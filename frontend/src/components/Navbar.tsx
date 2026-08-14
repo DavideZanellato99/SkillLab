@@ -393,29 +393,31 @@ export default function Navbar() {
                               Gestione Avatar
                             </Link>
                           )}
-                          {isSuperAdmin(user) && (
-                            <Link
-                              to="/app/admin/simulations"
-                              className={menuItemCls}
-                              onClick={() => setShowUserMenu(false)}
+                          {/* Scrivere i test tecnici è di entrambi i ruoli di
+                              amministrazione, come comporre i percorsi: chi
+                              amministra una sola organizzazione conosce le
+                              procedure su cui la sua gente va interrogata. */}
+                          <Link
+                            to="/app/admin/simulations"
+                            className={menuItemCls}
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
                             >
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M9 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4" />
-                                <path d="m9 7 2 2 4-4" />
-                                <path d="M8 16h8" />
-                              </svg>
-                              Gestione Simulazioni
-                            </Link>
-                          )}
+                              <path d="M9 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4" />
+                              <path d="m9 7 2 2 4-4" />
+                              <path d="M8 16h8" />
+                            </svg>
+                            Gestione Simulazioni
+                          </Link>
                           {/* Comporre i percorsi e assegnarli: sta qui e non
                               in barra perché è il lavoro di chi insegna, non
                               di chi si allena, e la voce in barra ora porta

@@ -68,6 +68,10 @@ export const queryKeys = {
     simulations: (organizationId?: string) =>
       ['reports', 'simulations', organizationId ?? '__all__'] as const,
   },
+  /** Il quadro d'insieme su una persona, una voce per persona. */
+  debriefings: {
+    byUser: (userId: string) => ['debriefings', userId] as const,
+  },
   training: {
     all: ['training'] as const,
     /** I percorsi componibili, cioè i modelli fatti di tappe. */

@@ -189,6 +189,7 @@ produzione i valori sono quelli elencati in [gdpr.md](gdpr.md):
 | Registrazione audio della chiamata | 90 giorni | `AUDIO_RECORDING_RETENTION_DAYS` |
 | Conversazione intera con valutazione e revisione | 730 giorni | `CONVERSATION_RETENTION_DAYS` |
 | Tentativi delle simulazioni tecniche | 730 giorni | `SIMULATION_ATTEMPT_RETENTION_DAYS` |
+| Quadro d'insieme su una persona | La finestra delle conversazioni, misurata sulla prova più recente che aveva letto | `CONVERSATION_RETENTION_DAYS` |
 | Registro delle azioni | 180 giorni | `AUDIT_LOG_RETENTION_DAYS` |
 
 L'audio ha la finestra più corta perché è il dato più sensibile del sistema: la
@@ -196,6 +197,13 @@ voce di una persona. La conversazione più lunga, perché è il percorso
 formativo. Un tentativo di simulazione se ne va intero, fotografia delle
 risposte compresa, mentre la simulazione con le sue domande non riguarda
 nessuno in particolare e resta.
+
+Il quadro d'insieme è l'unico senza un orologio proprio, e non per
+dimenticanza: è una sintesi delle conversazioni, quindi non può
+sopravvivere a quello che riassume. Si misura sulla data della prova più
+recente che aveva letto, così quando quella è oltre la finestra tutto il
+materiale su cui il testo si fonda è appena stato cancellato, e quello che
+resterebbe è un giudizio su una persona senza più niente dietro.
 
 ## Il ciclo di pulizia
 
@@ -246,10 +254,15 @@ Due regole su cosa **non** entra:
   firmato un giudizio sulle sue conversazioni, che fa parte del suo voto e che
   ha diritto di leggere.
 
-E una cosa che entra ed è facile dimenticare: le righe di registro che lo
-riguardano e le sessioni registrate sul suo account con IP e User-Agent. Sono
-dati personali tenuti su di lui, quindi l'art. 15 li copre, anche se il
-registro nell'interfaccia è una schermata da super admin.
+E due cose che entrano ed è facile dimenticare, per lo stesso motivo. Le
+righe di registro che lo riguardano e le sessioni registrate sul suo account
+con IP e User-Agent, e **il quadro d'insieme** che un formatore ha fatto
+scrivere su di lui, che nell'interfaccia lui non vede. Sono dati personali
+tenuti su di lui, quindi l'art. 15 li copre: chi può sfogliarli in una
+schermata e chi ha diritto a una copia di quello che la piattaforma tiene su
+di sé sono due domande diverse. Del quadro resta fuori solo il nome di chi lo
+ha fatto scrivere, che è un'altra persona e che, a differenza della firma su
+una revisione, non è parte di un voto contestabile.
 
 **Cancellazione (art. 17).** La sa fare un modulo solo,
 [erasure.py](../backend/erasure.py), usato sia dalla cancellazione di un

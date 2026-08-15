@@ -59,6 +59,7 @@ from models import (
     TrainingPath,
     TrainingPathAssignment,
     User,
+    UserDebriefing,
     UserSelection,
 )
 
@@ -72,6 +73,11 @@ _USER_OWNED = (
     NotificationRead,
     TrainingPathAssignment,
     SimulationAttempt,
+    # Il debriefing è un testo *sulla* persona, non una riga che ha creato:
+    # la sua paternità dice chi lo ha fatto scrivere, ma il contenuto è
+    # fatto di quello che lei ha detto nelle proprie conversazioni. Se ne va
+    # con lei, come le sue trascrizioni.
+    UserDebriefing,
 )
 
 # Every table that names the person who created or last modified the row

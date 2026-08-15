@@ -133,6 +133,41 @@ export interface AssignableContent {
   }[]
 }
 
+/** Una tappa come il modello la propone: il bersaglio, la soglia, e perché. */
+export interface PathDraftStep {
+  avatar_id: string | null
+  simulation_id: string | null
+  target_score: number
+  /** Perché questa tappa e perché in questo punto della fila. Non si salva:
+   *  serve a chi rilegge la proposta prima di accettarla. */
+  reason: string
+}
+
+/**
+ * Un percorso proposto dal modello, che nessuno ha ancora salvato.
+ *
+ * Le tappe arrivano già nell'ordine in cui vanno superate, e senza scadenze:
+ * una data dipende da quando il corso comincia, che è la cosa che il modello
+ * non può sapere, e la mette chi compone.
+ */
+export interface TrainingPathDraft {
+  title: string
+  description: string | null
+  steps: PathDraftStep[]
+}
+
+/**
+ * Fa comporre una bozza di percorso da un obiettivo raccontato a parole.
+ *
+ * Non salva niente: torna una proposta al form di chi l'ha chiesta, e il
+ * percorso nasce con la creazione, che è un'altra richiesta.
+ */
+export const draftPath = (goal: string, organizationId?: string) =>
+  apiFetch<TrainingPathDraft>('/api/training/paths/draft', {
+    method: 'POST',
+    body: { goal, ...(organizationId ? { organization_id: organizationId } : {}) },
+  })
+
 /** I percorsi componibili nello scope dell'admin. */
 export const fetchPaths = (organizationId?: string) =>
   apiFetch<TrainingPath[]>('/api/training/paths', {

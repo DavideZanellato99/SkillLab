@@ -46,10 +46,11 @@ questo documento e firmare l'accordo art. 28.
 | **Trascrizione della conversazione** | `chat_messages.content` | Prodotta dallo speech to text, oppure digitata in modalità chat |
 | **Valutazione automatica della prestazione** | `conversation_evaluations.result`, `.overall_score` | Generata da un modello linguistico |
 | Revisione umana e annotazioni del formatore | `conversation_reviews`, `message_annotations` | Scritte da un formatore |
+| **Quadro d'insieme sull'andamento della persona** | `user_debriefings.content` | Generato da un modello linguistico che ha letto le sue ultime prove, su richiesta di un formatore |
 | Percorsi di formazione assegnati | `training_path_assignments` | Assegnati da un amministratore. Le tappe di cui sono fatti stanno sul percorso, che è dell'organizzazione e non della persona |
 | Indirizzo IP e User-Agent | `token_session`, `audit_logs` | Raccolti a ogni accesso e a ogni azione |
 | Registro delle azioni compiute | `audit_logs` | Scritto dal middleware a ogni richiesta che modifica qualcosa |
-| Email di chi ha creato o modificato una riga | `users`, `organizations`, `avatars`, `technical_simulations`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`) |
+| Email di chi ha creato o modificato una riga | `users`, `organizations`, `avatars`, `avatar_categories`, `technical_simulations`, `training_paths`, `user_debriefings`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`) |
 
 Due precisazioni che contano.
 
@@ -116,6 +117,35 @@ leggibile anche se la valutazione viene rigenerata dopo.
 Il meccanismo tecnico esiste. **Perché soddisfi l'art. 22 il cliente deve
 garantirlo come procedura**, non solo come possibilità offerta dal software.
 
+### Il quadro d'insieme, che è un secondo trattamento automatizzato
+
+Sopra la valutazione della singola prova sta il debriefing: un modello legge
+le ultime prove di una persona e scrive cosa si ripete, cosa migliora e cosa
+dovrebbe fare adesso (vedi
+[training-e-report.md](training-e-report.md)). Va nell'informativa insieme
+alla valutazione, e ha tre differenze che contano.
+
+**Non produce nessun numero.** È testo, e i numeri che gli stanno accanto
+(medie e conteggi) li calcola il backend e non il modello, quindi non
+introduce nessun punteggio nuovo e non tocca nessuna decisione automatica: le
+tappe dei percorsi, le dashboard e le pagelle continuano a leggere solo
+`final_score`.
+
+**Non lo si subisce, lo si chiede.** Non viene prodotto da nessun processo
+automatico né a intervalli: esiste solo dopo che un formatore lo ha fatto
+scrivere, una persona alla volta, e la richiesta finisce nel registro delle
+azioni con chi l'ha fatta e su chi.
+
+**È materiale del formatore.** Non compare a chi si allena, perché dice cosa
+ripetergli a voce e non è la sua pagella. Nell'esportazione dei dati
+personali però c'è, per intero: chi può sfogliarlo in una schermata e chi ha
+diritto a una copia di quello che la piattaforma tiene su di sé sono due
+domande diverse. È lo stesso ragionamento che porta nell'archivio le righe di
+audit, che a schermo sono del solo super admin.
+
+Verso OpenAI vale la stessa pseudonimizzazione della valutazione: viaggiano
+le trascrizioni e i giudizi già scritti, mai il nome o l'email della persona.
+
 ## 5. Il monitoraggio dei lavoratori (Italia)
 
 Uno strumento che registra, trascrive e valuta la prestazione di un
@@ -137,8 +167,10 @@ monitoraggio sistematico, dati trattati su larga scala) la **DPIA ex art. 35
 | --- | --- | --- |
 | **ElevenLabs** | L'audio del microfono dell'operatore, in streaming | Durante ogni telefonata simulata |
 | **OpenAI** | Il testo della conversazione (entrambe le parti) e la scheda dell'avatar, senza identità dell'operatore | Ad ogni battuta, e a fine chiamata per la valutazione |
-| **OpenAI** | I documenti caricati per le simulazioni tecniche, senza nessun dato dell'operatore | Al caricamento e alla generazione delle domande, mai durante lo svolgimento di un test |
+| **OpenAI** | I documenti caricati per le simulazioni tecniche, senza nessun dato dell'operatore | Al caricamento, alla generazione delle domande e al controllo del serbatoio, mai durante lo svolgimento di un test |
 | **OpenAI** | Il testo che un amministratore incolla per farsi scrivere la bozza di una scheda persona: un caso raccontato a parole, oppure una conversazione reale **che chi la incolla deve avere già anonimizzato** | Solo quando un amministratore preme "genera la scheda" |
+| **OpenAI** | Le trascrizioni delle ultime prove di una persona e i giudizi già scritti su di esse, senza la sua identità, per il quadro d'insieme | Solo quando un formatore lo fa scrivere dal report attività |
+| **OpenAI** | L'obiettivo formativo scritto da un amministratore e il catalogo dell'organizzazione (nomi, categorie e descrizioni degli avatar, titoli dei test), che non contengono dati di nessuna persona reale | Solo quando un amministratore chiede una bozza di percorso |
 | **Cartesia** | Il testo generato dell'avatar, per sintetizzarlo in voce | Durante ogni telefonata simulata |
 | **AWS Cognito** | Solo l'indirizzo email, più la password gestita da Cognito | Alla creazione dell'account e a ogni accesso |
 
@@ -186,6 +218,7 @@ cliente**: se si cambiano lì vanno cambiati anche nell'informativa.
 | Registrazione audio della chiamata | 90 giorni | `AUDIO_RECORDING_RETENTION_DAYS` |
 | Conversazione intera: messaggi, valutazione, revisione, annotazioni | 730 giorni | `CONVERSATION_RETENTION_DAYS` |
 | Tentativi delle simulazioni tecniche: risposte date e punteggio | 730 giorni | `SIMULATION_ATTEMPT_RETENTION_DAYS` |
+| Quadro d'insieme su una persona | Quella delle conversazioni, misurata sulla prova più recente che aveva letto | `CONVERSATION_RETENTION_DAYS` |
 | Registro delle azioni (con IP e User-Agent) | 180 giorni | `AUDIT_LOG_RETENTION_DAYS` |
 | Sessioni di accesso (IP e User-Agent) | Alla scadenza del token: 1 ora, 30 giorni per l'ancora di sessione | non configurabile |
 | Copie di sicurezza del database, che contengono tutto quanto sopra | 7 giorni: 28 dump, uno ogni 6 ore | `BACKUP_KEEP`, `BACKUP_INTERVAL_HOURS` |
@@ -199,6 +232,13 @@ Dei test tecnici scade il tentativo, non la simulazione: le risposte date da
 una persona e il voto che ne è uscito sono un dato di valutazione come gli
 altri, mentre le domande e il documento da cui nascono non riguardano
 nessuno in particolare e restano.
+
+Il quadro d'insieme non ha una finestra propria e non ne merita una: è una
+sintesi delle conversazioni, quindi non può sopravvivere alle conversazioni
+che riassume. A misurarlo è la data della prova più recente che il modello
+aveva letto, contro la finestra delle conversazioni, così quando quella data
+è scaduta il materiale su cui il testo si fonda è già stato cancellato e non
+resta un giudizio su una persona senza più niente dietro a cui riferirlo.
 
 **L'orologio parte dall'ultimo utilizzo, non dalla creazione**: il riaggancio
 per una telefonata, l'ultima attività per una chat scritta
@@ -228,8 +268,8 @@ giorni ma indefinito.
 
 | Diritto | Come è soddisfatto |
 | --- | --- |
-| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
-| **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni e percorsi assegnati, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
+| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, il quadro d'insieme scritto su di lui, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
+| **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni, percorsi assegnati e il quadro d'insieme, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
 | **Rettifica** (art. 16) | L'utente modifica da solo nome e cognome; l'email la cambia un amministratore |
 | **Intervento umano** (art. 22) | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4) |
 | **Opposizione, limitazione** | Da gestire contrattualmente con il titolare: non esistono nel software |

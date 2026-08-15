@@ -55,8 +55,28 @@ CORREZIONE = SlidingWindowLimiter(scope="llm-correzione", max_events=20, window_
 # ma è anche l'unica il cui prezzo lo decide chi carica, perché cresce con il
 # documento, e un manuale da dieci megabyte ricaricato in ciclo è la stessa
 # spesa di qualcosa di molto più appariscente.
+# Il debriefing sta con le operazioni di amministrazione perché lo chiede
+# chi amministra, ma il suo tetto è quello della valutazione, ed è per la
+# stessa ragione: è una chiamata cara che si può rilanciare all'infinito
+# sulla stessa persona, perché ogni rilancio sostituisce il precedente.
+# Dieci in un'ora sono dieci persone diverse di cui preparare il colloquio,
+# che è già più di quante se ne facciano in una giornata.
+DEBRIEFING = SlidingWindowLimiter(scope="llm-debriefing", max_events=10, window_seconds=_ORA)
+
 BOZZA_SCHEDA = SlidingWindowLimiter(scope="llm-bozza", max_events=30, window_seconds=_ORA)
+# La bozza di percorso è la gemella della scheda persona, e ha lo stesso
+# tetto: una chiamata sola, che non salva niente, e che si rilancia
+# riscrivendo l'obiettivo finché la proposta non convince. Trenta all'ora
+# sono molte più riscritture di quante ne servano a comporre un corso.
+BOZZA_PERCORSO = SlidingWindowLimiter(scope="llm-percorso", max_events=30, window_seconds=_ORA)
 GENERAZIONE_DOMANDE = SlidingWindowLimiter(scope="llm-domande", max_events=10, window_seconds=_ORA)
+# Il controllo del serbatoio è una generazione al contrario, e costa quasi
+# quanto: un'indicizzazione delle cinquanta domande più una lettura ogni sei.
+# Il tetto è quello della generazione perché è lo stesso gesto ripetuto sulla
+# stessa simulazione, e ogni giro sostituisce l'esito precedente.
+REVISIONE_SERBATOIO = SlidingWindowLimiter(
+    scope="llm-revisione", max_events=10, window_seconds=_ORA
+)
 INDICIZZAZIONE = SlidingWindowLimiter(
     scope="llm-indicizzazione", max_events=20, window_seconds=_ORA
 )

@@ -131,11 +131,39 @@ export interface Simulation {
  * l'indirizzo di chi lo ha preparato. */
 export interface AdminSimulation extends Simulation, Authored {}
 
+/** Cosa il controllo del serbatoio ha trovato su una domanda o su una coppia. */
+export interface SimulationReviewFinding {
+  kind: 'duplicate' | 'unsupported' | 'implausible_options' | 'longest_correct' | 'answer_position'
+  severity: 'high' | 'medium' | 'low'
+  /** Le domande a cui si riferisce: due sui duplicati, nessuna sul serbatoio. */
+  positions: number[]
+  message: string
+}
+
+/**
+ * L'esito dell'ultimo controllo del serbatoio.
+ *
+ * Non blocca niente: la pubblicazione resta possibile con tutte le
+ * segnalazioni aperte. Serve a dire da quale delle cinquanta domande conviene
+ * cominciare a rileggere, che è l'unica cosa che mancava alla revisione umana.
+ */
+export interface SimulationReview {
+  findings: SimulationReviewFinding[]
+  /** Quante domande la passata del modello ha davvero potuto verificare. */
+  checked: number
+  reviewed_at: string
+  /** Le domande sono cambiate dopo il controllo: l'esito parla di un altro serbatoio. */
+  is_stale: boolean
+}
+
 export interface SimulationAdminDetail extends AdminSimulation {
   questions: SimulationQuestionAdmin[]
   document_text: string
   chunk_count: number
   total_attempts: number
+  /** Assente finché nessuno ha chiesto il controllo, che è diverso da un
+   *  controllo passato senza rilievi. */
+  review: SimulationReview | null
 }
 
 export interface SimulationAnswerResult {
@@ -326,6 +354,18 @@ export function replaceSimulationDocument(simulationId: string, file: File) {
 /** Genera le domande dal documento. Lenta: è il modello che ragiona. */
 export const generateSimulationQuestions = (simulationId: string) =>
   apiFetch<SimulationAdminDetail>(`/api/admin/simulations/${simulationId}/generate`, {
+    method: 'POST',
+  })
+
+/**
+ * Controlla il serbatoio e salva l'esito, sostituendo il precedente.
+ *
+ * Lenta come la generazione, e per la stessa ragione: indicizza le domande e
+ * ne fa rileggere una parte al modello. Torna il dettaglio intero, quindi
+ * l'esito arriva accanto alle domande di cui parla.
+ */
+export const reviewSimulationPool = (simulationId: string) =>
+  apiFetch<SimulationAdminDetail>(`/api/admin/simulations/${simulationId}/review`, {
     method: 'POST',
   })
 

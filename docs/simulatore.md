@@ -120,6 +120,8 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [backend/simulation_rag.py](../backend/simulation_rag.py) | Spezza il testo in passaggi, calcola le somiglianze, campiona |
 | [backend/openai_service.py](../backend/openai_service.py) | Le chiamate a OpenAI: embedding e risposte JSON dal modello di ragionamento |
 | [backend/simulation_questions.py](../backend/simulation_questions.py) | I prompt e le due passate che producono il serbatoio, dell'uno o dell'altro tipo |
+| [backend/simulation_review.py](../backend/simulation_review.py) | Il controllo del serbatoio che non costa: duplicati semantici, le due regole sulle alternative, l'impronta con cui l'esito invecchia |
+| [backend/simulation_grounding.py](../backend/simulation_grounding.py) | La passata del modello: la risposta è sostenuta dai passaggi citati, e le alternative sono errori plausibili |
 | [backend/simulation_open_answers.py](../backend/simulation_open_answers.py) | Il giudizio sulle risposte scritte: il prompt e la chiamata sola |
 | [backend/simulation_scoring.py](../backend/simulation_scoring.py) | Quanto vale una risposta: la scala che scende col tempo e quella del giudizio |
 | [backend/routers/admin_simulations.py](../backend/routers/admin_simulations.py) | Il ciclo di vita lato amministrazione: caricamento, generazione, revisione, pubblicazione |
@@ -140,7 +142,8 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationItemsAnswer.tsx](../frontend/src/components/SimulationItemsAnswer.tsx) | Nell'esito: la sequenza disposta e le coppie formate, con accanto la chiave |
 | [frontend/src/components/SimulationKindBadge.tsx](../frontend/src/components/SimulationKindBadge.tsx) | La targhetta del tipo, l'unico modo in cui si disegna, ovunque compaia un test |
 | [frontend/src/components/SimulationSourceBadge.tsx](../frontend/src/components/SimulationSourceBadge.tsx) | La targhetta dell'origine, che le sta sempre accanto: domande di un modello o di una persona |
-| [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, la chiave del suo tipo, la spiegazione |
+| [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, la chiave del suo tipo, la spiegazione, e le segnalazioni del controllo sopra il testo |
+| [frontend/src/components/SimulationReviewPanel.tsx](../frontend/src/components/SimulationReviewPanel.tsx) | L'esito del controllo in testa alle domande, dalla segnalazione più grave, con il salto alla domanda di cui parla |
 | [frontend/src/components/SimulationStepsEditor.tsx](../frontend/src/components/SimulationStepsEditor.tsx) | La chiave di un ordinamento: i passi nella sequenza corretta |
 | [frontend/src/components/SimulationPairsEditor.tsx](../frontend/src/components/SimulationPairsEditor.tsx) | La chiave di un abbinamento: le coppie già accoppiate |
 | [frontend/src/components/simulationFormat.ts](../frontend/src/components/simulationFormat.ts) | Come si scrivono voti, punti e tempi, i nomi dei tipi, e la copia della scala che si legge durante la domanda |
@@ -670,6 +673,126 @@ aggiunge `correct_option`, `expected_answer`, `ordered_steps`, `pairs`,
 hanno già svolto il test. Delle chiavi se ne legge una sola, quella del tipo
 del test. I passi arrivano **in ordine**, al contrario di come li riceve chi
 svolge il test: qui la chiave si rilegge, non si indovina.
+
+### Il controllo del serbatoio
+
+Il problema della revisione umana non è che nessuno voglia farla: è che
+cinquanta domande sono cinquanta righe tutte uguali, e chi le apre non ha
+nessun modo di sapere da quale cominciare. `POST /api/admin/simulations/{id}/review`
+dà quell'ordine.
+
+**Non blocca niente**, ed è la scelta su cui tutto il resto sta in piedi. La
+pubblicazione resta possibile con tutte le segnalazioni aperte, e quello che
+la ferma resta quello che la fermava già, cioè il serbatoio pieno e nessuna
+domanda a metà. Due domande simili sono un difetto piccolo, il conto di
+quanto due testi si somiglino è una soglia e non una verità, e un controllo
+che sbaglia e blocca è peggio di uno che sbaglia e avvisa.
+
+Tre controlli in una richiesta sola, perché sono la stessa domanda posta a un
+serbatoio, e stanno in due file secondo quello che costano:
+
+| Cosa guarda | Dove | Come |
+| --- | --- | --- |
+| Due domande che chiedono la stessa cosa | [simulation_review.py](../backend/simulation_review.py) | Le cinquanta domande diventano vettori con `embed_texts` e si confrontano a coppie, con lo stesso prodotto scalare del recupero dei passaggi |
+| La corretta molto più lunga delle altre, e la corretta quasi sempre nella stessa posizione | [simulation_review.py](../backend/simulation_review.py) | Si contano. Non sono giudizi, sono misure, e non servono un modello |
+| La risposta che il documento non sostiene, e le alternative implausibili | [simulation_grounding.py](../backend/simulation_grounding.py) | Una passata del modello di ragionamento, sei domande per chiamata, con i passaggi citati davanti |
+
+**I duplicati semantici sono il buco lasciato aperto da
+`_without_duplicates`**, che toglie solo le copie scritte identiche: la stessa
+domanda girata con altre parole passava, e l'estrazione può pescarle tutte e
+due nello stesso tentativo. La soglia è alta di proposito (`0.93`): su un
+documento aziendale le domande parlano tutte della stessa procedura e si
+somigliano tutte un po', e a `0.80` verrebbe segnalato mezzo serbatoio, che è
+lo stesso problema di cinquanta righe uguali con un passaggio in più. Quello
+che si vuole prendere è la domanda riscritta, non la domanda vicina.
+
+**La fondatezza è l'errore grave.** Le altre segnalazioni sono difetti di
+forma; una domanda la cui risposta indicata il documento non sostiene è una
+domanda sbagliata, e chi la sbaglia se la porta al lavoro convinto di avere
+imparato una procedura che non c'è scritta da nessuna parte. Nasce dalla
+regola che il prompt della generazione ripete a ogni chiamata, cioè di non
+inventare mai soglie o regole: quella regola non è verificabile mentre si
+scrive, lo è dopo, rileggendo la domanda accanto ai passaggi che cita.
+
+Nel prompt ci sono quattro cose che il modello **non** deve fare, e la più
+importante è l'ultima: non riscrivere le domande, non segnalare una domanda
+perché è difficile, non segnalare quello che i passaggi non coprono ma
+nemmeno contraddicono, e **nel dubbio non segnalare**. Un elenco lungo di
+segnalazioni deboli è di nuovo cinquanta righe da leggere, e chi rivede
+smette di guardarlo.
+
+I passaggi si scrivono **una volta sola** in testa alla chiamata e le domande
+li richiamano per ordinale, invece di ripeterli sotto ciascuna: le domande di
+uno stesso argomento citano quasi sempre gli stessi tre o quattro passaggi, e
+ripeterli vorrebbe dire pagare quattro volte la stessa pagina di documento. È
+anche la forma in cui il modello li ha già visti mentre le domande le
+scriveva.
+
+**Vale solo dove c'è un documento.** Su una simulazione scritta a mano non c'è
+niente da cui una domanda debba essere sostenuta, e le domande senza citazioni
+restano fuori: `checked` dice quante ne sono state davvero verificate, perché
+scrivere cinquanta dopo averne lette trenta sarebbe una rassicurazione
+inventata. La regola sta in un posto solo (`verifiable_count`), così l'esito
+non può dire un numero diverso da quello che la passata ha davvero letto.
+
+**Una chiamata che va storta si porta via il proprio gruppo e non le altre**,
+ed è voluto qui più che nella generazione: un controllo che fallisce per
+intero perché sei domande su cinquanta non si sono lasciate leggere
+lascerebbe chi rivede senza niente, che è peggio di un esito parziale.
+
+#### L'esito è salvato, e ammette di essere vecchio
+
+Sta sulla simulazione (`review_report`, `review_at`, `review_fingerprint`) e
+ogni giro sostituisce il precedente. È salvato per la stessa ragione del
+debriefing: il testo esiste solo perché qualcuno ha pagato una lettura, e
+riderivarlo a ogni apertura del pannello vorrebbe dire ripagarla.
+
+Le domande però non hanno una data di modifica, perché si riscrivono in
+blocco: a dire che l'esito parla di un serbatoio che non c'è più è
+**l'impronta**, un hash del testo, delle chiavi e delle citazioni, confrontato
+in lettura con quella di adesso. La spiegazione non entra nell'impronta,
+perché nessun controllo la legge: correggere un refuso lì non deve far
+invecchiare un esito ancora valido.
+
+L'impronta passa sempre da `snapshot`, da tutte e due le parti. Non è un
+dettaglio: la fotografia normalizza le chiavi vuote a liste vuote mentre sulle
+righe del database sono `NULL`, e senza quel passaggio le due impronte non
+coinciderebbero mai e ogni esito nascerebbe già vecchio.
+
+Non si rifà mai da solo. Un controllo che ripartisse a ogni salvataggio
+sarebbe una chiamata a pagamento fatta da nessuno, e ne partirebbe una a ogni
+virgola corretta.
+
+#### Come si legge
+
+L'esito viaggia dentro il dettaglio della simulazione e non da una rotta sua:
+chi apre il pannello vuole le domande e l'esito insieme, e una seconda
+chiamata sarebbe un secondo momento in cui i due possono non corrispondere.
+`review` è **null** finché nessuno lo ha chiesto, che è diverso da un
+controllo passato senza rilievi: quello è un esito con la lista vuota, ed è
+una notizia che la schermata dice.
+
+In cima alle domande sta
+[SimulationReviewPanel](../frontend/src/components/SimulationReviewPanel.tsx),
+con le segnalazioni **dalla più grave**, e ogni segnalazione porta al punto:
+un clic sul numero della domanda ci salta sopra. **L'elenco delle domande non
+si riordina**, ed è una scelta: il numero accanto a una domanda è anche la sua
+posizione nel serbatoio e il modo in cui una segnalazione la nomina, quindi
+riordinarlo vorrebbe dire che chi sta correggendo la 12 se la ritrova altrove
+al controllo successivo.
+
+Ogni domanda porta anche le proprie segnalazioni **sopra il testo**, dentro la
+sua scheda: il pannello si legge una volta e poi si scende a correggere, e
+senza il segno lì chi è arrivato alla trentunesima dovrebbe risalire per
+ricordarsi cosa non andava.
+
+Il tetto è quello della generazione, dieci all'ora
+([llm_limits.py](../backend/llm_limits.py)): è lo stesso gesto ripetuto sulla
+stessa simulazione, e ogni giro sostituisce l'esito precedente. Come per la
+generazione, la connessione al database torna al pool prima dell'attesa, e il
+serbatoio viene staccato dalla sessione prima del commit (`ReviewQuestion`,
+`ReviewChunk`), perché dopo una riga a cui si chiedesse il testo tornerebbe a
+interrogare il database proprio mentre nessuno gliela sta tenendo.
 
 `PUT /api/admin/simulations/{id}/questions` salva le domande **in blocco**: le
 righe di prima si cancellano e si riscrivono. Riordinarne una, toglierne una e

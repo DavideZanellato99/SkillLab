@@ -275,6 +275,104 @@ che vive in un file suo: la pagina di amministrazione si scarica solo
 entrandoci (vedi [frontend.md](frontend.md)), e una targhetta presa da lì se la
 sarebbe riportata dietro tutta sulla home di chiunque.
 
+### La bozza scritta dal modello
+
+Comporre un percorso vuol dire aprire la galleria, ricordarsi quali avatar
+esistono e cosa mettono alla prova, scegliere quali servono a questo corso,
+decidere in che ordine vanno affrontati e mettere sei soglie. Le cose che
+contano davvero sono l'obiettivo del corso e l'ordine, e si dicono in due
+righe; il resto è ricostruire a memoria un catalogo che il server conosce già.
+
+Da `POST /api/training/paths/draft`
+([path_draft.py](../backend/path_draft.py)) si ottiene un percorso intero a
+partire da un obiettivo raccontato a parole. **È lo stesso giro della scheda
+persona e del serbatoio di domande**: una fonte scritta da una persona, una
+passata del modello di ragionamento, una revisione umana, e solo dopo il
+salvataggio (vedi [avatar-e-persona.md](avatar-e-persona.md)). Passa da
+`eval_json_completion`, quindi si porta dietro i modelli di riserva e il tempo
+lungo, e ha il tetto della bozza di scheda, trenta all'ora
+([llm_limits.py](../backend/llm_limits.py)): non difende da chi genera, che è
+chi amministra, difende da una pagina lasciata a ripetere la stessa richiesta.
+
+**Qui non si salva niente.** La rotta non tocca il database: entra un
+obiettivo, esce una proposta che torna al form di chi l'ha chiesta. Un
+percorso proposto diventa un percorso solo con la creazione, che è un'altra
+richiesta, esattamente come una scheda generata diventa un avatar solo con il
+salvataggio.
+
+**Il catalogo è quello vero**, cioè la stessa `_assignable_catalog` che
+alimenta `/assignable-content`. Non è un dettaglio di implementazione: una
+bozza che proponesse prove che il selettore non offre sarebbe una proposta
+che chi la riceve non può nemmeno salvare, e il server la rifiuterebbe al
+primo tentativo. Su un'organizzazione senza avatar attivi né test pubblicati
+la risposta è **409**, perché non c'è niente di cui comporre un percorso e
+chiedere comunque vorrebbe dire pagare una risposta che può solo essere
+inventata.
+
+**Il modello non vede nessun UUID.** Il catalogo gli arriva numerato con
+sigle corte, `A1` per il primo avatar e `T1` per il primo test, e le tappe le
+indica con quelle. Un id di trentasei caratteri ricopiato da un modello
+linguistico è un id sbagliato prima o poi, e sarebbe sbagliato **in
+silenzio**: la tappa punterebbe a un avatar che esiste, solo non quello. Con
+le sigle una citazione storta non corrisponde a niente e cade.
+
+**Di un avatar escono solo i quattro campi della galleria**: nome, categoria,
+descrizione e grado di difficoltà. La scheda persona no, e a garantirlo non è
+l'attenzione di chi scrive il prompt ma la forma del dato: il catalogo passa
+per una dataclass di quattro campi
+(`CatalogAvatar`), quindi la vera causa del problema e l'obiettivo nascosto
+non arrivano nemmeno alla funzione che compone il testo. Per mettere in fila
+delle tappe basta sapere cosa mette alla prova un avatar e quanto è difficile.
+
+**Cosa il modello non può scrivere.** Una sigla che non esiste nel catalogo
+cade, e cade la tappa e non tutto il percorso, come per una domanda storta
+del serbatoio; la stessa prova nominata due volte entra una volta sola,
+perché ripeterla è una tappa che si supera due volte con lo stesso lavoro;
+le tappe oltre le otto non entrano; una soglia fuori scala o illeggibile
+torna al 7, perché la scelta che conta è quale prova e in che posizione,
+mentre una soglia sbagliata è l'unica cosa di una bozza che si corregge con
+un clic. Se non resta nessuna tappa, o manca il titolo, la risposta è
+**fallita** e si passa al modello di riserva come per un JSON illeggibile:
+un percorso di sole sigle inventate è esattamente il caso in cui ritentare
+serve.
+
+**Le scadenze non le scrive il modello.** Una data sta sul calendario e
+dipende da quando il corso comincia, che è la cosa che il modello non può
+sapere. Le tappe nascono senza, e le mette chi compone.
+
+Ogni tappa proposta porta con sé **perché sta lì e perché in quel punto della
+fila**. Non è un campo della tappa e non viene mai salvato: vive finché la
+proposta sta nel form, che è il solo momento in cui a qualcuno serve saperlo.
+
+#### Come la bozza entra nel form
+
+Il pannello sta dentro la finestra di composizione
+([PathDraftPanel](../frontend/src/components/PathDraftPanel.tsx)) e **compare
+solo su un percorso nuovo**: su uno che esiste già le tappe le stanno
+percorrendo delle persone, e rigenerarle non sarebbe una bozza, sarebbe
+buttare il lavoro di qualcuno insieme al loro progresso.
+
+Titolo e descrizione seguono la regola di `applyDraft`, la stessa della scheda
+persona: **si scrivono nei campi vuoti e in quelli che aveva scritto la bozza,
+mai in quelli scritti a mano**. Senza la prima metà, riprovare con un
+obiettivo scritto meglio non cambierebbe niente perché il titolo è già pieno;
+senza la seconda, una seconda proposta porterebbe via la correzione appena
+fatta, cioè la parte per cui la revisione esiste. Toccare un campo lo fa
+uscire da quell'elenco, e da quel momento è intoccabile.
+
+**Le tappe invece si sostituiscono tutte**, ed è la sola cosa che si possa
+fare: sono una fila ordinata, e infilare una proposta dentro quello che c'è
+darebbe un percorso che non ha composto né il modello né la persona. Il
+pannello lo scrive prima di far premere.
+
+Le motivazioni stanno nel pannello e non sulle righe delle tappe: appartengono
+alla proposta e non alla tappa, si leggono una volta mentre si decide se
+tenerla, e appese a una riga che poi si sposta, si cambia e si cancella
+diventerebbero didascalie di qualcosa che nessuno ha più proposto. Dopo la
+generazione il pannello dice quante tappe sono e che vanno rilette una per
+una: non è un messaggio di successo, perché in quel momento il form è pieno di
+roba che non ha scritto nessuno.
+
 **Assegnare fa una domanda sola**
 ([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)): chi deve
 percorrerlo. Le persone si cercano per nome o per email e si spuntano tutte
@@ -749,15 +847,21 @@ non dicono la stessa data in due modi diversi.
 nessuna prova: una riga a zero è la risposta a "chi non si sta allenando", e
 sparendo dalla tabella si porterebbe via la domanda.
 
-**Sotto la riga, due linguette**
+**Sotto la riga, tre linguette**
 ([UserReportDetail](../frontend/src/components/UserReportDetail.tsx)): le
 conversazioni di qua, le simulazioni di là, come nella dashboard e nel
-confronto. "Come parla" e "cosa sa" sono due domande, e in una lista sola la
-seconda si leggerebbe come il seguito della prima; il conteggio sulla
-linguetta dice da che parte ci sono dati prima di aprirla. Si apre sulla prova
-che la persona ha davvero svolto: chi ha solo fatto simulazioni troverebbe
-altrimenti una linguetta vuota, e dovrebbe scoprire da sé che l'altra non lo
-è.
+confronto, e in fondo il quadro d'insieme. "Come parla" e "cosa sa" sono due
+domande, e in una lista sola la seconda si leggerebbe come il seguito della
+prima; il conteggio sulla linguetta dice da che parte ci sono dati prima di
+aprirla. Si apre sulla prova che la persona ha davvero svolto: chi ha solo
+fatto simulazioni troverebbe altrimenti una linguetta vuota, e dovrebbe
+scoprire da sé che l'altra non lo è.
+
+La terza è arrivata dopo, sta **accanto** alle altre due e non sopra, ed è
+l'unica senza conteggio: "cosa devo dirgli" è una domanda dello stesso ordine
+delle prime due, non una conclusione che vale più degli elenchi da cui viene,
+e non elenca niente, quindi o c'è o non è ancora stata scritta. Ha una sezione
+sua più sotto.
 
 **Accanto alle linguette, tutto a destra, il filtro e la ricerca della prova
 attiva**, e cambiano con lei: di una conversazione si chiede il canale
@@ -872,6 +976,191 @@ servirebbe a nessuno.
 Lato server è una lettura sola ([admin.py](../backend/routers/admin.py)) con
 due query separate, una per prova: chi non usa il simulatore non deve pagare
 la scansione dei tentativi dentro quella delle conversazioni.
+
+## Il quadro d'insieme su una persona
+
+La terza linguetta del report attività, e l'unica cosa nell'applicazione che
+guarda **più prove insieme**.
+
+Tutto il resto ragiona su una prova per volta: la valutazione giudica una
+conversazione, il confronto ne affianca due e fa una sottrazione, la
+dashboard fa medie su un gruppo, una tappa di un percorso è una soglia
+superata o no. Nessuna di queste risponde alla domanda con cui un docente
+apre la riga di una persona, che è **cosa devo dirgli**: quella richiede di
+vedere che lo stesso errore è tornato quattro volte su quattro scenari
+diversi, e non c'era nessuna schermata da cui quel fatto si leggesse.
+
+I file sono tre, e la divisione è quella di sempre:
+
+| File | Cosa fa |
+| --- | --- |
+| [debriefing_source.py](../backend/debriefing_source.py) | Cosa il modello ha davanti: quali prove entrano, come vengono neutralizzate, e i numeri calcolati qui |
+| [user_debriefing.py](../backend/user_debriefing.py) | Il prompt e la chiamata sola, con la normalizzazione della risposta |
+| [routers/admin_debriefings.py](../backend/routers/admin_debriefings.py) | Le due rotte, il confine del tenant, il salvataggio |
+
+### Il giro è quello che si conosce già
+
+Una fonte scritta da qualcuno, una passata del modello di ragionamento, una
+persona che rilegge. È il terzo posto in cui succede, dopo la bozza di scheda
+persona e il serbatoio di domande di una simulazione (vedi
+[avatar-e-persona.md](avatar-e-persona.md) e
+[simulatore.md](simulatore.md)); qui cambia cosa entra e per chi esce. Là la
+fonte è un caso o un documento aziendale e il destinatario è chi prepara
+l'esercizio, qui la fonte sono le prove che una persona ha svolto e il
+destinatario è chi deve sedersi davanti a lei.
+
+La chiamata passa da `eval_json_completion` come tutte le altre, quindi si
+porta dietro i modelli di riserva, il tempo lungo e il JSON forzato, e ha il
+suo tetto per persona, **dieci all'ora**
+([llm_limits.py](../backend/llm_limits.py)). Il tetto è quello della
+valutazione e non quello delle operazioni di amministrazione, per la stessa
+ragione: è una chiamata cara che si può rilanciare all'infinito sulla stessa
+persona, perché ogni rilancio sostituisce il precedente.
+
+### Cosa il modello legge
+
+Le ultime **cinque conversazioni valutate** e gli ultimi **cinque tentativi**.
+Solo le conversazioni con un giudizio: una senza non porta niente da leggere
+e occuperebbe il budget delle trascrizioni al posto di una che parla.
+
+Di ogni conversazione entrano i sei criteri con voto, commento e suggerimenti
+già scritti dal valutatore, la revisione e le note del docente, e la
+**trascrizione intera**. I criteri sono anche il motivo per cui questa
+funzione costa poco rispetto a quello che restituisce: il lavoro di leggere
+una conversazione criterio per criterio lo ha già fatto il valutatore, e qui
+si rilegge invece di rifarlo.
+
+Di ogni tentativo entrano il voto e **solo le domande sbagliate**. Le giuste
+occuperebbero la maggior parte dello spazio per dire una cosa che il voto dice
+già, mentre gli sbagli sono l'unica parte da cui si capisce *cosa* una persona
+non sa, ed è la stessa ragione per cui il confronto fra due tentativi mette in
+cima le domande il cui esito è cambiato.
+
+Tre regole reggono la raccolta.
+
+**Le trascrizioni entrano intere o non entrano.** Il tetto è sui caratteri
+(`TRANSCRIPT_BUDGET_CHARS`) e si spende dalla conversazione più recente: quella
+che non ci sta per intero perde la trascrizione e tiene il resto, invece di
+entrare a metà. Una trascrizione tagliata racconta una chiamata che finisce a
+metà, e quella è una cosa che il debriefing scriverebbe come un difetto.
+
+**I numeri non li calcola il modello.** Media dei voti, media per criterio e
+conteggi si contano in Python, arrivano nel prompt già fatti sotto
+un'intestazione che dice di non rifarli, e i voti passano da `final_score`
+come ovunque. Un debriefing che dicesse una media diversa da quella della
+dashboard contraddirebbe la pagella che lo studente ha in mano, ed è il modo
+più rapido perché uno strumento del genere smetta di essere creduto.
+
+**Metà di questo materiale lo ha scritto la persona di cui parla.** Vale la
+regola della valutazione ([untrusted_text.py](../backend/untrusted_text.py)):
+battute, risposte aperte e perfino il **titolo** della conversazione, che chi
+si allena può riscrivere, perdono la forma con cui una riga si dichiara, e il
+dossier intero viaggia dentro un recinto che cambia a ogni chiamata e che il
+prompt nomina. Qui il rischio è più diretto che nella valutazione: là si
+sposta un voto, qui si detta a chi insegna cosa pensare di una persona.
+
+### Cosa il modello scrive
+
+Un JSON con la sintesi, fino a **quattro temi ricorrenti** con il loro
+dettaglio e le prove su cui poggiano, cosa sta migliorando e il passo
+successivo. Il tetto sui temi non è prudenza: a un modello a cui si chiedono i
+temi ricorrenti di dodici prove senza dire quanti, escono otto voci in cui le
+ultime quattro sono le prime quattro riscritte più deboli.
+
+Il prompt insiste su una distinzione sola, che è tutto il senso della
+funzione: **quello che si ripete attraverso prove diverse è un modo di
+lavorare, quello che è successo una volta è un episodio**. E chiede che ogni
+tema nomini le prove su cui è stato visto, perché un tema senza evidenze è
+un'impressione, e chi lo porta in un colloquio deve poter rispondere a «da
+dove lo hai preso».
+
+Della risposta si scarta poco e per motivi precisi: un tema senza titolo cade
+da solo, come una domanda storta del serbatoio di una simulazione, mentre una
+risposta **senza sintesi o senza il passo successivo è fallita** e fa
+ritentare sul modello di riserva, esattamente come un JSON troncato. Il
+miglioramento invece può mancare, ed è un esito e non un dato che non è
+arrivato: inventarne uno per chiudere in positivo renderebbe inutile anche
+quello vero, quindi vuoto resta vuoto e la schermata non mostra la sezione.
+
+### Perché è salvato, e come ammette di essere vecchio
+
+Il progresso di un percorso e le notifiche si derivano in lettura per non
+tenere copie che invecchiano. Questo no, e la differenza è che quelle si
+ricavano da righe che già le descrivono, mentre qui il testo esiste solo
+perché un modello lo ha scritto una volta: riderivarlo vuol dire ripagarlo e
+riscriverlo diverso.
+
+La riga (`user_debriefings`, una per persona) porta quindi con sé **cosa il
+modello aveva davanti**: `covered_until`, cioè la prova più recente che ha
+letto, quante ne erano per forma, e le medie di allora. È la stessa idea di
+`ai_score_at_review` sulle revisioni, e serve alla stessa cosa: quando la
+persona svolge altre prove, il confronto fra `covered_until` e quello che c'è
+adesso fa comparire il segnale **da aggiornare**, invece di presentare come
+attuale un quadro che non ha mai visto le ultime tre conversazioni.
+
+Lo stato non è salvato, si ricava in lettura (`debriefing_source.is_stale`), e
+guarda **le prove e non le revisioni**: una nota scritta dal docente dopo il
+debriefing non lo invecchia, perché è già il giudizio di chi lo sta leggendo,
+e vedersi dire che il proprio quadro è vecchio per una riga scritta da sé
+sarebbe un segnale che nessuno guarderebbe più.
+
+Non si aggiorna mai da solo. Un debriefing che si rigenerasse all'arrivo di
+una conversazione sarebbe una chiamata a pagamento fatta da nessuno.
+
+### Chi lo chiede, e cosa serve perché esista
+
+| | Super admin | Organization admin | Chi si allena |
+| --- | --- | --- | --- |
+| Lo legge e lo fa scrivere | Su chiunque | Sulla propria gente | Mai: 403 sulla rotta |
+| Su una persona di un altro tenant | La vede | 404, come se non ci fosse | |
+
+Il confine viene da `resolve_admin_scope` come ogni altra lettura di
+amministrazione, e il 404 è quello di sempre: chi non ha diritto di leggere
+quella riga non ha diritto di sapere che c'è.
+
+**Servono almeno tre prove svolte**, altrimenti la risposta è 409 e dice
+quante ne servono e quante ce ne sono, come una simulazione che non si
+pubblica finché il serbatoio non è pieno. Con una prova sola il debriefing
+sarebbe la valutazione riscritta con altre parole, con due sarebbe il
+confronto, che esiste già e non costa niente: quello che questo strumento
+aggiunge comincia quando le prove sono tante abbastanza da avere qualcosa in
+comune. Sotto la soglia la schermata non offre il bottone e al suo posto
+scrive il motivo, perché un bottone spento senza spiegazione manda a cercare
+cosa si è sbagliato.
+
+**Chi si allena non lo vede**, ed è una scelta: il debriefing dice a un
+docente cosa ripetere a voce, non è la pagella, che invece è la valutazione e
+la revisione, e quelle lo studente le legge già entrambe. Nell'esportazione
+dei propri dati personali però c'è (vedi [gdpr.md](gdpr.md)): chi può
+sfogliarlo in una schermata e chi ha diritto a una copia di quello che la
+piattaforma tiene su di sé sono due domande diverse, ed è lo stesso
+ragionamento che porta nell'archivio le righe di audit, che a schermo sono del
+solo super admin.
+
+La generazione finisce **nel registro delle azioni** (`user.debriefing`), la
+lettura no: è una chiamata a un fornitore esterno che costa e un testo su una
+persona scritto da una macchina, quindi sapere chi lo ha fatto scrivere, su
+chi e quando è esattamente quello per cui il registro esiste.
+
+### La schermata
+
+[UserDebriefingPanel](../frontend/src/components/UserDebriefingPanel.tsx), e
+ha una promessa sola: **non mostra mai un giudizio senza dire, accanto, su
+cosa poggia**. In testa quante prove sono entrate e fino a quando, le medie di
+allora, e da quanto il testo è lì. Poi la sintesi, i temi con le loro
+evidenze, il miglioramento se c'è, il passo successivo, e in fondo le medie
+per criterio **ordinate dalla più bassa**, che è l'ordine in cui si guardano.
+
+L'attesa è la più lunga dell'area di amministrazione dopo la generazione di un
+serbatoio di domande, perché il modello legge cinque trascrizioni prima di
+scrivere: la schermata lo dice mentre gira, e dirlo è l'unica cosa che
+impedisce di premere il bottone una seconda volta credendo che non abbia
+funzionato.
+
+Lato server la connessione al database **torna al pool prima dell'attesa**,
+come per la valutazione di una conversazione: per tutti quei secondi il
+database non serve, e il materiale raccolto è già fatto di soli valori
+staccati dalla sessione, quindi sopravvive alla scadenza degli oggetti.
 
 ## Le due date di un account
 

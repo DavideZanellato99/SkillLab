@@ -112,6 +112,14 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     ("DELETE", "/api/admin/users/{user_id}"): AuditAction(
         "user.delete", "Utente eliminato", "user", "user_id"
     ),
+    # Il debriefing: una chiamata a un fornitore esterno che costa, e un
+    # testo su una persona scritto da una macchina. Sapere chi lo ha fatto
+    # scrivere, su chi e quando è esattamente quello per cui il registro
+    # esiste. La lettura non ci finisce, perché è navigazione come tutte
+    # le altre: l'unica GET nel registro resta l'export dei propri dati.
+    ("POST", "/api/admin/users/{user_id}/debriefing"): AuditAction(
+        "user.debriefing", "Debriefing generato", "user", "user_id"
+    ),
     # Organizzazioni
     ("POST", "/api/admin/organizations"): AuditAction(
         "organization.create", "Organizzazione creata", "organization"
@@ -224,9 +232,20 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     ("POST", "/api/simulations/{simulation_id}/attempts"): AuditAction(
         "simulation.attempt", "Simulazione svolta", "simulation", "simulation_id"
     ),
+    # Il controllo del serbatoio: non cambia nessuna domanda, ma è una
+    # chiamata a un fornitore esterno che costa, e scrive sulla simulazione
+    # l'esito che chi rivede poi legge.
+    ("POST", "/api/admin/simulations/{simulation_id}/review"): AuditAction(
+        "simulation.review", "Serbatoio controllato", "simulation", "simulation_id"
+    ),
     # Percorsi di training
     ("POST", "/api/training/paths"): AuditAction(
         "training.path_create", "Percorso creato", "training_path"
+    ),
+    # La bozza non crea niente, ma è una chiamata a un fornitore esterno che
+    # costa, ed è lo stesso motivo per cui ci sta quella della scheda persona.
+    ("POST", "/api/training/paths/draft"): AuditAction(
+        "training.path_draft", "Bozza di percorso generata", "training_path"
     ),
     ("PUT", "/api/training/paths/{path_id}"): AuditAction(
         "training.path_update", "Percorso modificato", "training_path", "path_id"

@@ -5,6 +5,7 @@ import Field, { formInputCls, textareaCls } from './Field'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import ModalShell, { ModalHeader } from './ModalShell'
+import PathDraftPanel from './PathDraftPanel'
 import PathStepEditor, { PathStepsHeader } from './PathStepEditor'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
@@ -12,7 +13,14 @@ import Spinner from './Spinner'
 import { PlusIcon } from './icons'
 import { moved } from './listOrder'
 import type { PathStepDraft } from './pathStepDraft'
-import { draftFromStep, emptyDraft, isDraftComplete, toStepInput } from './pathStepDraft'
+import {
+  draftFromProposal,
+  draftFromStep,
+  emptyDraft,
+  isDraftComplete,
+  toStepInput,
+} from './pathStepDraft'
+import type { TrainingPathDraft } from '../services/training'
 
 /* Comporre un percorso: come si chiama, di che organizzazione è e quali
  * tappe lo compongono, nell'ordine in cui vanno superate.
@@ -58,6 +66,17 @@ export default function TrainingPathEditorModal({
     path ? path.steps.map(draftFromStep) : [emptyDraft()],
   )
   const [validationError, setValidationError] = useState('')
+  /* Quali campi del percorso li ha scritti una bozza e non una persona.
+   * Serve alla regola con cui una proposta entra nel form, la stessa della
+   * scheda persona: **scrive nei campi vuoti e in quelli che aveva scritto
+   * lei, mai in quelli scritti a mano**. Senza la prima metà, riprovare con
+   * un obiettivo scritto meglio non cambierebbe niente perché il titolo è
+   * già pieno; senza la seconda, una seconda proposta porterebbe via la
+   * correzione appena fatta, cioè la parte per cui la revisione esiste.
+   *
+   * Vive nella finestra aperta e non nel database: appena il percorso è
+   * salvato, ogni campo è roba che qualcuno ha deciso di tenere. */
+  const [fromDraft, setFromDraft] = useState<Set<'title' | 'description'>>(new Set())
 
   const createMutation = useCreatePath()
   const updateMutation = useUpdatePath()
@@ -79,6 +98,29 @@ export default function TrainingPathEditorModal({
 
   const setStep = (index: number, next: PathStepDraft) =>
     setSteps((prev) => prev.map((s, i) => (i === index ? next : s)))
+
+  /* Una proposta che entra nel form.
+   *
+   * Titolo e descrizione seguono la regola dei campi scritti a mano; **le
+   * tappe le sostituisce tutte**, ed è la sola cosa che può fare: sono una
+   * fila ordinata, e infilare una proposta dentro quello che c'è vorrebbe
+   * dire un percorso che non ha composto né il modello né la persona. Il
+   * pannello lo scrive prima di far premere, e non compare affatto su un
+   * percorso che esiste già. */
+  const applyDraft = (draft: TrainingPathDraft) => {
+    setTitle((prev) => (prev.trim() === '' || fromDraft.has('title') ? draft.title : prev))
+    setDescription((prev) =>
+      prev.trim() === '' || fromDraft.has('description') ? (draft.description ?? '') : prev,
+    )
+    setFromDraft((prev) => {
+      const next = new Set(prev)
+      if (title.trim() === '' || prev.has('title')) next.add('title')
+      if (description.trim() === '' || prev.has('description')) next.add('description')
+      return next
+    })
+    setSteps(draft.steps.map(draftFromProposal))
+    setValidationError('')
+  }
 
   const handleSubmit = async () => {
     if (!canSubmit) {
@@ -127,7 +169,18 @@ export default function TrainingPathEditorModal({
             className={`${formInputCls} w-full`}
             value={title}
             disabled={isSaving}
-            onChange={(e) => setTitle(e.target.value)}
+            /* Toccare un campo lo fa uscire dall'elenco di quelli scritti
+               dalla bozza, e da quel momento è intoccabile: è la metà della
+               regola che protegge una correzione appena fatta. */
+            onChange={(e) => {
+              setTitle(e.target.value)
+              setFromDraft((prev) => {
+                if (!prev.has('title')) return prev
+                const next = new Set(prev)
+                next.delete('title')
+                return next
+              })
+            }}
             placeholder="Onboarding vendite"
           />
         </Field>
@@ -143,7 +196,15 @@ export default function TrainingPathEditorModal({
             rows={2}
             value={description}
             disabled={isSaving}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => {
+              setDescription(e.target.value)
+              setFromDraft((prev) => {
+                if (!prev.has('description')) return prev
+                const next = new Set(prev)
+                next.delete('description')
+                return next
+              })
+            }}
             placeholder="A chi è rivolto e cosa ci si aspetta alla fine"
           />
         </Field>
@@ -174,6 +235,20 @@ export default function TrainingPathEditorModal({
               options={organizations.map((o) => ({ value: o.id, label: o.name }))}
             />
           </Field>
+        )}
+
+        {/* Solo su un percorso nuovo: su uno che esiste già le tappe le
+            stanno percorrendo delle persone, e rigenerarle non sarebbe una
+            bozza, sarebbe buttare il lavoro di qualcuno insieme al loro
+            progresso. Sta sopra le tappe perché è da lì che possono
+            arrivare, e sotto i campi del percorso perché anche quelli li
+            riempie. */}
+        {!isEditing && (
+          <PathDraftPanel
+            organizationId={organizationId}
+            disabled={isSaving}
+            onDrafted={applyDraft}
+          />
         )}
 
         <div>

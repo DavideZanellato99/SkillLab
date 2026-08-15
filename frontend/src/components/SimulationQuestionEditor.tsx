@@ -38,6 +38,12 @@ interface SimulationQuestionEditorProps {
   onChange: (question: SimulationQuestionPayload) => void
   /** Toglie la domanda dal serbatoio. Assente dove il serbatoio è fisso. */
   onRemove?: () => void
+  /* Cosa il controllo del serbatoio ha trovato su questa domanda. Le
+   * segnalazioni stanno anche in cima all'elenco, nel loro pannello, ma
+   * quello si legge una volta e poi si scende a correggere: senza il segno
+   * qui, chi è arrivato alla domanda 31 dovrebbe risalire per ricordarsi
+   * cosa non andava. */
+  findings?: string[]
   disabled?: boolean
 }
 
@@ -47,6 +53,7 @@ export default function SimulationQuestionEditor({
   kind,
   onChange,
   onRemove,
+  findings = [],
   disabled = false,
 }: SimulationQuestionEditorProps) {
   const options = question.options ?? []
@@ -78,7 +85,13 @@ export default function SimulationQuestionEditor({
   }
 
   return (
-    <li className="rounded-2xl border border-white/6 bg-white/3 p-4">
+    /* L'ancora porta il numero della domanda, cioè la sua posizione nel
+       serbatoio: è il numero con cui una segnalazione del controllo la
+       nomina, ed è quello che permette di saltarci sopra da lì. */
+    <li
+      id={`simulation-question-${index + 1}`}
+      className="rounded-2xl border border-white/6 bg-white/3 p-4"
+    >
       {/* Il numero e il cestino stanno in cima alla scheda, non addosso al
           testo: il cestino butta via tutta la domanda, non la riga accanto a
           cui si trova, e da qui il testo prende tutta la larghezza. */}
@@ -100,6 +113,18 @@ export default function SimulationQuestionEditor({
           </Tooltip>
         )}
       </div>
+
+      {/* Sopra il testo e non sotto: è la cosa da sapere prima di rileggere
+          la domanda, non un commento a quello che si è appena letto. */}
+      {findings.length > 0 && (
+        <ul className="mb-3 flex list-none flex-col gap-1 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3 py-2">
+          {findings.map((message, i) => (
+            <li key={i} className="text-xs leading-relaxed text-amber-200">
+              {message}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="mb-3">
         <textarea

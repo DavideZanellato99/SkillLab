@@ -27,10 +27,12 @@ import {
   fetchEvaluationsReport,
   fetchEvaluationsReportXlsx,
   fetchSimulationsReport,
+  fetchUserDebriefing,
   fetchUsers,
   fetchUsersReport,
   fetchVoicePreview,
   fetchVoices,
+  generateUserDebriefing,
   previewPersonaPrompt,
   resendUserCredentials,
   restoreAvatar,
@@ -283,6 +285,22 @@ describe('report', () => {
   it('senza filtri chiede tutto lo scope e tutta la storia', async () => {
     await fetchUsersReport()
     expect(ultimaChiamata().options.params).toEqual({})
+  })
+
+  /* Il quadro d'insieme è l'unica lettura dell'area report che non è un
+   * report: si chiede per una persona sola, e si scrive con una POST. */
+  it('legge e fa scrivere il quadro di una persona', async () => {
+    await fetchUserDebriefing('u-1')
+    expect(ultimaChiamata()).toEqual({
+      endpoint: '/api/admin/users/u-1/debriefing',
+      options: {},
+    })
+
+    await generateUserDebriefing('u-1')
+    expect(ultimaChiamata()).toEqual({
+      endpoint: '/api/admin/users/u-1/debriefing',
+      options: { method: 'POST' },
+    })
   })
 
   it('legge i due report della dashboard', async () => {

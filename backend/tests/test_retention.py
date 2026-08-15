@@ -20,6 +20,7 @@ from models import (
     MessageAnnotation,
     SimulationAttempt,
     TechnicalSimulation,
+    UserDebriefing,
 )
 
 
@@ -128,7 +129,7 @@ def test_recent_conversation_is_left_alone(db_session, standard_user, make_avata
 
     result = _purge(db_session)
 
-    assert result == (0, 0, 0)
+    assert result == (0, 0, 0, 0)
     assert (
         db_session.query(ChatConversation).filter(ChatConversation.id == conversation.id).count()
         == 1
@@ -250,6 +251,46 @@ def test_recent_attempt_is_left_alone(db_session, standard_user, organization):
     )
 
 
+# ── Il debriefing non sopravvive a quello che riassume ─────────────────
+
+
+def _seed_debriefing(db_session, user, *, covered_days_ago: int):
+    """Un quadro d'insieme, datato dalla prova più recente che aveva letto."""
+    debriefing = UserDebriefing(
+        user_id=user.id,
+        content={"summary": "Chiude prima di aver capito.", "themes": []},
+        covered_until=_days_ago(covered_days_ago),
+        covered_conversations=3,
+        covered_attempts=1,
+    )
+    db_session.add(debriefing)
+    db_session.flush()
+    return debriefing
+
+
+def test_expired_debriefing_goes_with_the_conversations_it_summarised(db_session, standard_user):
+    """Si misura sulla prova più recente che aveva letto, non su quando è
+    stato scritto: passata quella data, il materiale che riassume è stato
+    cancellato, e resterebbe un giudizio senza più niente dietro."""
+    _seed_debriefing(
+        db_session, standard_user, covered_days_ago=retention.CONVERSATION_RETENTION_DAYS + 1
+    )
+
+    result = _purge(db_session)
+
+    assert result.debriefings == 1
+    assert db_session.query(UserDebriefing).filter_by(user_id=standard_user.id).count() == 0
+
+
+def test_recent_debriefing_is_left_alone(db_session, standard_user):
+    _seed_debriefing(db_session, standard_user, covered_days_ago=1)
+
+    result = _purge(db_session)
+
+    assert result.debriefings == 0
+    assert db_session.query(UserDebriefing).filter_by(user_id=standard_user.id).count() == 1
+
+
 # ── Il purge è ripetibile ──────────────────────────────────────────────
 
 
@@ -262,4 +303,4 @@ def test_purge_is_idempotent(db_session, standard_user, make_avatar):
     second = _purge(db_session)
 
     assert first.conversations == 1
-    assert second == (0, 0, 0)
+    assert second == (0, 0, 0, 0)

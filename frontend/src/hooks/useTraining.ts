@@ -17,6 +17,7 @@ import {
   createPath,
   deleteAssignment,
   deletePath,
+  draftPath,
   fetchAssignableContent,
   fetchAssignableUsers,
   fetchAssignments,
@@ -97,6 +98,21 @@ export function useCreatePath() {
   return useMutation({
     mutationFn: (payload: PathWritePayload) => createPath(payload),
     onSuccess: invalidate,
+  })
+}
+
+/**
+ * Fa comporre una bozza di percorso da un obiettivo raccontato a parole.
+ *
+ * Non invalida niente, ed è la differenza che conta rispetto alle tre
+ * mutation qui sotto: questa non scrive nel database, restituisce una
+ * proposta al form. Finché nessuno preme "crea il percorso" non è successo
+ * niente che un elenco debba rileggere.
+ */
+export function useDraftPath() {
+  return useMutation({
+    mutationFn: ({ goal, organizationId }: { goal: string; organizationId?: string }) =>
+      draftPath(goal, organizationId),
   })
 }
 

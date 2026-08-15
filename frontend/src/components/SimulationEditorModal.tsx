@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   useAdminSimulation,
   useGenerateQuestions,
+  useReviewPool,
   useSaveQuestions,
   useSimulationResults,
   useUpdateSimulationStatus,
@@ -28,6 +29,7 @@ import Badge from './Badge'
 import TabBar from './TabBar'
 import { PlusIcon } from './icons'
 import SimulationQuestionEditor from './SimulationQuestionEditor'
+import SimulationReviewPanel from './SimulationReviewPanel'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import {
@@ -180,6 +182,7 @@ export default function SimulationEditorModal({
 }: SimulationEditorModalProps) {
   const { data: simulation, isLoading } = useAdminSimulation(simulationId)
   const generate = useGenerateQuestions(simulationId)
+  const review = useReviewPool(simulationId)
   const save = useSaveQuestions(simulationId)
   const setStatus = useUpdateSimulationStatus(simulationId)
 
@@ -196,7 +199,7 @@ export default function SimulationEditorModal({
     if (simulation) setDraft(toPayload(simulation.questions))
   }, [simulation])
 
-  const busy = generate.isPending || save.isPending || setStatus.isPending
+  const busy = generate.isPending || save.isPending || setStatus.isPending || review.isPending
   const isPublished = simulation?.status === 'published'
   const kind = simulation?.kind ?? 'multiple'
   const isManual = simulation?.source === 'manual'
@@ -211,6 +214,30 @@ export default function SimulationEditorModal({
   const addQuestion = () => {
     setSaved(false)
     setDraft((prev) => [...prev, blankQuestion(kind)])
+  }
+
+  /* Le segnalazioni raccolte per domanda, così ogni riga porta le proprie.
+   * La chiave è la posizione e non l'indice nell'elenco: sono lo stesso
+   * numero finché nessuno tocca il serbatoio, ma su una simulazione scritta
+   * a mano una domanda si può togliere, e da quel momento l'esito parla di
+   * una fila che non c'è più. A dirlo è comunque `is_stale`, e qui una
+   * posizione che non esiste semplicemente non trova nessuna riga. */
+  const findingsByPosition = new Map<number, string[]>()
+  for (const finding of simulation?.review?.findings ?? []) {
+    for (const position of finding.positions) {
+      findingsByPosition.set(position, [
+        ...(findingsByPosition.get(position) ?? []),
+        finding.message,
+      ])
+    }
+  }
+
+  /* Dalla segnalazione alla domanda. Il pannello sta in cima a un elenco che
+   * può essere lungo cinquanta schede, e senza questo "la domanda 37" sarebbe
+   * un numero da andare a cercare a mano. */
+  const goToQuestion = (position: number) => {
+    const node = document.getElementById(`simulation-question-${position}`)
+    node?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
   /* Pubblicare salva prima le domande: quello che finisce davanti agli utenti
@@ -310,6 +337,25 @@ export default function SimulationEditorModal({
                 </div>
               ) : (
                 <>
+                  {/* In testa alle domande, perché è quello che si guarda
+                      prima di cominciare a rileggerle. */}
+                  <SimulationReviewPanel
+                    review={simulation.review}
+                    isPending={review.isPending}
+                    error={
+                      review.error
+                        ? review.error instanceof Error
+                          ? review.error.message
+                          : 'Controllo non riuscito.'
+                        : ''
+                    }
+                    disabled={busy && !review.isPending}
+                    onRun={() => {
+                      review.reset()
+                      review.mutate()
+                    }}
+                    onGoTo={goToQuestion}
+                  />
                   <ol className="flex list-none flex-col gap-3">
                     {draft.map((question, index) => (
                       <SimulationQuestionEditor
@@ -317,6 +363,7 @@ export default function SimulationEditorModal({
                         index={index}
                         question={question}
                         kind={kind}
+                        findings={findingsByPosition.get(index + 1)}
                         disabled={busy}
                         onChange={(updated) =>
                           setDraft((prev) => prev.map((q, i) => (i === index ? updated : q)))

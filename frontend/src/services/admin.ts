@@ -359,6 +359,60 @@ export const fetchUsersReport = (organizationId?: string, days?: number) =>
     },
   })
 
+// ── Debriefing di una persona ────────────────
+
+/** Un tema ricorrente: cosa torna, perché è un problema, e su quali prove. */
+export interface DebriefingTheme {
+  title: string
+  detail: string
+  evidence: string
+}
+
+/** La media di un criterio sulle prove che il debriefing ha letto. */
+export interface DebriefingCriterionAverage {
+  key: string
+  label: string
+  average: number
+}
+
+/**
+ * Il quadro d'insieme su una persona: quello che si vede solo guardando più
+ * prove insieme, che è l'unica cosa che nessun'altra schermata sa dire.
+ *
+ * Tutti i numeri qui dentro sono una fotografia del momento in cui è stato
+ * scritto, non di adesso: sono quelli che il modello aveva davanti, e
+ * ricalcolarli farebbe comparire una media che il testo accanto non ha mai
+ * visto. A dire che il tempo è passato c'è `is_stale`.
+ */
+export interface UserDebriefing {
+  user_id: string
+  summary: string
+  themes: DebriefingTheme[]
+  /** null quando nel materiale non si vedeva nessun miglioramento. */
+  improving: string | null
+  next_step: string
+  covered_conversations: number
+  covered_attempts: number
+  covered_until: string
+  conversation_average: number | null
+  attempt_average: number | null
+  criteria_averages: DebriefingCriterionAverage[]
+  /** La persona ha svolto altre prove dopo che il quadro è stato scritto. */
+  is_stale: boolean
+  created_at: string
+  updated_at: string
+  /** Chi lo ha fatto scrivere per ultimo. */
+  requested_by: string
+}
+
+/** Il debriefing salvato, o null se non è mai stato chiesto per questa persona. */
+export const fetchUserDebriefing = (userId: string) =>
+  apiFetch<UserDebriefing | null>(`/api/admin/users/${userId}/debriefing`)
+
+/** Fa scrivere il quadro d'insieme, sostituendo quello che c'era. */
+export const generateUserDebriefing = (userId: string) =>
+  apiFetch<UserDebriefing>(`/api/admin/users/${userId}/debriefing`, { method: 'POST' })
+
 // ── Evaluations dashboard (read-only) ────────────────
 
 export interface EvaluationCriterionScore {

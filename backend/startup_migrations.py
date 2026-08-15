@@ -179,6 +179,23 @@ def _add_columns() -> None:
                 "source VARCHAR(20) NOT NULL DEFAULT 'ai'"
             )
         )
+        # L'esito dell'ultimo controllo del serbatoio, la sua data e
+        # l'impronta delle domande su cui è girato. Tutte e tre nullable e
+        # senza backfill, ed è il valore giusto: sulle simulazioni che
+        # esistevano prima nessuno ha ancora chiesto il controllo, che è una
+        # cosa diversa da un controllo passato senza rilievi.
+        conn.execute(
+            text("ALTER TABLE technical_simulations ADD COLUMN IF NOT EXISTS review_report JSONB")
+        )
+        conn.execute(
+            text("ALTER TABLE technical_simulations ADD COLUMN IF NOT EXISTS review_at TIMESTAMP")
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE technical_simulations ADD COLUMN IF NOT EXISTS "
+                "review_fingerprint VARCHAR(64)"
+            )
+        )
         # La chiave di una domanda aperta. Vuota sulle domande a scelta
         # multipla, che è quello che il default dà già alle righe di prima.
         conn.execute(

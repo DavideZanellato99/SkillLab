@@ -33,6 +33,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 import audit
+import llm_limits
 from auth_dependency import (
     get_current_admin,
     get_current_standard_user,
@@ -52,6 +53,7 @@ from models import (
     TrainingPathStep,
     User,
 )
+from path_draft import CatalogAvatar, CatalogSimulation, draft_path
 from routers.avatars import ensure_trainable
 from schemas import (
     STEP_KIND_AVATAR,
@@ -61,6 +63,8 @@ from schemas import (
     MessageResponse,
     TrainingPathAssignmentCreate,
     TrainingPathAssignmentResponse,
+    TrainingPathDraftRequest,
+    TrainingPathDraftResponse,
     TrainingPathResponse,
     TrainingPathStepResponse,
     TrainingPathWrite,
@@ -380,6 +384,86 @@ def create_path(
     return _path_response(path)
 
 
+@router.post("/paths/draft", response_model=TrainingPathDraftResponse)
+async def draft_training_path(
+    payload: TrainingPathDraftRequest,
+    http_request: Request,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Una bozza di percorso da un obiettivo formativo raccontato a parole.
+
+    È il gemello della bozza di scheda persona, e segue lo stesso patto: il
+    modello propone, una persona rilegge, e solo dopo si salva. **Questa
+    rotta non scrive niente**: restituisce una proposta al form di chi l'ha
+    chiesta, e il percorso nasce con la richiesta successiva, che è quella
+    normale di creazione.
+
+    Il catalogo da cui il modello sceglie è lo stesso di
+    ``assignable-content``, chiesto dalla stessa funzione: una bozza che
+    proponesse prove che il form non offre sarebbe una proposta che chi la
+    riceve non può nemmeno salvare.
+    """
+    await llm_limits.consume(llm_limits.BOZZA_PERCORSO, current_admin.id)
+
+    organization = _target_organization(db, current_admin, payload.organization_id)
+    avatars, simulations = _assignable_catalog(db, organization.id)
+    if not avatars and not simulations:
+        # 409 e non 400: la richiesta è scritta bene, è l'organizzazione a non
+        # avere ancora niente di cui un percorso possa essere fatto. Stessa
+        # forma della simulazione che non si pubblica a serbatoio vuoto.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Questa organizzazione non ha ancora avatar attivi né test pubblicati: "
+                "non c'è niente di cui comporre un percorso."
+            ),
+        )
+
+    audit.describe(
+        http_request,
+        organizzazione=organization.name,
+        avatar=len(avatars),
+        test=len(simulations),
+    )
+
+    # Il catalogo viene staccato dalla sessione **prima** dell'attesa, e poi
+    # la connessione torna al pool come per la valutazione e per il
+    # debriefing: la rotta non scrive niente e per tutti quei secondi il
+    # database non serve. Al commit gli oggetti della sessione scadono, e una
+    # riga di avatar a cui si chiedesse il nome dopo tornerebbe a interrogare
+    # il database proprio mentre la connessione è stata restituita. Le due
+    # dataclass sono fatte di soli valori, quindi sopravvivono.
+    catalog_avatars = [
+        CatalogAvatar(
+            id=a.id,
+            name=a.name,
+            category_name=a.category_name,
+            difficulty=a.difficulty,
+            description=a.description,
+        )
+        for a in avatars
+    ]
+    catalog_simulations = [
+        CatalogSimulation(id=s.id, title=s.title, kind=s.kind, description=s.description)
+        for s in simulations
+    ]
+    db.commit()
+
+    try:
+        draft = await draft_path(payload.goal, catalog_avatars, catalog_simulations)
+    except ValueError as e:
+        # Il catalogo si è svuotato fra la lettura e la chiamata: non è un
+        # guasto del fornitore, quindi non è un 502.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except RuntimeError as e:
+        # Il fornitore non ha risposto, o non ha risposto niente di
+        # utilizzabile: 502, come per la bozza di scheda persona.
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+
+    return TrainingPathDraftResponse(**draft)
+
+
 @router.put("/paths/{path_id}", response_model=TrainingPathResponse)
 def update_path(
     path_id: UUID,
@@ -443,6 +527,37 @@ def delete_path(
 # ── Di cosa può essere fatta una tappa ────────────────
 
 
+def _assignable_catalog(db: Session, organization_id: UUID) -> tuple[list, list]:
+    """Di cosa può essere fatta una tappa, in un'organizzazione.
+
+    Una definizione sola, e sono due i posti che la chiedono: il selettore
+    del form (``assignable-content``) e il modello che compone una bozza di
+    percorso, che deve poter proporre esattamente quello che una persona
+    potrebbe scegliere a mano. Due liste diverse vorrebbero dire una bozza
+    che nomina prove che il form non offre.
+
+    Solo avatar attivi e simulazioni pubblicate: una tappa su una bozza o su
+    un avatar archiviato è una tappa che nessuno potrebbe superare, e siccome
+    quelle dopo si sbloccano solo quando è chiusa, fermerebbe il percorso.
+    """
+    avatars = (
+        db.query(Avatar)
+        .filter(Avatar.organization_id == organization_id, Avatar.deleted_at.is_(None))
+        .order_by(Avatar.name.asc())
+        .all()
+    )
+    simulations = (
+        db.query(TechnicalSimulation)
+        .filter(
+            TechnicalSimulation.organization_id == organization_id,
+            TechnicalSimulation.status == SIMULATION_STATUS_PUBLISHED,
+        )
+        .order_by(TechnicalSimulation.title.asc())
+        .all()
+    )
+    return avatars, simulations
+
+
 @router.get("/assignable-content", response_model=AssignableContentResponse)
 def assignable_content(
     organization_id: UUID | None = None,
@@ -462,21 +577,7 @@ def assignable_content(
             status_code=400,
             detail="Specificare l'organizzazione di cui elencare i contenuti.",
         )
-    avatars = (
-        db.query(Avatar)
-        .filter(Avatar.organization_id == scope_org_id, Avatar.deleted_at.is_(None))
-        .order_by(Avatar.name.asc())
-        .all()
-    )
-    simulations = (
-        db.query(TechnicalSimulation)
-        .filter(
-            TechnicalSimulation.organization_id == scope_org_id,
-            TechnicalSimulation.status == SIMULATION_STATUS_PUBLISHED,
-        )
-        .order_by(TechnicalSimulation.title.asc())
-        .all()
-    )
+    avatars, simulations = _assignable_catalog(db, scope_org_id)
     return AssignableContentResponse(
         avatars=[
             AssignableAvatar(

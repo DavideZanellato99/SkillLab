@@ -19,6 +19,13 @@ different moments:
   quindi un dato di valutazione come gli altri, ma senza voce registrata né
   trascrizione, e chi li conserva di solito li conserva per un tempo diverso.
   La simulazione resta, se ne vanno i tentativi.
+- i **debriefing** non hanno un orologio proprio e non ne meritano uno: sono
+  una sintesi delle conversazioni, quindi non possono sopravvivere alle
+  conversazioni che riassumono. A misurarli è ``covered_until``, cioè la
+  prova più recente che il modello aveva letto, contro la finestra delle
+  conversazioni: quando quella data è scaduta, tutto il materiale su cui il
+  testo si fonda è già stato cancellato, e quello che resterebbe è un
+  giudizio su una persona senza più niente dietro a cui riferirlo.
 
 Nothing here is a soft delete. A row past its window is gone, which is the
 only thing that makes a retention policy worth writing down.
@@ -48,6 +55,7 @@ from models import (
     ChatConversation,
     ConversationRecording,
     SimulationAttempt,
+    UserDebriefing,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,6 +104,7 @@ class PurgeResult(NamedTuple):
     conversations: int
     recordings: int
     simulation_attempts: int
+    debriefings: int
 
 
 def _cutoff(days: int) -> datetime:
@@ -167,22 +176,33 @@ def _purge(conn: Connection) -> PurgeResult:
         delete(SimulationAttempt).where(SimulationAttempt.created_at < simulation_attempt_cutoff())
     ).rowcount
 
-    if conversations or recordings or simulation_attempts:
+    # Il debriefing si misura sulla prova più recente che aveva letto e non
+    # su quando è stato scritto: quando quella data è oltre la finestra
+    # delle conversazioni, tutto il materiale che riassume è appena stato
+    # cancellato qui sopra, e la sintesi non deve sopravvivergli.
+    debriefings = conn.execute(
+        delete(UserDebriefing).where(UserDebriefing.covered_until < conv_cutoff)
+    ).rowcount
+
+    if conversations or recordings or simulation_attempts or debriefings:
         logger.info(
             "Retention: %d conversazioni eliminate (oltre %d giorni), "
             "%d registrazioni audio eliminate (oltre %d giorni), "
-            "%d tentativi di simulazione eliminati (oltre %d giorni)",
+            "%d tentativi di simulazione eliminati (oltre %d giorni), "
+            "%d debriefing eliminati (sulla finestra delle conversazioni)",
             conversations,
             CONVERSATION_RETENTION_DAYS,
             recordings,
             AUDIO_RETENTION_DAYS,
             simulation_attempts,
             SIMULATION_ATTEMPT_RETENTION_DAYS,
+            debriefings,
         )
     return PurgeResult(
         conversations=conversations,
         recordings=recordings,
         simulation_attempts=simulation_attempts,
+        debriefings=debriefings,
     )
 
 
@@ -190,8 +210,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     result = purge_expired()
     logger.info(
-        "Purge completato: %d conversazioni, %d registrazioni, %d tentativi.",
+        "Purge completato: %d conversazioni, %d registrazioni, %d tentativi, %d debriefing.",
         result.conversations,
         result.recordings,
         result.simulation_attempts,
+        result.debriefings,
     )

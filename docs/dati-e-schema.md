@@ -43,7 +43,8 @@ valgono su tutte le righe. Tutto in
 | `avatar_categories` | Come un'organizzazione raggruppa i propri avatar: nome e colore. Vedi [avatar-e-persona.md](avatar-e-persona.md) |
 | `training_paths`, `training_path_steps`, `training_path_assignments` | I percorsi a tappe, descritti in [training-e-report.md](training-e-report.md) |
 | `notification_reads` | L'unica cosa che si salva delle notifiche: cosa è già stato letto |
-| `technical_simulations`, `simulation_chunks`, `simulation_questions`, `simulation_attempts` | Il simulatore tecnico, descritto in [simulatore.md](simulatore.md) |
+| `technical_simulations`, `simulation_chunks`, `simulation_questions`, `simulation_attempts` | Il simulatore tecnico, descritto in [simulatore.md](simulatore.md). Sulla prima stanno anche l'esito dell'ultimo controllo del serbatoio e l'impronta delle domande su cui è girato |
+| `user_debriefings` | Il quadro d'insieme su una persona, uno per persona, con la fotografia delle prove che il modello aveva letto. Vedi [training-e-report.md](training-e-report.md) |
 | `audit_logs` | Il registro delle azioni |
 
 ## Due convenzioni che valgono ovunque
@@ -60,9 +61,15 @@ può indovinare e che non rivela quante righe esistono.
 
 ## La paternità delle righe
 
-Cinque tabelle (`users`, `organizations`, `avatars`, `avatar_categories`,
-`technical_simulations`) portano sei colonne: quando è stata creata la riga, da chi, con quale email, e
-le tre gemelle della modifica.
+Sette tabelle (`users`, `organizations`, `avatars`, `avatar_categories`,
+`technical_simulations`, `training_paths`, `user_debriefings`) portano sei
+colonne: quando è stata creata la riga, da chi, con quale email, e le tre
+gemelle della modifica.
+
+L'ultima è l'unica in cui la paternità e il soggetto sono **due persone
+diverse**: un debriefing parla di chi si allena e lo ha fatto scrivere chi
+insegna, quindi verso `users` partono tre colonne e la relazione deve
+dichiarare quale delle tre sia il soggetto.
 
 A riempirle **non è l'endpoint**, ma un listener sul flush della sessione
 ([backend/authorship.py](../backend/authorship.py)). Qualunque strada porti

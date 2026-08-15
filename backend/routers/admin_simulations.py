@@ -40,6 +40,7 @@ stesso salvataggio in blocco, stessa bozza, stessa estrazione di dieci
 domande a caso quando qualcuno comincia il test.
 """
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import (
@@ -57,6 +58,7 @@ from sqlalchemy.orm import Session
 import audit
 import document_text
 import llm_limits
+import simulation_review
 from auth_dependency import get_current_admin, resolve_admin_scope
 from database import get_db
 from models import (
@@ -88,6 +90,7 @@ from schemas import (
     SimulationStatusRequest,
     SimulationUpdateRequest,
 )
+from simulation_grounding import grounding_findings, verifiable_count
 from simulation_questions import generate_questions
 from simulation_rag import split_into_chunks
 
@@ -172,6 +175,29 @@ def _admin_detail(db: Session, simulation: TechnicalSimulation, admin: User) -> 
         "document_text": simulation.document_text,
         "chunk_count": len(simulation.chunks),
         "total_attempts": total_attempts,
+        "review": _review_response(simulation),
+    }
+
+
+def _review_response(simulation: TechnicalSimulation) -> dict | None:
+    """L'esito dell'ultimo controllo, con la sola cosa che si ricava in lettura.
+
+    Viaggia dentro il dettaglio e non da una rotta sua: chi apre il pannello
+    di revisione vuole le domande e l'esito insieme, e una seconda chiamata
+    sarebbe un secondo momento in cui i due possono non corrispondere.
+
+    None quando nessuno lo ha ancora chiesto, che è diverso da un controllo
+    passato senza rilievi: quello è un esito con la lista vuota, ed è una
+    notizia.
+    """
+    if simulation.review_report is None or simulation.review_at is None:
+        return None
+    report = simulation.review_report or {}
+    return {
+        "findings": report.get("findings") or [],
+        "checked": report.get("checked") or 0,
+        "reviewed_at": simulation.review_at,
+        "is_stale": simulation_review.is_stale(simulation),
     }
 
 
@@ -578,6 +604,76 @@ async def generate_simulation_questions(
     db.refresh(simulation)
 
     audit.describe(http_request, titolo=simulation.title, domande=len(generated))
+    return _admin_detail(db, simulation, current_admin)
+
+
+@router.post("/{simulation_id}/review", response_model=SimulationAdminDetailResponse)
+async def review_question_pool(
+    simulation_id: UUID,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Controlla il serbatoio e salva l'esito, sostituendo il precedente.
+
+    **Non blocca niente.** La pubblicazione resta possibile con tutte le
+    segnalazioni aperte, e le regole che la fermano restano quelle di prima:
+    il serbatoio pieno e nessuna domanda a metà. Questo dice da quale delle
+    cinquanta domande conviene cominciare a rileggere, che è l'unica cosa che
+    mancava alla revisione umana.
+
+    Tre controlli in una richiesta sola, perché sono la stessa domanda posta
+    a un serbatoio: due domande che chiedono la stessa cosa, una risposta che
+    il documento non sostiene, e le alternative che si riconoscono senza
+    sapere la procedura. I primi due costano, e per questo si chiede a mano
+    invece di girare da solo a ogni salvataggio: rifarlo a ogni virgola
+    corretta sarebbe una chiamata a pagamento fatta da nessuno.
+    """
+    await llm_limits.consume(llm_limits.REVISIONE_SERBATOIO, current_admin.id)
+
+    simulation = _scoped_or_404(db, current_admin, simulation_id)
+    if not simulation.questions:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Non c'è ancora nessuna domanda da controllare.",
+        )
+
+    # Il serbatoio si stacca dalla sessione prima dell'attesa, e l'impronta si
+    # calcola su questa fotografia: è quella che dirà, più avanti, se l'esito
+    # parla ancora del serbatoio che qualcuno sta guardando.
+    questions = simulation_review.snapshot(simulation.questions)
+    chunks = [simulation_review.ReviewChunk(c.ordinal, c.content) for c in simulation.chunks]
+    impronta = simulation_review.fingerprint(questions)
+    kind = simulation.kind
+    titolo = simulation.title
+
+    # Come per la valutazione e per le altre chiamate lunghe: per tutti i
+    # secondi in cui si aspetta il modello il database non serve, e in aula
+    # le connessioni sono contate.
+    db.commit()
+
+    try:
+        embeddings = await embed_texts([q.text for q in questions])
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+
+    findings = simulation_review.duplicate_findings([q.position for q in questions], embeddings)
+    findings += simulation_review.option_findings(questions)
+    # La passata del modello vale solo dove c'è un documento: su una
+    # simulazione scritta a mano non c'è niente da cui una domanda debba
+    # essere sostenuta, e la lista esce vuota da sé.
+    findings += await grounding_findings(questions, chunks, kind)
+
+    simulation = _scoped_or_404(db, current_admin, simulation_id)
+    simulation.review_report = simulation_review.build_report(
+        findings, verifiable_count(questions, chunks)
+    )
+    simulation.review_at = datetime.now(UTC).replace(tzinfo=None)
+    simulation.review_fingerprint = impronta
+    db.commit()
+    db.refresh(simulation)
+
+    audit.describe(http_request, titolo=titolo, segnalazioni=len(findings))
     return _admin_detail(db, simulation, current_admin)
 
 

@@ -53,6 +53,7 @@ from models import (
     TrainingPathAssignment,
     TrainingPathStep,
     User,
+    UserDebriefing,
     UserSelection,
 )
 
@@ -78,7 +79,9 @@ esportato il {data}.
                      conversazioni con le trascrizioni complete, le
                      valutazioni automatiche, le revisioni dei formatori, i
                      percorsi assegnati, i test tecnici svolti con le tue
-                     risposte, gli accessi e il registro delle tue attività.
+                     risposte, il quadro d'insieme che un formatore ha fatto
+                     scrivere sul tuo andamento, gli accessi e il registro
+                     delle tue attività.
 
   {cartella}/   Le registrazioni audio delle tue telefonate simulate,
                      una per conversazione. Il nome del file corrisponde al
@@ -320,6 +323,52 @@ def _simulation_attempts(db: Session, user: User) -> list[dict]:
     ]
 
 
+def _debriefing(db: Session, user: User) -> dict | None:
+    """Il quadro d'insieme che un formatore ha fatto scrivere su di lei.
+
+    Nell'interfaccia questa è una schermata di amministrazione e chi si
+    allena non la vede, ed è una scelta: il debriefing dice a un docente
+    cosa ripetere a voce, non è la pagella, che invece è la valutazione e
+    la revisione e quelle lo studente le legge già entrambe.
+
+    Chi può sfogliarlo però è una domanda diversa da chi ha diritto a una
+    copia di quello che la piattaforma tiene su di sé, ed è lo stesso
+    ragionamento che porta qui dentro le righe di audit: quelle sono una
+    schermata del solo super admin, e stanno comunque nell'archivio. Un
+    testo scritto da una macchina sul modo di lavorare di una persona è
+    esattamente il genere di dato che l'art. 15 esiste per rendere
+    conoscibile.
+
+    Chi lo ha fatto scrivere non compare: è il nome di un'altra persona, e
+    a differenza della firma su una revisione non è parte di un voto che si
+    possa contestare.
+    """
+    row = db.query(UserDebriefing).filter(UserDebriefing.user_id == user.id).first()
+    if row is None:
+        return None
+    content = row.content or {}
+    return {
+        "sintesi": content.get("summary", ""),
+        "temi_ricorrenti": [
+            {
+                "tema": theme.get("title", ""),
+                "dettaglio": theme.get("detail", ""),
+                "prove_su_cui_si_fonda": theme.get("evidence", ""),
+            }
+            for theme in content.get("themes") or []
+        ],
+        "miglioramenti": content.get("improving"),
+        "prossimo_passo": content.get("next_step", ""),
+        "prove_lette": {
+            "conversazioni": row.covered_conversations,
+            "test_tecnici": row.covered_attempts,
+            "fino_al": _at(row.covered_until),
+        },
+        "scritto_il": _at(row.created_at),
+        "aggiornato_il": _at(row.updated_at),
+    }
+
+
 def _selections(db: Session, user: User) -> list[dict]:
     rows = (
         db.query(UserSelection, Avatar)
@@ -390,6 +439,7 @@ def _payload(db: Session, user: User) -> tuple[dict, dict[UUID, str]]:
         "conversazioni": conversations,
         "percorsi_assegnati": _assignments(db, user),
         "simulazioni_tecniche": _simulation_attempts(db, user),
+        "quadro_di_insieme": _debriefing(db, user),
         "avatar_selezionati": _selections(db, user),
         "sessioni_di_accesso": _sessions(db, user),
         "registro_attivita": _activity(db, user),

@@ -21,6 +21,7 @@ import {
   fetchSimulations,
   generateSimulationQuestions,
   replaceSimulationDocument,
+  reviewSimulationPool,
   saveSimulationQuestions,
   startSimulation,
   submitSimulation,
@@ -150,6 +151,22 @@ export function useGenerateQuestions(simulationId: string) {
   const invalidate = useInvalidateSimulations()
   return useMutation({
     mutationFn: () => generateSimulationQuestions(simulationId),
+    retry: false,
+    onSuccess: invalidate,
+  })
+}
+
+/**
+ * Il controllo del serbatoio.
+ *
+ * Lento come la generazione e senza ritentativi automatici, per la stessa
+ * ragione: indicizza le cinquanta domande e ne fa rileggere una parte al
+ * modello, e ripartire da capo da solo raddoppierebbe un'attesa già lunga.
+ */
+export function useReviewPool(simulationId: string) {
+  const invalidate = useInvalidateSimulations()
+  return useMutation({
+    mutationFn: () => reviewSimulationPool(simulationId),
     retry: false,
     onSuccess: invalidate,
   })

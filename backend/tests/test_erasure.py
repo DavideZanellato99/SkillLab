@@ -34,6 +34,7 @@ from models import (
     TechnicalSimulation,
     TokenSession,
     User,
+    UserDebriefing,
     UserSelection,
     VoiceSessionRecord,
 )
@@ -59,6 +60,7 @@ _SEEDED_TABLES = {
     "voice_sessions",
     "simulation_attempts",
     "technical_simulations",
+    "user_debriefings",
 }
 
 
@@ -158,6 +160,17 @@ def _seed_everything(db_session, victim: User, other: User, avatar, make_assigne
             correct_count=7,
             question_count=10,
             answers=[{"question_id": str(uuid.uuid4()), "selected_option": 1}],
+        )
+    )
+    # Il quadro d'insieme scritto su di loro: è fatto di quello che hanno
+    # detto nelle proprie conversazioni, quindi se ne va con loro
+    db_session.add(
+        UserDebriefing(
+            user_id=victim.id,
+            content={"summary": "Chiude prima di aver capito.", "themes": []},
+            covered_until=datetime.now(UTC).replace(tzinfo=None),
+            covered_conversations=3,
+            covered_attempts=1,
         )
     )
     db_session.add(

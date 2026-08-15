@@ -514,6 +514,42 @@ class TrainingPathAssignmentResponse(BaseModel):
     current_position: int | None = None
 
 
+class TrainingPathDraftRequest(BaseModel):
+    """L'obiettivo formativo da cui far comporre una bozza di percorso.
+
+    ``organization_id`` lo nomina solo il super admin, come per il percorso
+    vero: il catalogo da cui si sceglie è di un tenant solo.
+
+    Il minimo sull'obiettivo non è una formalità. Da tre parole il modello si
+    inventa un corso suo e mette in fila mezzo catalogo, che è esattamente
+    quello che chi chiede una bozza non vuole: lo stesso minimo, e per lo
+    stesso motivo, del caso raccontato da cui nasce una scheda persona.
+    """
+
+    goal: str = Field(min_length=30, max_length=2000)
+    organization_id: UUID | None = None
+
+
+class TrainingPathDraftStep(BaseModel):
+    """Una tappa proposta: il bersaglio, la soglia, e perché sta lì."""
+
+    avatar_id: UUID | None = None
+    simulation_id: UUID | None = None
+    target_score: float
+    # Perché questa tappa e perché in questo punto della fila. Non è un campo
+    # della tappa e non viene mai salvato: esiste finché la proposta sta nel
+    # form, che è il solo momento in cui a qualcuno serve saperlo.
+    reason: str = ""
+
+
+class TrainingPathDraftResponse(BaseModel):
+    """Un percorso proposto dal modello, che nessuno ha ancora salvato."""
+
+    title: str
+    description: str | None = None
+    steps: list[TrainingPathDraftStep]
+
+
 class AssignableAvatar(BaseModel):
     """Un avatar che può diventare una tappa."""
 
@@ -1069,6 +1105,61 @@ class UserActivityReport(BaseModel):
     simulation_attempts: list[SimulationAttemptReport] = []
 
 
+class DebriefingTheme(BaseModel):
+    """Un tema ricorrente del debriefing: cosa torna, e su quali prove."""
+
+    title: str
+    detail: str = ""
+    # Le prove su cui il tema poggia, nominate dal modello. Un tema senza
+    # evidenze è un'impressione, e chi legge deve poter risalire a dove
+    # l'ha vista prima di ripeterla a voce a qualcuno.
+    evidence: str = ""
+
+
+class DebriefingCriterionAverage(BaseModel):
+    """La media di un criterio sulle prove che il debriefing ha letto."""
+
+    key: str
+    label: str
+    average: float
+
+
+class UserDebriefingResponse(BaseModel):
+    """Il quadro d'insieme su una persona, come chi amministra lo legge.
+
+    Tutto quello che c'è qui è una fotografia salvata, tranne `is_stale`:
+    i numeri sono quelli che il modello aveva davanti quando ha scritto, non
+    quelli di adesso. Ricalcolarli in lettura farebbe comparire una media
+    che il testo accanto non ha mai visto, ed è esattamente il difetto che
+    `ai_score_at_review` esiste per evitare sulle revisioni.
+    """
+
+    user_id: UUID
+    summary: str
+    themes: list[DebriefingTheme] = []
+    # Vuoto quando nel materiale non si vedeva nessun miglioramento: è un
+    # esito, non un dato mancante, e l'interfaccia lo dice.
+    improving: str | None = None
+    next_step: str
+
+    # Su quanto poggia
+    covered_conversations: int
+    covered_attempts: int
+    covered_until: datetime
+    conversation_average: float | None = None
+    attempt_average: float | None = None
+    criteria_averages: list[DebriefingCriterionAverage] = []
+
+    # True quando la persona ha svolto altre prove dopo che il quadro è
+    # stato scritto: derivato in lettura, mai salvato.
+    is_stale: bool = False
+    created_at: datetime
+    updated_at: datetime
+    # Chi lo ha fatto scrivere per ultimo, dalle colonne di paternità: un
+    # testo su una persona è qualcosa che qualcuno ha deciso di chiedere.
+    requested_by: str
+
+
 class EvaluationCriterionScore(BaseModel):
     """Score of a single criterion inside the evaluations report."""
 
@@ -1462,6 +1553,41 @@ class AdminSimulationResponse(SimulationResponse, AuthorshipResponse):
     """
 
 
+class SimulationReviewFinding(BaseModel):
+    """Una segnalazione del controllo del serbatoio."""
+
+    # "duplicate", "unsupported", "implausible_options", "longest_correct",
+    # "answer_position"
+    kind: str
+    # "high", "medium", "low": è l'ordine in cui il pannello le mette, cioè
+    # la ragione per cui il controllo esiste
+    severity: str
+    # Le domande a cui si riferisce. Due sui duplicati, che parlano di una
+    # coppia; nessuna su quelle che riguardano il serbatoio nel suo insieme.
+    positions: list[int] = []
+    message: str
+
+
+class SimulationReviewResponse(BaseModel):
+    """L'esito dell'ultimo controllo del serbatoio, se ne è stato chiesto uno.
+
+    Non blocca niente: la pubblicazione resta possibile con tutte le
+    segnalazioni aperte. Serve a dire da quale delle cinquanta domande
+    conviene cominciare a rileggere.
+    """
+
+    findings: list[SimulationReviewFinding]
+    # Quante domande sono state davvero lette dalla passata del modello: le
+    # domande senza citazioni non hanno niente con cui essere confrontate, e
+    # dire cinquanta dopo averne verificate trenta sarebbe una rassicurazione
+    # inventata.
+    checked: int
+    reviewed_at: datetime
+    # True quando le domande sono cambiate dopo il controllo: l'esito parla
+    # di un serbatoio che non c'è più. Derivato in lettura, mai salvato.
+    is_stale: bool = False
+
+
 class SimulationAdminDetailResponse(AdminSimulationResponse):
     """La simulazione come la vede il super admin: domande con le chiavi,
     il testo del documento e quanti l'hanno svolta."""
@@ -1470,6 +1596,9 @@ class SimulationAdminDetailResponse(AdminSimulationResponse):
     document_text: str
     chunk_count: int
     total_attempts: int
+    # Assente finché nessuno ha chiesto il controllo, che è diverso da un
+    # controllo passato senza rilievi: quello è un esito con la lista vuota.
+    review: SimulationReviewResponse | None = None
 
 
 class SimulationCreateRequest(BaseModel):

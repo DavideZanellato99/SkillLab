@@ -1,11 +1,16 @@
 /* Quello che si apre sotto la riga di una persona nel report attività: le
  * sue conversazioni con gli avatar da una parte, le sue simulazioni
- * dall'altra, una prova per volta.
+ * dall'altra, una prova per volta, e il quadro d'insieme nella terza.
  *
  * Due linguette e non una lista sola, come nella dashboard e nel confronto:
  * "come parla" e "cosa sa" sono due domande, e mescolate in una colonna la
  * seconda si leggerebbe come il seguito della prima. Il conteggio sulla
  * linguetta dice da che parte ci sono dati prima di aprirla.
+ *
+ * La terza è arrivata dopo, e sta accanto alle altre e non sopra: "cosa devo
+ * dirgli" è una domanda dello stesso ordine delle prime due, non una
+ * conclusione che vale più degli elenchi da cui viene. È anche l'unica senza
+ * conteggio, perché non elenca niente: o c'è, o non è ancora stato scritto.
  *
  * Le due righe si comportano allo stesso modo, ed è voluto: si aprono per
  * leggere com'è andata (la valutazione di là, le risposte di qua) e si
@@ -32,6 +37,7 @@ import { conversationModeLabel, MODE_FILTERS } from './conversationMode'
 import type { ModeFilter } from './conversationMode'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
+import UserDebriefingPanel from './UserDebriefingPanel'
 import FilterTabs from './FilterTabs'
 import SearchInput from './SearchInput'
 import { TrashIcon } from './icons'
@@ -47,7 +53,7 @@ import { formatDateTime } from './lastAccess'
 import { formatDuration } from './reportFormat'
 import { matchesSearch } from './tableSearch'
 
-type Tab = 'conversations' | 'simulations'
+type Tab = 'conversations' | 'simulations' | 'debriefing'
 
 /* Il conteggio sulla linguetta dice quante prove ci sono nel periodo, e
  * quando un filtro è attivo anche quante ne restano: "12" diventa "3 di 12".
@@ -218,6 +224,7 @@ export default function UserReportDetail({
   const [simulationSearch, setSimulationSearch] = useState('')
 
   const isConversations = tab === 'conversations'
+  const isDebriefing = tab === 'debriefing'
 
   /* La prova si cerca con la stessa parola che il badge mostra, come nelle
    * tabelle della dashboard: chi legge "Chat" su una riga si aspetta che
@@ -277,11 +284,17 @@ export default function UserReportDetail({
               value: 'simulations',
               label: tabLabel('Simulazioni', attempts.length, user.simulation_attempts.length),
             },
+            /* Senza conteggio, al contrario delle altre due: non è un
+             * elenco che i filtri possono accorciare, è un testo solo. */
+            { value: 'debriefing', label: "Quadro d'insieme" },
           ]}
         />
 
+        {/* Il filtro e la ricerca appartengono all'elenco che si sta
+            guardando: sul quadro d'insieme non c'è niente da filtrare, e
+            lasciarli lì spenti sarebbe un comando che non risponde. */}
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:ml-0">
-          {isConversations ? (
+          {isDebriefing ? null : isConversations ? (
             <>
               <FilterTabs<ModeFilter>
                 value={modeFilter}
@@ -317,7 +330,20 @@ export default function UserReportDetail({
         </div>
       </div>
 
-      {shown === 0 ? (
+      {isDebriefing ? (
+        <UserDebriefingPanel
+          userId={user.id}
+          userName={user.nome || user.email}
+          /* Le prove che il quadro leggerebbe sono tutte quelle della
+             persona, non quelle rimaste sotto il periodo scelto in cima
+             alla pagina: il periodo restringe cosa si sta guardando, il
+             debriefing guarda comunque le ultime prove che esistono. Il
+             conto serve solo a non offrire un bottone che il server
+             rifiuterebbe, quindi conta le prove del periodo più largo che
+             questa schermata conosce. */
+          evidenceCount={user.conversation_count + user.simulation_count}
+        />
+      ) : shown === 0 ? (
         <p className="py-4 text-center text-[0.85rem] italic text-slate-500">{emptyMessage}</p>
       ) : (
         <ul className="flex list-none flex-col gap-2">

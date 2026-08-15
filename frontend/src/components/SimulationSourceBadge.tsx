@@ -1,5 +1,6 @@
 import Tooltip from './Tooltip'
 import type { SimulationSource } from '../services/simulations'
+import { SparkleIcon } from './icons'
 import { sourceLabel } from './simulationFormat'
 
 /**
@@ -56,20 +57,9 @@ export default function SimulationSourceBadge({ source }: { source: SimulationSo
             <circle cx="12" cy="7" r="4" />
           </svg>
         ) : (
-          /* Una scintilla: le ha scritte un modello */
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z" />
-            <path d="M18 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z" />
-          </svg>
+          /* Una scintilla: le ha scritte un modello. È la stessa che sta sul
+             bottone che propone un percorso, quindi vive in `icons`. */
+          <SparkleIcon size={10} />
         )}
         <span className="sr-only">{sourceLabel(source)}</span>
       </span>

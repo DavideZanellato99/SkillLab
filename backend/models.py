@@ -1011,6 +1011,30 @@ class TechnicalSimulation(Authored, Base):
     # Il documento su cui le domande si fondano, come testo estratto
     document_name = Column(String(255), nullable=False, default="")
     document_text = Column(Text, nullable=False, default="")
+
+    # ── L'esito dell'ultimo controllo del serbatoio ──
+    #
+    # Cinquanta domande da rileggere sono il punto in cui la revisione umana
+    # si sfilaccia: sono cinquanta righe tutte uguali, e chi le guarda non ha
+    # nessun modo di sapere da quale cominciare. Il controllo
+    # (``simulation_review``) non decide niente al posto suo, **segnala e
+    # basta**: la pubblicazione resta possibile, perché due domande simili
+    # sono un difetto piccolo e un controllo che sbaglia e blocca è peggio di
+    # uno che sbaglia e avvisa.
+    #
+    # {"findings": [{"kind", "severity", "positions", "message"}],
+    #  "checked": int}. NULL finché nessuno lo ha chiesto, che è diverso da
+    # un controllo passato senza rilievi.
+    review_report = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
+    review_at = Column(DateTime, nullable=True)
+    # L'impronta delle domande com'erano quando il controllo è girato. Le
+    # domande non hanno una data di modifica (si riscrivono in blocco, vedi
+    # ``save_questions``), quindi è l'unico modo di accorgersi che l'esito
+    # parla di un serbatoio che non c'è più. Lo stato di vecchio non si salva:
+    # si ricava confrontando questa con l'impronta di adesso, come per il
+    # debriefing e per la revisione di una conversazione.
+    review_fingerprint = Column(String(64), nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
@@ -1390,6 +1414,71 @@ class VoiceSessionRecord(Base):
 
     def __repr__(self):
         return f"<VoiceSessionRecord(conversation_id={self.conversation_id})>"
+
+
+class UserDebriefing(Authored, Base):
+    """Il quadro d'insieme su una persona, scritto dal modello per chi insegna.
+
+    Tutto il resto dell'applicazione ragiona su **una prova per volta**: la
+    valutazione giudica una conversazione, il confronto ne affianca due, la
+    dashboard fa medie su un gruppo. Nessuno legge dodici prove della stessa
+    persona e dice cosa hanno in comune, che è invece la domanda di chi deve
+    sedersi davanti a lei e dirle qualcosa.
+
+    **Una riga per persona**, come una valutazione ne ha una per
+    conversazione: rifare il debriefing sostituisce il precedente, perché è
+    il quadro di adesso e non un diario di quelli di prima.
+
+    Perché sia salvato, in un'applicazione che deriva in lettura quasi tutto
+    (il progresso di un percorso, le notifiche): quelle cose si ricavano da
+    righe che già le descrivono, questa no. Qui il testo esiste solo perché
+    un modello di ragionamento lo ha scritto una volta, e riderivarlo vuol
+    dire ripagarlo e riscriverlo diverso. Le notifiche sono derivate per non
+    tenere copie che invecchiano; questa invecchia e lo dice, che è l'altro
+    modo di risolvere lo stesso problema.
+
+    A dirlo sono le tre colonne di copertura, che sono la stessa idea di
+    ``ConversationReview.ai_score_at_review``: si conserva **cosa il modello
+    aveva davanti**, così quando arrivano prove nuove il confronto fa
+    comparire il segnale di vecchio invece di presentare come attuale un
+    quadro che non ha mai visto le ultime tre conversazioni. Lo stato non si
+    salva, si ricava confrontando ``covered_until`` con le prove che ci sono
+    adesso (vedi ``debriefing_source.is_stale``).
+
+    Chi l'ha chiesto e quando arriva da ``Authored``, come su ogni entità che
+    qualcuno amministra: un quadro d'insieme su una persona è qualcosa che
+    qualcuno ha deciso di far scrivere, e vale sapere chi.
+    """
+
+    __tablename__ = "user_debriefings"
+
+    # La persona di cui il debriefing parla, e la chiave: una sola riga per
+    # ciascuna, quindi rigenerare sostituisce senza dover cancellare prima.
+    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    # {"summary": str, "themes": [{"title", "detail", "evidence"}],
+    #  "improving": str | None, "next_step": str}. Vedi ``user_debriefing``
+    # per cosa il modello può scrivere e cosa viene buttato.
+    content = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+    # La prova più recente che il modello ha letto. Non è la data in cui il
+    # debriefing è stato scritto (quella è ``created_at``): fra le due passa
+    # tutto il tempo in cui la persona non si è allenata, e a dire se il
+    # quadro è ancora buono è la prima.
+    covered_until = Column(DateTime, nullable=False)
+    # Quante prove ci sono entrate, per forma. Servono a chi legge, che ha
+    # diritto di sapere su quanto poggia quello che sta leggendo, e non si
+    # ricavano dalle date: una conversazione senza valutazione non entra.
+    covered_conversations = Column(Integer, nullable=False, default=0)
+    covered_attempts = Column(Integer, nullable=False, default=0)
+
+    # `foreign_keys` è obbligatorio qui: verso `users` partono tre colonne,
+    # questa e le due di paternità di ``Authored``, e sono esattamente le due
+    # persone diverse di cui la riga parla. Il debriefing è **di** chi si
+    # allena e lo ha fatto scrivere qualcun altro, quindi senza questa riga
+    # SQLAlchemy non ha modo di sapere quale delle tre sia il soggetto.
+    user = relationship("User", foreign_keys=[user_id])
+
+    def __repr__(self):
+        return f"<UserDebriefing(user_id={self.user_id}, covered_until={self.covered_until})>"
 
 
 # Everything that hangs off a conversation, keyed by conversation_id. Held

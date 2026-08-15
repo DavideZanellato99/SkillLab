@@ -15,7 +15,7 @@
  * riordinano: uno stato legato alla posizione resterebbe dov'è mentre i
  * valori si spostano, e la tappa due si ritroverebbe il tipo della tre. */
 
-import type { PathStep, PathStepInput, StepKind } from '../services/training'
+import type { PathDraftStep, PathStep, PathStepInput, StepKind } from '../services/training'
 import { fromLocalInputValue, toLocalInputValue } from './instant'
 
 export interface PathStepDraft {
@@ -49,6 +49,27 @@ export function draftFromStep(step: PathStep): PathStepDraft {
     simulationId: step.simulation_id,
     targetScore: step.target_score,
     dueAt: step.due_at ? toLocalInputValue(step.due_at) : null,
+  }
+}
+
+/**
+ * Una tappa proposta dal modello, nella forma in cui il form la modifica.
+ *
+ * Il tipo si ricava da quale bersaglio è pieno, e qui si può: la proposta
+ * arriva dal server, dove una tappa porta già un bersaglio solo, quindi non
+ * c'è il momento intermedio in cui l'utente ha scelto il tipo e non ancora la
+ * prova, che è la ragione per cui `kind` esiste nella bozza.
+ *
+ * La scadenza resta vuota perché il modello non la scrive: una data dipende
+ * da quando il corso comincia, e la mette chi compone.
+ */
+export function draftFromProposal(step: PathDraftStep): PathStepDraft {
+  return {
+    kind: step.avatar_id ? 'avatar' : 'simulation',
+    avatarId: step.avatar_id,
+    simulationId: step.simulation_id,
+    targetScore: step.target_score,
+    dueAt: null,
   }
 }
 

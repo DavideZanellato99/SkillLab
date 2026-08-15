@@ -269,3 +269,16 @@ export function ResendIcon(props: IconProps) {
     </IconBase>
   )
 }
+
+/* Due scintille: **l'ha scritto un modello**. È il segno con cui l'app
+ * distingue ovunque quello che ha composto la macchina da quello che ha
+ * composto una persona, dalla targhetta dell'origine di una simulazione al
+ * bottone che propone un percorso. */
+export function SparkleIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z" />
+      <path d="M18 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z" />
+    </IconBase>
+  )
+}

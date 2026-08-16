@@ -84,59 +84,64 @@ export default function DataTable({
   const rangeEnd = Math.min(safePage * pageSize, totalRows)
   const showFooter = paginate && !isEmpty && totalRows > 0
 
+  const hasToolbar = Boolean(onSearchChange || searchActions)
+
   return (
     <div className="rounded-2xl border border-white/6 bg-gray-900/60 backdrop-blur-md">
-      {/* Ricerca e tabella restano nel proprio contenitore "overflow-hidden" (necessario per lo
-       * scroll orizzontale e gli angoli arrotondati); il footer sta fuori così la tendina delle
-       * righe per pagina, che si apre verso l'alto, non viene tagliata. */}
-      <div className={`overflow-hidden ${showFooter ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
-        {(onSearchChange || searchActions) && (
-          <div className="flex items-center gap-3 border-b border-white/6 bg-gray-900/80 px-4 py-3">
-            {onSearchChange && (
-              <SearchInput
-                value={searchValue}
-                onChange={onSearchChange}
-                placeholder={searchPlaceholder}
-                className="max-w-[340px] flex-1"
-              />
-            )}
-            {searchActions && <div className="ml-auto shrink-0">{searchActions}</div>}
-          </div>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left [&_tbody>tr:last-child>td]:border-b-0">
-            <thead>
-              <tr>
-                {columns.map((col) => (
-                  <th
-                    key={col.key}
-                    aria-label={col.ariaLabel}
-                    className={`border-b border-white/6 bg-gray-900/80 ${col.compact ? 'px-3' : 'px-6'} py-4 text-xs font-semibold uppercase tracking-wide text-slate-400 ${ALIGN[col.align ?? 'left']}`}
-                  >
-                    {col.title ? (
-                      <Tooltip content={col.title}>
-                        <span className="inline-flex">{col.label}</span>
-                      </Tooltip>
-                    ) : (
-                      col.label
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {isEmpty ? (
-                <tr>
-                  <td colSpan={columns.length} className="p-16 text-center text-slate-500">
-                    {emptyMessage}
-                  </td>
-                </tr>
-              ) : (
-                visibleRows
-              )}
-            </tbody>
-          </table>
+      {/* La barra dei comandi sta fuori dal contenitore che ritaglia, come il
+       * footer: dentro, le tendine dei filtri che si aprono verso il basso
+       * verrebbero tagliate dal bordo della tabella. Gli angoli arrotondati
+       * se li disegna da sé, visto che è lei il bordo alto della scheda. */}
+      {hasToolbar && (
+        <div className="flex flex-wrap items-center gap-3 rounded-t-2xl border-b border-white/6 bg-gray-900/80 px-4 py-3">
+          {onSearchChange && (
+            <SearchInput
+              value={searchValue}
+              onChange={onSearchChange}
+              placeholder={searchPlaceholder}
+              className="max-w-[340px] flex-1"
+            />
+          )}
+          {searchActions && <div className="ml-auto shrink-0">{searchActions}</div>}
         </div>
+      )}
+      {/* "overflow-x-auto" serve allo scroll orizzontale e ritaglia anche gli
+       * angoli arrotondati che tocca a questo blocco disegnare. */}
+      <div
+        className={`overflow-x-auto ${hasToolbar ? '' : 'rounded-t-2xl'} ${showFooter ? '' : 'rounded-b-2xl'}`}
+      >
+        <table className="w-full border-collapse text-left [&_tbody>tr:last-child>td]:border-b-0">
+          <thead>
+            <tr>
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  aria-label={col.ariaLabel}
+                  className={`border-b border-white/6 bg-gray-900/80 ${col.compact ? 'px-3' : 'px-6'} py-4 text-xs font-semibold uppercase tracking-wide text-slate-400 ${ALIGN[col.align ?? 'left']}`}
+                >
+                  {col.title ? (
+                    <Tooltip content={col.title}>
+                      <span className="inline-flex">{col.label}</span>
+                    </Tooltip>
+                  ) : (
+                    col.label
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {isEmpty ? (
+              <tr>
+                <td colSpan={columns.length} className="p-16 text-center text-slate-500">
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : (
+              visibleRows
+            )}
+          </tbody>
+        </table>
       </div>
       {showFooter && (
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-b-2xl border-t border-white/6 bg-gray-900/80 px-4 py-3">

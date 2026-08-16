@@ -81,14 +81,23 @@ describe('UserReportDetail', () => {
     show(report({ simulation_attempts: [attempt] }))
 
     expect(screen.getByText('Procedure di sportello')).toBeInTheDocument()
-    expect(screen.getByText('8/10 corrette')).toBeInTheDocument()
+    expect(screen.getByText('8/10')).toBeInTheDocument()
+  })
+
+  /* I numeri di una prova stanno in colonne con un'intestazione: "8/10" e
+   * "12" senza una parola sopra sono due misure che si scambiano. */
+  it('le colonne dicono cosa sono i numeri', () => {
+    show(report({ conversations: [conversation] }))
+
+    expect(screen.getByRole('columnheader', { name: 'Durata' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Voto' })).toBeInTheDocument()
   })
 
   it('il tipo del test è scritto per esteso, non solo nell icona', () => {
     show(report({ simulation_attempts: [attempt] }))
 
-    // Dentro la lista, non fra i pulsanti del filtro che portano le stesse parole
-    expect(within(screen.getByRole('list')).getByText('Scelta multipla')).toBeInTheDocument()
+    // Dentro la tabella, non fra le voci del filtro che portano le stesse parole
+    expect(within(screen.getByRole('table')).getByText('Scelta multipla')).toBeInTheDocument()
   })
 
   it('la linguetta porta il conteggio della propria prova', () => {
@@ -132,23 +141,24 @@ describe('UserReportDetail', () => {
   /* Filtro e ricerca cambiano con la linguetta, ed è il punto in cui
    * potrebbero restare quelli dell'altra metà: al canale di una
    * conversazione un test non saprebbe rispondere. */
-  it('il filtro accanto alle linguette è quello della prova attiva', async () => {
+  it('il filtro nella barra della tabella è quello della prova attiva', async () => {
     show(report({ conversations: [conversation], simulation_attempts: [attempt] }))
 
-    expect(screen.getByRole('radiogroup', { name: 'Canale delle conversazioni' })).toBeVisible()
-    expect(screen.queryByRole('radiogroup', { name: 'Tipo delle simulazioni' })).toBeNull()
+    expect(screen.getByRole('combobox', { name: 'Canale delle conversazioni' })).toBeVisible()
+    expect(screen.queryByRole('combobox', { name: 'Tipo delle simulazioni' })).toBeNull()
 
     await userEvent.click(screen.getByRole('radio', { name: 'Simulazioni (1)' }))
 
-    expect(screen.getByRole('radiogroup', { name: 'Tipo delle simulazioni' })).toBeVisible()
-    expect(screen.queryByRole('radiogroup', { name: 'Canale delle conversazioni' })).toBeNull()
+    expect(screen.getByRole('combobox', { name: 'Tipo delle simulazioni' })).toBeVisible()
+    expect(screen.queryByRole('combobox', { name: 'Canale delle conversazioni' })).toBeNull()
   })
 
   it('il canale restringe le conversazioni', async () => {
     const chiamata = { ...conversation, id: 'c2', title: 'Preventivo', mode: 'voice' as const }
     show(report({ conversations: [conversation, chiamata] }))
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Chiamate' }))
+    await userEvent.click(screen.getByRole('combobox', { name: 'Canale delle conversazioni' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Chiamate' }))
 
     expect(screen.getByText('Preventivo')).toBeInTheDocument()
     expect(screen.queryByText('Reclamo sul rimborso')).not.toBeInTheDocument()
@@ -162,7 +172,8 @@ describe('UserReportDetail', () => {
 
     expect(screen.getByRole('radio', { name: 'Conversazioni (2)' })).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Chiamate' }))
+    await userEvent.click(screen.getByRole('combobox', { name: 'Canale delle conversazioni' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Chiamate' }))
 
     expect(screen.getByRole('radio', { name: 'Conversazioni (1 di 2)' })).toBeInTheDocument()
   })
@@ -170,10 +181,7 @@ describe('UserReportDetail', () => {
   it('il conteggio filtrato resta scritto anche sulla linguetta che non si guarda', async () => {
     show(report({ conversations: [conversation], simulation_attempts: [attempt] }))
 
-    await userEvent.type(
-      screen.getByRole('textbox', { name: 'Cerca fra le conversazioni' }),
-      'preventivo',
-    )
+    await userEvent.type(screen.getByPlaceholderText(/Cerca per titolo, avatar/), 'preventivo')
     await userEvent.click(screen.getByRole('radio', { name: 'Simulazioni (1)' }))
 
     expect(screen.getByRole('radio', { name: 'Conversazioni (0 di 1)' })).toBeInTheDocument()
@@ -182,7 +190,7 @@ describe('UserReportDetail', () => {
   it('la ricerca guarda il titolo, e dice quando è lei a non lasciare niente', async () => {
     show(report({ conversations: [conversation] }))
 
-    const box = screen.getByRole('textbox', { name: 'Cerca fra le conversazioni' })
+    const box = screen.getByPlaceholderText(/Cerca per titolo, avatar/)
 
     await userEvent.type(box, 'rimb')
     expect(screen.getByText('Reclamo sul rimborso')).toBeInTheDocument()
@@ -195,14 +203,11 @@ describe('UserReportDetail', () => {
   it('ogni prova tiene la propria ricerca, senza svuotare l altra', async () => {
     show(report({ conversations: [conversation], simulation_attempts: [attempt] }))
 
-    await userEvent.type(
-      screen.getByRole('textbox', { name: 'Cerca fra le conversazioni' }),
-      'reclamo',
-    )
+    await userEvent.type(screen.getByPlaceholderText(/Cerca per titolo, avatar/), 'reclamo')
     await userEvent.click(screen.getByRole('radio', { name: 'Simulazioni (1)' }))
 
     expect(screen.getByText('Procedure di sportello')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Cerca fra le simulazioni' })).toHaveValue('')
+    expect(screen.getByPlaceholderText(/Cerca per titolo o tipo/)).toHaveValue('')
   })
 
   it('anche la simulazione si apre e si cancella', async () => {

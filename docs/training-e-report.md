@@ -847,6 +847,24 @@ non dicono la stessa data in due modi diversi.
 nessuna prova: una riga a zero è la risposta a "chi non si sta allenando", e
 sparendo dalla tabella si porterebbe via la domanda.
 
+**I comandi stanno tutti sulla stessa barra**, quella sopra le righe: la
+ricerca a sinistra, il periodo e l'organizzazione a destra. Prima il periodo e
+l'organizzazione stavano sotto il titolo, ciascuno con la sua etichetta
+scritta sopra, e la ricerca una fascia più giù: sono tre modi di restringere
+lo stesso elenco, e su due fasce diverse si leggevano come i comandi di due
+schermate diverse. Le etichette sono cadute con lo spostamento, perché
+"sempre, 7, 30, 90 giorni" e "tutte le organizzazioni" dicono già di cosa
+parlano, e restano solo per chi legge con uno screen reader. La pagina è larga
+come il registro attività, perché la riga di una persona ha sette colonne e
+quello che si apre sotto ne ha altrettante.
+
+Perché la barra potesse ospitare una tendina è uscita dal contenitore che
+ritaglia la tabella
+([DataTable](../frontend/src/components/DataTable.tsx)): là dentro l'elenco
+delle organizzazioni si sarebbe aperto contro il bordo e sarebbe stato
+tagliato. È lo stesso motivo per cui il piede con le righe per pagina stava
+già fuori.
+
 **Sotto la riga, tre linguette**
 ([UserReportDetail](../frontend/src/components/UserReportDetail.tsx)): le
 conversazioni di qua, le simulazioni di là, come nella dashboard e nel
@@ -863,17 +881,47 @@ delle prime due, non una conclusione che vale più degli elenchi da cui viene,
 e non elenca niente, quindi o c'è o non è ancora stata scritta. Ha una sezione
 sua più sotto.
 
-**Accanto alle linguette, tutto a destra, il filtro e la ricerca della prova
-attiva**, e cambiano con lei: di una conversazione si chiede il canale
-(chiamate, chat, entrambe), di una simulazione il tipo (uno dei quattro, o
-tutti), e sono due domande che all'altra metà non si
-possono nemmeno fare. Le opzioni sono le stesse della dashboard e stanno
-scritte una volta sola, accanto alla parola che il badge mostra: `MODE_FILTERS`
-in [conversationMode](../frontend/src/components/conversationMode.ts)
-e `KIND_FILTERS` in
-[simulationFormat](../frontend/src/components/simulationFormat.ts). Anche qui
-**la prova si cerca con la stessa parola del badge**: chi legge "Chat" su una
-riga si aspetta che scrivere "chat" gliela trovi.
+**La ricerca e il filtro della prova attiva stanno nella barra della tabella
+dello storico**, cioè dove stanno in ogni altra schermata, e cambiano con la
+linguetta: di una conversazione si chiede il canale (chiamate, chat,
+entrambe), di una simulazione il tipo (uno dei quattro, o tutti), e sono due
+domande che all'altra metà non si possono nemmeno fare. Prima stavano accanto
+alle linguette, tutte e tre le cose sulla stessa riga: le linguette, cinque
+pastiglie con dentro "scelta multipla" e "risposta aperta", e la casella di
+ricerca. Ora la linguetta sceglie da sola cosa si guarda, e chi restringe sta
+una riga più sotto, dove ci sono le righe da restringere.
+
+Il filtro è **una tendina e non più una fila di pulsanti**: quattro tipi più
+"tutti" scritti per esteso erano più larghi delle linguette che dovevano
+accompagnare. Le opzioni restano quelle della dashboard, scritte una volta
+sola accanto alla parola che il badge mostra (`MODE_FILTERS` in
+[conversationMode](../frontend/src/components/conversationMode.ts),
+`KIND_FILTERS` in
+[simulationFormat](../frontend/src/components/simulationFormat.ts)), con
+"tutto" spostato in cima: fra i pulsanti sta in fondo perché è il punto di
+partenza da cui ci si allontana, in una tendina è la prima voce che si cerca
+quando si vuole tornare indietro. Anche qui **la prova si cerca con la stessa
+parola del badge**: chi legge "Chat" su una riga si aspetta che scrivere
+"chat" gliela trovi.
+
+**Le prove sono righe di tabella, con le colonne intestate.** Erano righe
+libere, con la targhetta, il titolo, l'avatar, la data, i conteggi, la durata
+e il voto uno dietro l'altro: a seconda di quanto era lungo il titolo ogni
+riga li metteva altrove, e per confrontare due prove bisognava rileggerle una
+a una invece di scorrere una colonna. Una conversazione ha canale,
+conversazione, avatar, data, messaggi, durata e voto; una simulazione tipo,
+simulazione, data, corrette e voto. L'intestazione è anche l'unico posto dove
+dire una volta sola cosa sono quei numeri, che è quello che "8/10" e "12" da
+soli non dicono.
+
+È la stessa tabella della pagina che la contiene, e si impagina **solo oltre
+le dieci prove**: sotto, il piede direbbe "da 1 a 3 di 3" e offrirebbe due
+frecce spente, cioè comandi che non servono dentro una riga appena aperta.
+La categoria dell'avatar ha smesso di essere una pastiglia ed è un pallino
+colorato con la parola sotto il nome
+([categoryStyles](../frontend/src/components/categoryStyles.ts)): la riga ha
+già la targhetta del canale, e due pastiglie di fila si contendono lo stesso
+sguardo mentre la categoria è un'informazione di contorno.
 
 **I tre filtri si sommano**, in quest'ordine: il periodo restringe lato server
 quello che arriva, il canale (o il tipo) restringe quelle righe, la ricerca
@@ -896,10 +944,10 @@ nasconderebbe una parte. E quando è un filtro a non lasciare niente la lista
 lo dice con parole sue ("nessuna conversazione **con questi filtri**"), che è
 una notizia diversa da "nessuna nel periodo scelto".
 
-La casella di ricerca è la stessa della tabella, estratta da DataTable in
-[SearchInput](../frontend/src/components/SearchInput.tsx) quando è servita
-anche fuori da una tabella: due caselle scritte due volte a due centimetri
-l'una dall'altra prima o poi non si somigliano più.
+La casella di ricerca è quella della tabella, e da quando anche lo storico è
+una tabella arriva da lì senza che nessuno debba metterla: vive in
+[SearchInput](../frontend/src/components/SearchInput.tsx) per i posti dove
+serve fuori da una tabella, come la colonna delle conversazioni nella chat.
 
 **Le due righe si comportano allo stesso modo**: si aprono per leggere com'è
 andata e si possono togliere. Il clic su una conversazione apre trascrizione e
@@ -923,8 +971,11 @@ esiste proprio.
 Le modali stanno **fuori dalla tabella** e non dentro il dettaglio, perché il
 riquadro della tabella sfoca lo sfondo, e una schermata intera aperta lì
 dentro resterebbe confinata al riquadro. Dentro la riga, il cestino è un
-bersaglio separato dal resto: aprire e cancellare sono due gesti sulla stessa
-riga, ed è lì che si confondono.
+bersaglio separato dal resto e il suo clic si ferma lì, senza arrivare alla
+riga che aprirebbe la prova: aprire e cancellare sono due gesti sulla stessa
+riga, ed è lì che si confondono. La riga si apre da tutta la sua larghezza,
+ma il titolo è comunque un pulsante: la riga è comoda col mouse, il pulsante
+è l'unico appiglio per chi gira con il tabulatore.
 
 **Le due prove si buttano anche da aperte.** Il cestino non è solo sulla riga:
 sta anche in testa alla schermata che apre una prova per intero, accanto al

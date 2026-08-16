@@ -16,6 +16,10 @@ interface SelectProps {
   onChange: (value: string) => void
   options: SelectOption[]
   disabled?: boolean
+  /** Cosa si sta scegliendo, quando la tendina non ha una label accanto:
+   *  in una barra di filtri l'etichetta scritta sopra ogni comando è una
+   *  seconda riga di parole, e la scelta corrente si legge già sul pulsante. */
+  ariaLabel?: string
   /** Testo mostrato sul pulsante quando nulla è selezionato (non è un'opzione della lista) */
   placeholder?: string
   /** Classi extra sul wrapper (es. larghezza) */
@@ -50,6 +54,7 @@ export default function Select({
   onChange,
   options,
   disabled = false,
+  ariaLabel,
   placeholder,
   className = '',
 }: SelectProps) {
@@ -168,6 +173,7 @@ export default function Select({
         type="button"
         id={id}
         role="combobox"
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={listboxId}

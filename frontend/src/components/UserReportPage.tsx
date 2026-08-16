@@ -122,40 +122,12 @@ export default function UserReportPage() {
    * cioè si riscriveva lato client una somma che il server fa già. */
 
   return (
-    <PageContainer>
+    /* Larga come il registro attività: la riga di una persona ha già sette
+     * colonne, e quello che si apre sotto ne ha altrettante. */
+    <PageContainer width="wide">
       <PageHeader
         title="Report Attività"
         description="Attività di ogni persona: le conversazioni con gli avatar e le simulazioni consegnate."
-        actions={
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium tracking-wide text-slate-400">Periodo</span>
-              <FilterTabs<PeriodValue>
-                value={period}
-                onChange={setPeriod}
-                options={[...PERIOD_OPTIONS]}
-                ariaLabel="Periodo delle prove svolte"
-              />
-            </div>
-            {showOrg && (
-              <div className="flex flex-col gap-1.5">
-                <label
-                  className="text-xs font-medium tracking-wide text-slate-400"
-                  htmlFor="report-org-filter"
-                >
-                  Organizzazione
-                </label>
-                <Select
-                  id="report-org-filter"
-                  className="min-w-[240px]"
-                  value={orgFilter}
-                  onChange={setOrgFilter}
-                  options={orgFilterOptions}
-                />
-              </div>
-            )}
-          </div>
-        }
       />
 
       {error && (
@@ -173,6 +145,31 @@ export default function UserReportPage() {
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Cerca per nome, email, organizzazione o ruolo..."
+          /* Periodo e organizzazione stanno nella barra della tabella, con la
+             ricerca: sono i tre modi di restringere lo stesso elenco, e messi
+             su due fasce diverse (due sotto il titolo, uno sopra le righe) si
+             leggevano come comandi di due schermate diverse. L'etichetta
+             scritta sopra ciascuno era una seconda riga di parole per dire
+             quello che le voci dicono da sé. */
+          searchActions={
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterTabs<PeriodValue>
+                value={period}
+                onChange={setPeriod}
+                options={[...PERIOD_OPTIONS]}
+                ariaLabel="Periodo delle prove svolte"
+              />
+              {showOrg && (
+                <Select
+                  ariaLabel="Organizzazione"
+                  className="w-[220px]"
+                  value={orgFilter}
+                  onChange={setOrgFilter}
+                  options={orgFilterOptions}
+                />
+              )}
+            </div>
+          }
           isEmpty={visibleReport.length === 0}
           emptyMessage={search ? 'Nessun utente corrisponde alla ricerca' : 'Nessun utente trovato'}
         >

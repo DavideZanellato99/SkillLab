@@ -2,11 +2,10 @@
  * che lo svuota.
  *
  * Nasce dentro DataTable e si è spostata qui quando è servita anche fuori da
- * una tabella, nello storico di una persona nel report attività: due caselle
- * di ricerca scritte due volte sarebbero due caselle che prima o poi non si
- * somigliano più, e stanno a due centimetri l'una dall'altra nella stessa
- * area di amministrazione. Stessa ragione per cui i selettori a pulsanti
- * vivono in FilterTabs. */
+ * una tabella: la colonna delle conversazioni nella chat, il pannello che le
+ * apre tutte, l'elenco di chi assegnare a un percorso. Due caselle di ricerca
+ * scritte due volte sarebbero due caselle che prima o poi non si somigliano
+ * più. Stessa ragione per cui i selettori a pulsanti vivono in FilterTabs. */
 
 import { CloseIcon } from './icons'
 

@@ -12,15 +12,22 @@
  * conclusione che vale più degli elenchi da cui viene. È anche l'unica senza
  * conteggio, perché non elenca niente: o c'è, o non è ancora stato scritto.
  *
+ * Le prove stanno nella tabella dell'app e non in righe disegnate qui. Erano
+ * righe libere, con la data, i conteggi, la durata e il voto uno dietro
+ * l'altro: ogni riga li metteva dove capitava a seconda di quanto era lungo
+ * il titolo, e per confrontare due prove bisognava rileggerle una a una
+ * invece di scorrere una colonna. Le colonne hanno anche un'intestazione, che
+ * è l'unico posto dove dire una volta sola cosa sono quei numeri.
+ *
  * Le due righe si comportano allo stesso modo, ed è voluto: si aprono per
  * leggere com'è andata (la valutazione di là, le risposte di qua) e si
  * possono togliere. Una prova cancellabile solo se è una conversazione
  * lascerebbe lì per sempre il test aperto per sbaglio.
  *
- * Accanto alle linguette, tutto a destra, il filtro e la ricerca della prova
- * che si sta guardando: cambiano con la linguetta perché di una conversazione
- * si chiede il canale e di un test il tipo, e sono due domande che non si
- * possono fare all'altra metà.
+ * La ricerca e il filtro della prova che si sta guardando stanno nella barra
+ * della tabella, cioè dove stanno in tutte le altre schermate: cambiano con
+ * la linguetta perché di una conversazione si chiede il canale e di un test
+ * il tipo, e sono due domande che non si possono fare all'altra metà.
  *
  * Sta in un file suo perché la pagina descrive già una tabella con i suoi
  * filtri, e questa è la schermata dentro la schermata. */
@@ -31,15 +38,17 @@ import type {
   SimulationAttemptReport,
   UserActivityReport,
 } from '../services/admin'
-import { categoryBadgeClasses } from './categoryStyles'
+import { categoryDotClass } from './categoryStyles'
 import ConversationModeBadge from './ConversationModeBadge'
 import { conversationModeLabel, MODE_FILTERS } from './conversationMode'
 import type { ModeFilter } from './conversationMode'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import UserDebriefingPanel from './UserDebriefingPanel'
+import DataTable, { Td, Tr } from './DataTable'
+import type { DataTableColumn } from './DataTable'
 import FilterTabs from './FilterTabs'
-import SearchInput from './SearchInput'
+import Select from './Select'
 import { TrashIcon } from './icons'
 import {
   formatScore,
@@ -66,14 +75,62 @@ function tabLabel(name: string, shown: number, total: number): string {
   return shown === total ? `${name} (${total})` : `${name} (${shown} di ${total})`
 }
 
-const rowCls =
-  'flex items-center gap-2 rounded-xl border border-white/6 bg-white/3 pr-3 transition hover:border-violet-600/30 hover:bg-violet-600/8'
+/* Oltre questo numero di prove l'elenco si impagina. Sotto, il piede della
+ * tabella direbbe "da 1 a 3 di 3" e offrirebbe due frecce spente: comandi che
+ * non servono dentro una riga che si è appena aperta. */
+const PAGINATE_OVER = 10
 
-/* Quello che apre la prova occupa tutta la riga tranne il cestino: si legge
- * com'è andata cliccandola dove capita, e il gesto che cancella resta un
- * bersaglio separato che nessuno colpisce per sbaglio. */
-const openCls =
-  'flex flex-1 flex-wrap items-center gap-x-6 gap-y-2 cursor-pointer px-4 py-2 text-left min-w-0'
+/* Le colonne delle due prove. Sono diverse perché sono diverse le domande:
+ * di una conversazione si guarda quanto è durata e con chi, di un test quante
+ * risposte erano giuste. */
+const CONVERSATION_COLUMNS: DataTableColumn[] = [
+  { key: 'canale', label: 'Canale' },
+  { key: 'conversazione', label: 'Conversazione' },
+  { key: 'avatar', label: 'Avatar' },
+  { key: 'data', label: 'Data' },
+  {
+    key: 'messaggi',
+    label: 'Msg',
+    align: 'right',
+    compact: true,
+    title: 'Messaggi scambiati nella conversazione',
+  },
+  { key: 'durata', label: 'Durata', align: 'right' },
+  { key: 'voto', label: 'Voto', align: 'right', compact: true },
+  { key: 'elimina', ariaLabel: 'Elimina', compact: true },
+]
+
+const SIMULATION_COLUMNS: DataTableColumn[] = [
+  { key: 'tipo', label: 'Tipo' },
+  { key: 'simulazione', label: 'Simulazione' },
+  { key: 'data', label: 'Data' },
+  {
+    key: 'corrette',
+    label: 'Corrette',
+    align: 'right',
+    compact: true,
+    title: 'Risposte giuste sul totale delle domande',
+  },
+  { key: 'voto', label: 'Voto', align: 'right', compact: true },
+  { key: 'elimina', ariaLabel: 'Elimina', compact: true },
+]
+
+/* Le voci delle due tendine sono quelle dei filtri a pulsanti, con "tutto"
+ * spostato in cima: in un gruppo di pulsanti sta in fondo perché è il punto
+ * di partenza da cui ci si allontana, in una tendina è la prima voce che si
+ * cerca quando si vuole tornare indietro. */
+const MODE_OPTIONS = [
+  { value: 'all', label: 'Tutti i canali' },
+  ...MODE_FILTERS.filter((o) => o.value !== 'all'),
+]
+
+const KIND_OPTIONS = [
+  { value: 'all', label: 'Tutti i tipi' },
+  ...KIND_FILTERS.filter((o) => o.value !== 'all'),
+]
+
+const titleCls =
+  'cursor-pointer truncate text-left text-[0.85rem] font-semibold text-slate-100 transition hover:text-violet-300'
 
 const deleteCls =
   'flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
@@ -82,20 +139,42 @@ const deleteCls =
  * attesa di giudizio non è uno zero. */
 function ScoreTag({ score }: { score: number | null }) {
   if (score === null) {
-    return <span className="min-w-[46px] text-right text-xs italic text-slate-500">n.d.</span>
+    return <span className="text-xs italic text-slate-500">n.d.</span>
   }
   return (
     <span
-      className={`min-w-[46px] rounded-full px-2 py-0.5 text-center text-[0.8rem] font-semibold ${scoreBadgeTone(score)}`}
+      className={`inline-block min-w-[46px] rounded-full px-2 py-0.5 text-center text-[0.8rem] font-semibold ${scoreBadgeTone(score)}`}
     >
       {formatScore(score)}
     </span>
   )
 }
 
+/* Il cestino ferma il clic prima che arrivi alla riga: la riga apre la prova,
+ * e chi vuole cancellarla non deve vedersela aprire per un istante. */
+function DeleteButton({ label, onDelete }: { label: string; onDelete: () => void }) {
+  return (
+    <button
+      type="button"
+      className={deleteCls}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation()
+        onDelete()
+      }}
+    >
+      <TrashIcon />
+    </button>
+  )
+}
+
 /* Il clic apre la conversazione per intero, trascrizione e valutazione:
  * qui c'è il voto ma non quello che l'ha prodotto, e il voto da solo non
- * dice a chi corregge dove si è girato male. */
+ * dice a chi corregge dove si è girato male.
+ *
+ * Si apre da tutta la riga, e il titolo è comunque un pulsante: la riga è
+ * comoda col mouse, il pulsante è l'unico appiglio per chi gira con il
+ * tabulatore. */
 function ConversationRow({
   conversation,
   onOpen,
@@ -106,37 +185,60 @@ function ConversationRow({
   onDelete: (conversation: ConversationReport) => void
 }) {
   return (
-    <li className={rowCls}>
-      <button type="button" className={openCls} onClick={() => onOpen(conversation)}>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <ConversationModeBadge mode={conversation.mode} />
-          <span className="truncate text-[0.85rem] font-semibold text-slate-100">
-            {conversation.title}
-          </span>
-          <span className="shrink-0 text-slate-700">·</span>
-          <span className="truncate text-[0.85rem] text-slate-400">{conversation.avatar_name}</span>
+    <Tr className="cursor-pointer" onClick={() => onOpen(conversation)}>
+      <Td>
+        <ConversationModeBadge mode={conversation.mode} />
+      </Td>
+      <Td>
+        <button
+          type="button"
+          className={titleCls}
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpen(conversation)
+          }}
+        >
+          {conversation.title}
+        </button>
+      </Td>
+      <Td>
+        {/* La categoria dell'avatar è il pallino colorato e la parola sotto
+            il nome: è il contorno di chi ha parlato, non una seconda
+            targhetta che si contende la riga con quella del canale. */}
+        <span className="flex items-center gap-2">
           <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-widest ${categoryBadgeClasses(conversation.avatar_category_color)}`}
-          >
-            {conversation.avatar_category}
+            className={`h-2 w-2 shrink-0 rounded-full ${categoryDotClass(conversation.avatar_category_color)}`}
+          />
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-[0.85rem] text-slate-300">
+              {conversation.avatar_name}
+            </span>
+            <span className="truncate text-xs text-slate-500">{conversation.avatar_category}</span>
           </span>
-        </div>
-        <span className="text-xs text-slate-500">{formatDateTime(conversation.created_at)}</span>
-        <span className="text-xs text-slate-400">{conversation.message_count} msg</span>
-        <span className="min-w-[90px] text-right text-[0.85rem] font-semibold text-cyan-400">
+        </span>
+      </Td>
+      <Td>
+        <span className="whitespace-nowrap text-xs text-slate-500">
+          {formatDateTime(conversation.created_at)}
+        </span>
+      </Td>
+      <Td align="right" compact>
+        <span className="text-[0.85rem] tabular-nums text-slate-400">
+          {conversation.message_count}
+        </span>
+      </Td>
+      <Td align="right">
+        <span className="whitespace-nowrap text-[0.85rem] font-semibold text-cyan-400">
           {formatDuration(conversation.duration_seconds)}
         </span>
+      </Td>
+      <Td align="right" compact>
         <ScoreTag score={conversation.score} />
-      </button>
-      <button
-        type="button"
-        className={deleteCls}
-        aria-label="Elimina Conversazione"
-        onClick={() => onDelete(conversation)}
-      >
-        <TrashIcon />
-      </button>
-    </li>
+      </Td>
+      <Td align="right" compact>
+        <DeleteButton label="Elimina Conversazione" onDelete={() => onDelete(conversation)} />
+      </Td>
+    </Tr>
   )
 }
 
@@ -145,8 +247,8 @@ function ConversationRow({
  * per cui si apre un test già consegnato.
  *
  * Il tipo è scritto per esteso e non nella sola icona: nella tabella della
- * dashboard lo spazio è contato, qui la riga è larga e "scelta multipla" o
- * "risposta aperta" si legge senza passarci sopra col mouse. */
+ * dashboard lo spazio è contato, qui il tipo ha una colonna sua e "scelta
+ * multipla" o "risposta aperta" si legge senza passarci sopra col mouse. */
 function SimulationRow({
   attempt,
   onOpen,
@@ -157,30 +259,42 @@ function SimulationRow({
   onDelete: (attempt: SimulationAttemptReport) => void
 }) {
   return (
-    <li className={rowCls}>
-      <button type="button" className={openCls} onClick={() => onOpen(attempt.id)}>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+    <Tr className="cursor-pointer" onClick={() => onOpen(attempt.id)}>
+      <Td>
+        <span className="flex items-center gap-2">
           <SimulationKindBadge kind={attempt.simulation_kind} />
           <SimulationSourceBadge source={attempt.simulation_source} />
-          <span className="truncate text-[0.85rem] font-semibold text-slate-100">
-            {attempt.simulation_title}
-          </span>
-        </div>
-        <span className="text-xs text-slate-500">{formatDateTime(attempt.created_at)}</span>
-        <span className="min-w-[90px] text-right text-xs text-slate-400">
-          {attempt.correct_count}/{attempt.question_count} corrette
         </span>
+      </Td>
+      <Td>
+        <button
+          type="button"
+          className={titleCls}
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpen(attempt.id)
+          }}
+        >
+          {attempt.simulation_title}
+        </button>
+      </Td>
+      <Td>
+        <span className="whitespace-nowrap text-xs text-slate-500">
+          {formatDateTime(attempt.created_at)}
+        </span>
+      </Td>
+      <Td align="right" compact>
+        <span className="whitespace-nowrap text-[0.85rem] tabular-nums text-slate-400">
+          {attempt.correct_count}/{attempt.question_count}
+        </span>
+      </Td>
+      <Td align="right" compact>
         <ScoreTag score={attempt.score} />
-      </button>
-      <button
-        type="button"
-        className={deleteCls}
-        aria-label="Elimina Tentativo"
-        onClick={() => onDelete(attempt)}
-      >
-        <TrashIcon />
-      </button>
-    </li>
+      </Td>
+      <Td align="right" compact>
+        <DeleteButton label="Elimina Tentativo" onDelete={() => onDelete(attempt)} />
+      </Td>
+    </Tr>
   )
 }
 
@@ -268,67 +382,27 @@ export default function UserReportDetail({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Le linguette a sinistra, come si sceglie cosa guardare; il filtro e
-          la ricerca di quella prova tutti a destra, e cambiano con lei. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <FilterTabs<Tab>
-          value={tab}
-          onChange={setTab}
-          ariaLabel="Tipo di prova da consultare"
-          options={[
-            {
-              value: 'conversations',
-              label: tabLabel('Conversazioni', conversations.length, user.conversations.length),
-            },
-            {
-              value: 'simulations',
-              label: tabLabel('Simulazioni', attempts.length, user.simulation_attempts.length),
-            },
-            /* Senza conteggio, al contrario delle altre due: non è un
-             * elenco che i filtri possono accorciare, è un testo solo. */
-            { value: 'debriefing', label: "Quadro d'insieme" },
-          ]}
-        />
-
-        {/* Il filtro e la ricerca appartengono all'elenco che si sta
-            guardando: sul quadro d'insieme non c'è niente da filtrare, e
-            lasciarli lì spenti sarebbe un comando che non risponde. */}
-        <div className="ml-auto flex flex-wrap items-center gap-2 max-md:ml-0">
-          {isDebriefing ? null : isConversations ? (
-            <>
-              <FilterTabs<ModeFilter>
-                value={modeFilter}
-                onChange={setModeFilter}
-                options={MODE_FILTERS}
-                ariaLabel="Canale delle conversazioni"
-              />
-              <SearchInput
-                value={conversationSearch}
-                onChange={setConversationSearch}
-                placeholder="Cerca per titolo, avatar o canale..."
-                ariaLabel="Cerca fra le conversazioni"
-                className="w-[260px] max-sm:w-full"
-              />
-            </>
-          ) : (
-            <>
-              <FilterTabs<KindFilter>
-                value={kindFilter}
-                onChange={setKindFilter}
-                options={KIND_FILTERS}
-                ariaLabel="Tipo delle simulazioni"
-              />
-              <SearchInput
-                value={simulationSearch}
-                onChange={setSimulationSearch}
-                placeholder="Cerca per titolo o tipo..."
-                ariaLabel="Cerca fra le simulazioni"
-                className="w-[260px] max-sm:w-full"
-              />
-            </>
-          )}
-        </div>
-      </div>
+      {/* Le linguette da sole sulla loro riga: si sceglie cosa guardare, e
+          poi si guarda. Il filtro e la ricerca di quella prova stanno più
+          sotto, nella barra della tabella che sono lì per restringere. */}
+      <FilterTabs<Tab>
+        value={tab}
+        onChange={setTab}
+        ariaLabel="Tipo di prova da consultare"
+        options={[
+          {
+            value: 'conversations',
+            label: tabLabel('Conversazioni', conversations.length, user.conversations.length),
+          },
+          {
+            value: 'simulations',
+            label: tabLabel('Simulazioni', attempts.length, user.simulation_attempts.length),
+          },
+          /* Senza conteggio, al contrario delle altre due: non è un
+           * elenco che i filtri possono accorciare, è un testo solo. */
+          { value: 'debriefing', label: "Quadro d'insieme" },
+        ]}
+      />
 
       {isDebriefing ? (
         <UserDebriefingPanel
@@ -343,10 +417,41 @@ export default function UserReportDetail({
              questa schermata conosce. */
           evidenceCount={user.conversation_count + user.simulation_count}
         />
-      ) : shown === 0 ? (
-        <p className="py-4 text-center text-[0.85rem] italic text-slate-500">{emptyMessage}</p>
       ) : (
-        <ul className="flex list-none flex-col gap-2">
+        /* Una tabella per linguetta, e non una che cambia colonne sotto le
+           mani: passando da una prova all'altra la pagina aperta e la
+           ricerca in corso sono quelle dell'altra metà. */
+        <DataTable
+          key={tab}
+          columns={isConversations ? CONVERSATION_COLUMNS : SIMULATION_COLUMNS}
+          searchValue={isConversations ? conversationSearch : simulationSearch}
+          onSearchChange={isConversations ? setConversationSearch : setSimulationSearch}
+          searchPlaceholder={
+            isConversations ? 'Cerca per titolo, avatar o canale...' : 'Cerca per titolo o tipo...'
+          }
+          searchActions={
+            isConversations ? (
+              <Select
+                ariaLabel="Canale delle conversazioni"
+                className="w-[180px]"
+                value={modeFilter}
+                onChange={(value) => setModeFilter(value as ModeFilter)}
+                options={MODE_OPTIONS}
+              />
+            ) : (
+              <Select
+                ariaLabel="Tipo delle simulazioni"
+                className="w-[180px]"
+                value={kindFilter}
+                onChange={(value) => setKindFilter(value as KindFilter)}
+                options={KIND_OPTIONS}
+              />
+            )
+          }
+          paginate={total > PAGINATE_OVER}
+          isEmpty={shown === 0}
+          emptyMessage={emptyMessage}
+        >
           {isConversations
             ? conversations.map((conversation) => (
                 <ConversationRow
@@ -364,7 +469,7 @@ export default function UserReportDetail({
                   onDelete={onDeleteAttempt}
                 />
               ))}
-        </ul>
+        </DataTable>
       )}
     </div>
   )

@@ -59,7 +59,7 @@ describe('letture', () => {
   })
 
   /* La stringa vuota è come "nessun filtro": arriva così dalle tendine, dove
-   * "Tutte le organizzazioni" vale "". Passata al server chiederebbe i
+   * "Tutte le Organizzazioni" vale "". Passata al server chiederebbe i
    * percorsi di un'organizzazione senza id, cioè nessuno. */
   it('tratta il tenant vuoto come nessun filtro', async () => {
     const { result } = renderHook(() => usePaths(''), { wrapper })

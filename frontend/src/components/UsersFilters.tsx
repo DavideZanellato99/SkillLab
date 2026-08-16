@@ -10,13 +10,13 @@ import { fieldCls, labelCls } from './Field'
 import Select from './Select'
 
 const ACCESS_OPTIONS = [
-  { value: '', label: 'Qualsiasi accesso' },
-  { value: 'never', label: 'Mai acceduto' },
-  { value: 'done', label: 'Ha già acceduto' },
+  { value: '', label: 'Qualsiasi Accesso' },
+  { value: 'never', label: 'Mai Acceduto' },
+  { value: 'done', label: 'Ha Già Acceduto' },
 ]
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'Tutti gli stati' },
+  { value: '', label: 'Tutti gli Stati' },
   ...(Object.keys(STATUS_LABELS) as UserStatus[]).map((s) => ({
     value: s,
     label: STATUS_LABELS[s],
@@ -58,7 +58,7 @@ export default function UsersFilters({
           className="min-w-[220px]"
           value={value.organizationId}
           onChange={(organizationId) => onChange({ organizationId })}
-          options={[{ value: '', label: 'Tutte le organizzazioni' }, ...organizationOptions]}
+          options={[{ value: '', label: 'Tutte le Organizzazioni' }, ...organizationOptions]}
         />
       </div>
       <div className={fieldCls}>
@@ -70,7 +70,7 @@ export default function UsersFilters({
           className="min-w-[180px]"
           value={value.ruolo}
           onChange={(ruolo) => onChange({ ruolo })}
-          options={[{ value: '', label: 'Tutti i ruoli' }, ...ROLE_OPTIONS]}
+          options={[{ value: '', label: 'Tutti i Ruoli' }, ...ROLE_OPTIONS]}
         />
       </div>
       <div className={fieldCls}>
@@ -103,7 +103,7 @@ export default function UsersFilters({
           className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
           onClick={onReset}
         >
-          Azzera filtri
+          Azzera Filtri
         </button>
       )}
     </div>

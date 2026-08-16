@@ -12,8 +12,8 @@ import { SuspendIcon, ReactivateIcon, DisableIcon, ResendIcon } from './icons'
  * menu a tendina rispecchia la gerarchia dei permessi. */
 export const ROLE_OPTIONS: { value: RoleName; label: string }[] = [
   { value: 'super_admin', label: 'Super Admin' },
-  { value: 'organization_admin', label: 'Organization Admin' },
-  { value: 'user', label: 'User' },
+  { value: 'organization_admin', label: 'Amministratore Organizzazione' },
+  { value: 'user', label: 'Utente' },
 ]
 
 export const STATUS_LABELS: Record<UserStatus, string> = {

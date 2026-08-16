@@ -116,7 +116,7 @@ describe('le righe', () => {
   it('mostrano il cestino solo a chi può eliminare', async () => {
     const { onDelete } = renderPanel({ canDelete: true })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Elimina conversazione' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Conversazione' }))
 
     expect(onDelete).toHaveBeenCalledWith('c-1', expect.anything())
   })
@@ -124,7 +124,7 @@ describe('le righe', () => {
   it("senza il permesso il cestino non c'è", () => {
     renderPanel()
 
-    expect(screen.queryByRole('button', { name: 'Elimina conversazione' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Elimina Conversazione' })).not.toBeInTheDocument()
   })
 })
 
@@ -159,7 +159,7 @@ describe('rinomina', () => {
   it('comincia dalla riga giusta', async () => {
     const { onStartRename } = renderPanel()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rinomina conversazione' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Rinomina Conversazione' }))
 
     expect(onStartRename).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'c-1' }),
@@ -200,7 +200,7 @@ describe('rinomina', () => {
   it('nasconde le azioni della riga durante la rinomina', () => {
     renderPanel({ renamingId: 'c-1', renameValue: 'Reclamo', canDelete: true })
 
-    expect(screen.queryByRole('button', { name: 'Rinomina conversazione' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Elimina conversazione' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Rinomina Conversazione' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Elimina Conversazione' })).not.toBeInTheDocument()
   })
 })

@@ -46,7 +46,7 @@ describe('completezza della scheda', () => {
   it('elenca i campi chiave ancora vuoti con la loro etichetta', () => {
     const missing = missingEssentials(emptyProfile())
     expect(missing).toContain('Nome')
-    expect(missing).toContain('Tipo di scenario')
+    expect(missing).toContain('Tipo di Scenario')
 
     const filled = { ...emptyProfile(), NOME: 'Anna' }
     expect(missingEssentials(filled)).not.toContain('Nome')

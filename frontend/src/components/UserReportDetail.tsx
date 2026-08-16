@@ -131,7 +131,7 @@ function ConversationRow({
       <button
         type="button"
         className={deleteCls}
-        aria-label="Elimina conversazione"
+        aria-label="Elimina Conversazione"
         onClick={() => onDelete(conversation)}
       >
         <TrashIcon />
@@ -175,7 +175,7 @@ function SimulationRow({
       <button
         type="button"
         className={deleteCls}
-        aria-label="Elimina tentativo"
+        aria-label="Elimina Tentativo"
         onClick={() => onDelete(attempt)}
       >
         <TrashIcon />

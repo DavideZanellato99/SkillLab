@@ -77,8 +77,8 @@ describe('PathMapPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.getByText('1/2')).toBeInTheDocument()
-    expect(screen.getByText('In corso')).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Mappa del percorso' })).toBeInTheDocument()
+    expect(screen.getByText('In Corso')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Mappa del Percorso' })).toBeInTheDocument()
   })
 
   it('senza descrizione dice quante tappe sono state superate', () => {
@@ -114,7 +114,7 @@ describe('PathMapPage', () => {
   it('si apre senza nessuna tappa scelta', () => {
     renderPage({ data: [percorso()] })
 
-    expect(screen.queryByLabelText('Dettaglio della tappa')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Dettaglio della Tappa')).not.toBeInTheDocument()
   })
 
   it('apre il dettaglio della tappa scelta', async () => {
@@ -122,7 +122,7 @@ describe('PathMapPage', () => {
 
     await userEvent.click(tappa(2))
 
-    expect(screen.getByLabelText('Dettaglio della tappa')).toBeInTheDocument()
+    expect(screen.getByLabelText('Dettaglio della Tappa')).toBeInTheDocument()
   })
 
   /* Il nodo è l'interruttore con cui il riquadro si è acceso: ricliccarlo lo
@@ -133,7 +133,7 @@ describe('PathMapPage', () => {
     await userEvent.click(tappa(2))
     await userEvent.click(tappa(2))
 
-    expect(screen.queryByLabelText('Dettaglio della tappa')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Dettaglio della Tappa')).not.toBeInTheDocument()
   })
 
   it("passa da una tappa all'altra restando aperto", async () => {
@@ -142,13 +142,13 @@ describe('PathMapPage', () => {
     await userEvent.click(tappa(2))
     await userEvent.click(tappa(1))
 
-    expect(screen.getByLabelText('Dettaglio della tappa')).toBeInTheDocument()
+    expect(screen.getByLabelText('Dettaglio della Tappa')).toBeInTheDocument()
   })
 
   it("torna all'elenco dei percorsi", async () => {
     renderPage({ data: [percorso()] })
 
-    await userEvent.click(screen.getByRole('link', { name: /Tutti i percorsi/ }))
+    await userEvent.click(screen.getByRole('link', { name: /Tutti i Percorsi/ }))
 
     expect(screen.getByText('Elenco dei percorsi')).toBeInTheDocument()
   })
@@ -178,6 +178,6 @@ describe('PathMapPage', () => {
     renderPage({ data: [percorso()] }, 'as-999')
 
     expect(screen.getByText('Questo percorso non è più fra i tuoi')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Tutti i percorsi/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Tutti i Percorsi/ })).toBeInTheDocument()
   })
 })

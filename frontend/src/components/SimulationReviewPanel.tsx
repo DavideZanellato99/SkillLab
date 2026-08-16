@@ -110,18 +110,18 @@ export default function SimulationReviewPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[0.9rem] font-semibold text-slate-100">Controllo del serbatoio</h3>
+            <h3 className="text-[0.9rem] font-semibold text-slate-100">Controllo delle Domande</h3>
             {review?.is_stale && (
-              <Tooltip content="Le domande sono cambiate dopo il controllo: quello che leggi parla del serbatoio di prima.">
+              <Tooltip content="Le domande sono cambiate dopo il controllo: l'esito si riferisce all'archivio precedente.">
                 <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest text-amber-400">
-                  Da rifare
+                  Da ripetere
                 </span>
               </Tooltip>
             )}
           </div>
           <span className="text-xs leading-relaxed text-slate-500">
             {review
-              ? `Controllato il ${formatDateTime(review.reviewed_at)}, su ${review.checked} domande verificabili. Non blocca la pubblicazione: dice da dove conviene cominciare.`
+              ? `Controllato il ${formatDateTime(review.reviewed_at)}, su ${review.checked} domande verificabili. Non blocca la pubblicazione, indica da dove conviene cominciare la revisione.`
               : 'Cerca le domande ripetute, quelle la cui risposta il documento non sostiene e le alternative che si riconoscono senza sapere la procedura.'}
           </span>
         </div>
@@ -140,8 +140,8 @@ export default function SimulationReviewPanel({
 
       {isPending && (
         <p className="text-xs italic text-slate-500">
-          Le domande vengono indicizzate e rilette accanto ai passaggi che citano. Può volerci un
-          minuto.
+          Le domande vengono indicizzate e rilette accanto ai passaggi che citano. L'operazione può
+          richiedere qualche minuto.
         </p>
       )}
 

@@ -57,7 +57,7 @@ export default function Toast({ title, message, type, onClose }: ToastProps) {
       <button
         className="cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 transition hover:bg-white/8 hover:text-slate-100"
         onClick={onClose}
-        aria-label="Chiudi notifica"
+        aria-label="Chiudi Notifica"
       >
         <CloseIcon size={16} />
       </button>

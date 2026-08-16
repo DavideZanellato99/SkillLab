@@ -65,7 +65,7 @@ describe('come si legge una tappa', () => {
 
   it('dice che prova chiede', () => {
     expect(stepKindLabel(avatarStep)).toBe('Conversazione')
-    expect(stepKindLabel(simulationStep)).toBe('Test tecnico')
+    expect(stepKindLabel(simulationStep)).toBe('Test Tecnico')
   })
 })
 

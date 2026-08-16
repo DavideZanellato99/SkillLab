@@ -163,7 +163,7 @@ export default function AvatarCategoriesModal({
           </svg>
         }
         iconWrapperCls="border border-violet-600/25 bg-violet-600/10"
-        title="Categorie avatar"
+        title="Categorie Avatar"
         description="Ogni organizzazione ha le proprie categorie: qui si creano, si rinominano e si personalizzano nel colore."
       />
 

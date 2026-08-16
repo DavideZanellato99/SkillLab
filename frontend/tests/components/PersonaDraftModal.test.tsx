@@ -86,16 +86,16 @@ describe('PersonaDraftModal', () => {
   it('cambia fonte, e con lei il campo e le istruzioni', async () => {
     renderModal()
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Una conversazione' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Una Conversazione' }))
 
     expect(screen.getByLabelText('La conversazione')).toBeInTheDocument()
-    expect(screen.getByText(/già ripulita dai dati/)).toBeInTheDocument()
+    expect(screen.getByText(/già priva dei dati identificativi/)).toBeInTheDocument()
   })
 
   it('manda la fonte scelta', async () => {
     renderModal()
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Una conversazione' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Una Conversazione' }))
     await userEvent.type(screen.getByLabelText('La conversazione'), CASO)
     await userEvent.click(bottone())
 
@@ -126,7 +126,7 @@ describe('PersonaDraftModal', () => {
     stato.isPending = true
     renderModal()
 
-    expect(screen.getByRole('button', { name: /Sto scrivendo la scheda/ })).toBeDisabled()
-    expect(screen.getByText(/una ventina di secondi/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Scrittura della scheda in corso/ })).toBeDisabled()
+    expect(screen.getByText(/circa venti secondi/)).toBeInTheDocument()
   })
 })

@@ -16,7 +16,7 @@ import type { SelectOption } from './Select'
  * e questo è il punto: sono la stessa barra, e devono restare uguali. */
 
 interface ComparisonFilterBarProps<F extends string> {
-  /** Cosa sceglie il gruppo di linguette: "Modalità", "Tipo di test". */
+  /** Cosa sceglie il gruppo di linguette: "Modalità", "Tipo di Test". */
   kindLabel: string
   kindValue: F
   kindOptions: { value: F; label: string }[]

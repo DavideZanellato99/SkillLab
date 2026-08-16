@@ -118,7 +118,7 @@ describe('ComparisonSimulations', () => {
     )
 
     expect(screen.getByText(/due test diversi/)).toBeInTheDocument()
-    expect(screen.queryByText('Domanda per domanda')).not.toBeInTheDocument()
+    expect(screen.queryByText('Domanda per Domanda')).not.toBeInTheDocument()
   })
 
   it('dice che sono i filtri a lasciare un test solo, invece del vuoto', () => {
@@ -135,7 +135,7 @@ describe('ComparisonSimulations', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: /Apri il tentativo su Sicurezza in cantiere del 05 feb 2026/,
+        name: /Apri il Tentativo su Sicurezza in cantiere del 05 feb 2026/,
       }),
     )
 
@@ -148,7 +148,7 @@ describe('ComparisonSimulations', () => {
     const user = userEvent.setup()
     renderConfronto(stessoTest, false)
 
-    await user.click(screen.getAllByRole('button', { name: /Apri il tentativo/ })[0])
+    await user.click(screen.getAllByRole('button', { name: /Apri il Tentativo/ })[0])
 
     expect(aperto.own).toBe(false)
   })

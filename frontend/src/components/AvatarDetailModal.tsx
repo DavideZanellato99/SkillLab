@@ -47,7 +47,7 @@ export default function AvatarDetailModal({
           <Badge tone="border border-amber-500/30 bg-amber-500/10 text-amber-400">Archiviato</Badge>
         ) : (
           <Badge tone="border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
-            In catalogo
+            In Catalogo
           </Badge>
         )}
       </DetailField>
@@ -65,7 +65,7 @@ export default function AvatarDetailModal({
           <span className="text-slate-500">—</span>
         )}
       </DetailField>
-      <DetailField label="Brief per l'operatore">
+      <DetailField label="Brief per l'Operatore">
         {avatar.description || <span className="text-slate-500">Nessun brief</span>}
       </DetailField>
       <DetailField label="Voce">
@@ -74,18 +74,18 @@ export default function AvatarDetailModal({
             {avatar.voice_id}
           </span>
         ) : (
-          <span className="text-slate-500">Voce predefinita</span>
+          <span className="text-slate-500">Voce Predefinita</span>
         )}
       </DetailField>
       <DetailField label="Conversazioni">{avatar.conversation_count}</DetailField>
-      <DetailField label="Scheda persona">
+      <DetailField label="Scheda Persona">
         <div>{percent}% compilata</div>
         <div className="text-xs text-slate-500">
           {filled} campi su {ALL_PROFILE_KEYS.length}
         </div>
       </DetailField>
       <AuthorshipFields row={avatar} />
-      <DetailField label="ID avatar" mono>
+      <DetailField label="ID Avatar" mono>
         {avatar.id}
       </DetailField>
     </DetailModal>

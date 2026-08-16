@@ -60,7 +60,7 @@ describe('prima di entrare', () => {
     renderNavbar(null)
 
     expect(screen.getByRole('button', { name: 'Accedi' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Avatar Gallery/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Galleria Avatar/ })).not.toBeInTheDocument()
     expect(screen.queryByText('campanella')).not.toBeInTheDocument()
   })
 
@@ -97,7 +97,7 @@ describe('dopo essere entrati', () => {
   it('mostra le voci che valgono per tutti', () => {
     renderNavbar('user')
 
-    expect(screen.getByRole('link', { name: /Avatar Gallery/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Galleria Avatar/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Simulatore Tecnico/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Percorsi/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Confronto/ })).toBeInTheDocument()

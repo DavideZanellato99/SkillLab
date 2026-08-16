@@ -151,7 +151,7 @@ describe('NotificationsBell', () => {
     renderBell([avviso(), avviso({ key: 'n-2' })])
 
     await userEvent.click(campanella())
-    await userEvent.click(screen.getByRole('button', { name: 'Segna tutte come lette' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Segna Tutte come Lette' }))
 
     expect(mutate).toHaveBeenCalledWith(undefined)
   })
@@ -161,7 +161,7 @@ describe('NotificationsBell', () => {
 
     await userEvent.click(campanella())
 
-    expect(screen.queryByRole('button', { name: 'Segna tutte come lette' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Segna Tutte come Lette' })).not.toBeInTheDocument()
   })
 
   /* La campanella è un accessorio: un errore di rete qui non deve piazzare

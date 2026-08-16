@@ -32,7 +32,7 @@ export default function ProfilePage() {
   const [profileValidationError, setProfileValidationError] = useState('')
   const [profileSuccess, setProfileSuccess] = useState('')
 
-  // --- "Cambia password" form state ---
+  // --- "Cambia Password" form state ---
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')

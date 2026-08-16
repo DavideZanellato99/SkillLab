@@ -5,7 +5,7 @@
  * quella regola non basta: appena si sceglie "test tecnico" non c'è ancora
  * nessun test scelto, quindi entrambi i campi sono vuoti e dedurre il tipo
  * dagli id lo farebbe tornare subito a "conversazione". Era il motivo per
- * cui premere "Test tecnico" sembrava non fare niente.
+ * cui premere "Test Tecnico" sembrava non fare niente.
  *
  * Quindi la bozza tiene il tipo per conto suo, e i due id restano quello che
  * sono: la scelta fatta dentro quel tipo, che può ancora mancare. Al

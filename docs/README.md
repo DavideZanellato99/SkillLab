@@ -35,6 +35,7 @@ alle singole funzionalità.
 | [valutazione.md](valutazione.md) | Il giudizio dell'AI sui sei criteri, la revisione del docente, il voto che conta |
 | [training-e-report.md](training-e-report.md) | Percorsi a tappe, notifiche, confronto fra tentativi, cruscotti, report per persona ed esportazioni |
 | [simulatore.md](simulatore.md) | Il test tecnico, ricavato da un documento aziendale o scritto a mano dal docente: il serbatoio di domande, le dieci estratte a ogni tentativo, la correzione |
+| [agenti.md](agenti.md) | I tre punti in cui un modello prepara del lavoro per chi insegna invece di parlare a chi si allena: cosa fanno, le regole che rispettano tutti e tre, cosa è stato scartato e perché |
 
 ## Come gira davvero
 

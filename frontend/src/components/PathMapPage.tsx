@@ -46,7 +46,7 @@ export default function PathMapPage() {
       className="mb-6 inline-flex items-center gap-2 text-[0.82rem] font-medium text-slate-400 no-underline transition hover:text-slate-100"
     >
       <ArrowLeftIcon size={15} />
-      Tutti i percorsi
+      Tutti i Percorsi
     </Link>
   )
 

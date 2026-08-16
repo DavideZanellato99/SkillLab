@@ -31,6 +31,7 @@ import { queryKeys } from '../hooks/queryKeys'
 import TrainerReviewNote from './TrainerReviewNote'
 import { hasReviewContent } from './trainerReview'
 import TrainerReviewPanel from './TrainerReviewPanel'
+import { PlusIcon } from './icons'
 
 /* Dettaglio di una conversazione valutata: trascrizione completa a sinistra
  * e valutazione a destra.
@@ -274,7 +275,7 @@ export default function ConversationDetailModal({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-heading text-xl font-bold text-slate-100">
-              Dettaglio conversazione
+              Dettaglio Conversazione
             </h2>
             <ConversationModeBadge mode={row.mode} />
           </div>
@@ -299,7 +300,7 @@ export default function ConversationDetailModal({
         <div className="flex items-start gap-2">
           {canDelete && (
             <ModalDeleteButton
-              label="Elimina conversazione"
+              label="Elimina Conversazione"
               onClick={() => setIsConfirmingDelete(true)}
             />
           )}
@@ -462,12 +463,17 @@ export default function ConversationDetailModal({
                   <h3 className={`${sectionTitleCls} mb-0`}>Valutazione</h3>
                   {!isOwn && !isEditingReview && (
                     <button
-                      className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-0.5 text-[0.72rem] font-semibold text-violet-300 transition hover:bg-violet-500/15"
+                      className="flex cursor-pointer items-center gap-1 rounded-lg border-none bg-transparent px-2 py-0.5 text-[0.72rem] font-semibold text-violet-300 transition hover:bg-violet-500/15"
                       onClick={() => setIsEditingReview(true)}
                     >
-                      {hasReviewContent(detail.review)
-                        ? 'Modifica revisione'
-                        : '+ Aggiungi revisione'}
+                      {hasReviewContent(detail.review) ? (
+                        'Modifica revisione'
+                      ) : (
+                        <>
+                          <PlusIcon size={12} />
+                          Aggiungi Revisione
+                        </>
+                      )}
                     </button>
                   )}
                 </div>

@@ -185,7 +185,7 @@ describe('catalogo', () => {
 
     await userEvent.click(screen.getByLabelText('Stato'))
     await userEvent.click(screen.getByRole('option', { name: /Archiviati/ }))
-    await userEvent.click(screen.getByRole('button', { name: 'Azzera filtri' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
 
     expect(screen.getByText('Cliente arrabbiato')).toBeInTheDocument()
   })

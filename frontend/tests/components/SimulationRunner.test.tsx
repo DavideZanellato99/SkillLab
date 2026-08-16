@@ -281,7 +281,7 @@ describe('SimulationRunner', () => {
     await user.click(await screen.findByText('Gamma'))
     await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
 
-    await user.click(await screen.findByRole('button', { name: 'Riprova il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Riprova il Test' }))
     // Si torna alle regole, e il test nuovo comincia da un'altra estrazione
     await user.click(await screen.findByRole('button', { name: /il test$/ }))
     expect(await screen.findByText('Alfa')).toBeInTheDocument()
@@ -307,10 +307,10 @@ describe('SimulationRunner', () => {
     await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
 
     // I passi arrivano mescolati: rimetterli a posto è la risposta
-    await user.click(await screen.findByRole('button', { name: 'Sposta in alto: Alfa' }))
+    await user.click(await screen.findByRole('button', { name: 'Sposta in Alto: Alfa' }))
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
 
-    await user.click(await screen.findByRole('button', { name: 'Sposta in basso: Delta' }))
+    await user.click(await screen.findByRole('button', { name: 'Sposta in Basso: Delta' }))
     await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
@@ -336,7 +336,7 @@ describe('SimulationRunner', () => {
        chi non tocca niente non ne sta dando una: il pulsante lo dice, e il
        corpo della richiesta pure. */
     await user.click(await screen.findByRole('button', { name: 'Salta la domanda' }))
-    await user.click(await screen.findByRole('button', { name: 'Sposta in alto: Gamma' }))
+    await user.click(await screen.findByRole('button', { name: 'Sposta in Alto: Gamma' }))
     await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())

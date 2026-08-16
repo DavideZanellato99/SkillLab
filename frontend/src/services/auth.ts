@@ -40,10 +40,13 @@ export interface AuthUser {
 
 export type RoleName = 'super_admin' | 'organization_admin' | 'user'
 
+/* Le etichette dei badge, che stanno in una pastiglia stretta accanto al nome:
+ * il ruolo esteso ("Amministratore Organizzazione") lo scrivono le tendine in
+ * cui il ruolo si sceglie, dove lo spazio c'è e la distinzione conta. */
 export const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
-  organization_admin: 'Org Admin',
-  user: 'User',
+  organization_admin: 'Amministratore',
+  user: 'Utente',
 }
 
 /** Tailwind classes for the role badge pill, per role name. */

@@ -41,7 +41,7 @@ export default function SimulationAttemptsList({ simulationId }: { simulationId:
     <>
       <div className="mt-6 rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md">
         <h2 className="mb-4 font-heading text-base font-semibold text-slate-100">
-          Tentativi passati
+          Tentativi Passati
         </h2>
 
         <ul className="flex list-none flex-col gap-2">

@@ -15,27 +15,27 @@ import IconButton from '../../src/components/IconButton'
 describe('IconButton', () => {
   it("prende il nome accessibile dall'etichetta", () => {
     render(
-      <IconButton label="Elimina utente" onClick={vi.fn()}>
+      <IconButton label="Elimina Utente" onClick={vi.fn()}>
         <svg />
       </IconButton>,
     )
-    expect(screen.getByRole('button', { name: 'Elimina utente' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Elimina Utente' })).toBeInTheDocument()
   })
 
   it('mostra il tooltip al passaggio del mouse', async () => {
     render(
-      <IconButton label="Elimina utente" onClick={vi.fn()}>
+      <IconButton label="Elimina Utente" onClick={vi.fn()}>
         <svg />
       </IconButton>,
     )
-    await userEvent.hover(screen.getByRole('button', { name: 'Elimina utente' }))
-    expect(await screen.findByText('Elimina utente')).toBeInTheDocument()
+    await userEvent.hover(screen.getByRole('button', { name: 'Elimina Utente' }))
+    expect(await screen.findByText('Elimina Utente')).toBeInTheDocument()
   })
 
   it('spiega perché è bloccato, anche se bloccato', async () => {
     render(
       <IconButton
-        label="Elimina utente"
+        label="Elimina Utente"
         tooltip="Non puoi eliminare il tuo stesso account"
         disabled
         onClick={vi.fn()}
@@ -44,7 +44,7 @@ describe('IconButton', () => {
       </IconButton>,
     )
 
-    const button = screen.getByRole('button', { name: 'Elimina utente' })
+    const button = screen.getByRole('button', { name: 'Elimina Utente' })
     expect(button).toBeDisabled()
     // Il puntatore passa sull'involucro, non sul bottone spento
     await userEvent.hover(button.parentElement!)
@@ -54,11 +54,11 @@ describe('IconButton', () => {
   it('non fa partire niente quando è bloccato', async () => {
     const onClick = vi.fn()
     render(
-      <IconButton label="Elimina utente" disabled onClick={onClick}>
+      <IconButton label="Elimina Utente" disabled onClick={onClick}>
         <svg />
       </IconButton>,
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Elimina utente' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Utente' }))
     expect(onClick).not.toHaveBeenCalled()
   })
 

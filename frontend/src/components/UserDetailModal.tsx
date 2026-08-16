@@ -53,7 +53,7 @@ export default function UserDetailModal({
           {STATUS_LABELS[user.status] ?? user.status}
         </Badge>
       </DetailField>
-      <DetailField label="Ultimo accesso">
+      <DetailField label="Ultimo Accesso">
         {user.last_login_at ? (
           withRelative(user.last_login_at)
         ) : (
@@ -66,11 +66,11 @@ export default function UserDetailModal({
           persona, non il ricontrollo automatico della campanella, e si
           aggiorna a intervalli di pochi minuti: l'orario è preciso quanto
           basta a dire "adesso" e non va letto al secondo. */}
-      <DetailField label="Ultima attività">
+      <DetailField label="Ultima Attività">
         {user.last_activity_at ? withRelative(user.last_activity_at) : '—'}
       </DetailField>
       <AuthorshipFields row={user} />
-      <DetailField label="ID utente" mono>
+      <DetailField label="ID Utente" mono>
         {user.id}
       </DetailField>
       <DetailField label="Cognito Sub" mono>

@@ -133,7 +133,7 @@ export default function AvatarRow({
               <IconButton
                 tone="danger"
                 label={`Elimina ${avatar.name}`}
-                tooltip="Elimina avatar"
+                tooltip="Elimina Avatar"
                 onClick={() => onDelete(avatar)}
               >
                 <TrashIcon />

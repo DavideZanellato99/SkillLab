@@ -124,7 +124,7 @@ describe('elenco', () => {
 
     await userEvent.click(screen.getByLabelText('Stato'))
     await userEvent.click(screen.getByRole('option', { name: 'Sospesa' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Azzera filtri' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
 
     expect(screen.getByText('Banca Esempio')).toBeInTheDocument()
   })
@@ -240,7 +240,7 @@ describe('dettaglio', () => {
 
     const modale = dettaglio()
     expect(within(modale).getByText('Nessuna valutazione')).toBeInTheDocument()
-    expect(within(modale).getByText('Mai acceduto')).toBeInTheDocument()
+    expect(within(modale).getByText('Mai Acceduto')).toBeInTheDocument()
   })
 
   /* Le statistiche mancanti non devono portarsi dietro il resto del
@@ -264,7 +264,7 @@ describe('dettaglio', () => {
 
     await userEvent.click(screen.getByText('Banca Esempio'))
 
-    const salti = within(dettaglio()).getAllByRole('link', { name: 'Apri elenco' })
+    const salti = within(dettaglio()).getAllByRole('link', { name: 'Apri Elenco' })
     expect(salti[0]).toHaveAttribute('href', '/app/admin?organization_id=org-1')
     expect(salti[1]).toHaveAttribute('href', '/app/admin/avatars?organization_id=org-1')
   })
@@ -350,7 +350,7 @@ describe('creazione e modifica', () => {
 describe('sospensione', () => {
   async function apriSospensione() {
     await userEvent.click(screen.getByRole('button', { name: 'Altre azioni per Banca Esempio' }))
-    await userEvent.click(screen.getByRole('menuitem', { name: /Sospendi organizzazione/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Sospendi Organizzazione/ }))
   }
 
   it('spiega cosa succede agli utenti del tenant', async () => {
@@ -388,7 +388,7 @@ describe('sospensione', () => {
     renderPage([organizzazione({ status: 'suspended', suspension_reason: 'Contratto scaduto' })])
 
     await userEvent.click(screen.getByRole('button', { name: 'Altre azioni per Banca Esempio' }))
-    await userEvent.click(screen.getByRole('menuitem', { name: /Riattiva organizzazione/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Riattiva Organizzazione/ }))
 
     expect(screen.queryByLabelText(/Motivo/)).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Riattiva' }))

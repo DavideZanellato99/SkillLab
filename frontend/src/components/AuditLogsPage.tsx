@@ -19,7 +19,7 @@ import FormError from './FormError'
  * modifica e non si cancella, scade e basta. */
 
 const COLUMNS: DataTableColumn[] = [
-  { key: 'quando', label: 'Data e ora' },
+  { key: 'quando', label: 'Data e Ora' },
   { key: 'utente', label: 'Utente' },
   { key: 'organizzazione', label: 'Organizzazione' },
   { key: 'azione', label: 'Azione' },
@@ -122,7 +122,7 @@ export default function AuditLogsPage() {
             value={actionFilter}
             onChange={setActionFilter}
             options={[
-              { value: '', label: 'Tutte le azioni' },
+              { value: '', label: 'Tutte le Azioni' },
               ...actions.map((a) => ({ value: a.key, label: a.label })),
             ]}
           />
@@ -137,7 +137,7 @@ export default function AuditLogsPage() {
             value={orgFilter}
             onChange={setOrgFilter}
             options={[
-              { value: '', label: 'Tutte le organizzazioni' },
+              { value: '', label: 'Tutte le Organizzazioni' },
               ...organizations.map((o) => ({ value: o.id, label: o.name })),
             ]}
           />
@@ -179,7 +179,7 @@ export default function AuditLogsPage() {
               setDateTo('')
             }}
           >
-            Azzera filtri
+            Azzera Filtri
           </button>
         )}
       </div>

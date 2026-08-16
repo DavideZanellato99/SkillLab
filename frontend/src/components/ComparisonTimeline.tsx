@@ -48,7 +48,7 @@ export default function ComparisonTimeline({
   rightId,
   onAssign,
 }: {
-  /** Cosa si sta scegliendo: "Conversazioni valutate", "Test consegnati". */
+  /** Cosa si sta scegliendo: "Conversazioni Valutate", "Test Consegnati". */
   label: string
   entries: TimelineEntry[]
   leftId: string

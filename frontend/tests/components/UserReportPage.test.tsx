@@ -256,7 +256,7 @@ describe('storico di una persona', () => {
     renderPage()
 
     await userEvent.click(screen.getByText('Anna Rossi'))
-    await userEvent.click(screen.getByRole('button', { name: 'Elimina conversazione' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Conversazione' }))
 
     expect(screen.getByText('elimina conversazione: c-1')).toBeInTheDocument()
   })
@@ -266,7 +266,7 @@ describe('storico di una persona', () => {
 
     await userEvent.click(screen.getByText('Anna Rossi'))
     await userEvent.click(screen.getByRole('radio', { name: /Simulazioni/ }))
-    await userEvent.click(screen.getByRole('button', { name: 'Elimina tentativo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Tentativo' }))
 
     expect(screen.getByText('elimina tentativo: t-1')).toBeInTheDocument()
   })

@@ -194,7 +194,7 @@ export default function PathTrailMap({
             className={controlCls}
             onClick={() => setZoomIndex(zoomIndex + 1)}
             disabled={zoomIndex >= ZOOM_LEVELS.length - 1}
-            aria-label="Ingrandisci la mappa"
+            aria-label="Ingrandisci la Mappa"
           >
             <PlusIcon size={15} />
           </button>
@@ -205,7 +205,7 @@ export default function PathTrailMap({
             className={controlCls}
             onClick={() => setZoomIndex(zoomIndex - 1)}
             disabled={zoomIndex <= 0}
-            aria-label="Rimpicciolisci la mappa"
+            aria-label="Rimpicciolisci la Mappa"
           >
             <MinusIcon size={15} />
           </button>
@@ -234,7 +234,7 @@ export default function PathTrailMap({
       <div
         ref={viewportRef}
         role="region"
-        aria-label="Mappa del percorso"
+        aria-label="Mappa del Percorso"
         tabIndex={0}
         onScroll={handleScroll}
         onPointerDown={handlePointerDown}

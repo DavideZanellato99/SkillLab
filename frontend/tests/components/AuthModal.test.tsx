@@ -56,7 +56,7 @@ describe('AuthModal', () => {
 
     await compilaEAccedi('mario@test.it', 'Temporanea1!')
 
-    expect(await screen.findByText('Imposta nuova password')).toBeInTheDocument()
+    expect(await screen.findByText('Imposta Nuova Password')).toBeInTheDocument()
     expect(onClose).not.toHaveBeenCalled()
 
     await userEvent.type(screen.getByLabelText('Nuova Password'), 'Password-Lunga1!')
@@ -73,7 +73,7 @@ describe('AuthModal', () => {
     login.mockResolvedValue({ challenge: 'NEW_PASSWORD_REQUIRED', session: 'sess-1' })
     render(<AuthModal onClose={vi.fn()} />)
     await compilaEAccedi('mario@test.it', 'Temporanea1!')
-    await screen.findByText('Imposta nuova password')
+    await screen.findByText('Imposta Nuova Password')
 
     await userEvent.type(screen.getByLabelText('Nuova Password'), 'Password-Lunga1!')
     await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'Password-Lunga2!')
@@ -87,7 +87,7 @@ describe('AuthModal', () => {
     login.mockResolvedValue({ challenge: 'NEW_PASSWORD_REQUIRED', session: 'sess-1' })
     render(<AuthModal onClose={vi.fn()} />)
     await compilaEAccedi('mario@test.it', 'Temporanea1!')
-    await screen.findByText('Imposta nuova password')
+    await screen.findByText('Imposta Nuova Password')
 
     await userEvent.type(screen.getByLabelText('Nuova Password'), 'tuttaminuscola')
     await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'tuttaminuscola')

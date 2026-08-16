@@ -12,9 +12,9 @@ import KebabMenu, { type KebabMenuItem } from '../../src/components/KebabMenu'
 function voci(over: Partial<KebabMenuItem>[] = []): KebabMenuItem[] {
   // L'icona non entra in gioco qui: quello che si prova è il giro da tastiera.
   const base: KebabMenuItem[] = [
-    { key: 'sospendi', label: 'Sospendi account', icon: null, onSelect: vi.fn() },
-    { key: 'disabilita', label: 'Disabilita account', icon: null, onSelect: vi.fn() },
-    { key: 'rinvia', label: 'Rinvia credenziali', icon: null, onSelect: vi.fn() },
+    { key: 'sospendi', label: 'Sospendi Account', icon: null, onSelect: vi.fn() },
+    { key: 'disabilita', label: 'Disabilita Account', icon: null, onSelect: vi.fn() },
+    { key: 'rinvia', label: 'Rinvia Credenziali', icon: null, onSelect: vi.fn() },
   ]
   return base.map((v, i) => ({ ...v, ...over[i] }))
 }
@@ -48,7 +48,7 @@ describe('apertura', () => {
     const items = renderMenu()
 
     await userEvent.click(puntini())
-    await userEvent.click(screen.getByRole('menuitem', { name: /Rinvia credenziali/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Rinvia Credenziali/ }))
 
     expect(items[2].onSelect).toHaveBeenCalledOnce()
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
@@ -80,7 +80,7 @@ describe('voci spente', () => {
 
     await userEvent.click(puntini())
 
-    const voce = screen.getByRole('menuitem', { name: /Sospendi account/ })
+    const voce = screen.getByRole('menuitem', { name: /Sospendi Account/ })
     expect(voce).toBeDisabled()
     expect(voce).toHaveTextContent('Non puoi sospendere il tuo stesso account')
   })
@@ -89,7 +89,7 @@ describe('voci spente', () => {
     const items = renderMenu(voci([{ disabled: true }]))
 
     await userEvent.click(puntini())
-    await userEvent.click(screen.getByRole('menuitem', { name: /Sospendi account/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Sospendi Account/ }))
 
     expect(items[0].onSelect).not.toHaveBeenCalled()
     expect(screen.getByRole('menu')).toBeInTheDocument()

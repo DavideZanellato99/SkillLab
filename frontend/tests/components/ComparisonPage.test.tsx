@@ -69,7 +69,7 @@ describe('scelta della persona', () => {
   it('parte dalle proprie prove anche per un admin', () => {
     renderPage('organization_admin')
 
-    expect(screen.getByRole('combobox')).toHaveTextContent('Le mie prove')
+    expect(screen.getByRole('combobox')).toHaveTextContent('Le Mie Prove')
     expect(stato.chiesto.subjectId).toBe('')
   })
 

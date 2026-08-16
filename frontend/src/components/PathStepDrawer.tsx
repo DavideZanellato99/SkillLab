@@ -45,7 +45,7 @@ export default function PathStepDrawer({
         aria-hidden="true"
       />
       <aside
-        aria-label="Dettaglio della tappa"
+        aria-label="Dettaglio della Tappa"
         className="animate-slide-in-bottom fixed inset-x-0 bottom-0 z-40 max-h-[78dvh] overflow-y-auto overscroll-contain p-3 lg:animate-slide-in-right lg:absolute lg:inset-x-auto lg:bottom-auto lg:right-4 lg:top-4 lg:z-30 lg:max-h-[calc(100%-2rem)] lg:w-[356px] lg:p-0"
       >
         <PathStepPanel step={step} total={total} onClose={onClose} />

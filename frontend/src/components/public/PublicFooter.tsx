@@ -55,7 +55,7 @@ export default function PublicFooter() {
 
         <nav className="flex flex-col gap-3">
           <h3 className="font-heading text-[0.8rem] font-semibold uppercase tracking-wide text-slate-400">
-            La piattaforma
+            La Piattaforma
           </h3>
           {PUBLIC_SECTIONS.map((section) => (
             <Link key={section.path} to={section.path} className={linkCls}>

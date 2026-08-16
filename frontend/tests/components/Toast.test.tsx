@@ -18,7 +18,7 @@ describe('Toast', () => {
       <Toast title="Errore" message="Qualcosa è andato storto" type="error" onClose={onClose} />,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: 'Chiudi notifica' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Chiudi Notifica' }))
     expect(onClose).toHaveBeenCalledOnce()
   })
 })

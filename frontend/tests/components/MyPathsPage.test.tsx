@@ -70,7 +70,7 @@ describe('MyPathsPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.getByText('1/2')).toBeInTheDocument()
-    expect(screen.getByText('In corso')).toBeInTheDocument()
+    expect(screen.getByText('In Corso')).toBeInTheDocument()
   })
 
   it('porta al sentiero del percorso', () => {
@@ -96,7 +96,7 @@ describe('MyPathsPage', () => {
   it('dice a che tappa si è arrivati', () => {
     renderPage({ data: [percorso()] })
 
-    const riga = screen.getByText(/Ora tocca a/)
+    const riga = screen.getByText(/Tappa in corso/)
     expect(within(riga).getByText('Avatar 2')).toBeInTheDocument()
     expect(riga).toHaveTextContent('conversazione')
   })
@@ -119,7 +119,7 @@ describe('MyPathsPage', () => {
     })
 
     expect(screen.getByText(/Ultima tappa/)).toBeInTheDocument()
-    expect(screen.queryByText(/Ora tocca a/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Tappa in corso/)).not.toBeInTheDocument()
   })
 
   /* Senza descrizione la riga non resta vuota: quante tappe ci sono è la

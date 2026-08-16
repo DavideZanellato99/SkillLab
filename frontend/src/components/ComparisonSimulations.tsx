@@ -102,8 +102,8 @@ function AttemptPanel({
           prove: cosa fosse stato risposto, e cosa diceva il documento, stanno
           nel tentativo per intero. */}
       <ComparisonOpenButton
-        label="Apri il tentativo"
-        ariaLabel={`Apri il tentativo su ${attempt.simulation_title} del ${formatDate(attempt.attempted_at)}`}
+        label="Apri il Tentativo"
+        ariaLabel={`Apri il Tentativo su ${attempt.simulation_title} del ${formatDate(attempt.attempted_at)}`}
         onClick={onOpen}
       />
     </div>
@@ -255,7 +255,7 @@ export default function ComparisonSimulations({
           un contesto di impilamento e la tendina del Select ci resta dentro. */}
       <div className={`${cardCls} relative z-20 mb-8`}>
         <ComparisonFilterBar
-          kindLabel="Tipo di test"
+          kindLabel="Tipo di Test"
           kindValue={kindFilter}
           kindOptions={KIND_FILTERS}
           onKindChange={setKindFilter}
@@ -267,7 +267,7 @@ export default function ComparisonSimulations({
         />
 
         <ComparisonTimeline
-          label="Test consegnati"
+          label="Test Consegnati"
           entries={entries}
           leftId={leftId}
           rightId={rightId}
@@ -305,7 +305,7 @@ export default function ComparisonSimulations({
           {sameSimulation && questionRows.length > 0 && (
             <div className={`${cardCls} mb-6`}>
               <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-sm font-semibold text-slate-300">Domanda per domanda</h2>
+                <h2 className="text-sm font-semibold text-slate-300">Domanda per Domanda</h2>
                 {/* I due segni di ogni riga vanno intestati una volta sola:
                     senza, si legge una coppia di crocette senza sapere quale
                     prova è quale. */}
@@ -342,7 +342,7 @@ export default function ComparisonSimulations({
 
           {/* Il contesto in fondo, come nell'altra metà: di quali due prove si
               stava parlando, per chi ha già letto di quanto e su cosa. */}
-          <h2 className="mb-3 text-sm font-semibold text-slate-300">I due test</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-300">I Due Test</h2>
           <div className="grid grid-cols-2 items-start gap-6 max-md:grid-cols-1">
             <AttemptPanel
               role="Prima"

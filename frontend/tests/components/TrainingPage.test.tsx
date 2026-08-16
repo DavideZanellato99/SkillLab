@@ -129,13 +129,13 @@ describe('filtro per organizzazione', () => {
   it("c'è per il super admin", () => {
     renderPage()
 
-    expect(screen.getByText('Tutte le organizzazioni')).toBeInTheDocument()
+    expect(screen.getByText('Tutte le Organizzazioni')).toBeInTheDocument()
   })
 
   it("non c'è per un org admin", () => {
     renderPage('organization_admin')
 
-    expect(screen.queryByText('Tutte le organizzazioni')).not.toBeInTheDocument()
+    expect(screen.queryByText('Tutte le Organizzazioni')).not.toBeInTheDocument()
   })
 })
 
@@ -143,7 +143,7 @@ describe('composizione e assegnazione', () => {
   it("apre l'editor su un percorso nuovo", async () => {
     renderPage()
 
-    await userEvent.click(screen.getByRole('button', { name: /Nuovo percorso/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Nuovo Percorso/ }))
 
     expect(screen.getByText('editor: nuovo percorso')).toBeInTheDocument()
   })

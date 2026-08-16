@@ -225,9 +225,45 @@ stessa in tutta l'app, deve stare scritta una volta.
   preferenza, ed è imposto dalla Content-Security-Policy: un `@import` verso
   un dominio di fuori non verrebbe caricato affatto. Il perché sta in
   [sicurezza-e-privacy.md](sicurezza-e-privacy.md) e in [gdpr.md](gdpr.md).
-- **Il testo è in italiano** e senza trattini: si usano le virgole.
+- **Il testo è in italiano** e senza trattini: si usano le virgole. In italiano
+  anche i nomi delle schermate, dove esiste la parola: la voce in barra è
+  «Galleria Avatar», non «Avatar Gallery», e i ruoli si leggono «Super Admin» e
+  «Amministratore Organizzazione».
 - **Gli stati vuoti non finiscono col punto.** Il punto resta negli errori e
   nelle descrizioni.
+- **Il registro è professionale e impersonale.** Un'attesa si annuncia con
+  quello che sta succedendo («Scrittura della scheda in corso...»), non con il
+  sistema che parla di sé in prima persona; una durata si dice in modo asciutto
+  («L'operazione richiede circa venti secondi»), non con un'approssimazione
+  parlata. Niente emoji in nessuna scritta, neanche negli stati vuoti, dove il
+  posto dell'illustrazione lo prende un'icona di
+  [icons.tsx](../frontend/src/components/icons.tsx).
+- **Il gergo interno non arriva a schermo.** «Tenant» è «organizzazione», il
+  serbatoio delle domande di un test è «l'archivio» o semplicemente «le
+  domande», e un errore del server non nomina mai una variabile d'ambiente: il
+  dettaglio tecnico va nei log, all'utente arriva cosa non funziona e cosa può
+  fare. I nomi interni restano validi nei commenti e in questi documenti, dove
+  chi legge sono io.
+- **Le etichette portano la maiuscola su ogni parola piena**: «Salva
+  Modifiche», «Gestione Utenti», «Nuovo Avatar», «Crea Nuova Organizzazione».
+  Restano minuscoli articoli, preposizioni e congiunzioni quando cadono in
+  mezzo, perché «Torna All'Elenco» e «Valutazione E Analisi» non li scriverebbe
+  nessuno: si legge «Torna all'Elenco», «Media per Criterio», «Segna Tutte come
+  Lette». Vale anche fra un comando e ciò che apre, dove la stessa cosa va detta
+  con le stesse maiuscole: il bottone «Nuova Simulazione» apre una modale
+  intitolata «Nuova Simulazione», e se un bottone ha un'`aria-label` che ripete
+  l'etichetta e la completa, quella comincia con l'etichetta identica («Apri il
+  Tentativo su ...»).
+
+  **Etichetta vuol dire comando, titolo, voce di menu, intestazione di colonna,
+  linguetta, campo di un form, badge, opzione di un filtro.** Non lo sono le
+  frasi, e restano quindi con la sola iniziale maiuscola: gli stati vuoti
+  («Nessun dato disponibile»), i messaggi di errore e conferma, le descrizioni
+  sotto i titoli, i testi di trasparenza («Questa chiamata viene registrata») e
+  i titoli editoriali del sito pubblico, che sono headline e non etichette
+  («Due ambiti di formazione, un unico percorso»). Del sito pubblico seguono la
+  regola delle etichette le sole voci di navigazione, in
+  [publicSections.ts](../frontend/src/components/public/publicSections.ts).
 - **I tooltip sono sempre `Tooltip`, mai l'attributo `title` del browser.**
   Quello nativo compare dopo un secondo, si veste come il sistema operativo e
   non si sa dove finisce; il componente compare subito, è uguale in tutta

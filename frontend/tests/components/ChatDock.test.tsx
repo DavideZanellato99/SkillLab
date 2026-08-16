@@ -7,7 +7,7 @@ vi.mock('../../src/components/VoiceButton', () => ({
   default: () => <button>Chiama</button>,
 }))
 vi.mock('../../src/components/CallRecordingPlayer', () => ({
-  default: () => <div>Registrazione della chiamata</div>,
+  default: () => <div>Registrazione della Chiamata</div>,
 }))
 
 import ChatDock from '../../src/components/ChatDock'
@@ -98,13 +98,13 @@ describe('ChatDock in chat scritta', () => {
     const props = renderDock({ isChatMode: true, conversationId: 'conv-1', mode: 'text' })
 
     expect(screen.getByPlaceholderText('Scrivi a Mario Rossi...')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Termina la chat' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Termina la Chat' }))
     expect(props.chat.end).toHaveBeenCalledOnce()
   })
 
   it('non lascia inviare una casella vuota', () => {
     renderDock({ isChatMode: true, conversationId: 'conv-1', mode: 'text' })
-    expect(screen.getByRole('button', { name: 'Invia il messaggio' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Invia il Messaggio' })).toBeDisabled()
   })
 
   it('lascia inviare quando qualcosa è stato scritto', () => {
@@ -114,7 +114,7 @@ describe('ChatDock in chat scritta', () => {
       mode: 'text',
       chat: { ...chat, input: 'Buongiorno' },
     })
-    expect(screen.getByRole('button', { name: 'Invia il messaggio' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Invia il Messaggio' })).toBeEnabled()
   })
 })
 
@@ -131,11 +131,11 @@ describe('ChatDock a conversazione chiusa', () => {
 
   it('dopo una telefonata si può riascoltare la registrazione', () => {
     renderDock({ isClosed: true, conversationId: 'conv-1', mode: 'voice' })
-    expect(screen.getByText('Registrazione della chiamata')).toBeInTheDocument()
+    expect(screen.getByText('Registrazione della Chiamata')).toBeInTheDocument()
   })
 
   it("dopo una chat non c'è niente da riascoltare", () => {
     renderDock({ isClosed: true, conversationId: 'conv-1', mode: 'text' })
-    expect(screen.queryByText('Registrazione della chiamata')).not.toBeInTheDocument()
+    expect(screen.queryByText('Registrazione della Chiamata')).not.toBeInTheDocument()
   })
 })

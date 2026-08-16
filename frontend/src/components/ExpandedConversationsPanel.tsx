@@ -202,11 +202,11 @@ export default function ExpandedConversationsPanel({
 
                   {!isRenaming && (
                     <div className="flex shrink-0 items-center gap-1">
-                      <Tooltip content="Rinomina conversazione">
+                      <Tooltip content="Rinomina Conversazione">
                         <button
                           className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 opacity-0 transition hover:bg-violet-600/12 hover:text-violet-400 focus-visible:opacity-100 group-hover/conv:opacity-100 max-[900px]:opacity-100"
                           onClick={(e) => onStartRename(conv, e)}
-                          aria-label="Rinomina conversazione"
+                          aria-label="Rinomina Conversazione"
                         >
                           <svg
                             width="15"
@@ -224,11 +224,11 @@ export default function ExpandedConversationsPanel({
                         </button>
                       </Tooltip>
                       {canDelete && (
-                        <Tooltip content="Elimina conversazione">
+                        <Tooltip content="Elimina Conversazione">
                           <button
                             className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-500 focus-visible:opacity-100 group-hover/conv:opacity-100 max-[900px]:opacity-100"
                             onClick={(e) => onDelete(conv.id, e)}
-                            aria-label="Elimina conversazione"
+                            aria-label="Elimina Conversazione"
                           >
                             <TrashIcon size={15} />
                           </button>
@@ -262,7 +262,7 @@ export default function ExpandedConversationsPanel({
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          Nuova conversazione
+          Nuova Conversazione
         </button>
       </div>
     </ModalShell>

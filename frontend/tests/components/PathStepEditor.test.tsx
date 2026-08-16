@@ -9,7 +9,7 @@ import type { PathStepDraft } from '../../src/components/pathStepDraft'
 import { emptyDraft } from '../../src/components/pathStepDraft'
 
 /* Il selettore del tipo è il punto in cui la tappa decide che prova
- * chiedere, e per un po' non ha funzionato: premere "Test tecnico" azzerava
+ * chiedere, e per un po' non ha funzionato: premere "Test Tecnico" azzerava
  * il bersaglio e il tipo, dedotto dagli id, tornava subito indietro. Questo
  * test lo tiene premuto. */
 
@@ -35,7 +35,7 @@ function Harness({ initial = emptyDraft() }: { initial?: PathStepDraft }) {
   )
 }
 
-const kindButton = (name: 'Conversazione' | 'Test tecnico') => screen.getByRole('button', { name })
+const kindButton = (name: 'Conversazione' | 'Test Tecnico') => screen.getByRole('button', { name })
 
 describe('PathStepEditor', () => {
   it('parte dalla conversazione e cerca fra gli avatar', () => {
@@ -48,9 +48,9 @@ describe('PathStepEditor', () => {
   it('passa al test tecnico e ci resta', async () => {
     render(<Harness />)
 
-    await userEvent.click(kindButton('Test tecnico'))
+    await userEvent.click(kindButton('Test Tecnico'))
 
-    expect(kindButton('Test tecnico')).toHaveAttribute('aria-pressed', 'true')
+    expect(kindButton('Test Tecnico')).toHaveAttribute('aria-pressed', 'true')
     expect(kindButton('Conversazione')).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByPlaceholderText('Cerca un test...')).toBeInTheDocument()
   })
@@ -58,7 +58,7 @@ describe('PathStepEditor', () => {
   it('cerca fra i test una volta cambiato tipo', async () => {
     render(<Harness />)
 
-    await userEvent.click(kindButton('Test tecnico'))
+    await userEvent.click(kindButton('Test Tecnico'))
     await userEvent.click(screen.getByPlaceholderText('Cerca un test...'))
 
     expect(screen.getByRole('option', { name: /Procedure di cassa/ })).toBeInTheDocument()
@@ -69,12 +69,12 @@ describe('PathStepEditor', () => {
     /* Senza data la tappa non scade, ed è la partenza giusta: una data
      * messa d'ufficio sarebbe un termine che nessuno ha deciso. */
     render(<Harness />)
-    const field = screen.getByLabelText('Da completare entro')
+    const field = screen.getByLabelText('Da Completare Entro')
     expect(field).toHaveValue('')
 
     fireEvent.change(field, { target: { value: '2026-03-04T15:30' } })
 
-    expect(screen.getByLabelText('Da completare entro')).toHaveValue('2026-03-04T15:30')
+    expect(screen.getByLabelText('Da Completare Entro')).toHaveValue('2026-03-04T15:30')
   })
 
   it('la scelta prende il posto del campo di ricerca, e toglierla lo riporta', async () => {
@@ -95,7 +95,7 @@ describe('PathStepEditor', () => {
   it('non perde l’avatar già scelto se si torna indietro', async () => {
     render(<Harness initial={{ ...emptyDraft(), avatarId: 'a1' }} />)
 
-    await userEvent.click(kindButton('Test tecnico'))
+    await userEvent.click(kindButton('Test Tecnico'))
     await userEvent.click(kindButton('Conversazione'))
 
     // La chip del selettore riporta la scelta di prima

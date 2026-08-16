@@ -234,7 +234,7 @@ export default function DashboardSimulations({
     <>
       {/* KPI */}
       <div className="mb-6 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
-        <KpiCard label="Voto medio dei test">
+        <KpiCard label="Voto Medio dei Test">
           <p className="font-heading text-4xl font-bold text-slate-100">
             {overallAvg !== null ? (
               <>
@@ -246,13 +246,13 @@ export default function DashboardSimulations({
             )}
           </p>
         </KpiCard>
-        <KpiCard label="Test consegnati">
+        <KpiCard label="Test Consegnati">
           <p className="font-heading text-4xl font-bold text-slate-100">{filtered.length}</p>
         </KpiCard>
-        <KpiCard label="Simulazioni svolte">
+        <KpiCard label="Simulazioni Svolte">
           <p className="font-heading text-4xl font-bold text-slate-100">{simulationsTaken}</p>
         </KpiCard>
-        <KpiCard label="Risposte esatte">
+        <KpiCard label="Risposte Esatte">
           <p className="font-heading text-4xl font-bold text-slate-100">
             {correctRate !== null ? (
               <>
@@ -268,7 +268,7 @@ export default function DashboardSimulations({
 
       {/* Andamento nel tempo */}
       <div className={`${cardCls} mb-6`}>
-        <h3 className="text-sm font-semibold text-slate-300">Andamento nel tempo</h3>
+        <h3 className="text-sm font-semibold text-slate-300">Andamento nel Tempo</h3>
         <p className="mb-4 text-xs text-slate-500">
           Media giornaliera dei voti dei test{KIND_SUFFIX[kindFilter]} consegnati
           {selectedUserId ? ', per l’utente selezionato' : ''}
@@ -284,7 +284,7 @@ export default function DashboardSimulations({
 
       {/* Media per simulazione */}
       <div className={`${cardCls} mb-6`}>
-        <h3 className="text-sm font-semibold text-slate-300">Media per simulazione</h3>
+        <h3 className="text-sm font-semibold text-slate-300">Media per Simulazione</h3>
         <p className="mb-4 text-xs text-slate-500">
           Voto medio di ogni test, dal più critico al migliore
         </p>
@@ -312,7 +312,7 @@ export default function DashboardSimulations({
 
       {/* Confronto tra utenti */}
       <div className={`${cardCls} mb-6`}>
-        <h3 className="text-sm font-semibold text-slate-300">Confronto tra utenti</h3>
+        <h3 className="text-sm font-semibold text-slate-300">Confronto tra Utenti</h3>
         <p className="mb-4 text-xs text-slate-500">
           Voto medio per utente, su tutti i test{KIND_SUFFIX[kindFilter]} che ha consegnato
         </p>

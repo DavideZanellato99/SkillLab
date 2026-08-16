@@ -331,7 +331,7 @@ export default function SimulationEditorModal({
                       onClick={addQuestion}
                       disabled={busy}
                     >
-                      Aggiungi la prima domanda
+                      Aggiungi la Prima Domanda
                     </PrimaryButton>
                   )}
                 </div>
@@ -391,7 +391,7 @@ export default function SimulationEditorModal({
                       className={`${secondaryBtnCls} mt-3 w-full border-dashed`}
                     >
                       <PlusIcon size={16} />
-                      Aggiungi domanda
+                      Aggiungi Domanda
                     </button>
                   )}
                 </>
@@ -438,7 +438,7 @@ export default function SimulationEditorModal({
 
             {generate.isPending && (
               <p className="text-center text-xs text-slate-500">
-                Il modello sta analizzando il documento e redigendo le domande. Non chiudere questa
+                Analisi del documento e redazione delle domande in corso. Non chiudere questa
                 finestra.
               </p>
             )}

@@ -51,7 +51,7 @@ describe('PathStepsTrail', () => {
 
     expect(screen.getByText('Avatar 1')).toBeInTheDocument()
     expect(screen.getByText('Completato')).toBeInTheDocument()
-    expect(screen.getByText('In corso')).toBeInTheDocument()
+    expect(screen.getByText('In Corso')).toBeInTheDocument()
     expect(screen.getByText('Bloccata')).toBeInTheDocument()
   })
 

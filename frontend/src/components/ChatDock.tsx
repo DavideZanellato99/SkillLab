@@ -137,12 +137,12 @@ export default function ChatDock({
                   }
                 }}
               />
-              <Tooltip content="Invia il messaggio">
+              <Tooltip content="Invia il Messaggio">
                 <button
                   className="mb-1 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-gradient-to-br from-violet-600 to-violet-700 text-white shadow-[0_4px_12px_rgba(124,58,237,0.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
                   onClick={chat.send}
                   disabled={!chat.input.trim() || chat.isSending}
-                  aria-label="Invia il messaggio"
+                  aria-label="Invia il Messaggio"
                 >
                   <svg
                     width="18"
@@ -160,13 +160,13 @@ export default function ChatDock({
                 </button>
               </Tooltip>
             </div>
-            <Tooltip content="Termina la chat">
+            <Tooltip content="Termina la Chat">
               <button
                 className="flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-red-500/90 text-white shadow-[0_8px_24px_rgba(239,68,68,0.4)] transition hover:scale-[1.08] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                 onClick={chat.end}
                 disabled={chat.isEnding}
                 id="end-chat-btn"
-                aria-label="Termina la chat"
+                aria-label="Termina la Chat"
               >
                 <svg
                   width="24"
@@ -191,7 +191,7 @@ export default function ChatDock({
               <>Chiusura della chat in corso...</>
             ) : (
               <>
-                💬 Invio invia il messaggio, Shift+Invio va a capo · Il pulsante rosso termina la
+                Invio invia il messaggio, Shift+Invio va a capo · Il pulsante rosso termina la
                 conversazione
               </>
             )}
@@ -217,7 +217,7 @@ export default function ChatDock({
                   className="flex h-16 cursor-pointer items-center justify-center gap-2.5 rounded-full border-none bg-gradient-to-br from-violet-600 to-violet-700 px-8 text-base font-semibold text-white shadow-[0_8px_24px_rgba(124,58,237,0.35)] transition hover:scale-[1.05] hover:shadow-[0_10px_28px_rgba(124,58,237,0.5)]"
                   onClick={chat.start}
                   id="chat-btn"
-                  aria-label="Chatta con l’avatar"
+                  aria-label="Chatta con l’Avatar"
                 >
                   <svg
                     width="22"
@@ -240,9 +240,9 @@ export default function ChatDock({
             {voiceActive ? (
               <>Chiamata in corso · il pulsante rosso termina la chiamata</>
             ) : canStartChat ? (
-              <>Chiama {avatar.name} al telefono, oppure scrivigli in chat</>
+              <>Chiama {avatar.name} al telefono, oppure prosegui in chat</>
             ) : (
-              <>📞 Premi Chiama per telefonare a {avatar.name}</>
+              <>Premi Chiama per telefonare a {avatar.name}</>
             )}
           </p>
           {/* Trasparenza continua (art. 13): l'avviso completo si legge una

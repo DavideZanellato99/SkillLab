@@ -20,8 +20,8 @@ function renderControls(over: Partial<Parameters<typeof MoveControls>[0]> = {}) 
   return { onUp, onDown }
 }
 
-const su = () => screen.getByRole('button', { name: 'Sposta in alto: Primo passo' })
-const giu = () => screen.getByRole('button', { name: 'Sposta in basso: Primo passo' })
+const su = () => screen.getByRole('button', { name: 'Sposta in Alto: Primo passo' })
+const giu = () => screen.getByRole('button', { name: 'Sposta in Basso: Primo passo' })
 
 describe('MoveControls', () => {
   it('sposta di un posto nella direzione scelta', async () => {
@@ -79,7 +79,7 @@ describe('MoveControls', () => {
     renderControls({ canMoveDown: false })
 
     await userEvent.hover(su())
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Sposta in alto')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Sposta in Alto')
 
     await userEvent.unhover(su())
     await userEvent.hover(giu())

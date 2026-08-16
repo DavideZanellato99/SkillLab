@@ -129,7 +129,7 @@ export default forwardRef<CallRecordingPlayerHandle, CallRecordingPlayerProps>(
               controls
               autoPlay
               src={audioUrl}
-              aria-label="Registrazione della chiamata"
+              aria-label="Registrazione della Chiamata"
               onLoadedMetadata={(e) => {
                 if (pendingSeekMs.current !== null) {
                   applySeek(e.currentTarget, pendingSeekMs.current)
@@ -156,7 +156,7 @@ export default forwardRef<CallRecordingPlayerHandle, CallRecordingPlayerProps>(
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              Scarica l’audio
+              Scarica l’Audio
             </a>
           </>
         ) : (

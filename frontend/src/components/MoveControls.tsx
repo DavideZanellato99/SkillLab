@@ -37,23 +37,23 @@ export default function MoveControls({
     'flex h-6 w-7 cursor-pointer items-center justify-center rounded-md text-slate-500 transition hover:bg-white/8 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-500'
   return (
     <div className="flex shrink-0 flex-col">
-      <Tooltip content={canMoveUp && !disabled ? 'Sposta in alto' : ''}>
+      <Tooltip content={canMoveUp && !disabled ? 'Sposta in Alto' : ''}>
         <button
           type="button"
           onClick={onUp}
           disabled={disabled || !canMoveUp}
-          aria-label={`Sposta in alto: ${label}`}
+          aria-label={`Sposta in Alto: ${label}`}
           className={btnCls}
         >
           <ChevronUpIcon size={14} />
         </button>
       </Tooltip>
-      <Tooltip content={canMoveDown && !disabled ? 'Sposta in basso' : ''}>
+      <Tooltip content={canMoveDown && !disabled ? 'Sposta in Basso' : ''}>
         <button
           type="button"
           onClick={onDown}
           disabled={disabled || !canMoveDown}
-          aria-label={`Sposta in basso: ${label}`}
+          aria-label={`Sposta in Basso: ${label}`}
           className={btnCls}
         >
           <ChevronDownIcon size={14} />

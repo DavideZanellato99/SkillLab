@@ -86,7 +86,7 @@ export default function PathStepPanel({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Chiudi la tappa"
+            aria-label="Chiudi la Tappa"
             className="-mr-1 -mt-1 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100"
           >
             <CloseIcon size={16} />

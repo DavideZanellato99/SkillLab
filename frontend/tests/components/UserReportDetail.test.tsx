@@ -124,7 +124,7 @@ describe('UserReportDetail', () => {
     expect(handlers.onOpenConversation).toHaveBeenCalledWith(conversation)
     expect(handlers.onDeleteConversation).not.toHaveBeenCalled()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Elimina conversazione' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Conversazione' }))
     expect(handlers.onDeleteConversation).toHaveBeenCalledWith(conversation)
     expect(handlers.onOpenConversation).toHaveBeenCalledTimes(1)
   })
@@ -211,7 +211,7 @@ describe('UserReportDetail', () => {
     await userEvent.click(screen.getByText('Procedure di sportello'))
     expect(handlers.onOpenAttempt).toHaveBeenCalledWith(attempt.id)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Elimina tentativo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Tentativo' }))
     expect(handlers.onDeleteAttempt).toHaveBeenCalledWith(attempt)
     expect(handlers.onOpenAttempt).toHaveBeenCalledTimes(1)
   })

@@ -12,14 +12,14 @@
  *
  * L'etichetta per intero sta nell'aria-label e non nel testo visibile: sullo
  * schermo le due card dicono già di quale prova si tratta, mentre due comandi
- * che si chiamano entrambi "Apri il tentativo" sono indistinguibili per chi
+ * che si chiamano entrambi "Apri il Tentativo" sono indistinguibili per chi
  * ascolta la pagina. */
 export default function ComparisonOpenButton({
   label,
   ariaLabel,
   onClick,
 }: {
-  /** Cosa si va a leggere: "Apri la trascrizione", "Apri il tentativo". */
+  /** Cosa si va a leggere: "Apri la Trascrizione", "Apri il Tentativo". */
   label: string
   /** Lo stesso comando con dentro la prova a cui appartiene. */
   ariaLabel: string

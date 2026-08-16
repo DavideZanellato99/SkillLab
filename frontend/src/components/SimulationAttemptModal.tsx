@@ -95,7 +95,7 @@ export default function SimulationAttemptModal({
             <div className="flex items-start gap-2">
               {canDelete && (
                 <ModalDeleteButton
-                  label="Elimina tentativo"
+                  label="Elimina Tentativo"
                   onClick={() => setIsConfirmingDelete(true)}
                 />
               )}

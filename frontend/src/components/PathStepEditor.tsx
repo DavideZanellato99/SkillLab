@@ -42,7 +42,7 @@ import { draftTarget } from './pathStepDraft'
 
 const KINDS = [
   { value: 'avatar', label: 'Conversazione' },
-  { value: 'simulation', label: 'Test tecnico' },
+  { value: 'simulation', label: 'Test Tecnico' },
 ] as const
 
 const kindBtnCls =
@@ -118,7 +118,7 @@ export default function PathStepEditor({
   const menuItems: KebabMenuItem[] = [
     {
       key: 'up',
-      label: 'Sposta in alto',
+      label: 'Sposta in Alto',
       icon: <ChevronUpIcon />,
       onSelect: () => onMove(index - 1),
       disabled: disabled || index === 0,
@@ -126,7 +126,7 @@ export default function PathStepEditor({
     },
     {
       key: 'down',
-      label: 'Sposta in basso',
+      label: 'Sposta in Basso',
       icon: <ChevronDownIcon />,
       onSelect: () => onMove(index + 1),
       disabled: disabled || index === total - 1,
@@ -134,7 +134,7 @@ export default function PathStepEditor({
     },
     {
       key: 'remove',
-      label: 'Rimuovi la tappa',
+      label: 'Rimuovi la Tappa',
       icon: <TrashIcon />,
       danger: true,
       onSelect: onRemove,
@@ -202,13 +202,13 @@ export default function PathStepEditor({
         </div>
         <div className="flex flex-1 flex-col gap-1 lg:block">
           <label htmlFor={`${fieldId}-due`} className={`${labelCls} lg:hidden`}>
-            Da completare entro
+            Da Completare Entro
           </label>
           <input
             id={`${fieldId}-due`}
             type="datetime-local"
             disabled={disabled}
-            aria-label="Da completare entro"
+            aria-label="Da Completare Entro"
             value={step.dueAt ?? ''}
             onChange={(e) => onChange({ ...step, dueAt: e.target.value || null })}
             className={`${formInputCls} w-full`}

@@ -39,7 +39,7 @@ export default function SimulationDetailModal({
       </DetailField>
       {/* Il tipo non si cambia dopo la creazione, quindi qui è una cosa da
           sapere e non un campo che qualcuno andrà a cercare per modificarlo. */}
-      <DetailField label="Tipo di test">
+      <DetailField label="Tipo di Test">
         <SimulationKindBadge kind={simulation.kind} />
       </DetailField>
       {showOrganization && (
@@ -48,7 +48,7 @@ export default function SimulationDetailModal({
       {/* Chi ha scritto le domande, e da cosa. Le due righe sono la stessa
           informazione vista da due lati, quindi su un test scritto a mano il
           documento non compare vuoto: non ce n'è uno. */}
-      <DetailField label="Origine domande">
+      <DetailField label="Origine Domande">
         <SimulationSourceBadge source={simulation.source} />
       </DetailField>
       {simulation.source !== 'manual' && (
@@ -76,7 +76,7 @@ export default function SimulationDetailModal({
         )}
       </DetailField>
       <AuthorshipFields row={simulation} />
-      <DetailField label="ID simulazione" mono>
+      <DetailField label="ID Simulazione" mono>
         {simulation.id}
       </DetailField>
     </DetailModal>

@@ -152,7 +152,7 @@ describe('ComparisonConversations', () => {
     const user = userEvent.setup()
     renderConfronto()
 
-    await user.click(screen.getByRole('button', { name: /Apri la trascrizione di Prima chiamata/ }))
+    await user.click(screen.getByRole('button', { name: /Apri la Trascrizione di Prima chiamata/ }))
 
     expect(screen.getByText('trascrizione: c1')).toBeInTheDocument()
     expect(aperta.row).toMatchObject({ conversation_id: 'c1', avatar_name: 'Anna Neri' })
@@ -164,7 +164,7 @@ describe('ComparisonConversations', () => {
     const user = userEvent.setup()
     renderConfronto(attempts, { ...io, isSelf: false })
 
-    await user.click(screen.getByRole('button', { name: /Apri la trascrizione di Prima chiamata/ }))
+    await user.click(screen.getByRole('button', { name: /Apri la Trascrizione di Prima chiamata/ }))
 
     expect(aperta.scope).toBe('admin')
   })
@@ -173,7 +173,7 @@ describe('ComparisonConversations', () => {
     const user = userEvent.setup()
     renderConfronto()
 
-    await user.click(screen.getByRole('button', { name: /Apri la trascrizione di Prima chiamata/ }))
+    await user.click(screen.getByRole('button', { name: /Apri la Trascrizione di Prima chiamata/ }))
 
     expect(aperta.scope).toBe('own')
   })

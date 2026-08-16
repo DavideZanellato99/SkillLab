@@ -62,10 +62,10 @@ export default function ProfileFieldInput({
           value={value}
           onChange={onChange}
           options={[
-            { value: '', label: 'Non applicabile' },
+            { value: '', label: 'Non Applicabile' },
             ...[...options, ...extra].map((o) => ({ value: o, label: o })),
           ]}
-          placeholder="Non applicabile"
+          placeholder="Non Applicabile"
           disabled={disabled}
         />
         {hint}

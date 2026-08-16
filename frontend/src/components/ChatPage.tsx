@@ -382,7 +382,7 @@ export default function ChatPage() {
             to="/app"
             className="text-sm text-violet-400 no-underline transition-colors hover:text-slate-100"
           >
-            ← Torna alla Gallery
+            ← Torna alla galleria
           </Link>
         </div>
       </div>

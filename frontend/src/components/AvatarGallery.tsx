@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import AvatarCard from './AvatarCard'
 import Toast from './Toast'
+import { ChatIcon } from './icons'
 import { useAvatars, useCategories } from '../hooks/useAvatars'
 
 interface AvatarGalleryProps {
@@ -110,7 +111,9 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
         </div>
       ) : avatars.length === 0 ? (
         <div className="animate-fade-in p-16 text-center">
-          <div className="mb-4 animate-float text-5xl">🎭</div>
+          <div className="mb-4 flex justify-center text-slate-600">
+            <ChatIcon size={40} />
+          </div>
           <p className="text-lg text-slate-500">Nessun avatar presente in questa categoria</p>
         </div>
       ) : (

@@ -74,7 +74,7 @@ export default function TrainingAssignmentsTable({
       columns={[
         { key: 'utente', label: 'Utente' },
         { key: 'percorso', label: 'Percorso' },
-        { key: 'tappa', label: 'Tappa corrente' },
+        { key: 'tappa', label: 'Tappa Corrente' },
         { key: 'avanzamento', label: 'Avanzamento' },
         { key: 'assegnato', label: 'Assegnato il' },
         { key: 'stato', label: 'Stato' },

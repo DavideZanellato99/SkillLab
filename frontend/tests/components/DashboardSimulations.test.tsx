@@ -62,7 +62,7 @@ const rows: SimulationReportRow[] = [
 
 /** Il voto medio, che è il primo numero in cima alla sezione. */
 function averageShown() {
-  return screen.getByText('Voto medio dei test').closest('div')?.textContent
+  return screen.getByText('Voto Medio dei Test').closest('div')?.textContent
 }
 
 describe('DashboardSimulations, filtro per tipo', () => {
@@ -71,7 +71,7 @@ describe('DashboardSimulations, filtro per tipo', () => {
 
     // (10 + 5 + 6 + 6) / 4
     expect(averageShown()).toContain('6,8')
-    expect(screen.getByText('Test consegnati').closest('div')?.textContent).toContain('4')
+    expect(screen.getByText('Test Consegnati').closest('div')?.textContent).toContain('4')
     // Ogni titolo compare due volte, nella barra delle medie e in tabella
     expect(screen.getAllByText('Rimborsi allo sportello').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Procedure di sportello').length).toBeGreaterThan(0)
@@ -82,7 +82,7 @@ describe('DashboardSimulations, filtro per tipo', () => {
 
     // I due test scritti, non i due a crocette
     expect(averageShown()).toContain('6')
-    expect(screen.getByText('Test consegnati').closest('div')?.textContent).toContain('2')
+    expect(screen.getByText('Test Consegnati').closest('div')?.textContent).toContain('2')
     expect(screen.queryByText('Procedure di sportello')).not.toBeInTheDocument()
   })
 
@@ -92,7 +92,7 @@ describe('DashboardSimulations, filtro per tipo', () => {
      * direbbe di quell'utente un numero che non esiste. */
     render(<DashboardSimulations rows={rows} selectedUserId="" kindFilter="multiple" />)
 
-    const confronto = screen.getByText('Confronto tra utenti').closest('div')
+    const confronto = screen.getByText('Confronto tra Utenti').closest('div')
     expect(within(confronto!).getByText('2 tentativi')).toBeInTheDocument()
   })
 

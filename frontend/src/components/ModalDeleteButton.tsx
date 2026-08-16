@@ -17,7 +17,7 @@ export default function ModalDeleteButton({
   label,
   onClick,
 }: {
-  /** Cosa si sta per eliminare: "Elimina conversazione", "Elimina tentativo". */
+  /** Cosa si sta per eliminare: "Elimina Conversazione", "Elimina Tentativo". */
   label: string
   onClick: () => void
 }) {

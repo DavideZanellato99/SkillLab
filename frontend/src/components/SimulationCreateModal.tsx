@@ -39,8 +39,8 @@ const KIND_OPTIONS = (['multiple', 'open', 'ordering', 'matching'] as Simulation
 )
 
 const SOURCE_OPTIONS = [
-  { value: 'ai', label: 'Generate da un documento' },
-  { value: 'manual', label: 'Scritte a mano' },
+  { value: 'ai', label: 'Generate da un Documento' },
+  { value: 'manual', label: 'Scritte a Mano' },
 ]
 
 interface SimulationCreateModalProps {
@@ -115,7 +115,7 @@ export default function SimulationCreateModal({
           </svg>
         }
         iconWrapperCls="border border-violet-600/20 bg-violet-600/10 text-violet-400"
-        title="Nuova simulazione"
+        title="Nuova Simulazione"
         description={
           fromDocument
             ? 'Carica il documento da cui ricavare le domande.'
@@ -151,7 +151,7 @@ export default function SimulationCreateModal({
           />
         </Field>
 
-        <Field label="Tipo di test" htmlFor="simulation-kind">
+        <Field label="Tipo di Test" htmlFor="simulation-kind">
           <Select
             id="simulation-kind"
             value={kind}

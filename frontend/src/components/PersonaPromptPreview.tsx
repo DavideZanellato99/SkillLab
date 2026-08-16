@@ -65,7 +65,7 @@ export default function PersonaPromptPreview({ profile, onClose }: Props) {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-heading text-[1.25rem] font-bold text-slate-100">
-            Anteprima del prompt
+            Anteprima del Prompt
           </h2>
           <p className="text-[0.8rem] text-slate-500">
             Il contenuto che l'avatar riceve effettivamente da questa scheda.
@@ -97,7 +97,7 @@ export default function PersonaPromptPreview({ profile, onClose }: Props) {
             type="button"
             className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100"
             onClick={onClose}
-            aria-label="Chiudi anteprima"
+            aria-label="Chiudi Anteprima"
           >
             <CloseIcon size={18} />
           </button>

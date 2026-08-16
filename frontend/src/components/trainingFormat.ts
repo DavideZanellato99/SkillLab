@@ -23,7 +23,7 @@ export function stepLink(step: PathStep): string {
 
 /** Cosa chiede la tappa, per chi la legge senza conoscere il percorso. */
 export function stepKindLabel(step: PathStep): string {
-  return step.kind === 'avatar' ? 'Conversazione' : 'Test tecnico'
+  return step.kind === 'avatar' ? 'Conversazione' : 'Test Tecnico'
 }
 
 export function formatScore(score: number): string {

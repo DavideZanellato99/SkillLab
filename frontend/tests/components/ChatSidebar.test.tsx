@@ -103,8 +103,8 @@ describe('ChatSidebar', () => {
   it("apre una conversazione nuova ed espande l'elenco", async () => {
     const { onNewConversation, onExpand } = renderSidebar()
 
-    await userEvent.click(screen.getByRole('button', { name: /Nuova conversazione/ }))
-    await userEvent.click(screen.getByRole('button', { name: 'Espandi le conversazioni' }))
+    await userEvent.click(screen.getByRole('button', { name: /Nuova Conversazione/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Espandi le Conversazioni' }))
 
     expect(onNewConversation).toHaveBeenCalledOnce()
     expect(onExpand).toHaveBeenCalledOnce()
@@ -137,17 +137,20 @@ describe('ChatSidebar', () => {
         />
       </MemoryRouter>,
     )
-    expect(screen.getByRole('button', { name: 'Elimina conversazione' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Elimina Conversazione' })).toBeInTheDocument()
     unmount()
 
     renderSidebar()
-    expect(screen.queryByRole('button', { name: 'Elimina conversazione' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Elimina Conversazione' })).not.toBeInTheDocument()
   })
 
   it('torna alla galleria', () => {
     renderSidebar()
 
-    expect(screen.getByRole('link', { name: /Torna alla Gallery/ })).toHaveAttribute('href', '/app')
+    expect(screen.getByRole('link', { name: /Torna alla Galleria/ })).toHaveAttribute(
+      'href',
+      '/app',
+    )
   })
 })
 
@@ -219,7 +222,7 @@ describe('rinomina di una conversazione', () => {
   it('chiede di cominciare dalla riga giusta', async () => {
     const { onStartRename } = renderSidebar()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rinomina conversazione' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Rinomina Conversazione' }))
 
     expect(onStartRename).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'c-1' }),
@@ -264,7 +267,7 @@ describe('rinomina di una conversazione', () => {
   it('nasconde le azioni della riga durante la rinomina', () => {
     renderSidebar({ renamingId: 'c-1', renameValue: 'Reclamo', canDelete: true })
 
-    expect(screen.queryByRole('button', { name: 'Rinomina conversazione' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Elimina conversazione' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Rinomina Conversazione' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Elimina Conversazione' })).not.toBeInTheDocument()
   })
 })

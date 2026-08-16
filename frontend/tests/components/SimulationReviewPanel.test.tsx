@@ -90,7 +90,7 @@ describe('SimulationReviewPanel', () => {
   it('dice quando le domande sono cambiate dopo il controllo', () => {
     renderPanel({ is_stale: true })
 
-    expect(screen.getByText('Da rifare')).toBeInTheDocument()
+    expect(screen.getByText('Da ripetere')).toBeInTheDocument()
   })
 
   it('lancia il controllo', async () => {

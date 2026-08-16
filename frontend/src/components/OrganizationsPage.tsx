@@ -47,7 +47,7 @@ const STATUS_LABELS: Record<OrgStatus, string> = {
 const ACTIVITY_WINDOW_DAYS = 30
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'Tutti gli stati' },
+  { value: '', label: 'Tutti gli Stati' },
   ...(Object.keys(STATUS_LABELS) as OrgStatus[]).map((s) => ({
     value: s,
     label: STATUS_LABELS[s],
@@ -255,7 +255,7 @@ export default function OrganizationsPage() {
             className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
             onClick={() => setStatusFilter('')}
           >
-            Azzera filtri
+            Azzera Filtri
           </button>
         )}
       </div>
@@ -284,7 +284,7 @@ export default function OrganizationsPage() {
               {
                 key: 'toggle',
                 label:
-                  o.status === 'suspended' ? 'Riattiva organizzazione' : 'Sospendi organizzazione',
+                  o.status === 'suspended' ? 'Riattiva Organizzazione' : 'Sospendi Organizzazione',
                 icon: o.status === 'suspended' ? reactivateIcon : suspendIcon,
                 onSelect: () =>
                   openStatusChange(o, o.status === 'suspended' ? 'active' : 'suspended'),
@@ -403,7 +403,7 @@ export default function OrganizationsPage() {
             </Badge>
           </DetailField>
           {viewingOrg.status === 'suspended' && viewingOrg.suspension_reason && (
-            <DetailField label="Motivo sospensione">{viewingOrg.suspension_reason}</DetailField>
+            <DetailField label="Motivo Sospensione">{viewingOrg.suspension_reason}</DetailField>
           )}
           <DetailField label="Utenti">
             <div className="flex items-center justify-end gap-3">
@@ -413,7 +413,7 @@ export default function OrganizationsPage() {
                 onClick={closeDetail}
                 className={detailLinkCls}
               >
-                Apri elenco
+                Apri Elenco
               </Link>
             </div>
           </DetailField>
@@ -425,7 +425,7 @@ export default function OrganizationsPage() {
                 onClick={closeDetail}
                 className={detailLinkCls}
               >
-                Apri elenco
+                Apri Elenco
               </Link>
             </div>
           </DetailField>
@@ -443,7 +443,7 @@ export default function OrganizationsPage() {
               <Spinner variant="button" />
             )}
           </DetailField>
-          <DetailField label="Punteggio medio">
+          <DetailField label="Punteggio Medio">
             {detailError ? (
               <span className="text-slate-500">—</span>
             ) : detail ? (
@@ -463,7 +463,7 @@ export default function OrganizationsPage() {
               <Spinner variant="button" />
             )}
           </DetailField>
-          <DetailField label="Ultimo accesso">
+          <DetailField label="Ultimo Accesso">
             {detailError ? (
               <span className="text-slate-500">—</span>
             ) : detail ? (
@@ -479,7 +479,7 @@ export default function OrganizationsPage() {
             )}
           </DetailField>
           <AuthorshipFields row={viewingOrg} />
-          <DetailField label="ID organizzazione" mono>
+          <DetailField label="ID Organizzazione" mono>
             {viewingOrg.id}
           </DetailField>
         </DetailModal>
@@ -647,7 +647,7 @@ export default function OrganizationsPage() {
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 disabled={deleteMutation.isPending}
-                aria-label="Conferma nome organizzazione"
+                aria-label="Conferma Nome Organizzazione"
               />
             </div>
           </div>

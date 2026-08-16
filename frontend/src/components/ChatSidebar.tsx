@@ -113,7 +113,7 @@ export default function ChatSidebar({
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
-        Nuova conversazione
+        Nuova Conversazione
       </button>
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -121,11 +121,11 @@ export default function ChatSidebar({
           <h3 className="text-[0.7rem] font-semibold uppercase tracking-widest text-slate-500">
             Conversazioni
           </h3>
-          <Tooltip content="Espandi le conversazioni">
+          <Tooltip content="Espandi le Conversazioni">
             <button
               className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-slate-500 transition hover:bg-violet-600/12 hover:text-violet-400"
               onClick={onExpand}
-              aria-label="Espandi le conversazioni"
+              aria-label="Espandi le Conversazioni"
             >
               <svg
                 width="14"
@@ -208,7 +208,7 @@ export default function ChatSidebar({
                     <button
                       className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 opacity-0 transition hover:bg-violet-600/12 hover:text-violet-400 focus-visible:opacity-100 group-hover/conv:opacity-100 max-[900px]:opacity-100"
                       onClick={(e) => onStartRename(conv, e)}
-                      aria-label="Rinomina conversazione"
+                      aria-label="Rinomina Conversazione"
                     >
                       <svg
                         width="14"
@@ -229,7 +229,7 @@ export default function ChatSidebar({
                     <button
                       className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-500 group-hover/conv:opacity-100"
                       onClick={(e) => onDelete(conv.id, e)}
-                      aria-label="Elimina conversazione"
+                      aria-label="Elimina Conversazione"
                     >
                       <TrashIcon />
                     </button>
@@ -259,7 +259,7 @@ export default function ChatSidebar({
           <line x1="19" y1="12" x2="5" y2="12" />
           <polyline points="12 19 5 12 12 5" />
         </svg>
-        Torna alla Gallery
+        Torna alla Galleria
       </Link>
     </aside>
   )

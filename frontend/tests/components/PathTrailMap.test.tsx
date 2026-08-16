@@ -69,9 +69,9 @@ describe('PathTrailMap', () => {
 
   it('rimpicciolita accorcia il sentiero senza perdere tappe', async () => {
     renderMap()
-    const mappa = screen.getByRole('region', { name: 'Mappa del percorso' })
+    const mappa = screen.getByRole('region', { name: 'Mappa del Percorso' })
     const alto = mappa.style.height
-    const rimpicciolisci = screen.getByRole('button', { name: 'Rimpicciolisci la mappa' })
+    const rimpicciolisci = screen.getByRole('button', { name: 'Rimpicciolisci la Mappa' })
 
     await userEvent.click(rimpicciolisci)
 

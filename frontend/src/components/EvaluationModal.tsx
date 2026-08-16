@@ -107,7 +107,7 @@ export default function EvaluationModal({
           </svg>
         </div>
         <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-          Valutazione della chiamata
+          Valutazione della Chiamata
         </h2>
         <p className="text-[0.85rem] text-slate-500">
           Il formatore AI ha analizzato la tua conversazione con {avatarName}.
@@ -178,7 +178,7 @@ export default function EvaluationModal({
                     <polyline points="1 4 1 10 7 10" />
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                   </svg>
-                  Riprova questo scenario
+                  Riprova Questo Scenario
                 </button>
               )}
             </div>
@@ -230,7 +230,7 @@ export default function EvaluationModal({
               disabled={!canSaveTitle}
             >
               {isSavingTitle && <Spinner variant="button" />}
-              Salva e chiudi
+              Salva e Chiudi
             </button>
           </div>
           {titleError && <p className="mt-2 text-[0.8rem] text-red-400">{titleError}</p>}

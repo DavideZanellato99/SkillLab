@@ -64,7 +64,7 @@ function AuthHeader({ step }: { step: AuthStep }) {
         </>
       ) : (
         <>
-          <h2 className={titleCls}>Imposta nuova password</h2>
+          <h2 className={titleCls}>Imposta Nuova Password</h2>
           <p className="text-[0.85rem] text-slate-500">
             La tua password temporanea è scaduta. Scegline una nuova per continuare.
           </p>

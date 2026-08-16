@@ -24,7 +24,7 @@ function startOfDay(date: Date): number {
 }
 
 /** Etichetta mostrata al posto della data quando l'account non è mai stato usato. */
-export const NEVER_ACCESSED_LABEL = 'Mai acceduto'
+export const NEVER_ACCESSED_LABEL = 'Mai Acceduto'
 
 /**
  * Distanza da adesso in italiano: "oggi", "ieri", "3 giorni fa",

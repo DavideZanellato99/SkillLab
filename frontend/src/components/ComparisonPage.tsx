@@ -64,7 +64,7 @@ export default function ComparisonPage() {
   return (
     <PageContainer width="split">
       <PageHeader
-        title="Confronto tra i tentativi"
+        title="Confronto tra i Tentativi"
         description={
           canPickUser
             ? 'Seleziona una persona e affianca due delle sue prove per osservare le differenze.'
@@ -89,7 +89,7 @@ export default function ComparisonPage() {
                 value={subjectId}
                 onChange={setSubjectId}
                 options={[
-                  { value: '', label: 'Le mie prove' },
+                  { value: '', label: 'Le Mie Prove' },
                   ...people.map((p) => ({
                     value: p.id,
                     label: `${p.nome} ${p.cognome}`.trim() || p.email,

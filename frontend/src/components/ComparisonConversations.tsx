@@ -146,8 +146,8 @@ function AttemptPanel({
       )}
 
       <ComparisonOpenButton
-        label="Apri la trascrizione"
-        ariaLabel={`Apri la trascrizione di ${attempt.title} del ${formatDate(attempt.conversation_at)}`}
+        label="Apri la Trascrizione"
+        ariaLabel={`Apri la Trascrizione di ${attempt.title} del ${formatDate(attempt.conversation_at)}`}
         onClick={onOpen}
       />
     </div>
@@ -303,7 +303,7 @@ export default function ComparisonConversations({
         />
 
         <ComparisonTimeline
-          label="Conversazioni valutate"
+          label="Conversazioni Valutate"
           entries={entries}
           leftId={leftId}
           rightId={rightId}
@@ -340,7 +340,7 @@ export default function ComparisonConversations({
           </ComparisonVerdict>
 
           <div className={`${cardCls} mb-6`}>
-            <h2 className="mb-4 text-sm font-semibold text-slate-300">Punteggi per criterio</h2>
+            <h2 className="mb-4 text-sm font-semibold text-slate-300">Punteggi per Criterio</h2>
             {/* Le due colonne di barre vanno intestate: senza, si legge un
                 paio di numeri senza sapere quale conversazione è quale, e
                 tocca risalire al verdetto ogni volta. Le stesse due parole
@@ -411,7 +411,7 @@ export default function ComparisonConversations({
               stava parlando. Senza `items-start` i due riquadri si stirano
               all'altezza del più alto, e le sintesi sono lunghe quanto
               capita. */}
-          <h2 className="mb-3 text-sm font-semibold text-slate-300">Le due conversazioni</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-300">Le Due Conversazioni</h2>
           <div className="grid grid-cols-2 items-start gap-6 max-md:grid-cols-1">
             <AttemptPanel role="Prima" attempt={left} onOpen={() => setOpenAttempt(left)} />
             <AttemptPanel role="Dopo" attempt={right} onOpen={() => setOpenAttempt(right)} />

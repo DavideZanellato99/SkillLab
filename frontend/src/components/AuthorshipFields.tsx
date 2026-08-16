@@ -14,7 +14,7 @@ export default function AuthorshipFields({ row }: { row: Authored }) {
       <DetailField label="Creato il">
         <Moment at={row.created_at} by={row.created_by_email} />
       </DetailField>
-      <DetailField label="Ultima modifica">
+      <DetailField label="Ultima Modifica">
         {/* Uguale alla creazione quando nessuno l'ha più toccata: dirlo è più
             utile che ripetere la stessa data come se fosse una modifica. */}
         {row.updated_at === row.created_at ? (

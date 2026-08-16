@@ -50,7 +50,7 @@ describe('PathStepDrawer', () => {
   it('si chiude dal bottone', async () => {
     const { onClose } = renderDrawer()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Chiudi la tappa' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Chiudi la Tappa' }))
 
     expect(onClose).toHaveBeenCalled()
   })

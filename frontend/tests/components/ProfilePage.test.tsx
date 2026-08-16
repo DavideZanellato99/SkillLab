@@ -72,7 +72,7 @@ describe('i propri dati', () => {
     renderPage()
 
     expect(screen.getByRole('heading', { name: 'Anna Rossi' })).toBeInTheDocument()
-    expect(screen.getByText('User')).toBeInTheDocument()
+    expect(screen.getByText('Utente')).toBeInTheDocument()
   })
 
   it("ripiega sull'email quando il nome non c'è ancora", () => {

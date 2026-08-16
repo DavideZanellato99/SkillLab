@@ -84,6 +84,6 @@ describe('UserRow', () => {
 
   it('segnala un invito mai usato invece di lasciare la data vuota', () => {
     renderRow({ last_login_at: null })
-    expect(screen.getByText('Mai acceduto')).toBeInTheDocument()
+    expect(screen.getByText('Mai Acceduto')).toBeInTheDocument()
   })
 })

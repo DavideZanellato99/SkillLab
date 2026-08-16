@@ -120,7 +120,7 @@ export default function TrainerReviewPanel({
         <button
           className="cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 transition hover:bg-white/8 hover:text-slate-100"
           onClick={onClose}
-          aria-label="Chiudi la revisione"
+          aria-label="Chiudi la Revisione"
         >
           <CloseIcon size={15} />
         </button>

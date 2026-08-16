@@ -15,6 +15,7 @@ Flow:
 
 import asyncio
 import json
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
@@ -43,6 +44,8 @@ from voice_sessions import close_voice_session, create_voice_session, load_voice
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
+logger = logging.getLogger(__name__)
+
 # Opus voice runs about 2 MB per 10 minutes, so this is a very long call.
 # It guards against a client posting something absurd, it is not a real cap.
 MAX_RECORDING_BYTES = 50 * 1024 * 1024
@@ -64,10 +67,14 @@ def start_voice_session(
     db: Session = Depends(get_db),
 ):
     """Start a voice session: returns the session id for the voice WebSocket."""
+    # Il dettaglio tecnico resta nei log: chi legge il messaggio si sta
+    # esercitando, e i nomi delle variabili d'ambiente non gli servono a
+    # nulla se non a capire che la piattaforma è configurata male.
     if not ELEVENLABS_API_KEY or not CARTESIA_API_KEY:
+        logger.error("Sessione vocale rifiutata: ELEVENLABS_API_KEY o CARTESIA_API_KEY mancanti")
         raise HTTPException(
             status_code=503,
-            detail="ELEVENLABS_API_KEY / CARTESIA_API_KEY non configurate nel .env del backend.",
+            detail="Il servizio vocale non è al momento disponibile. Utilizza la modalità chat oppure contatta l'amministratore.",
         )
 
     avatar = (

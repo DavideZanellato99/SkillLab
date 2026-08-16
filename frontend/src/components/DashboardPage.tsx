@@ -153,7 +153,7 @@ export default function DashboardPage() {
   }
 
   const orgFilterOptions = [
-    { value: '', label: 'Tutte le organizzazioni' },
+    { value: '', label: 'Tutte le Organizzazioni' },
     ...organizations.map((o) => ({ value: o.id, label: o.name })),
   ]
 
@@ -459,7 +459,7 @@ export default function DashboardPage() {
                 <>
                   {/* KPI */}
                   <div className="mb-6 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
-                    <KpiCard label="Voto medio complessivo">
+                    <KpiCard label="Voto Medio Complessivo">
                       <p className="font-heading text-4xl font-bold text-slate-100">
                         {overallAvg !== null ? (
                           <>
@@ -473,12 +473,12 @@ export default function DashboardPage() {
                         )}
                       </p>
                     </KpiCard>
-                    <KpiCard label="Conversazioni valutate">
+                    <KpiCard label="Conversazioni Valutate">
                       <p className="font-heading text-4xl font-bold text-slate-100">
                         {filtered.length}
                       </p>
                     </KpiCard>
-                    <KpiCard label="Criterio più forte">
+                    <KpiCard label="Criterio Più Forte">
                       {bestCriterion ? (
                         <>
                           <Tooltip content={bestCriterion.label} truncateOnly>
@@ -497,7 +497,7 @@ export default function DashboardPage() {
                         <p className="text-2xl text-slate-500">—</p>
                       )}
                     </KpiCard>
-                    <KpiCard label="Criterio più debole">
+                    <KpiCard label="Criterio Più Debole">
                       {worstCriterion ? (
                         <>
                           <Tooltip content={worstCriterion.label} truncateOnly>
@@ -520,7 +520,7 @@ export default function DashboardPage() {
 
                   {/* Andamento nel tempo */}
                   <div className={`${cardCls} mb-6`}>
-                    <h2 className="text-sm font-semibold text-slate-300">Andamento nel tempo</h2>
+                    <h2 className="text-sm font-semibold text-slate-300">Andamento nel Tempo</h2>
                     <p className="mb-4 text-xs text-slate-500">
                       Media giornaliera del voto complessivo {MODE_SUFFIX[modeFilter]}
                       {selectedUserId ? ', per l’utente selezionato' : ''}
@@ -536,7 +536,7 @@ export default function DashboardPage() {
 
                   {/* Media per criterio */}
                   <div className={`${cardCls} mb-6`}>
-                    <h2 className="text-sm font-semibold text-slate-300">Media per criterio</h2>
+                    <h2 className="text-sm font-semibold text-slate-300">Media per Criterio</h2>
                     <p className="mb-4 text-xs text-slate-500">
                       Punteggio medio dei 6 criteri di valutazione {MODE_SUFFIX[modeFilter]}
                     </p>
@@ -555,7 +555,7 @@ export default function DashboardPage() {
 
                   {/* Confronto tra utenti */}
                   <div className={`${cardCls} mb-6`}>
-                    <h2 className="text-sm font-semibold text-slate-300">Confronto tra utenti</h2>
+                    <h2 className="text-sm font-semibold text-slate-300">Confronto tra Utenti</h2>
                     <p className="mb-4 text-xs text-slate-500">
                       Voto medio complessivo per utente, su tutte le valutazioni{' '}
                       {MODE_SUFFIX[modeFilter]}

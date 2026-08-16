@@ -57,7 +57,7 @@ function AssignmentCard({ assignment }: { assignment: PathAssignment }) {
           <PathStepDots steps={assignment.steps} />
           {now && (
             <p className="mt-2.5 truncate text-[0.78rem] text-slate-500">
-              {open ? 'Ora tocca a' : 'Ultima tappa'}{' '}
+              {open ? 'Tappa in corso' : 'Ultima tappa'}{' '}
               <strong className="font-semibold text-slate-300">{stepTarget(now)}</strong> ·{' '}
               {stepKindLabel(now).toLowerCase()}
             </p>
@@ -80,7 +80,7 @@ export default function MyPathsPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="I tuoi percorsi"
+        title="I Tuoi Percorsi"
         description="Le tappe che il tuo formatore ti ha assegnato: si superano in ordine, una alla volta."
       />
 

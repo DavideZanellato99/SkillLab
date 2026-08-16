@@ -71,7 +71,7 @@ describe('la riga', () => {
     expect(screen.getByText('Onboarding')).toBeInTheDocument()
     expect(screen.getByText('2. Avatar 2')).toBeInTheDocument()
     expect(screen.getByText('1/2')).toBeInTheDocument()
-    expect(screen.getByText('In corso')).toBeInTheDocument()
+    expect(screen.getByText('In Corso')).toBeInTheDocument()
   })
 
   it('scrive la scadenza della tappa aperta', () => {

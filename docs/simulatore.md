@@ -774,7 +774,9 @@ una notizia che la schermata dice.
 
 In cima alle domande sta
 [SimulationReviewPanel](../frontend/src/components/SimulationReviewPanel.tsx),
-con le segnalazioni **dalla più grave**, e ogni segnalazione porta al punto:
+che a schermo si intitola **«Controllo delle Domande»**: serbatoio è il nome
+che la cosa ha qui e nel codice, non una parola da far leggere a chi
+amministra. Le segnalazioni stanno **dalla più grave**, e ognuna porta al punto:
 un clic sul numero della domanda ci salta sopra. **L'elenco delle domande non
 si riordina**, ed è una scelta: il numero accanto a una domanda è anche la sua
 posizione nel serbatoio e il modo in cui una segnalazione la nomina, quindi

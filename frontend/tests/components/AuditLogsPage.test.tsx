@@ -146,16 +146,16 @@ describe('filtri', () => {
     expect(stato.filtriChiesti.organizationId).toBe('org-1')
   })
 
-  /* "Azzera filtri" compare solo quando c'è qualcosa da azzerare: un
+  /* "Azzera Filtri" compare solo quando c'è qualcosa da azzerare: un
    * pulsante sempre acceso su una tabella intatta non fa niente. */
   it("offre di azzerare i filtri solo quando ce n'è uno", async () => {
     renderPage()
-    expect(screen.queryByRole('button', { name: 'Azzera filtri' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Azzera Filtri' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByLabelText('Azione'))
     await userEvent.click(screen.getByRole('option', { name: 'Utente creato' }))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Azzera filtri' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
     expect(stato.filtriChiesti.action).toBe('')
   })
 

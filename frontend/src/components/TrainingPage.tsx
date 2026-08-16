@@ -88,7 +88,7 @@ export default function TrainingPage() {
   return (
     <PageContainer>
       <PageHeader
-        title="Percorsi di training"
+        title="Percorsi di Training"
         description="Sequenze di tappe da superare in ordine: la successiva si apre quando la precedente è chiusa."
         actions={
           <div className="flex flex-wrap items-center gap-3 max-sm:w-full">
@@ -99,7 +99,7 @@ export default function TrainingPage() {
                 value={orgFilter}
                 onChange={setOrgFilter}
                 options={[
-                  { value: '', label: 'Tutte le organizzazioni' },
+                  { value: '', label: 'Tutte le Organizzazioni' },
                   ...organizations.map((o) => ({ value: o.id, label: o.name })),
                 ]}
               />
@@ -109,7 +109,7 @@ export default function TrainingPage() {
               onClick={() => setIsComposing(true)}
               className="max-sm:w-full"
             >
-              Nuovo percorso
+              Nuovo Percorso
             </PrimaryButton>
           </div>
         }

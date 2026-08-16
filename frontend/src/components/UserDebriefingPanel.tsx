@@ -174,7 +174,8 @@ export default function UserDebriefingPanel({
             <>
               <h3 className="text-[0.95rem] font-semibold text-slate-100">Quadro d'insieme</h3>
               <span className="text-xs text-slate-500">
-                Cosa si ripete nelle prove di {userName}, che una prova alla volta non si vede
+                Gli elementi ricorrenti nelle prove di {userName}, che una prova alla volta non
+                emergono
               </span>
             </>
           )}
@@ -201,15 +202,15 @@ export default function UserDebriefingPanel({
           volta credendo che non abbia funzionato. */}
       {generate.isPending && (
         <LoadingState
-          message="Il modello sta leggendo le prove di questa persona. Può volerci un minuto."
+          message="Lettura delle prove di questa persona in corso. L'operazione può richiedere qualche minuto."
           variant="modal"
         />
       )}
 
       {tooFewProofs && (
         <p className="py-4 text-center text-[0.85rem] italic text-slate-500">
-          Servono almeno {MIN_EVIDENCE} prove svolte per un quadro d'insieme. Con meno, ripeterebbe
-          le valutazioni che ci sono già
+          Servono almeno {MIN_EVIDENCE} prove svolte per un quadro d'insieme. Con un numero
+          inferiore riprodurrebbe le valutazioni già disponibili
         </p>
       )}
 
@@ -228,7 +229,7 @@ export default function UserDebriefingPanel({
           {debriefing.themes.length > 0 && (
             <div className="flex flex-col gap-2">
               <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Cosa si ripete
+                Elementi Ricorrenti
               </h4>
               <ul className="flex list-none flex-col gap-2">
                 {debriefing.themes.map((theme) => (
@@ -244,7 +245,7 @@ export default function UserDebriefingPanel({
           {debriefing.improving && (
             <div className={`${cardCls} border-l-2 border-l-cyan-500/50`}>
               <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Cosa sta migliorando
+                Aspetti in Miglioramento
               </h4>
               <p className="mt-1.5 text-[0.85rem] leading-relaxed text-slate-300">
                 {debriefing.improving}
@@ -254,7 +255,7 @@ export default function UserDebriefingPanel({
 
           <div className={`${cardCls} border-l-2 border-l-violet-600`}>
             <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-              Da fare adesso
+              Intervento Prioritario
             </h4>
             <p className="mt-1.5 text-[0.85rem] leading-relaxed text-slate-200">
               {debriefing.next_step}

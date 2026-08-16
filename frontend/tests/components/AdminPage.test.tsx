@@ -151,7 +151,7 @@ describe('elenco', () => {
     renderPage()
 
     await userEvent.click(screen.getByLabelText('Ruolo'))
-    await userEvent.click(screen.getByRole('option', { name: 'User' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Utente' }))
 
     expect(screen.getByText(/che corrispondono ai filtri/)).toBeInTheDocument()
   })
@@ -213,7 +213,7 @@ describe('filtri', () => {
     renderPage()
 
     await userEvent.click(screen.getByLabelText('Ruolo'))
-    await userEvent.click(screen.getByRole('option', { name: 'Organization Admin' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Amministratore Organizzazione' }))
     await userEvent.click(screen.getByLabelText('Stato'))
     await userEvent.click(screen.getByRole('option', { name: 'Sospeso' }))
 
@@ -228,18 +228,18 @@ describe('filtri', () => {
     expect(stato.filtriChiesti.neverLoggedIn).toBeUndefined()
 
     await userEvent.click(screen.getByLabelText('Accesso'))
-    await userEvent.click(screen.getByRole('option', { name: 'Mai acceduto' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Mai Acceduto' }))
     expect(stato.filtriChiesti.neverLoggedIn).toBe(true)
 
     await userEvent.click(screen.getByLabelText('Accesso'))
-    await userEvent.click(screen.getByRole('option', { name: 'Ha già acceduto' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Ha Già Acceduto' }))
     expect(stato.filtriChiesti.neverLoggedIn).toBe(false)
   })
 
   it('azzera tutti i filtri insieme', async () => {
     renderPage('/app/admin?organization_id=org-1')
 
-    await userEvent.click(screen.getByRole('button', { name: /Azzera filtri/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Azzera Filtri/ }))
 
     expect(stato.filtriChiesti.organizationId).toBe('')
     expect(stato.filtriChiesti.ruolo).toBeUndefined()
@@ -318,7 +318,7 @@ describe('azioni su una riga', () => {
     renderPage()
 
     await userEvent.click(screen.getByRole('button', { name: 'Altre azioni per anna@test.it' }))
-    await userEvent.click(screen.getByRole('menuitem', { name: /Rinvia credenziali/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Rinvia Credenziali/ }))
     expect(screen.getByText(/cesseranno immediatamente di funzionare/)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Invia Nuova Password' }))
@@ -331,7 +331,7 @@ describe('azioni su una riga', () => {
     renderPage()
 
     await userEvent.click(screen.getByRole('button', { name: 'Altre azioni per anna@test.it' }))
-    await userEvent.click(screen.getByRole('menuitem', { name: /Sospendi account/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Sospendi Account/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Sospendi Account' }))
 
     await waitFor(() =>
@@ -346,7 +346,7 @@ describe('azioni su una riga', () => {
     renderPage()
 
     await userEvent.click(screen.getByRole('button', { name: 'Altre azioni per anna@test.it' }))
-    await userEvent.click(screen.getByRole('menuitem', { name: /Disabilita account/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Disabilita Account/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Disabilita Definitivamente' }))
 
     await waitFor(() =>
@@ -363,7 +363,7 @@ describe('azioni su una riga', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Altre azioni per anna@test.it' }))
 
     // Spente entrambe, e ciascuna dice perché
-    for (const voce of [/Sospendi account/, /Disabilita account/]) {
+    for (const voce of [/Sospendi Account/, /Disabilita Account/]) {
       expect(screen.getByRole('menuitem', { name: voce })).toBeDisabled()
       expect(screen.getByRole('menuitem', { name: voce })).toHaveTextContent(
         'Non puoi modificare lo stato del tuo stesso account',

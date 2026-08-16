@@ -126,7 +126,7 @@ describe('ConversationDetailModal', () => {
     // Una revisione con le sole note sui messaggi è ancora da scrivere, e il
     // comando lo dice: "Modifica" comparirebbe con una sintesi o una
     // correzione del voto.
-    expect(screen.getByText('+ Aggiungi revisione')).toBeInTheDocument()
+    expect(screen.getByText('Aggiungi Revisione')).toBeInTheDocument()
     expect(calledPaths().some((p) => p.includes('/api/admin/conversations/'))).toBe(true)
   })
 
@@ -138,7 +138,7 @@ describe('ConversationDetailModal', () => {
     // Né il pannello né il pulsante che lo apre: il voto lo corregge chi
     // insegna, non chi lo ha preso.
     expect(screen.queryByText('Modifica revisione')).not.toBeInTheDocument()
-    expect(screen.queryByText('+ Aggiungi revisione')).not.toBeInTheDocument()
+    expect(screen.queryByText('Aggiungi Revisione')).not.toBeInTheDocument()
     // La nota del docente invece si legge, come nel referto.
     expect(screen.getByText('Presentazione da rifare.')).toBeInTheDocument()
   })
@@ -149,21 +149,21 @@ describe('ConversationDetailModal', () => {
    * sbaglio la funzione che elimina. */
   it('offre il cestino a un admin, e solo se chi lo ha aperto sa cosa farne', async () => {
     const { unmount } = show('admin', () => {})
-    expect(await screen.findByText('Elimina conversazione')).toBeInTheDocument()
+    expect(await screen.findByText('Elimina Conversazione')).toBeInTheDocument()
     unmount()
 
     // Senza `onDeleted` la schermata non saprebbe chiudersi su una
     // conversazione che non esiste più: il cestino resta spento.
     show('admin')
     await screen.findByText('Verifico subito la pratica.')
-    expect(screen.queryByText('Elimina conversazione')).not.toBeInTheDocument()
+    expect(screen.queryByText('Elimina Conversazione')).not.toBeInTheDocument()
   })
 
   it('a chi rilegge una conversazione sua non offre il cestino', async () => {
     show('own', () => {})
 
     await screen.findByText('Verifico subito la pratica.')
-    expect(screen.queryByText('Elimina conversazione')).not.toBeInTheDocument()
+    expect(screen.queryByText('Elimina Conversazione')).not.toBeInTheDocument()
   })
 
   it('per una conversazione propria non passa dagli endpoint di amministrazione', async () => {

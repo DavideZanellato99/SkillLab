@@ -85,7 +85,7 @@ export default function SimulationRunner() {
           {error instanceof Error ? error.message : 'Simulazione non trovata.'}
         </div>
         <Link to="/app/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
-          Torna all'elenco
+          Torna all'Elenco
         </Link>
       </PageContainer>
     )
@@ -194,9 +194,9 @@ export default function SimulationRunner() {
           attempt={result}
           actions={
             <>
-              <PrimaryButton onClick={restart}>Riprova il test</PrimaryButton>
+              <PrimaryButton onClick={restart}>Riprova il Test</PrimaryButton>
               <Link to="/app/simulatore" className={linkBtnCls}>
-                Torna all'elenco
+                Torna all'Elenco
               </Link>
             </>
           }
@@ -208,13 +208,13 @@ export default function SimulationRunner() {
   if (simulation.question_count === 0) {
     return (
       <PageContainer>
-        <PageHeader title={simulation.title} description="Simulazione non ancora svolgibile." />
+        <PageHeader title={simulation.title} description="Simulazione non ancora disponibile." />
         <div className="rounded-2xl border border-white/6 bg-gray-900/60 p-16 text-center text-slate-500 backdrop-blur-md">
           <p className="mb-1 text-[0.95rem]">Questa simulazione non contiene ancora domande</p>
           <p className="text-sm">Sarà disponibile appena chi la gestisce le avrà predisposte</p>
         </div>
         <Link to="/app/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
-          Torna all'elenco
+          Torna all'Elenco
         </Link>
       </PageContainer>
     )
@@ -235,7 +235,7 @@ export default function SimulationRunner() {
         actions={
           started ? undefined : (
             <Link to="/app/simulatore" className={linkBtnCls}>
-              Torna all'elenco
+              Torna all'Elenco
             </Link>
           )
         }
@@ -262,7 +262,7 @@ export default function SimulationRunner() {
           <p className="mb-4 text-[0.85rem] text-slate-400">
             Le risposte non sono andate perse: ripeti la consegna.
           </p>
-          <PrimaryButton onClick={() => send(answers)}>Riprova la consegna</PrimaryButton>
+          <PrimaryButton onClick={() => send(answers)}>Riprova la Consegna</PrimaryButton>
         </>
       ) : started ? (
         /* La chiave rimonta il passo a ogni domanda, e con lui il cronometro

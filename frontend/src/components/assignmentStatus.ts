@@ -12,14 +12,14 @@ export const STATUS_META: Record<AssignmentStatus, { label: string; cls: string 
    * qualcosa da fare. Grigia e senza accento, perché è l'unico stato in cui
    * non c'è niente da fare. */
   locked: { label: 'Bloccata', cls: 'border-white/10 bg-white/4 text-slate-500' },
-  active: { label: 'In corso', cls: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' },
+  active: { label: 'In Corso', cls: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' },
   overdue: { label: 'Scaduto', cls: 'border-red-500/30 bg-red-500/10 text-red-400' },
   completed: {
     label: 'Completato',
     cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
   },
   completed_late: {
-    label: 'Completato in ritardo',
+    label: 'Completato in Ritardo',
     cls: 'border-orange-500/30 bg-orange-500/10 text-orange-400',
   },
 }

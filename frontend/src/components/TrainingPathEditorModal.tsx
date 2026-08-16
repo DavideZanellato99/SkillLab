@@ -154,7 +154,7 @@ export default function TrainingPathEditorModal({
       <ModalHeader
         icon={<PlusIcon size={24} stroke="#a78bfa" />}
         iconWrapperCls="border border-violet-500/30 bg-violet-500/10"
-        title={isEditing ? 'Modifica il percorso' : 'Nuovo percorso'}
+        title={isEditing ? 'Modifica il percorso' : 'Nuovo Percorso'}
         description={
           isEditing && path && path.assigned_count > 0
             ? `Le modifiche valgono subito per le ${path.assigned_count} persone che lo stanno percorrendo.`
@@ -216,7 +216,7 @@ export default function TrainingPathEditorModal({
             hint={
               isEditing ? (
                 <span className="text-xs text-slate-500">
-                  Non si cambia: le tappe appartengono a questo tenant
+                  Non è modificabile: le tappe appartengono a questa organizzazione
                 </span>
               ) : undefined
             }
@@ -286,7 +286,7 @@ export default function TrainingPathEditorModal({
                   className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition hover:bg-white/5 hover:text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <PlusIcon size={13} />
-                  Aggiungi tappa
+                  Aggiungi Tappa
                 </button>
                 {content.avatars.length === 0 && content.simulations.length === 0 && (
                   <p className="mt-2 text-[0.82rem] text-slate-500">

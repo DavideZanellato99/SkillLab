@@ -93,7 +93,7 @@ export default function SimulationPairsEditor({
             className="mt-0.5 flex w-fit cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition hover:bg-white/5 hover:text-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <PlusIcon size={13} />
-            Aggiungi coppia
+            Aggiungi Coppia
           </button>
         )}
       </div>

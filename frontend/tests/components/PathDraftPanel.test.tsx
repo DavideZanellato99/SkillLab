@@ -63,7 +63,7 @@ describe('PathDraftPanel', () => {
   it('non manda un obiettivo troppo corto', async () => {
     renderPanel()
 
-    await userEvent.type(screen.getByLabelText(/Fatti proporre/), 'un corso')
+    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), 'un corso')
 
     expect(screen.getByRole('button', { name: /Proponi/ })).toBeDisabled()
     expect(servizio.draftPath).not.toHaveBeenCalled()
@@ -72,7 +72,7 @@ describe('PathDraftPanel', () => {
   it('chiede la proposta sul catalogo del tenant scelto', async () => {
     renderPanel('org-7')
 
-    await userEvent.type(screen.getByLabelText(/Fatti proporre/), OBIETTIVO)
+    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), OBIETTIVO)
     await userEvent.click(screen.getByRole('button', { name: /Proponi/ }))
 
     await waitFor(() => expect(servizio.draftPath).toHaveBeenCalledWith(OBIETTIVO, 'org-7'))
@@ -84,7 +84,7 @@ describe('PathDraftPanel', () => {
   it('dopo la proposta dice quante tappe sono e perché', async () => {
     renderPanel()
 
-    await userEvent.type(screen.getByLabelText(/Fatti proporre/), OBIETTIVO)
+    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), OBIETTIVO)
     await userEvent.click(screen.getByRole('button', { name: /Proponi/ }))
 
     expect(await screen.findByText(/da rileggere una per una/)).toBeInTheDocument()
@@ -98,7 +98,7 @@ describe('PathDraftPanel', () => {
     servizio.draftPath.mockRejectedValue(new Error('Il catalogo è vuoto.'))
     renderPanel()
 
-    await userEvent.type(screen.getByLabelText(/Fatti proporre/), OBIETTIVO)
+    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), OBIETTIVO)
     await userEvent.click(screen.getByRole('button', { name: /Proponi/ }))
 
     expect(await screen.findByText('Il catalogo è vuoto.')).toBeInTheDocument()
@@ -109,7 +109,7 @@ describe('PathDraftPanel', () => {
   it('resta spento finché non è stata scelta un organizzazione', async () => {
     renderPanel('')
 
-    await userEvent.type(screen.getByLabelText(/Fatti proporre/), OBIETTIVO)
+    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), OBIETTIVO)
 
     expect(screen.getByRole('button', { name: /Proponi/ })).toBeDisabled()
   })

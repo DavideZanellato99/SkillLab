@@ -35,22 +35,22 @@ async function scegli(campo: string, opzione: string) {
 describe('UsersFilters', () => {
   it('cambia un filtro alla volta', async () => {
     const { onChange } = renderFilters()
-    await scegli('Ruolo', 'Organization Admin')
+    await scegli('Ruolo', 'Amministratore Organizzazione')
     expect(onChange).toHaveBeenCalledWith({ ruolo: 'organization_admin' })
   })
 
   it('distingue "mai acceduto" da "ha già acceduto"', async () => {
     const { onChange } = renderFilters()
-    await scegli('Accesso', 'Mai acceduto')
+    await scegli('Accesso', 'Mai Acceduto')
     expect(onChange).toHaveBeenCalledWith({ access: 'never' })
   })
 
   it("offre di azzerare solo quando c'è qualcosa da azzerare", async () => {
     renderFilters()
-    expect(screen.queryByRole('button', { name: 'Azzera filtri' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Azzera Filtri' })).not.toBeInTheDocument()
 
     const { onReset } = renderFilters({ ...empty, status: 'suspended' })
-    await userEvent.click(screen.getByRole('button', { name: 'Azzera filtri' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
     expect(onReset).toHaveBeenCalledOnce()
   })
 })

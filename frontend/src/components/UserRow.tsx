@@ -73,7 +73,7 @@ export default function UserRow({
     const toggleTarget: UserStatus = user.status === 'suspended' ? 'active' : 'suspended'
     menuItems.push({
       key: 'toggle',
-      label: toggleTarget === 'active' ? 'Riattiva account' : 'Sospendi account',
+      label: toggleTarget === 'active' ? 'Riattiva Account' : 'Sospendi Account',
       icon: toggleTarget === 'active' ? reactivateIcon : suspendIcon,
       disabled: isProtected,
       disabledReason: statusBlockedReason,
@@ -81,7 +81,7 @@ export default function UserRow({
     })
     menuItems.push({
       key: 'disable',
-      label: 'Disabilita account',
+      label: 'Disabilita Account',
       icon: disableIcon,
       danger: true,
       disabled: isProtected,
@@ -91,7 +91,7 @@ export default function UserRow({
   }
   menuItems.push({
     key: 'resend',
-    label: 'Rinvia credenziali',
+    label: 'Rinvia Credenziali',
     icon: resendIcon,
     disabled: isProtected || !isActive,
     disabledReason: resendBlockedReason,
@@ -150,7 +150,7 @@ export default function UserRow({
         <div className="flex items-center justify-end gap-2">
           <IconButton
             label={`Modifica ${user.email}`}
-            tooltip="Modifica utente"
+            tooltip="Modifica Utente"
             onClick={() => onEdit(user)}
           >
             <PencilIcon />
@@ -163,7 +163,7 @@ export default function UserRow({
                 ? 'Non puoi eliminare il tuo stesso account'
                 : isSystemAccount
                   ? "Non è possibile eliminare l'account di sistema"
-                  : 'Elimina utente'
+                  : 'Elimina Utente'
             }
             disabled={isProtected}
             onClick={() => onDelete(user)}

@@ -67,7 +67,7 @@ export default function SimulationIntro({
   return (
     <>
       <div className="rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md">
-        <h2 className="mb-4 font-heading text-base font-semibold text-slate-100">Come funziona</h2>
+        <h2 className="mb-4 font-heading text-base font-semibold text-slate-100">Come Funziona</h2>
         <ul className="flex list-none flex-col gap-2.5">
           <Rule>
             {total} domande, presentate una alla volta: la domanda successiva compare dopo la
@@ -153,7 +153,7 @@ export default function SimulationIntro({
                 Preparazione del test...
               </>
             ) : attempts.length > 0 ? (
-              'Riprova il test'
+              'Riprova il Test'
             ) : (
               'Inizia il test'
             )}

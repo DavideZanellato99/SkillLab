@@ -82,7 +82,7 @@ describe('TrainingPathCard', () => {
     })
 
     expect(screen.getByText('Normativa antiriciclaggio')).toBeInTheDocument()
-    expect(screen.getByText(/Test tecnico · obiettivo 7/)).toBeInTheDocument()
+    expect(screen.getByText(/Test Tecnico · obiettivo 7/)).toBeInTheDocument()
   })
 
   it('dice quante persone lo stanno percorrendo', () => {

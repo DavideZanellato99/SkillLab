@@ -182,7 +182,7 @@ export default function SimulationAdminPage() {
                       <PencilIcon />
                     </button>
                   </Tooltip>
-                  <Tooltip content="Elimina simulazione">
+                  <Tooltip content="Elimina Simulazione">
                     <button
                       className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
                       onClick={() => setToDelete(simulation)}
@@ -232,7 +232,7 @@ export default function SimulationAdminPage() {
         <ConfirmModal
           icon={<TrashIcon size={24} />}
           iconWrapperCls="border border-red-500/25 bg-red-500/10 text-red-300"
-          title="Elimina simulazione"
+          title="Elimina Simulazione"
           description={
             <>
               La simulazione <strong>{toDelete.title}</strong> verrà eliminata con le sue domande e

@@ -19,7 +19,7 @@ export default function CategoryColorPicker({
   disabled = false,
 }: CategoryColorPickerProps) {
   return (
-    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Colore della categoria">
+    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Colore della Categoria">
       {CATEGORY_COLORS.map((color) => (
         <button
           key={color}

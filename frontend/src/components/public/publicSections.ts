@@ -35,12 +35,12 @@ export const PUBLIC_SECTIONS: PublicSection[] = [
   },
   {
     path: '/simulatore',
-    label: 'Simulatore tecnico',
+    label: 'Simulatore Tecnico',
     description: 'Test di verifica sulle procedure aziendali',
   },
   {
     path: '/valutazione',
-    label: 'Valutazione e analisi',
+    label: 'Valutazione e Analisi',
     description: 'Criteri, revisione, obiettivi formativi e cruscotti',
   },
 ]

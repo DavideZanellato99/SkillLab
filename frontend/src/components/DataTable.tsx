@@ -161,7 +161,7 @@ export default function DataTable({
                 type="button"
                 onClick={() => setPage(1)}
                 disabled={safePage === 1}
-                aria-label="Prima pagina"
+                aria-label="Prima Pagina"
                 className={paginationBtnCls}
               >
                 <svg
@@ -182,7 +182,7 @@ export default function DataTable({
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={safePage === 1}
-                aria-label="Pagina precedente"
+                aria-label="Pagina Precedente"
                 className={paginationBtnCls}
               >
                 <svg
@@ -205,7 +205,7 @@ export default function DataTable({
                 type="button"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage === totalPages}
-                aria-label="Pagina successiva"
+                aria-label="Pagina Successiva"
                 className={paginationBtnCls}
               >
                 <svg
@@ -225,7 +225,7 @@ export default function DataTable({
                 type="button"
                 onClick={() => setPage(totalPages)}
                 disabled={safePage === totalPages}
-                aria-label="Ultima pagina"
+                aria-label="Ultima Pagina"
                 className={paginationBtnCls}
               >
                 <svg

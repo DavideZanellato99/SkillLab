@@ -29,15 +29,15 @@ import Spinner from './Spinner'
 const MIN_CHARS = 40
 
 const SOURCES: { value: PersonaDraftSource; label: string }[] = [
-  { value: 'descrizione', label: 'Un caso' },
-  { value: 'conversazione', label: 'Una conversazione' },
+  { value: 'descrizione', label: 'Un Caso' },
+  { value: 'conversazione', label: 'Una Conversazione' },
 ]
 
 const HINTS: Record<PersonaDraftSource, string> = {
   descrizione:
-    "Racconta il caso come lo racconteresti a un collega: chi chiama, cosa è successo davvero e cosa vuoi che l'operatore impari a fare. Il resto della scheda lo inventa il modello attorno a questo.",
+    "Descrivi il caso come lo esporresti a un collega: chi chiama, cosa è accaduto e quale competenza deve esercitare l'operatore. Il resto della scheda viene composto attorno a questi elementi.",
   conversazione:
-    'Incolla una conversazione vera, già ripulita dai dati di chi ci compare. Il modello ricava dal testo come parla il cliente e cosa lo ha portato a scrivere, e inventa solo quello che manca.',
+    'Incolla una conversazione reale, già priva dei dati identificativi delle persone coinvolte. Dal testo vengono ricavati il modo di esprimersi del cliente e il motivo del contatto, e vengono composti solo gli elementi mancanti.',
 }
 
 const PLACEHOLDERS: Record<PersonaDraftSource, string> = {
@@ -89,11 +89,11 @@ export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Pr
     <ModalShell onClose={onClose} locked={isPending} size="md" padding="md" elevated>
       <div className="mb-6">
         <h2 className="mb-1 font-heading text-[1.2rem] font-bold text-slate-100">
-          Genera la scheda
+          Genera la Scheda
         </h2>
         <p className="text-[0.8rem] leading-relaxed text-slate-500">
-          Il modello propone una scheda intera, tu la correggi prima di salvarla. Quello che hai già
-          scritto nel form non viene toccato.
+          Il modello propone una scheda completa, da rivedere prima del salvataggio. I campi già
+          compilati restano invariati.
         </p>
       </div>
 
@@ -101,12 +101,12 @@ export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Pr
 
       <div className="flex flex-col gap-4">
         <div className={fieldCls}>
-          <span className={labelCls}>Da cosa parti</span>
+          <span className={labelCls}>Punto di partenza</span>
           <FilterTabs
             value={source}
             onChange={(value) => setSource(value)}
             options={SOURCES}
-            ariaLabel="Da cosa nasce la scheda"
+            ariaLabel="Origine della scheda"
           />
           <p className="text-[0.72rem] leading-relaxed text-slate-500">{HINTS[source]}</p>
         </div>
@@ -128,22 +128,22 @@ export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Pr
               una cosa da sapere. */}
           {troppoCorto && text.length > 0 && (
             <p className="text-[0.7rem] text-slate-500">
-              Ancora {MIN_CHARS - text.trim().length} caratteri: da poche parole il modello si
-              inventa un caso suo.
+              Ancora {MIN_CHARS - text.trim().length} caratteri: da poche parole il modello
+              comporrebbe un caso non aderente.
             </p>
           )}
         </div>
 
         <div className={fieldCls}>
           <label className={labelCls} htmlFor="draft-difficulty">
-            Grado di difficoltà
+            Grado di Difficoltà
           </label>
           <Select
             id="draft-difficulty"
             value={grado}
             onChange={setGrado}
             options={DIFFICULTY_OPTIONS.map((value) => ({ value, label: value }))}
-            placeholder="Lo decide il modello"
+            placeholder="Definito dal modello"
             disabled={isPending}
           />
           <p className="text-[0.7rem] text-slate-500">
@@ -162,7 +162,7 @@ export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Pr
           {isPending ? (
             <>
               <Spinner variant="button" />
-              Sto scrivendo la scheda...
+              Scrittura della scheda in corso...
             </>
           ) : (
             'Genera la bozza'
@@ -170,8 +170,8 @@ export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Pr
         </PrimaryButton>
         {isPending && (
           <p className="text-center text-[0.72rem] text-slate-500">
-            Ci vuole una ventina di secondi: il modello scrive una settantina di campi che devono
-            stare in piedi insieme
+            L'operazione richiede circa venti secondi: vengono compilati una settantina di campi che
+            devono risultare coerenti fra loro
           </p>
         )}
       </div>

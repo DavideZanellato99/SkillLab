@@ -173,7 +173,7 @@ function AnswerRow({
 
 interface SimulationResultProps {
   attempt: SimulationAttempt
-  /** Azioni sotto il riepilogo, es. "Riprova" e "Torna all'elenco". */
+  /** Azioni sotto il riepilogo, es. "Riprova" e "Torna all'Elenco". */
   actions?: React.ReactNode
   /** Falso quando a rileggere il test è un altro, non chi l'ha svolto. */
   own?: boolean

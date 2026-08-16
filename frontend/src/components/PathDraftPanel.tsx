@@ -67,7 +67,7 @@ export default function PathDraftPanel({
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-violet-500/20 bg-violet-600/6 p-3">
       <Field
-        label="Fatti proporre un percorso"
+        label="Proposta Automatica del Percorso"
         htmlFor="path-goal"
         hint={<span className="text-xs text-slate-500">Facoltativo</span>}
       >
@@ -83,9 +83,9 @@ export default function PathDraftPanel({
       </Field>
 
       <p className="text-xs leading-relaxed text-slate-500">
-        Il modello sceglie fra gli avatar e i test di questa organizzazione e li mette in fila. È
-        una proposta da rileggere: le tappe restano modificabili qui sotto, e il percorso nasce solo
-        quando lo crei.
+        Il modello seleziona gli avatar e i test di questa organizzazione e li dispone in sequenza.
+        È una proposta da rileggere: le tappe restano modificabili qui sotto, e il percorso viene
+        creato solo alla conferma.
       </p>
 
       {error && <FormError message={error} />}
@@ -96,7 +96,7 @@ export default function PathDraftPanel({
         icon={draft.isPending ? <Spinner variant="button" /> : <SparkleIcon size={15} />}
         className="w-fit"
       >
-        {draft.isPending ? 'Il modello sta componendo...' : 'Proponi un percorso'}
+        {draft.isPending ? 'Composizione in corso...' : 'Proponi un percorso'}
       </PrimaryButton>
 
       {/* Non è un messaggio di successo: in questo momento il form è pieno di

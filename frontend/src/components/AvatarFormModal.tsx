@@ -107,7 +107,7 @@ export default function AvatarFormModal({
    * Il catalogo arriva già filtrato sulla lingua dell'app, quindi il nome
    * basta: ripetere la lingua su ogni riga sarebbe solo rumore. */
   const voiceOptions = [
-    { value: '', label: 'Voce predefinita' },
+    { value: '', label: 'Voce Predefinita' },
     ...voices.map((v) => ({ value: v.id, label: v.name })),
     ...(form.voiceId && !voices.some((v) => v.id === form.voiceId)
       ? [{ value: form.voiceId, label: `${form.voiceId} (non nel catalogo)` }]
@@ -148,8 +148,8 @@ export default function AvatarFormModal({
     setShowDraft(false)
     setDraftNotice(
       merge.kept > 0
-        ? `Bozza inserita in ${merge.written} campi. ${merge.kept} li avevi già scritti tu e sono rimasti come stanno.`
-        : `Bozza inserita in ${merge.written} campi. Rileggila prima di salvare: è una proposta, non una scheda finita.`,
+        ? `Bozza inserita in ${merge.written} campi. ${merge.kept} erano già compilati e sono rimasti invariati.`
+        : `Bozza inserita in ${merge.written} campi. Rileggila prima di salvare: è una proposta, non una scheda definitiva.`,
     )
   }
 
@@ -264,7 +264,7 @@ export default function AvatarFormModal({
               <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z" />
               <path d="M19 15.5 19.8 17.4 21.7 18.2 19.8 19 19 20.9 18.2 19 16.3 18.2 18.2 17.4 19 15.5Z" />
             </svg>
-            Genera la scheda
+            Genera la Scheda
           </button>
           <button
             type="button"
@@ -284,7 +284,7 @@ export default function AvatarFormModal({
               <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
-            Anteprima del prompt
+            Anteprima del Prompt
           </button>
         </div>
       </div>
@@ -311,7 +311,7 @@ export default function AvatarFormModal({
       )}
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <h3 className={sectionTitleCls}>Dati base</h3>
+        <h3 className={sectionTitleCls}>Dati Base</h3>
         <div className={fieldCls}>
           <label className={labelCls} htmlFor="av-description">
             Brief per l'operatore (descrizione visibile allo studente)
@@ -374,7 +374,7 @@ export default function AvatarFormModal({
               onClick={() => onManageCategories(form.organizationId)}
               disabled={isSaving}
             >
-              Gestisci categorie
+              Gestisci Categorie
             </button>
           </div>
 
@@ -390,13 +390,13 @@ export default function AvatarFormModal({
                   value={form.voiceId}
                   onChange={(value) => setForm((p) => ({ ...p, voiceId: value }))}
                   options={voiceOptions}
-                  placeholder="Voce predefinita"
+                  placeholder="Voce Predefinita"
                   disabled={isSaving}
                 />
                 <IconButton
                   tone="play"
                   className="shrink-0"
-                  label="Ascolta anteprima della voce"
+                  label="Ascolta Anteprima della Voce"
                   tooltip="Ascolta questa voce"
                   onClick={() => playVoicePreview(form.voiceId)}
                   disabled={!form.voiceId || playingVoiceId !== null || isSaving}

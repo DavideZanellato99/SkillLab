@@ -5,6 +5,7 @@ import {
   useDeleteMessageAnnotation,
 } from '../hooks/useConversationReview'
 import Tooltip from './Tooltip'
+import { PlusIcon } from './icons'
 
 /* La nota che il docente appunta su un singolo messaggio della trascrizione,
  * con il suo mini editor.
@@ -143,10 +144,11 @@ export default function MessageAnnotationEditor({
 
   return (
     <button
-      className="mt-1 cursor-pointer rounded-lg border-none bg-transparent px-1.5 py-0.5 text-[0.72rem] font-medium text-slate-500 transition hover:text-violet-300"
+      className="mt-1 flex cursor-pointer items-center gap-1 rounded-lg border-none bg-transparent px-1.5 py-0.5 text-[0.72rem] font-medium text-slate-500 transition hover:text-violet-300"
       onClick={() => setIsEditing(true)}
     >
-      + Annota
+      <PlusIcon size={12} />
+      Annota
     </button>
   )
 }

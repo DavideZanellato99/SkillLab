@@ -150,7 +150,7 @@ export default function NotificationsBell() {
                   className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-0.5 text-[0.72rem] font-semibold text-violet-300 transition hover:bg-violet-500/15"
                   onClick={markAll}
                 >
-                  Segna tutte come lette
+                  Segna Tutte come Lette
                 </button>
               )}
             </div>

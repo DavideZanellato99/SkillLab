@@ -5,7 +5,7 @@ import KebabMenu from './KebabMenu'
 import type { KebabMenuItem } from './KebabMenu'
 import SearchSelect from './SearchSelect'
 import Tooltip from './Tooltip'
-import { ChevronDownIcon, ChevronUpIcon, InfoIcon, TrashIcon } from './icons'
+import { ChevronDownIcon, ChevronUpIcon, InfoIcon, SparkleIcon, TrashIcon } from './icons'
 import { formInputCls, labelCls } from './Field'
 import type { PathStepDraft } from './pathStepDraft'
 import { draftTarget } from './pathStepDraft'
@@ -38,7 +38,12 @@ import { draftTarget } from './pathStepDraft'
  *
  * Sotto i 1024px le colonne non ci starebbero: la riga torna a essere una
  * scheda impilata e le etichette dei campi ricompaiono, visto che lì
- * l'intestazione non c'è. È lo stesso markup, riordinato da `lg:contents`. */
+ * l'intestazione non c'è. È lo stesso markup, riordinato da `lg:contents`.
+ *
+ * Una tappa arrivata da una proposta porta sotto di sé il perché il modello
+ * l'ha messa lì: si legge accanto alla cosa che spiega, mentre si decide se
+ * tenerla. Sparisce appena il bersaglio o il tipo cambiano, perché da quel
+ * momento sarebbe la didascalia di una tappa che nessuno ha proposto. */
 
 const KINDS = [
   { value: 'avatar', label: 'Conversazione' },
@@ -104,15 +109,17 @@ export default function PathStepEditor({
       ? content.avatars.map((a) => ({ value: a.id, label: a.name, sub: a.category }))
       : content.simulations.map((s) => ({ value: s.id, label: s.title }))
 
+  // La motivazione parlava della prova che c'era prima: cambiando tipo o
+  // bersaglio non spiega più niente, e se ne va con la scelta che spiegava.
   const setKind = (next: StepKind) => {
-    if (next !== kind) onChange({ ...step, kind: next })
+    if (next !== kind) onChange({ ...step, kind: next, reason: null })
   }
 
   const setTarget = (value: string) =>
     onChange(
       kind === 'avatar'
-        ? { ...step, avatarId: value || null }
-        : { ...step, simulationId: value || null },
+        ? { ...step, avatarId: value || null, reason: null }
+        : { ...step, simulationId: value || null, reason: null },
     )
 
   const menuItems: KebabMenuItem[] = [
@@ -218,6 +225,17 @@ export default function PathStepEditor({
           <KebabMenu label={`Azioni della tappa ${index + 1}`} items={menuItems} />
         </Tooltip>
       </div>
+
+      {/* Sopra i 1024px va sotto il bersaglio di cui parla, e non sotto il
+          numero, perché è quella la colonna che spiega. */}
+      {step.reason && (
+        <p className="flex gap-1.5 text-[0.72rem] leading-relaxed text-violet-300/70 lg:col-span-3 lg:col-start-3 lg:-mt-1 lg:pb-1">
+          <span className="mt-0.5 shrink-0">
+            <SparkleIcon size={12} />
+          </span>
+          <span>{step.reason}</span>
+        </p>
+      )}
     </li>
   )
 }

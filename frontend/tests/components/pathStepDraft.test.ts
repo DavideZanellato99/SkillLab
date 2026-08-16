@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { PathStep } from '../../src/services/training'
 import { toLocalInputValue } from '../../src/components/instant'
 import {
+  draftFromProposal,
   draftFromStep,
   draftTarget,
   emptyDraft,
@@ -56,6 +57,29 @@ describe('la bozza di una tappa', () => {
       simulationId: 'x1',
       targetScore: 6,
       dueAt: toLocalInputValue('2026-03-04T15:30:00'),
+      // Le motivazioni erano della proposta: un percorso salvato non ne ha
+      reason: null,
+    })
+  })
+
+  /* La motivazione viaggia con la tappa proposta, perché è sotto quella riga
+   * che si legge mentre si decide se tenerla, e non si salva: `toStepInput`
+   * non la manda al server, che di quel campo non sa niente. */
+  it('porta la motivazione dentro la tappa proposta, e non la salva', () => {
+    const draft = draftFromProposal({
+      avatar_id: 'a1',
+      simulation_id: null,
+      target_score: 6,
+      reason: 'Si comincia da un caso semplice.',
+    })
+
+    expect(draft.reason).toBe('Si comincia da un caso semplice.')
+    expect(draft.dueAt).toBeNull()
+    expect(toStepInput(draft)).toEqual({
+      avatar_id: 'a1',
+      simulation_id: null,
+      target_score: 6,
+      due_at: null,
     })
   })
 
@@ -81,6 +105,7 @@ describe('la bozza di una tappa', () => {
       simulationId: 'x1',
       targetScore: 8,
       dueAt: null,
+      reason: null,
     }
 
     expect(toStepInput(indeciso)).toEqual({

@@ -26,6 +26,13 @@ export interface PathStepDraft {
   targetScore: number
   /** La scadenza come la scrive il campo: ora locale, o vuota se non scade. */
   dueAt: string | null
+  /* Perché il modello ha messo questa prova in questo punto della fila.
+   *
+   * Non è un campo della tappa e non si salva: vale finché la tappa è quella
+   * che ha proposto lui, e appena il bersaglio cambia sparisce, perché
+   * sarebbe la didascalia di qualcosa che nessuno ha più proposto. Una tappa
+   * scritta a mano nasce senza. */
+  reason: string | null
 }
 
 /** L'obiettivo di partenza di una tappa nuova: la sufficienza piena. */
@@ -38,6 +45,7 @@ export function emptyDraft(): PathStepDraft {
     simulationId: null,
     targetScore: DEFAULT_TARGET,
     dueAt: null,
+    reason: null,
   }
 }
 
@@ -49,6 +57,8 @@ export function draftFromStep(step: PathStep): PathStepDraft {
     simulationId: step.simulation_id,
     targetScore: step.target_score,
     dueAt: step.due_at ? toLocalInputValue(step.due_at) : null,
+    // Un percorso salvato non porta motivazioni: erano della proposta.
+    reason: null,
   }
 }
 
@@ -62,6 +72,9 @@ export function draftFromStep(step: PathStep): PathStepDraft {
  *
  * La scadenza resta vuota perché il modello non la scrive: una data dipende
  * da quando il corso comincia, e la mette chi compone.
+ *
+ * La motivazione invece viaggia con la tappa, ed è l'unico posto in cui
+ * entra: si legge sotto la riga che spiega, mentre si decide se tenerla.
  */
 export function draftFromProposal(step: PathDraftStep): PathStepDraft {
   return {
@@ -70,6 +83,7 @@ export function draftFromProposal(step: PathDraftStep): PathStepDraft {
     simulationId: step.simulation_id,
     targetScore: step.target_score,
     dueAt: null,
+    reason: step.reason || null,
   }
 }
 

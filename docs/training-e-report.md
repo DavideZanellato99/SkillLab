@@ -346,11 +346,14 @@ proposta sta nel form, che è il solo momento in cui a qualcuno serve saperlo.
 
 #### Come la bozza entra nel form
 
-Il pannello sta dentro la finestra di composizione
-([PathDraftPanel](../frontend/src/components/PathDraftPanel.tsx)) e **compare
-solo su un percorso nuovo**: su uno che esiste già le tappe le stanno
-percorrendo delle persone, e rigenerarle non sarebbe una bozza, sarebbe
-buttare il lavoro di qualcuno insieme al loro progresso.
+La proposta si chiede da una finestra che si apre sopra quella di
+composizione ([PathDraftModal](../frontend/src/components/PathDraftModal.tsx)),
+come il gemello della scheda persona: si scrive l'obiettivo, la finestra
+consegna la proposta al form e si chiude, perché quello che c'è da rileggere
+sta lì dietro. Il bottone che la apre **c'è solo su un percorso nuovo**: su
+uno che esiste già le tappe le stanno percorrendo delle persone, e
+rigenerarle non sarebbe una bozza, sarebbe buttare il lavoro di qualcuno
+insieme al loro progresso.
 
 Titolo e descrizione seguono la regola di `applyDraft`, la stessa della scheda
 persona: **si scrivono nei campi vuoti e in quelli che aveva scritto la bozza,
@@ -362,16 +365,16 @@ uscire da quell'elenco, e da quel momento è intoccabile.
 
 **Le tappe invece si sostituiscono tutte**, ed è la sola cosa che si possa
 fare: sono una fila ordinata, e infilare una proposta dentro quello che c'è
-darebbe un percorso che non ha composto né il modello né la persona. Il
-pannello lo scrive prima di far premere.
+darebbe un percorso che non ha composto né il modello né la persona. La
+finestra lo scrive prima di far premere, non dopo.
 
-Le motivazioni stanno nel pannello e non sulle righe delle tappe: appartengono
-alla proposta e non alla tappa, si leggono una volta mentre si decide se
-tenerla, e appese a una riga che poi si sposta, si cambia e si cancella
-diventerebbero didascalie di qualcosa che nessuno ha più proposto. Dopo la
-generazione il pannello dice quante tappe sono e che vanno rilette una per
-una: non è un messaggio di successo, perché in quel momento il form è pieno di
-roba che non ha scritto nessuno.
+**Le motivazioni stanno sotto la tappa che spiegano**
+([PathStepEditor](../frontend/src/components/PathStepEditor.tsx)), e non in un
+elenco a parte: si leggono accanto alla cosa di cui parlano, mentre si decide
+se tenerla. Ognuna sparisce appena il tipo o il bersaglio di quella tappa
+cambiano, perché da quel momento sarebbe la didascalia di una tappa che
+nessuno ha proposto. Viaggiano dentro `PathStepDraft`, che al salvataggio non
+le manda: il server di quel campo non sa niente.
 
 **Assegnare fa una domanda sola**
 ([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)): chi deve

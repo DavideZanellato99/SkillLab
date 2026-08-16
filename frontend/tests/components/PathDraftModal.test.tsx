@@ -8,11 +8,12 @@ const servizio = vi.hoisted(() => ({ draftPath: vi.fn() }))
 vi.mock('../../src/services/training', () => servizio)
 
 import type { TrainingPathDraft } from '../../src/services/training'
-import PathDraftPanel from '../../src/components/PathDraftPanel'
+import PathDraftModal from '../../src/components/PathDraftModal'
 
-/* Il pannello ha due promesse: non manda al server un obiettivo troppo corto,
- * e quello che torna lo presenta come una proposta da rileggere invece che
- * come un percorso fatto. */
+/* La finestra da cui nasce una proposta di percorso. Le promesse sono tre:
+ * non manda al server un obiettivo troppo corto, chiede la proposta sul
+ * catalogo del tenant scelto, e si toglie di mezzo appena l'ha consegnata,
+ * perché quello che c'è da rileggere sta nel form dietro. */
 
 const OBIETTIVO =
   'Formare un nuovo addetto allo sportello, deve gestire i reclami sulle commissioni'
@@ -36,80 +37,80 @@ const proposta: TrainingPathDraft = {
   ],
 }
 
-/* Tipizzato e non `ReturnType<typeof vi.fn>`: il mock viene passato come
+/* Tipizzati e non `ReturnType<typeof vi.fn>`: i mock vengono passati come
  * prop, e `tsc -b` controlla anche i test, dove un mock generico non
  * corrisponde alla firma che il componente dichiara. */
 let onDrafted: (draft: TrainingPathDraft) => void
+let onClose: () => void
 
-function renderPanel(organizationId = 'org-1') {
+function renderModal(organizationId = 'org-1') {
   onDrafted = vi.fn<(draft: TrainingPathDraft) => void>()
+  onClose = vi.fn<() => void>()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   )
-  return render(<PathDraftPanel organizationId={organizationId} onDrafted={onDrafted} />, {
-    wrapper,
-  })
+  return render(
+    <PathDraftModal organizationId={organizationId} onClose={onClose} onDrafted={onDrafted} />,
+    { wrapper },
+  )
 }
 
 beforeEach(() => {
   servizio.draftPath.mockReset().mockResolvedValue(proposta)
 })
 
-describe('PathDraftPanel', () => {
+describe('PathDraftModal', () => {
   /* Da tre parole il modello inventa un corso suo e mette in fila mezzo
    * catalogo: il minimo è la stessa regola del server, ripetuta qui solo per
    * dirlo prima di far partire una richiesta che verrebbe rifiutata. */
   it('non manda un obiettivo troppo corto', async () => {
-    renderPanel()
+    renderModal()
 
-    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), 'un corso')
+    await userEvent.type(screen.getByLabelText(/obiettivo formativo/i), 'un corso')
 
     expect(screen.getByRole('button', { name: /Proponi/ })).toBeDisabled()
     expect(servizio.draftPath).not.toHaveBeenCalled()
   })
 
-  it('chiede la proposta sul catalogo del tenant scelto', async () => {
-    renderPanel('org-7')
+  /* Quello che torna è una proposta da rileggere, e si rilegge nel form: la
+   * finestra consegna e si chiude, come il gemello della scheda persona. */
+  it('consegna la proposta al form e si chiude', async () => {
+    renderModal('org-7')
 
-    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), OBIETTIVO)
+    await userEvent.type(screen.getByLabelText(/obiettivo formativo/i), OBIETTIVO)
     await userEvent.click(screen.getByRole('button', { name: /Proponi/ }))
 
     await waitFor(() => expect(servizio.draftPath).toHaveBeenCalledWith(OBIETTIVO, 'org-7'))
     expect(onDrafted).toHaveBeenCalledWith(proposta)
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
-  /* Non è un messaggio di successo: in quel momento il form è pieno di roba
-   * che non ha scritto nessuno, e la cosa da dire è quella. */
-  it('dopo la proposta dice quante tappe sono e perché', async () => {
-    renderPanel()
+  /* Le tappe sono una fila ordinata: una proposta le sostituisce tutte, e va
+   * detto prima di far premere, non dopo. */
+  it('avverte che le tappe già inserite vengono sostituite', () => {
+    renderModal()
 
-    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), OBIETTIVO)
-    await userEvent.click(screen.getByRole('button', { name: /Proponi/ }))
-
-    expect(await screen.findByText(/da rileggere una per una/)).toBeInTheDocument()
-    expect(screen.getByText('Si comincia da un caso semplice.')).toBeInTheDocument()
-    expect(
-      screen.getByText(/La procedura va saputa prima di gestire il cliente difficile/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/vengono sostituite dalla proposta/)).toBeInTheDocument()
   })
 
-  it("mostra l'errore del server invece di una proposta", async () => {
+  it("mostra l'errore del server e resta aperta", async () => {
     servizio.draftPath.mockRejectedValue(new Error('Il catalogo è vuoto.'))
-    renderPanel()
+    renderModal()
 
-    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), OBIETTIVO)
+    await userEvent.type(screen.getByLabelText(/obiettivo formativo/i), OBIETTIVO)
     await userEvent.click(screen.getByRole('button', { name: /Proponi/ }))
 
     expect(await screen.findByText('Il catalogo è vuoto.')).toBeInTheDocument()
     expect(onDrafted).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   /* Senza tenant scelto non c'è nessun catalogo da cui comporre. */
-  it('resta spento finché non è stata scelta un organizzazione', async () => {
-    renderPanel('')
+  it('resta spenta finché non è stata scelta un organizzazione', async () => {
+    renderModal('')
 
-    await userEvent.type(screen.getByLabelText(/Proposta Automatica/), OBIETTIVO)
+    await userEvent.type(screen.getByLabelText(/obiettivo formativo/i), OBIETTIVO)
 
     expect(screen.getByRole('button', { name: /Proponi/ })).toBeDisabled()
   })

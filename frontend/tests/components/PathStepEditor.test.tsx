@@ -101,4 +101,22 @@ describe('PathStepEditor', () => {
     // La chip del selettore riporta la scelta di prima
     expect(screen.getByText('Mario Rossi')).toBeInTheDocument()
   })
+
+  /* Una tappa arrivata da una proposta porta il perché sta lì, sotto la riga
+   * che spiega. Cambiare la prova lo fa sparire: da quel momento sarebbe la
+   * didascalia di una tappa che nessuno ha proposto. */
+  it('mostra la motivazione della proposta e la perde quando la tappa cambia', async () => {
+    const proposta = {
+      ...emptyDraft(),
+      avatarId: 'a1',
+      reason: 'Si comincia da un caso semplice.',
+    }
+    render(<Harness initial={proposta} />)
+
+    expect(screen.getByText('Si comincia da un caso semplice.')).toBeInTheDocument()
+
+    await userEvent.click(kindButton('Test Tecnico'))
+
+    expect(screen.queryByText('Si comincia da un caso semplice.')).not.toBeInTheDocument()
+  })
 })

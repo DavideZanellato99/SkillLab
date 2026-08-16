@@ -5,12 +5,12 @@ import Field, { formInputCls, textareaCls } from './Field'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import ModalShell, { ModalHeader } from './ModalShell'
-import PathDraftPanel from './PathDraftPanel'
+import PathDraftModal from './PathDraftModal'
 import PathStepEditor, { PathStepsHeader } from './PathStepEditor'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
 import Spinner from './Spinner'
-import { PlusIcon } from './icons'
+import { PlusIcon, SparkleIcon } from './icons'
 import { moved } from './listOrder'
 import type { PathStepDraft } from './pathStepDraft'
 import {
@@ -66,6 +66,7 @@ export default function TrainingPathEditorModal({
     path ? path.steps.map(draftFromStep) : [emptyDraft()],
   )
   const [validationError, setValidationError] = useState('')
+  const [showDraft, setShowDraft] = useState(false)
   /* Quali campi del percorso li ha scritti una bozza e non una persona.
    * Serve alla regola con cui una proposta entra nel form, la stessa della
    * scheda persona: **scrive nei campi vuoti e in quelli che aveva scritto
@@ -104,9 +105,9 @@ export default function TrainingPathEditorModal({
    * Titolo e descrizione seguono la regola dei campi scritti a mano; **le
    * tappe le sostituisce tutte**, ed è la sola cosa che può fare: sono una
    * fila ordinata, e infilare una proposta dentro quello che c'è vorrebbe
-   * dire un percorso che non ha composto né il modello né la persona. Il
-   * pannello lo scrive prima di far premere, e non compare affatto su un
-   * percorso che esiste già. */
+   * dire un percorso che non ha composto né il modello né la persona. La
+   * finestra della proposta lo scrive prima di far premere, e non si apre
+   * affatto su un percorso che esiste già. */
   const applyDraft = (draft: TrainingPathDraft) => {
     setTitle((prev) => (prev.trim() === '' || fromDraft.has('title') ? draft.title : prev))
     setDescription((prev) =>
@@ -160,7 +161,27 @@ export default function TrainingPathEditorModal({
             ? `Le modifiche valgono subito per le ${path.assigned_count} persone che lo stanno percorrendo.`
             : 'Le tappe si superano in ordine: la successiva si apre quando la precedente è chiusa.'
         }
+        className="mb-4"
       />
+
+      {/* Solo su un percorso nuovo: su uno che esiste già le tappe le stanno
+          percorrendo delle persone, e rigenerarle non sarebbe una bozza,
+          sarebbe buttare il lavoro di qualcuno insieme al loro progresso.
+          Sta in cima e non fra i campi perché è il punto da cui il form si
+          riempie, e chi compone a mano lo salta con lo sguardo. */}
+      {!isEditing && (
+        <div className="mb-6 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setShowDraft(true)}
+            disabled={isSaving || organizationId === ''}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-violet-600/30 bg-violet-600/10 px-4 py-2 text-[0.8rem] font-medium text-violet-300 transition hover:bg-violet-600/20 hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <SparkleIcon size={14} />
+            Proponi un percorso
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-4">
         <Field label="Titolo" htmlFor="path-title">
@@ -237,20 +258,6 @@ export default function TrainingPathEditorModal({
           </Field>
         )}
 
-        {/* Solo su un percorso nuovo: su uno che esiste già le tappe le
-            stanno percorrendo delle persone, e rigenerarle non sarebbe una
-            bozza, sarebbe buttare il lavoro di qualcuno insieme al loro
-            progresso. Sta sopra le tappe perché è da lì che possono
-            arrivare, e sotto i campi del percorso perché anche quelli li
-            riempie. */}
-        {!isEditing && (
-          <PathDraftPanel
-            organizationId={organizationId}
-            disabled={isSaving}
-            onDrafted={applyDraft}
-          />
-        )}
-
         <div>
           <span className="mb-2 block text-xs font-medium tracking-wide text-slate-400">
             Tappe, nell'ordine in cui si superano
@@ -305,6 +312,16 @@ export default function TrainingPathEditorModal({
           {isEditing ? 'Salva il percorso' : 'Crea il percorso'}
         </PrimaryButton>
       </div>
+
+      {/* La proposta si apre sopra il form, e il form resta lì dietro: è
+          quello che sta per riempirsi. */}
+      {showDraft && (
+        <PathDraftModal
+          organizationId={organizationId}
+          onClose={() => setShowDraft(false)}
+          onDrafted={applyDraft}
+        />
+      )}
     </ModalShell>
   )
 }

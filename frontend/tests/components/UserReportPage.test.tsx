@@ -109,6 +109,19 @@ describe('la riga di una persona', () => {
     expect(screen.getByText('10 min 00 s')).toBeInTheDocument()
   })
 
+  /* Come nella gestione utenti e nella tabella degli avatar: i valori della
+   * colonna delle persone vanno a sinistra, mentre l'intestazione sopra resta
+   * centrata come tutte le altre. Le altre celle della riga non seguono
+   * l'eccezione. */
+  it('allinea a sinistra la colonna delle persone, e solo quella', () => {
+    renderPage()
+
+    const celle = [...document.querySelectorAll('tbody td')]
+    expect(celle[0].className).toContain('text-left')
+    expect(celle[0].className).not.toContain('text-center')
+    for (const cella of celle.slice(1)) expect(cella.className).toContain('text-center')
+  })
+
   /* Zero è un trattino e non uno zero in evidenza: è un'assenza, e una
    * pastiglia con dentro uno zero pesa quanto una con dentro un numero. */
   it('mette un trattino dove una prova non è stata svolta', () => {

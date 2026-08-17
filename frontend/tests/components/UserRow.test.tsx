@@ -60,6 +60,19 @@ describe('UserRow', () => {
     expect(onView).toHaveBeenCalledOnce()
   })
 
+  /* L'unica colonna dell'app allineata a sinistra: nome ed email incolonnati
+   * si scorrono con l'occhio. L'intestazione sopra resta al centro come tutte
+   * le altre, e quella la disegna la tabella. Le altre celle della riga non
+   * seguono l'eccezione. */
+  it('allinea a sinistra la colonna delle persone, e solo quella', () => {
+    renderRow()
+
+    const celle = [...document.querySelectorAll('td')]
+    expect(celle[0].className).toContain('text-left')
+    expect(celle[0].className).not.toContain('text-center')
+    for (const cella of celle.slice(1)) expect(cella.className).toContain('text-center')
+  })
+
   it('le azioni non aprono anche il dettaglio della riga sotto di loro', async () => {
     const { onEdit, onView } = renderRow()
     await userEvent.click(screen.getByRole('button', { name: /Modifica/ }))

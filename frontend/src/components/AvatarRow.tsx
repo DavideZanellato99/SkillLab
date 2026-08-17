@@ -42,7 +42,11 @@ export default function AvatarRow({
       className={`cursor-pointer ${isArchived ? 'opacity-60' : ''}`}
       onClick={() => onView(avatar)}
     >
-      <Td>
+      {/* Come la colonna delle persone nella gestione utenti: l'intestazione
+          resta al centro, i valori vanno a sinistra. Sono un'immagine, un
+          nome e una descrizione, e incolonnati si scorrono con l'occhio
+          invece di cercare ogni riga da capo. */}
+      <Td align="left">
         <div className="flex items-center gap-4">
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-white/6">
             <img
@@ -88,13 +92,13 @@ export default function AvatarRow({
       <Td>
         <span className="text-[0.85rem] text-orange-400">{avatar.difficulty ?? '—'}</span>
       </Td>
-      <Td align="center">
+      <Td>
         <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
           {avatar.conversation_count}
         </span>
       </Td>
       <Td onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-center gap-2">
           {isArchived ? (
             <IconButton
               tone="restore"

@@ -44,24 +44,40 @@ import type { PeriodValue } from './reportFormat'
 /** Columns depend on the role: the super admin also sees the organization,
  * an org admin already knows it (its own), so the column is dropped. */
 function reportColumns(showOrg: boolean): DataTableColumn[] {
-  return [
-    { key: 'utente', label: 'Utente' },
-    ...(showOrg ? [{ key: 'organizzazione', label: 'Organizzazione' } as DataTableColumn] : []),
-    { key: 'ruolo', label: 'Ruolo' },
+  /* Le percentuali sommano a 100 in entrambi gli assetti: le due colonne dei
+   * conteggi restano larghe quanto la loro intestazione, e a cedere spazio
+   * all'organizzazione è la colonna dell'utente. */
+  const conteggi = [
     {
       key: 'conversazioni',
       label: 'Conversazioni',
-      align: 'center',
       title: 'Conversazioni sostenute nel periodo selezionato',
     },
     {
       key: 'simulazioni',
       label: 'Simulazioni',
-      align: 'center',
       title: 'Simulazioni consegnate nel periodo selezionato',
     },
-    { key: 'durata', label: 'Durata', align: 'right' },
-    { key: 'dettaglio', ariaLabel: 'Dettaglio' },
+  ]
+
+  if (showOrg) {
+    return [
+      { key: 'utente', label: 'Utente', width: '23%' },
+      { key: 'organizzazione', label: 'Organizzazione', width: '15%' },
+      { key: 'ruolo', label: 'Ruolo', width: '13%' },
+      { ...conteggi[0], width: '14%' },
+      { ...conteggi[1], width: '14%' },
+      { key: 'durata', label: 'Durata', width: '13%' },
+      { key: 'dettaglio', ariaLabel: 'Dettaglio', width: '8%' },
+    ]
+  }
+  return [
+    { key: 'utente', label: 'Utente', width: '33%' },
+    { key: 'ruolo', label: 'Ruolo', width: '14%' },
+    { ...conteggi[0], width: '15%' },
+    { ...conteggi[1], width: '15%' },
+    { key: 'durata', label: 'Durata', width: '15%' },
+    { key: 'dettaglio', ariaLabel: 'Dettaglio', width: '8%' },
   ]
 }
 
@@ -182,7 +198,11 @@ export default function UserReportPage() {
                   className={`cursor-pointer ${isExpanded ? '[&>td]:bg-violet-600/6' : ''}`}
                   onClick={() => setExpandedUserId(isExpanded ? null : u.id)}
                 >
-                  <Td>
+                  {/* Come nella gestione utenti e nella tabella degli avatar:
+                      l'intestazione resta al centro, i valori vanno a
+                      sinistra, perché un'iniziale, un nome e un'email
+                      incolonnati si scorrono con l'occhio. */}
+                  <Td align="left">
                     <div className="flex items-center gap-4">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
                         {getInitials(u.nome, u.cognome, u.email)}
@@ -209,18 +229,18 @@ export default function UserReportPage() {
                       {ROLE_LABELS[u.ruolo] ?? u.ruolo}
                     </Badge>
                   </Td>
-                  <Td align="center">
+                  <Td>
                     <CountCell count={u.conversation_count} />
                   </Td>
-                  <Td align="center">
+                  <Td>
                     <CountCell count={u.simulation_count} />
                   </Td>
-                  <Td align="right">
+                  <Td>
                     <span className="text-[0.85rem] text-slate-400">
                       {formatDuration(u.total_duration_seconds)}
                     </span>
                   </Td>
-                  <Td align="right">
+                  <Td>
                     <svg
                       width="16"
                       height="16"
@@ -239,7 +259,10 @@ export default function UserReportPage() {
 
                 {isExpanded && (
                   <tr>
-                    <Td colSpan={columns.length} className="bg-gray-950/40">
+                    {/* Il dettaglio che si apre porta la propria tabella, che
+                        centra le proprie colonne da sé: qui il testo torna a
+                        sinistra, perché non è una riga di questa. */}
+                    <Td colSpan={columns.length} align="left" className="bg-gray-950/40">
                       <UserReportDetail
                         user={u}
                         onOpenAttempt={setOpenAttemptId}

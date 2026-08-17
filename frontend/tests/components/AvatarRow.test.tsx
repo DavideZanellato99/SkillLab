@@ -54,6 +54,19 @@ describe('AvatarRow', () => {
     expect(screen.getByText('12')).toBeInTheDocument()
   })
 
+  /* Come la colonna delle persone nella gestione utenti: i valori vanno a
+   * sinistra perché sono un'immagine, un nome e una descrizione, mentre
+   * l'intestazione sopra resta centrata come tutte e la disegna la tabella.
+   * Le altre celle della riga non seguono l'eccezione. */
+  it("allinea a sinistra la colonna dell'avatar, e solo quella", () => {
+    renderRow()
+
+    const celle = [...document.querySelectorAll('td')]
+    expect(celle[0].className).toContain('text-left')
+    expect(celle[0].className).not.toContain('text-center')
+    for (const cella of celle.slice(1)) expect(cella.className).toContain('text-center')
+  })
+
   /* La difficoltà è un campo che può restare vuoto: al suo posto va un
    * trattino, non uno zero, che sarebbe un grado di difficoltà. */
   it('mette un trattino dove la scheda non dice la difficoltà', () => {

@@ -141,4 +141,40 @@ describe('TrainingPathCard', () => {
 
     expect(screen.getByText('Le basi del ruolo')).toBeInTheDocument()
   })
+
+  /* Oltre le prime tre la scheda diventerebbe alta il doppio di quella
+   * accanto, e in una griglia sono le schede a doversi somigliare: le altre si
+   * contano in coda. */
+  describe('percorsi lunghi', () => {
+    const lungo = () => ({
+      steps: [1, 2, 3, 4, 5].map((position) => step({ id: `s-${position}`, position })),
+    })
+
+    it('mostra le prime tre tappe e conta le altre', () => {
+      renderCard(lungo())
+
+      expect(screen.getByText('Avatar 3')).toBeInTheDocument()
+      expect(screen.queryByText('Avatar 4')).not.toBeInTheDocument()
+      expect(screen.getByText('+2 tappe')).toBeInTheDocument()
+    })
+
+    it('usa il singolare per una tappa sola in coda', () => {
+      renderCard({
+        steps: [1, 2, 3, 4].map((position) => step({ id: `s-${position}`, position })),
+      })
+
+      expect(screen.getByText('+1 tappa')).toBeInTheDocument()
+    })
+
+    /* Contarle non basta: quali siano si legge senza aprire il percorso. */
+    it('elenca nel tooltip le tappe che non entrano', async () => {
+      renderCard(lungo())
+
+      await userEvent.hover(screen.getByText('+2 tappe'))
+
+      const tooltip = await screen.findByRole('tooltip')
+      expect(tooltip).toHaveTextContent('4. Avatar 4')
+      expect(tooltip).toHaveTextContent('5. Avatar 5')
+    })
+  })
 })

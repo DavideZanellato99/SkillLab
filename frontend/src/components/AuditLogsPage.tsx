@@ -18,14 +18,17 @@ import FormError from './FormError'
  * risponde 403 a chiunque altro. In sola lettura: il registro non si
  * modifica e non si cancella, scade e basta. */
 
+/* Le percentuali sommano a 100. La data e ora non va a capo, quindi la sua
+ * colonna è tarata sulla riga intera ("31/12/2025, 23:59:59"); l'oggetto si
+ * prende quello che avanza perché è l'unica colonna dal contenuto lungo. */
 const COLUMNS: DataTableColumn[] = [
-  { key: 'quando', label: 'Data e Ora' },
-  { key: 'utente', label: 'Utente' },
-  { key: 'organizzazione', label: 'Organizzazione' },
-  { key: 'azione', label: 'Azione' },
-  { key: 'oggetto', label: 'Oggetto' },
-  { key: 'esito', label: 'Esito', align: 'center', compact: true },
-  { key: 'dettaglio', ariaLabel: 'Dettaglio' },
+  { key: 'quando', label: 'Data e Ora', width: '15%' },
+  { key: 'utente', label: 'Utente', width: '20%' },
+  { key: 'organizzazione', label: 'Organizzazione', width: '14%' },
+  { key: 'azione', label: 'Azione', width: '15%' },
+  { key: 'oggetto', label: 'Oggetto', width: '22%' },
+  { key: 'esito', label: 'Esito', compact: true, width: '8%' },
+  { key: 'dettaglio', ariaLabel: 'Dettaglio', width: '6%' },
 ]
 
 const dateInputCls =
@@ -222,7 +225,7 @@ export default function AuditLogsPage() {
                       </span>
                     </Td>
                     <Td>
-                      <div className="flex flex-col">
+                      <div className="flex flex-col items-center">
                         <span className="text-[0.85rem] font-semibold text-slate-100">
                           {log.user_email || '—'}
                         </span>
@@ -246,18 +249,18 @@ export default function AuditLogsPage() {
                       </span>
                     </Td>
                     <Td>
-                      <span className="line-clamp-1 max-w-[320px] text-[0.8rem] text-slate-400">
+                      <span className="mx-auto line-clamp-1 max-w-[320px] text-[0.8rem] text-slate-400">
                         {summarize(log)}
                       </span>
                     </Td>
-                    <Td align="center" compact>
+                    <Td compact>
                       <span
                         className={`inline-block rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold tabular-nums ${statusClasses(log.status_code)}`}
                       >
                         {log.status_code}
                       </span>
                     </Td>
-                    <Td align="right">
+                    <Td>
                       <svg
                         width="16"
                         height="16"
@@ -276,7 +279,10 @@ export default function AuditLogsPage() {
 
                   {isExpanded && (
                     <tr>
-                      <Td colSpan={COLUMNS.length} className="bg-gray-950/40">
+                      {/* Il pannello che si apre non è una riga di colonne ma
+                          un elenco di voci e valori: resta allineato a
+                          sinistra, dove un elenco si legge. */}
+                      <Td colSpan={COLUMNS.length} align="left" className="bg-gray-950/40">
                         <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-[0.8rem]">
                           <dt className="text-slate-500">Richiesta</dt>
                           <dd className="break-all font-mono text-slate-300">

@@ -10,6 +10,7 @@ import {
   PASSWORD_RULES,
   getUnmetPasswordRules,
   getInitials,
+  isSuperAdmin,
 } from '../services/auth'
 import PasswordToggle from './PasswordToggle'
 import Spinner from './Spinner'
@@ -63,6 +64,10 @@ export default function ProfilePage() {
   if (!user) return null
 
   const isSystemAccount = user.cognito_sub.startsWith('mock-')
+  /* L'anagrafica la tiene l'amministrazione, non l'interessato: chi si
+   * allena e chi amministra un'organizzazione legge nome e cognome come
+   * legge l'email, e per cambiarli passa da un amministratore. */
+  const canEditName = isSuperAdmin(user)
   const isProfileDirty = nome.trim() !== user.nome || cognome.trim() !== user.cognome
 
   const handleSaveProfile = async (e: FormEvent) => {
@@ -150,7 +155,11 @@ export default function ProfilePage() {
     <PageContainer width="form">
       <PageHeader
         title="Il Mio Profilo"
-        description="Visualizza i tuoi dati, aggiorna nome e cognome e gestisci la password del tuo account."
+        description={
+          canEditName
+            ? 'Visualizza i tuoi dati, aggiorna nome e cognome e gestisci la password del tuo account.'
+            : 'Visualizza i tuoi dati e gestisci la password del tuo account.'
+        }
       />
 
       {/* I miei dati */}
@@ -201,9 +210,6 @@ export default function ProfilePage() {
                 disabled
               />
             </div>
-            <p className="text-[0.7rem] text-slate-500">
-              L'email non è modificabile. Contatta un amministratore per cambiarla.
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 max-[480px]:grid-cols-1">
@@ -211,11 +217,12 @@ export default function ProfilePage() {
               <TextInput
                 type="text"
                 id="profile-nome"
-                placeholder="Mario"
+                placeholder={canEditName ? 'Mario' : undefined}
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                required
-                disabled={profileMutation.isPending}
+                required={canEditName}
+                readOnly={!canEditName}
+                disabled={!canEditName || profileMutation.isPending}
               />
             </Field>
 
@@ -223,30 +230,33 @@ export default function ProfilePage() {
               <TextInput
                 type="text"
                 id="profile-cognome"
-                placeholder="Rossi"
+                placeholder={canEditName ? 'Rossi' : undefined}
                 value={cognome}
                 onChange={(e) => setCognome(e.target.value)}
-                required
-                disabled={profileMutation.isPending}
+                required={canEditName}
+                readOnly={!canEditName}
+                disabled={!canEditName || profileMutation.isPending}
               />
             </Field>
           </div>
 
-          <PrimaryButton
-            type="submit"
-            variant="submit"
-            className="mt-1"
-            disabled={profileMutation.isPending || !isProfileDirty}
-          >
-            {profileMutation.isPending ? (
-              <>
-                <Spinner variant="button" />
-                Salvataggio...
-              </>
-            ) : (
-              'Salva Modifiche'
-            )}
-          </PrimaryButton>
+          {canEditName && (
+            <PrimaryButton
+              type="submit"
+              variant="submit"
+              className="mt-1"
+              disabled={profileMutation.isPending || !isProfileDirty}
+            >
+              {profileMutation.isPending ? (
+                <>
+                  <Spinner variant="button" />
+                  Salvataggio...
+                </>
+              ) : (
+                'Salva Modifiche'
+              )}
+            </PrimaryButton>
+          )}
         </form>
       </section>
 

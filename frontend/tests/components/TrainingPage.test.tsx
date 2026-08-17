@@ -122,6 +122,91 @@ describe('le due linguette', () => {
   })
 })
 
+/* Un elenco che cresce di una scheda a settimana diventa un muro da scorrere,
+ * e chi arriva qui di solito sa già quale percorso vuole toccare. */
+describe('ricerca fra i percorsi', () => {
+  const trePercorsi = [
+    percorso(),
+    percorso({ id: 'p-2', title: 'Gestione reclami' }),
+    percorso({
+      id: 'p-3',
+      title: 'Vendita consulenziale',
+      steps: [
+        {
+          id: 's-1',
+          position: 1,
+          kind: 'avatar',
+          target_score: 7,
+          due_at: null,
+          avatar_id: 'a-1',
+          avatar_name: 'Cliente esigente',
+          avatar_category: 'Clienti',
+          avatar_category_color: 'violet',
+          simulation_id: null,
+          simulation_title: null,
+          simulation_kind: null,
+        },
+      ],
+    }),
+  ]
+
+  const cerca = async (testo: string) => {
+    stato.paths = { data: trePercorsi, isPending: false, error: null }
+    renderPage()
+    await userEvent.type(screen.getByRole('textbox', { name: 'Cerca fra i percorsi' }), testo)
+  }
+
+  it('tiene solo i percorsi che corrispondono', async () => {
+    await cerca('reclami')
+
+    expect(screen.getByRole('heading', { name: 'Gestione reclami' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Onboarding' })).not.toBeInTheDocument()
+  })
+
+  /* Chi cerca un avatar sta cercando i percorsi che lo attraversano. */
+  it('cerca anche nei nomi delle tappe', async () => {
+    await cerca('esigente')
+
+    expect(screen.getByRole('heading', { name: 'Vendita consulenziale' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Gestione reclami' })).not.toBeInTheDocument()
+  })
+
+  it('dice quando la ricerca non trova nulla', async () => {
+    await cerca('assicurazioni')
+
+    expect(screen.getByText('Nessun percorso corrisponde alla ricerca')).toBeInTheDocument()
+  })
+
+  /* La ricerca è dei percorsi: senza percorsi non c'è niente in cui cercare,
+   * e resta il solo invito a comporne uno. */
+  it("non compare quando non c'è ancora nessun percorso", () => {
+    stato.paths = { data: [], isPending: false, error: null }
+    renderPage()
+
+    expect(screen.queryByRole('textbox', { name: 'Cerca fra i percorsi' })).not.toBeInTheDocument()
+  })
+})
+
+describe('percorsi da sfogliare', () => {
+  it('mostra una pagina per volta', async () => {
+    stato.paths = {
+      data: Array.from({ length: 12 }, (_, i) =>
+        percorso({ id: `p-${i + 1}`, title: `Percorso ${i + 1}` }),
+      ),
+      isPending: false,
+      error: null,
+    }
+    renderPage()
+
+    expect(screen.getByText(/Da 1 a 10 di 12/)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Percorso 11' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Pagina Successiva' }))
+
+    expect(screen.getByRole('heading', { name: 'Percorso 11' })).toBeInTheDocument()
+  })
+})
+
 /* Il filtro per organizzazione ha senso solo per il super admin, che è
  * l'unico a vederne più di una: a un org admin sarebbe una tendina con
  * dentro la sua sola organizzazione. */

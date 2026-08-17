@@ -270,7 +270,7 @@ giorni ma indefinito.
 | --- | --- |
 | **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, il quadro d'insieme scritto su di lui, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
 | **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni, percorsi assegnati e il quadro d'insieme, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
-| **Rettifica** (art. 16) | L'utente modifica da solo nome e cognome; l'email la cambia un amministratore |
+| **Rettifica** (art. 16) | L'anagrafica la tiene l'amministrazione: nome, cognome ed email li corregge un amministratore su richiesta dell'interessato, che dalla pagina Profilo li vede in sola lettura |
 | **Intervento umano** (art. 22) | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4) |
 | **Opposizione, limitazione** | Da gestire contrattualmente con il titolare: non esistono nel software |
 

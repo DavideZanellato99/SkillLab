@@ -1,29 +1,24 @@
-import { Children, useEffect, useState } from 'react'
+import { Children } from 'react'
 import type { HTMLAttributes, ReactNode, TdHTMLAttributes } from 'react'
 import Tooltip from './Tooltip'
-import Select from './Select'
 import SearchInput from './SearchInput'
+import PaginationBar from './Pagination'
+import { usePagination } from '../hooks/usePagination'
 
 /* Tabella condivisa dell'app: contenitore, header, righe e celle hanno un
- * unico stile definito qui — le pagine descrivono solo colonne e contenuto. */
-
-/* Righe per pagina: identiche in ogni tabella dell'app, non configurabili
- * dalla pagina. Sono impostate qui perché il footer sia lo stesso ovunque,
- * e restano tutte a due cifre: il selettore ha una larghezza fissa, e un
- * valore a tre cifre ci starebbe stretto fino a essere troncato. */
-const PAGE_SIZE_OPTIONS = [10, 20, 30, 50]
-
-/* Larghezza del selettore, tarata su quei valori. Vive qui e non nelle
- * pagine così che nessuna tabella possa averlo di una misura diversa. */
-const pageSizeSelectCls = 'w-[77px]'
-
-const paginationBtnCls =
-  'flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/6 disabled:hover:bg-white/4 disabled:hover:text-slate-400'
+ * unico stile definito qui — le pagine descrivono solo colonne e contenuto.
+ *
+ * Sfogliare le righe non è affare suo: quello sta in Pagination, che serve
+ * anche agli elenchi che tabella non sono. */
 
 export interface DataTableColumn {
   key: string
   label?: ReactNode
-  align?: 'left' | 'center' | 'right'
+  /* Larghezza della colonna, in percentuale della tabella (es. '18%'): le
+   * percentuali di un elenco di colonne sommano a 100. È obbligatoria
+   * perché la tabella è a layout fisso, e una colonna senza misura si
+   * prenderebbe quello che avanza invece di quello che le spetta. */
+  width: string
   /** Padding orizzontale ridotto (px-3) per colonne numeriche strette */
   compact?: boolean
   /** Tooltip custom sull'intestazione, utile quando `label` è abbreviata */
@@ -31,12 +26,6 @@ export interface DataTableColumn {
   /** Nome accessibile per colonne senza label visibile */
   ariaLabel?: string
 }
-
-const ALIGN = {
-  left: 'text-left',
-  center: 'text-center',
-  right: 'text-right',
-} as const
 
 interface DataTableProps {
   columns: DataTableColumn[]
@@ -51,6 +40,12 @@ interface DataTableProps {
   searchActions?: ReactNode
   /** Disattiva la paginazione, mostrando tutte le righe senza footer (default: attiva) */
   paginate?: boolean
+  /* Misura sotto la quale le colonne smettono di stringersi e a scorrere è
+   * il contenitore. Le percentuali restano quelle dichiarate, ma di una
+   * tabella troppo stretta sono percentuali di niente: su un telefono, o
+   * in una tabella con dieci colonne, un po' di scorrimento orizzontale si
+   * legge meglio di colonne schiacciate. */
+  minWidth?: string
   /** Righe del corpo: <Tr> con celle <Td>, una per elemento (un <Tr> = una riga di dati) */
   children?: ReactNode
 }
@@ -64,25 +59,14 @@ export default function DataTable({
   searchPlaceholder = 'Cerca...',
   searchActions,
   paginate = true,
+  minWidth = '880px',
   children,
 }: DataTableProps) {
   const rows = Children.toArray(children)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
+  const { visible, bar } = usePagination(rows)
 
-  const totalRows = rows.length
-  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize))
-  // Riporta la pagina in un range valido quando i dati cambiano (es. una ricerca
-  // riduce le righe filtrate e la pagina corrente non esiste più).
-  const safePage = Math.min(page, totalPages)
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage)
-  }, [page, safePage])
-
-  const visibleRows = paginate ? rows.slice((safePage - 1) * pageSize, safePage * pageSize) : rows
-  const rangeStart = totalRows === 0 ? 0 : (safePage - 1) * pageSize + 1
-  const rangeEnd = Math.min(safePage * pageSize, totalRows)
-  const showFooter = paginate && !isEmpty && totalRows > 0
+  const visibleRows = paginate ? visible : rows
+  const showFooter = paginate && !isEmpty && rows.length > 0
 
   const hasToolbar = Boolean(onSearchChange || searchActions)
 
@@ -110,14 +94,30 @@ export default function DataTable({
       <div
         className={`overflow-x-auto ${hasToolbar ? '' : 'rounded-t-2xl'} ${showFooter ? '' : 'rounded-b-2xl'}`}
       >
-        <table className="w-full border-collapse text-left [&_tbody>tr:last-child>td]:border-b-0">
+        {/* Layout fisso: le colonne stanno alle misure dichiarate qui sotto e
+         * non a quelle del contenuto. Senza, la stessa tabella cambia forma a
+         * ogni pagina sfogliata, perché basta un'email lunga o un nome corto
+         * perché le colonne si spostino sotto il cursore. */}
+        {/* Tutto al centro della propria colonna, intestazioni e righe: è la
+         * tabella a deciderlo, non la pagina, perché una colonna allineata
+         * diversamente dalle altre si legge come una tabella diversa. Per
+         * questo una colonna non ha più un `align` da scegliere. */}
+        <table
+          style={{ minWidth }}
+          className="w-full table-fixed border-collapse text-center [&_tbody>tr:last-child>td]:border-b-0"
+        >
+          <colgroup>
+            {columns.map((col) => (
+              <col key={col.key} style={{ width: col.width }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               {columns.map((col) => (
                 <th
                   key={col.key}
                   aria-label={col.ariaLabel}
-                  className={`border-b border-white/6 bg-gray-900/80 ${col.compact ? 'px-3' : 'px-6'} py-4 text-xs font-semibold uppercase tracking-wide text-slate-400 ${ALIGN[col.align ?? 'left']}`}
+                  className={`border-b border-white/6 bg-gray-900/80 ${col.compact ? 'px-3' : 'px-6'} py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400`}
                 >
                   {col.title ? (
                     <Tooltip content={col.title}>
@@ -144,112 +144,7 @@ export default function DataTable({
         </table>
       </div>
       {showFooter && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-b-2xl border-t border-white/6 bg-gray-900/80 px-4 py-3">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="whitespace-nowrap">Righe per pagina</span>
-            <Select
-              value={String(pageSize)}
-              onChange={(value) => {
-                setPageSize(Number(value))
-                setPage(1)
-              }}
-              options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
-              className={pageSizeSelectCls}
-            />
-          </div>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
-            <span className="whitespace-nowrap tabular-nums">
-              Da {rangeStart} a {rangeEnd} di {totalRows}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setPage(1)}
-                disabled={safePage === 1}
-                aria-label="Prima Pagina"
-                className={paginationBtnCls}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m11 17-5-5 5-5" />
-                  <path d="m18 17-5-5 5-5" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={safePage === 1}
-                aria-label="Pagina Precedente"
-                className={paginationBtnCls}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m15 18-6-6 6-6" />
-                </svg>
-              </button>
-              <span className="min-w-[92px] text-center tabular-nums text-slate-400">
-                Pagina {safePage} di {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safePage === totalPages}
-                aria-label="Pagina Successiva"
-                className={paginationBtnCls}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage(totalPages)}
-                disabled={safePage === totalPages}
-                aria-label="Ultima Pagina"
-                className={paginationBtnCls}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m6 17 5-5-5-5" />
-                  <path d="m13 17 5-5-5-5" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
+        <PaginationBar {...bar} className="rounded-b-2xl border-t border-white/6 bg-gray-900/80" />
       )}
     </div>
   )
@@ -270,15 +165,26 @@ export function Tr({ hover = true, className = '', ...props }: TrProps) {
 }
 
 interface TdProps extends Omit<TdHTMLAttributes<HTMLTableCellElement>, 'align'> {
-  align?: 'left' | 'center' | 'right'
   /** Padding orizzontale ridotto, da usare in colonne `compact` */
   compact?: boolean
+  /* Le due eccezioni al centro, che restano eccezioni: la colonna che elenca
+   * persone, dove un nome e un'email incolonnati a sinistra si scorrono con
+   * l'occhio, e i pannelli che si aprono sotto una riga, che sono elenchi di
+   * voci e valori e non righe di colonne. L'intestazione resta al centro in
+   * entrambi i casi. Sta qui e non in una classe passata da fuori perché due
+   * classi Tailwind in conflitto non si risolvono nell'ordine in cui uno le
+   * scrive: qui la cella ne riceve una sola. */
+  align?: 'center' | 'left'
 }
 
-export function Td({ align = 'left', compact = false, className = '', ...props }: TdProps) {
+/* Il contenuto sta al centro della cella in orizzontale e in verticale. Una
+ * cella che dentro si costruisce da sé con un flex (un'immagine accanto a un
+ * nome, due bottoncini) lo centra con `justify-center`: il centramento del
+ * testo non arriva fin lì. */
+export function Td({ compact = false, align = 'center', className = '', ...props }: TdProps) {
   return (
     <td
-      className={`border-b border-white/6 ${compact ? 'px-3' : 'px-6'} py-4 align-middle ${ALIGN[align]} ${className}`}
+      className={`border-b border-white/6 ${compact ? 'px-3' : 'px-6'} py-4 ${align === 'left' ? 'text-left' : 'text-center'} align-middle break-words ${className}`}
       {...props}
     />
   )

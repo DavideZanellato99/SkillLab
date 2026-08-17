@@ -83,36 +83,39 @@ const PAGINATE_OVER = 10
 /* Le colonne delle due prove. Sono diverse perché sono diverse le domande:
  * di una conversazione si guarda quanto è durata e con chi, di un test quante
  * risposte erano giuste. */
+/* Le percentuali sommano a 100 in tutte e due. La data non va a capo, quindi
+ * la sua colonna è tarata sulla riga intera con l'ora; il titolo si prende
+ * quello che avanza, perché è l'unico testo che può essere lungo davvero. */
 const CONVERSATION_COLUMNS: DataTableColumn[] = [
-  { key: 'canale', label: 'Canale' },
-  { key: 'conversazione', label: 'Conversazione' },
-  { key: 'avatar', label: 'Avatar' },
-  { key: 'data', label: 'Data' },
+  { key: 'canale', label: 'Canale', width: '10%' },
+  { key: 'conversazione', label: 'Conversazione', width: '26%' },
+  { key: 'avatar', label: 'Avatar', width: '18%' },
+  { key: 'data', label: 'Data', width: '14%' },
   {
     key: 'messaggi',
     label: 'Msg',
-    align: 'right',
     compact: true,
     title: 'Messaggi scambiati nella conversazione',
+    width: '7%',
   },
-  { key: 'durata', label: 'Durata', align: 'right' },
-  { key: 'voto', label: 'Voto', align: 'right', compact: true },
-  { key: 'elimina', ariaLabel: 'Elimina', compact: true },
+  { key: 'durata', label: 'Durata', width: '11%' },
+  { key: 'voto', label: 'Voto', compact: true, width: '8%' },
+  { key: 'elimina', ariaLabel: 'Elimina', compact: true, width: '6%' },
 ]
 
 const SIMULATION_COLUMNS: DataTableColumn[] = [
-  { key: 'tipo', label: 'Tipo' },
-  { key: 'simulazione', label: 'Simulazione' },
-  { key: 'data', label: 'Data' },
+  { key: 'tipo', label: 'Tipo', width: '16%' },
+  { key: 'simulazione', label: 'Simulazione', width: '36%' },
+  { key: 'data', label: 'Data', width: '16%' },
   {
     key: 'corrette',
     label: 'Corrette',
-    align: 'right',
     compact: true,
     title: 'Risposte giuste sul totale delle domande',
+    width: '12%',
   },
-  { key: 'voto', label: 'Voto', align: 'right', compact: true },
-  { key: 'elimina', ariaLabel: 'Elimina', compact: true },
+  { key: 'voto', label: 'Voto', compact: true, width: '12%' },
+  { key: 'elimina', ariaLabel: 'Elimina', compact: true, width: '8%' },
 ]
 
 /* Le voci delle due tendine sono quelle dei filtri a pulsanti, con "tutto"
@@ -129,8 +132,11 @@ const KIND_OPTIONS = [
   ...KIND_FILTERS.filter((o) => o.value !== 'all'),
 ]
 
+/* `w-full` perché il bottone sta al centro della cella: senza, si stringe sul
+ * proprio testo e il taglio dei titoli lunghi cadrebbe in un punto diverso a
+ * ogni riga. */
 const titleCls =
-  'cursor-pointer truncate text-left text-[0.85rem] font-semibold text-slate-100 transition hover:text-violet-300'
+  'w-full cursor-pointer truncate text-center text-[0.85rem] font-semibold text-slate-100 transition hover:text-violet-300'
 
 const deleteCls =
   'flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
@@ -205,7 +211,7 @@ function ConversationRow({
         {/* La categoria dell'avatar è il pallino colorato e la parola sotto
             il nome: è il contorno di chi ha parlato, non una seconda
             targhetta che si contende la riga con quella del canale. */}
-        <span className="flex items-center gap-2">
+        <span className="flex items-center justify-center gap-2">
           <span
             className={`h-2 w-2 shrink-0 rounded-full ${categoryDotClass(conversation.avatar_category_color)}`}
           />
@@ -222,20 +228,20 @@ function ConversationRow({
           {formatDateTime(conversation.created_at)}
         </span>
       </Td>
-      <Td align="right" compact>
+      <Td compact>
         <span className="text-[0.85rem] tabular-nums text-slate-400">
           {conversation.message_count}
         </span>
       </Td>
-      <Td align="right">
+      <Td>
         <span className="whitespace-nowrap text-[0.85rem] font-semibold text-cyan-400">
           {formatDuration(conversation.duration_seconds)}
         </span>
       </Td>
-      <Td align="right" compact>
+      <Td compact>
         <ScoreTag score={conversation.score} />
       </Td>
-      <Td align="right" compact>
+      <Td compact>
         <DeleteButton label="Elimina Conversazione" onDelete={() => onDelete(conversation)} />
       </Td>
     </Tr>
@@ -261,7 +267,7 @@ function SimulationRow({
   return (
     <Tr className="cursor-pointer" onClick={() => onOpen(attempt.id)}>
       <Td>
-        <span className="flex items-center gap-2">
+        <span className="flex items-center justify-center gap-2">
           <SimulationKindBadge kind={attempt.simulation_kind} />
           <SimulationSourceBadge source={attempt.simulation_source} />
         </span>
@@ -283,15 +289,15 @@ function SimulationRow({
           {formatDateTime(attempt.created_at)}
         </span>
       </Td>
-      <Td align="right" compact>
+      <Td compact>
         <span className="whitespace-nowrap text-[0.85rem] tabular-nums text-slate-400">
           {attempt.correct_count}/{attempt.question_count}
         </span>
       </Td>
-      <Td align="right" compact>
+      <Td compact>
         <ScoreTag score={attempt.score} />
       </Td>
-      <Td align="right" compact>
+      <Td compact>
         <DeleteButton label="Elimina Tentativo" onDelete={() => onDelete(attempt)} />
       </Td>
     </Tr>

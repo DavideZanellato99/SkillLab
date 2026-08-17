@@ -24,7 +24,7 @@ import { formatDate, formatDeadline, stepTarget } from './trainingFormat'
 function ProgressBar({ done, total }: { done: number; total: number }) {
   const ratio = total === 0 ? 0 : done / total
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex items-center justify-center gap-2">
       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-white/6">
         <span
           className={`block h-full rounded-full ${
@@ -71,14 +71,17 @@ export default function TrainingAssignmentsTable({
 
   return (
     <DataTable
+      /* Le percentuali sommano a 100: le tre colonne di testo si dividono la
+         metà buona della riga, le altre stanno alla misura di quello che
+         contengono (una barra, una data, una targhetta, due bottoncini). */
       columns={[
-        { key: 'utente', label: 'Utente' },
-        { key: 'percorso', label: 'Percorso' },
-        { key: 'tappa', label: 'Tappa Corrente' },
-        { key: 'avanzamento', label: 'Avanzamento' },
-        { key: 'assegnato', label: 'Assegnato il' },
-        { key: 'stato', label: 'Stato' },
-        { key: 'azioni', label: '', align: 'right' },
+        { key: 'utente', label: 'Utente', width: '21%' },
+        { key: 'percorso', label: 'Percorso', width: '18%' },
+        { key: 'tappa', label: 'Tappa Corrente', width: '15%' },
+        { key: 'avanzamento', label: 'Avanzamento', width: '14%' },
+        { key: 'assegnato', label: 'Assegnato', width: '11%' },
+        { key: 'stato', label: 'Stato', width: '12%' },
+        { key: 'azioni', label: '', width: '9%' },
       ]}
       searchValue={search}
       onSearchChange={setSearch}
@@ -130,8 +133,8 @@ export default function TrainingAssignmentsTable({
               <Td>
                 <AssignmentStatusBadge status={a.status} />
               </Td>
-              <Td align="right">
-                <span className="flex items-center justify-end gap-1">
+              <Td>
+                <span className="flex items-center justify-center gap-1">
                   <Tooltip content={isOpen ? 'Chiudi le tappe' : 'Mostra le tappe'}>
                     <button
                       className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-200"
@@ -162,7 +165,9 @@ export default function TrainingAssignmentsTable({
             </Tr>
             {isOpen && (
               <Tr hover={false}>
-                <Td colSpan={7} className="bg-gray-950/40">
+                {/* Le tappe che si aprono sono un elenco, non una riga di
+                    colonne: restano allineate a sinistra. */}
+                <Td colSpan={7} align="left" className="bg-gray-950/40">
                   <PathStepsTrail steps={a.steps} />
                 </Td>
               </Tr>

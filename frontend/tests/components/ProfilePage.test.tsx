@@ -47,6 +47,11 @@ function renderPage(over: Record<string, unknown> = {}) {
   render(<ProfilePage />)
 }
 
+/* Nome e cognome li scrive solo chi amministra la piattaforma: le prove sul
+ * salvataggio partono da lì, quelle sulla sola lettura dagli altri ruoli. */
+const renderPageComeSuperAdmin = (over: Record<string, unknown> = {}) =>
+  renderPage({ ruolo: 'super_admin', ...over })
+
 const salva = () => screen.getByRole('button', { name: /Salva Modifiche/ })
 const aggiorna = () => screen.getByRole('button', { name: /Aggiorna Password/ })
 
@@ -83,18 +88,17 @@ describe('i propri dati', () => {
 
   /* L'email non si cambia da qui: è l'identità dell'account su Cognito, e
    * un campo modificabile che poi il server rifiuta è peggio di uno spento. */
-  it("tiene l'email in sola lettura e lo spiega", () => {
+  it("tiene l'email in sola lettura", () => {
     renderPage()
 
     expect(screen.getByLabelText('Email')).toBeDisabled()
-    expect(screen.getByText(/L'email non è modificabile/)).toBeInTheDocument()
   })
 
   /* Il salvataggio resta spento finché non si cambia davvero qualcosa: un
    * pulsante vivo su un modulo intatto invita a una scrittura che non
    * scriverebbe niente. */
   it('tiene spento il salvataggio finché niente è cambiato', async () => {
-    renderPage()
+    renderPageComeSuperAdmin()
     expect(salva()).toBeDisabled()
 
     await userEvent.type(screen.getByLabelText('Nome'), 'lisa')
@@ -103,7 +107,7 @@ describe('i propri dati', () => {
   })
 
   it('salva nome e cognome senza spazi attorno', async () => {
-    renderPage()
+    renderPageComeSuperAdmin()
 
     const nome = screen.getByLabelText('Nome')
     await userEvent.clear(nome)
@@ -121,7 +125,7 @@ describe('i propri dati', () => {
   /* Il profilo di chi guarda vive nel contesto e non in cache: senza
    * allinearlo, la barra in alto continuerebbe a mostrare il nome vecchio. */
   it('allinea la sessione con il profilo salvato', async () => {
-    renderPage()
+    renderPageComeSuperAdmin()
 
     await userEvent.type(screen.getByLabelText('Nome'), 'lisa')
     await userEvent.click(salva())
@@ -136,7 +140,7 @@ describe('i propri dati', () => {
    * non è un nome: senza il controllo qui arriverebbe al server, che lo
    * rifiuterebbe dopo un giro di rete. */
   it('rifiuta un nome fatto di soli spazi senza chiamare il server', async () => {
-    renderPage()
+    renderPageComeSuperAdmin()
 
     const nome = screen.getByLabelText('Nome')
     await userEvent.clear(nome)
@@ -149,9 +153,30 @@ describe('i propri dati', () => {
 
   it('mostra il motivo di un salvataggio rifiutato dal server', () => {
     profileMutation.error = new Error('Nome non valido.')
-    renderPage()
+    renderPageComeSuperAdmin()
 
     expect(screen.getByText('Nome non valido.')).toBeInTheDocument()
+  })
+
+  /* L'anagrafica la tiene l'amministrazione: il nome che compare nei report
+   * e nelle revisioni è quello registrato dall'organizzazione, quindi
+   * l'interessato lo legge come legge l'email. */
+  it.each([
+    ['un utente', 'user'],
+    ["un amministratore d'organizzazione", 'organization_admin'],
+  ])('tiene nome e cognome in sola lettura per %s', (_, ruolo) => {
+    renderPage({ ruolo })
+
+    expect(screen.getByLabelText('Nome')).toBeDisabled()
+    expect(screen.getByLabelText('Cognome')).toBeDisabled()
+  })
+
+  /* Un pulsante che non ha niente da salvare è solo un invito a un rifiuto:
+   * dove i campi sono spenti, il salvataggio non c'è proprio. */
+  it.each([['user'], ['organization_admin']])('non offre il salvataggio al ruolo %s', (ruolo) => {
+    renderPage({ ruolo })
+
+    expect(screen.queryByRole('button', { name: /Salva Modifiche/ })).not.toBeInTheDocument()
   })
 })
 

@@ -38,16 +38,28 @@ import { iconActionCls as actionBtnCls } from './IconButton'
  * direbbero sempre la stessa parola. A confinarlo è il server. */
 
 /** Le colonne dipendono dal ruolo: l'organizzazione la vede solo chi ne
- * amministra più di una. */
+ * amministra più di una. Le percentuali sommano a 100 in entrambi gli
+ * assetti, e quando l'organizzazione entra lo spazio lo cede il titolo: è
+ * l'unica colonna che può accorciarsi senza spezzare quello che contiene. */
 function simulationColumns(showOrg: boolean): DataTableColumn[] {
+  if (showOrg) {
+    return [
+      { key: 'title', label: 'Simulazione', width: '24%' },
+      { key: 'organization', label: 'Organizzazione', width: '14%' },
+      { key: 'kind', label: 'Tipo', width: '15%' },
+      { key: 'questions', label: 'Domande', compact: true, width: '9%' },
+      { key: 'status', label: 'Stato', width: '13%' },
+      { key: 'creazione', label: 'Data Creazione', width: '12%' },
+      { key: 'actions', label: 'Azioni', width: '13%' },
+    ]
+  }
   return [
-    { key: 'title', label: 'Simulazione' },
-    ...(showOrg ? [{ key: 'organization', label: 'Organizzazione' } as DataTableColumn] : []),
-    { key: 'kind', label: 'Tipo' },
-    { key: 'questions', label: 'Domande', align: 'center', compact: true },
-    { key: 'status', label: 'Stato' },
-    { key: 'creazione', label: 'Data Creazione' },
-    { key: 'actions', label: 'Azioni', align: 'right' },
+    { key: 'title', label: 'Simulazione', width: '30%' },
+    { key: 'kind', label: 'Tipo', width: '17%' },
+    { key: 'questions', label: 'Domande', compact: true, width: '10%' },
+    { key: 'status', label: 'Stato', width: '14%' },
+    { key: 'creazione', label: 'Data Creazione', width: '13%' },
+    { key: 'actions', label: 'Azioni', width: '16%' },
   ]
 }
 
@@ -150,12 +162,12 @@ export default function SimulationAdminPage() {
                 <Td className="text-[0.85rem] text-slate-400">{simulation.organization_name}</Td>
               )}
               <Td>
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
                   <SimulationKindBadge kind={simulation.kind} />
                   <SimulationSourceBadge source={simulation.source} />
                 </div>
               </Td>
-              <Td align="center" compact className="tabular-nums text-slate-400">
+              <Td compact className="tabular-nums text-slate-400">
                 {simulation.question_count}
               </Td>
               <Td>
@@ -169,7 +181,7 @@ export default function SimulationAdminPage() {
                 </span>
               </Td>
               <Td onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-center gap-2">
                   {/* La matita apre il pannello delle domande: modificare una
                       simulazione vuol dire scriverle e pubblicarle, non
                       correggere un titolo in un form. */}

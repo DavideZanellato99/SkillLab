@@ -130,6 +130,15 @@ Due stati, e la differenza conta:
 
 Entrambi bloccano il login **e** uccidono le sessioni già aperte.
 
+**L'anagrafica la tiene l'amministrazione.** Nome e cognome di un utente o di
+un amministratore d'organizzazione non si riscrivono dal proprio profilo: il
+nome che compare nei report, nelle revisioni e sui percorsi affidati è quello
+registrato da chi ha creato l'account, e cambiarlo passa da
+`PUT /api/admin/users/{id}` come già succede per l'email e per il ruolo. La
+pagina Profilo mostra i due campi in sola lettura e non offre il salvataggio,
+mentre `PUT /api/auth/me` risponde 403 a chi non è super admin: è quest'ultimo
+il controllo che conta, il modulo spento è solo il modo di dirlo prima.
+
 La cancellazione di una persona è il diritto all'oblio, ed è descritta in
 [sicurezza-e-privacy.md](sicurezza-e-privacy.md): cosa sparisce, cosa resta di
 proposito, e perché.

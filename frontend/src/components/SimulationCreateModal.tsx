@@ -39,8 +39,8 @@ const KIND_OPTIONS = (['multiple', 'open', 'ordering', 'matching'] as Simulation
 )
 
 const SOURCE_OPTIONS = [
-  { value: 'ai', label: 'Generate da un Documento' },
-  { value: 'manual', label: 'Scritte a Mano' },
+  { value: 'ai', label: 'Generate da un documento' },
+  { value: 'manual', label: 'Scritte a mano' },
 ]
 
 interface SimulationCreateModalProps {

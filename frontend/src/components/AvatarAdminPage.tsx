@@ -34,13 +34,15 @@ import Select from './Select'
 import { matchesSearch } from './tableSearch'
 import { PlusIcon, TrashIcon } from './icons'
 
+/* Le percentuali sommano a 100. All'avatar tocca la fetta più larga: è
+ * l'unica colonna con due righe di testo, immagine, nome e descrizione. */
 const AVATAR_COLUMNS: DataTableColumn[] = [
-  { key: 'avatar', label: 'Avatar' },
-  { key: 'organizzazione', label: 'Organizzazione' },
-  { key: 'categoria', label: 'Categoria' },
-  { key: 'difficolta', label: 'Difficoltà' },
-  { key: 'conversazioni', label: 'Conversazioni', align: 'center' },
-  { key: 'azioni', label: 'Azioni', align: 'right' },
+  { key: 'avatar', label: 'Avatar', width: '28%' },
+  { key: 'organizzazione', label: 'Organizzazione', width: '15%' },
+  { key: 'categoria', label: 'Categoria', width: '15%' },
+  { key: 'difficolta', label: 'Difficoltà', width: '12%' },
+  { key: 'conversazioni', label: 'Conversazioni', width: '14%' },
+  { key: 'azioni', label: 'Azioni', width: '16%' },
 ]
 
 const STATUS_ACTIVE = 'active'

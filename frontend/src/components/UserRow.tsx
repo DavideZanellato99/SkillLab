@@ -102,7 +102,11 @@ export default function UserRow({
 
   return (
     <Tr className={`cursor-pointer ${isActive ? '' : 'opacity-60'}`} onClick={() => onView(user)}>
-      <Td>
+      {/* L'unica colonna dell'app allineata a sinistra: l'intestazione resta
+          al centro come tutte, ma qui sotto ci sono un'iniziale, un nome e
+          un'email, e incolonnati a sinistra si scorrono con l'occhio invece
+          di cercare ogni riga da capo. */}
+      <Td align="left">
         <div className="flex items-center gap-4">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
             {getInitials(user.nome, user.cognome, user.email)}
@@ -147,7 +151,7 @@ export default function UserRow({
         <span className="text-[0.85rem] text-slate-500">{formatDate(user.created_at)}</span>
       </Td>
       <Td onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-center gap-2">
           <IconButton
             label={`Modifica ${user.email}`}
             tooltip="Modifica Utente"

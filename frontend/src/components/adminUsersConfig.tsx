@@ -34,14 +34,17 @@ export const STATUS_BADGE_CLASSES: Record<UserStatus, string> = {
 export const NEVER_ACCESSED_BADGE_CLASSES =
   'border border-amber-500/30 bg-amber-500/10 text-amber-400'
 
+/* Le percentuali sommano a 100. Le tre colonne di targhette (ruolo, stato,
+ * ultimo accesso) sono larghe quanto la loro pillola più lunga, perché una
+ * targhetta spezzata su due righe si legge peggio di una colonna generosa. */
 export const USER_COLUMNS: DataTableColumn[] = [
-  { key: 'utente', label: 'Utente' },
-  { key: 'organizzazione', label: 'Organizzazione' },
-  { key: 'ruolo', label: 'Ruolo' },
-  { key: 'stato', label: 'Stato' },
-  { key: 'ultimo_accesso', label: 'Ultimo Accesso' },
-  { key: 'creazione', label: 'Data Creazione' },
-  { key: 'azioni', label: 'Azioni', align: 'right' },
+  { key: 'utente', label: 'Utente', width: '20%' },
+  { key: 'organizzazione', label: 'Organizzazione', width: '12%' },
+  { key: 'ruolo', label: 'Ruolo', width: '15%' },
+  { key: 'stato', label: 'Stato', width: '14%' },
+  { key: 'ultimo_accesso', label: 'Ultimo Accesso', width: '14%' },
+  { key: 'creazione', label: 'Data Creazione', width: '11%' },
+  { key: 'azioni', label: 'Azioni', width: '14%' },
 ]
 
 /* Icone delle voci del menu kebab, alla misura di default (14px) */

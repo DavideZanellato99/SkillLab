@@ -332,12 +332,14 @@ export default function DashboardSimulations({
 
       {/* Vista tabellare */}
       <DataTable
+        /* Le percentuali sommano a 100: al titolo la fetta più larga, perché
+           porta anche le targhette del tipo e della provenienza. */
         columns={[
-          { key: 'simulazione', label: 'Simulazione' },
-          { key: 'data', label: 'Data' },
-          { key: 'utente', label: 'Utente' },
-          { key: 'corrette', label: 'Corrette', align: 'center', compact: true },
-          { key: 'voto', label: 'Voto', align: 'right' },
+          { key: 'simulazione', label: 'Simulazione', width: '34%' },
+          { key: 'data', label: 'Data', width: '16%' },
+          { key: 'utente', label: 'Utente', width: '22%' },
+          { key: 'corrette', label: 'Corrette', compact: true, width: '14%' },
+          { key: 'voto', label: 'Voto', width: '14%' },
         ]}
         searchValue={search}
         onSearchChange={setSearch}
@@ -353,7 +355,7 @@ export default function DashboardSimulations({
           <Tooltip key={r.attempt_id} content="Vedi il test svolto" anchor="cursor">
             <Tr className="cursor-pointer" onClick={() => setOpenAttemptId(r.attempt_id)}>
               <Td>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center gap-2">
                   <SimulationKindBadge kind={r.simulation_kind} iconOnly />
                   <SimulationSourceBadge source={r.simulation_source} />
                   <span className="text-[0.85rem] font-medium text-slate-100">
@@ -366,10 +368,10 @@ export default function DashboardSimulations({
                 <span className="text-[0.85rem] font-medium text-slate-100">{personName(r)}</span>
                 <span className="block truncate text-[0.7rem] text-slate-500">{r.user_email}</span>
               </Td>
-              <Td align="center" compact className="text-[0.82rem] tabular-nums text-slate-400">
+              <Td compact className="text-[0.82rem] tabular-nums text-slate-400">
                 {r.correct_count}/{r.question_count}
               </Td>
-              <Td align="right">
+              <Td>
                 <span className={`text-sm font-bold tabular-nums ${scoreTextColor(r.score)}`}>
                   {formatScore(r.score)}/10
                 </span>

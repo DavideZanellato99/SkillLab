@@ -20,6 +20,7 @@ from auth_dependency import (
     MOCK_ADMIN_SUB,
     REFRESH_TOKEN_COOKIE,
     access_denied_reason,
+    get_current_super_admin,
     get_current_user,
     get_or_create_mock_admin,
 )
@@ -560,13 +561,18 @@ def export_my_data(
 @router.put("/me", response_model=UserResponse)
 def update_my_profile(
     request: UpdateProfileRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
     """
-    Update the authenticated user's own first/last name (self-service,
-    every role). Email and role are read-only here — only a Super Admin can
-    change those, via /api/admin/users/{id}.
+    Update the authenticated user's own first/last name.
+
+    Riservato al Super Admin: l'anagrafica di chi si allena e di chi
+    amministra un'organizzazione la tiene l'amministrazione, non
+    l'interessato, così il nome che compare nei report e nelle revisioni
+    resta quello che l'organizzazione ha registrato. Gli altri ruoli
+    vedono i campi in sola lettura e passano da /api/admin/users/{id},
+    come già succede per l'email e per il ruolo.
     """
     if request.nome is not None:
         current_user.nome = clean_name_or_400(request.nome, "nome")

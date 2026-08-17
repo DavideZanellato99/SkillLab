@@ -66,14 +66,17 @@ const STATUS_BADGE_CLASSES: Record<OrgStatus, string> = {
   suspended: 'border border-amber-500/30 bg-amber-500/10 text-amber-400',
 }
 
+/* Le percentuali sommano a 100. I due conteggi stanno stretti perché sono
+ * numeri dentro una pillola, mentre lo stato ospita anche il motivo di una
+ * sospensione sotto la targhetta. */
 const ORG_COLUMNS: DataTableColumn[] = [
-  { key: 'org', label: 'Organizzazione' },
-  { key: 'slug', label: 'Slug' },
-  { key: 'utenti', label: 'Utenti', align: 'center' },
-  { key: 'avatar', label: 'Avatar', align: 'center' },
-  { key: 'stato', label: 'Stato' },
-  { key: 'creazione', label: 'Data Creazione' },
-  { key: 'azioni', label: 'Azioni', align: 'right' },
+  { key: 'org', label: 'Organizzazione', width: '21%' },
+  { key: 'slug', label: 'Slug', width: '16%' },
+  { key: 'utenti', label: 'Utenti', width: '10%' },
+  { key: 'avatar', label: 'Avatar', width: '10%' },
+  { key: 'stato', label: 'Stato', width: '16%' },
+  { key: 'creazione', label: 'Data Creazione', width: '12%' },
+  { key: 'azioni', label: 'Azioni', width: '15%' },
 ]
 
 const suspendIcon = <SuspendIcon />
@@ -304,18 +307,18 @@ export default function OrganizationsPage() {
                     {o.slug}
                   </code>
                 </Td>
-                <Td align="center">
+                <Td>
                   <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
                     {o.user_count}
                   </span>
                 </Td>
-                <Td align="center">
+                <Td>
                   <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">
                     {o.avatar_count}
                   </span>
                 </Td>
                 <Td>
-                  <div className="flex flex-col items-start gap-1">
+                  <div className="flex flex-col items-center gap-1">
                     <Badge tone={STATUS_BADGE_CLASSES[o.status] ?? ''}>
                       {STATUS_LABELS[o.status] ?? o.status}
                     </Badge>
@@ -334,7 +337,7 @@ export default function OrganizationsPage() {
                   <span className="text-[0.85rem] text-slate-500">{formatDate(o.created_at)}</span>
                 </Td>
                 <Td onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-center gap-2">
                     <Tooltip content="Modifica organizzazione">
                       <button
                         className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}

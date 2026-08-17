@@ -69,6 +69,46 @@ function shortCriterionLabel(key: string, label: string): string {
   return CRITERION_SHORT_LABELS[key] ?? label.split(' ')[0].replace(/[,;:]$/, '')
 }
 
+/* Le colonne della tabella delle valutazioni sono le uniche dell'app a non
+ * essere note in anticipo: i criteri arrivano dal backend, quindi il riparto
+ * si calcola invece di essere scritto a mano. Si parte dalla misura che ogni
+ * colonna vuole in pixel, e da lì escono sia le percentuali sia la larghezza
+ * minima della tabella: sotto quella è il riquadro a scorrere, perché sei
+ * criteri più il contorno in milleduecento pixel non ci stanno. */
+const EVALUATION_COLUMN_PX = {
+  conversazione: 240,
+  data: 120,
+  utente: 160,
+  avatar: 130,
+  criterio: 140,
+  voto: 100,
+}
+
+function evaluationColumns(criteria: CriterionAvg[]) {
+  const px = EVALUATION_COLUMN_PX
+  const totalPx =
+    px.conversazione + px.data + px.utente + px.avatar + px.voto + criteria.length * px.criterio
+  const width = (columnPx: number) => `${((columnPx / totalPx) * 100).toFixed(2)}%`
+
+  return {
+    minWidth: `${totalPx}px`,
+    columns: [
+      { key: 'conversazione', label: 'Conversazione', width: width(px.conversazione) },
+      { key: 'data', label: 'Data', width: width(px.data) },
+      { key: 'utente', label: 'Utente', width: width(px.utente) },
+      { key: 'avatar', label: 'Avatar', width: width(px.avatar) },
+      ...criteria.map((c) => ({
+        key: c.key,
+        label: shortCriterionLabel(c.key, c.label),
+        title: c.label,
+        compact: true,
+        width: width(px.criterio),
+      })),
+      { key: 'voto', label: 'Voto', width: width(px.voto) },
+    ],
+  }
+}
+
 interface UserAvg {
   userId: string
   name: string
@@ -225,6 +265,8 @@ export default function DashboardPage() {
       return { key, label: e.label, avg: e.sum / e.count }
     })
   }, [filtered])
+
+  const evaluationTable = useMemo(() => evaluationColumns(criteriaAvgs), [criteriaAvgs])
 
   const bestCriterion = useMemo(
     () => (criteriaAvgs.length ? criteriaAvgs.reduce((a, b) => (b.avg > a.avg ? b : a)) : null),
@@ -582,20 +624,8 @@ export default function DashboardPage() {
 
                   {/* Vista tabellare: tutti i valori raggiungibili senza hover */}
                   <DataTable
-                    columns={[
-                      { key: 'conversazione', label: 'Conversazione' },
-                      { key: 'data', label: 'Data' },
-                      { key: 'utente', label: 'Utente' },
-                      { key: 'avatar', label: 'Avatar' },
-                      ...criteriaAvgs.map((c) => ({
-                        key: c.key,
-                        label: shortCriterionLabel(c.key, c.label),
-                        title: c.label,
-                        align: 'center' as const,
-                        compact: true,
-                      })),
-                      { key: 'voto', label: 'Voto', align: 'right' },
-                    ]}
+                    columns={evaluationTable.columns}
+                    minWidth={evaluationTable.minWidth}
                     searchValue={search}
                     onSearchChange={setSearch}
                     searchPlaceholder="Cerca per conversazione, utente o avatar..."
@@ -643,7 +673,7 @@ export default function DashboardPage() {
                       >
                         <Tr className="cursor-pointer" onClick={() => setDetailRow(r)}>
                           <Td>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center gap-2">
                               <ConversationModeBadge mode={r.mode} iconOnly />
                               <span className="text-[0.85rem] font-medium text-slate-100">
                                 {r.conversation_title}
@@ -662,7 +692,7 @@ export default function DashboardPage() {
                           {criteriaAvgs.map((c) => {
                             const crit = r.criteria.find((rc) => rc.key === c.key)
                             return (
-                              <Td key={c.key} align="center" compact>
+                              <Td key={c.key} compact>
                                 {crit ? (
                                   <span
                                     className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(crit.score)}`}
@@ -675,7 +705,7 @@ export default function DashboardPage() {
                               </Td>
                             )
                           })}
-                          <Td align="right">
+                          <Td>
                             {/* Il voto in colonna è quello che conta: se un docente
                         l'ha corretto va detto, altrimenti la tabella
                         sembrerebbe contraddire la valutazione automatica.
@@ -695,7 +725,7 @@ export default function DashboardPage() {
                                 <Tooltip
                                   content={`Punteggio corretto dal docente, la valutazione automatica assegnava ${formatScore(r.ai_overall_score)}`}
                                 >
-                                  <span className="absolute right-0 top-full whitespace-nowrap text-[0.7rem] font-semibold text-violet-300">
+                                  <span className="absolute inset-x-0 top-full whitespace-nowrap text-[0.7rem] font-semibold text-violet-300">
                                     corretto
                                   </span>
                                 </Tooltip>

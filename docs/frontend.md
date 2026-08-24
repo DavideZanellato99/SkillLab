@@ -15,12 +15,12 @@ flowchart LR
 
 La direzione è sempre questa e non si salta un passo:
 
-| Cartella | Contiene | Regola |
-| --- | --- | --- |
-| [components/](../frontend/src/components/) | Pagine e pezzi di interfaccia | Nessun `fetch`, nessuna chiave di cache |
-| [hooks/](../frontend/src/hooks/) | Un hook per ogni lettura e per ogni scrittura | Qui vivono `useQuery` e `useMutation`, e le invalidazioni |
-| [services/](../frontend/src/services/) | I tipi e le funzioni che chiamano gli endpoint | Niente React |
-| [contexts/](../frontend/src/contexts/) | Solo `AuthProvider` e il suo context | Lo stato dell'utente, che serve ovunque, letto con `useAuth` |
+| Cartella                                   | Contiene                                       | Regola                                                       |
+| ------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------ |
+| [components/](../frontend/src/components/) | Pagine e pezzi di interfaccia                  | Nessun `fetch`, nessuna chiave di cache                      |
+| [hooks/](../frontend/src/hooks/)           | Un hook per ogni lettura e per ogni scrittura  | Qui vivono `useQuery` e `useMutation`, e le invalidazioni    |
+| [services/](../frontend/src/services/)     | I tipi e le funzioni che chiamano gli endpoint | Niente React                                                 |
+| [contexts/](../frontend/src/contexts/)     | Solo `AuthProvider` e il suo context           | Lo stato dell'utente, che serve ovunque, letto con `useAuth` |
 
 **Un componente non chiama mai un endpoint da solo.** Il motivo non è
 l'eleganza: una chiamata scritta dentro un componente non ha cache, non si
@@ -39,16 +39,16 @@ aggiungere una pagina senza aver deciso chi ci entra.
 l'area pubblica e quella privata si dividevano `/` e `/simulatore`, e dove
 portasse un link dipendeva da chi lo apriva.
 
-| Rotta | Accesso | Pagina |
-| --- | --- | --- |
-| `/app` | autenticato | Galleria degli avatar, con sopra i propri obiettivi |
-| `/app/chat/:avatarId` | autenticato | Chiamata e chat con un avatar |
-| `/app/percorsi`, `/app/percorsi/:assignmentId` | user | I propri percorsi di training, e il singolo come mappa |
-| `/app/confronto` | autenticato | Confronto fra i propri tentativi (per un admin, quelli di una persona del proprio tenant) |
-| `/app/simulatore`, `/app/simulatore/:id` | autenticato | Elenco dei test tecnici e svolgimento |
-| `/app/profile` | autenticato | Profilo, password, export dei propri dati |
-| `/app/admin/dashboard`, `/app/admin/training`, `/app/admin/report`, `/app/admin/simulations` | admin | Cruscotti, percorsi a tappe, report per utente, test tecnici |
-| `/app/admin`, `/app/admin/organizations`, `/app/admin/avatars`, `/app/admin/logs` | super admin | Utenti, organizzazioni, avatar, registro |
+| Rotta                                                                                        | Accesso     | Pagina                                                                                    |
+| -------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------- |
+| `/app`                                                                                       | autenticato | Galleria degli avatar, con sopra i propri obiettivi                                       |
+| `/app/chat/:avatarId`                                                                        | autenticato | Chiamata e chat con un avatar                                                             |
+| `/app/percorsi`, `/app/percorsi/:assignmentId`                                               | user        | I propri percorsi di training, e il singolo come mappa                                    |
+| `/app/confronto`                                                                             | autenticato | Confronto fra i propri tentativi (per un admin, quelli di una persona del proprio tenant) |
+| `/app/simulatore`, `/app/simulatore/:id`                                                     | autenticato | Elenco dei test tecnici e svolgimento                                                     |
+| `/app/profile`                                                                               | autenticato | Profilo, password, export dei propri dati                                                 |
+| `/app/admin/dashboard`, `/app/admin/training`, `/app/admin/report`, `/app/admin/simulations` | admin       | Cruscotti, percorsi a tappe, report per utente, test tecnici                              |
+| `/app/admin`, `/app/admin/organizations`, `/app/admin/avatars`, `/app/admin/logs`            | super admin | Utenti, organizzazioni, avatar, registro                                                  |
 
 Il gate è [RequireRole](../frontend/src/components/RequireRole.tsx), che su un
 ruolo che non corrisponde rimanda a `/app` con `replace`, così l'indirizzo
@@ -64,20 +64,17 @@ I link che il backend mette nelle notifiche
 prefisso compreso: chi legge una notifica ha per forza la sessione aperta.
 
 Quelle rotte esistono **solo a sessione aperta**. Senza, lo stesso albero monta
-il sito pubblico, che ha le sue:
+il sito pubblico, che è una rotta sola:
 
-| Rotta | Pagina |
-| --- | --- |
-| `/` | Cosa fa la piattaforma, in un colpo d'occhio |
-| `/piattaforma` | La presentazione generale: le tre parti, il ciclo, i ruoli, come si adotta, cosa succede ai dati |
-| `/roleplay` | La telefonata e la chat, la scheda persona, cosa resta dopo |
-| `/simulatore` | Il test tecnico: le due origini delle domande, i quattro tipi, la correzione |
-| `/valutazione` | I sei criteri, la revisione del docente, percorsi, confronto, cruscotti |
+| Rotta | Pagina                                                      |
+| ----- | ----------------------------------------------------------- |
+| `/`   | Cosa è SkillLab e quali servizi offre, in un colpo d'occhio |
 
-La home e `/piattaforma` non dicono la stessa cosa due volte: la prima parla a
-chi è appena arrivato e deve capire in dieci secondi se la cosa lo riguarda, la
-seconda a chi ha già capito di sì e vuole sapere com'è fatta, chi ci lavora
-dentro e cosa deve preparare.
+Le quattro pagine di sezione che stavano accanto alla home (`/piattaforma`,
+`/roleplay`, `/simulatore`, `/valutazione`) non ci sono più. Raccontavano le
+funzionalità nel dettaglio a chi non le aveva ancora viste, e quel dettaglio
+serve a chi la piattaforma la sta già usando: prima dell'accesso resta la
+presentazione generale, il resto si vede entrando.
 
 Un indirizzo sconosciuto torna alla home in tutti e due i casi, che sono due
 home diverse: `/app` per chi è collegato, `/` per chi no. Da questo passano
@@ -113,21 +110,21 @@ oltre il quale non si chiama nessun endpoint e non si legge nessun utente. Una
 pagina che si apre senza essere nessuno non ha dati da chiedere, quindi lì
 dentro non esistono hook di TanStack Query.
 
-| File | Cosa fa |
-| --- | --- |
-| `PublicHome`, `PlatformPage`, `RoleplayPage`, `SimulatorPage`, `EvaluationPage` | Le cinque pagine, una per rotta |
-| [publicUi.tsx](../frontend/src/components/public/publicUi.tsx) | I pezzi con cui sono costruite: hero, sezione, griglia asimmetrica e card, striscia dei numeri, passi, pillole, tabella di confronto, chiamata all'azione |
-| [publicSections.ts](../frontend/src/components/public/publicSections.ts) | Le cinque voci del sito, home compresa, scritte una volta sola: le leggono navbar, menu compatto e footer |
-| [PublicNav.tsx](../frontend/src/components/public/PublicNav.tsx) | Le voci dentro la navbar, in fila sopra i 1024px e in un pannello sotto |
-| [PublicFooter.tsx](../frontend/src/components/public/PublicFooter.tsx) | Il fondo pagina: mappa delle sezioni, fornitori, conservazione dei dati |
-| [PublicLayout.tsx](../frontend/src/components/public/PublicLayout.tsx) | La rotta di impaginazione che le contiene, più il ritorno in cima a ogni cambio di pagina |
-| [openLogin.ts](../frontend/src/components/public/openLogin.ts) | L'evento con cui una pagina chiede alla navbar di aprire la modale di accesso |
-| [publicIcons.tsx](../frontend/src/components/public/publicIcons.tsx) | Le icone che servono solo qui, sulla stessa base di [icons.tsx](../frontend/src/components/icons.tsx) |
+| File                                                                   | Cosa fa                                                                                               |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [PublicHome.tsx](../frontend/src/components/public/PublicHome.tsx)     | L'unica pagina: hero, i servizi in una griglia di card, i tre passaggi d'uso, la chiamata all'accesso |
+| [publicUi.tsx](../frontend/src/components/public/publicUi.tsx)         | I pezzi con cui è costruita: hero, sezione, griglia asimmetrica e card, passi, chiamata all'azione    |
+| [PublicNav.tsx](../frontend/src/components/public/PublicNav.tsx)       | La voce dentro la navbar, che è una sola e quindi non ha nessuna forma compatta                       |
+| [PublicFooter.tsx](../frontend/src/components/public/PublicFooter.tsx) | Il fondo pagina: accesso, fornitori, conservazione dei dati                                           |
+| [PublicLayout.tsx](../frontend/src/components/public/PublicLayout.tsx) | La rotta di impaginazione che la contiene, più il ritorno in cima a ogni cambio di pagina             |
+| [openLogin.ts](../frontend/src/components/public/openLogin.ts)         | L'evento con cui una pagina chiede alla navbar di aprire la modale di accesso                         |
+| [publicIcons.tsx](../frontend/src/components/public/publicIcons.tsx)   | Le icone che servono solo qui, sulla stessa base di [icons.tsx](../frontend/src/components/icons.tsx) |
 
-**Le pagine sono corte per scelta.** Ognuna sta in tre o quattro sezioni, con
-le card che portano una frase o due: chi valuta uno strumento non legge un
-manuale, e la profondità sta nell'applicazione e in `docs/`. Il testo descrive
-cosa la piattaforma fa, mai come lo fa.
+**La pagina è corta per scelta.** Sta in tre sezioni, con le card che portano
+una frase o due: chi valuta uno strumento non legge un manuale, e la
+profondità sta nell'applicazione e in `docs/`. Il testo dice cosa la
+piattaforma fa, mai come lo fa, e si ferma prima di numeri, condizioni e
+configurazioni.
 
 Due comportamenti che l'impaginazione porta con sé: il contenuto di ogni
 sezione compare quando entra nello schermo (`Reveal`, che senza
@@ -138,8 +135,8 @@ lentissime, la cui animazione `aurora` sta fra i token di
 
 **Gli import dinamici vanno in tutte e due le direzioni.** Le pagine di
 amministrazione non si scaricano finché non ci si entra, e per lo stesso motivo
-il sito pubblico non si scarica a chi ha la sessione aperta: sono cinque pagine
-di sola presentazione che quella persona non vedrà mai più. Il confine è
+il sito pubblico non si scarica a chi ha la sessione aperta: è una pagina di
+sola presentazione che quella persona non vedrà mai più. Il confine è
 sempre quello dei permessi, qui nella sua forma più semplice, cioè l'essere o
 non essere collegati.
 
@@ -148,34 +145,37 @@ navbar è montata sempre:
 
 - l'evento che apre la modale sta in un file suo e non dentro una pagina,
   altrimenti l'import della navbar si riporterebbe dietro tutto il sito;
-- le icone del sito pubblico non si importano dalla navbar. `MenuIcon`, che è
-  l'unica che le serve, vive in `icons.tsx` proprio per questo.
+- le icone del sito pubblico non si importano dalla navbar: quelle che servono
+  a entrambi vivono in `icons.tsx` proprio per questo.
 
-**Il sito pubblico è documentazione che invecchia.** Racconta le funzionalità
-dell'applicazione a chi non le ha ancora viste, quindi una funzionalità nuova
-che non passa di lì lo lascia indietro senza che nessuno se ne accorga: chi
-lavora all'applicazione non esce dalla propria sessione per guardare la
-vetrina. Vale la stessa regola dei documenti in `docs/`, e il promemoria è la
-prova in [smoke.test.tsx](../frontend/tests/components/public/smoke.test.tsx),
-che verifica soltanto che le cinque pagine si aprano.
+**Il sito pubblico è documentazione che invecchia.** Racconta i servizi
+dell'applicazione a chi non li ha ancora visti, quindi un servizio nuovo che
+non passa di lì lo lascia indietro senza che nessuno se ne accorga: chi lavora
+all'applicazione non esce dalla propria sessione per guardare la vetrina.
+Restando generale invecchia più lentamente, ma non è immune. Vale la stessa
+regola dei documenti in `docs/`, e il promemoria è la prova in
+[smoke.test.tsx](../frontend/tests/components/public/smoke.test.tsx), che
+verifica soltanto che la pagina si apra.
 
 ## I componenti condivisi
 
 Prima di scrivere una schermata nuova si guarda cosa c'è già. Quasi tutta
 l'impaginazione dell'app è fatta di questi pezzi:
 
-| Componente | A cosa serve |
-| --- | --- |
-| [PageLayout](../frontend/src/components/PageLayout.tsx) | Il contenitore centrato e l'intestazione con titolo, descrizione e azione a destra. Le larghezze hanno nomi (`default`, `wide`, `split`, `form`) e non numeri, così una pagina nuova sceglie in base al proprio contenuto |
-| [ModalShell](../frontend/src/components/ModalShell.tsx) | La scatola di ogni modale: sfondo, pannello, chiusura. Durante un'azione in corso (`locked`) non si chiude, perché una scrittura non va interrotta a metà. Esce in fondo alla pagina da un portal, come il tooltip: serve a chi si apre da dentro un'altra modale, che sfoca lo sfondo e altrimenti la confinerebbe al proprio riquadro |
-| [DetailModal](../frontend/src/components/DetailModal.tsx) e `DetailField` | Il dettaglio in sola lettura di una riga di tabella |
-| [ConfirmModal](../frontend/src/components/ConfirmModal.tsx) | Le conferme, comprese quelle distruttive. Con `elevated` sta sopra la modale da cui l'azione è partita |
-| [DataTable](../frontend/src/components/DataTable.tsx) | Tabella, intestazione, righe, ricerca e paginazione. Le righe per pagina sono le stesse ovunque e la pagina non le sceglie. Le colonne stanno a misure fisse: ogni colonna dichiara la propria `width` in percentuale (obbligatoria, e le percentuali di una tabella sommano a 100), il layout è `table-fixed` e sotto `minWidth` scorre il riquadro invece di stringersi le colonne. Intestazioni e celle sono centrate nella propria colonna, e una cella che dentro si costruisce con un flex lo centra con `justify-center`. Le eccezioni le dichiara la cella con `align="left"`, e l'intestazione resta comunque al centro: la prima colonna della gestione utenti, degli avatar e del report attività, dove un'immagine, un nome e una riga sotto si scorrono con l'occhio, e i pannelli che si aprono sotto una riga, che sono elenchi di voci e valori |
-| [Tooltip](../frontend/src/components/Tooltip.tsx) | Ogni spiegazione al passaggio del mouse. Vive in un portal, quindi non lo taglia il bordo di una tabella o di una modale, e di suo non aggiunge nodi al DOM: clona il figlio e gli aggancia gli eventi |
-| [IconButton](../frontend/src/components/IconButton.tsx) | Il bottoncino quadrato delle azioni di una riga. Il tooltip fa parte del bottone e non gli sta attorno, così un'icona senza parole non può restare senza nome; su un bottone bloccato il tooltip viene avvolto da solo, altrimenti il motivo del blocco non comparirebbe proprio a chi ne ha bisogno |
-| [FormError](../frontend/src/components/FormError.tsx) e [FormSuccess](../frontend/src/components/FormSuccess.tsx) | I due esiti, in due misure: `form` dentro una modale, `page` la fascia in cima a una schermata |
-| [Badge](../frontend/src/components/Badge.tsx), [Spinner](../frontend/src/components/Spinner.tsx), [Toast](../frontend/src/components/Toast.tsx), [LoadingState](../frontend/src/components/LoadingState.tsx) | I pezzi piccoli ricorrenti |
-| [Field](../frontend/src/components/Field.tsx), [Select](../frontend/src/components/Select.tsx), [SearchSelect](../frontend/src/components/SearchSelect.tsx) | I campi dei form, con le classi già decise. `SearchSelect` ha due varianti: come filtro la scelta sta in una chip accanto al campo di ricerca, come campo di un form (`variant="field"`) la chip prende il posto del campo, che torna quando si toglie la scelta |
+| Componente                                                                                                                                                                                                   | A cosa serve                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [PageLayout](../frontend/src/components/PageLayout.tsx)                                                                                                                                                      | Il contenitore centrato e l'intestazione con titolo, descrizione e azione a destra. Le larghezze hanno nomi (`default`, `wide`, `split`, `form`) e non numeri, così una pagina nuova sceglie in base al proprio contenuto                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| [ModalShell](../frontend/src/components/ModalShell.tsx)                                                                                                                                                      | La scatola di ogni modale: sfondo, pannello, chiusura. Durante un'azione in corso (`locked`) non si chiude, perché una scrittura non va interrotta a metà. Esce in fondo alla pagina da un portal, come il tooltip: serve a chi si apre da dentro un'altra modale, che sfoca lo sfondo e altrimenti la confinerebbe al proprio riquadro                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| [DetailModal](../frontend/src/components/DetailModal.tsx) e `DetailField`                                                                                                                                    | Il dettaglio in sola lettura di una riga di tabella                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| [ConfirmModal](../frontend/src/components/ConfirmModal.tsx)                                                                                                                                                  | Le conferme, comprese quelle distruttive. Con `elevated` sta sopra la modale da cui l'azione è partita                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| [DataTable](../frontend/src/components/DataTable.tsx)                                                                                                                                                        | Tabella, intestazione, righe e ricerca. Sfogliare le righe non è affare suo, sta in `Pagination`. Le colonne stanno a misure fisse: ogni colonna dichiara la propria `width` in percentuale (obbligatoria, e le percentuali di una tabella sommano a 100), il layout è `table-fixed` e sotto `minWidth` scorre il riquadro invece di stringersi le colonne. Intestazioni e celle sono centrate nella propria colonna, e una cella che dentro si costruisce con un flex lo centra con `justify-center`. Le eccezioni le dichiara la cella con `align="left"`, e l'intestazione resta comunque al centro: la prima colonna della gestione utenti, degli avatar, del report attività e dei percorsi assegnati, dove un'immagine, un nome e una riga sotto si scorrono con l'occhio, e i pannelli che si aprono sotto una riga, che sono elenchi di voci e valori |
+| [Pagination](../frontend/src/components/Pagination.tsx) e [usePagination](../frontend/src/hooks/usePagination.ts)                                                                                            | Sfogliare un elenco lungo: la barra in fondo e il conto di quale fetta mostrare. Le righe per pagina sono le stesse ovunque e chi mostra l'elenco non le sceglie, `label` cambia soltanto come si chiama quello che si conta ("Percorsi per pagina" nella griglia dei percorsi). Stava dentro `DataTable` ed è uscita quando è servita anche a un elenco che tabella non è                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| [Tooltip](../frontend/src/components/Tooltip.tsx)                                                                                                                                                            | Ogni spiegazione al passaggio del mouse. Vive in un portal, quindi non lo taglia il bordo di una tabella o di una modale, e di suo non aggiunge nodi al DOM: clona il figlio e gli aggancia gli eventi                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| [IconButton](../frontend/src/components/IconButton.tsx)                                                                                                                                                      | Il bottoncino quadrato delle azioni di una riga. Il tooltip fa parte del bottone e non gli sta attorno, così un'icona senza parole non può restare senza nome; su un bottone bloccato il tooltip viene avvolto da solo, altrimenti il motivo del blocco non comparirebbe proprio a chi ne ha bisogno                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| [FormError](../frontend/src/components/FormError.tsx) e [FormSuccess](../frontend/src/components/FormSuccess.tsx)                                                                                            | I due esiti, in due misure: `form` dentro una modale, `page` la fascia in cima a una schermata                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| [Badge](../frontend/src/components/Badge.tsx), [Spinner](../frontend/src/components/Spinner.tsx), [Toast](../frontend/src/components/Toast.tsx), [LoadingState](../frontend/src/components/LoadingState.tsx) | I pezzi piccoli ricorrenti                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| [Field](../frontend/src/components/Field.tsx), [Select](../frontend/src/components/Select.tsx), [SearchSelect](../frontend/src/components/SearchSelect.tsx)                                                  | I campi dei form, con le classi già decise. `SearchSelect` ha due varianti: come filtro la scelta sta in una chip accanto al campo di ricerca, come campo di un form (`variant="field"`) la chip prende il posto del campo, che torna quando si toglie la scelta. I nomi non si tagliano mai: l'elenco dei suggerimenti si allarga quanto il nome più lungo invece di stare nella larghezza del campo, e come campo di un form il nome scelto va a capo. Chi cerca sta scegliendo fra cose che si somigliano, e spesso si distinguono per l'ultima parola                                                                                                                                                                                                                                                                             |
+| [NumberInput](../frontend/src/components/NumberInput.tsx)                                                                                                                                                    | Ogni campo numerico dell'app. Le frecce del browser sono spente da una regola sola in `index.css`, valida per tutti i campi numerici, e queste sono disegnate da noi: quelle di sistema sono due triangolini grigi che cambiano forma fra un browser e l'altro e in Chrome compaiono solo passandoci sopra. A muovere il valore sono `stepUp` e `stepDown` del campo stesso, le stesse funzioni che stanno dietro le frecce della tastiera, quindi `min`, `max` e `step` valgono senza rifare quel conto. La larghezza va sul riquadro (`wrapperClassName`) e non sul campo, altrimenti dentro una colonna di flex le frecce finiscono fuori dal bordo                                                                                                                                                                                |
 
 Questi file esistono quasi tutti perché la stessa cosa era stata ricopiata in
 otto o undici posti, e nelle copie i valori avevano cominciato a divergere
@@ -261,9 +261,10 @@ stessa in tutta l'app, deve stare scritta una volta.
   («Nessun dato disponibile»), i messaggi di errore e conferma, le descrizioni
   sotto i titoli, i testi di trasparenza («Questa chiamata viene registrata») e
   i titoli editoriali del sito pubblico, che sono headline e non etichette
-  («Due ambiti di formazione, un unico percorso»). Del sito pubblico seguono la
-  regola delle etichette le sole voci di navigazione, in
-  [publicSections.ts](../frontend/src/components/public/publicSections.ts).
+  («Esercitazione, verifica e misurazione dei risultati»). Del sito pubblico segue la regola
+  delle etichette la sola voce di navigazione, in
+  [PublicNav.tsx](../frontend/src/components/public/PublicNav.tsx).
+
 - **I tooltip sono sempre `Tooltip`, mai l'attributo `title` del browser.**
   Quello nativo compare dopo un secondo, si veste come il sistema operativo e
   non si sa dove finisce; il componente compare subito, è uguale in tutta

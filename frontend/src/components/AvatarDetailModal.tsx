@@ -58,13 +58,6 @@ export default function AvatarDetailModal({
       <DetailField label="Categoria">
         <Badge tone={categoryBadgeClasses(avatar.category_color)}>{avatar.category}</Badge>
       </DetailField>
-      <DetailField label="Difficoltà">
-        {avatar.difficulty ? (
-          <span className="text-orange-400">{avatar.difficulty}</span>
-        ) : (
-          <span className="text-slate-500">—</span>
-        )}
-      </DetailField>
       <DetailField label="Brief per l'Operatore">
         {avatar.description || <span className="text-slate-500">Nessun brief</span>}
       </DetailField>

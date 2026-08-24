@@ -19,6 +19,7 @@ from models import (
     SIMULATION_STATUS_PUBLISHED,
     ChatConversation,
     ConversationEvaluation,
+    ConversationReview,
     Organization,
     SimulationAttempt,
     TechnicalSimulation,
@@ -27,6 +28,7 @@ from models import (
     TrainingPathStep,
     User,
 )
+from openai_service import EVALUATION_CRITERIA
 
 
 def _make_user_in(db_session, organization) -> User:
@@ -64,7 +66,13 @@ def _make_simulation(
     return simulation
 
 
-def _seed_evaluated_conversation(db_session, user, avatar, score, opened_at=None):
+def _seed_evaluated_conversation(db_session, user, avatar, score, opened_at=None, criteria=None):
+    """Una conversazione giudicata, con i voti per criterio se servono.
+
+    ``criteria`` è ``{chiave: voto}`` e finisce nel JSON della valutazione
+    nella forma in cui lo scrive il giudice: serve alle tappe che pongono
+    soglie sui singoli criteri, e le altre non lo guardano.
+    """
     conversation = ChatConversation(
         user_id=user.id,
         avatar_id=avatar.id,
@@ -78,7 +86,10 @@ def _seed_evaluated_conversation(db_session, user, avatar, score, opened_at=None
         ConversationEvaluation(
             conversation_id=conversation.id,
             overall_score=score,
-            result={"summary": "", "criteria": []},
+            result={
+                "summary": "",
+                "criteria": [{"key": key, "score": voto} for key, voto in (criteria or {}).items()],
+            },
         )
     )
     db_session.flush()
@@ -115,10 +126,12 @@ def _in(days: float) -> str:
     return (datetime.now(UTC) + timedelta(days=days)).isoformat()
 
 
-def _avatar_step(avatar, target=7.0, due_at=None) -> dict:
+def _avatar_step(avatar, target=7.0, due_at=None, criteria=None) -> dict:
     step = {"avatar_id": str(avatar.id), "target_score": target}
     if due_at is not None:
         step["due_at"] = due_at
+    if criteria is not None:
+        step["criteria_targets"] = criteria
     return step
 
 
@@ -391,6 +404,257 @@ def test_a_below_target_proof_counts_without_passing(
     assert listed["steps"][0]["best_score"] == 6.0
 
 
+# ── Le soglie sui singoli criteri ─────────────────────
+#
+# Valgono in aggiunta al voto complessivo e sulla stessa conversazione: sono
+# la condizione che la media pesata non può assorbire, e questi test tengono
+# ferme le due metà di quella frase.
+
+
+def test_a_step_can_ask_for_single_criteria(admin_client, organization, make_avatar):
+    avatar = make_avatar(category="clienti")
+
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, 7.0, criteria={"empatia": 8.0})],
+    )
+
+    (criterio,) = path["steps"][0]["criteria_targets"]
+    assert criterio["key"] == "empatia"
+    assert criterio["target"] == 8.0
+    # L'etichetta viaggia con la soglia: chi la legge deve trovare il nome
+    # che leggerà nel referto, non la chiave della colonna.
+    assert criterio["label"] == {k: etichetta for k, etichetta, _ in EVALUATION_CRITERIA}["empatia"]
+
+
+def test_the_criteria_are_read_back_in_the_order_of_the_report(
+    admin_client, organization, make_avatar
+):
+    avatar = make_avatar(category="clienti")
+
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, 7.0, criteria={"empatia": 8.0, "rispetto_fasi_chiamata": 6.0})],
+    )
+
+    canonico = [key for key, _, _ in EVALUATION_CRITERIA]
+    letto = [c["key"] for c in path["steps"][0]["criteria_targets"]]
+    assert letto == [key for key in canonico if key in letto]
+
+
+def test_a_criterion_below_its_target_does_not_pass_the_step(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """Il voto complessivo c'è, il criterio no: la tappa resta aperta.
+
+    È tutto il motivo per cui le soglie sui criteri esistono: 9 e 5 fanno una
+    media che passa, e la tappa che allena l'empatia non va superata così.
+    """
+    avatar = make_avatar(category="clienti")
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, 7.0, criteria={"empatia": 8.0})],
+    )
+    created = _assign(admin_client, path, standard_user)
+
+    _seed_evaluated_conversation(db_session, standard_user, avatar, 8.5, criteria={"empatia": 5.0})
+    listed = _reload(admin_client, created["id"])
+
+    tappa = listed["steps"][0]
+    assert tappa["status"] == "active"
+    assert tappa["attempts"] == 1
+    # Il complessivo si legge lo stesso, ed è raggiunto: senza il meglio per
+    # criterio accanto, chi si allena leggerebbe 8.5 su un obiettivo di 7 e
+    # una tappa aperta, senza sapere cosa manca.
+    assert tappa["best_score"] == 8.5
+    assert tappa["best_criteria_scores"] == {"empatia": 5.0}
+
+
+def test_the_criteria_must_be_met_by_the_same_conversation(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """Due prove che si completano a vicenda non fanno una prova buona."""
+    avatar = make_avatar(category="clienti")
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, 7.0, criteria={"empatia": 8.0, "comprensione_casistica": 8.0})],
+    )
+    created = _assign(admin_client, path, standard_user)
+
+    _seed_evaluated_conversation(
+        db_session,
+        standard_user,
+        avatar,
+        8.0,
+        criteria={"empatia": 9.0, "comprensione_casistica": 6.0},
+    )
+    _seed_evaluated_conversation(
+        db_session,
+        standard_user,
+        avatar,
+        8.0,
+        criteria={"empatia": 6.0, "comprensione_casistica": 9.0},
+    )
+    listed = _reload(admin_client, created["id"])
+
+    tappa = listed["steps"][0]
+    assert tappa["status"] == "active"
+    # Il meglio per criterio è il meglio di ognuno, anche su conversazioni
+    # diverse: racconta dove si è arrivati, non che la tappa sia superata.
+    assert tappa["best_criteria_scores"] == {"empatia": 9.0, "comprensione_casistica": 9.0}
+
+
+def test_one_conversation_meeting_everything_passes_the_step(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    avatar = make_avatar(category="clienti")
+    second = make_avatar(name="Luisa Bianchi", category="clienti")
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, 7.0, criteria={"empatia": 8.0}), _avatar_step(second)],
+    )
+    created = _assign(admin_client, path, standard_user)
+
+    _seed_evaluated_conversation(db_session, standard_user, avatar, 8.5, criteria={"empatia": 8.0})
+    listed = _reload(admin_client, created["id"])
+
+    assert [s["status"] for s in listed["steps"]] == ["completed", "active"]
+
+
+def test_an_evaluation_without_criteria_does_not_pass_a_step_that_asks_for_them(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """Un criterio che non c'è è un criterio non raggiunto.
+
+    Darlo per buono vorrebbe dire superare una tappa su un voto che nessuno
+    ha mai assegnato.
+    """
+    avatar = make_avatar(category="clienti")
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, 7.0, criteria={"empatia": 6.0})],
+    )
+    created = _assign(admin_client, path, standard_user)
+
+    _seed_evaluated_conversation(db_session, standard_user, avatar, 9.0)
+    listed = _reload(admin_client, created["id"])
+
+    assert listed["steps"][0]["status"] == "active"
+    assert listed["steps"][0]["best_criteria_scores"] == {}
+
+
+def test_a_corrected_score_decides_the_overall_and_not_the_criteria(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """La correzione del docente vale sul complessivo, come nel referto.
+
+    I sei numeri sotto restano quelli della macchina, quindi una tappa con
+    una soglia su un criterio non si supera per via di una correzione.
+    """
+    avatar = make_avatar(category="clienti")
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, 7.0, criteria={"empatia": 8.0})],
+    )
+    created = _assign(admin_client, path, standard_user)
+
+    conversation = _seed_evaluated_conversation(
+        db_session, standard_user, avatar, 5.0, criteria={"empatia": 5.0}
+    )
+    db_session.add(
+        ConversationReview(
+            conversation_id=conversation.id,
+            override_score=9.0,
+            override_reason="Giudizio troppo severo.",
+            ai_score_at_review=5.0,
+        )
+    )
+    db_session.flush()
+    listed = _reload(admin_client, created["id"])
+
+    tappa = listed["steps"][0]
+    assert tappa["best_score"] == 9.0
+    assert tappa["status"] == "active"
+
+
+def test_a_test_step_cannot_ask_for_criteria(admin_client, db_session, organization):
+    simulation = _make_simulation(db_session, organization)
+
+    response = admin_client.post(
+        "/api/training/paths",
+        json={
+            "title": "Onboarding",
+            "organization_id": str(organization.id),
+            "steps": [
+                {
+                    "simulation_id": str(simulation.id),
+                    "target_score": 6.0,
+                    "criteria_targets": {"empatia": 8.0},
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_an_unknown_criterion_is_refused(admin_client, organization, make_avatar):
+    avatar = make_avatar(category="clienti")
+
+    response = admin_client.post(
+        "/api/training/paths",
+        json={
+            "title": "Onboarding",
+            "organization_id": str(organization.id),
+            "steps": [_avatar_step(avatar, 7.0, criteria={"simpatia": 8.0})],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_a_criterion_target_stays_on_the_scale_of_the_judgement(
+    admin_client, organization, make_avatar
+):
+    avatar = make_avatar(category="clienti")
+
+    response = admin_client.post(
+        "/api/training/paths",
+        json={
+            "title": "Onboarding",
+            "organization_id": str(organization.id),
+            "steps": [_avatar_step(avatar, 7.0, criteria={"empatia": 11.0})],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_rewriting_a_path_can_drop_its_criteria(admin_client, organization, make_avatar):
+    """Togliere le soglie le toglie davvero, non le lascia sulla riga."""
+    avatar = make_avatar(category="clienti")
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, 7.0, criteria={"empatia": 8.0})],
+    )
+
+    response = admin_client.put(
+        f"/api/training/paths/{path['id']}",
+        json={"title": "Onboarding", "steps": [_avatar_step(avatar, 7.0)]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["steps"][0]["criteria_targets"] == []
+
+
 # ── La scadenza, che sta sul calendario ───────────────
 
 
@@ -638,7 +902,12 @@ def test_assignable_content_of_another_tenant_is_empty(admin_client, db_session,
         "/api/training/assignable-content", params={"organization_id": str(other.id)}
     )
 
-    assert response.json() == {"avatars": [], "simulations": []}
+    body = response.json()
+    assert body["avatars"] == []
+    assert body["simulations"] == []
+    # I criteri restano: non sono contenuto di un'organizzazione, sono quelli
+    # su cui ogni conversazione viene giudicata.
+    assert [c["key"] for c in body["criteria"]] == [key for key, _, _ in EVALUATION_CRITERIA]
 
 
 # ── Chi può ricevere un percorso ──────────────────────

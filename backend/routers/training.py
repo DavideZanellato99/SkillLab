@@ -53,14 +53,17 @@ from models import (
     TrainingPathStep,
     User,
 )
+from openai_service import EVALUATION_CRITERIA
 from path_draft import CatalogAvatar, CatalogSimulation, draft_path
 from routers.avatars import ensure_trainable
 from schemas import (
     STEP_KIND_AVATAR,
     AssignableAvatar,
     AssignableContentResponse,
+    AssignableCriterion,
     AssignableSimulation,
     MessageResponse,
+    StepCriterionTarget,
     TrainingPathAssignmentCreate,
     TrainingPathAssignmentResponse,
     TrainingPathDraftRequest,
@@ -83,6 +86,32 @@ router = APIRouter(prefix="/api/training", tags=["training"])
 # mostrano non hanno una seconda chiamata da fare.
 
 
+# L'etichetta di ogni criterio, per chiave: le soglie di una tappa si salvano
+# per chiave, e chi le legge deve vedere lo stesso nome che leggerà nel
+# referto (vedi ``StepCriterionTarget``).
+_CRITERION_LABELS = {key: label for key, label, _ in EVALUATION_CRITERIA}
+
+
+def _criteria_targets(step: TrainingPathStep) -> list[StepCriterionTarget]:
+    """Le soglie di una tappa, nell'ordine in cui i criteri stanno nel referto.
+
+    L'ordine è quello canonico e non quello in cui sono state scritte: chi
+    legge una tappa e chi legge un giudizio devono scorrere la stessa fila.
+
+    Una chiave che nella lista canonica non c'è più esce comunque, in coda e
+    con la propria chiave per nome: continua a valere come condizione (vedi
+    ``training_progress``), e una condizione che vale ma non si vede sarebbe
+    una tappa che non si supera senza che si capisca perché.
+    """
+    saved = step.criteria_targets or {}
+    keys = [key for key in _CRITERION_LABELS if key in saved]
+    keys += [key for key in saved if key not in _CRITERION_LABELS]
+    return [
+        StepCriterionTarget(key=key, label=_CRITERION_LABELS.get(key, key), target=saved[key])
+        for key in keys
+    ]
+
+
 def _step_fields(step: TrainingPathStep, position: int) -> dict:
     """I campi di una tappa comuni a chi la compone e a chi la percorre."""
     kind = step_kind(step)
@@ -96,6 +125,10 @@ def _step_fields(step: TrainingPathStep, position: int) -> dict:
     if kind == STEP_KIND_AVATAR:
         avatar = step.avatar
         fields |= {
+            # Le soglie sui criteri esistono solo qui: su un test la colonna
+            # è vuota, e la risposta non porta un campo che non vuol dire
+            # niente per quella forma di tappa.
+            "criteria_targets": _criteria_targets(step),
             "avatar_id": step.avatar_id,
             "avatar_name": avatar.name,
             "avatar_category": avatar.category_name,
@@ -177,6 +210,7 @@ def _assignment_responses(
                         unlocked_at=step_progress.unlocked_at,
                         attempts=step_progress.attempts,
                         best_score=step_progress.best_score,
+                        best_criteria_scores=step_progress.best_criteria_scores,
                         achieved_at=step_progress.achieved_at,
                     )
                     for index, (step, step_progress) in enumerate(
@@ -298,6 +332,11 @@ def _build_steps(
             # più. Stessa distinzione della galleria.
             ensure_trainable(avatar)
             step.avatar_id = avatar.id
+            # Vuoto è NULL e non ``{}``: una tappa che non pone soglie sui
+            # criteri e una che ne poneva e non ne pone più devono finire
+            # nella stessa riga, altrimenti la colonna racconterebbe la
+            # storia delle modifiche invece dello stato della tappa.
+            step.criteria_targets = item.criteria_targets or None
         else:
             simulation = (
                 db.query(TechnicalSimulation)
@@ -439,7 +478,6 @@ async def draft_training_path(
             id=a.id,
             name=a.name,
             category_name=a.category_name,
-            difficulty=a.difficulty,
             description=a.description,
         )
         for a in avatars
@@ -590,6 +628,13 @@ def assignable_content(
         ],
         simulations=[
             AssignableSimulation(id=s.id, title=s.title, kind=s.kind) for s in simulations
+        ],
+        # I criteri della valutazione, gli stessi che il giudice assegna: il
+        # form ci scrive le soglie di una tappa di conversazione, e prenderli
+        # di qui è quello che tiene i nomi uguali a quelli del referto.
+        criteria=[
+            AssignableCriterion(key=key, label=label, weight=weight)
+            for key, label, weight in EVALUATION_CRITERIA
         ],
     )
 

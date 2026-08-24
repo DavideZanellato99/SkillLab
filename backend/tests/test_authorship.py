@@ -60,7 +60,7 @@ def _avatar_payload(organization, category, **overrides) -> dict:
         "image_url": "/static/avatars/test.png",
         "voice_id": None,
         "organization_id": str(organization.id),
-        "profile": {"NOME": "Giovanni", "COGNOME": "Salemmi", "GRADO_DIFFICOLTA": "5/10"},
+        "profile": {"NOME": "Giovanni", "COGNOME": "Salemmi"},
         **overrides,
     }
 

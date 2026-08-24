@@ -14,6 +14,7 @@ const step = (over: Partial<StepProgress>): StepProgress => ({
   position: 2,
   kind: 'avatar',
   target_score: 7,
+  criteria_targets: [],
   due_at: null,
   avatar_id: 'a1',
   avatar_name: 'Mario Rossi',
@@ -26,6 +27,7 @@ const step = (over: Partial<StepProgress>): StepProgress => ({
   unlocked_at: '2026-01-02T09:00:00',
   attempts: 0,
   best_score: null,
+  best_criteria_scores: {},
   achieved_at: null,
   ...over,
 })
@@ -79,5 +81,50 @@ describe('PathStepPanel', () => {
     renderPanel({})
 
     expect(screen.getByText('Tappa 2 di 5')).toBeInTheDocument()
+  })
+  /* Una tappa può chiedere anche dei minimi sui singoli criteri, e allora il
+   * solo voto complessivo non basta a spiegare cosa sta succedendo: senza
+   * questa riga, un 8,5 su un obiettivo di 7 accanto a una tappa ancora
+   * aperta non si capirebbe. */
+  it('dice quali criteri servono e a che punto sono', () => {
+    renderPanel({
+      best_score: 8.5,
+      criteria_targets: [
+        { key: 'empatia', label: "Empatia e gestione dello stato d'animo del cliente", target: 8 },
+      ],
+      best_criteria_scores: { empatia: 5 },
+    })
+
+    // Il nome per esteso, lo stesso che si legge nel referto: un criterio
+    // abbreviato lo riconosce solo chi ha già imparato l'elenco.
+    expect(
+      screen.getByText("Empatia e gestione dello stato d'animo del cliente"),
+    ).toBeInTheDocument()
+    expect(screen.getByText('5')).toBeInTheDocument()
+    expect(screen.getByText('/8')).toBeInTheDocument()
+  })
+
+  it('su una tappa chiusa non mostra voti sui criteri', () => {
+    /* Le prove fatte prima del suo turno non contano: un numero lì direbbe
+     * che il conto è già cominciato. */
+    renderPanel({
+      status: 'locked',
+      unlocked_at: null,
+      criteria_targets: [
+        { key: 'empatia', label: "Empatia e gestione dello stato d'animo del cliente", target: 8 },
+      ],
+      best_criteria_scores: { empatia: 9 },
+    })
+
+    expect(
+      screen.getByText("Empatia e gestione dello stato d'animo del cliente"),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('9')).not.toBeInTheDocument()
+  })
+
+  it('non scrive niente di criteri su una tappa che non ne chiede', () => {
+    renderPanel({})
+
+    expect(screen.queryByText(/nella stessa conversazione/)).not.toBeInTheDocument()
   })
 })

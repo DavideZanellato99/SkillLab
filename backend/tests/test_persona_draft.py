@@ -19,7 +19,6 @@ import pytest
 
 from persona_draft import (
     ALL_KEYS,
-    DIFFICULTY_KEY,
     REQUIRED_KEYS,
     SOURCE_CONVERSATION,
     SOURCE_DESCRIPTION,
@@ -71,10 +70,7 @@ def test_ogni_campo_generato_finisce_nel_prompt():
 
     mai_lette = [key for key, valore in sentinelle.items() if valore not in reso]
 
-    # Il grado di difficoltà è l'eccezione dichiarata: non entra nel prompt
-    # perché non è una cosa che il personaggio sa di sé, è la targhetta che
-    # lo studente legge in galleria (vedi Avatar.difficulty).
-    assert mai_lette == [DIFFICULTY_KEY]
+    assert mai_lette == []
 
 
 def test_le_istruzioni_nominano_tutti_i_campi():
@@ -93,12 +89,6 @@ def test_le_due_fonti_chiedono_due_cose_diverse():
     assert "inventare" in descrizione
     assert "RICAVATO" in conversazione
     assert "anonimizzata" in conversazione
-
-
-def test_il_grado_richiesto_entra_nelle_istruzioni():
-    assert "8/10" in _system_prompt(SOURCE_DESCRIPTION, "8/10")
-    # Senza, non si inventa un grado: lo sceglie il modello
-    assert "difficoltà richiesto" not in _system_prompt(SOURCE_DESCRIPTION)
 
 
 # ── La pulizia della risposta ─────────────────────────
@@ -137,16 +127,6 @@ def test_le_percentuali_prendono_la_forma_della_scheda(risposta, atteso):
     profilo = normalize_profile(_scheda(LIVELLO_PAZIENZA=risposta))
 
     assert profilo["LIVELLO_PAZIENZA"] == atteso
-
-
-@pytest.mark.parametrize(
-    "risposta,atteso",
-    [("8/10", "8/10"), ("8", "8/10"), ("difficoltà 8 su 10", "8/10"), ("99", "10/10"), ("x", "")],
-)
-def test_il_grado_prende_il_formato_della_galleria(risposta, atteso):
-    profilo = normalize_profile(_scheda(GRADO_DIFFICOLTA=risposta))
-
-    assert profilo[DIFFICULTY_KEY] == atteso
 
 
 def test_i_valori_a_scelta_tornano_sull_elenco():
@@ -220,7 +200,7 @@ def test_una_fonte_sconosciuta_non_arriva_al_modello():
 def _finto_modello(monkeypatch, profilo=None, errore=None):
     """Sostituisce la chiamata a OpenAI dentro il modulo che la fa."""
 
-    async def _draft(text, source, difficulty=""):
+    async def _draft(text, source):
         if errore:
             raise errore
         return normalize_profile(profilo or _scheda())

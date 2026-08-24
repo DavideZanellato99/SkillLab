@@ -181,20 +181,6 @@ export function UserPlusIcon(props: IconProps) {
   )
 }
 
-/* Le tre righe del menu compatto. Sta qui e non fra le icone del sito
- * pubblico, che pure è l'unico posto in cui compare: quelle si scaricano
- * solo entrando in una pagina pubblica, mentre la navbar è sempre montata e
- * se la sarebbe portata dietro tutta per disegnare tre righe. */
-export function MenuIcon(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </IconBase>
-  )
-}
-
 /* Le due forme in cui si può presentare una tappa di un percorso: parlare con
  * qualcuno o rispondere a delle domande. Stanno una accanto all'altra perché
  * sulla mappa si leggono per differenza, in una pastiglia da 12px appesa al
@@ -235,6 +221,25 @@ export function TargetIcon(props: IconProps) {
       <circle cx="12" cy="12" r="10" />
       <circle cx="12" cy="12" r="6" />
       <circle cx="12" cy="12" r="2" />
+    </IconBase>
+  )
+}
+
+/* Le soglie sui singoli criteri di una tappa: tre cursori a quote diverse,
+ * che è la stessa cosa che il pannello fa vedere, cioè un obiettivo solo
+ * regolato criterio per criterio invece che in blocco. */
+export function SlidersIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="12" x2="15" y2="12" />
+      <line x1="17" y1="16" x2="23" y2="16" />
     </IconBase>
   )
 }

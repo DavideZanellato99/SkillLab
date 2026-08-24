@@ -1,5 +1,6 @@
 import type { StepProgress } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
+import StepCriteriaProgress from './StepCriteriaProgress'
 import { CheckIcon, LockIcon } from './icons'
 import {
   formatScore,
@@ -121,6 +122,15 @@ function StepRow({ step }: { step: StepProgress }) {
             </span>
           )}
         </span>
+        {step.criteria_targets.length > 0 && (
+          <span className="mt-2 block">
+            <StepCriteriaProgress
+              targets={step.criteria_targets}
+              best={step.best_criteria_scores}
+              locked={locked}
+            />
+          </span>
+        )}
         {!locked && (
           <span className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-white/6">
             <span

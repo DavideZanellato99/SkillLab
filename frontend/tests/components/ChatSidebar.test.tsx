@@ -13,7 +13,6 @@ const avatar = {
   category: 'Clienti',
   category_color: 'violet',
   description: 'Chiama per un addebito',
-  difficulty: '8/10',
 } as Avatar
 
 const conversazione = (over: Partial<ChatConversationSummary> = {}): ChatConversationSummary => ({
@@ -71,12 +70,11 @@ function renderSidebar(over: Partial<Parameters<typeof ChatSidebar>[0]> = {}) {
 }
 
 describe('ChatSidebar', () => {
-  it("presenta l'avatar con le sue targhette", () => {
+  it("presenta l'avatar con la sua targhetta", () => {
     renderSidebar()
 
     expect(screen.getByRole('heading', { name: 'Cliente arrabbiato' })).toBeInTheDocument()
     expect(screen.getByText('Clienti')).toBeInTheDocument()
-    expect(screen.getByText(/Difficoltà: 8\/10/)).toBeInTheDocument()
   })
 
   it('elenca le conversazioni con data e numero di messaggi', () => {

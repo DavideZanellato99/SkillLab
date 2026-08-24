@@ -31,7 +31,7 @@ import { formatDate } from './lastAccess'
  *
  * Si sceglie fra le prove che i due filtri lasciano passare, il canale e lo
  * scenario: una telefonata e una chat scritta non si giudicano nello stesso
- * modo, e i sei criteri sono tarati sulla difficoltà di quel cliente.
+ * modo, e i sei criteri sono tarati su quello che quel cliente chiede.
  *
  * L'ordine di quello che si legge è l'ordine delle domande che ci si fa: di
  * quanto sono migliorato, su cosa, e infine quali erano le due prove. Il
@@ -256,14 +256,14 @@ export default function ComparisonConversations({
   }, [left, right])
 
   /* Confrontare due prove di specie diversa si può, ma va detto: i criteri
-   * sono tarati sulla difficoltà di quel cliente, e al telefono e in chat non
-   * si risponde nello stesso modo. Dirlo è più utile che impedirlo, ed è
+   * sono tarati su quello che quel cliente chiede, e al telefono e in chat
+   * non si risponde nello stesso modo. Dirlo è più utile che impedirlo, ed è
    * quello che resta da fare quando i filtri sono aperti. */
   const warnings =
     left && right
       ? [
           left.avatar_id !== right.avatar_id
-            ? `Il confronto riguarda due scenari diversi, ${left.avatar_name} e ${right.avatar_name}: i punteggi non sono direttamente comparabili, perché la difficoltà del cliente varia.`
+            ? `Il confronto riguarda due scenari diversi, ${left.avatar_name} e ${right.avatar_name}: i punteggi non sono direttamente comparabili, perché ogni scenario mette alla prova competenze diverse.`
             : '',
           left.mode !== right.mode
             ? `Il confronto riguarda due canali diversi, ${conversationModeLabel(left.mode)} e ${conversationModeLabel(right.mode)}: al telefono e in chat si risponde in modi diversi, e i punteggi non sono direttamente comparabili.`

@@ -404,14 +404,6 @@ class Avatar(Authored, Base):
         """La tinta della pastiglia della categoria (vedi AVATAR_CATEGORY_COLORS)."""
         return self.category.color if self.category else DEFAULT_AVATAR_CATEGORY_COLOR
 
-    @property
-    def difficulty(self) -> str | None:
-        """Safe-to-expose difficulty grade from the persona sheet (e.g. '8/10')."""
-        if not self.profile:
-            return None
-        value = str(self.profile.get("GRADO_DIFFICOLTA", "") or "").strip()
-        return value or None
-
     def __repr__(self):
         return f"<Avatar(id={self.id}, name='{self.name}', category='{self.category_name}')>"
 
@@ -858,6 +850,23 @@ class TrainingPathStep(Base):
     # Il voto da raggiungere, da 1 a 10, sulla stessa scala nei due casi:
     # una valutazione e un test consegnato si leggono già in decimi.
     target_score = Column(Float, nullable=False)
+    # Le soglie sui singoli criteri della valutazione, ``{chiave: voto}``, o
+    # NULL se la tappa chiede solo il voto complessivo. Sono facoltative una
+    # per una: si scrivono i criteri che quella tappa allena, e gli altri
+    # restano fuori invece di essere sei numeri da riempire ogni volta.
+    #
+    # Valgono **in aggiunta** a ``target_score`` e sulla stessa prova: una
+    # conversazione supera la tappa quando raggiunge il voto complessivo e
+    # ogni criterio richiesto. È il motivo per cui esistono, ed è anche il
+    # motivo per cui non sostituiscono il complessivo: una media pesata copre
+    # un criterio andato male con gli altri cinque, e una tappa che allena
+    # l'empatia non vuole essere superata così.
+    #
+    # Solo sulle tappe di conversazione: un test consegnato non ha criteri,
+    # ha domande, quindi lì la colonna resta vuota (lo impone
+    # ``TrainingPathStepInput``). Le chiavi sono quelle canoniche di
+    # ``openai_service.EVALUATION_CRITERIA``.
+    criteria_targets = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
     # Data e ora entro cui la tappa andrebbe chiusa, o NULL se non scade
     due_at = Column(DateTime, nullable=True)
 
@@ -1416,6 +1425,17 @@ class VoiceSessionRecord(Base):
         return f"<VoiceSessionRecord(conversation_id={self.conversation_id})>"
 
 
+# Dove si è mosso il quadro rispetto a quello di prima. Tre valori e non un
+# numero: la direzione la scrive il modello leggendo temi e giudizi, e un
+# modello che producesse una percentuale la starebbe inventando. I numeri che
+# si possono davvero confrontare sono le medie, e quelle le sottrae il backend
+# (vedi ``debriefing_source.deltas``).
+DEBRIEFING_UP = "up"
+DEBRIEFING_STABLE = "stable"
+DEBRIEFING_DOWN = "down"
+DEBRIEFING_DIRECTIONS = (DEBRIEFING_UP, DEBRIEFING_STABLE, DEBRIEFING_DOWN)
+
+
 class UserDebriefing(Authored, Base):
     """Il quadro d'insieme su una persona, scritto dal modello per chi insegna.
 
@@ -1425,9 +1445,18 @@ class UserDebriefing(Authored, Base):
     persona e dice cosa hanno in comune, che è invece la domanda di chi deve
     sedersi davanti a lei e dirle qualcosa.
 
-    **Una riga per persona**, come una valutazione ne ha una per
-    conversazione: rifare il debriefing sostituisce il precedente, perché è
-    il quadro di adesso e non un diario di quelli di prima.
+    **Una riga per volta che qualcuno lo ha chiesto**, e non una per
+    persona: rifare il debriefing ne aggiunge uno invece di sostituire
+    quello di prima. La differenza non è archivistica. Un quadro d'insieme
+    dice a che punto è una persona, e a che punto è una persona si sa
+    soltanto rispetto a dove era: senza la versione precedente sul disco,
+    "sta migliorando" è una cosa che nessuno può né scrivere né verificare,
+    e chi insegna si ritrova ogni volta la stessa fotografia senza il prima.
+
+    Il più recente è quello che si legge, gli altri sono la storia. A dire
+    quale è quale è ``created_at``, e l'ordine è l'unica cosa che li lega:
+    ogni riga resta esattamente com'era quando è stata scritta, comprese le
+    medie, e nessuna viene mai riscritta.
 
     Perché sia salvato, in un'applicazione che deriva in lettura quasi tutto
     (il progresso di un percorso, le notifiche): quelle cose si ricavano da
@@ -1452,12 +1481,24 @@ class UserDebriefing(Authored, Base):
 
     __tablename__ = "user_debriefings"
 
-    # La persona di cui il debriefing parla, e la chiave: una sola riga per
-    # ciascuna, quindi rigenerare sostituisce senza dover cancellare prima.
-    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    # L'indice è composto e nell'ordine in cui la tabella si legge sempre:
+    # tutti i quadri di una persona, dal più recente. Sostituisce quello
+    # sulla sola `user_id`, che ne era il prefisso e quindi non rispondeva a
+    # niente in più, a spese di ogni scrittura.
+    __table_args__ = (Index("ix_user_debriefings_user_created", "user_id", "created_at"),)
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    # La persona di cui il debriefing parla. Non è più la chiave: di righe
+    # per persona adesso ce ne sono quante volte è stato chiesto.
+    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     # {"summary": str, "themes": [{"title", "detail", "evidence"}],
-    #  "improving": str | None, "next_step": str}. Vedi ``user_debriefing``
-    # per cosa il modello può scrivere e cosa viene buttato.
+    #  "improving": str | None, "next_step": str,
+    #  "direction": "up" | "stable" | "down" | None, "change": str | None}.
+    # Gli ultimi due esistono solo dalla seconda versione in poi: sul primo
+    # quadro di una persona non c'è nessun prima con cui confrontarsi, e una
+    # direzione inventata lì sarebbe la prima cosa a non essere creduta.
+    # Vedi ``user_debriefing`` per cosa il modello può scrivere e cosa viene
+    # buttato.
     content = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
     # La prova più recente che il modello ha letto. Non è la data in cui il
     # debriefing è stato scritto (quella è ``created_at``): fra le due passa

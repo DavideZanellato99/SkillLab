@@ -9,6 +9,7 @@ import {
   emptyDraft,
   isDraftComplete,
   toStepInput,
+  withCriterionTarget,
 } from '../../src/components/pathStepDraft'
 
 /* Il tipo di una tappa in composizione non si deduce dagli id, e questi test
@@ -24,6 +25,7 @@ const simulationStep: PathStep = {
   position: 1,
   kind: 'simulation',
   target_score: 6,
+  criteria_targets: [],
   due_at: '2026-03-04T15:30:00',
   avatar_id: null,
   avatar_name: null,
@@ -54,6 +56,8 @@ describe('la bozza di una tappa', () => {
     expect(draftFromStep(simulationStep)).toEqual({
       kind: 'simulation',
       avatarId: null,
+      criteriaTargets: {},
+      criteriaOpen: false,
       simulationId: 'x1',
       targetScore: 6,
       dueAt: toLocalInputValue('2026-03-04T15:30:00'),
@@ -79,6 +83,7 @@ describe('la bozza di una tappa', () => {
       avatar_id: 'a1',
       simulation_id: null,
       target_score: 6,
+      criteria_targets: {},
       due_at: null,
     })
   })
@@ -104,6 +109,8 @@ describe('la bozza di una tappa', () => {
       avatarId: 'a1',
       simulationId: 'x1',
       targetScore: 8,
+      criteriaTargets: {},
+      criteriaOpen: false,
       dueAt: null,
       reason: null,
     }
@@ -112,13 +119,62 @@ describe('la bozza di una tappa', () => {
       avatar_id: null,
       simulation_id: 'x1',
       target_score: 8,
+      criteria_targets: {},
       due_at: null,
     })
     expect(toStepInput({ ...indeciso, kind: 'avatar' })).toEqual({
       avatar_id: 'a1',
       simulation_id: null,
       target_score: 8,
+      criteria_targets: {},
       due_at: null,
+    })
+  })
+  /* Le soglie sui criteri: un criterio senza numero non è una soglia a zero,
+   * è un criterio che non pone nessuna condizione. Le due cose non si possono
+   * confondere, perché una soglia a zero la raggiunge chiunque. */
+  it('toglie la chiave di un criterio quando il campo si svuota', () => {
+    const conSoglia = withCriterionTarget(emptyDraft(), 'empatia', 8)
+    expect(conSoglia.criteriaTargets).toEqual({ empatia: 8 })
+
+    const senza = withCriterionTarget(conSoglia, 'empatia', null)
+    expect(senza.criteriaTargets).toEqual({})
+  })
+
+  it('riapre una tappa con le sue soglie, e col pannello già aperto', () => {
+    const step: PathStep = {
+      ...simulationStep,
+      kind: 'avatar',
+      simulation_id: null,
+      simulation_title: null,
+      simulation_kind: null,
+      avatar_id: 'a1',
+      avatar_name: 'Mario Rossi',
+      criteria_targets: [{ key: 'empatia', label: 'Empatia', target: 8 }],
+    }
+
+    const draft = draftFromStep(step)
+
+    expect(draft.criteriaTargets).toEqual({ empatia: 8 })
+    // Una tappa che le soglie ce le ha già si riapre mostrandole: nascoste
+    // dietro un bottone sarebbero condizioni che chi rilegge non sa di avere.
+    expect(draft.criteriaOpen).toBe(true)
+  })
+
+  it('non manda al server le soglie di una tappa diventata un test', () => {
+    /* Come per il bersaglio: chi ha scritto le soglie e poi è passato a "test
+     * tecnico" se le tiene nel form, ma un test non si valuta per criteri e
+     * il server rifiuterebbe la tappa. */
+    const draft = {
+      ...emptyDraft(),
+      kind: 'simulation' as const,
+      simulationId: 'x1',
+      criteriaTargets: { empatia: 8 },
+    }
+
+    expect(toStepInput(draft).criteria_targets).toEqual({})
+    expect(toStepInput({ ...draft, kind: 'avatar', avatarId: 'a1' }).criteria_targets).toEqual({
+      empatia: 8,
     })
   })
 })

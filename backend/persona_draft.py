@@ -76,9 +76,6 @@ CHOICE_KEYS: dict[str, tuple[str, ...]] = {
     "FORMALITA_LINGUAGGIO": ("Formale", "Informale"),
 }
 
-# Il grado di difficoltà, l'unico campo della scheda che lo studente vede.
-DIFFICULTY_KEY = "GRADO_DIFFICOLTA"
-
 # La scheda come viene spiegata al modello: sezione per sezione, chiave per
 # chiave, con accanto cosa ci va dentro.
 #
@@ -197,7 +194,6 @@ SHEET: list[tuple[str, list[tuple[str, str]]]] = [
                 "obbligatorio: cosa questa simulazione mette alla prova nell'operatore, "
                 "scritto come un obiettivo didattico e non come un desiderio del cliente",
             ),
-            (DIFFICULTY_KEY, "da 1/10 a 10/10"),
         ],
     ),
     (
@@ -239,7 +235,7 @@ def _sheet_spec() -> str:
     return "\n\n".join(blocks)
 
 
-def _system_prompt(source: str, difficulty: str = "") -> str:
+def _system_prompt(source: str) -> str:
     """Le istruzioni, che cambiano solo nel pezzo su cosa sia la fonte."""
     if source == SOURCE_CONVERSATION:
         fonte = (
@@ -265,20 +261,10 @@ def _system_prompt(source: str, difficulty: str = "") -> str:
             "cui i dettagli non si contraddicono."
         )
 
-    grado = (
-        f"\nIl grado di difficoltà richiesto è {difficulty}, e deve guidare la scheda: una "
-        "difficoltà alta significa un cliente meno paziente, più diffidente, con più obiezioni e "
-        "con informazioni che consegna solo se gli vengono chieste bene, non un problema più "
-        "complicato da capire.\n"
-        if difficulty
-        else ""
-    )
-
     return (
         "Sei un progettista di simulazioni di formazione per operatori di un servizio clienti "
         "bancario. Costruisci le schede dei clienti simulati con cui gli operatori si allenano.\n\n"
-        f"{fonte}\n"
-        f"{grado}\n"
+        f"{fonte}\n\n"
         "## COSA DEVI PRODURRE\n"
         "Un oggetto JSON con una chiave per ogni campo della scheda qui sotto, e nessuna chiave "
         "in più. Ogni valore è una stringa.\n\n"
@@ -312,15 +298,6 @@ def _percent(value: str) -> str:
     if not digits:
         return ""
     return f"{min(100, int(digits[:3]))}%"
-
-
-def _difficulty(value: str) -> str:
-    """Il grado nel formato "n/10", che è quello che la galleria mostra."""
-    match = re.search(r"\d+", value)
-    if not match:
-        return ""
-    grado = min(10, max(1, int(match.group())))
-    return f"{grado}/10"
 
 
 def _choice(value: str, allowed: tuple[str, ...]) -> str:
@@ -365,8 +342,6 @@ def normalize_profile(raw: dict) -> dict:
             continue
         if key in PERCENT_KEYS:
             profile[key] = _percent(value)
-        elif key == DIFFICULTY_KEY:
-            profile[key] = _difficulty(value)
         elif key in CHOICE_KEYS:
             profile[key] = _choice(value, CHOICE_KEYS[key])
         else:
@@ -380,7 +355,7 @@ def normalize_profile(raw: dict) -> dict:
     return profile
 
 
-async def draft_persona(text: str, source: str, difficulty: str = "") -> dict:
+async def draft_persona(text: str, source: str) -> dict:
     """Una bozza di scheda dal caso raccontato in ``text``.
 
     Una chiamata sola, al contrario delle cinque del serbatoio di domande: qui
@@ -397,7 +372,7 @@ async def draft_persona(text: str, source: str, difficulty: str = "") -> dict:
     )
     return await eval_json_completion(
         [
-            {"role": "system", "content": _system_prompt(source, difficulty)},
+            {"role": "system", "content": _system_prompt(source)},
             {"role": "user", "content": f"{intestazione}\n{text.strip()}"},
         ],
         # Una settantina di campi, di cui una decina sono paragrafi interi

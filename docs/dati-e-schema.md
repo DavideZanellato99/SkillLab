@@ -44,7 +44,7 @@ valgono su tutte le righe. Tutto in
 | `training_paths`, `training_path_steps`, `training_path_assignments` | I percorsi a tappe, descritti in [training-e-report.md](training-e-report.md) |
 | `notification_reads` | L'unica cosa che si salva delle notifiche: cosa è già stato letto |
 | `technical_simulations`, `simulation_chunks`, `simulation_questions`, `simulation_attempts` | Il simulatore tecnico, descritto in [simulatore.md](simulatore.md). Sulla prima stanno anche l'esito dell'ultimo controllo del serbatoio e l'impronta delle domande su cui è girato |
-| `user_debriefings` | Il quadro d'insieme su una persona, uno per persona, con la fotografia delle prove che il modello aveva letto. Vedi [training-e-report.md](training-e-report.md) |
+| `user_debriefings` | I quadri d'insieme su una persona, una riga per ogni volta che ne è stato chiesto uno, ciascuna con la fotografia delle prove che il modello aveva letto e con come si è mossa rispetto alla precedente. Vedi [training-e-report.md](training-e-report.md) |
 | `audit_logs` | Il registro delle azioni |
 
 ## Due convenzioni che valgono ovunque

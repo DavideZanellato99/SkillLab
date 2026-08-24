@@ -10,6 +10,7 @@ const step = (
 ): StepProgress => ({
   kind: 'avatar',
   target_score: 7,
+  criteria_targets: [],
   due_at: null,
   avatar_id: `a${over.position}`,
   avatar_name: `Avatar ${over.position}`,
@@ -22,6 +23,7 @@ const step = (
   unlocked_at: null,
   attempts: 0,
   best_score: null,
+  best_criteria_scores: {},
   achieved_at: null,
   ...over,
 })
@@ -104,11 +106,13 @@ describe('la riga', () => {
         onWithdraw={vi.fn()}
       />,
     )
-    expect(screen.getByText(/Banca Esempio · anna@test.it/)).toBeInTheDocument()
+    expect(screen.getByText('anna@test.it')).toBeInTheDocument()
+    expect(screen.getByText('Banca Esempio')).toBeInTheDocument()
     unmount()
 
     renderTable()
     expect(screen.getByText('anna@test.it')).toBeInTheDocument()
+    expect(screen.queryByText('Banca Esempio')).not.toBeInTheDocument()
   })
 })
 

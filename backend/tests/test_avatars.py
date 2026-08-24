@@ -52,13 +52,12 @@ def test_categories_of_another_tenant_stay_hidden(user_client, make_category, db
 
 
 def test_persona_sheet_is_never_exposed(user_client, make_avatar):
-    """The profile (secrets, hidden objectives) must not leak; only difficulty."""
+    """The profile (secrets, hidden objectives) must not leak."""
     make_avatar(name="Segreto", category="clienti")
     response = user_client.get("/api/avatars")
     assert response.status_code == 200
     first = response.json()[0]
     assert "profile" not in first
-    assert first["difficulty"] == "5/10"
 
 
 def test_get_missing_avatar_is_404(user_client):

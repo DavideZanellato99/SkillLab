@@ -11,6 +11,7 @@ somebody else.
 import io
 import json
 import zipfile
+from datetime import UTC, datetime
 
 from models import (
     AuditLog,
@@ -19,6 +20,7 @@ from models import (
     ConversationEvaluation,
     ConversationRecording,
     ConversationReview,
+    UserDebriefing,
 )
 
 _ANSWER_KEY = "IL-CLIENTE-STA-MENTENDO-SUL-GUASTO"
@@ -121,6 +123,41 @@ def test_the_export_carries_the_transcript_and_every_verdict(
     assert conversation["revisione_del_formatore"]["voto_corretto"] == 7.5
     assert conversation["revisione_del_formatore"]["formatore"] == "Anna Formatrice"
     assert data["percorsi_assegnati"][0]["tappe"][0]["punteggio_obiettivo"] == 8.0
+
+
+def test_the_export_carries_every_debriefing_ever_written(user_client, db_session, standard_user):
+    """Tutti e non solo l'ultimo, con la direzione che ciascuno indicava.
+
+    L'archivio deve dire quello che la piattaforma tiene, non quello che
+    mostra, e la direzione è la riga più delicata che qualcuno scriva su
+    una persona: è anche l'unica che dà senso a contestarla, perché il
+    testo di cui parla resta lì com'era.
+    """
+    for indice, direzione in enumerate([None, "up"]):
+        db_session.add(
+            UserDebriefing(
+                user_id=standard_user.id,
+                content={
+                    "summary": f"Quadro {indice}",
+                    "themes": [],
+                    "improving": None,
+                    "next_step": "Un cliente confuso.",
+                    "direction": direzione,
+                    "change": "Il tema di allora non torna più." if direzione else None,
+                },
+                covered_until=datetime.now(UTC).replace(tzinfo=None),
+                covered_conversations=2,
+                covered_attempts=1,
+            )
+        )
+        db_session.flush()
+
+    quadri = _data(_download(user_client))["quadri_di_insieme"]
+
+    # Dal più vecchio: è l'ordine in cui la storia si legge.
+    assert [q["sintesi"] for q in quadri] == ["Quadro 0", "Quadro 1"]
+    assert quadri[0]["andamento_rispetto_al_precedente"] is None
+    assert quadri[1]["andamento_rispetto_al_precedente"] == "up"
 
 
 def test_the_export_carries_the_account_and_the_activity(

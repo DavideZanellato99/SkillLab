@@ -28,7 +28,12 @@ const actionBtnCls =
 /** Cosa chiede una tappa, in una riga: serve sotto il nome e nel tooltip. */
 function stepDetail(step: PathStep): string {
   const deadline = step.due_at ? ` · entro il ${formatShortDeadline(step.due_at)}` : ''
-  return `${stepKindLabel(step)} · obiettivo ${formatScore(step.target_score)}${deadline}`
+  // Le soglie sui criteri qui si contano e non si elencano: la scheda mostra
+  // già solo le prime tre tappe, e i nomi dei criteri si leggono aprendo il
+  // percorso, dove ci sono i campi con cui si scrivono.
+  const quanti = step.criteria_targets.length
+  const condizioni = quanti ? ` · ${quanti} ${quanti === 1 ? 'criterio' : 'criteri'}` : ''
+  return `${stepKindLabel(step)} · obiettivo ${formatScore(step.target_score)}${condizioni}${deadline}`
 }
 
 export default function TrainingPathCard({

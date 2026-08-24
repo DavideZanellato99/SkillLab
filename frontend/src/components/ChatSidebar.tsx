@@ -11,7 +11,8 @@ import { Link } from 'react-router'
 
 import type { Avatar, ChatConversationSummary } from '../services/api'
 import { getAvatarImageUrl } from '../services/api'
-import AvatarBadges from './AvatarBadges'
+import Badge from './Badge'
+import { categoryBadgeClasses } from './categoryStyles'
 import { formatDate } from './chatFormat'
 import SearchInput from './SearchInput'
 import Tooltip from './Tooltip'
@@ -86,12 +87,9 @@ export default function ChatSidebar({
           />
         </div>
         <h2 className="mb-1 font-heading text-xl font-bold text-slate-100">{avatar.name}</h2>
-        <AvatarBadges
-          category={avatar.category}
-          categoryColor={avatar.category_color}
-          difficulty={avatar.difficulty}
-          center
-        />
+        <Badge tone={categoryBadgeClasses(avatar.category_color)} className="mb-2">
+          {avatar.category}
+        </Badge>
         <p className="text-[0.8rem] leading-normal text-slate-500">{avatar.description}</p>
       </div>
 

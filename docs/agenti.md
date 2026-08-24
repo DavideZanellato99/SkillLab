@@ -31,7 +31,7 @@ Quello che li distingue dagli altri usi del modello è **a chi consegnano**:
 
 | | Cosa fa | Chi lo chiede | Dove è descritto |
 | --- | --- | --- | --- |
-| **Debriefing** | Legge le ultime prove di una persona e dice cosa si ripete, cosa migliora e cosa fare adesso | Chi amministra, dal report attività | [training-e-report.md](training-e-report.md#il-quadro-dinsieme-su-una-persona) |
+| **Debriefing** | Legge le ultime prove di una persona e il quadro che gli era stato scritto prima, e dice cosa si ripete, come si è mossa da allora e cosa fare adesso | Chi amministra, dal report attività | [training-e-report.md](training-e-report.md#il-quadro-dinsieme-su-una-persona) |
 | **Bozza di percorso** | Da un obiettivo raccontato a parole compone una fila di tappe scelte dal catalogo del tenant | Chi amministra, componendo un percorso nuovo | [training-e-report.md](training-e-report.md#la-bozza-scritta-dal-modello) |
 | **Controllo del serbatoio** | Rilegge le cinquanta domande di un test e dice da quale conviene cominciare | Chi amministra, prima di pubblicare | [simulatore.md](simulatore.md#il-controllo-del-serbatoio) |
 
@@ -44,13 +44,17 @@ Nessuna di queste dice che lo stesso errore è tornato quattro volte su
 quattro scenari diversi, ed è la cosa che serve a chi deve sedersi davanti a
 qualcuno.
 
+Ed è l'unico che **rilegge sé stesso**: dalla seconda volta in poi ha davanti
+il quadro che era stato scritto prima, e alla domanda "cosa si ripete"
+aggiunge "come si è mossa questa persona da allora".
+
 | | |
 | --- | --- |
-| Rotta | `POST /api/admin/users/{user_id}/debriefing` |
+| Rotta | `POST /api/admin/users/{user_id}/debriefings` |
 | File | [debriefing_source.py](../backend/debriefing_source.py), [user_debriefing.py](../backend/user_debriefing.py), [routers/admin_debriefings.py](../backend/routers/admin_debriefings.py) |
-| Legge | Ultime 5 conversazioni valutate con trascrizione, criteri, revisioni e note, più gli ultimi 5 tentativi con le sole domande sbagliate |
-| Produce | Sintesi, fino a 4 temi ricorrenti con le prove su cui poggiano, il miglioramento, il passo successivo |
-| Salva | Sì, una riga per persona (`user_debriefings`), che invecchia |
+| Legge | Da 5 a 12 conversazioni valutate con trascrizione, criteri, revisioni e note, altrettanti tentativi con le sole domande sbagliate, e il quadro precedente se c'è. La finestra parte da cinque e si allarga a contenere tutte le prove svolte dopo il quadro precedente, così nessuna resta non letta da nessuno |
+| Produce | Sintesi, fino a 4 temi ricorrenti con le prove su cui poggiano, il miglioramento, il passo successivo, e dal secondo in poi la direzione con il racconto di cosa è cambiato |
+| Salva | Sì, una riga per generazione (`user_debriefings`): nessuna sostituisce quella prima, e la più recente invecchia |
 | Tetto | 10 all'ora per persona |
 
 ### La bozza di percorso risponde a "da dove comincio"
@@ -102,7 +106,10 @@ senza che qualcuno ci abbia messo gli occhi.
 in Python e arrivano nel prompt già fatti, con l'istruzione di non
 ricalcolarli. Un debriefing che dicesse una media diversa da quella della
 dashboard contraddirebbe la pagella che lo studente ha in mano, ed è il modo
-più rapido perché uno strumento del genere smetta di essere creduto.
+più rapido perché uno strumento del genere smetta di essere creduto. Vale
+anche per il confronto fra due debriefing: al modello si chiede la direzione,
+che è una lettura, e non di quanto la media si è mossa, che è una
+sottrazione fatta in Python.
 
 **3. Quello che il modello legge lo decide una funzione sola.** Il catalogo
 della bozza di percorso è la stessa `_assignable_catalog` del selettore, e le
@@ -162,6 +169,13 @@ Nessuno dei due si rigenera all'arrivo di una prova nuova o al salvataggio di
 una domanda: sarebbe una chiamata a pagamento fatta da nessuno, e ne
 partirebbe una a ogni virgola corretta.
 
+I due salvano però in modi diversi, e il debriefing è l'unico che **si
+accumula**: il controllo del serbatoio ha un esito per simulazione e ogni giro
+sostituisce quello prima, il debriefing ha una riga per volta che è stato
+chiesto. La ragione sta nella domanda a cui risponde: dove una persona è
+arrivata si sa solo rispetto a dove era, quindi la versione di prima non è un
+archivio, è metà del materiale della prossima.
+
 **Non chiesto e passato senza rilievi sono due stati diversi**, e le due
 schermate li dicono diversamente. Il primo è un `null`, il secondo è un esito
 con la lista vuota, ed è una notizia.
@@ -176,7 +190,7 @@ hanno un tetto per persona in
 
 | Limitatore | Tetto | Perché quello |
 | --- | --- | --- |
-| `DEBRIEFING` | 10 all'ora | È il tetto della valutazione, e per la stessa ragione: chiamata cara, rilanciabile all'infinito sulla stessa persona |
+| `DEBRIEFING` | 10 all'ora | È il tetto della valutazione, e per la stessa ragione: chiamata cara, che su una persona si può chiedere a ogni prova nuova |
 | `BOZZA_PERCORSO` | 30 all'ora | È il tetto della bozza di scheda persona: non salva niente, e si riscrive l'obiettivo finché la proposta non convince |
 | `REVISIONE_SERBATOIO` | 10 all'ora | È il tetto della generazione: stesso gesto ripetuto sulla stessa simulazione, e ogni giro sostituisce l'esito |
 

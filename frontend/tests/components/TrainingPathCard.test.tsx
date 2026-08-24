@@ -8,6 +8,7 @@ import TrainingPathCard from '../../src/components/TrainingPathCard'
 const step = (over: Partial<PathStep> & Pick<PathStep, 'id' | 'position'>): PathStep => ({
   kind: 'avatar',
   target_score: 7,
+  criteria_targets: [],
   due_at: null,
   avatar_id: `a${over.position}`,
   avatar_name: `Avatar ${over.position}`,

@@ -198,7 +198,6 @@ def _to_response(avatar: Avatar, conversation_count: int = 0) -> AdminAvatarResp
         category_color=avatar.category_color,
         description=avatar.description,
         voice_id=avatar.voice_id,
-        difficulty=avatar.difficulty,
         organization_id=avatar.organization_id,
         organization_name=avatar.organization.name,
         profile=avatar.profile or {},
@@ -446,7 +445,7 @@ async def draft_persona_sheet(
 
     audit.describe(http_request, source=payload.source, characters=len(payload.text))
     try:
-        profile = await draft_persona(payload.text, payload.source, payload.difficulty)
+        profile = await draft_persona(payload.text, payload.source)
     except RuntimeError as e:
         # Il fornitore non ha risposto, o non ha risposto niente di
         # utilizzabile: 502, come per la valutazione di una conversazione.

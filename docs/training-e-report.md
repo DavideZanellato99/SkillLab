@@ -32,16 +32,40 @@ salvato da nessuna parte: si rilegge dalle tappe che ci sono adesso.
 
 Le tre tabelle ([models.py](../backend/models.py)):
 
-| Tabella | Cosa tiene |
-| --- | --- |
-| `training_paths` | Il percorso: titolo, descrizione, tenant |
-| `training_path_steps` | Una tappa: posto nella fila, bersaglio, obiettivo, scadenza |
-| `training_path_assignments` | Il percorso affidato a una persona, e quando |
+| Tabella                     | Cosa tiene                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `training_paths`            | Il percorso: titolo, descrizione, tenant                                        |
+| `training_path_steps`       | Una tappa: posto nella fila, bersaglio, obiettivo, soglie sui criteri, scadenza |
+| `training_path_assignments` | Il percorso affidato a una persona, e quando                                    |
 
 Sulla tappa il bersaglio è **una colonna o l'altra**, mai tutte e due e mai
 nessuna, e a imporlo è un vincolo sulla tabella: è la stessa forma delle
 chiavi di una domanda di simulazione, dove ogni tipo riempie la propria
 colonna e lascia stare le altre (vedi [simulatore.md](simulatore.md)).
+
+**Una tappa di conversazione può chiedere anche dei minimi sui singoli
+criteri.** Sta in `criteria_targets`, `{chiave del criterio: voto}`, e le
+chiavi sono quelle canoniche della valutazione (vedi
+[valutazione.md](valutazione.md)). Si scrivono una per una: ci stanno solo i
+criteri su cui quella tappa insiste, e sulle altre la colonna resta vuota.
+
+Servono a una cosa che il solo voto complessivo non sa fare. Quel voto è la
+media pesata dei sei criteri, quindi un criterio andato male lo coprono gli
+altri cinque, e una tappa pensata per allenare l'empatia si supera lo stesso
+restando freddi. Una soglia sul criterio è la condizione che la media non può
+assorbire.
+
+Le condizioni valgono **tutte insieme e sulla stessa conversazione**: il voto
+complessivo e ognuno dei criteri richiesti. Due prove che si completano a
+vicenda, una buona sull'empatia e una buona sulla casistica, non fanno una
+prova buona. Sui criteri conta il punteggio dell'AI e non esiste un
+equivalente della correzione del docente, per la stessa ragione per cui non
+esiste nel referto: un docente corregge il verdetto nel suo insieme, non i sei
+numeri che ci stanno sotto. Quindi una correzione decide il complessivo, e i
+criteri restano quelli della macchina.
+
+Su un test tecnico non ci sono: un test non si valuta per criteri, si
+consegna, e il server rifiuta una tappa su simulazione che ne porti.
 
 **La scadenza è una data con l'ora, scritta quando si compone il percorso.**
 Sta sul calendario, quindi è la stessa per chiunque percorra quel percorso e
@@ -63,7 +87,12 @@ le sue tappe possono puntare solo agli avatar e ai test di quella, e si affida
 solo a utenti di quella.
 
 **Di cosa può essere fatta una tappa** lo dice `GET /assignable-content`: gli
-avatar non archiviati e le simulazioni pubblicate del tenant. Sta accanto alla
+avatar non archiviati e le simulazioni pubblicate del tenant, e i criteri su
+cui una tappa di conversazione può porre una soglia. I criteri non dipendono
+dall'organizzazione e viaggiano di lì lo stesso, perché è la chiamata con cui
+il form scopre di cosa può essere fatta una tappa: le loro etichette e i loro
+pesi arrivano dalla lista canonica, così chi compone legge le stesse parole
+che leggerà nel referto. Sta accanto alla
 validazione che rifiuta una tappa sbagliata, per la stessa ragione per cui ci
 sta `assignable-users`: il selettore e il controllo devono condividere una
 definizione sola, invece che il frontend ne tenga una copia libera di
@@ -93,7 +122,15 @@ Una tappa è superata quando **una prova svolta dopo il suo sblocco** raggiunge
 il punteggio richiesto. La prova è una conversazione valutata con l'avatar
 della tappa, oppure un test tecnico consegnato se la tappa è una simulazione;
 in entrambi i casi il voto è in decimi, che è quello che permette alle due
-forme di stare sulla stessa scala e sotto la stessa barra.
+forme di stare sulla stessa scala e sotto la stessa barra. Dove ci sono anche
+delle soglie sui criteri, "raggiunge il punteggio richiesto" vuol dire quella
+conversazione lì che raggiunge il complessivo e ognuno dei criteri.
+
+Il JSON della valutazione, da cui escono i voti per criterio, si legge **solo
+quando qualche tappa dei criteri li chiede**: è la colonna più pesante della
+riga, con commenti, suggerimenti e citazioni dentro, e una pagina di trenta
+allievi su percorsi che guardano il solo voto complessivo non se la trascina
+dal database per poi buttarla.
 
 ```mermaid
 flowchart TD
@@ -224,6 +261,17 @@ tappa bloccata si sceglie**, e il riquadro risponde con il motivo per cui non
 si può ancora cominciare invece che con un bottone: quella tappa esiste ed è la
 prossima.
 
+Dove la tappa pone anche delle soglie sui criteri, sotto la barra c'è quali
+sono e a che punto stanno
+([StepCriteriaProgress](../frontend/src/components/StepCriteriaProgress.tsx)),
+e la stessa riga compare nella fila delle tappe che legge un amministratore.
+Senza, una tappa con la barra piena e lo stato ancora aperto sarebbe una tappa
+che non si capisce: il complessivo è arrivato, e a mancare è una condizione
+che non si vede. Il numero accanto alla soglia è il **meglio fatto criterio
+per criterio**, anche su conversazioni diverse, quindi tutti verdi non vuol
+dire tappa superata: quella la supera una conversazione che li raggiunge
+insieme.
+
 **La pagina si apre sulla sola mappa, e il riquadro arriva scegliendo un
 nodo** ([PathStepDrawer](../frontend/src/components/PathStepDrawer.tsx)). La
 domanda con cui si entra in un percorso è dove si è arrivati, e a quella il
@@ -263,6 +311,36 @@ dell'avatar; comporre e seguire sono due lavori, e si fanno in due momenti
 diversi della settimana. Nella tabella la riga dice quante tappe sono chiuse e
 qual è quella aperta, e la fila intera si apre solo sulla riga che interessa:
 sei tappe per venti persone tutte insieme sono una tabella che non si legge.
+
+La finestra che affida il percorso
+([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)) elenca le
+persone del tenant con la spunta già messa a chi il percorso ce l'ha, e
+**togliere quella spunta lo ritira**: la casella dice chi lo sta percorrendo,
+quindi deve poterlo dire anche al contrario. Prima era spenta, e il ritiro
+viveva solo nel cestino della tabella accanto, che è un posto in cui chi
+apriva questa finestra per togliere una persona non veniva mandato da niente.
+I ritiri però non partono dal clic sulla casella: si accumulano, e prima di
+salvare una conferma li nomina uno per uno con il punto a cui ognuno è
+arrivato («3 tappe superate su 5»), perché togliere una spunta è un gesto
+piccolo mentre quello che fa è far sparire un percorso dalla home di qualcuno
+che magari lo ha quasi finito. Le conversazioni e i test già svolti restano
+dove sono, qui come nel ritiro dalla tabella. Il bottone di massa invece non
+ritira nessuno: «seleziona tutti» aggiunge chi manca fra quelli che la ricerca
+lascia vedere, «deseleziona tutti» annulla soltanto quella scelta, perché
+premuto per abitudine toglierebbe il percorso a un'organizzazione intera con
+un clic solo.
+
+Anche la linguetta dei percorsi si cerca e si sfoglia, come la tabella
+accanto: la casella guarda titolo, descrizione, organizzazione e nomi delle
+tappe, perché chi cerca un avatar sta cercando i percorsi che lo attraversano,
+e sotto stanno una griglia di due schede per riga e la barra condivisa
+([Pagination](../frontend/src/components/Pagination.tsx)). Un elenco che
+cresce di una scheda a settimana era diventato un muro da scorrere, e chi
+apre questa pagina di solito sa già quale percorso vuole toccare. Sulla scheda
+([TrainingPathCard](../frontend/src/components/TrainingPathCard.tsx)) si
+leggono le prime tre tappe e le altre si contano in coda, con i loro nomi nel
+tooltip: in una griglia sono le schede a doversi somigliare, e una da otto
+tappe sarebbe alta il triplo di quella di fianco.
 
 La fila di tappe della tabella
 ([PathStepsTrail](../frontend/src/components/PathStepsTrail.tsx)) non apre
@@ -316,13 +394,12 @@ linguistico è un id sbagliato prima o poi, e sarebbe sbagliato **in
 silenzio**: la tappa punterebbe a un avatar che esiste, solo non quello. Con
 le sigle una citazione storta non corrisponde a niente e cade.
 
-**Di un avatar escono solo i quattro campi della galleria**: nome, categoria,
-descrizione e grado di difficoltà. La scheda persona no, e a garantirlo non è
-l'attenzione di chi scrive il prompt ma la forma del dato: il catalogo passa
-per una dataclass di quattro campi
-(`CatalogAvatar`), quindi la vera causa del problema e l'obiettivo nascosto
-non arrivano nemmeno alla funzione che compone il testo. Per mettere in fila
-delle tappe basta sapere cosa mette alla prova un avatar e quanto è difficile.
+**Di un avatar escono solo i campi della galleria**: nome, categoria e
+descrizione. La scheda persona no, e a garantirlo non è l'attenzione di chi
+scrive il prompt ma la forma del dato: il catalogo passa per una dataclass di
+tre campi (`CatalogAvatar`), quindi la vera causa del problema e l'obiettivo
+nascosto non arrivano nemmeno alla funzione che compone il testo. Per mettere
+in fila delle tappe basta sapere cosa mette alla prova un avatar.
 
 **Cosa il modello non può scrivere.** Una sigla che non esiste nel catalogo
 cade, e cade la tappa e non tutto il percorso, come per una domanda storta
@@ -376,6 +453,40 @@ cambiano, perché da quel momento sarebbe la didascalia di una tappa che
 nessuno ha proposto. Viaggiano dentro `PathStepDraft`, che al salvataggio non
 le manda: il server di quel campo non sa niente.
 
+**Una tappa si compone in due file dentro la propria scheda**
+([PathStepEditor](../frontend/src/components/PathStepEditor.tsx)): sopra chi è
+la tappa, cioè il numero, il tipo di prova e il bersaglio; sotto cosa chiede,
+cioè l'obiettivo, i criteri e la scadenza. Era una riga di tabella a sette
+colonne e non ci stava: la finestra è larga 860px e le colonne fisse ne
+prendevano seicento, quindi al bersaglio, che è la cosa più importante della
+tappa, ne restavano meno di duecento e i nomi ci finivano dentro a capo.
+Adesso il bersaglio ha una fila tutta sua e i campi corti stanno insieme
+sotto, dove la larghezza che serve loro è quella che hanno.
+
+Con le due file tornano le etichette accanto ai campi, e se ne va
+l'intestazione di colonne che stava in cima all'elenco: una fila di campi che
+va a capo non si allinea a nessuna intestazione, e leggere "Obiettivo" accanto
+al campo costa meno che risalire in cima a cercarlo. Se ne va anche il doppio
+impaginato, uno per schermo largo e uno per schermo stretto, perché una scheda
+che manda i campi a capo regge tutte e due da sola.
+
+**Le soglie sui criteri stanno dietro un bottone accanto all'obiettivo**
+([PathStepCriteria](../frontend/src/components/PathStepCriteria.tsx)), che
+porta il numero di quelle scritte così una tappa con delle condizioni si
+riconosce anche a pannello chiuso. Chiuso e non aperto perché quasi nessuna
+tappa ne pone: sei campi in più su ogni tappa direbbero che vanno riempiti.
+Dentro, i criteri stanno uno per riga col nome per esteso: qui si decide una
+condizione su un percorso, e un nome accorciato lo riconosce solo chi ha già
+imparato l'elenco. Il peso che il criterio ha nella media accanto al nome non
+c'è: è un numero che parla di un'altra cosa, e su una riga dove se ne scrive
+un altro i due si fanno confondere. Accorciati restano nelle
+intestazioni della tabella delle valutazioni, che è l'unico posto dove una
+riga intera non ci sta
+([evaluationCriteria](../frontend/src/components/evaluationCriteria.ts)).
+Un campo vuoto e uno zero sono due cose diverse e il form non le confonde,
+perché svuotarlo toglie la soglia mentre uno zero sarebbe una condizione che
+chiunque soddisfa. Su una tappa su un test il bottone non c'è affatto.
+
 **Assegnare fa una domanda sola**
 ([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)): chi deve
 percorrerlo. Le persone si cercano per nome o per email e si spuntano tutte
@@ -397,14 +508,14 @@ una cosa che non è più vera; ritira un percorso e la sua notifica gli
 sopravvive. Derivate,
 smettono semplicemente di essere prodotte.
 
-| Tipo | Quando |
-| --- | --- |
-| `assignment.assigned` | Un percorso è stato assegnato |
-| `assignment.unlocked` | Una tappa si è aperta |
-| `assignment.due_soon` | La scadenza della tappa aperta è entro tre giorni |
-| `assignment.overdue` | La scadenza è passata e la tappa non è superata |
-| `assignment.completed` | L'ultima tappa è stata superata |
-| `review.published` | Un docente ha pubblicato o rivisto una revisione |
+| Tipo                   | Quando                                            |
+| ---------------------- | ------------------------------------------------- |
+| `assignment.assigned`  | Un percorso è stato assegnato                     |
+| `assignment.unlocked`  | Una tappa si è aperta                             |
+| `assignment.due_soon`  | La scadenza della tappa aperta è entro tre giorni |
+| `assignment.overdue`   | La scadenza è passata e la tappa non è superata   |
+| `assignment.completed` | L'ultima tappa è stata superata                   |
+| `review.published`     | Un docente ha pubblicato o rivisto una revisione  |
 
 **Le tappe già chiuse non annunciano niente**, e nemmeno quelle bloccate
 finché sono in tempo: una scadenza che deve ancora arrivare, per qualcosa a
@@ -483,10 +594,10 @@ cui si guardano entrambe, ripetere il selettore in ciascuna metà sarebbe due
 modi di dire la stessa cosa, e un riquadro suo sopra i filtri faceva tre
 pannelli da attraversare prima di arrivare a un voto.
 
-| Metà | Componente | Cosa c'è sotto il verdetto |
-| --- | --- | --- |
-| Conversazioni | [ComparisonConversations](../frontend/src/components/ComparisonConversations.tsx) | I sei criteri della valutazione, appaiati per chiave |
-| Test tecnici | [ComparisonSimulations](../frontend/src/components/ComparisonSimulations.tsx) | Le domande capitate in tutte e due le prove, appaiate per id: quali sbagli sono stati recuperati e quali persi |
+| Metà          | Componente                                                                        | Cosa c'è sotto il verdetto                                                                                     |
+| ------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Conversazioni | [ComparisonConversations](../frontend/src/components/ComparisonConversations.tsx) | I sei criteri della valutazione, appaiati per chiave                                                           |
+| Test tecnici  | [ComparisonSimulations](../frontend/src/components/ComparisonSimulations.tsx)     | Le domande capitate in tutte e due le prove, appaiate per id: quali sbagli sono stati recuperati e quali persi |
 
 ### Il verdetto prima del dettaglio
 
@@ -517,10 +628,10 @@ In fondo a ciascuna metà le due card portano un comando
 uno solo per tutte e due, perché è lo stesso gesto) che apre la prova per intero
 nella schermata che la sa già mostrare:
 
-| Metà | Cosa apre | Cosa ci si trova |
-| --- | --- | --- |
-| Conversazioni | [ConversationDetailModal](../frontend/src/components/ConversationDetailModal.tsx) | La trascrizione, i momenti citati dalla valutazione, la registrazione della chiamata, le note del docente |
-| Test tecnici | [SimulationAttemptModal](../frontend/src/components/SimulationAttemptModal.tsx) | Le domande come sono state viste, cosa è stato risposto e il passaggio del documento che dice qual era la risposta giusta |
+| Metà          | Cosa apre                                                                         | Cosa ci si trova                                                                                                          |
+| ------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Conversazioni | [ConversationDetailModal](../frontend/src/components/ConversationDetailModal.tsx) | La trascrizione, i momenti citati dalla valutazione, la registrazione della chiamata, le note del docente                 |
+| Test tecnici  | [SimulationAttemptModal](../frontend/src/components/SimulationAttemptModal.tsx)   | Le domande come sono state viste, cosa è stato risposto e il passaggio del documento che dice qual era la risposta giusta |
 
 Sul test tecnico serve più che sulle conversazioni: il dettaglio domanda per
 domanda dice **se** una domanda è andata bene o male, e solo per quelle capitate
@@ -564,10 +675,10 @@ linguette, perché ha poche voci fisse e la scelta corrente va letta senza aprir
 niente, e **il bersaglio** in una tendina, perché è un elenco lungo quanto le
 cose fatte da quella persona.
 
-| Metà | Linguette | Tendina |
-| --- | --- | --- |
-| Conversazioni | Il canale, con `MODE_FILTERS` | Lo scenario, cioè l'avatar |
-| Test tecnici | Il tipo di test, con `KIND_FILTERS` | Il test |
+| Metà          | Linguette                           | Tendina                    |
+| ------------- | ----------------------------------- | -------------------------- |
+| Conversazioni | Il canale, con `MODE_FILTERS`       | Lo scenario, cioè l'avatar |
+| Test tecnici  | Il tipo di test, con `KIND_FILTERS` | Il test                    |
 
 I due elenchi di linguette sono gli stessi che filtrano la dashboard e lo
 storico di una persona, non due gemelli scritti a parte: le tre schermate
@@ -658,12 +769,12 @@ test deve poterci finire, o la metà scritta si aprirebbe su nessuno.
 
 Tre schermate per chi amministra, tutte confinate dallo stesso `resolve_admin_scope`:
 
-| Schermata | Endpoint | Cosa mostra |
-| --- | --- | --- |
-| `/app/admin/dashboard` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie |
-| `/app/admin/dashboard` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte |
-| `/app/admin/report` | `GET /api/admin/users-report` | Una riga per persona: le due prove svolte, apribili e cancellabili una a una |
-| `/app/admin` | `GET /api/admin/users` | La tabella degli utenti, filtrata e paginata |
+| Schermata              | Endpoint                            | Cosa mostra                                                                  |
+| ---------------------- | ----------------------------------- | ---------------------------------------------------------------------------- |
+| `/app/admin/dashboard` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie                            |
+| `/app/admin/dashboard` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte                        |
+| `/app/admin/report`    | `GET /api/admin/users-report`       | Una riga per persona: le due prove svolte, apribili e cancellabili una a una |
+| `/app/admin`           | `GET /api/admin/users`              | La tabella degli utenti, filtrata e paginata                                 |
 
 **La dashboard e il report rispondono a due domande diverse**, ed è quello che
 li tiene separati invece di farne due viste della stessa cosa. La dashboard
@@ -811,11 +922,11 @@ quanto l'app era stata usata. Sono i due numeri che dicono meno: mezz'ora di
 chiamate non è una notizia, e chi si allenava solo sul simulatore compariva
 come una riga vuota. Ora la riga porta:
 
-| Colonna | Cosa risponde |
-| --- | --- |
-| Conversazioni | Quante ne ha avute nel periodo |
-| Simulazioni | Quante ne ha consegnate nel periodo |
-| Durata | Il tempo passato a parlare, che resta ma non comanda più |
+| Colonna       | Cosa risponde                                            |
+| ------------- | -------------------------------------------------------- |
+| Conversazioni | Quante ne ha avute nel periodo                           |
+| Simulazioni   | Quante ne ha consegnate nel periodo                      |
+| Durata        | Il tempo passato a parlare, che resta ma non comanda più |
 
 **Nella riga non c'è nessuna media.** Il voto appartiene alla singola prova e
 si legge lì, nello storico che si apre sotto; una media per persona accanto a
@@ -1046,11 +1157,11 @@ diversi, e non c'era nessuna schermata da cui quel fatto si leggesse.
 
 I file sono tre, e la divisione è quella di sempre:
 
-| File | Cosa fa |
-| --- | --- |
-| [debriefing_source.py](../backend/debriefing_source.py) | Cosa il modello ha davanti: quali prove entrano, come vengono neutralizzate, e i numeri calcolati qui |
-| [user_debriefing.py](../backend/user_debriefing.py) | Il prompt e la chiamata sola, con la normalizzazione della risposta |
-| [routers/admin_debriefings.py](../backend/routers/admin_debriefings.py) | Le due rotte, il confine del tenant, il salvataggio |
+| File                                                                    | Cosa fa                                                                                               |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| [debriefing_source.py](../backend/debriefing_source.py)                 | Cosa il modello ha davanti: quali prove entrano, come vengono neutralizzate, e i numeri calcolati qui |
+| [user_debriefing.py](../backend/user_debriefing.py)                     | Il prompt e la chiamata sola, con la normalizzazione della risposta                                   |
+| [routers/admin_debriefings.py](../backend/routers/admin_debriefings.py) | Le due rotte, il confine del tenant, il salvataggio, gli scarti fra una versione e quella prima       |
 
 ### Il giro è quello che si conosce già
 
@@ -1068,12 +1179,35 @@ porta dietro i modelli di riserva, il tempo lungo e il JSON forzato, e ha il
 suo tetto per persona, **dieci all'ora**
 ([llm_limits.py](../backend/llm_limits.py)). Il tetto è quello della
 valutazione e non quello delle operazioni di amministrazione, per la stessa
-ragione: è una chiamata cara che si può rilanciare all'infinito sulla stessa
-persona, perché ogni rilancio sostituisce il precedente.
+ragione: è una chiamata cara, e su una persona la si può chiedere ogni volta
+che ha svolto una prova nuova.
 
 ### Cosa il modello legge
 
-Le ultime **cinque conversazioni valutate** e gli ultimi **cinque tentativi**.
+Da **cinque a dodici conversazioni valutate**, altrettanti tentativi, e dalla
+seconda volta in poi il **quadro precedente**.
+
+La finestra non è un numero fisso, e il motivo è un buco che una finestra
+fissa lasciava aperto in silenzio. Con cinque conversazioni fisse, una persona
+che fra un debriefing e il successivo ne svolge sette se ne vedrebbe leggere
+cinque, e le altre due non le guarderebbe **nessuno mai**: il quadro
+precedente non poteva vederle perché non esistevano, e quello nuovo le ha
+scartate perché troppo vecchie per la finestra.
+
+Quindi la finestra parte da cinque, che è quante prove servono perché uno
+schema si veda ripetere, e si allarga fino a contenere tutte quelle svolte
+dopo `covered_until` del quadro precedente. Il tetto è dodici per forma: oltre
+quello si ferma, e quel che resta fuori è il più vecchio, cioè roba che è già
+passata dal quadro precedente sotto forma di temi e di medie.
+
+Il conto è una riga sola (`_window`): il massimo fra le prove nuove e la base,
+poi il minimo con il tetto. Le prove nuove sono anche le più recenti, quindi
+prendere le ultime N con N grande almeno quanto loro le prende tutte, senza
+bisogno di un secondo filtro sulle date.
+
+Una conversazione **senza valutazione non allarga la finestra**, come non
+entra nel dossier: dentro non c'è niente da leggere, quindi non è una prova
+che il debriefing possa mancare di guardare.
 Solo le conversazioni con un giudizio: una senza non porta niente da leggere
 e occuperebbe il budget delle trascrizioni al posto di una che parla.
 
@@ -1086,17 +1220,31 @@ si rilegge invece di rifarlo.
 
 Di ogni tentativo entrano il voto e **solo le domande sbagliate**. Le giuste
 occuperebbero la maggior parte dello spazio per dire una cosa che il voto dice
-già, mentre gli sbagli sono l'unica parte da cui si capisce *cosa* una persona
+già, mentre gli sbagli sono l'unica parte da cui si capisce _cosa_ una persona
 non sa, ed è la stessa ragione per cui il confronto fra due tentativi mette in
 cima le domande il cui esito è cambiato.
 
-Tre regole reggono la raccolta.
+Quattro regole reggono la raccolta.
+
+**Il quadro precedente è materiale quanto le prove.** Entra il suo testo con i
+numeri di allora accanto, dentro lo stesso recinto del resto, e non le
+trascrizioni che quel quadro aveva letto: quelle o sono già nel dossier di
+adesso, o sono vecchie abbastanza da essere uscite dalla finestra. Le prove
+non sono **solo** quelle nuove dall'ultima volta, e non è un dettaglio di
+costo: leggere le sole nuove darebbe un confronto più netto, ma dopo una prova
+sola non si vede nessun tema ricorrente, e un tema ricorrente è l'unica cosa
+che questo strumento aggiunge. Ci sono tutte le nuove, più le vecchie che
+servono ad arrivare a cinque.
 
 **Le trascrizioni entrano intere o non entrano.** Il tetto è sui caratteri
 (`TRANSCRIPT_BUDGET_CHARS`) e si spende dalla conversazione più recente: quella
 che non ci sta per intero perde la trascrizione e tiene il resto, invece di
 entrare a metà. Una trascrizione tagliata racconta una chiamata che finisce a
-metà, e quella è una cosa che il debriefing scriverebbe come un difetto.
+metà, e quella è una cosa che il debriefing scriverebbe come un difetto. È il
+secondo freno alla spesa e lavora su un asse diverso dal tetto sul numero:
+quello dice quante prove si guardano, questo quante se ne leggono per intero.
+In una finestra larga le più vecchie perdono le battute e tengono giudizio,
+criteri e note del docente, che è la parte da cui uno schema si vede.
 
 **I numeri non li calcola il modello.** Media dei voti, media per criterio e
 conteggi si contano in Python, arrivano nel prompt già fatti sotto
@@ -1121,6 +1269,18 @@ successivo. Il tetto sui temi non è prudenza: a un modello a cui si chiedono i
 temi ricorrenti di dodici prove senza dire quanti, escono otto voci in cui le
 ultime quattro sono le prime quattro riscritte più deboli.
 
+Dalla seconda volta in poi si aggiungono **la direzione** (`up`, `stable`,
+`down`) e due o tre frasi su cosa è cambiato. Il prompt insiste su un punto:
+_stabile è una risposta legittima e spesso è quella giusta_, perché fra due
+quadri passano poche prove e in poche prove un modo di lavorare cambia
+raramente. Mezzo punto di media in più non è un miglioramento, un errore che
+tornava sempre e adesso non torna più lo è.
+
+Di quanto si sono mosse le medie **non lo scrive il modello**: quella è una
+sottrazione fra due fotografie ferme, e la fa `debriefing_source.deltas` in
+lettura. Le due cose stanno vicine e possono non coincidere, ed è voluto: la
+direzione è una lettura del modo di lavorare, lo scarto è un numero.
+
 Il prompt insiste su una distinzione sola, che è tutto il senso della
 funzione: **quello che si ripete attraverso prove diverse è un modo di
 lavorare, quello che è successo una volta è un episodio**. E chiede che ogni
@@ -1131,10 +1291,19 @@ dove lo hai preso».
 Della risposta si scarta poco e per motivi precisi: un tema senza titolo cade
 da solo, come una domanda storta del serbatoio di una simulazione, mentre una
 risposta **senza sintesi o senza il passo successivo è fallita** e fa
-ritentare sul modello di riserva, esattamente come un JSON troncato. Il
-miglioramento invece può mancare, ed è un esito e non un dato che non è
-arrivato: inventarne uno per chiudere in positivo renderebbe inutile anche
-quello vero, quindi vuoto resta vuoto e la schermata non mostra la sezione.
+ritentare sul modello di riserva, esattamente come un JSON troncato. Lo stesso
+vale per una **direzione irriconoscibile**, quando la direzione era stata
+chiesta: metterci "stabile" al suo posto vorrebbe dire dire a un docente che
+una persona è ferma senza averlo letto da nessuna parte. Una direzione scritta
+in italiano invece viene tradotta, perché è una risposta giusta con
+l'etichetta sbagliata. Il miglioramento invece può mancare, ed è un esito e
+non un dato che non è arrivato: inventarne uno per chiudere in positivo
+renderebbe inutile anche quello vero, quindi vuoto resta vuoto e la schermata
+non mostra la sezione.
+
+Sul **primo** quadro di una persona la direzione non viene chiesta, e se il
+modello la scrive lo stesso viene buttata: lì un prima non c'è, e una
+direzione rispetto a niente è inventata.
 
 ### Perché è salvato, e come ammette di essere vecchio
 
@@ -1144,29 +1313,57 @@ ricavano da righe che già le descrivono, mentre qui il testo esiste solo
 perché un modello lo ha scritto una volta: riderivarlo vuol dire ripagarlo e
 riscriverlo diverso.
 
-La riga (`user_debriefings`, una per persona) porta quindi con sé **cosa il
-modello aveva davanti**: `covered_until`, cioè la prova più recente che ha
-letto, quante ne erano per forma, e le medie di allora. È la stessa idea di
-`ai_score_at_review` sulle revisioni, e serve alla stessa cosa: quando la
-persona svolge altre prove, il confronto fra `covered_until` e quello che c'è
-adesso fa comparire il segnale **da aggiornare**, invece di presentare come
-attuale un quadro che non ha mai visto le ultime tre conversazioni.
+La riga porta quindi con sé **cosa il modello aveva davanti**: `covered_until`,
+cioè la prova più recente che ha letto, quante ne erano per forma, e le medie
+di allora. È la stessa idea di `ai_score_at_review` sulle revisioni, e serve
+alla stessa cosa: quando la persona svolge altre prove, il confronto fra
+`covered_until` e quello che c'è adesso fa comparire il segnale **da
+aggiornare**, invece di presentare come attuale un quadro che non ha mai visto
+le ultime tre conversazioni.
 
 Lo stato non è salvato, si ricava in lettura (`debriefing_source.is_stale`), e
 guarda **le prove e non le revisioni**: una nota scritta dal docente dopo il
 debriefing non lo invecchia, perché è già il giudizio di chi lo sta leggendo,
 e vedersi dire che il proprio quadro è vecchio per una riga scritta da sé
-sarebbe un segnale che nessuno guarderebbe più.
+sarebbe un segnale che nessuno guarderebbe più. Vale solo sul più recente: su
+una versione vecchia dello storico "non ha visto le ultime prove" è ovvio,
+perché quello che non ha visto è il quadro che l'ha sostituita.
 
 Non si aggiorna mai da solo. Un debriefing che si rigenerasse all'arrivo di
 una conversazione sarebbe una chiamata a pagamento fatta da nessuno.
 
+### Una riga per volta che è stato chiesto, non una per persona
+
+`user_debriefings` ha una riga per **generazione**, e nessuna sostituisce
+quella di prima. La differenza non è archivistica: un quadro d'insieme dice a
+che punto è una persona, e a che punto è una persona si sa soltanto rispetto a
+dove era. Senza la versione precedente sul disco, "sta migliorando" è una cosa
+che nessuno può né scrivere né verificare, e chi insegna si ritrova ogni volta
+la stessa fotografia senza il prima.
+
+Ogni riga resta esattamente com'era quando è stata scritta, medie comprese, e
+non viene mai riscritta. A dire quale vale adesso è `created_at`: il più
+recente è quello che si legge, gli altri sono la storia.
+
+Da qui vengono due conseguenze:
+
+- **senza prove nuove non si rigenera.** Stesso materiale e stesso prompt
+  darebbero il quadro di prima riscritto con altre parole, che nello storico
+  entrerebbe come una versione da confrontare con sé stessa. La risposta è
+  409, e la schermata spegne il bottone dicendo il motivo prima di far partire
+  una richiesta che tornerebbe indietro;
+- **la retention accorcia lo storico dal fondo.** Il debriefing non ha un
+  orologio proprio e si misura su `covered_until` contro la finestra delle
+  conversazioni: le versioni vecchie sono quelle che hanno letto le prove più
+  vecchie, quindi se ne vanno per prime (vedi
+  [sicurezza-e-privacy.md](sicurezza-e-privacy.md)).
+
 ### Chi lo chiede, e cosa serve perché esista
 
-| | Super admin | Organization admin | Chi si allena |
-| --- | --- | --- | --- |
-| Lo legge e lo fa scrivere | Su chiunque | Sulla propria gente | Mai: 403 sulla rotta |
-| Su una persona di un altro tenant | La vede | 404, come se non ci fosse | |
+|                                   | Super admin | Organization admin        | Chi si allena        |
+| --------------------------------- | ----------- | ------------------------- | -------------------- |
+| Lo legge e lo fa scrivere         | Su chiunque | Sulla propria gente       | Mai: 403 sulla rotta |
+| Su una persona di un altro tenant | La vede     | 404, come se non ci fosse |                      |
 
 Il confine viene da `resolve_admin_scope` come ogni altra lettura di
 amministrazione, e il 404 è quello di sempre: chi non ha diritto di leggere
@@ -1198,12 +1395,30 @@ chi e quando è esattamente quello per cui il registro esiste.
 
 ### La schermata
 
-[UserDebriefingPanel](../frontend/src/components/UserDebriefingPanel.tsx), e
-ha una promessa sola: **non mostra mai un giudizio senza dire, accanto, su
-cosa poggia**. In testa quante prove sono entrate e fino a quando, le medie di
-allora, e da quanto il testo è lì. Poi la sintesi, i temi con le loro
-evidenze, il miglioramento se c'è, il passo successivo, e in fondo le medie
-per criterio **ordinate dalla più bassa**, che è l'ordine in cui si guardano.
+[UserDebriefingPanel](../frontend/src/components/UserDebriefingPanel.tsx)
+sceglie quale versione mostrare e comanda la generazione;
+[DebriefingVersion](../frontend/src/components/DebriefingVersion.tsx) disegna
+un quadro per intero e
+[DebriefingHistory](../frontend/src/components/DebriefingHistory.tsx) l'elenco
+delle versioni.
+
+La promessa è sempre quella: **non mostra mai un giudizio senza dire, accanto,
+su cosa poggia**. In testa quante prove sono entrate e fino a quando, le medie
+di allora con lo scarto da quelle del quadro prima, e da quanto il testo è lì.
+Poi la sintesi, come la persona si è mossa dal quadro precedente, i temi con
+le loro evidenze, il miglioramento se c'è, il passo successivo, e in fondo le
+medie per criterio **ordinate dalla più bassa**, che è l'ordine in cui si
+guardano.
+
+**Aperto c'è sempre un quadro solo, e di default è l'ultimo.** Le versioni
+precedenti stanno sotto in righe da una riga, con data, direzione e media, e
+si aprono al posto suo invece che sotto: mezze pagine aperte una sotto l'altra
+sono il modo di non leggerne nessuna, e due quadri interi nella stessa
+schermata obbligherebbero a decidere a quale credere. Quando quello aperto non
+è il più recente lo dice una fascia in cima, con dentro il comando per tornare
+all'attuale, perché leggere per attuale un testo scritto tre mesi fa è l'unico
+modo in cui questa schermata può ingannare. Con una versione sola l'elenco non
+compare affatto.
 
 L'attesa è la più lunga dell'area di amministrazione dopo la generazione di un
 serbatoio di domande, perché il modello legge cinque trascrizioni prima di
@@ -1221,10 +1436,10 @@ staccati dalla sessione, quindi sopravvive alla scadenza degli oggetti.
 Nella tabella degli utenti compaiono due colonne che sembrano la stessa cosa e
 non lo sono:
 
-| Colonna | Cosa dice |
-| --- | --- |
-| `last_login_at` | L'ultimo accesso vero. Non lo tocca il rinnovo del token, perché ruotare un token non è un accesso |
-| `last_activity_at` | L'ultima volta che l'account è stato visto vivo, scritta da qualunque richiesta autenticata |
+| Colonna            | Cosa dice                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| `last_login_at`    | L'ultimo accesso vero. Non lo tocca il rinnovo del token, perché ruotare un token non è un accesso |
+| `last_activity_at` | L'ultima volta che l'account è stato visto vivo, scritta da qualunque richiesta autenticata        |
 
 Servono entrambe perché una sessione si rinnova da sola finché il browser resta
 aperto: la data di accesso può essere di settimane fa mentre la persona sta

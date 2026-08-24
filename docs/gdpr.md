@@ -46,7 +46,7 @@ questo documento e firmare l'accordo art. 28.
 | **Trascrizione della conversazione** | `chat_messages.content` | Prodotta dallo speech to text, oppure digitata in modalità chat |
 | **Valutazione automatica della prestazione** | `conversation_evaluations.result`, `.overall_score` | Generata da un modello linguistico |
 | Revisione umana e annotazioni del formatore | `conversation_reviews`, `message_annotations` | Scritte da un formatore |
-| **Quadro d'insieme sull'andamento della persona** | `user_debriefings.content` | Generato da un modello linguistico che ha letto le sue ultime prove, su richiesta di un formatore |
+| **Quadro d'insieme sull'andamento della persona** | `user_debriefings.content` | Generato da un modello linguistico che ha letto le sue ultime prove e il quadro scritto la volta prima, su richiesta di un formatore. Se ne conserva uno per ogni volta che è stato chiesto, e dal secondo in poi ciascuno dice se la persona è migliorata o peggiorata |
 | Percorsi di formazione assegnati | `training_path_assignments` | Assegnati da un amministratore. Le tappe di cui sono fatti stanno sul percorso, che è dell'organizzazione e non della persona |
 | Indirizzo IP e User-Agent | `token_session`, `audit_logs` | Raccolti a ogni accesso e a ogni azione |
 | Registro delle azioni compiute | `audit_logs` | Scritto dal middleware a ogni richiesta che modifica qualcosa |
@@ -123,13 +123,25 @@ Sopra la valutazione della singola prova sta il debriefing: un modello legge
 le ultime prove di una persona e scrive cosa si ripete, cosa migliora e cosa
 dovrebbe fare adesso (vedi
 [training-e-report.md](training-e-report.md)). Va nell'informativa insieme
-alla valutazione, e ha tre differenze che contano.
+alla valutazione, e ha quattro differenze che contano.
 
 **Non produce nessun numero.** È testo, e i numeri che gli stanno accanto
 (medie e conteggi) li calcola il backend e non il modello, quindi non
 introduce nessun punteggio nuovo e non tocca nessuna decisione automatica: le
 tappe dei percorsi, le dashboard e le pagelle continuano a leggere solo
 `final_score`.
+
+**Dal secondo in poi dice anche una direzione.** Il modello ha davanti il
+quadro precedente e scrive se la persona è migliorata, è ferma o è
+peggiorata, con due o tre frasi su cosa è cambiato. Resta testo, e resta un
+giudizio qualitativo: la direzione non è un punteggio, non entra in nessun
+calcolo e non produce nessun effetto automatico. È però la riga più delicata
+che la piattaforma scrive su qualcuno, quindi vale tutto il resto di questa
+sezione a maggior ragione, e nell'esportazione dei dati personali c'è, come
+il resto. Ogni versione resta com'era: **non si riscrive quello che era stato
+detto prima**, il che è anche l'unico modo perché una persona possa
+contestare un giudizio sul proprio andamento e trovare ancora il testo di cui
+parla.
 
 **Non lo si subisce, lo si chiede.** Non viene prodotto da nessun processo
 automatico né a intervalli: esiste solo dopo che un formatore lo ha fatto
@@ -238,7 +250,10 @@ sintesi delle conversazioni, quindi non può sopravvivere alle conversazioni
 che riassume. A misurarlo è la data della prova più recente che il modello
 aveva letto, contro la finestra delle conversazioni, così quando quella data
 è scaduta il materiale su cui il testo si fonda è già stato cancellato e non
-resta un giudizio su una persona senza più niente dietro a cui riferirlo.
+resta un giudizio su una persona senza più niente dietro a cui riferirlo. La
+regola vale su ciascuna versione, non sulla persona: lo storico si accorcia
+dal fondo, perché le versioni vecchie sono quelle che avevano letto le prove
+più vecchie.
 
 **L'orologio parte dall'ultimo utilizzo, non dalla creazione**: il riaggancio
 per una telefonata, l'ultima attività per una chat scritta
@@ -268,7 +283,7 @@ giorni ma indefinito.
 
 | Diritto | Come è soddisfatto |
 | --- | --- |
-| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, il quadro d'insieme scritto su di lui, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
+| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, tutti i quadri d'insieme scritti su di lui con la direzione che ciascuno indicava, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
 | **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni, percorsi assegnati e il quadro d'insieme, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
 | **Rettifica** (art. 16) | L'anagrafica la tiene l'amministrazione: nome, cognome ed email li corregge un amministratore su richiesta dell'interessato, che dalla pagina Profilo li vede in sola lettura |
 | **Intervento umano** (art. 22) | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4) |

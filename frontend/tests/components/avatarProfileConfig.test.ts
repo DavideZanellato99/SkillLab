@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   ALL_PROFILE_KEYS,
-  DIFFICULTY_OPTIONS,
   PROFILE_SECTIONS,
   countFilled,
   emptyProfile,
@@ -63,10 +62,5 @@ describe('definizione della scheda', () => {
       if (field.options) expect(field.kind).toBe('choice')
       if (field.kind === 'choice') expect(field.options?.length).toBeGreaterThan(0)
     }
-  })
-
-  it('offre le dieci difficoltà nel formato che il backend espone', () => {
-    expect(DIFFICULTY_OPTIONS).toHaveLength(10)
-    expect(DIFFICULTY_OPTIONS[7]).toBe('8/10')
   })
 })

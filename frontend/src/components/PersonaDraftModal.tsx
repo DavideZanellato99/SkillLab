@@ -13,13 +13,11 @@ import { useState } from 'react'
 
 import { useDraftPersona } from '../hooks/useAdminAvatars'
 import type { PersonaDraftSource } from '../services/admin'
-import { DIFFICULTY_OPTIONS } from './avatarProfileConfig'
 import { fieldCls, labelCls, textareaCls } from './Field'
 import FilterTabs from './FilterTabs'
 import FormError from './FormError'
 import ModalShell from './ModalShell'
 import PrimaryButton from './PrimaryButton'
-import Select from './Select'
 import Spinner from './Spinner'
 
 /* Sotto questa lunghezza il server rifiuta, ed è la stessa soglia: da tre
@@ -48,17 +46,14 @@ const PLACEHOLDERS: Record<PersonaDraftSource, string> = {
 }
 
 interface Props {
-  /** Il grado già scelto nella scheda, se c'è: la bozza parte da lì. */
-  difficulty: string
   onClose: () => void
   /** La bozza pronta, che il form fa entrare nella scheda con le sue regole. */
   onDrafted: (profile: Record<string, string>) => void
 }
 
-export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Props) {
+export default function PersonaDraftModal({ onClose, onDrafted }: Props) {
   const [source, setSource] = useState<PersonaDraftSource>('descrizione')
   const [text, setText] = useState('')
-  const [grado, setGrado] = useState(difficulty)
 
   const draftMutation = useDraftPersona()
   const isPending = draftMutation.isPending
@@ -77,7 +72,6 @@ export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Pr
       const { profile } = await draftMutation.mutateAsync({
         text: text.trim(),
         source,
-        difficulty: grado,
       })
       onDrafted(profile)
     } catch {
@@ -132,24 +126,6 @@ export default function PersonaDraftModal({ difficulty, onClose, onDrafted }: Pr
               comporrebbe un caso non aderente.
             </p>
           )}
-        </div>
-
-        <div className={fieldCls}>
-          <label className={labelCls} htmlFor="draft-difficulty">
-            Grado di Difficoltà
-          </label>
-          <Select
-            id="draft-difficulty"
-            value={grado}
-            onChange={setGrado}
-            options={DIFFICULTY_OPTIONS.map((value) => ({ value, label: value }))}
-            placeholder="Definito dal modello"
-            disabled={isPending}
-          />
-          <p className="text-[0.7rem] text-slate-500">
-            Un grado alto non rende il problema più difficile da capire, rende il cliente meno
-            paziente e più avaro di informazioni.
-          </p>
         </div>
 
         <PrimaryButton

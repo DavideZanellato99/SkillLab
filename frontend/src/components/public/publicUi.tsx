@@ -1,20 +1,18 @@
-/* I pezzi con cui sono costruite le pagine pubbliche.
+/* I pezzi con cui è costruita la pagina pubblica.
  *
- * Stesso motivo di [PageLayout](../PageLayout.tsx) dentro l'applicazione: le
- * pagine sono cinque, e senza un posto solo in cui stanno le card, le
- * intestazioni e i pulsanti, gli stessi valori finirebbero ricopiati cinque
- * volte con margini che divergono.
+ * Stesso motivo di [PageLayout](../PageLayout.tsx) dentro l'applicazione:
+ * card, intestazioni e pulsanti stanno in un posto solo, così le sezioni
+ * della pagina non divergono su margini e misure man mano che si aggiungono.
  *
  * Qui non c'è nessuna chiamata al server: il sito si legge senza essere
  * nessuno, quindi non ha dati da chiedere. */
 
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Link } from 'react-router'
 import { openLogin } from './openLogin'
 import { ArrowRightIcon } from './publicIcons'
 
-export const primaryBtnCls =
+const primaryBtnCls =
   'inline-flex cursor-pointer items-center gap-2 rounded-full border-none bg-gradient-to-r from-violet-600 to-cyan-500 px-7 py-3.5 text-[0.95rem] font-semibold text-white no-underline shadow-[0_10px_30px_-10px_rgba(124,58,237,0.9)] transition duration-300 hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_18px_44px_-12px_rgba(124,58,237,0.95)]'
 
 export const ghostBtnCls =
@@ -22,10 +20,10 @@ export const ghostBtnCls =
 
 /* Il vetro di cui è fatto tutto: un bordo appena visibile, una velatura in
    gradiente dall'alto e la sfocatura di quello che sta dietro. */
-export const cardCls =
+const cardCls =
   'relative overflow-hidden rounded-3xl border border-white/8 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-7 backdrop-blur-xl'
 
-export const cardIconCls =
+const cardIconCls =
   'inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600/30 to-cyan-500/15 text-violet-300 ring-1 ring-inset ring-white/10'
 
 export function LoginButton({ children = 'Accedi' }: { children?: ReactNode }) {
@@ -171,7 +169,6 @@ export function Section({ id, kicker, title, description, children }: SectionPro
 const SPANS = {
   third: 'col-span-2 max-lg:col-span-3 max-md:col-span-6',
   half: 'col-span-3 max-md:col-span-6',
-  twoThirds: 'col-span-4 max-md:col-span-6',
   full: 'col-span-6',
 } as const
 
@@ -213,26 +210,6 @@ export function FeatureCard({
   )
 }
 
-/** I numeri che descrivono il prodotto, in fila e separati da un filetto. */
-export function StatStrip({ items }: { items: { value: string; label: string }[] }) {
-  return (
-    <section className="relative mx-auto max-w-[1120px] px-6 pb-24">
-      <Reveal>
-        <div className="grid grid-cols-4 divide-x divide-white/8 rounded-3xl border border-white/8 bg-white/[0.02] px-4 py-9 backdrop-blur-xl max-lg:grid-cols-2 max-lg:gap-y-8 max-lg:divide-x-0 max-md:grid-cols-1">
-          {items.map((item) => (
-            <div key={item.value} className="px-6 text-center">
-              <div className="bg-gradient-to-br from-violet-400 to-cyan-400 bg-clip-text font-heading text-[2.6rem] font-bold leading-none tracking-tight text-transparent">
-                {item.value}
-              </div>
-              <p className="mt-2 text-[0.85rem] leading-relaxed text-slate-500">{item.label}</p>
-            </div>
-          ))}
-        </div>
-      </Reveal>
-    </section>
-  )
-}
-
 export interface Step {
   title: string
   text: string
@@ -256,97 +233,6 @@ export function Steps({ items }: { items: Step[] }) {
         </div>
       ))}
     </div>
-  )
-}
-
-/** Un elenco di voci brevi, dove una tabella sarebbe stata di troppo. */
-export function PillList({ items }: { items: string[] }) {
-  return (
-    <div className="flex flex-wrap gap-2.5">
-      {items.map((item) => (
-        <span
-          key={item}
-          className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[0.85rem] text-slate-300 backdrop-blur transition hover:border-violet-500/40 hover:text-slate-50"
-        >
-          {item}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-interface SpecTableProps {
-  head: ReactNode[]
-  rows: ReactNode[][]
-}
-
-export function SpecTable({ head, rows }: SpecTableProps) {
-  return (
-    <div className="overflow-x-auto rounded-3xl border border-white/8 bg-white/[0.02] backdrop-blur-xl">
-      <table className="w-full border-collapse text-left text-[0.9rem]">
-        <thead>
-          <tr className="border-b border-white/8">
-            {head.map((cell, i) => (
-              <th
-                key={i}
-                className="px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-slate-500"
-              >
-                {cell}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr
-              key={i}
-              className="border-b border-white/6 transition-colors last:border-b-0 hover:bg-white/[0.03]"
-            >
-              {row.map((cell, j) => (
-                <td
-                  key={j}
-                  className={`px-6 py-4 align-top leading-relaxed ${
-                    j === 0 ? 'font-medium text-slate-100' : 'text-slate-400'
-                  }`}
-                >
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-/** Un criterio con il suo peso: la barra è il peso, non il punteggio. */
-export function WeightRow({ label, weight }: { label: string; weight: number }) {
-  return (
-    <div className="group flex items-center gap-5 max-md:flex-col max-md:items-start max-md:gap-1.5">
-      <span className="w-[330px] shrink-0 text-[0.9rem] text-slate-300 max-md:w-full">{label}</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/8 max-md:w-full">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all duration-1000 ease-out"
-          style={{ width: `${(weight / 22) * 100}%` }}
-        />
-      </div>
-      <span className="w-11 shrink-0 text-right font-heading text-[0.9rem] font-bold text-slate-100 max-md:text-left">
-        {weight}%
-      </span>
-    </div>
-  )
-}
-
-export function SectionLink({ to, children }: { to: string; children: ReactNode }) {
-  return (
-    <Link
-      to={to}
-      className="inline-flex items-center gap-1.5 text-[0.85rem] font-medium text-violet-300 no-underline transition hover:gap-2.5 hover:text-cyan-300"
-    >
-      {children}
-      <ArrowRightIcon size={15} />
-    </Link>
   )
 }
 

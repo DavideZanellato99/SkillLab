@@ -117,7 +117,7 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     # scrivere, su chi e quando è esattamente quello per cui il registro
     # esiste. La lettura non ci finisce, perché è navigazione come tutte
     # le altre: l'unica GET nel registro resta l'export dei propri dati.
-    ("POST", "/api/admin/users/{user_id}/debriefing"): AuditAction(
+    ("POST", "/api/admin/users/{user_id}/debriefings"): AuditAction(
         "user.debriefing", "Debriefing generato", "user", "user_id"
     ),
     # Organizzazioni

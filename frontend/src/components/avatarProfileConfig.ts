@@ -42,9 +42,6 @@ export interface ProfileSection {
 const LEVELS = ['Bassa', 'Media', 'Alta']
 const YES_NO = ['No', 'Sì, moderato', 'Sì, marcato']
 
-/** Le dieci difficoltà, nel formato "n/10" che il modello Avatar espone. */
-export const DIFFICULTY_OPTIONS = Array.from({ length: 10 }, (_, i) => `${i + 1}/10`)
-
 export const PROFILE_SECTIONS: ProfileSection[] = [
   {
     title: 'Anagrafica',
@@ -251,13 +248,6 @@ export const PROFILE_SECTIONS: ProfileSection[] = [
         placeholder:
           "Verificare se l'operatore riconosce l'errore interno senza attribuirne la responsabilità al cliente",
       },
-      {
-        key: 'GRADO_DIFFICOLTA',
-        label: 'Grado di Difficoltà',
-        kind: 'choice',
-        options: DIFFICULTY_OPTIONS,
-        hint: "L'unico campo della scheda visibile allo studente nella galleria.",
-      },
     ],
   },
   {
@@ -305,7 +295,6 @@ export const ESSENTIAL_KEYS = [
   'EMOZIONE_INIZIALE',
   'OBIEZIONI_PREVISTE',
   'PERSONALITA_DESCRIZIONE',
-  'GRADO_DIFFICOLTA',
 ]
 
 const ESSENTIAL_LABELS = new Map(

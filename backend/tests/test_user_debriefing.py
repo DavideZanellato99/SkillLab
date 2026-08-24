@@ -6,10 +6,11 @@ e cosa succede alla risposta. Sono le parti che decidono se il testo che un
 docente porta in un colloquio poggia su qualcosa, e nessuna dipende da quale
 modello ha risposto.
 
-Tre gruppi di test, e sono le tre promesse della funzionalità: il materiale
-raccolto è quello giusto e neutralizzato, il quadro salvato dice su cosa
-poggia e ammette di essere vecchio, e il confine del tenant vale qui come
-ovunque.
+Quattro gruppi di test, e sono le quattro promesse della funzionalità: il
+materiale raccolto è quello giusto e neutralizzato, il quadro salvato dice su
+cosa poggia e ammette di essere vecchio, ogni generazione si aggiunge allo
+storico dicendo come la persona si è mossa da quella prima, e il confine del
+tenant vale qui come ovunque.
 """
 
 import uuid
@@ -32,7 +33,7 @@ from user_debriefing import normalize_debriefing
 
 
 def _url(user) -> str:
-    return f"/api/admin/users/{user.id}/debriefing"
+    return f"/api/admin/users/{user.id}/debriefings"
 
 
 def _risposta_del_modello(**campi) -> dict:
@@ -47,20 +48,36 @@ def _risposta_del_modello(**campi) -> dict:
         ],
         "improving": "La presentazione iniziale è migliorata nelle ultime due prove.",
         "next_step": "Un cliente confuso, con l'obiettivo di non proporre niente per tre turni.",
+        # Chiesti solo dalla seconda volta in poi, e buttati via quando non
+        # sono stati chiesti: la risposta finta li porta sempre, così è la
+        # normalizzazione a decidere se tenerli, come in produzione.
+        "direction": "up",
+        "change": "Il tema di allora sulla presentazione non torna più.",
     }
     base.update(campi)
     return base
 
 
 def _finto_modello(monkeypatch, risposta=None, errore=None):
-    """Sostituisce la chiamata a OpenAI dentro il router che la fa."""
+    """Sostituisce la chiamata a OpenAI dentro il router che la fa.
+
+    Il materiale arriva fino a qui, e ``material.previous`` è quello che in
+    produzione decide se al modello viene chiesta una direzione: la finzione
+    usa la stessa condizione, altrimenti proverebbe una normalizzazione che
+    non è quella che gira davvero.
+    """
+    visti = []
 
     async def _scrivi(material):
+        visti.append(material)
         if errore:
             raise errore
-        return normalize_debriefing(risposta or _risposta_del_modello())
+        return normalize_debriefing(
+            risposta or _risposta_del_modello(), comparing=bool(material.previous)
+        )
 
     monkeypatch.setattr("routers.admin_debriefings.write_debriefing", _scrivi)
+    return visti
 
 
 def _conversazione(db_session, user, avatar, *, score=8.0, at=None, battute=(), titolo="Clienti 1"):
@@ -188,6 +205,82 @@ def test_anche_il_titolo_della_conversazione_viene_neutralizzato(
     assert "[1] OPERATORE:" not in material.dossier
 
 
+def test_senza_un_quadro_precedente_la_finestra_e_quella_di_base(
+    db_session, organization, standard_user, make_avatar
+):
+    """La prima volta non c'è nessun "dopo" da cui contare, quindi si legge
+    quanto basta perché uno schema si veda, e non tutto lo storico."""
+    avatar = make_avatar()
+    for _ in range(8):
+        _conversazione(db_session, standard_user, avatar, score=7.0)
+
+    material = debriefing_source.collect(db_session, standard_user.id)
+
+    assert material.conversations == debriefing_source.BASE_CONVERSATIONS
+
+
+def test_le_prove_svolte_dopo_lultimo_quadro_entrano_tutte(
+    admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
+):
+    """Il buco che la finestra fissa lasciava: con sette prove nuove e una
+    finestra di cinque, due non le leggerebbe nessuno mai, perché il quadro
+    di prima non poteva vederle e quello nuovo le ha scartate."""
+    avatar = make_avatar()
+    _tre_prove(db_session, organization, standard_user, avatar)
+    _finto_modello(monkeypatch)
+    admin_client.post(_url(standard_user))
+
+    for _ in range(7):
+        _conversazione(db_session, standard_user, avatar, score=9.0)
+
+    material = debriefing_source.collect(db_session, standard_user.id)
+
+    assert material.conversations == 7
+
+
+def test_la_finestra_non_si_allarga_oltre_il_tetto(
+    admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
+):
+    """Chi si allena tantissimo pagherebbe una chiamata che cresce con lui.
+    Quello che resta fuori è il più vecchio, ed è già passato dal quadro
+    precedente in forma di temi e di medie."""
+    avatar = make_avatar()
+    _tre_prove(db_session, organization, standard_user, avatar)
+    _finto_modello(monkeypatch)
+    admin_client.post(_url(standard_user))
+
+    for _ in range(20):
+        _conversazione(db_session, standard_user, avatar, score=9.0)
+
+    material = debriefing_source.collect(db_session, standard_user.id)
+
+    assert material.conversations == debriefing_source.MAX_CONVERSATIONS
+
+
+def test_una_conversazione_nuova_ma_non_valutata_non_allarga_la_finestra(
+    admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
+):
+    """Dentro non c'è niente da leggere, quindi non è una prova che il
+    debriefing possa mancare di guardare."""
+    avatar = make_avatar()
+    for _ in range(6):
+        _conversazione(db_session, standard_user, avatar, score=7.0)
+    _finto_modello(monkeypatch)
+    admin_client.post(_url(standard_user))
+
+    # Una nuova valutata, e sei nuove senza giudizio.
+    _conversazione(db_session, standard_user, avatar, score=8.0)
+    for _ in range(6):
+        _conversazione(db_session, standard_user, avatar, score=None)
+
+    material = debriefing_source.collect(db_session, standard_user.id)
+
+    # Cinque, cioè la finestra di base: la nuova valutata e quattro vecchie.
+    # Se le sei senza giudizio contassero come prove nuove, la finestra si
+    # sarebbe allargata a sette.
+    assert material.conversations == debriefing_source.BASE_CONVERSATIONS
+
+
 def test_una_trascrizione_che_non_ci_sta_resta_fuori_intera(
     db_session, organization, standard_user, make_avatar, monkeypatch
 ):
@@ -308,6 +401,33 @@ def test_nessun_miglioramento_e_un_esito_non_un_errore():
     assert risultato["improving"] is None
 
 
+def test_la_direzione_scritta_in_italiano_viene_tradotta():
+    """La direzione giusta con l'etichetta sbagliata è una risposta giusta:
+    buttare via il debriefing vorrebbe dire ripagarlo per riavere lo stesso
+    contenuto."""
+    risultato = normalize_debriefing(
+        _risposta_del_modello(direction="In peggioramento"), comparing=True
+    )
+
+    assert risultato["direction"] == "down"
+
+
+def test_una_direzione_che_non_si_capisce_fa_ritentare():
+    """Metterci "stabile" al suo posto vorrebbe dire dire a un docente che
+    una persona è ferma senza averlo letto da nessuna parte."""
+    with pytest.raises(ValueError):
+        normalize_debriefing(_risposta_del_modello(direction="forse meglio"), comparing=True)
+
+
+def test_senza_confronto_la_direzione_viene_buttata():
+    """Non gli è stata chiesta, quindi qualunque cosa abbia scritto lì non
+    poggia su niente."""
+    risultato = normalize_debriefing(_risposta_del_modello(direction="up", change="molto"))
+
+    assert risultato["direction"] is None
+    assert risultato["change"] is None
+
+
 # ── L'endpoint ────────────────────────────────────────
 
 
@@ -327,6 +447,21 @@ def test_il_quadro_viene_salvato_con_quello_che_ha_letto(
     assert corpo["is_stale"] is False
 
 
+def test_il_primo_quadro_non_ha_nessuna_direzione(
+    admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
+):
+    """Un prima non c'è, quindi una direzione sarebbe rispetto a niente. Il
+    modello finto la scrive comunque, ed è il punto: viene buttata."""
+    _tre_prove(db_session, organization, standard_user, make_avatar())
+    _finto_modello(monkeypatch)
+
+    corpo = admin_client.post(_url(standard_user)).json()
+
+    assert corpo["direction"] is None
+    assert corpo["change"] is None
+    assert corpo["conversation_average_delta"] is None
+
+
 def test_le_medie_salvate_sono_quelle_di_allora(
     admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
 ):
@@ -340,24 +475,115 @@ def test_le_medie_salvate_sono_quelle_di_allora(
     # Una prova nuova, molto diversa, dopo che il quadro è stato scritto
     _conversazione(db_session, standard_user, avatar, score=10.0)
 
-    corpo = admin_client.get(_url(standard_user)).json()
+    corpo = admin_client.get(_url(standard_user)).json()[0]
 
     assert corpo["conversation_average"] == 6.5
     assert corpo["is_stale"] is True
 
 
-def test_rigenerare_sostituisce_invece_di_aggiungere(
+# ── Lo storico, e il confronto con la volta prima ─────
+
+
+def test_rigenerare_aggiunge_una_versione_invece_di_sostituire(
     admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
 ):
+    """Le due righe sono la ragione per cui la direzione si può scrivere:
+    senza quella di prima, "sta migliorando" non poggia su niente."""
+    avatar = make_avatar()
+    _tre_prove(db_session, organization, standard_user, avatar)
+    _finto_modello(monkeypatch)
+    admin_client.post(_url(standard_user))
+
+    _conversazione(db_session, standard_user, avatar, score=9.0)
+    _finto_modello(monkeypatch, _risposta_del_modello(summary="Un altro quadro, del tutto nuovo."))
+    admin_client.post(_url(standard_user))
+
+    assert db_session.query(UserDebriefing).filter_by(user_id=standard_user.id).count() == 2
+    storico = admin_client.get(_url(standard_user)).json()
+    # Dal più recente: è quello che si legge, gli altri sono la storia.
+    assert storico[0]["summary"].startswith("Un altro quadro")
+    assert storico[1]["summary"].startswith("Sa gestire il tono")
+
+
+def test_il_quadro_precedente_finisce_nel_materiale_del_successivo(
+    admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
+):
+    """È tutta la funzionalità: al modello si chiede come la persona si è
+    mossa, e quella domanda ha senso solo se ha davanti da dove partiva."""
+    avatar = make_avatar()
+    _tre_prove(db_session, organization, standard_user, avatar)
+    _finto_modello(monkeypatch)
+    admin_client.post(_url(standard_user))
+
+    _conversazione(db_session, standard_user, avatar, score=9.0)
+    visti = _finto_modello(monkeypatch)
+    admin_client.post(_url(standard_user))
+
+    precedente = visti[0].previous
+    assert "Sa gestire il tono" in precedente
+    assert "Chiude prima di aver capito" in precedente
+
+
+def test_la_direzione_e_lo_scarto_delle_medie_arrivano_insieme(
+    admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
+):
+    """Due cose diverse e vicine: la direzione la legge il modello nelle
+    prove, lo scarto è una sottrazione fatta qui. Possono anche non
+    coincidere, perché mezzo punto di media non è un modo di lavorare."""
+    avatar = make_avatar()
+    _conversazione(db_session, standard_user, avatar, score=6.0)
+    _conversazione(db_session, standard_user, avatar, score=6.0)
+    _tentativo(db_session, organization, standard_user)
+    _finto_modello(monkeypatch)
+    admin_client.post(_url(standard_user))
+
+    _conversazione(db_session, standard_user, avatar, score=9.0)
+    _finto_modello(monkeypatch)
+    corpo = admin_client.post(_url(standard_user)).json()
+
+    assert corpo["direction"] == "up"
+    assert corpo["change"].startswith("Il tema di allora")
+    # Da 6.0 a 7.0: la media di adesso meno quella che il quadro di prima
+    # aveva davanti, non una ricalcolata su tutto.
+    assert corpo["conversation_average"] == 7.0
+    assert corpo["conversation_average_delta"] == 1.0
+
+
+def test_senza_prove_nuove_non_si_rigenera(
+    admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
+):
+    """Leggerebbe lo stesso materiale e direbbe le stesse cose, e nello
+    storico entrerebbe una versione da confrontare con sé stessa."""
     _tre_prove(db_session, organization, standard_user, make_avatar())
     _finto_modello(monkeypatch)
     admin_client.post(_url(standard_user))
 
-    _finto_modello(monkeypatch, _risposta_del_modello(summary="Un altro quadro, del tutto nuovo."))
+    risposta = admin_client.post(_url(standard_user))
+
+    assert risposta.status_code == 409
+    assert "nessuna prova" in risposta.json()["detail"]
+    assert db_session.query(UserDebriefing).filter_by(user_id=standard_user.id).count() == 1
+
+
+def test_solo_il_quadro_piu_recente_puo_essere_vecchio(
+    admin_client, db_session, organization, standard_user, make_avatar, monkeypatch
+):
+    """Su una versione dello storico "non ha visto le ultime prove" è ovvio:
+    quello che non ha visto è il quadro che l'ha sostituita."""
+    avatar = make_avatar()
+    _tre_prove(db_session, organization, standard_user, avatar)
+    _finto_modello(monkeypatch)
+    admin_client.post(_url(standard_user))
+    _conversazione(db_session, standard_user, avatar, score=9.0)
     admin_client.post(_url(standard_user))
 
-    assert db_session.query(UserDebriefing).filter_by(user_id=standard_user.id).count() == 1
-    assert admin_client.get(_url(standard_user)).json()["summary"].startswith("Un altro quadro")
+    # Una prova ancora, dopo il secondo quadro: adesso il vecchio è lui.
+    _conversazione(db_session, standard_user, avatar, score=4.0)
+
+    storico = admin_client.get(_url(standard_user)).json()
+
+    assert storico[0]["is_stale"] is True
+    assert storico[1]["is_stale"] is False
 
 
 def test_con_meno_di_tre_prove_il_quadro_non_si_scrive(
@@ -375,13 +601,13 @@ def test_con_meno_di_tre_prove_il_quadro_non_si_scrive(
     assert "almeno 3" in risposta.json()["detail"]
 
 
-def test_niente_quadro_e_null_non_un_errore(admin_client, standard_user):
+def test_niente_quadro_e_una_lista_vuota_non_un_errore(admin_client, standard_user):
     """La persona esiste, semplicemente nessuno lo ha ancora chiesto: il 404
     resta per la persona che chi guarda non può vedere."""
     risposta = admin_client.get(_url(standard_user))
 
     assert risposta.status_code == 200
-    assert risposta.json() is None
+    assert risposta.json() == []
 
 
 def test_il_fornitore_che_non_risponde_e_un_502(

@@ -15,6 +15,14 @@ docente apre il report di una persona, che è "cosa devo dirgli": quella
 richiede di vedere che lo stesso errore è tornato quattro volte su quattro
 scenari diversi, e non c'è nessuna schermata da cui quel fatto si legga.
 
+**Dalla seconda volta in poi legge anche sé stesso.** Il quadro precedente
+entra nel materiale insieme alle prove, e la domanda cambia: non più solo
+"cosa si ripete", ma "cosa si è mosso da allora". Ne escono due campi in
+più, la direzione e il racconto del cambiamento, che sul primo quadro di una
+persona restano vuoti perché lì un prima non c'è. Di quanto si sono mosse le
+medie non lo dice il modello: quella è una sottrazione, e la fa
+``debriefing_source.deltas``.
+
 **Cosa non fa, e sta scritto nel prompt.** Non calcola numeri: media dei
 voti e medie per criterio arrivano già fatte da ``debriefing_source`` e il
 prompt dice di usarle così come sono. Un debriefing che dicesse una media
@@ -29,6 +37,9 @@ telefonata di marzo" e una pagella. Quello che di questo quadro va detto a
 chi si allena lo decide chi insegna, che è anche l'unico a sapere come.
 """
 
+from functools import partial
+
+from models import DEBRIEFING_DIRECTIONS, DEBRIEFING_DOWN, DEBRIEFING_STABLE, DEBRIEFING_UP
 from openai_service import eval_json_completion
 from untrusted_text import fence, rule
 
@@ -39,14 +50,66 @@ from untrusted_text import fence, rule
 # possono dire a una persona in un colloquio senza che si perda.
 MAX_THEMES = 4
 
+# Le parole con cui un modello dice la direzione quando non usa quelle che
+# gli sono state chieste. Tradurre invece di rifiutare: la direzione giusta
+# scritta in italiano è una risposta giusta con l'etichetta sbagliata, e
+# buttare via un debriefing intero per quello vorrebbe dire ripagarlo per
+# riottenere lo stesso contenuto.
+_SINONIMI_DIREZIONE = {
+    "in miglioramento": DEBRIEFING_UP,
+    "miglioramento": DEBRIEFING_UP,
+    "migliorato": DEBRIEFING_UP,
+    "migliora": DEBRIEFING_UP,
+    "stabile": DEBRIEFING_STABLE,
+    "invariato": DEBRIEFING_STABLE,
+    "fermo": DEBRIEFING_STABLE,
+    "in peggioramento": DEBRIEFING_DOWN,
+    "peggioramento": DEBRIEFING_DOWN,
+    "peggiorato": DEBRIEFING_DOWN,
+    "peggiora": DEBRIEFING_DOWN,
+}
 
-def _system_prompt() -> tuple[str, str]:
+
+def _confronto_rules() -> str:
+    """Le istruzioni che valgono solo dalla seconda volta in poi.
+
+    Stanno in una funzione a parte e non in un blocco sempre presente perché
+    il primo quadro di una persona non ha nessun prima: chiedere lì una
+    direzione vorrebbe dire chiederla rispetto a niente, e la risposta
+    sarebbe inventata al primo tentativo.
+    """
+    return (
+        "\n## IL CONFRONTO CON IL QUADRO PRECEDENTE\n"
+        "Su questa persona un quadro è già stato scritto, e ce l'hai davanti insieme alle "
+        "prove. La domanda a cui questo debriefing deve rispondere, e che il precedente non "
+        "poteva, è **come si è mossa questa persona da allora**.\n"
+        f'- "direction" è una sola di queste tre parole, scritta esattamente così: '
+        f'"{DEBRIEFING_UP}" se la persona è migliorata, "{DEBRIEFING_STABLE}" se è dove '
+        f'era, "{DEBRIEFING_DOWN}" se è peggiorata.\n'
+        '- "change" sono due o tre frasi su cosa è cambiato: quali temi di allora sono '
+        "rientrati, quali sono rimasti, quali sono nuovi. Nomina le cose, non i voti.\n"
+        "- **Stabile è una risposta legittima e spesso è quella giusta.** Fra due quadri "
+        "passano poche prove, e in poche prove un modo di lavorare cambia raramente. Scrivi "
+        "una direzione solo se nelle prove si vede: mezzo punto di media in più non è un "
+        "miglioramento, un errore che tornava sempre e adesso non torna più lo è.\n"
+        "- Le medie di allora e quelle di adesso ce le hai tutte e due, ma la differenza non "
+        "la devi calcolare né scrivere: quella la mette l'applicazione accanto al tuo testo. "
+        "A te si chiede di dire cosa è cambiato nel modo di lavorare.\n"
+        "- Se il quadro precedente diceva una cosa che le prove nuove smentiscono, dillo: un "
+        "quadro che si limita a confermare il precedente non serve a chi lo rilegge.\n"
+    )
+
+
+def _system_prompt(*, comparing: bool) -> tuple[str, str]:
     """Le istruzioni, e il marcatore con cui recintare il materiale.
 
     I due tornano insieme perché sono la stessa decisione presa una volta:
     il recinto cambia a ogni chiamata (vedi ``untrusted_text.fence``), quindi
     il prompt che lo nomina e il messaggio che lo usa devono ricevere lo
     stesso, e farseli dare separatamente vorrebbe dire due recinti diversi.
+
+    ``comparing`` dice se un quadro precedente esiste, ed è l'unica cosa che
+    cambia fra le due versioni del prompt.
     """
     marker = fence()
     return (
@@ -90,17 +153,25 @@ def _system_prompt() -> tuple[str, str]:
         '- "improving" resta una stringa vuota se nel materiale non si vede nessun '
         "miglioramento. Inventarne uno per chiudere in positivo è il modo di rendere inutile "
         "anche quello vero.\n"
-        "- Scrivi tutto in italiano.\n\n"
-        f"{rule(marker, 'il materiale delle prove')}\n\n"
+        "- Scrivi tutto in italiano.\n" + (_confronto_rules() if comparing else "") + "\n"
+        f"{rule(marker, 'il materiale delle prove e il quadro precedente')}\n\n"
         "## FORMATO DELLA RISPOSTA\n"
         "Restituisci esclusivamente un JSON valido, senza testo prima o dopo, con questa "
         "struttura esatta:\n"
         '{"summary": "", "themes": [{"title": "", "detail": "", "evidence": ""}], '
-        '"improving": "", "next_step": ""}\n'
+        '"improving": "", "next_step": ""'
+        + (', "direction": "", "change": ""' if comparing else "")
+        + "}\n"
         '- "summary": due o tre frasi che dicono a che punto è questa persona.\n'
         '- "title": il tema in poche parole.\n'
         '- "detail": due o tre frasi su cosa succede e perché è un problema.\n'
         '- "evidence": su quali prove lo hai visto.'
+        + (
+            '\n- "direction": una sola delle tre parole indicate sopra.\n'
+            '- "change": cosa è cambiato rispetto al quadro precedente.'
+            if comparing
+            else ""
+        )
     ), marker
 
 
@@ -120,13 +191,36 @@ def _facts(material) -> str:
     return "\n".join(righe)
 
 
-def normalize_debriefing(raw: dict) -> dict:
+def _direction(raw: dict) -> str:
+    """La direzione scritta dal modello, ridotta a una delle tre parole.
+
+    Fallisce, e quindi fa ritentare, quando la parola non si riconosce: la
+    direzione è l'unica cosa che il secondo quadro aggiunge al primo, e
+    metterci "stabile" perché il modello ha scritto qualcos'altro vorrebbe
+    dire dire a un docente che una persona è ferma senza averlo letto da
+    nessuna parte.
+    """
+    scritto = str(raw.get("direction") or "").strip().lower()
+    if scritto in DEBRIEFING_DIRECTIONS:
+        return scritto
+    tradotto = _SINONIMI_DIREZIONE.get(scritto)
+    if tradotto:
+        return tradotto
+    raise ValueError(f"Il debriefing generato non dice una direzione riconoscibile: {scritto!r}.")
+
+
+def normalize_debriefing(raw: dict, *, comparing: bool = False) -> dict:
     """La risposta del modello ridotta a quello che viene salvato.
 
     Il controllo sta qui e non nel chiamante di proposito, come per la
     scheda persona: ``eval_json_completion`` esegue la normalizzazione dentro
     il giro sui modelli di riserva, quindi un debriefing senza sintesi fa
     ritentare esattamente come farebbe un JSON troncato.
+
+    ``comparing`` è la stessa cosa che sa il prompt, cioè se un quadro
+    precedente esisteva. Senza, direzione e cambiamento restano None anche
+    se il modello li ha scritti lo stesso: non gli sono stati chiesti,
+    quindi qualunque cosa abbia scritto lì non poggia su niente.
     """
     if not isinstance(raw, dict):
         raise ValueError("La risposta del modello non è un oggetto.")
@@ -169,6 +263,11 @@ def normalize_debriefing(raw: dict) -> dict:
         # all'interfaccia, che quel caso lo sa già disegnare.
         "improving": str(raw.get("improving") or "").strip() or None,
         "next_step": next_step,
+        # Presenti sempre, valorizzati solo dal secondo quadro in poi: una
+        # chiave che a volte c'è e a volte no costringerebbe ogni lettore a
+        # chiedersi se manca perché era il primo o perché è vecchia.
+        "direction": _direction(raw) if comparing else None,
+        "change": (str(raw.get("change") or "").strip() or None) if comparing else None,
     }
 
 
@@ -180,7 +279,16 @@ async def write_debriefing(material) -> dict:
     risposta. Il giro sui modelli di riserva e il tempo lungo li mette
     ``eval_json_completion``, che è lo stesso meccanismo della valutazione.
     """
-    system, marker = _system_prompt()
+    comparing = bool(material.previous)
+    system, marker = _system_prompt(comparing=comparing)
+    # Il quadro precedente sta dentro lo stesso recinto delle prove, e non
+    # fuori come istruzione: lo ha scritto un modello leggendo materiale di
+    # qualcuno, quindi ripassa dal recinto per la stessa ragione per cui ci
+    # passa il materiale, cioè che niente di quello che è arrivato da fuori
+    # torna dentro come istruzione.
+    precedente = (
+        f"\n\n# IL QUADRO PRECEDENTE SU QUESTA PERSONA\n{material.previous}" if comparing else ""
+    )
     return await eval_json_completion(
         [
             {"role": "system", "content": system},
@@ -190,7 +298,7 @@ async def write_debriefing(material) -> dict:
                     "# QUELLO CHE È GIÀ CALCOLATO\n"
                     f"{_facts(material)}\n\n"
                     "# LE PROVE, DALLA PIÙ VECCHIA ALLA PIÙ RECENTE\n"
-                    f"{marker}\n{material.dossier}\n{marker}"
+                    f"{marker}\n{material.dossier}{precedente}\n{marker}"
                 ),
             },
         ],
@@ -201,6 +309,6 @@ async def write_debriefing(material) -> dict:
         # troncato, cioè come un debriefing che si interrompe a metà di un
         # tema.
         max_completion_tokens=6144,
-        normalize=normalize_debriefing,
+        normalize=partial(normalize_debriefing, comparing=comparing),
         what="debriefing della persona",
     )

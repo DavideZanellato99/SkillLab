@@ -15,7 +15,13 @@
  * riordinano: uno stato legato alla posizione resterebbe dov'è mentre i
  * valori si spostano, e la tappa due si ritroverebbe il tipo della tre. */
 
-import type { PathDraftStep, PathStep, PathStepInput, StepKind } from '../services/training'
+import type {
+  CriteriaTargets,
+  PathDraftStep,
+  PathStep,
+  PathStepInput,
+  StepKind,
+} from '../services/training'
 import { fromLocalInputValue, toLocalInputValue } from './instant'
 
 export interface PathStepDraft {
@@ -24,6 +30,27 @@ export interface PathStepDraft {
   avatarId: string | null
   simulationId: string | null
   targetScore: number
+  /* Le soglie sui singoli criteri, `{chiave: voto}`.
+   *
+   * Ci stanno solo i criteri su cui la tappa pone una condizione: togliere
+   * il numero da un criterio ne toglie la chiave, invece di lasciarla con
+   * un valore che vorrebbe dire "nessuna soglia". Un vuoto scritto come
+   * zero sarebbe una soglia raggiunta da chiunque, e la differenza fra le
+   * due cose la si scopre solo quando qualcuno percorre la tappa.
+   *
+   * Restano nella bozza anche mentre il tipo è "test tecnico", come ci
+   * resta l'avatar scelto: al salvataggio parte solo quello che il tipo
+   * attivo prevede, e chi torna indietro ritrova quello che aveva scritto. */
+  criteriaTargets: CriteriaTargets
+  /* Se il pannello dei criteri è aperto. Non si salva: è come si sta
+   * guardando la tappa, non cosa la tappa chiede.
+   *
+   * Sta nel dato per la stessa ragione per cui ci sta il tipo: le tappe si
+   * riordinano, e uno stato del componente legato alla posizione resterebbe
+   * dov'è mentre i valori si spostano, lasciando aperto il pannello della
+   * tappa sbagliata. Nasce aperto su una tappa che le soglie ce le ha già,
+   * cioè quando si riapre in modifica un percorso che le porta. */
+  criteriaOpen: boolean
   /** La scadenza come la scrive il campo: ora locale, o vuota se non scade. */
   dueAt: string | null
   /* Perché il modello ha messo questa prova in questo punto della fila.
@@ -44,6 +71,8 @@ export function emptyDraft(): PathStepDraft {
     avatarId: null,
     simulationId: null,
     targetScore: DEFAULT_TARGET,
+    criteriaTargets: {},
+    criteriaOpen: false,
     dueAt: null,
     reason: null,
   }
@@ -56,6 +85,11 @@ export function draftFromStep(step: PathStep): PathStepDraft {
     avatarId: step.avatar_id,
     simulationId: step.simulation_id,
     targetScore: step.target_score,
+    // Dalla forma in cui si leggono, che porta anche l'etichetta, a quella
+    // in cui si scrivono: qui l'etichetta non serve, il pannello la prende
+    // dal catalogo dei criteri insieme al peso.
+    criteriaTargets: Object.fromEntries(step.criteria_targets.map((c) => [c.key, c.target])),
+    criteriaOpen: step.criteria_targets.length > 0,
     dueAt: step.due_at ? toLocalInputValue(step.due_at) : null,
     // Un percorso salvato non porta motivazioni: erano della proposta.
     reason: null,
@@ -82,6 +116,10 @@ export function draftFromProposal(step: PathDraftStep): PathStepDraft {
     avatarId: step.avatar_id,
     simulationId: step.simulation_id,
     targetScore: step.target_score,
+    // Una proposta non pone soglie sui criteri: sceglie le prove e il loro
+    // ordine, e su quali criteri insistere lo decide chi conosce la classe.
+    criteriaTargets: {},
+    criteriaOpen: false,
     dueAt: null,
     reason: step.reason || null,
   }
@@ -97,6 +135,18 @@ export function isDraftComplete(draft: PathStepDraft): boolean {
   return draftTarget(draft) !== null
 }
 
+/** La soglia di un criterio, scritta o cancellata: senza valore, la chiave se ne va. */
+export function withCriterionTarget(
+  draft: PathStepDraft,
+  key: string,
+  value: number | null,
+): PathStepDraft {
+  const next = { ...draft.criteriaTargets }
+  if (value === null) delete next[key]
+  else next[key] = value
+  return { ...draft, criteriaTargets: next }
+}
+
 /**
  * La tappa nella forma che il server accetta: un bersaglio e uno solo.
  *
@@ -110,6 +160,10 @@ export function toStepInput(draft: PathStepDraft): PathStepInput {
     avatar_id: draft.kind === 'avatar' ? draft.avatarId : null,
     simulation_id: draft.kind === 'simulation' ? draft.simulationId : null,
     target_score: draft.targetScore,
+    // Come per il bersaglio: parte solo quello che il tipo attivo prevede.
+    // Un test tecnico non si valuta per criteri, e mandarne al server una
+    // tappa che ne porta è una tappa che il server rifiuta.
+    criteria_targets: draft.kind === 'avatar' ? draft.criteriaTargets : {},
     due_at: draft.dueAt ? fromLocalInputValue(draft.dueAt) : null,
   }
 }

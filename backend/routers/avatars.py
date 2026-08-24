@@ -90,7 +90,6 @@ def _avatar_response(avatar: Avatar, selection_count: int) -> AvatarResponse:
         description=avatar.description,
         created_at=avatar.created_at,
         selection_count=selection_count,
-        difficulty=avatar.difficulty,
     )
 
 

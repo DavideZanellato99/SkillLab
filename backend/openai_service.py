@@ -521,7 +521,6 @@ def _evaluation_prompt(profile: dict, marker: str, channel: str = CHANNEL_VOICE)
             ("DESCRIZIONE_PROBLEMATICA", "Vera causa del problema (ignota al cliente)"),
             ("OBIETTIVO_NASCOSTO", "Obiettivo nascosto della simulazione"),
             ("EMOZIONE_INIZIALE", "Emozione iniziale del cliente"),
-            ("GRADO_DIFFICOLTA", "Grado di difficoltà"),
         ],
     )
     pesi = "\n".join(f"- {key}: {weight}%" for key, _, weight in EVALUATION_CRITERIA)

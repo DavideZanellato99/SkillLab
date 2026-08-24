@@ -1,43 +1,36 @@
-/* La pagina di atterraggio: cosa offre la piattaforma, in sintesi.
+/* La pagina pubblica: cosa è SkillLab e quali servizi offre, in sintesi.
  *
- * Resta volutamente corta. Chi arriva qui decide in pochi secondi se la cosa
- * lo riguarda, e le quattro pagine di sezione esistono proprio perché questa
- * non debba raccontare tutto. */
+ * È l'unica pagina accessibile senza credenziali, e resta volutamente corta.
+ * Chi la apre valuta in pochi secondi se la piattaforma risponde a un proprio
+ * bisogno, quindi la presentazione si ferma prima delle condizioni, dei numeri
+ * e delle configurazioni: quel livello di dettaglio interessa chi la
+ * piattaforma la sta già usando, e lo trova all'interno. */
 
 import {
   Hero,
   Section,
   Bento,
   FeatureCard,
-  StatStrip,
   Steps,
   CtaSection,
-  SectionLink,
   LoginButton,
   PublicPage,
   ghostBtnCls,
 } from './publicUi'
-import { PhoneIcon, ChecklistIcon, AwardIcon, TargetIcon, PlayIcon } from './publicIcons'
-
-const NUMBERS = [
-  { value: '2', label: 'canali per ogni simulazione, telefonico e scritto' },
-  { value: '6', label: 'criteri di valutazione, con pesi dichiarati' },
-  { value: '4', label: 'tipologie di test tecnico' },
-  { value: '10', label: 'domande per sessione, selezionate in modo casuale' },
-]
+import { PhoneIcon, ChecklistIcon, AwardIcon, TargetIcon, PlayIcon, ChartIcon } from './publicIcons'
 
 const STEPS = [
   {
-    title: 'Selezione dello scenario',
-    text: "Il catalogo raccoglie gli interlocutori simulati predisposti dall'organizzazione, ciascuno con il proprio grado di difficoltà.",
+    title: 'Selezione della prova',
+    text: 'Il catalogo raccoglie gli scenari di conversazione e i test disponibili.',
   },
   {
     title: 'Svolgimento',
-    text: 'La sessione si svolge al telefono, in chat oppure come test tecnico sulle procedure interne.',
+    text: 'La sessione si conduce interamente dal browser, al telefono, in chat oppure come test sulle procedure interne.',
   },
   {
     title: 'Valutazione',
-    text: 'Al termine la piattaforma restituisce un punteggio motivato, la documentazione della prova e il confronto con i tentativi precedenti.',
+    text: 'Al termine la piattaforma restituisce un punteggio motivato e la documentazione integrale della prova.',
   },
 ]
 
@@ -48,66 +41,57 @@ export default function PublicHome() {
         eyebrow="Formazione conversazionale con intelligenza artificiale"
         title="Simulazioni realistiche per le conversazioni"
         highlight="professionali"
-        description="Il personale si esercita con interlocutori simulati, al telefono o in chat, e riceve una valutazione strutturata della prestazione. Un simulatore dedicato verifica la conoscenza delle procedure aziendali."
+        description="SkillLab è una piattaforma di formazione aziendale. Il personale si esercita con interlocutori simulati, al telefono o in chat, verifica la conoscenza delle procedure interne e riceve una valutazione strutturata della prestazione."
         actions={
           <>
             <LoginButton>Accedi</LoginButton>
-            <a href="#funzionalita" className={ghostBtnCls}>
-              Le funzionalità
+            <a href="#servizi" className={ghostBtnCls}>
+              I servizi
             </a>
           </>
         }
       />
 
-      <StatStrip items={NUMBERS} />
-
       <Section
-        id="funzionalita"
-        kicker="Funzionalità"
-        title="Due ambiti di formazione, un unico percorso"
-        description="La conduzione di una conversazione e la conoscenza delle procedure sono competenze distinte, e la piattaforma le allena separatamente."
+        id="servizi"
+        kicker="Servizi"
+        title="Esercitazione, verifica e misurazione dei risultati"
+        description="La conduzione di una conversazione e la conoscenza delle procedure sono competenze distinte. La piattaforma le sviluppa separatamente e ne misura i risultati nel tempo."
       >
         <Bento>
           <FeatureCard span="half" accent icon={<PhoneIcon />} title="Roleplay con avatar">
-            Interlocutori con profilo, tratti di personalità e obiettivi definiti, che rispondono al
-            telefono con voce naturale oppure in chat mantenendo il proprio ruolo.
-            <div className="mt-4">
-              <SectionLink to="/roleplay">Approfondisci</SectionLink>
-            </div>
+            Interlocutori simulati con profilo e obiettivi definiti, che rispondono al telefono con
+            voce naturale oppure in chat, mantenendo il ruolo assegnato per l'intera conversazione.
           </FeatureCard>
           <FeatureCard span="half" icon={<ChecklistIcon />} title="Simulatore tecnico">
-            Test costruiti sulla documentazione aziendale o redatti dal formatore, in quattro
-            tipologie di domanda, con correzione e spiegazione delle risposte.
-            <div className="mt-4">
-              <SectionLink to="/simulatore">Approfondisci</SectionLink>
-            </div>
+            Test di verifica sulle procedure aziendali, con correzione immediata e motivazione delle
+            risposte.
           </FeatureCard>
-          <FeatureCard icon={<AwardIcon />} title="Valutazione e revisione">
-            Punteggio su sei criteri pesati, con riferimenti ai passaggi rilevanti. Il formatore può
-            rettificarlo indicandone la motivazione.
+          <FeatureCard icon={<AwardIcon />} title="Valutazione della prestazione">
+            Al termine di ogni prova viene prodotto un punteggio calcolato su criteri dichiarati,
+            corredato dalle motivazioni e sottoponibile a revisione.
           </FeatureCard>
-          <FeatureCard icon={<PlayIcon />} title="Registrazione e trascrizione">
-            Ogni conversazione viene trascritta integralmente e ogni telefonata registrata, con
-            accesso dallo storico personale.
+          <FeatureCard icon={<TargetIcon />} title="Percorsi e obiettivi">
+            Le prove si organizzano in percorsi formativi assegnati al personale, con obiettivi
+            definiti e avanzamento aggiornato automaticamente.
           </FeatureCard>
-          <FeatureCard icon={<TargetIcon />} title="Obiettivi formativi">
-            Obiettivi individuali con scadenza, avanzamento aggiornato automaticamente e notifica
-            alle persone interessate.
+          <FeatureCard icon={<ChartIcon />} title="Andamento nel tempo">
+            Lo storico delle sessioni documenta l'evoluzione della singola persona e l'andamento
+            complessivo dell'organico.
+          </FeatureCard>
+          <FeatureCard span="full" icon={<PlayIcon />} title="Documentazione di ogni prova">
+            Le conversazioni vengono trascritte integralmente e le telefonate registrate, rimanendo
+            disponibili per il riascolto e la revisione.
           </FeatureCard>
         </Bento>
       </Section>
 
       <Section
         kicker="Utilizzo"
-        title="Tre passaggi, nessuna configurazione"
-        description="Per iniziare sono sufficienti un browser e un microfono."
+        title="Tre passaggi, senza installazioni"
+        description="Per l'avvio sono sufficienti un browser e un microfono."
       >
         <Steps items={STEPS} />
-        <div className="mt-8">
-          <SectionLink to="/piattaforma">
-            Ruoli, modalità di adozione e trattamento dei dati
-          </SectionLink>
-        </div>
       </Section>
 
       <CtaSection

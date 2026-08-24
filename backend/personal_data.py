@@ -323,8 +323,8 @@ def _simulation_attempts(db: Session, user: User) -> list[dict]:
     ]
 
 
-def _debriefing(db: Session, user: User) -> dict | None:
-    """Il quadro d'insieme che un formatore ha fatto scrivere su di lei.
+def _debriefings(db: Session, user: User) -> list[dict]:
+    """I quadri d'insieme che un formatore ha fatto scrivere su di lei.
 
     Nell'interfaccia questa è una schermata di amministrazione e chi si
     allena non la vede, ed è una scelta: il debriefing dice a un docente
@@ -339,34 +339,47 @@ def _debriefing(db: Session, user: User) -> dict | None:
     esattamente il genere di dato che l'art. 15 esiste per rendere
     conoscibile.
 
-    Chi lo ha fatto scrivere non compare: è il nome di un'altra persona, e
+    Ci sono tutti e non solo l'ultimo, dal più vecchio: ogni volta che
+    qualcuno ne ha fatto scrivere uno, la piattaforma ha tenuto quel testo,
+    e l'archivio deve dire quello che tiene, non quello che mostra. Dal
+    secondo in poi c'è anche la direzione, cioè il giudizio su come questa
+    persona si sia mossa, che è la riga più delicata di tutte e proprio per
+    questo non può mancare da una copia dei propri dati.
+
+    Chi li ha fatti scrivere non compare: è il nome di un'altra persona, e
     a differenza della firma su una revisione non è parte di un voto che si
     possa contestare.
     """
-    row = db.query(UserDebriefing).filter(UserDebriefing.user_id == user.id).first()
-    if row is None:
-        return None
-    content = row.content or {}
-    return {
-        "sintesi": content.get("summary", ""),
-        "temi_ricorrenti": [
-            {
-                "tema": theme.get("title", ""),
-                "dettaglio": theme.get("detail", ""),
-                "prove_su_cui_si_fonda": theme.get("evidence", ""),
-            }
-            for theme in content.get("themes") or []
-        ],
-        "miglioramenti": content.get("improving"),
-        "prossimo_passo": content.get("next_step", ""),
-        "prove_lette": {
-            "conversazioni": row.covered_conversations,
-            "test_tecnici": row.covered_attempts,
-            "fino_al": _at(row.covered_until),
-        },
-        "scritto_il": _at(row.created_at),
-        "aggiornato_il": _at(row.updated_at),
-    }
+    rows = (
+        db.query(UserDebriefing)
+        .filter(UserDebriefing.user_id == user.id)
+        .order_by(UserDebriefing.created_at.asc())
+        .all()
+    )
+    return [
+        {
+            "sintesi": (row.content or {}).get("summary", ""),
+            "temi_ricorrenti": [
+                {
+                    "tema": theme.get("title", ""),
+                    "dettaglio": theme.get("detail", ""),
+                    "prove_su_cui_si_fonda": theme.get("evidence", ""),
+                }
+                for theme in (row.content or {}).get("themes") or []
+            ],
+            "miglioramenti": (row.content or {}).get("improving"),
+            "prossimo_passo": (row.content or {}).get("next_step", ""),
+            "andamento_rispetto_al_precedente": (row.content or {}).get("direction"),
+            "cosa_e_cambiato": (row.content or {}).get("change"),
+            "prove_lette": {
+                "conversazioni": row.covered_conversations,
+                "test_tecnici": row.covered_attempts,
+                "fino_al": _at(row.covered_until),
+            },
+            "scritto_il": _at(row.created_at),
+        }
+        for row in rows
+    ]
 
 
 def _selections(db: Session, user: User) -> list[dict]:
@@ -439,7 +452,7 @@ def _payload(db: Session, user: User) -> tuple[dict, dict[UUID, str]]:
         "conversazioni": conversations,
         "percorsi_assegnati": _assignments(db, user),
         "simulazioni_tecniche": _simulation_attempts(db, user),
-        "quadro_di_insieme": _debriefing(db, user),
+        "quadri_di_insieme": _debriefings(db, user),
         "avatar_selezionati": _selections(db, user),
         "sessioni_di_accesso": _sessions(db, user),
         "registro_attivita": _activity(db, user),

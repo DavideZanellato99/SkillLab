@@ -1,13 +1,13 @@
-/* Il fondo delle pagine pubbliche: mappa delle sezioni, accesso e le
- * informazioni di conformità che chi valuta l'adozione si aspetta di trovare
- * senza doverle chiedere.
+/* Il fondo della pagina pubblica: l'accesso e le informazioni di conformità
+ * che chi valuta l'adozione si aspetta di trovare senza doverle chiedere.
+ *
+ * Non c'è nessuna mappa delle sezioni perché la pagina è una sola, e un
+ * elenco di una voce sotto un titolo è solo un titolo.
  *
  * Esiste solo prima dell'accesso: dentro l'applicazione ogni schermata
- * finisce con i propri dati, e un piè di pagina con la mappa del sito
- * pubblico sarebbe un secondo menu che non porta da nessuna parte. */
+ * finisce con i propri dati. */
 
 import { Link } from 'react-router'
-import { PUBLIC_SECTIONS } from './publicSections'
 import { openLogin } from './openLogin'
 
 const linkCls =
@@ -16,7 +16,7 @@ const linkCls =
 export default function PublicFooter() {
   return (
     <footer className="relative border-t border-white/8 bg-white/[0.02] backdrop-blur-xl">
-      <div className="mx-auto grid max-w-[1120px] grid-cols-[1.4fr_1fr_1fr] gap-12 px-6 py-14 max-lg:grid-cols-2 max-md:grid-cols-1 max-md:gap-8 max-md:py-12">
+      <div className="mx-auto grid max-w-[1120px] grid-cols-[1.6fr_1fr] gap-12 px-6 py-14 max-md:grid-cols-1 max-md:gap-8 max-md:py-12">
         <div>
           <Link
             to="/"
@@ -52,17 +52,6 @@ export default function PublicFooter() {
             test sulle procedure interne, valutazione della prestazione con revisione del formatore.
           </p>
         </div>
-
-        <nav className="flex flex-col gap-3">
-          <h3 className="font-heading text-[0.8rem] font-semibold uppercase tracking-wide text-slate-400">
-            La Piattaforma
-          </h3>
-          {PUBLIC_SECTIONS.map((section) => (
-            <Link key={section.path} to={section.path} className={linkCls}>
-              {section.label}
-            </Link>
-          ))}
-        </nav>
 
         <div className="flex flex-col gap-3">
           <h3 className="font-heading text-[0.8rem] font-semibold uppercase tracking-wide text-slate-400">

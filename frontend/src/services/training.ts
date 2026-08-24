@@ -30,11 +30,37 @@ export type AssignmentStatus = 'locked' | 'active' | 'overdue' | 'completed' | '
 /** Di cosa è fatta una tappa: una conversazione o un test tecnico. */
 export type StepKind = 'avatar' | 'simulation'
 
+/**
+ * Le soglie sui singoli criteri di una tappa, `{chiave: voto}`.
+ *
+ * Le chiavi sono quelle dei criteri della valutazione, che arrivano dal
+ * server (vedi `AssignableContent`). Facoltative una per una: ci stanno solo
+ * i criteri su cui la tappa pone una condizione, e valgono in aggiunta al
+ * voto complessivo, sulla stessa conversazione.
+ */
+export type CriteriaTargets = Record<string, number>
+
+/**
+ * Una soglia su un criterio, come la legge chi la deve rispettare.
+ *
+ * L'etichetta arriva col dato e non da una lista scritta qui: è la stessa
+ * che comparirà nel referto, e una copia locale col tempo racconterebbe
+ * criteri diversi da quelli su cui il giudizio viene dato.
+ */
+export interface StepCriterionTarget {
+  key: string
+  label: string
+  target: number
+}
+
 /** Una tappa come la si compone: uno dei due bersagli, mai tutti e due. */
 export interface PathStepInput {
   avatar_id?: string | null
   simulation_id?: string | null
   target_score: number
+  /** Le soglie sui criteri, vuote se la tappa chiede solo il complessivo.
+   *  Solo su una tappa di conversazione: il server rifiuta le altre. */
+  criteria_targets?: CriteriaTargets
   /** Entro quando va chiusa, ISO 8601 con il fuso di chi la scrive. */
   due_at?: string | null
 }
@@ -46,6 +72,9 @@ export interface PathStep {
   position: number
   kind: StepKind
   target_score: number
+  /** Le soglie sui criteri, nell'ordine in cui i criteri stanno nel referto.
+   *  Vuote se la tappa chiede solo il voto complessivo. */
+  criteria_targets: StepCriterionTarget[]
   /** Entro quando va chiusa, o null se la tappa non scade. */
   due_at: string | null
   avatar_id: string | null
@@ -67,6 +96,11 @@ export interface StepProgress extends PathStep {
   /** Prove svolte dopo lo sblocco. */
   attempts: number
   best_score: number | null
+  /** Il meglio fatto su ognuno dei criteri richiesti, sulle prove che
+   *  contano. Sta accanto alle soglie e non dentro perché è di chi percorre
+   *  la tappa, mentre la soglia è della tappa. Un criterio assente vuol dire
+   *  che su quello non c'è ancora nessun voto. */
+  best_criteria_scores: CriteriaTargets
   achieved_at: string | null
 }
 
@@ -130,6 +164,15 @@ export interface AssignableContent {
     id: string
     title: string
     kind: string
+  }[]
+  /** I criteri su cui una tappa di conversazione può porre una soglia, con
+   *  l'etichetta e il peso che hanno nel referto. Non dipendono
+   *  dall'organizzazione: viaggiano di qui perché è la chiamata con cui il
+   *  form scopre di cosa può essere fatta una tappa. */
+  criteria: {
+    key: string
+    label: string
+    weight: number
   }[]
 }
 

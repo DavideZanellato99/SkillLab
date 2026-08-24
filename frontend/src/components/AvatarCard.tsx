@@ -1,7 +1,8 @@
 import { useNavigate } from 'react-router'
 import type { Avatar } from '../services/api'
 import { getAvatarImageUrl } from '../services/api'
-import AvatarBadges from './AvatarBadges'
+import Badge from './Badge'
+import { categoryBadgeClasses } from './categoryStyles'
 
 interface AvatarCardProps {
   avatar: Avatar
@@ -53,11 +54,9 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
       </div>
 
       <div className="relative p-6">
-        <AvatarBadges
-          category={avatar.category}
-          categoryColor={avatar.category_color}
-          difficulty={avatar.difficulty}
-        />
+        <Badge tone={categoryBadgeClasses(avatar.category_color)} className="mb-2">
+          {avatar.category}
+        </Badge>
         <h3 className="mb-1 font-heading text-lg font-bold text-slate-100">{avatar.name}</h3>
         <p className="line-clamp-2 text-[0.82rem] leading-normal text-slate-500">
           {avatar.description}

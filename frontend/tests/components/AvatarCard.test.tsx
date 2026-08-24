@@ -16,7 +16,6 @@ const avatar: Avatar = {
   description: 'Chiama per un addebito che non riconosce',
   created_at: '2026-01-01T10:00:00Z',
   selection_count: 3,
-  difficulty: '8/10',
 }
 
 function renderCard() {
@@ -33,13 +32,12 @@ function renderCard() {
 const scheda = () => screen.getByRole('button', { name: 'Parla con Cliente arrabbiato' })
 
 describe('AvatarCard', () => {
-  it("presenta l'avatar con le sue targhette", () => {
+  it("presenta l'avatar con la sua targhetta", () => {
     renderCard()
 
     expect(screen.getByRole('heading', { name: 'Cliente arrabbiato' })).toBeInTheDocument()
     expect(screen.getByText('Chiama per un addebito che non riconosce')).toBeInTheDocument()
     expect(screen.getByText('Clienti')).toBeInTheDocument()
-    expect(screen.getByText(/Difficoltà: 8\/10/)).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Cliente arrabbiato' })).toHaveAttribute(
       'src',
       '/static/avatars/a-1.png',

@@ -137,6 +137,7 @@ describe('ricerca fra i percorsi', () => {
           position: 1,
           kind: 'avatar',
           target_score: 7,
+          criteria_targets: [],
           due_at: null,
           avatar_id: 'a-1',
           avatar_name: 'Cliente esigente',

@@ -131,7 +131,6 @@ export interface AdminAvatar extends Authored {
   category_color: string
   description: string | null
   voice_id: string | null
-  difficulty: string | null
   /** Owning tenant: every avatar belongs to exactly one organization. */
   organization_id: string
   organization_name: string
@@ -266,8 +265,6 @@ export type PersonaDraftSource = 'descrizione' | 'conversazione'
 export interface PersonaDraftPayload {
   text: string
   source: PersonaDraftSource
-  /** Facoltativo: se c'è guida la scheda, se manca lo decide il modello. */
-  difficulty?: string
 }
 
 /** Una bozza di scheda persona. Non salva niente: torna al form, e a
@@ -373,11 +370,21 @@ export interface DebriefingCriterionAverage {
   key: string
   label: string
   average: number
+  /** Di quanto è cambiata dal quadro precedente, null se non c'è confronto. */
+  delta: number | null
 }
 
+/** Come si è mossa la persona rispetto al quadro precedente. */
+export type DebriefingDirection = 'up' | 'stable' | 'down'
+
 /**
- * Il quadro d'insieme su una persona: quello che si vede solo guardando più
- * prove insieme, che è l'unica cosa che nessun'altra schermata sa dire.
+ * Una versione del quadro d'insieme su una persona: quello che si vede solo
+ * guardando più prove insieme, che è l'unica cosa che nessun'altra schermata
+ * sa dire.
+ *
+ * Ogni generazione è una riga sua e nessuna sostituisce quella di prima, che
+ * è la ragione per cui `direction` può esistere: come sta andando qualcuno è
+ * una domanda che ha risposta solo rispetto a dove era.
  *
  * Tutti i numeri qui dentro sono una fotografia del momento in cui è stato
  * scritto, non di adesso: sono quelli che il modello aveva davanti, e
@@ -385,33 +392,42 @@ export interface DebriefingCriterionAverage {
  * visto. A dire che il tempo è passato c'è `is_stale`.
  */
 export interface UserDebriefing {
+  id: string
   user_id: string
   summary: string
   themes: DebriefingTheme[]
   /** null quando nel materiale non si vedeva nessun miglioramento. */
   improving: string | null
   next_step: string
+  /** null sul primo quadro di una persona, dove un prima non c'è. */
+  direction: DebriefingDirection | null
+  change: string | null
   covered_conversations: number
   covered_attempts: number
   covered_until: string
   conversation_average: number | null
   attempt_average: number | null
   criteria_averages: DebriefingCriterionAverage[]
+  /* Gli scarti delle medie rispetto al quadro precedente. La direzione qui
+   * sopra la legge il modello nelle prove, questi sono una sottrazione: le
+   * due cose possono non coincidere, e va bene, perché mezzo punto di media
+   * in più non è un miglioramento nel modo di lavorare. */
+  conversation_average_delta: number | null
+  attempt_average_delta: number | null
   /** La persona ha svolto altre prove dopo che il quadro è stato scritto. */
   is_stale: boolean
   created_at: string
-  updated_at: string
-  /** Chi lo ha fatto scrivere per ultimo. */
+  /** Chi lo ha fatto scrivere. */
   requested_by: string
 }
 
-/** Il debriefing salvato, o null se non è mai stato chiesto per questa persona. */
-export const fetchUserDebriefing = (userId: string) =>
-  apiFetch<UserDebriefing | null>(`/api/admin/users/${userId}/debriefing`)
+/** Tutti i quadri scritti su questa persona, dal più recente. */
+export const fetchUserDebriefings = (userId: string) =>
+  apiFetch<UserDebriefing[]>(`/api/admin/users/${userId}/debriefings`)
 
-/** Fa scrivere il quadro d'insieme, sostituendo quello che c'era. */
+/** Fa scrivere un quadro nuovo, che si aggiunge a quelli di prima. */
 export const generateUserDebriefing = (userId: string) =>
-  apiFetch<UserDebriefing>(`/api/admin/users/${userId}/debriefing`, { method: 'POST' })
+  apiFetch<UserDebriefing>(`/api/admin/users/${userId}/debriefings`, { method: 'POST' })
 
 // ── Evaluations dashboard (read-only) ────────────────
 

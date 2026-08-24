@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import type { StepProgress } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
 import Badge from './Badge'
+import StepCriteriaProgress from './StepCriteriaProgress'
 import { categoryBadgeClasses } from './categoryStyles'
 import { primaryActionCls } from './PrimaryButton'
 import { ChatIcon, ChecklistIcon, CloseIcon, LockIcon } from './icons'
@@ -31,7 +32,11 @@ import {
  *
  * Il modo di chiudere lo porta chi lo apre: sulla mappa il pannello si posa
  * sopra il sentiero (vedi PathStepDrawer) e va tolto di mezzo, altrove sta
- * dove sta e un bottone per chiuderlo sarebbe un bottone che non fa niente. */
+ * dove sta e un bottone per chiuderlo sarebbe un bottone che non fa niente.
+ *
+ * Sotto la barra, quando la tappa pone condizioni sui singoli criteri, c'è
+ * quali sono e a che punto stanno: senza, una tappa con la barra piena e lo
+ * stato ancora aperto sarebbe una tappa che non si capisce. */
 
 function Stat({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -125,6 +130,18 @@ export default function PathStepPanel({
             style={{ width: `${progress * 100}%` }}
           />
         </div>
+        {step.criteria_targets.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[0.72rem] text-slate-400">
+              Serve anche, nella stessa conversazione
+            </p>
+            <StepCriteriaProgress
+              targets={step.criteria_targets}
+              best={step.best_criteria_scores}
+              locked={locked}
+            />
+          </div>
+        )}
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-2">

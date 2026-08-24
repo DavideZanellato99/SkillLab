@@ -27,7 +27,7 @@ import {
   fetchEvaluationsReport,
   fetchEvaluationsReportXlsx,
   fetchSimulationsReport,
-  fetchUserDebriefing,
+  fetchUserDebriefings,
   fetchUsers,
   fetchUsersReport,
   fetchVoicePreview,
@@ -290,15 +290,15 @@ describe('report', () => {
   /* Il quadro d'insieme è l'unica lettura dell'area report che non è un
    * report: si chiede per una persona sola, e si scrive con una POST. */
   it('legge e fa scrivere il quadro di una persona', async () => {
-    await fetchUserDebriefing('u-1')
+    await fetchUserDebriefings('u-1')
     expect(ultimaChiamata()).toEqual({
-      endpoint: '/api/admin/users/u-1/debriefing',
+      endpoint: '/api/admin/users/u-1/debriefings',
       options: {},
     })
 
     await generateUserDebriefing('u-1')
     expect(ultimaChiamata()).toEqual({
-      endpoint: '/api/admin/users/u-1/debriefing',
+      endpoint: '/api/admin/users/u-1/debriefings',
       options: { method: 'POST' },
     })
   })

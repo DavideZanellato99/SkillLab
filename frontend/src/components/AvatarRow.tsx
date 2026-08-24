@@ -1,5 +1,5 @@
-/* Una riga della tabella avatar: chi è, di chi è, quanto è difficile e
- * quante conversazioni ha già sostenuto.
+/* Una riga della tabella avatar: chi è, di chi è e quante conversazioni ha
+ * già sostenuto.
  *
  * Un avatar archiviato ha una sola azione, tornare in catalogo: la sua
  * scheda è il documento di ciò su cui gli studenti si sono allenati e resta
@@ -88,9 +88,6 @@ export default function AvatarRow({
       </Td>
       <Td>
         <Badge tone={categoryBadgeClasses(avatar.category_color)}>{avatar.category}</Badge>
-      </Td>
-      <Td>
-        <span className="text-[0.85rem] text-orange-400">{avatar.difficulty ?? '—'}</span>
       </Td>
       <Td>
         <span className="inline-block min-w-8 rounded-full border border-white/6 bg-white/4 px-2 py-0.5 text-[0.8rem] font-semibold text-slate-100">

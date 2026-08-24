@@ -40,7 +40,6 @@ def _avatar_card(nome="Mario Rossi", **campi) -> CatalogAvatar:
         "id": uuid.uuid4(),
         "name": nome,
         "category_name": "Clienti",
-        "difficulty": "7/10",
         "description": "Cliente arrabbiato per due addebiti uguali.",
     }
     base.update(campi)
@@ -85,7 +84,6 @@ def test_del_catalogo_esce_solo_quello_che_si_vede_in_galleria():
 
     assert "Mario Rossi" in testo
     assert "Clienti" in testo
-    assert "7/10" in testo
     assert "due addebiti uguali" in testo
     # Il resto della scheda non passa nemmeno da questa funzione: la
     # dataclass del catalogo ha quattro campi, ed è quella la difesa.
@@ -93,7 +91,6 @@ def test_del_catalogo_esce_solo_quello_che_si_vede_in_galleria():
         "id",
         "name",
         "category_name",
-        "difficulty",
         "description",
     }
 

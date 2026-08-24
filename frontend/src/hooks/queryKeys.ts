@@ -68,7 +68,8 @@ export const queryKeys = {
     simulations: (organizationId?: string) =>
       ['reports', 'simulations', organizationId ?? '__all__'] as const,
   },
-  /** Il quadro d'insieme su una persona, una voce per persona. */
+  /** I quadri d'insieme su una persona: una voce per persona, e dentro
+   *  tutte le versioni scritte su di lei, dalla più recente. */
   debriefings: {
     byUser: (userId: string) => ['debriefings', userId] as const,
   },

@@ -7,6 +7,19 @@ valutata con l'avatar della tappa, oppure un test tecnico consegnato se la
 tappa è una simulazione; in entrambi i casi il voto è in decimi, e sulle
 conversazioni è quello finale, correzione del docente compresa.
 
+Una tappa di conversazione può chiedere anche delle soglie sui singoli
+criteri della valutazione (vedi ``TrainingPathStep.criteria_targets``), e
+allora **le condizioni valgono tutte insieme e sulla stessa prova**: una
+conversazione supera la tappa quando raggiunge il voto complessivo e ognuno
+dei criteri richiesti. Due prove che si completano a vicenda, una buona
+sull'empatia e una buona sulla casistica, non fanno una prova buona.
+
+Sui criteri conta il punteggio dell'AI e non c'è un equivalente della
+correzione del docente, per la stessa ragione per cui non c'è nel referto:
+un docente corregge il verdetto nel suo insieme, non i sei numeri che ci
+stanno sotto. Quindi un voto corretto a mano decide il complessivo, e i
+criteri restano quelli che la macchina ha dato.
+
 Quello che le tappe aggiungono è la fila. La prima si sblocca quando il
 percorso viene affidato, ognuna delle altre quando quella prima di lei è
 stata superata, e da lì partono sia il conteggio delle prove sia la
@@ -83,6 +96,53 @@ def _proof_key(user_id: UUID, step: TrainingPathStep) -> ProofKey:
 
 
 @dataclass(frozen=True)
+class Proof:
+    """Una prova svolta, nella sola forma in cui una tappa la guarda.
+
+    ``criteria`` è vuoto su un test consegnato, che di criteri non ne ha, e
+    su una conversazione la cui valutazione non li porta. In entrambi i casi
+    la conseguenza è la stessa e voluta: quella prova non supera una tappa
+    che dei criteri li richiede, perché non c'è niente da confrontare con la
+    soglia e darla per raggiunta sarebbe inventarsi un voto.
+    """
+
+    at: datetime
+    score: float
+    criteria: dict[str, float]
+
+
+def _criteria_scores(result: dict | None) -> dict[str, float]:
+    """I voti per criterio dentro il JSON di una valutazione, ``{chiave: voto}``.
+
+    Legge la stessa forma che leggono il referto e il debriefing, e scarta le
+    voci senza chiave o senza voto invece di fermarsi: un criterio mancante è
+    un criterio non raggiunto, che è già la risposta giusta.
+    """
+    scores: dict[str, float] = {}
+    for criterion in (result or {}).get("criteria") or []:
+        key = criterion.get("key")
+        score = criterion.get("score")
+        if key and score is not None:
+            scores[str(key)] = float(score)
+    return scores
+
+
+def _passes(proof: Proof, step: TrainingPathStep) -> bool:
+    """Se questa prova, da sola, supera la tappa.
+
+    Da sola è la parte che conta: il voto complessivo e ogni criterio
+    richiesto devono stare nella stessa conversazione. Sommare il meglio di
+    prove diverse racconterebbe una prestazione che non è mai avvenuta.
+    """
+    if proof.score < step.target_score:
+        return False
+    return all(
+        proof.criteria.get(key, 0.0) >= target
+        for key, target in (step.criteria_targets or {}).items()
+    )
+
+
+@dataclass(frozen=True)
 class StepProgress:
     """Una tappa vista da chi la sta percorrendo, senza niente di salvato.
 
@@ -98,6 +158,14 @@ class StepProgress:
     # Prove svolte dopo lo sblocco
     attempts: int
     best_score: float | None
+    # Il meglio fatto su ognuno dei criteri che la tappa richiede, sempre
+    # sulle prove svolte dopo lo sblocco. Vuoto se la tappa non ne richiede.
+    #
+    # Non basta a superare la tappa e non prova che lo sia: sono i massimi
+    # criterio per criterio, presi anche su conversazioni diverse. Serve a
+    # dire a chi si allena quale delle condizioni non è ancora arrivata,
+    # che con il solo voto complessivo resterebbe un mistero.
+    best_criteria_scores: dict[str, float]
     achieved_at: datetime | None
 
 
@@ -147,8 +215,8 @@ def _naive(value: datetime) -> datetime:
 
 def proofs_by_key(
     db: Session, assignments: list[TrainingPathAssignment]
-) -> dict[ProofKey, list[tuple[datetime, float]]]:
-    """(utente, forma, bersaglio) -> [(prova svolta il, voto che conta)].
+) -> dict[ProofKey, list[Proof]]:
+    """(utente, forma, bersaglio) -> le prove svolte su quel bersaglio.
 
     Due query per tutta la pagina, una per forma di prova, invece di una per
     tappa: il taglio per tappa (solo le prove successive al suo sblocco)
@@ -163,6 +231,12 @@ def proofs_by_key(
     docente è il voto contro cui la tappa si misura. Sui test è quello
     congelato sul tentativo, che nessuno corregge a mano (vedi
     ``SimulationAttempt``).
+
+    Il JSON della valutazione, da cui escono i voti per criterio, si legge
+    **solo se qualche tappa dei criteri li chiede**: è la colonna più pesante
+    della riga, con commenti, suggerimenti e citazioni dentro, e una pagina
+    di trenta allievi su percorsi che guardano il solo voto complessivo non
+    deve trascinarsela dal database per poi buttarla.
     """
     wanted: set[ProofKey] = {
         _proof_key(a.user_id, step) for a in assignments for step in a.path.steps
@@ -170,20 +244,24 @@ def proofs_by_key(
     if not wanted:
         return {}
 
-    by_key: dict[ProofKey, list[tuple[datetime, float]]] = defaultdict(list)
+    by_key: dict[ProofKey, list[Proof]] = defaultdict(list)
     user_ids = {user_id for user_id, _, _ in wanted}
     avatar_ids = {target for _, kind, target in wanted if kind == STEP_KIND_AVATAR}
     simulation_ids = {target for _, kind, target in wanted if kind == STEP_KIND_SIMULATION}
+    with_criteria = any(step.criteria_targets for a in assignments for step in a.path.steps)
 
     if avatar_ids:
+        columns = [
+            ChatConversation.user_id,
+            ChatConversation.avatar_id,
+            ChatConversation.created_at,
+            ConversationEvaluation.overall_score,
+            ConversationReview.override_score,
+        ]
+        if with_criteria:
+            columns.append(ConversationEvaluation.result)
         rows = (
-            db.query(
-                ChatConversation.user_id,
-                ChatConversation.avatar_id,
-                ChatConversation.created_at,
-                ConversationEvaluation.overall_score,
-                ConversationReview.override_score,
-            )
+            db.query(*columns)
             .join(
                 ConversationEvaluation,
                 ConversationEvaluation.conversation_id == ChatConversation.id,
@@ -198,9 +276,12 @@ def proofs_by_key(
             )
             .all()
         )
-        for user_id, avatar_id, opened_at, ai_score, override_score in rows:
+        for user_id, avatar_id, opened_at, ai_score, override_score, *rest in rows:
             score = override_score if override_score is not None else ai_score
-            by_key[(user_id, STEP_KIND_AVATAR, avatar_id)].append((_naive(opened_at), score))
+            criteria = _criteria_scores(rest[0]) if rest else {}
+            by_key[(user_id, STEP_KIND_AVATAR, avatar_id)].append(
+                Proof(at=_naive(opened_at), score=score, criteria=criteria)
+            )
 
     if simulation_ids:
         rows = (
@@ -219,8 +300,11 @@ def proofs_by_key(
         )
         for user_id, simulation_id, submitted_at, points, questions in rows:
             score = attempt_score(points or 0.0, questions)
+            # Un test non ha criteri, ha domande: la mappa resta vuota, e
+            # una tappa che chiedesse dei criteri non potrebbe essere sua
+            # (lo rifiuta ``TrainingPathStepInput``).
             by_key[(user_id, STEP_KIND_SIMULATION, simulation_id)].append(
-                (_naive(submitted_at), score)
+                Proof(at=_naive(submitted_at), score=score, criteria={})
             )
 
     return by_key
@@ -229,7 +313,7 @@ def proofs_by_key(
 def _step_progress(
     step: TrainingPathStep,
     unlocked_at: datetime | None,
-    proofs: list[tuple[datetime, float]],
+    proofs: list[Proof],
     now: datetime,
 ) -> StepProgress:
     """Una tappa, dato il momento in cui si è aperta e le prove di quel bersaglio."""
@@ -246,16 +330,30 @@ def _step_progress(
             unlocked_at=None,
             attempts=0,
             best_score=None,
+            best_criteria_scores={},
             achieved_at=None,
         )
 
-    relevant = [(at, score) for at, score in proofs if at >= unlocked_at]
-    best_score = max((score for _, score in relevant), default=None)
-    # Primo momento in cui il bersaglio è stato raggiunto, per data della prova
-    achieved_at = min(
-        (at for at, score in relevant if score >= step.target_score),
-        default=None,
-    )
+    relevant = [proof for proof in proofs if proof.at >= unlocked_at]
+    best_score = max((proof.score for proof in relevant), default=None)
+    # Il meglio criterio per criterio, e solo sui criteri che la tappa
+    # chiede: gli altri sei numeri della valutazione non sono una condizione
+    # di questa tappa, e mostrarli accanto a quelli che lo sono farebbe
+    # sembrare condizioni anche loro.
+    best_criteria_scores = {
+        key: best
+        for key in (step.criteria_targets or {})
+        if (
+            best := max(
+                (proof.criteria[key] for proof in relevant if key in proof.criteria),
+                default=None,
+            )
+        )
+        is not None
+    }
+    # Primo momento in cui il bersaglio è stato raggiunto, per data della
+    # prova che l'ha raggiunto tutto: il complessivo e i criteri insieme.
+    achieved_at = min((proof.at for proof in relevant if _passes(proof, step)), default=None)
 
     if achieved_at is not None:
         late = due_at is not None and achieved_at > due_at
@@ -270,13 +368,14 @@ def _step_progress(
         unlocked_at=unlocked_at,
         attempts=len(relevant),
         best_score=best_score,
+        best_criteria_scores=best_criteria_scores,
         achieved_at=achieved_at,
     )
 
 
 def progress_of(
     assignment: TrainingPathAssignment,
-    by_key: dict[ProofKey, list[tuple[datetime, float]]],
+    by_key: dict[ProofKey, list[Proof]],
 ) -> PathProgress:
     """Il percorso di una persona, tappa per tappa e nel suo insieme.
 

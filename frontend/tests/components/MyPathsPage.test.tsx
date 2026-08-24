@@ -13,6 +13,7 @@ const step = (
 ): StepProgress => ({
   kind: 'avatar',
   target_score: 7,
+  criteria_targets: [],
   due_at: null,
   avatar_id: `a${over.position}`,
   avatar_name: `Avatar ${over.position}`,
@@ -25,6 +26,7 @@ const step = (
   unlocked_at: null,
   attempts: 0,
   best_score: null,
+  best_criteria_scores: {},
   achieved_at: null,
   ...over,
 })

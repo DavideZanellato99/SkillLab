@@ -21,8 +21,8 @@ citare i momenti su cui si fonda.
 
 **Il contesto della simulazione**, preso dalla scheda persona: quale fosse il
 caso vero, la causa reale del problema, l'obiettivo nascosto, l'emozione
-iniziale, il grado di difficoltà. È la chiave di correzione, cioè l'unico modo
-per distinguere una diagnosi vera da un'ipotesi plausibile. Il prompt dice
+iniziale. È la chiave di correzione, cioè l'unico modo per distinguere una
+diagnosi vera da un'ipotesi plausibile. Il prompt dice
 esplicitamente che **non è parte della conversazione**: nulla va attribuito
 all'operatore che non abbia detto, e nulla gli va tolto per informazioni che il
 cliente non gli ha mai dato.
@@ -95,6 +95,12 @@ possono divergere.
 La scala è da 1 a 10, con una guida esplicita su cosa vuol dire ogni fascia.
 Lo zero non esiste: il fondo è una prestazione gravemente insufficiente, non
 l'assenza di prestazione.
+
+Le stesse chiavi sono anche quelle con cui una tappa di un percorso può
+chiedere un minimo su un singolo criterio, oltre al voto complessivo: la
+media pesata copre un criterio andato male con gli altri cinque, e una tappa
+che allena l'empatia non va superata così. Come si comportano le due
+condizioni sta in [training-e-report.md](training-e-report.md).
 
 ### Cosa torna, e cosa viene ricalcolato
 
@@ -205,7 +211,9 @@ Due proprietà:
   cruscotto poi metterebbe in media.
 
 Il punteggio per criterio invece resta quello dell'AI: un docente corregge il
-verdetto nel suo insieme, non i sei numeri che ci stanno sotto.
+verdetto nel suo insieme, non i sei numeri che ci stanno sotto. È anche il
+motivo per cui una correzione non apre una tappa che chiede un minimo su un
+criterio: decide il complessivo, e sotto restano i voti della macchina.
 
 ## Il confronto con il tentativo precedente
 

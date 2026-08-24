@@ -203,7 +203,10 @@ dimenticanza: è una sintesi delle conversazioni, quindi non può
 sopravvivere a quello che riassume. Si misura sulla data della prova più
 recente che aveva letto, così quando quella è oltre la finestra tutto il
 materiale su cui il testo si fonda è appena stato cancellato, e quello che
-resterebbe è un giudizio su una persona senza più niente dietro.
+resterebbe è un giudizio su una persona senza più niente dietro. Di quadri
+una persona ne ha uno per ogni volta che gliene è stato fatto scrivere uno, e
+la regola si applica a ciascuno per conto suo: lo storico si accorcia dal
+fondo, che è esattamente quello che deve succedere.
 
 ## Il ciclo di pulizia
 
@@ -256,12 +259,14 @@ Due regole su cosa **non** entra:
 
 E due cose che entrano ed è facile dimenticare, per lo stesso motivo. Le
 righe di registro che lo riguardano e le sessioni registrate sul suo account
-con IP e User-Agent, e **il quadro d'insieme** che un formatore ha fatto
-scrivere su di lui, che nell'interfaccia lui non vede. Sono dati personali
+con IP e User-Agent, e **i quadri d'insieme** che un formatore ha fatto
+scrivere su di lui, che nell'interfaccia lui non vede. Ci sono tutti e non
+solo l'ultimo, con la direzione che ciascuno indicava: l'archivio deve dire
+quello che la piattaforma tiene, non quello che mostra. Sono dati personali
 tenuti su di lui, quindi l'art. 15 li copre: chi può sfogliarli in una
 schermata e chi ha diritto a una copia di quello che la piattaforma tiene su
-di sé sono due domande diverse. Del quadro resta fuori solo il nome di chi lo
-ha fatto scrivere, che è un'altra persona e che, a differenza della firma su
+di sé sono due domande diverse. Dei quadri resta fuori solo il nome di chi li
+ha fatti scrivere, che è un'altra persona e che, a differenza della firma su
 una revisione, non è parte di un voto contestabile.
 
 **Cancellazione (art. 17).** La sa fare un modulo solo,

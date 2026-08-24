@@ -325,7 +325,7 @@ def _conversazione():
 
 
 def _scheda():
-    return {"NOME": "Anna", "COGNOME": "Bianchi", "GRADO_DIFFICOLTA": "5/10"}
+    return {"NOME": "Anna", "COGNOME": "Bianchi"}
 
 
 def test_la_risposta_arriva_a_pezzi_man_mano_che_il_modello_la_scrive(modelli, monkeypatch):

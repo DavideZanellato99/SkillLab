@@ -42,7 +42,7 @@ def altra_organizzazione(db_session):
 
 def _payload(organization, category, **campi) -> dict:
     return {
-        "profile": {"NOME": "Anna", "COGNOME": "Bianchi", "GRADO_DIFFICOLTA": "5/10"},
+        "profile": {"NOME": "Anna", "COGNOME": "Bianchi"},
         "category_id": str(category.id),
         "organization_id": str(organization.id),
         "description": "Cliente con una carta bloccata",

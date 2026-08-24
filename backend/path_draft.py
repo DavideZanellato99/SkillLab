@@ -63,7 +63,7 @@ class CatalogAvatar:
     è qui e non è una dimenticanza: contiene la vera causa del problema e
     l'obiettivo nascosto, cioè la soluzione dell'esercizio, e non esce mai
     dal server. Per mettere in fila delle tappe basta sapere cosa mette alla
-    prova un avatar e quanto è difficile.
+    prova un avatar.
 
     È anche una dataclass e non la riga del database di proposito: il router
     restituisce la connessione al pool prima di aspettare il modello, e da
@@ -74,7 +74,6 @@ class CatalogAvatar:
     id: UUID
     name: str
     category_name: str
-    difficulty: str | None
     description: str | None
 
 
@@ -108,8 +107,6 @@ def build_catalog(
             ref = f"{_AVATAR_PREFIX}{index}"
             lookup[ref] = {"avatar_id": avatar.id}
             parti = [f"{ref}: {avatar.name}", f"categoria: {avatar.category_name}"]
-            if avatar.difficulty:
-                parti.append(f"difficoltà: {avatar.difficulty}")
             if avatar.description:
                 parti.append(f"scenario: {avatar.description.strip()}")
             righe.append("- " + ", ".join(parti))
@@ -154,8 +151,6 @@ def _system_prompt(catalog: str) -> str:
         "sta attorno al 6, una finale può arrivare all'8. Non mettere 9 o 10 da nessuna "
         "parte: una tappa che quasi nessuno può chiudere ferma anche tutte quelle dopo di "
         "lei.\n"
-        "- **La soglia sale anche con la difficoltà del cliente.** Chiedere 8 su un avatar da "
-        "9/10 e 6 su uno da 3/10 è il modo di dire che il secondo è un riscaldamento.\n"
         f"- **Al massimo {MAX_STEPS} tappe, e usa solo quello che serve.** Un percorso non è "
         "l'elenco del catalogo: se l'obiettivo si raggiunge in quattro tappe, scrivine "
         "quattro. Non ripetere due volte la stessa prova.\n"

@@ -1,29 +1,30 @@
-/* Il quadro d'insieme su una persona: leggerlo e farlo riscrivere.
+/* I quadri d'insieme su una persona: rileggerli tutti, e farne scrivere uno.
  *
  * Sta in un file suo e non fra i report perché non è un report: quelli sono
- * letture che il server ricalcola a ogni richiesta, questo è un testo che
- * esiste solo dopo che qualcuno ha deciso di farlo scrivere, e che costa una
- * chiamata a un modello di ragionamento ogni volta.
+ * letture che il server ricalcola a ogni richiesta, questi sono testi che
+ * esistono solo dopo che qualcuno ha deciso di farli scrivere, e che costano
+ * una chiamata a un modello di ragionamento ciascuno.
  *
  * Da qui viene anche la differenza di cache. Un report scade dopo tre
- * minuti perché nel frattempo la gente si allena; un debriefing non scade
- * mai da solo, perché cambia soltanto quando qualcuno lo rigenera, e a dire
- * che è invecchiato c'è `is_stale`, che arriva dentro la risposta. */
+ * minuti perché nel frattempo la gente si allena; uno storico di debriefing
+ * non scade mai da solo, perché cresce soltanto quando qualcuno ne fa
+ * scrivere uno, e a dire che il più recente è invecchiato c'è `is_stale`,
+ * che arriva dentro la risposta. */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchUserDebriefing, generateUserDebriefing } from '../services/admin'
+import { fetchUserDebriefings, generateUserDebriefing } from '../services/admin'
 import type { UserDebriefing } from '../services/admin'
 import { queryKeys } from './queryKeys'
 
-/** Il debriefing salvato di una persona, o null se non è mai stato chiesto. */
-export function useUserDebriefing(userId: string, enabled = true) {
+/** I quadri scritti su una persona, dal più recente. Vuoto se non ce n'è. */
+export function useUserDebriefings(userId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.debriefings.byUser(userId),
-    queryFn: () => fetchUserDebriefing(userId),
+    queryFn: () => fetchUserDebriefings(userId),
     enabled,
-    /* Non invecchia da solo: il testo cambia solo per una rigenerazione, e
+    /* Non invecchia da solo: la lista cambia solo per una generazione, e
      * quella passa dalla mutation qui sotto, che scrive il risultato in
-     * cache. Rileggerlo a ogni apertura del pannello sarebbe una richiesta
+     * cache. Rileggerla a ogni apertura del pannello sarebbe una richiesta
      * che riporta indietro le stesse righe. Il fatto che nel frattempo
      * siano arrivate prove nuove lo dice `is_stale`, che il server calcola
      * quando la risposta viene comunque prodotta. */
@@ -31,17 +32,25 @@ export function useUserDebriefing(userId: string, enabled = true) {
   })
 }
 
-/** Fa scrivere il quadro d'insieme, sostituendo quello che c'era.
+/** Fa scrivere un quadro nuovo, che si mette davanti a quelli di prima.
  *
- * L'attesa è lunga, perché il modello legge le trascrizioni prima di
- * scrivere: chi la lancia resta davanti a una rotella, e per questo il
- * risultato viene scritto in cache invece di essere richiesto di nuovo. */
+ * L'attesa è lunga, perché il modello legge le trascrizioni e il quadro
+ * precedente prima di scrivere: chi la lancia resta davanti a una rotella, e
+ * per questo il risultato viene messo in cima alla lista in cache invece di
+ * essere richiesto di nuovo.
+ *
+ * Solo in testa, e il resto della lista resta com'è: le versioni vecchie non
+ * cambiano mai, e `is_stale` di quella che era prima la più recente diventa
+ * falso da solo, perché il server lo calcola soltanto sulla prima. */
 export function useGenerateDebriefing(userId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => generateUserDebriefing(userId),
     onSuccess: (debriefing: UserDebriefing) => {
-      queryClient.setQueryData(queryKeys.debriefings.byUser(userId), debriefing)
+      queryClient.setQueryData<UserDebriefing[]>(
+        queryKeys.debriefings.byUser(userId),
+        (storico = []) => [debriefing, ...storico.map((v) => ({ ...v, is_stale: false }))],
+      )
     },
   })
 }

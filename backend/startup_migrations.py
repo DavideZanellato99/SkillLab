@@ -231,6 +231,14 @@ def _add_columns() -> None:
             text("ALTER TABLE training_path_steps ADD COLUMN IF NOT EXISTS due_at TIMESTAMP")
         )
         conn.execute(text("ALTER TABLE training_path_steps DROP COLUMN IF EXISTS due_days"))
+        # Le soglie sui singoli criteri di una tappa di conversazione (vedi
+        # ``TrainingPathStep.criteria_targets``). Nascono vuote su tutte le
+        # tappe di prima, ed è quello che devono dire: quelle tappe chiedono
+        # il voto complessivo e nient'altro, che è la regola con cui sono
+        # state scritte e con cui qualcuno le sta percorrendo.
+        conn.execute(
+            text("ALTER TABLE training_path_steps ADD COLUMN IF NOT EXISTS criteria_targets JSONB")
+        )
         # Il secchiello di un limite non è più solo "email" o "ip": adesso ci
         # sono anche le chiamate al modello, contate per funzione e per
         # persona (vedi ``llm_limits``), e "llm-valutazione" in dieci
@@ -706,6 +714,90 @@ def _drop_legacy_training_assignments() -> None:
         conn.execute(text("DROP TABLE IF EXISTS training_assignments"))
 
 
+def _version_debriefings() -> None:
+    """Dare una chiave propria a ogni debriefing, invece che alla persona.
+
+    La tabella nasceva con ``user_id`` come chiave primaria, cioè una riga
+    per persona: rigenerare il quadro d'insieme sovrascriveva quello di
+    prima. Da qui in avanti ogni generazione è una riga sua, perché "questa
+    persona sta migliorando" è una frase che si può scrivere solo avendo
+    sotto mano il quadro precedente (vedi ``UserDebriefing``).
+
+    Le righe che c'erano restano, e diventano la prima versione dello
+    storico di ciascuno: non hanno la direzione, ed è giusto così, perché
+    nessuno le ha scritte confrontandole con niente.
+
+    Tre passaggi nell'ordine obbligato: la colonna, il valore su ogni riga,
+    e solo alla fine lo scambio della chiave primaria. Lo scambio è dentro
+    un blocco condizionale perché su un database nuovo la chiave giusta
+    l'ha già messa create_all, e in quel caso qui non c'è niente da fare.
+    """
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE user_debriefings ADD COLUMN IF NOT EXISTS id UUID"))
+        conn.execute(text("UPDATE user_debriefings SET id = gen_random_uuid() WHERE id IS NULL"))
+        # La condizione guarda le colonne della chiave attuale e non il suo
+        # nome: se è già (id), qui non si entra e la migrazione è passata.
+        conn.execute(
+            text(
+                """
+                DO $$
+                DECLARE chiave text;
+                BEGIN
+                    SELECT con.conname INTO chiave
+                      FROM pg_constraint con
+                     WHERE con.conrelid = 'user_debriefings'::regclass
+                       AND con.contype = 'p'
+                       AND con.conkey <> ARRAY[
+                             (SELECT attnum FROM pg_attribute
+                               WHERE attrelid = 'user_debriefings'::regclass
+                                 AND attname = 'id')
+                           ]::smallint[];
+                    IF chiave IS NOT NULL THEN
+                        EXECUTE format(
+                            'ALTER TABLE user_debriefings DROP CONSTRAINT %I', chiave
+                        );
+                        ALTER TABLE user_debriefings ALTER COLUMN id SET NOT NULL;
+                        ALTER TABLE user_debriefings ADD PRIMARY KEY (id);
+                    END IF;
+                END $$;
+                """
+            )
+        )
+        # La persona non è più la chiave, ma resta il modo in cui la tabella
+        # si legge sempre: tutti i quadri di qualcuno, in ordine di tempo.
+        # Il vecchio indice sulla sola colonna se ne va dopo, come per le
+        # conversazioni: è il prefisso di questo, e una replica interrotta a
+        # metà deve trovare comunque un indice al suo posto.
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_user_debriefings_user_created "
+                "ON user_debriefings (user_id, created_at)"
+            )
+        )
+        conn.execute(text("DROP INDEX IF EXISTS ix_user_debriefings_user_id"))
+
+
+def _drop_avatar_difficulty() -> None:
+    """Togliere il grado di difficoltà dalle schede persona già salvate.
+
+    Era un campo della scheda (``GRADO_DIFFICOLTA``) e l'unico che la
+    galleria mostrava allo studente. Non esiste più: né il form lo scrive,
+    né i prompt lo leggono, quindi quello che resta nelle schede vecchie è
+    un valore che nessuno aggiorna e che riaffiorerebbe solo agli occhi di
+    chi rilegge il JSON.
+
+    Idempotente: ``-`` su una chiave che non c'è restituisce l'oggetto
+    com'era, e il WHERE guarda solo le righe che ce l'hanno ancora.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE avatars SET profile = profile - 'GRADO_DIFFICOLTA' "
+                "WHERE jsonb_exists(profile, 'GRADO_DIFFICOLTA')"
+            )
+        )
+
+
 def _index_audit_logs() -> None:
     """Index the audit trail the way it is read.
 
@@ -779,6 +871,8 @@ def run_startup_migrations() -> None:
     _backfill_authorship()
     _backfill_simulation_points()
     _drop_legacy_training_assignments()
+    _version_debriefings()
+    _drop_avatar_difficulty()
     _index_audit_logs()
     _index_conversations()
 

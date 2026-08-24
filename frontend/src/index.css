@@ -284,6 +284,22 @@
     flex-direction: column;
   }
 
+  /* Le frecce dei campi numerici le disegna `NumberInput`: quelle del
+     browser sono grigie di sistema, cambiano forma fra Chrome e Firefox e
+     non si possono vestire. Spente qui una volta per tutte, e non campo per
+     campo, perché un campo numerico scritto domani non deve poter ricomparire
+     con le frecce di sistema. */
+  input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
   ::-webkit-scrollbar {
     width: 8px;
   }

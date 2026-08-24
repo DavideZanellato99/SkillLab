@@ -19,6 +19,7 @@ const avatarStep: PathStep = {
   position: 1,
   kind: 'avatar',
   target_score: 7,
+  criteria_targets: [],
   due_at: null,
   avatar_id: 'a1',
   avatar_name: 'Mario Rossi',
@@ -48,6 +49,7 @@ const progressOf = (step: PathStep, extra: Partial<StepProgress>): StepProgress 
   unlocked_at: '2026-01-01T00:00:00',
   attempts: 0,
   best_score: null,
+  best_criteria_scores: {},
   achieved_at: null,
   ...extra,
 })
@@ -89,6 +91,7 @@ describe('quanto manca a superare una tappa', () => {
       status: 'locked',
       unlocked_at: null,
       best_score: 9,
+      best_criteria_scores: {},
     })
 
     expect(stepProgress(locked)).toBe(0)
@@ -102,6 +105,7 @@ describe('quanto manca a superare una tappa', () => {
       unlocked_at: null,
       due_at: '2020-01-01T12:00:00',
       best_score: 9,
+      best_criteria_scores: {},
     })
 
     expect(isStepLocked(lockedAndLate)).toBe(true)

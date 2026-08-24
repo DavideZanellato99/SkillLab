@@ -66,7 +66,6 @@ const avatar = (over: Partial<AdminAvatar> = {}): AdminAvatar =>
     category_id: 'cat-1',
     category_color: 'violet',
     description: 'Chiama per un addebito',
-    difficulty: '8/10',
     organization_id: 'org-1',
     organization_name: 'Banca Esempio',
     conversation_count: 12,
@@ -190,7 +189,7 @@ describe('catalogo', () => {
     expect(screen.getByText('Cliente arrabbiato')).toBeInTheDocument()
   })
 
-  it('cerca per nome, categoria e difficoltà', async () => {
+  it('cerca per nome e categoria', async () => {
     renderPage([avatar(), avatar({ id: 'a-2', name: 'Collega scettico', category: 'Colleghi' })])
 
     await userEvent.type(screen.getByPlaceholderText(/Cerca per nome/), 'colleghi')

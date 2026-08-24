@@ -38,17 +38,13 @@ const AvatarAdminPage = lazy(() => import('./components/AvatarAdminPage'))
 const SimulationAdminPage = lazy(() => import('./components/SimulationAdminPage'))
 const AuditLogsPage = lazy(() => import('./components/AuditLogsPage'))
 
-/* Il sito pubblico, per lo stesso motivo e dal lato opposto: sono cinque
- * pagine di sola presentazione che chi ha la sessione aperta non vedrà mai
- * più, e un import normale le avrebbe messe addosso a ogni accesso. Il
- * confine è di nuovo quello dei permessi, cioè l'essere o non essere
- * collegati, e l'attesa la paga il visitatore una volta sola. */
+/* Il sito pubblico, per lo stesso motivo e dal lato opposto: è la pagina di
+ * presentazione che chi ha la sessione aperta non vedrà mai più, e un import
+ * normale l'avrebbe messa addosso a ogni accesso. Il confine è di nuovo
+ * quello dei permessi, cioè l'essere o non essere collegati, e l'attesa la
+ * paga il visitatore una volta sola. */
 const PublicLayout = lazy(() => import('./components/public/PublicLayout'))
 const PublicHome = lazy(() => import('./components/public/PublicHome'))
-const PlatformPage = lazy(() => import('./components/public/PlatformPage'))
-const RoleplayPage = lazy(() => import('./components/public/RoleplayPage'))
-const SimulatorPage = lazy(() => import('./components/public/SimulatorPage'))
-const EvaluationPage = lazy(() => import('./components/public/EvaluationPage'))
 
 function HomePage() {
   const [totalAvatars, setTotalAvatars] = useState(0)
@@ -255,23 +251,18 @@ function App() {
                 />
               </Route>
               {/* Il catch all sta fuori da `/app` perché deve prendere anche
-                  ciò che sta fuori: le pagine pubbliche, che a sessione
-                  aperta non esistono più, e gli indirizzi di prima del
-                  prefisso. */}
+                  ciò che sta fuori: la pagina pubblica, che a sessione aperta
+                  non esiste più, e gli indirizzi di prima del prefisso. */}
               <Route path="*" element={<Navigate to="/app" replace />} />
             </>
           ) : (
-            /* Non autenticato: il sito pubblico. Le sezioni sono pagine vere
-               e non ancore della stessa pagina, perché una funzionalità che
-               si presenta in venti righe merita un indirizzo che si possa
-               mandare a qualcuno. Il footer, che è solo loro, sta nella
-               rotta di impaginazione che le contiene tutte. */
+            /* Non autenticato: il sito pubblico, che è una pagina sola. I
+               servizi si presentano lì in sintesi, perché chi apre la pagina
+               valuta in pochi secondi se la piattaforma gli serve, e il
+               dettaglio si vede entrando. Il footer, che è solo suo, sta nella
+               rotta di impaginazione. */
             <Route element={<PublicLayout />}>
               <Route path="/" element={<PublicHome />} />
-              <Route path="/piattaforma" element={<PlatformPage />} />
-              <Route path="/roleplay" element={<RoleplayPage />} />
-              <Route path="/simulatore" element={<SimulatorPage />} />
-              <Route path="/valutazione" element={<EvaluationPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           )}

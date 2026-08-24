@@ -99,15 +99,25 @@ export default function TrainingAssignmentsTable({
         return (
           <Fragment key={a.id}>
             <Tr className="cursor-pointer" onClick={() => setOpenId(isOpen ? null : a.id)}>
-              <Td>
+              {/* Chi è: il nome, l'email sotto e l'organizzazione sotto
+                  ancora, una riga per cosa. Stavano su due righe con
+                  organizzazione ed email separate da un punto, che è una riga
+                  da leggere tutta per prenderne metà. Le righe partono dallo
+                  stesso punto (allineate a sinistra, mentre l'intestazione
+                  resta al centro come tutte le altre), così la colonna si
+                  scorre con l'occhio invece di rileggersi ogni volta.
+
+                  L'organizzazione la vede solo il super admin: a un org admin
+                  direbbe, riga per riga, la sola organizzazione che può
+                  vedere. */}
+              <Td align="left">
                 <span className="block text-[0.85rem] font-medium text-slate-100">
                   {a.user_name}
                 </span>
-                <span className="block text-[0.72rem] text-slate-500">
-                  {showOrganization && a.organization_name
-                    ? `${a.organization_name} · ${a.user_email}`
-                    : a.user_email}
-                </span>
+                <span className="block text-[0.72rem] text-slate-500">{a.user_email}</span>
+                {showOrganization && a.organization_name && (
+                  <span className="block text-[0.72rem] text-slate-500">{a.organization_name}</span>
+                )}
               </Td>
               <Td className="text-[0.85rem] text-slate-100">{a.path_title}</Td>
               <Td>

@@ -9,6 +9,7 @@ import { isAdmin, isSuperAdmin } from '../services/auth'
 import SearchSelect from './SearchSelect'
 import Select from './Select'
 import ConversationModeBadge from './ConversationModeBadge'
+import { shortCriterionLabel } from './evaluationCriteria'
 import { conversationModeLabel, MODE_FILTERS } from './conversationMode'
 import type { ModeFilter } from './conversationMode'
 import { KIND_FILTERS } from './simulationFormat'
@@ -50,23 +51,6 @@ interface CriterionAvg {
   key: string
   label: string
   avg: number
-}
-
-/* Intestazioni brevi per le colonne dei criteri nella tabella. La prima parola
- * dell'etichetta completa non basta a distinguerli, "Corretta identificazione
- * del cliente" diventerebbe "Corretta". L'etichetta intera resta nel tooltip.
- * Le chiavi sono quelle di openai_service.EVALUATION_CRITERIA. */
-const CRITERION_SHORT_LABELS: Record<string, string> = {
-  rispetto_fasi_chiamata: 'Fasi',
-  empatia: 'Empatia',
-  sicurezza_competenza: 'Sicurezza',
-  appropriatezza_linguaggio: 'Linguaggio',
-  identificazione_cliente: 'Identificazione',
-  comprensione_casistica: 'Casistica',
-}
-
-function shortCriterionLabel(key: string, label: string): string {
-  return CRITERION_SHORT_LABELS[key] ?? label.split(' ')[0].replace(/[,;:]$/, '')
 }
 
 /* Le colonne della tabella delle valutazioni sono le uniche dell'app a non

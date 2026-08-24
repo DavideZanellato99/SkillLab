@@ -29,7 +29,6 @@ const avatar = (over: Partial<Avatar> = {}): Avatar => ({
   description: 'Chiama per un addebito',
   created_at: '2026-01-01T10:00:00Z',
   selection_count: 0,
-  difficulty: null,
   ...over,
 })
 

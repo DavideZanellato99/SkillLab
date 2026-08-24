@@ -19,6 +19,7 @@ from models import (
     SIMULATION_POOL_COUNT,
     SIMULATION_SOURCE_AI,
 )
+from openai_service import EVALUATION_CRITERIA, EVALUATION_MAX_SCORE, EVALUATION_MIN_SCORE
 from persona_draft import SOURCE_CONVERSATION, SOURCE_DESCRIPTION, SOURCES
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
 
@@ -67,13 +68,12 @@ class AvatarResponse(AvatarBase):
 
     Note: the persona sheet (Avatar.profile) is intentionally NOT exposed —
     students must not see secrets, hidden objectives or the real cause of
-    the problem. Only the derived difficulty grade is safe to show.
+    the problem.
     """
 
     id: UUID
     created_at: datetime
     selection_count: int = 0
-    difficulty: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -352,6 +352,13 @@ ASSIGNMENT_STATUS_COMPLETED_LATE = "completed_late"
 STEP_KIND_AVATAR = "avatar"
 STEP_KIND_SIMULATION = "simulation"
 
+# I criteri su cui una tappa di conversazione può porre una soglia: quelli
+# della valutazione e nessun altro, letti dalla lista canonica invece di
+# essere riscritti qui. Una tappa che chiedesse un criterio che il giudice non
+# assegna sarebbe una tappa impossibile da superare, e nessuno vedrebbe
+# perché.
+EVALUATION_CRITERION_KEYS = frozenset(key for key, _, _ in EVALUATION_CRITERIA)
+
 
 class TrainingPathStepInput(BaseModel):
     """Una tappa come la compone chi scrive il percorso.
@@ -365,6 +372,11 @@ class TrainingPathStepInput(BaseModel):
     avatar_id: UUID | None = None
     simulation_id: UUID | None = None
     target_score: float = Field(ge=1, le=10)
+    # Le soglie sui singoli criteri, ``{chiave: voto}``, vuote quando la
+    # tappa chiede solo il voto complessivo. Si scrivono uno per uno e
+    # valgono in aggiunta a ``target_score``, sulla stessa prova (vedi
+    # ``TrainingPathStep.criteria_targets``).
+    criteria_targets: dict[str, float] = Field(default_factory=dict)
     # Data e ora entro cui la tappa va chiusa, facoltativa: senza, la tappa
     # non scade mai. Vedi ``TrainingPathStep``.
     due_at: datetime | None = None
@@ -383,11 +395,52 @@ class TrainingPathStepInput(BaseModel):
             return value
         return value.astimezone(UTC).replace(tzinfo=None)
 
+    @field_validator("criteria_targets")
+    @classmethod
+    def _known_criteria(cls, value: dict[str, float]) -> dict[str, float]:
+        """Chiavi note e voti nella scala della valutazione, arrotondati.
+
+        L'arrotondamento è lo stesso che il router fa sul voto complessivo:
+        la soglia si confronta con un punteggio a una cifra decimale, e una
+        con tre cifre sarebbe una tappa che non si supera per un millesimo.
+        """
+        sconosciute = sorted(set(value) - EVALUATION_CRITERION_KEYS)
+        if sconosciute:
+            raise ValueError(f"Criteri non riconosciuti: {', '.join(sconosciute)}.")
+        for chiave, voto in value.items():
+            if not EVALUATION_MIN_SCORE <= voto <= EVALUATION_MAX_SCORE:
+                raise ValueError(
+                    f"L'obiettivo del criterio '{chiave}' deve stare "
+                    f"fra {EVALUATION_MIN_SCORE:.0f} e {EVALUATION_MAX_SCORE:.0f}."
+                )
+        return {chiave: round(voto, 1) for chiave, voto in value.items()}
+
     @model_validator(mode="after")
     def _exactly_one_target(self) -> "TrainingPathStepInput":
         if (self.avatar_id is None) == (self.simulation_id is None):
             raise ValueError("Una tappa punta a un avatar oppure a una simulazione.")
+        # I criteri sono quelli della valutazione di una conversazione: un
+        # test consegnato non ne ha, e accettarli qui vorrebbe dire salvare
+        # una condizione che poi non verrebbe mai verificata da niente.
+        if self.simulation_id is not None and self.criteria_targets:
+            raise ValueError("Un test tecnico non si valuta per criteri.")
         return self
+
+
+class StepCriterionTarget(BaseModel):
+    """Una soglia su un criterio, come la legge chi la deve rispettare.
+
+    Porta l'etichetta accanto alla chiave, e non è ridondanza: la chiave è
+    ``empatia``, e chi si allena deve leggere "Empatia e gestione dello stato
+    d'animo del cliente", cioè lo stesso nome che vedrà nel referto. Il
+    contrario vorrebbe dire una copia della lista dei criteri nel frontend,
+    che col tempo racconterebbe criteri diversi da quelli su cui il giudizio
+    viene dato.
+    """
+
+    key: str
+    label: str
+    target: float
 
 
 class TrainingPathWrite(BaseModel):
@@ -423,6 +476,10 @@ class TrainingPathStepResponse(BaseModel):
     # "avatar" o "simulation"
     kind: str
     target_score: float
+    # Le soglie sui singoli criteri, nell'ordine in cui i criteri stanno nel
+    # referto. Vuote quando la tappa chiede solo il voto complessivo, e
+    # sempre vuote su un test.
+    criteria_targets: list[StepCriterionTarget] = Field(default_factory=list)
     # Entro quando va chiusa, o assente se la tappa non scade
     due_at: datetime | None = None
     # Il bersaglio: uno dei due gruppi è pieno, l'altro resta vuoto
@@ -481,6 +538,15 @@ class TrainingStepProgressResponse(TrainingPathStepResponse):
     unlocked_at: datetime | None = None
     attempts: int = 0
     best_score: float | None = None
+    # Il meglio fatto su ognuno dei criteri che la tappa richiede, ``{chiave:
+    # voto}``, sulle prove svolte dopo lo sblocco. Sta accanto alle soglie
+    # invece che dentro, perché sono due cose diverse: la soglia è della
+    # tappa e vale per chiunque, questo è di chi la sta percorrendo. Serve a
+    # rispondere alla domanda che una tappa con soglie sui criteri pone e che
+    # il solo voto complessivo non spiega, cioè quale delle condizioni non è
+    # ancora arrivata. Una chiave assente vuol dire che su quel criterio non
+    # c'è ancora nessun voto.
+    best_criteria_scores: dict[str, float] = Field(default_factory=dict)
     achieved_at: datetime | None = None
 
 
@@ -568,6 +634,21 @@ class AssignableSimulation(BaseModel):
     kind: str
 
 
+class AssignableCriterion(BaseModel):
+    """Un criterio su cui una tappa di conversazione può porre una soglia.
+
+    Etichetta e peso arrivano dalla lista canonica invece di essere riscritti
+    nel frontend: chi compone il percorso deve leggere gli stessi nomi che
+    leggerà nel referto, e un peso ricopiato a mano è un peso che prima o poi
+    racconta una media diversa da quella che il server calcola.
+    """
+
+    key: str
+    label: str
+    # Quanto pesa nella media pesata che fa il voto complessivo, in percento
+    weight: int
+
+
 class AssignableContentResponse(BaseModel):
     """Di cosa può essere fatta una tappa, in un'organizzazione sola.
 
@@ -584,6 +665,10 @@ class AssignableContentResponse(BaseModel):
 
     avatars: list[AssignableAvatar]
     simulations: list[AssignableSimulation]
+    # I criteri su cui una tappa di conversazione può porre una soglia: non
+    # dipendono dall'organizzazione, ma viaggiano di qui perché è la
+    # chiamata che il form fa per sapere di cosa può essere fatta una tappa
+    criteria: list[AssignableCriterion] = Field(default_factory=list)
 
 
 class ChatConversationSummary(BaseModel):
@@ -908,7 +993,6 @@ class AdminAvatarResponse(AuthorshipResponse):
     category_color: str
     description: str | None = None
     voice_id: str | None = None
-    difficulty: str | None = None
     organization_id: UUID
     organization_name: str
     profile: dict
@@ -968,8 +1052,6 @@ class AvatarDraftRequest(BaseModel):
     # vera, già anonimizzata da chi la incolla): due lavori diversi per il
     # modello, vedi persona_draft.
     source: str = SOURCE_DESCRIPTION
-    # Facoltativo: se c'è guida la scheda, se manca lo decide il modello.
-    difficulty: str = ""
 
     @field_validator("source")
     @classmethod
@@ -1122,18 +1204,27 @@ class DebriefingCriterionAverage(BaseModel):
     key: str
     label: str
     average: float
+    # Di quanto è cambiata rispetto al quadro precedente. None quando il
+    # confronto non si può fare: il primo quadro di una persona, o un
+    # criterio che una delle due volte non era stato giudicato. La
+    # sottrazione la fa il backend in lettura, vedi ``debriefing_source``.
+    delta: float | None = None
 
 
 class UserDebriefingResponse(BaseModel):
-    """Il quadro d'insieme su una persona, come chi amministra lo legge.
+    """Una versione del quadro d'insieme su una persona, come si legge.
 
-    Tutto quello che c'è qui è una fotografia salvata, tranne `is_stale`:
-    i numeri sono quelli che il modello aveva davanti quando ha scritto, non
-    quelli di adesso. Ricalcolarli in lettura farebbe comparire una media
-    che il testo accanto non ha mai visto, ed è esattamente il difetto che
-    `ai_score_at_review` esiste per evitare sulle revisioni.
+    Tutto quello che c'è qui è una fotografia salvata, tranne `is_stale` e i
+    tre scarti: i numeri sono quelli che il modello aveva davanti quando ha
+    scritto, non quelli di adesso. Ricalcolarli in lettura farebbe comparire
+    una media che il testo accanto non ha mai visto, ed è esattamente il
+    difetto che `ai_score_at_review` esiste per evitare sulle revisioni.
+
+    Gli scarti sono l'eccezione, e non contraddicono la regola: non
+    ricalcolano niente, sottraggono due fotografie che non cambiano più.
     """
 
+    id: UUID
     user_id: UUID
     summary: str
     themes: list[DebriefingTheme] = []
@@ -1141,6 +1232,13 @@ class UserDebriefingResponse(BaseModel):
     # esito, non un dato mancante, e l'interfaccia lo dice.
     improving: str | None = None
     next_step: str
+
+    # Come si è mossa la persona rispetto al quadro precedente: "up",
+    # "stable" o "down", con accanto il racconto di cosa è cambiato.
+    # Tutti e due null sul primo quadro di una persona, dove un prima non
+    # c'è e una direzione sarebbe inventata.
+    direction: str | None = None
+    change: str | None = None
 
     # Su quanto poggia
     covered_conversations: int
@@ -1150,13 +1248,23 @@ class UserDebriefingResponse(BaseModel):
     attempt_average: float | None = None
     criteria_averages: list[DebriefingCriterionAverage] = []
 
+    # Di quanto si sono mosse le medie dal quadro precedente. La direzione
+    # sopra la legge il modello nelle prove, questi sono una sottrazione: le
+    # due cose possono non coincidere, e va bene così, perché mezzo punto di
+    # media in più non è un miglioramento nel modo di lavorare.
+    conversation_average_delta: float | None = None
+    attempt_average_delta: float | None = None
+
     # True quando la persona ha svolto altre prove dopo che il quadro è
-    # stato scritto: derivato in lettura, mai salvato.
+    # stato scritto: derivato in lettura, mai salvato, e solo sul più
+    # recente. Su una versione vecchia dello storico non vuol dire niente,
+    # perché quello che non ha visto è il quadro che l'ha sostituita.
     is_stale: bool = False
     created_at: datetime
-    updated_at: datetime
-    # Chi lo ha fatto scrivere per ultimo, dalle colonne di paternità: un
-    # testo su una persona è qualcosa che qualcuno ha deciso di chiedere.
+    # Chi lo ha fatto scrivere, dalle colonne di paternità: un testo su una
+    # persona è qualcosa che qualcuno ha deciso di chiedere. Una riga non
+    # viene mai riscritta, quindi chi lo ha chiesto e quando sono per sempre
+    # quelli della creazione.
     requested_by: str
 
 

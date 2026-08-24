@@ -356,7 +356,7 @@ def make_avatar(db_session, organization, make_category):
     def _factory(
         *, name="Mario Rossi", category="clienti", organization_id=None, **profile_extra
     ) -> Avatar:
-        profile = {"NOME": name, "GRADO_DIFFICOLTA": "5/10", **profile_extra}
+        profile = {"NOME": name, **profile_extra}
         organization_id = organization_id or organization.id
         avatar = Avatar(
             name=name,

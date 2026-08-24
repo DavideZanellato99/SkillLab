@@ -29,7 +29,6 @@ const avatar = {
   description: 'Cliente irritato',
   created_at: '2026-01-01T10:00:00Z',
   selection_count: 0,
-  difficulty: '7/10',
 } as Avatar
 
 const chat = {

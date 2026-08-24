@@ -15,6 +15,7 @@ const step: StepProgress = {
   position: 2,
   kind: 'avatar',
   target_score: 7,
+  criteria_targets: [],
   due_at: null,
   avatar_id: 'a1',
   avatar_name: 'Mario Rossi',
@@ -27,6 +28,7 @@ const step: StepProgress = {
   unlocked_at: '2026-01-02T09:00:00',
   attempts: 0,
   best_score: null,
+  best_criteria_scores: {},
   achieved_at: null,
 }
 

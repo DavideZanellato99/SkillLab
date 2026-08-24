@@ -6,7 +6,7 @@ import FormError from './FormError'
 import LoadingState from './LoadingState'
 import ModalShell, { ModalHeader } from './ModalShell'
 import PathDraftModal from './PathDraftModal'
-import PathStepEditor, { PathStepsHeader } from './PathStepEditor'
+import PathStepEditor from './PathStepEditor'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
 import Spinner from './Spinner'
@@ -262,16 +262,15 @@ export default function TrainingPathEditorModal({
           <span className="mb-2 block text-xs font-medium tracking-wide text-slate-400">
             Tappe, nell'ordine in cui si superano
           </span>
-          {/* Il riquadro tiene insieme intestazione, tappe e "aggiungi": senza,
-              le righe senza card di sopra i 1024px si confonderebbero con i
-              campi del percorso che le stanno sopra. */}
+          {/* Il riquadro tiene insieme le tappe e "aggiungi": è il pezzo di
+              form che si allunga, e senza un bordo attorno le sue schede si
+              confonderebbero con i campi del percorso che stanno sopra. */}
           <div className="rounded-xl border border-white/6 p-3">
             {isLoadingContent || !content ? (
               <LoadingState message="Caricamento del catalogo..." variant="modal" />
             ) : (
               <>
-                <PathStepsHeader />
-                <ol className="flex flex-col gap-2 lg:gap-0">
+                <ol className="flex flex-col gap-2">
                   {steps.map((step, index) => (
                     <PathStepEditor
                       key={index}

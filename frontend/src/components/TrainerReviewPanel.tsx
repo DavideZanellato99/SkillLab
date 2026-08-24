@@ -6,6 +6,7 @@ import {
 } from '../hooks/useConversationReview'
 import { hasReviewContent } from './trainerReview'
 import { CloseIcon } from './icons'
+import NumberInput from './NumberInput'
 
 /* Il modulo con cui il docente scrive la propria revisione.
  *
@@ -22,10 +23,10 @@ import { CloseIcon } from './icons'
  * ripetuto qui solo per dirlo prima di far partire la richiesta, la regola
  * che vale resta quella del server. */
 
-/* La larghezza sta fuori dalla classe base: concatenare `w-[74px]` a una
- * stringa che contiene già `w-full` non la sovrascrive (in Tailwind vince
- * l'ordine nel CSS generato, non quello nella stringa), e il campo del voto
- * finiva a piena riga mandando a capo tutto il resto. */
+/* La larghezza sta fuori dalla classe base: concatenare la larghezza del
+ * campo del voto a una stringa che contiene già `w-full` non la sovrascrive
+ * (in Tailwind vince l'ordine nel CSS generato, non quello nella stringa), e
+ * il campo del voto finiva a piena riga mandando a capo tutto il resto. */
 const inputBase =
   'rounded-xl border border-white/6 bg-white/4 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-violet-600 focus:bg-violet-600/8'
 const inputCls = `${inputBase} w-full`
@@ -145,15 +146,15 @@ export default function TrainerReviewPanel({
         <label className="text-xs font-medium text-slate-400" htmlFor="review-score">
           Voto corretto
         </label>
-        <input
+        <NumberInput
           id="review-score"
-          className={`${inputBase} w-[74px] text-center`}
-          type="number"
+          wrapperClassName="w-24"
+          className={`${inputBase} w-full pr-6 pl-6 text-center`}
           min={1}
           max={10}
           step={0.5}
           value={overrideScore}
-          onChange={(e) => setOverrideScore(e.target.value)}
+          onValueChange={setOverrideScore}
           placeholder="—"
         />
         <span className="text-xs text-slate-500">/ 10</span>

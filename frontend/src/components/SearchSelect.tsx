@@ -11,7 +11,13 @@ import { matchesSearch } from './tableSearch'
  * accanto al campo, che resta lì pronto a filtrare di nuovo. Come campo di un
  * form la chip prende il posto del campo: è il valore di una casella che ne
  * vuole uno solo, e affiancare i due dentro una colonna di tabella
- * lascerebbe al campo di ricerca una fessura in cui non si legge nulla. */
+ * lascerebbe al campo di ricerca una fessura in cui non si legge nulla.
+ *
+ * **I nomi non si tagliano.** Chi cerca sta scegliendo fra cose che si
+ * somigliano, e due avatar dello stesso reparto si distinguono spesso per
+ * l'ultima parola: l'elenco dei suggerimenti si allarga quanto il nome più
+ * lungo invece di stare nella larghezza del campo, e nella variante a campo
+ * il nome scelto va a capo invece di finire in puntini. */
 
 export interface SearchSelectOption {
   value: string
@@ -143,7 +149,14 @@ export default function SearchSelect({
         variant === 'field' ? 'min-w-0 flex-1 py-1.5' : 'max-w-[240px] shrink-0 py-1'
       }`}
     >
-      <span className="truncate">{selected.label}</span>
+      {/* Come campo di un form il nome scelto va a capo invece di finire in
+          puntini: è il valore della casella, e mezzo nome non dice quale
+          delle due cose simili si è scelta. Come filtro resta su una riga,
+          perché lì la chip sta in una barra di comandi accanto ad altri e
+          crescendo in altezza sposterebbe tutto il resto. */}
+      <span className={variant === 'field' ? 'min-w-0 break-words' : 'truncate'}>
+        {selected.label}
+      </span>
       <button
         type="button"
         onClick={clear}
@@ -221,7 +234,13 @@ export default function SearchSelect({
               ref={listRef}
               id={listboxId}
               role="listbox"
-              className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-60 animate-menu-in overflow-y-auto rounded-xl border border-white/6 bg-gray-900/95 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
+              /* L'elenco è largo quanto il nome più lungo e non quanto il
+                 campo: sta dentro una colonna di tabella, dove i nomi
+                 finirebbero tutti in puntini proprio nel momento in cui si
+                 sta scegliendo fra cose che si somigliano. Parte dal bordo
+                 sinistro del campo e non oltre i 28rem, oltre i quali
+                 uscirebbe dalla finestra su schermo stretto. */
+              className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-60 w-max min-w-full max-w-[min(28rem,80vw)] animate-menu-in overflow-y-auto rounded-xl border border-white/6 bg-gray-900/95 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
             >
               {visible.length === 0 ? (
                 <li className="px-3 py-2 text-[0.85rem] italic text-slate-500">Nessun risultato</li>
@@ -240,9 +259,9 @@ export default function SearchSelect({
                         i === activeIndex ? 'bg-white/8 text-slate-100' : 'text-slate-300'
                       } ${isSelected ? 'font-semibold' : ''}`}
                     >
-                      <span className="truncate">{opt.label}</span>
+                      <span className="min-w-0 break-words">{opt.label}</span>
                       {opt.sub && (
-                        <span className="truncate text-xs font-normal text-slate-500">
+                        <span className="shrink-0 text-xs font-normal text-slate-500">
                           {opt.sub}
                         </span>
                       )}

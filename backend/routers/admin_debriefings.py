@@ -1,4 +1,4 @@
-"""Il debriefing di una persona: leggerlo e farlo riscrivere.
+"""I debriefing di una persona: rileggerli tutti, e farne scrivere uno nuovo.
 
 Due rotte sole, e stanno in un file loro per la stessa ragione per cui ci
 stanno quelle degli avatar e delle simulazioni: ``routers/admin`` amministra
@@ -10,6 +10,13 @@ Il confine è quello di sempre e viene da un punto solo: il super admin vede
 tutti, un organization admin i propri, e una persona fuori dalla propria
 organizzazione risponde 404 e non 403, perché chi non ha diritto di leggere
 quella riga non ha diritto di sapere che esiste.
+
+**Ogni generazione aggiunge, nessuna sostituisce.** La lettura restituisce
+tutte le versioni dal più recente, e ciascuna arriva con lo scarto delle
+medie rispetto a quella prima: la domanda che si fa chi apre questa
+schermata non è "com'è messo", è "come si è mosso", e a quella risponde una
+riga letta accanto alla precedente. Per la stessa ragione un quadro nuovo
+non si scrive finché non c'è una prova nuova da leggere.
 
 **Chi si allena non passa di qui.** Il debriefing è materiale di chi insegna:
 dice cosa ripetere a voce a qualcuno, non è la pagella di quel qualcuno,
@@ -55,59 +62,104 @@ def _user_in_scope_or_404(db: Session, admin: User, user_id: UUID) -> User:
     return user
 
 
-def _response(db: Session, debriefing: UserDebriefing) -> UserDebriefingResponse:
-    """Il debriefing salvato, più l'unica cosa che si ricava in lettura."""
+def _response(
+    db: Session,
+    debriefing: UserDebriefing,
+    previous: UserDebriefing | None,
+    *,
+    is_latest: bool,
+) -> UserDebriefingResponse:
+    """Un quadro salvato, più le due cose che si ricavano in lettura.
+
+    Gli scarti delle medie e il segnale di vecchio. Il primo confronta due
+    fotografie ferme, il secondo guarda le prove di adesso, e solo sul
+    quadro più recente: su una versione vecchia dello storico "non ha visto
+    le ultime prove" è ovvio e sarebbe rumore su ogni riga.
+    """
     content = debriefing.content or {}
     facts = content.get("facts") or {}
+    scarti = debriefing_source.deltas(debriefing, previous)
     return UserDebriefingResponse(
+        id=debriefing.id,
         user_id=debriefing.user_id,
         summary=content.get("summary", ""),
         themes=content.get("themes") or [],
         improving=content.get("improving"),
         next_step=content.get("next_step", ""),
+        direction=content.get("direction"),
+        change=content.get("change"),
         covered_conversations=debriefing.covered_conversations,
         covered_attempts=debriefing.covered_attempts,
         covered_until=debriefing.covered_until,
         conversation_average=facts.get("conversation_average"),
         attempt_average=facts.get("attempt_average"),
-        criteria_averages=facts.get("criteria_averages") or [],
-        is_stale=debriefing_source.is_stale(db, debriefing),
+        criteria_averages=[
+            {**c, "delta": scarti.criteria.get(c.get("key"))}
+            for c in facts.get("criteria_averages") or []
+        ],
+        conversation_average_delta=scarti.conversation_average,
+        attempt_average_delta=scarti.attempt_average,
+        is_stale=is_latest and debriefing_source.is_stale(db, debriefing),
         created_at=debriefing.created_at,
-        updated_at=debriefing.updated_at,
-        requested_by=debriefing.updated_by_email,
+        requested_by=debriefing.created_by_email,
     )
 
 
-@router.get("/{user_id}/debriefing", response_model=UserDebriefingResponse | None)
-def read_user_debriefing(
+def _history_response(db: Session, user_id: UUID) -> list[UserDebriefingResponse]:
+    """Lo storico dal più recente, ciascuno confrontato con quello di prima.
+
+    Il confronto si fa qui e non a una riga per volta perché la lista è già
+    in mano: il quadro precedente di ciascuno è quello che lo segue
+    nell'elenco, e chiederlo al database una volta per riga sarebbe una
+    query per ogni versione mai scritta su quella persona.
+    """
+    rows = debriefing_source.history(db, user_id)
+    return [
+        _response(
+            db,
+            debriefing,
+            rows[index + 1] if index + 1 < len(rows) else None,
+            is_latest=index == 0,
+        )
+        for index, debriefing in enumerate(rows)
+    ]
+
+
+@router.get("/{user_id}/debriefings", response_model=list[UserDebriefingResponse])
+def read_user_debriefings(
     user_id: UUID,
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Il debriefing di questa persona, o null se non è mai stato chiesto.
+    """Tutti i quadri scritti su questa persona, dal più recente.
 
-    Null e non 404: la persona esiste, semplicemente nessuno ha ancora fatto
-    scrivere il suo quadro d'insieme, e quella è la schermata da cui lo si
-    chiede. Il 404 resta per la persona che chi guarda non può vedere.
+    Lista vuota e non 404: la persona esiste, semplicemente nessuno ha
+    ancora fatto scrivere il suo quadro d'insieme, e quella è la schermata
+    da cui lo si chiede. Il 404 resta per la persona che chi guarda non può
+    vedere.
+
+    Tutte le versioni in una richiesta sola, e non l'ultima con lo storico
+    dietro un secondo comando: chi apre questa schermata vuole sapere se la
+    persona sta migliorando, e quella risposta è la riga di adesso letta
+    accanto a quelle di prima.
     """
     _user_in_scope_or_404(db, current_admin, user_id)
-
-    debriefing = db.query(UserDebriefing).filter(UserDebriefing.user_id == user_id).first()
-    return _response(db, debriefing) if debriefing else None
+    return _history_response(db, user_id)
 
 
-@router.post("/{user_id}/debriefing", response_model=UserDebriefingResponse)
+@router.post("/{user_id}/debriefings", response_model=UserDebriefingResponse)
 async def generate_user_debriefing(
     user_id: UUID,
     http_request: Request,
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Fa scrivere il quadro d'insieme su questa persona, e lo salva.
+    """Fa scrivere un nuovo quadro d'insieme su questa persona, e lo salva.
 
-    Rifarlo sostituisce il precedente, come rifare la valutazione di una
-    conversazione: è il quadro di adesso, e tenerne due vorrebbe dire una
-    schermata in cui bisogna scegliere quale credere.
+    Si aggiunge allo storico invece di sostituire il precedente, e il
+    precedente entra nel materiale che il modello legge: il quadro nuovo
+    dice anche come la persona si è mossa da allora, che è la sola cosa che
+    una fotografia sola non può dire.
 
     Il tetto viene prima di tutto il resto, perché è l'unico controllo che
     parla del costo della richiesta invece che di cosa contiene, ed è una
@@ -116,6 +168,7 @@ async def generate_user_debriefing(
     await llm_limits.consume(llm_limits.DEBRIEFING, current_admin.id)
 
     user = _user_in_scope_or_404(db, current_admin, user_id)
+    previous = debriefing_source.latest(db, user.id)
     material = debriefing_source.collect(db, user.id)
 
     if material.evidence_count < debriefing_source.MIN_EVIDENCE:
@@ -129,6 +182,22 @@ async def generate_user_debriefing(
                 f"Servono almeno {debriefing_source.MIN_EVIDENCE} prove svolte per un "
                 f"quadro d'insieme, e questa persona ne ha {material.evidence_count}. "
                 "Con meno prove il debriefing ripeterebbe le valutazioni che ci sono già."
+            ),
+        )
+
+    if previous is not None and not debriefing_source.has_new_evidence(
+        db, user.id, previous.covered_until
+    ):
+        # Stesso materiale, stesso prompt: quello che tornerebbe è il quadro
+        # di prima riscritto con altre parole, e finirebbe nello storico
+        # come una versione da confrontare con sé stessa. Che l'unica
+        # differenza fra due righe sia il giro di frasi del modello è
+        # esattamente ciò che rende illeggibile uno storico.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Questa persona non ha svolto nessuna prova dopo l'ultimo quadro d'insieme. "
+                "Un quadro nuovo leggerebbe lo stesso materiale e direbbe le stesse cose."
             ),
         )
 
@@ -173,22 +242,24 @@ async def generate_user_debriefing(
     # Ricaricato, non riusato: gli oggetti di prima sono staccati dalla
     # sessione dopo il commit.
     user = _user_in_scope_or_404(db, current_admin, user_id)
-    debriefing = db.query(UserDebriefing).filter(UserDebriefing.user_id == user.id).first()
-    if debriefing:
-        debriefing.content = content
-        debriefing.covered_until = material.covered_until
-        debriefing.covered_conversations = material.conversations
-        debriefing.covered_attempts = material.attempts
-    else:
-        debriefing = UserDebriefing(
-            user_id=user.id,
-            content=content,
-            covered_until=material.covered_until,
-            covered_conversations=material.conversations,
-            covered_attempts=material.attempts,
-        )
-        db.add(debriefing)
+    debriefing = UserDebriefing(
+        user_id=user.id,
+        content=content,
+        covered_until=material.covered_until,
+        covered_conversations=material.conversations,
+        covered_attempts=material.attempts,
+    )
+    db.add(debriefing)
     db.commit()
     db.refresh(debriefing)
 
-    return _response(db, debriefing)
+    # Il precedente riletto dopo il commit, per la stessa ragione: quello di
+    # prima dell'attesa è staccato, e gli scarti si calcolano sui suoi
+    # numeri. È il secondo della lista, perché il primo è appena nato.
+    storico = debriefing_source.history(db, user.id)
+    return _response(
+        db,
+        debriefing,
+        storico[1] if len(storico) > 1 else None,
+        is_latest=True,
+    )

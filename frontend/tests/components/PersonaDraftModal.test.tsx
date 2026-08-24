@@ -36,12 +36,10 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-function renderModal(difficulty = '') {
+function renderModal() {
   const onClose = vi.fn()
   const onDrafted = vi.fn()
-  render(<PersonaDraftModal difficulty={difficulty} onClose={onClose} onDrafted={onDrafted} />, {
-    wrapper,
-  })
+  render(<PersonaDraftModal onClose={onClose} onDrafted={onDrafted} />, { wrapper })
   return { onClose, onDrafted }
 }
 
@@ -73,11 +71,7 @@ describe('PersonaDraftModal', () => {
     await userEvent.type(screen.getByLabelText('Il caso'), CASO)
     await userEvent.click(bottone())
 
-    expect(draftPersona).toHaveBeenCalledWith({
-      text: CASO,
-      source: 'descrizione',
-      difficulty: '',
-    })
+    expect(draftPersona).toHaveBeenCalledWith({ text: CASO, source: 'descrizione' })
     expect(onDrafted).toHaveBeenCalledWith({ NOME: 'Mario' })
   })
 
@@ -100,17 +94,6 @@ describe('PersonaDraftModal', () => {
     await userEvent.click(bottone())
 
     expect(draftPersona).toHaveBeenCalledWith(expect.objectContaining({ source: 'conversazione' }))
-  })
-
-  /* Il grado guida la scheda, quindi parte da quello che c'è già nel form
-   * invece di farlo scegliere due volte. */
-  it('parte dal grado già scelto nella scheda', async () => {
-    renderModal('8/10')
-
-    await userEvent.type(screen.getByLabelText('Il caso'), CASO)
-    await userEvent.click(bottone())
-
-    expect(draftPersona).toHaveBeenCalledWith(expect.objectContaining({ difficulty: '8/10' }))
   })
 
   it('dice quando il fornitore non ha risposto', () => {

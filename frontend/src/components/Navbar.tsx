@@ -2,7 +2,7 @@
 import { Link, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { OPEN_LOGIN_EVENT } from './public/openLogin'
-import { PublicNavLinks, PublicNavMenu } from './public/PublicNav'
+import { PublicNavLinks } from './public/PublicNav'
 import {
   isSuperAdmin,
   isAdmin,
@@ -92,13 +92,10 @@ export default function Navbar() {
           </Link>
 
           {/* Center nav links.
-              Prima dell'accesso lo stesso posto ospita le sezioni del sito
-              pubblico: sono cinque e hanno bisogno di più larghezza, quindi
-              spariscono un gradino prima, dove il menu compatto le riprende. */}
-          <div
-            className={`flex items-center gap-1 ${isAuthenticated ? 'max-md:hidden' : 'max-lg:hidden'}`}
-            id="navbar-links"
-          >
+              Prima dell'accesso lo stesso posto ospita la voce del sito
+              pubblico, che è una sola e sta in fila alla stessa larghezza
+              delle altre. */}
+          <div className="flex items-center gap-1 max-md:hidden" id="navbar-links">
             {!isAuthenticated && <PublicNavLinks />}
             {isAuthenticated && (
               <Link
@@ -516,10 +513,8 @@ export default function Navbar() {
                 </div>
               </>
             ) : (
-              /* Prima dell'accesso: il menu compatto delle sezioni pubbliche
-                 e il pulsante che apre la modale */
+              /* Prima dell'accesso: il pulsante che apre la modale */
               <>
-                <PublicNavMenu />
                 <button
                   className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1.5 text-[0.82rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 hover:shadow-[0_4px_12px_rgba(124,58,237,0.15)]"
                   onClick={() => setShowAuthModal(true)}

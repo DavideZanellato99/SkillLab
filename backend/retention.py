@@ -25,7 +25,10 @@ different moments:
   prova più recente che il modello aveva letto, contro la finestra delle
   conversazioni: quando quella data è scaduta, tutto il materiale su cui il
   testo si fonda è già stato cancellato, e quello che resterebbe è un
-  giudizio su una persona senza più niente dietro a cui riferirlo.
+  giudizio su una persona senza più niente dietro a cui riferirlo. Vale per
+  ogni versione dello storico, una per una: le vecchie escono per prime,
+  perché sono quelle che hanno letto le prove più vecchie, e uno storico che
+  si accorcia dal fondo è esattamente quello che deve succedere.
 
 Nothing here is a soft delete. A row past its window is gone, which is the
 only thing that makes a retention policy worth writing down.

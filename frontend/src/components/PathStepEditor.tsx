@@ -1,17 +1,43 @@
 import { useId } from 'react'
+import type { ReactNode } from 'react'
 
 import type { AssignableContent, StepKind } from '../services/training'
 import KebabMenu from './KebabMenu'
 import type { KebabMenuItem } from './KebabMenu'
+import NumberInput from './NumberInput'
+import PathStepCriteria from './PathStepCriteria'
 import SearchSelect from './SearchSelect'
 import Tooltip from './Tooltip'
-import { ChevronDownIcon, ChevronUpIcon, InfoIcon, SparkleIcon, TrashIcon } from './icons'
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  InfoIcon,
+  SlidersIcon,
+  SparkleIcon,
+  TrashIcon,
+} from './icons'
 import { formInputCls, labelCls } from './Field'
 import type { PathStepDraft } from './pathStepDraft'
-import { draftTarget } from './pathStepDraft'
+import { draftTarget, withCriterionTarget } from './pathStepDraft'
 
 /* Una tappa mentre la si compone: cosa chiede, a chi, con che obiettivo ed
  * entro quando.
+ *
+ * **Due file dentro la stessa scheda**: sopra chi è la tappa (il numero, il
+ * tipo di prova, il bersaglio), sotto cosa chiede (l'obiettivo, i criteri, la
+ * scadenza). Prima era una riga di tabella a sette colonne, e non ci stava:
+ * la finestra è larga 860px e le colonne fisse ne prendevano seicento, quindi
+ * al bersaglio, che è la cosa più importante della tappa, ne restavano meno
+ * di duecento e i nomi ci finivano dentro a capo. Adesso il bersaglio ha una
+ * fila tutta sua, e i campi corti stanno insieme sotto, dove la larghezza che
+ * serve loro è quella che hanno.
+ *
+ * Con le due file tornano le etichette accanto ai campi, e se ne va
+ * l'intestazione di colonne che stava in cima all'elenco: una fila di campi
+ * che va a capo non si allinea a nessuna intestazione, e leggere "Obiettivo"
+ * accanto al campo costa meno che risalire in cima a cercarlo. Se ne va anche
+ * il doppio impaginato, uno per schermo largo e uno per schermo stretto:
+ * questo regge tutte e due da solo.
  *
  * Il tipo si sceglie prima del bersaglio e non dopo, perché è quello che
  * decide fra quali cose si sta cercando: un elenco unico di avatar e test
@@ -29,21 +55,17 @@ import { draftTarget } from './pathStepDraft'
  * chiusa, quindi un percorso vecchio va ridatato prima di affidarlo di nuovo
  * (vedi il backend, `TrainingPathStep`).
  *
- * Le tappe sono righe di una tabella e non schede una sotto l'altra: sono
- * tutte fatte delle stesse quattro cose, e in colonne allineate si leggono
- * tenendo l'occhio fermo. Le intestazioni stanno in cima una volta sola
- * (`PathStepsHeader`), quindi le righe non ripetono nessuna etichetta e le
- * azioni di riga si raccolgono in un menu, che di larghezza ne chiede una
- * colonna sola.
+ * Accanto all'obiettivo, su una tappa di conversazione, c'è il bottone che
+ * apre le soglie sui singoli criteri (`PathStepCriteria`). Sta chiuso e non
+ * aperto perché quasi nessuna tappa ne pone: sei campi in più su ogni tappa
+ * direbbero che vanno riempiti. Quando ce ne sono, il bottone porta il loro
+ * numero, così una tappa con delle condizioni si riconosce anche a pannello
+ * chiuso. Su un test tecnico il bottone non c'è: un test non si valuta per
+ * criteri, si consegna.
  *
- * Sotto i 1024px le colonne non ci starebbero: la riga torna a essere una
- * scheda impilata e le etichette dei campi ricompaiono, visto che lì
- * l'intestazione non c'è. È lo stesso markup, riordinato da `lg:contents`.
- *
- * Una tappa arrivata da una proposta porta sotto di sé il perché il modello
- * l'ha messa lì: si legge accanto alla cosa che spiega, mentre si decide se
- * tenerla. Sparisce appena il bersaglio o il tipo cambiano, perché da quel
- * momento sarebbe la didascalia di una tappa che nessuno ha proposto. */
+ * Una tappa arrivata da una proposta porta in fondo il perché il modello
+ * l'ha messa lì. Sparisce appena il bersaglio o il tipo cambiano, perché da
+ * quel momento sarebbe la didascalia di una tappa che nessuno ha proposto. */
 
 const KINDS = [
   { value: 'avatar', label: 'Conversazione' },
@@ -53,28 +75,22 @@ const KINDS = [
 const kindBtnCls =
   'cursor-pointer rounded-lg border-none px-2.5 py-1 text-[0.75rem] font-medium transition disabled:cursor-not-allowed disabled:opacity-50'
 
-/* Le colonne della tabella, in un posto solo perché l'intestazione e le righe
- * si disallineerebbero al primo che qualcuno ritocca senza toccare l'altra. */
-const gridCls =
-  'lg:grid lg:grid-cols-[1.75rem_13.25rem_minmax(0,1fr)_5.5rem_11rem_2rem] lg:items-center lg:gap-3'
-
-/** Le intestazioni delle colonne, che le righe non ripetono. */
-export function PathStepsHeader() {
+/** Un campo della fila di sotto: l'etichetta sopra, il campo largo quanto serve. */
+function StepField({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: ReactNode
+  htmlFor?: string
+  children: ReactNode
+}) {
   return (
-    <div className={`hidden pb-1 ${gridCls}`}>
-      <span />
-      <span className={labelCls}>Tipo</span>
-      <span className={labelCls}>Bersaglio</span>
-      <span className={labelCls}>Obiettivo</span>
-      <span className={`flex items-center gap-1 ${labelCls}`}>
-        Entro
-        <Tooltip content="Facoltativa: senza data la tappa non scade. L'ora è quella locale.">
-          <span tabIndex={0} className="cursor-help text-slate-500 outline-none">
-            <InfoIcon size={12} />
-          </span>
-        </Tooltip>
-      </span>
-      <span />
+    <div className="flex flex-col gap-1">
+      <label htmlFor={htmlFor} className={labelCls}>
+        {label}
+      </label>
+      {children}
     </div>
   )
 }
@@ -122,6 +138,12 @@ export default function PathStepEditor({
         : { ...step, simulationId: value || null, reason: null },
     )
 
+  // Le soglie restano dove sono quando il pannello si chiude: chiuderlo è
+  // smettere di guardarle, non toglierle. A dire che ci sono resta il numero
+  // sul bottone.
+  const criteriaCount = Object.keys(step.criteriaTargets).length
+  const showCriteria = kind === 'avatar' && step.criteriaOpen
+
   const menuItems: KebabMenuItem[] = [
     {
       key: 'up',
@@ -151,10 +173,10 @@ export default function PathStepEditor({
   ]
 
   return (
-    <li
-      className={`flex flex-col gap-2 rounded-xl border border-white/6 bg-gray-950/40 p-3 ${gridCls} lg:rounded-none lg:border-x-0 lg:border-b lg:border-t-0 lg:border-white/6 lg:bg-transparent lg:p-0 lg:py-2 lg:last:border-b-0`}
-    >
-      <div className="flex items-center gap-2 lg:contents">
+    <li className="flex flex-col gap-2.5 rounded-xl border border-white/6 bg-gray-950/40 p-3">
+      {/* Chi è la tappa: il posto nella fila, che prova chiede, e il menu con
+          cui si sposta o si toglie. */}
+      <div className="flex items-center gap-2">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-violet-600/30 bg-violet-600/10 text-xs font-bold tabular-nums text-violet-400">
           {index + 1}
         </span>
@@ -176,60 +198,102 @@ export default function PathStepEditor({
             </button>
           ))}
         </div>
-      </div>
-
-      <SearchSelect
-        value={targetValue}
-        onChange={setTarget}
-        options={options}
-        variant="field"
-        placeholder={kind === 'avatar' ? 'Cerca un avatar...' : 'Cerca un test...'}
-      />
-
-      <div className="flex items-end gap-2 lg:contents">
-        <div className="flex flex-1 flex-col gap-1 lg:block">
-          {/* L'etichetta è quella della colonna, che sopra i 1024px sta in
-              cima alla tabella: qui resta per chi legge la scheda impilata,
-              e l'`aria-label` la sostituisce quando è nascosta. */}
-          <label htmlFor={`${fieldId}-score`} className={`${labelCls} lg:hidden`}>
-            Obiettivo (1-10)
-          </label>
-          <input
-            id={`${fieldId}-score`}
-            type="number"
-            min={1}
-            max={10}
-            step={0.5}
-            disabled={disabled}
-            aria-label="Obiettivo (1-10)"
-            value={step.targetScore}
-            onChange={(e) => onChange({ ...step, targetScore: Number(e.target.value) })}
-            className={`${formInputCls} w-full`}
-          />
-        </div>
-        <div className="flex flex-1 flex-col gap-1 lg:block">
-          <label htmlFor={`${fieldId}-due`} className={`${labelCls} lg:hidden`}>
-            Da Completare Entro
-          </label>
-          <input
-            id={`${fieldId}-due`}
-            type="datetime-local"
-            disabled={disabled}
-            aria-label="Da Completare Entro"
-            value={step.dueAt ?? ''}
-            onChange={(e) => onChange({ ...step, dueAt: e.target.value || null })}
-            className={`${formInputCls} w-full`}
-          />
-        </div>
+        <span className="flex-1" />
         <Tooltip wrap content="Altre azioni">
           <KebabMenu label={`Azioni della tappa ${index + 1}`} items={menuItems} />
         </Tooltip>
       </div>
 
-      {/* Sopra i 1024px va sotto il bersaglio di cui parla, e non sotto il
-          numero, perché è quella la colonna che spiega. */}
+      {/* Il bersaglio si prende la fila intera: è il campo su cui si cerca, e
+          due avatar dello stesso reparto si distinguono per l'ultima parola
+          del nome. */}
+      <StepField label="Bersaglio">
+        <SearchSelect
+          value={targetValue}
+          onChange={setTarget}
+          options={options}
+          variant="field"
+          placeholder={kind === 'avatar' ? 'Cerca un avatar...' : 'Cerca un test...'}
+        />
+      </StepField>
+
+      {/* Cosa chiede la tappa. I campi vanno a capo su schermo stretto invece
+          di stringersi, perché un campo data stretto non si legge. */}
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2.5">
+        <StepField label="Obiettivo (1-10)" htmlFor={`${fieldId}-score`}>
+          <NumberInput
+            id={`${fieldId}-score`}
+            min={1}
+            max={10}
+            step={0.5}
+            disabled={disabled}
+            value={step.targetScore}
+            onValueChange={(value) => onChange({ ...step, targetScore: Number(value) })}
+            wrapperClassName="w-24"
+            className={`w-full pr-6 pl-6 text-center ${formInputCls}`}
+          />
+        </StepField>
+
+        {kind === 'avatar' && (
+          <StepField label="Criteri">
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange({ ...step, criteriaOpen: !step.criteriaOpen })}
+              aria-expanded={step.criteriaOpen}
+              aria-label={`Obiettivi per criterio della tappa ${index + 1}`}
+              className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-[0.8rem] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                criteriaCount > 0 || step.criteriaOpen
+                  ? 'border-violet-600/30 bg-violet-600/10 text-violet-300 hover:bg-violet-600/20'
+                  : 'border-white/6 bg-slate-800/50 text-slate-400 hover:border-white/12 hover:text-slate-200'
+              }`}
+            >
+              <SlidersIcon size={14} />
+              Obiettivi per criterio
+              {criteriaCount > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[0.6rem] font-bold tabular-nums text-white">
+                  {criteriaCount}
+                </span>
+              )}
+            </button>
+          </StepField>
+        )}
+
+        <StepField
+          label={
+            <span className="flex items-center gap-1">
+              Da completare entro
+              <Tooltip content="Facoltativa, senza data la tappa non scade">
+                <span tabIndex={0} className="cursor-help text-slate-500 outline-none">
+                  <InfoIcon size={12} />
+                </span>
+              </Tooltip>
+            </span>
+          }
+          htmlFor={`${fieldId}-due`}
+        >
+          <input
+            id={`${fieldId}-due`}
+            type="datetime-local"
+            disabled={disabled}
+            value={step.dueAt ?? ''}
+            onChange={(e) => onChange({ ...step, dueAt: e.target.value || null })}
+            className={`min-w-[13rem] ${formInputCls}`}
+          />
+        </StepField>
+      </div>
+
+      {showCriteria && (
+        <PathStepCriteria
+          criteria={content.criteria}
+          targets={step.criteriaTargets}
+          disabled={disabled}
+          onChange={(key, value) => onChange(withCriterionTarget(step, key, value))}
+        />
+      )}
+
       {step.reason && (
-        <p className="flex gap-1.5 text-[0.72rem] leading-relaxed text-violet-300/70 lg:col-span-3 lg:col-start-3 lg:-mt-1 lg:pb-1">
+        <p className="flex gap-1.5 text-[0.72rem] leading-relaxed text-violet-300/70">
           <span className="mt-0.5 shrink-0">
             <SparkleIcon size={12} />
           </span>

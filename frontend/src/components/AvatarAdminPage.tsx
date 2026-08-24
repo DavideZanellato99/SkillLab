@@ -37,12 +37,11 @@ import { PlusIcon, TrashIcon } from './icons'
 /* Le percentuali sommano a 100. All'avatar tocca la fetta più larga: è
  * l'unica colonna con due righe di testo, immagine, nome e descrizione. */
 const AVATAR_COLUMNS: DataTableColumn[] = [
-  { key: 'avatar', label: 'Avatar', width: '28%' },
-  { key: 'organizzazione', label: 'Organizzazione', width: '15%' },
-  { key: 'categoria', label: 'Categoria', width: '15%' },
-  { key: 'difficolta', label: 'Difficoltà', width: '12%' },
-  { key: 'conversazioni', label: 'Conversazioni', width: '14%' },
-  { key: 'azioni', label: 'Azioni', width: '16%' },
+  { key: 'avatar', label: 'Avatar', width: '32%' },
+  { key: 'organizzazione', label: 'Organizzazione', width: '17%' },
+  { key: 'categoria', label: 'Categoria', width: '17%' },
+  { key: 'conversazioni', label: 'Conversazioni', width: '16%' },
+  { key: 'azioni', label: 'Azioni', width: '18%' },
 ]
 
 const STATUS_ACTIVE = 'active'
@@ -103,7 +102,7 @@ export default function AvatarAdminPage() {
     (a) =>
       (!orgFilter || a.organization_id === orgFilter) &&
       matchesStatus(a) &&
-      matchesSearch(search, a.name, a.description, a.category, a.difficulty),
+      matchesSearch(search, a.name, a.description, a.category),
   )
 
   const archivedCount = avatars.filter((a) => a.deleted_at !== null).length
@@ -216,7 +215,7 @@ export default function AvatarAdminPage() {
           columns={AVATAR_COLUMNS}
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Cerca per nome, categoria o difficoltà..."
+          searchPlaceholder="Cerca per nome o categoria..."
           isEmpty={visibleAvatars.length === 0}
           emptyMessage={
             statusFilter === STATUS_ARCHIVED && !search && !orgFilter

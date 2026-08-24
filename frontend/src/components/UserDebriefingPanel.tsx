@@ -1,4 +1,4 @@
-/* Il quadro d'insieme su una persona, dentro la sua riga del report attività.
+/* I quadri d'insieme su una persona, dentro la sua riga del report attività.
  *
  * Le altre due linguette elencano le prove una per una, questa risponde alla
  * terza domanda che ci si fa aprendo la riga di qualcuno, cioè «cosa devo
@@ -6,114 +6,32 @@
  * ordine: tre domande sulla stessa persona, non una conclusione che vale più
  * degli elenchi da cui viene.
  *
- * **La schermata dice sempre su cosa poggia quello che si sta leggendo.**
- * Quante prove sono entrate, fino a quando, e le medie di allora. Un testo
- * scritto da una macchina sul modo di lavorare di una persona, senza accanto
- * cosa ha letto per scriverlo, è un'opinione con l'aria di un verdetto, e chi
- * lo porta in un colloquio deve poter rispondere a «da dove lo hai preso».
+ * **Aperto c'è sempre uno solo, e di default è l'ultimo.** Le versioni
+ * precedenti stanno sotto, in righe da una riga, e si aprono al posto suo:
+ * quello che vale è il quadro di adesso, e una schermata che ne mostrasse
+ * due per intero obbligherebbe a decidere a quale credere. Che una vecchia
+ * sia aperta lo dice la fascia in cima, perché leggere per attuale un testo
+ * scritto tre mesi fa è l'unico modo in cui questa schermata può ingannare.
  *
- * I numeri sono quelli del momento in cui è stato scritto e non quelli di
- * adesso, per la stessa ragione per cui una revisione conserva il voto che il
- * docente aveva davanti: una media che cambia sotto un testo che non l'ha mai
- * vista è il modo in cui i due si mettono a dire cose diverse. Che nel
- * frattempo siano arrivate prove nuove lo dice `is_stale`, e lo dice in
- * chiaro invece di aggiornarsi da solo. */
+ * Il disegno di un quadro e quello dello storico stanno in due file loro:
+ * qui resta la scelta di quale mostrare, il bottone che ne fa scrivere uno
+ * nuovo e i casi in cui non ce n'è ancora nessuno. */
 
-import { useUserDebriefing, useGenerateDebriefing } from '../hooks/useDebriefing'
-import type { UserDebriefing } from '../services/admin'
+import { useState } from 'react'
+import { useUserDebriefings, useGenerateDebriefing } from '../hooks/useDebriefing'
+import DebriefingHistory from './DebriefingHistory'
+import DebriefingVersion from './DebriefingVersion'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
 import Tooltip from './Tooltip'
 import { formatDateTime } from './lastAccess'
-import { formatScore, scoreBadgeTone } from './simulationFormat'
 
 /* Quante prove servono al server per accettare di scriverlo. Ripetuto qui
  * solo per dirlo prima di far partire una richiesta che verrebbe rifiutata,
  * come la coppia voto/motivazione della revisione: la regola che vale resta
  * quella del server, che risponde 409 con il conto esatto. */
 const MIN_EVIDENCE = 3
-
-const cardCls = 'rounded-xl border border-white/6 bg-white/3 p-4'
-
-/** Su cosa poggia il quadro: le prove lette e le medie di allora. */
-function Coverage({ debriefing }: { debriefing: UserDebriefing }) {
-  const { covered_conversations, covered_attempts, conversation_average, attempt_average } =
-    debriefing
-  return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-400">
-      <span>
-        Letto su <strong className="text-slate-200">{covered_conversations}</strong>{' '}
-        {covered_conversations === 1 ? 'conversazione' : 'conversazioni'} e{' '}
-        <strong className="text-slate-200">{covered_attempts}</strong>{' '}
-        {covered_attempts === 1 ? 'test tecnico' : 'test tecnici'}, fino al{' '}
-        {formatDateTime(debriefing.covered_until)}
-      </span>
-      {conversation_average !== null && (
-        <span className="flex items-center gap-1.5">
-          Media conversazioni
-          <span
-            className={`rounded-full px-2 py-0.5 text-[0.8rem] font-semibold ${scoreBadgeTone(conversation_average)}`}
-          >
-            {formatScore(conversation_average)}
-          </span>
-        </span>
-      )}
-      {attempt_average !== null && (
-        <span className="flex items-center gap-1.5">
-          Media test
-          <span
-            className={`rounded-full px-2 py-0.5 text-[0.8rem] font-semibold ${scoreBadgeTone(attempt_average)}`}
-          >
-            {formatScore(attempt_average)}
-          </span>
-        </span>
-      )}
-    </div>
-  )
-}
-
-/* Le medie per criterio, dal più basso: è l'ordine in cui si guardano, perché
- * quello che si cerca è dove la persona perde punti. Le sei etichette
- * arrivano dal server insieme ai numeri e non da una copia scritta qui: sono
- * le stesse della valutazione, e due elenchi si allontanerebbero al primo
- * criterio che cambia nome. */
-function CriteriaAverages({ debriefing }: { debriefing: UserDebriefing }) {
-  if (debriefing.criteria_averages.length === 0) return null
-  const sorted = [...debriefing.criteria_averages].sort((a, b) => a.average - b.average)
-  return (
-    <div className={cardCls}>
-      <h4 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
-        Media per criterio, sulle prove lette
-      </h4>
-      <ul className="flex list-none flex-col gap-1.5">
-        {sorted.map((criterion) => (
-          <li key={criterion.key} className="flex items-center justify-between gap-4">
-            <span className="text-[0.85rem] text-slate-300">{criterion.label}</span>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[0.8rem] font-semibold ${scoreBadgeTone(criterion.average)}`}
-            >
-              {formatScore(criterion.average)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-/** Un tema ricorrente: cosa torna, e su quali prove è stato visto. */
-function Theme({ title, detail, evidence }: { title: string; detail: string; evidence: string }) {
-  return (
-    <li className={`${cardCls} border-l-2 border-l-violet-600/50`}>
-      <h4 className="text-[0.9rem] font-semibold text-slate-100">{title}</h4>
-      {detail && <p className="mt-1.5 text-[0.85rem] leading-relaxed text-slate-300">{detail}</p>}
-      {/* Le prove su cui poggia stanno sotto e in piccolo: si leggono quando
-       * si è deciso di credere al tema, non prima. */}
-      {evidence && <p className="mt-2 text-xs italic text-slate-500">Visto su: {evidence}</p>}
-    </li>
-  )
-}
 
 export default function UserDebriefingPanel({
   userId,
@@ -128,8 +46,11 @@ export default function UserDebriefingPanel({
    * per non offrire un bottone che il server rifiuterebbe. */
   evidenceCount: number
 }) {
-  const { data: debriefing, isPending, error } = useUserDebriefing(userId)
+  const { data: debriefings, isPending, error } = useUserDebriefings(userId)
   const generate = useGenerateDebriefing(userId)
+  /* Quale versione è aperta. Un id e non un indice: dopo una generazione la
+   * lista si sposta di uno, e un indice terrebbe aperta la riga sbagliata. */
+  const [openId, setOpenId] = useState<string | null>(null)
 
   if (isPending) {
     return <LoadingState message="Caricamento del quadro d'insieme..." variant="modal" />
@@ -142,9 +63,34 @@ export default function UserDebriefingPanel({
       : 'Generazione non riuscita.'
     : ''
 
+  const storico = debriefings ?? []
+  const latest = storico[0]
+  /* L'ultimo finché non si sceglie, e di nuovo l'ultimo se quello scelto non
+   * c'è più: dopo una generazione la lista cambia sotto la selezione. */
+  const shown = storico.find((d) => d.id === openId) ?? latest
+  const isLatestShown = shown?.id === latest?.id
+
   /* Sotto la soglia il bottone non c'è, e al suo posto c'è il motivo. Un
    * bottone spento senza spiegazione manda a cercare cosa si è sbagliato. */
-  const tooFewProofs = !debriefing && evidenceCount < MIN_EVIDENCE
+  const tooFewProofs = storico.length === 0 && evidenceCount < MIN_EVIDENCE
+  /* Rigenerare senza prove nuove darebbe una versione che dice le stesse
+   * cose, e il server la rifiuta: il bottone lo dice prima invece di far
+   * partire una richiesta che tornerà indietro. */
+  const nothingNew = latest !== undefined && !latest.is_stale
+
+  const generateButton = (
+    <PrimaryButton
+      onClick={() => generate.mutate()}
+      disabled={generate.isPending || nothingNew}
+      className="shrink-0"
+    >
+      {generate.isPending
+        ? 'Lettura delle prove in corso...'
+        : latest
+          ? 'Genera un quadro aggiornato'
+          : "Genera il quadro d'insieme"}
+    </PrimaryButton>
+  )
 
   return (
     <div className="flex flex-col gap-4">
@@ -153,47 +99,40 @@ export default function UserDebriefingPanel({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          {debriefing ? (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-[0.95rem] font-semibold text-slate-100">Quadro d'insieme</h3>
-                {debriefing.is_stale && (
-                  <Tooltip content="Questa persona ha svolto altre prove dopo che il quadro è stato scritto: quello che leggi non le ha viste.">
-                    <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest text-amber-400">
-                      Da aggiornare
-                    </span>
-                  </Tooltip>
-                )}
-              </div>
-              <span className="text-xs text-slate-500">
-                Scritto il {formatDateTime(debriefing.updated_at)}, richiesto da{' '}
-                {debriefing.requested_by}
-              </span>
-            </>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[0.95rem] font-semibold text-slate-100">Quadro d'insieme</h3>
+            {latest?.is_stale && (
+              <Tooltip content="Questa persona ha svolto altre prove dopo che il quadro è stato scritto: quello che leggi non le ha viste.">
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest text-amber-400">
+                  Da aggiornare
+                </span>
+              </Tooltip>
+            )}
+          </div>
+          {shown ? (
+            <span className="text-xs text-slate-500">
+              Scritto il {formatDateTime(shown.created_at)}, richiesto da {shown.requested_by}
+            </span>
           ) : (
-            <>
-              <h3 className="text-[0.95rem] font-semibold text-slate-100">Quadro d'insieme</h3>
-              <span className="text-xs text-slate-500">
-                Gli elementi ricorrenti nelle prove di {userName}, che una prova alla volta non
-                emergono
-              </span>
-            </>
+            <span className="text-xs text-slate-500">
+              Gli elementi ricorrenti nelle prove di {userName}, che una prova alla volta non
+              emergono
+            </span>
           )}
         </div>
 
-        {!tooFewProofs && (
-          <PrimaryButton
-            onClick={() => generate.mutate()}
-            disabled={generate.isPending}
-            className="shrink-0"
-          >
-            {generate.isPending
-              ? 'Lettura delle prove in corso...'
-              : debriefing
-                ? 'Rigenera'
-                : "Genera il quadro d'insieme"}
-          </PrimaryButton>
-        )}
+        {/* Spento quando non c'è niente di nuovo da leggere, con il motivo
+            nel tooltip: `wrap` perché un elemento disabilitato non emette
+            eventi del mouse, quindi senza involucro il motivo non si
+            vedrebbe proprio nel caso in cui serve. */}
+        {!tooFewProofs &&
+          (nothingNew ? (
+            <Tooltip content="Nessuna prova nuova dall'ultimo quadro d'insieme" wrap>
+              {generateButton}
+            </Tooltip>
+          ) : (
+            generateButton
+          ))}
       </div>
 
       {/* L'attesa è la più lunga dell'area di amministrazione dopo la
@@ -214,55 +153,38 @@ export default function UserDebriefingPanel({
         </p>
       )}
 
-      {!debriefing && !tooFewProofs && !generate.isPending && (
+      {storico.length === 0 && !tooFewProofs && !generate.isPending && (
         <p className="py-4 text-center text-[0.85rem] italic text-slate-500">
           Nessun quadro d'insieme ancora scritto per questa persona
         </p>
       )}
 
-      {debriefing && !generate.isPending && (
+      {shown && !generate.isPending && (
         <div className="flex flex-col gap-4">
-          <Coverage debriefing={debriefing} />
-
-          <p className="text-[0.9rem] leading-relaxed text-slate-200">{debriefing.summary}</p>
-
-          {debriefing.themes.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Elementi Ricorrenti
-              </h4>
-              <ul className="flex list-none flex-col gap-2">
-                {debriefing.themes.map((theme) => (
-                  <Theme key={theme.title} {...theme} />
-                ))}
-              </ul>
+          {/* Una versione vecchia riaperta lo dice in chiaro, e il modo di
+              tornare all'attuale sta nella stessa riga che avvisa. */}
+          {!isLatestShown && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/25 bg-amber-500/8 px-3 py-2">
+              <span className="text-[0.8rem] text-amber-300">
+                Stai leggendo un quadro precedente, scritto il {formatDateTime(shown.created_at)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpenId(null)}
+                className="text-[0.8rem] font-semibold text-amber-300 underline underline-offset-2 hover:text-amber-200"
+              >
+                Torna a quello attuale
+              </button>
             </div>
           )}
 
-          {/* Il miglioramento manca quando nel materiale non si vedeva: è un
-              esito e non un dato che non è arrivato, quindi la sezione non
-              compare invece di comparire vuota. */}
-          {debriefing.improving && (
-            <div className={`${cardCls} border-l-2 border-l-cyan-500/50`}>
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                Aspetti in Miglioramento
-              </h4>
-              <p className="mt-1.5 text-[0.85rem] leading-relaxed text-slate-300">
-                {debriefing.improving}
-              </p>
-            </div>
-          )}
+          <DebriefingVersion debriefing={shown} />
 
-          <div className={`${cardCls} border-l-2 border-l-violet-600`}>
-            <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-              Intervento Prioritario
-            </h4>
-            <p className="mt-1.5 text-[0.85rem] leading-relaxed text-slate-200">
-              {debriefing.next_step}
-            </p>
-          </div>
-
-          <CriteriaAverages debriefing={debriefing} />
+          <DebriefingHistory
+            debriefings={storico}
+            currentId={shown.id}
+            onSelect={(id) => setOpenId(id)}
+          />
         </div>
       )}
     </div>

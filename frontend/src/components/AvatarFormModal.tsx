@@ -534,11 +534,7 @@ export default function AvatarFormModal({
       {/* La bozza si apre sopra la scheda, e la scheda resta lì dietro: è
           quello che sta per essere riempito. */}
       {showDraft && (
-        <PersonaDraftModal
-          difficulty={form.profile.GRADO_DIFFICOLTA ?? ''}
-          onClose={() => setShowDraft(false)}
-          onDrafted={handleDrafted}
-        />
+        <PersonaDraftModal onClose={() => setShowDraft(false)} onDrafted={handleDrafted} />
       )}
     </ModalShell>
   )

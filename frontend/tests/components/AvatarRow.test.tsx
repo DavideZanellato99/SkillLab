@@ -14,7 +14,6 @@ const avatar = (over: Partial<AdminAvatar> = {}): AdminAvatar =>
     category_id: 'cat-1',
     category_color: 'violet',
     description: 'Chiama per un addebito',
-    difficulty: '8/10',
     organization_id: 'org-1',
     organization_name: 'Banca Esempio',
     conversation_count: 12,
@@ -50,7 +49,6 @@ describe('AvatarRow', () => {
     expect(screen.getByText('Chiama per un addebito')).toBeInTheDocument()
     expect(screen.getByText('Banca Esempio')).toBeInTheDocument()
     expect(screen.getByText('Clienti')).toBeInTheDocument()
-    expect(screen.getByText('8/10')).toBeInTheDocument()
     expect(screen.getByText('12')).toBeInTheDocument()
   })
 
@@ -65,14 +63,6 @@ describe('AvatarRow', () => {
     expect(celle[0].className).toContain('text-left')
     expect(celle[0].className).not.toContain('text-center')
     for (const cella of celle.slice(1)) expect(cella.className).toContain('text-center')
-  })
-
-  /* La difficoltà è un campo che può restare vuoto: al suo posto va un
-   * trattino, non uno zero, che sarebbe un grado di difficoltà. */
-  it('mette un trattino dove la scheda non dice la difficoltà', () => {
-    renderRow({ difficulty: null })
-
-    expect(screen.getByText('—')).toBeInTheDocument()
   })
 
   it('apre la scheda con un clic sulla riga', async () => {

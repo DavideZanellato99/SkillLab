@@ -16,10 +16,6 @@ il roleplay sia il metro con cui la conversazione viene poi giudicata.
 | `voice_id` | La voce Cartesia con cui parla al telefono |
 | `deleted_at` | La data di archiviazione, NULL finché è attivo |
 
-Il grado di difficoltà mostrato nella galleria non è una colonna: è il campo
-`GRADO_DIFFICOLTA` della scheda, l'unico che si può mostrare senza rivelare
-niente.
-
 ## Le categorie
 
 Sono un'anagrafica, non una stringa scritta sull'avatar: una riga di
@@ -115,9 +111,8 @@ diventa un avatar solo con il salvataggio, che è un'altra richiesta, esattament
 come le cinquanta domande di una simulazione non si pubblicano da sole.
 
 **Cosa il modello non può scrivere.** Le chiavi che non appartengono alla
-scheda vengono buttate, le percentuali prendono la forma `60%`, il grado la
-forma `8/10`, i valori a scelta tornano sull'elenco chiuso quando ci
-somigliano. E i marcatori di vuoto valgono vuoto, qui come nel prompt: il
+scheda vengono buttate, le percentuali prendono la forma `60%`, i valori a
+scelta tornano sull'elenco chiuso quando ci somigliano. E i marcatori di vuoto valgono vuoto, qui come nel prompt: il
 modello è istruito a lasciare vuoto un campo che non si applica, e la
 normalizzazione è la rete sotto.
 
@@ -130,9 +125,7 @@ più.
 Che ogni campo generato sia un campo che il prompt del roleplay legge davvero
 non è affidato all'attenzione di chi ne aggiunge uno: lo verifica un test, che
 riempie la scheda di sentinelle e le cerca nel prompt reso su tutti e due i
-canali. L'unica eccezione, dichiarata nel test, è il grado di difficoltà, che
-non entra nel prompt perché non è una cosa che il personaggio sa di sé, è la
-targhetta che lo studente legge in galleria.
+canali.
 
 ### Come la bozza entra nella scheda
 

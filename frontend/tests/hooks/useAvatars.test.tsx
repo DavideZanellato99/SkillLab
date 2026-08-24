@@ -28,27 +28,15 @@ beforeEach(() => {
 })
 
 describe('useAvatars', () => {
-  it('legge la galleria filtrata per categoria', async () => {
-    const { result } = renderHook(() => useAvatars('cat-1'), { wrapper })
+  /* Il catalogo si legge intero e una volta sola: il filtro per categoria è
+   * locale alla galleria, quindi non esistono più liste diverse in cache né
+   * una richiesta per ogni pastiglia premuta. */
+  it('legge il catalogo intero in una voce di cache sola', async () => {
+    const { result } = renderHook(() => useAvatars(), { wrapper })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(servizio.fetchAvatars).toHaveBeenCalledWith('cat-1')
-  })
-
-  /* "Tutte le categorie" arriva come null dal filtro della galleria: va
-   * tradotto in nessun parametro, e deve finire in una voce di cache sua,
-   * distinta da quella di una categoria scelta. */
-  it('tratta nessuna categoria come galleria intera', async () => {
-    const { result } = renderHook(() => useAvatars(null), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(servizio.fetchAvatars).toHaveBeenCalledWith(undefined)
+    expect(servizio.fetchAvatars).toHaveBeenCalledOnce()
     expect(client.getQueryData(queryKeys.avatars.list())).toEqual([])
-  })
-
-  it('non legge la galleria quando serve solo come sorgente spenta', () => {
-    renderHook(() => useAvatars('cat-1', false), { wrapper })
-    expect(servizio.fetchAvatars).not.toHaveBeenCalled()
   })
 })
 

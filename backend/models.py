@@ -266,7 +266,6 @@ class User(Authored, Base):
         lazy="joined",
         foreign_keys=[organization_id],
     )
-    selections = relationship("UserSelection", back_populates="user")
     conversations = relationship("ChatConversation", back_populates="user")
 
     @property
@@ -372,7 +371,6 @@ class Avatar(Authored, Base):
         ),
     )
 
-    # Relationship to selections
     organization = relationship("Organization", back_populates="avatars")
     # Sola lettura e su category_id soltanto: la categoria si assegna
     # scrivendo l'id, e lasciare la relazione fuori dal flush evita che
@@ -386,7 +384,6 @@ class Avatar(Authored, Base):
         lazy="joined",
         viewonly=True,
     )
-    selections = relationship("UserSelection", back_populates="avatar")
     conversations = relationship("ChatConversation", back_populates="avatar")
 
     @property
@@ -406,24 +403,6 @@ class Avatar(Authored, Base):
 
     def __repr__(self):
         return f"<Avatar(id={self.id}, name='{self.name}', category='{self.category_name}')>"
-
-
-class UserSelection(Base):
-    """Records when a user selects an avatar."""
-
-    __tablename__ = "user_selections"
-
-    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(Uuid, ForeignKey("users.id"), nullable=False, index=True)
-    avatar_id = Column(Uuid, ForeignKey("avatars.id"), nullable=False)
-    selected_at = Column(DateTime, default=lambda: datetime.now(UTC))
-
-    # Relationships
-    user = relationship("User", back_populates="selections")
-    avatar = relationship("Avatar", back_populates="selections")
-
-    def __repr__(self):
-        return f"<UserSelection(id={self.id}, user_id={self.user_id}, avatar_id={self.avatar_id})>"
 
 
 class RevokedJti(Base):

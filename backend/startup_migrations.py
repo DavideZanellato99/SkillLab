@@ -798,6 +798,29 @@ def _drop_avatar_difficulty() -> None:
         )
 
 
+def _drop_user_selections() -> None:
+    """Portare via le selezioni degli avatar, che nessuno ha mai scritto.
+
+    Una riga diceva "questa persona ha scelto questo avatar in questo
+    momento", e c'era l'endpoint per scriverla, ma nessuna schermata lo
+    chiamava: la galleria apre direttamente la chat. La tabella è quindi
+    rimasta vuota, mentre il contatore che ne usciva, sempre a zero, costava
+    una query aggregata a ogni caricamento del catalogo e una sezione vuota
+    nell'export dell'articolo 15.
+
+    Quello che la selezione avrebbe dovuto dire lo dicono già le
+    conversazioni, che hanno la persona, l'avatar e la data: è da lì che
+    viene lo storico mostrato sulle tessere (vedi `_own_history` in
+    routers/avatars). Un dato personale in meno da conservare, e senza
+    perderne nessuno, perché non ce n'era nessuno da perdere.
+
+    Idempotente: IF EXISTS, e su un database nuovo la tabella non nasce
+    proprio, perché il modello non esiste più.
+    """
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS user_selections"))
+
+
 def _index_audit_logs() -> None:
     """Index the audit trail the way it is read.
 
@@ -873,6 +896,7 @@ def run_startup_migrations() -> None:
     _drop_legacy_training_assignments()
     _version_debriefings()
     _drop_avatar_difficulty()
+    _drop_user_selections()
     _index_audit_logs()
     _index_conversations()
 

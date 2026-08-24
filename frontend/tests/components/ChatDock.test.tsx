@@ -28,7 +28,8 @@ const avatar = {
   category_color: 'orange',
   description: 'Cliente irritato',
   created_at: '2026-01-01T10:00:00Z',
-  selection_count: 0,
+  own_sessions: 0,
+  last_session_at: null,
 } as Avatar
 
 const chat = {

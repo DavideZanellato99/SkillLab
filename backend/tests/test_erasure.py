@@ -35,7 +35,6 @@ from models import (
     TokenSession,
     User,
     UserDebriefing,
-    UserSelection,
     VoiceSessionRecord,
 )
 from routers import admin as admin_router
@@ -47,7 +46,6 @@ _SEEDED_TABLES = {
     "organizations",
     "avatars",
     "avatar_categories",
-    "user_selections",
     "token_session",
     "notification_reads",
     "training_paths",
@@ -138,7 +136,6 @@ def _seed_everything(db_session, victim: User, other: User, avatar, make_assigne
             expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
         )
     )
-    db_session.add(UserSelection(user_id=victim.id, avatar_id=avatar.id))
     db_session.add(NotificationRead(user_id=victim.id, key="assignment.overdue:x"))
     make_assigned_path(victim, [{"avatar": avatar, "target": 8.0}], assigned_by=victim)
 

@@ -124,15 +124,12 @@ def test_no_new_training_can_start_on_an_archived_avatar(
     assert client.delete(f"/api/admin/avatars/{avatar.id}").status_code == 200
 
     act_as(standard_user)
-    selected = client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
-    assert selected.status_code == 409
-    assert "archiviato" in selected.json()["detail"]
-
     started = client.post(
         "/api/chat/message",
         json={"avatar_id": str(avatar.id), "content": "buongiorno"},
     )
     assert started.status_code == 409
+    assert "archiviato" in started.json()["detail"]
 
 
 def test_restore_puts_the_avatar_back_in_the_catalogue(

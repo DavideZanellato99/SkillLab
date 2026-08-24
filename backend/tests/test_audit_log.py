@@ -3,7 +3,22 @@
 import uuid
 
 import audit
-from models import AuditLog
+from models import AuditLog, ChatConversation
+
+
+def _conversazione(db_session, user, avatar) -> ChatConversation:
+    """Una conversazione della persona, da rinominare.
+
+    Rinominare è l'azione mutante più semplice che un utente semplice possa
+    fare davvero: non chiama nessun fornitore esterno e non chiede nessun
+    ruolo di amministrazione.
+    """
+    conversation = ChatConversation(
+        user_id=user.id, avatar_id=avatar.id, title="Clienti 1", mode="text"
+    )
+    db_session.add(conversation)
+    db_session.commit()
+    return conversation
 
 
 def _logs(db_session, action: str | None = None) -> list[AuditLog]:
@@ -18,20 +33,22 @@ def _logs(db_session, action: str | None = None) -> list[AuditLog]:
 
 def test_mutating_request_is_recorded(user_client, db_session, standard_user, make_avatar):
     """A plain user's action lands in the log with its actor and target."""
-    avatar = make_avatar()
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
 
-    response = user_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    response = user_client.patch(
+        f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"}
+    )
     assert response.status_code == 200
 
-    rows = _logs(db_session, "avatar.select")
+    rows = _logs(db_session, "conversation.rename")
     assert len(rows) == 1
     row = rows[0]
     assert row.user_id == standard_user.id
     assert row.user_email == standard_user.email
     assert row.user_role == "user"
     assert row.organization_id == standard_user.organization_id
-    assert row.method == "POST"
-    assert row.path == "/api/avatars/select"
+    assert row.method == "PATCH"
+    assert row.path == f"/api/chat/conversation/{conversazione.id}"
     assert row.status_code == 200
 
 
@@ -46,10 +63,12 @@ def test_read_only_request_is_not_recorded(user_client, db_session, make_avatar)
 
 def test_failed_action_is_recorded_with_its_status(user_client, db_session):
     """A rejected attempt is an action too, and keeps its status code."""
-    response = user_client.post("/api/avatars/select", json={"avatar_id": str(uuid.uuid4())})
+    response = user_client.patch(
+        f"/api/chat/conversation/{uuid.uuid4()}", json={"title": "Mai esistita"}
+    )
     assert response.status_code == 404
 
-    rows = _logs(db_session, "avatar.select")
+    rows = _logs(db_session, "conversation.rename")
     assert len(rows) == 1
     assert rows[0].status_code == 404
 
@@ -78,19 +97,19 @@ def test_super_admin_actions_are_recorded_too(admin_client, db_session, super_ad
 
 def test_unauthenticated_attempt_is_not_recorded(client, db_session):
     """Rejected before the endpoint, with no identifiable actor: nothing to log."""
-    assert (
-        client.post("/api/avatars/select", json={"avatar_id": str(uuid.uuid4())}).status_code == 401
-    )
+    assert client.put("/api/auth/me", json={"nome": "Anna", "cognome": "Rossi"}).status_code == 401
 
     assert _logs(db_session) == []
 
 
-def test_details_never_carry_the_request_body(user_client, db_session, make_avatar):
-    """Only what an endpoint whitelists reaches `details`."""
-    avatar = make_avatar()
-    user_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+def test_details_never_carry_the_request_body(user_client, db_session, standard_user, make_avatar):
+    """Only what an endpoint whitelists reaches the details column."""
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
+    user_client.patch(
+        f"/api/chat/conversation/{conversazione.id}", json={"title": "Titolo scritto a mano"}
+    )
 
-    assert _logs(db_session, "avatar.select")[0].details is None
+    assert _logs(db_session, "conversation.rename")[0].details is None
 
 
 # ── Chi può leggerlo ──────────────────────────────────
@@ -115,11 +134,11 @@ def test_organization_admin_cannot_read_the_registry(org_admin_client):
 
 
 def test_registry_filters_by_user_and_action(
-    admin_client, act_as, standard_user, super_admin_user, make_avatar
+    admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
 ):
-    avatar = make_avatar()
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
     act_as(standard_user)
-    admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    admin_client.patch(f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"})
     act_as(super_admin_user)
     admin_client.put(f"/api/admin/users/{standard_user.id}", json={"nome": "Filtrato"})
 
@@ -127,7 +146,7 @@ def test_registry_filters_by_user_and_action(
         "/api/admin/audit-logs", params={"user_id": str(standard_user.id)}
     ).json()
     assert by_user["total"] == 1
-    assert by_user["items"][0]["action"] == "avatar.select"
+    assert by_user["items"][0]["action"] == "conversation.rename"
 
     by_action = admin_client.get("/api/admin/audit-logs", params={"action": "user.update"}).json()
     assert by_action["total"] == 1
@@ -135,27 +154,29 @@ def test_registry_filters_by_user_and_action(
 
 
 def test_registry_returns_newest_first_and_labels_actions(
-    admin_client, act_as, standard_user, super_admin_user, make_avatar
+    admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
 ):
-    avatar = make_avatar()
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
     act_as(standard_user)
-    admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    admin_client.patch(f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"})
     act_as(super_admin_user)
     admin_client.put(f"/api/admin/users/{standard_user.id}", json={"nome": "Ultimo"})
 
     items = admin_client.get("/api/admin/audit-logs").json()["items"]
-    assert [i["action"] for i in items] == ["user.update", "avatar.select"]
+    assert [i["action"] for i in items] == ["user.update", "conversation.rename"]
     assert items[0]["action_label"] == audit.action_label("user.update")
 
 
 def test_registry_window_is_bounded(
-    admin_client, act_as, standard_user, super_admin_user, make_avatar
+    admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
 ):
     """`total` counts every match, the page returns only the window asked for."""
-    avatar = make_avatar()
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
     act_as(standard_user)
     for _ in range(3):
-        admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+        admin_client.patch(
+            f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"}
+        )
 
     act_as(super_admin_user)
     page = admin_client.get("/api/admin/audit-logs", params={"limit": 2}).json()
@@ -164,19 +185,19 @@ def test_registry_window_is_bounded(
 
 
 def test_registry_filters_by_organization(
-    admin_client, act_as, standard_user, super_admin_user, make_avatar, organization
+    admin_client, act_as, standard_user, super_admin_user, organization, make_avatar, db_session
 ):
     """The tenant is stamped on the row when the action happens, so filtering
     by it still finds the actions of someone who has moved since."""
-    avatar = make_avatar()
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
     act_as(standard_user)
-    admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    admin_client.patch(f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"})
     act_as(super_admin_user)
 
     page = admin_client.get(
         "/api/admin/audit-logs", params={"organization_id": str(organization.id)}
     ).json()
-    assert [i["action"] for i in page["items"]] == ["avatar.select"]
+    assert [i["action"] for i in page["items"]] == ["conversation.rename"]
 
     other = admin_client.get(
         "/api/admin/audit-logs", params={"organization_id": str(uuid.uuid4())}
@@ -185,16 +206,16 @@ def test_registry_filters_by_organization(
 
 
 def test_registry_filters_by_date_range(
-    admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
+    admin_client, act_as, standard_user, super_admin_user, db_session, make_avatar
 ):
     """The column is naive UTC and the client sends an ISO datetime with its
     offset: without dropping it the comparison would raise instead of
     filtering."""
     from datetime import UTC, datetime, timedelta
 
-    avatar = make_avatar()
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
     act_as(standard_user)
-    admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    admin_client.patch(f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"})
     act_as(super_admin_user)
     now = datetime.now(UTC)
 
@@ -214,13 +235,13 @@ def test_registry_filters_by_date_range(
 
 
 def test_registry_search_spans_the_columns_that_name_things(
-    admin_client, act_as, standard_user, super_admin_user, make_avatar
+    admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
 ):
     """One box for the four columns anyone would type into: who acted, which
     tenant, which route, which row."""
-    avatar = make_avatar()
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
     act_as(standard_user)
-    admin_client.post("/api/avatars/select", json={"avatar_id": str(avatar.id)})
+    admin_client.patch(f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"})
     act_as(super_admin_user)
 
     by_email = admin_client.get(
@@ -228,7 +249,7 @@ def test_registry_search_spans_the_columns_that_name_things(
     ).json()
     assert by_email["total"] == 1
 
-    by_path = admin_client.get("/api/admin/audit-logs", params={"q": "avatars/select"}).json()
+    by_path = admin_client.get("/api/admin/audit-logs", params={"q": "chat/conversation"}).json()
     assert by_path["total"] == 1
 
     # L'identificativo della riga toccata: lo porta chi ce l'ha nel percorso

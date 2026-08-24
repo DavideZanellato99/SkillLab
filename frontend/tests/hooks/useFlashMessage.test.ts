@@ -51,4 +51,28 @@ describe('useFlashMessage', () => {
     // Senza la pulizia, allo scadere si scriverebbe su un componente smontato
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  /* Chiuderlo a mano: la crocetta dell'avviso della galleria. Il timer va
+   * spento con lui, altrimenti scatterebbe su un messaggio arrivato dopo. */
+  it('lo toglie subito quando lo si chiude, e spegne il timer', () => {
+    const { result } = renderHook(() => useFlashMessage(1000))
+
+    act(() => result.current.flash('Aggiornamento non riuscito'))
+    act(() => result.current.clear())
+
+    expect(result.current.message).toBe('')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('un messaggio nuovo dopo una chiusura vive il suo tempo intero', () => {
+    const { result } = renderHook(() => useFlashMessage(1000))
+
+    act(() => result.current.flash('Primo'))
+    act(() => vi.advanceTimersByTime(900))
+    act(() => result.current.clear())
+    act(() => result.current.flash('Secondo'))
+
+    act(() => vi.advanceTimersByTime(200))
+    expect(result.current.message).toBe('Secondo')
+  })
 })

@@ -5,7 +5,6 @@
    Tailwind utilities. This file only holds:
    - the theme tokens (colors, fonts, animations)
    - base styles (body, mesh background, scrollbar)
-   - the imperative .ripple effect used by AvatarCard
 */
 
 /* I due caratteri dell'applicazione, serviti dalla propria origine e non
@@ -316,22 +315,4 @@
 }
 
 @layer components {
-  /* Click ripple injected imperatively by AvatarCard */
-  .ripple {
-    position: absolute;
-    border-radius: 9999px;
-    background: rgb(124 58 237 / 0.3);
-    pointer-events: none;
-    animation: ripple 0.6s ease-out forwards;
-  }
-  @keyframes ripple {
-    0% {
-      transform: scale(0);
-      opacity: 0.6;
-    }
-    100% {
-      transform: scale(4);
-      opacity: 0;
-    }
-  }
 }

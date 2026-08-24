@@ -31,5 +31,13 @@ export function useFlashMessage(durationMs: number = FLASH_DURATION_MS) {
     [durationMs],
   )
 
-  return { message, flash }
+  /* Farlo sparire prima della scadenza: serve dove il messaggio ha una
+   * crocetta, e il timer va spento con lui, altrimenti scatterebbe su un
+   * messaggio nuovo arrivato nel frattempo. */
+  const clear = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current)
+    setMessage('')
+  }, [])
+
+  return { message, flash, clear }
 }

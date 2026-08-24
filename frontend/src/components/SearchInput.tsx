@@ -7,7 +7,7 @@
  * scritte due volte sarebbero due caselle che prima o poi non si somigliano
  * più. Stessa ragione per cui i selettori a pulsanti vivono in FilterTabs. */
 
-import { CloseIcon } from './icons'
+import { CloseIcon, SearchIcon } from './icons'
 
 export default function SearchInput({
   value,
@@ -27,20 +27,7 @@ export default function SearchInput({
     <div
       className={`flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)] ${className}`}
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="shrink-0 text-slate-500"
-      >
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
+      <SearchIcon className="shrink-0 text-slate-500" />
       <input
         type="text"
         value={value}

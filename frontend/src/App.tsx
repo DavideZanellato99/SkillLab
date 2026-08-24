@@ -1,4 +1,4 @@
-import { useState, useCallback, lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
 import { useAuth } from './hooks/useAuth'
 import Navbar from './components/Navbar'
@@ -46,20 +46,15 @@ const AuditLogsPage = lazy(() => import('./components/AuditLogsPage'))
 const PublicLayout = lazy(() => import('./components/public/PublicLayout'))
 const PublicHome = lazy(() => import('./components/public/PublicHome'))
 
+/* La galleria: la testata che presenta il catalogo, e il catalogo stesso.
+ * Niente stato da tenere qui in mezzo, i due pezzi leggono gli stessi dati
+ * dalla stessa cache. */
 function HomePage() {
-  const [totalAvatars, setTotalAvatars] = useState(0)
-  const [totalCategories, setTotalCategories] = useState(0)
-
-  const handleStatsUpdate = useCallback((avatars: number, categories: number) => {
-    setTotalAvatars(avatars)
-    setTotalCategories(categories)
-  }, [])
-
   return (
     <>
-      <Header totalAvatars={totalAvatars} totalCategories={totalCategories} />
+      <Header />
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 pb-12 max-md:p-4">
-        <AvatarGallery onStatsUpdate={handleStatsUpdate} />
+        <AvatarGallery />
       </main>
     </>
   )

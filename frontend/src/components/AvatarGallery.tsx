@@ -1,19 +1,30 @@
-import { useState, useCallback, useEffect } from 'react'
-import AvatarCard from './AvatarCard'
-import Toast from './Toast'
-import { ChatIcon } from './icons'
+/* Il catalogo degli avatar: la casella di ricerca, i filtri per categoria e
+ * la griglia.
+ *
+ * Gli avatar arrivano tutti in una lettura sola e da lì non si torna più sul
+ * server: cercare e scegliere una categoria sono giri su una lista che è già
+ * in memoria (`avatarFilters`), quindi la griglia risponde nell'istante in
+ * cui si preme, e il numero accanto a ogni categoria si sa senza chiederlo.
+ * Prima ogni pastiglia era una richiesta e una voce di cache sua.
+ *
+ * Un guasto di rete si racconta in due modi, perché sono due situazioni
+ * diverse: se non c'è niente a schermo la pagina lo dice e offre di
+ * riprovare, se il catalogo è già lì da una lettura precedente basta un
+ * avviso a scomparsa, perché quello che si vede resta buono. */
+
+import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../hooks/useAuth'
 import { useAvatars, useCategories } from '../hooks/useAvatars'
-
-interface AvatarGalleryProps {
-  onStatsUpdate: (totalAvatars: number, totalCategories: number) => void
-}
-
-const filterBtnBase =
-  'cursor-pointer rounded-full border px-6 py-2 text-[0.85rem] font-medium tracking-wide transition max-[480px]:px-4 max-[480px]:py-1 max-[480px]:text-[0.8rem]'
-const filterBtnInactive =
-  'border-white/6 bg-white/4 text-slate-400 hover:-translate-y-px hover:border-white/12 hover:bg-white/8 hover:text-slate-100'
-const filterBtnActive =
-  'border-violet-600 bg-violet-600/15 text-slate-100 shadow-[0_0_20px_rgba(124,58,237,0.2)]'
+import { useFlashMessage } from '../hooks/useFlashMessage'
+import { isSuperAdmin } from '../services/auth'
+import AvatarCard from './AvatarCard'
+import AvatarGalleryEmpty, { type EmptyReason } from './AvatarGalleryEmpty'
+import { countByCategory, filterAvatars } from './avatarFilters'
+import FilterTabs from './FilterTabs'
+import FormError from './FormError'
+import PrimaryButton from './PrimaryButton'
+import SearchInput from './SearchInput'
+import Toast from './Toast'
 
 const gridCls =
   'grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-8 p-2 max-md:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] max-md:gap-4 max-[480px]:grid-cols-1'
@@ -21,78 +32,71 @@ const gridCls =
 const shimmerCls =
   'animate-shimmer bg-[linear-gradient(90deg,#111827_0%,rgba(255,255,255,0.05)_50%,#111827_100%)] bg-[length:200%_100%]'
 
-export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
+/** Il valore della pastiglia "Tutti": il gruppo di scelta parla per stringhe,
+ *  il catalogo intero è l'assenza di una categoria. */
+const ALL = 'all'
+
+export default function AvatarGallery() {
+  const { user } = useAuth()
+
   /* L'id della categoria e non il suo nome: il nome si può rinominare
    * mentre la galleria è aperta, l'id no. */
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<
-    Array<{
-      id: number
-      title: string
-      message: string
-      type: 'success' | 'error'
-    }>
-  >([])
+  const [search, setSearch] = useState('')
 
-  const { data: avatars = [], isLoading, isError } = useAvatars(activeCategoryId)
+  const { data: avatars = [], isLoading, isError, isFetching, refetch } = useAvatars()
   const { data: categories = [] } = useCategories()
 
-  const addToast = useCallback(
-    (title: string, message: string, type: 'success' | 'error' = 'success') => {
-      const id = Date.now()
-      setToasts((prev) => [...prev, { id, title, message, type }])
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id))
-      }, 4000)
-    },
-    [],
+  const counts = useMemo(() => countByCategory(avatars), [avatars])
+  const visibleAvatars = useMemo(
+    () => filterAvatars(avatars, activeCategoryId, search),
+    [avatars, activeCategoryId, search],
   )
 
-  const removeToast = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
-
-  // Update stats when avatars change
+  /* Il catalogo è già a schermo e il rinfresco è fallito: si dice, senza
+   * togliere quello che si vede, che potrebbe non essere l'ultima parola. */
+  const { message: staleWarning, flash, clear } = useFlashMessage()
   useEffect(() => {
-    onStatsUpdate(avatars.length, categories.length)
-  }, [avatars, categories, onStatsUpdate])
-
-  // Show error toast on query failure
-  useEffect(() => {
-    if (isError) {
-      addToast(
-        'Errore di connessione',
-        'Impossibile contattare il server. Verifica la connessione e riprova.',
-        'error',
-      )
+    if (isError && avatars.length > 0) {
+      flash('Il catalogo a schermo potrebbe non essere aggiornato.')
     }
-  }, [isError, addToast])
+  }, [isError, avatars.length, flash])
+
+  const options = [
+    { value: ALL, label: 'Tutti', count: avatars.length },
+    ...categories.map((cat) => ({
+      value: cat.id,
+      label: cat.name,
+      count: counts[cat.id] ?? 0,
+    })),
+  ]
+
+  /* Perché non c'è niente da mostrare, in ordine di quanto è facile
+   * rimediarci: la ricerca, poi la categoria, e da ultimo il catalogo che è
+   * vuoto davvero. */
+  const emptyReason: EmptyReason =
+    search.trim() !== '' ? 'search' : activeCategoryId !== null ? 'category' : 'catalog'
 
   return (
     <>
-      {/* Category Filters */}
-      <div
-        className="mb-12 flex animate-fade-in-up flex-wrap justify-center gap-2 [animation-delay:0.3s] max-[480px]:gap-1"
-        id="category-filter"
-      >
-        <button
-          className={`${filterBtnBase} ${activeCategoryId === null ? filterBtnActive : filterBtnInactive}`}
-          onClick={() => setActiveCategoryId(null)}
-        >
-          Tutti
-        </button>
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            className={`${filterBtnBase} ${activeCategoryId === cat.id ? filterBtnActive : filterBtnInactive}`}
-            onClick={() => setActiveCategoryId(cat.id)}
-          >
-            {cat.name}
-          </button>
-        ))}
+      {/* Ricerca e filtri */}
+      <div className="mb-12 flex animate-fade-in-up flex-col items-center gap-4 [animation-delay:0.3s]">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Cerca per nome, scenario o categoria"
+          ariaLabel="Cerca un avatar"
+          className="w-full max-w-md"
+        />
+        <FilterTabs
+          value={activeCategoryId ?? ALL}
+          onChange={(value) => setActiveCategoryId(value === ALL ? null : value)}
+          options={options}
+          ariaLabel="Categoria degli avatar"
+          variant="pills"
+        />
       </div>
 
-      {/* Avatar Grid */}
       {isLoading ? (
         <div className={gridCls}>
           {Array.from({ length: 6 }).map((_, i) => (
@@ -109,33 +113,43 @@ export default function AvatarGallery({ onStatsUpdate }: AvatarGalleryProps) {
             </div>
           ))}
         </div>
-      ) : avatars.length === 0 ? (
-        <div className="animate-fade-in p-16 text-center">
-          <div className="mb-4 flex justify-center text-slate-600">
-            <ChatIcon size={40} />
-          </div>
-          <p className="text-lg text-slate-500">Nessun avatar presente in questa categoria</p>
+      ) : isError && avatars.length === 0 ? (
+        /* Niente a schermo e il server non risponde: non è un catalogo
+           vuoto, ed è l'unico caso in cui c'è qualcosa da riprovare. */
+        <div className="flex animate-fade-in flex-col items-center gap-4 p-16 max-md:p-8">
+          <FormError
+            variant="page"
+            message="Impossibile caricare il catalogo degli avatar. Verifica la connessione e riprova."
+          />
+          <PrimaryButton onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? 'Nuovo tentativo in corso...' : 'Riprova'}
+          </PrimaryButton>
         </div>
+      ) : visibleAvatars.length === 0 ? (
+        <AvatarGalleryEmpty
+          reason={emptyReason}
+          canManageAvatars={isSuperAdmin(user)}
+          onClearSearch={() => setSearch('')}
+          onShowAll={() => setActiveCategoryId(null)}
+        />
       ) : (
         <div className={gridCls} id="avatar-grid">
-          {avatars.map((avatar, index) => (
+          {visibleAvatars.map((avatar, index) => (
             <AvatarCard key={avatar.id} avatar={avatar} index={index} />
           ))}
         </div>
       )}
 
-      {/* Toast Notifications */}
-      <div className="fixed right-8 top-20 z-[1000] flex flex-col gap-2 max-md:inset-x-4 max-md:top-[4.5rem]">
-        {toasts.map((toast) => (
+      {staleWarning && (
+        <div className="fixed right-8 top-20 z-[1000] flex flex-col gap-2 max-md:inset-x-4 max-md:top-[4.5rem]">
           <Toast
-            key={toast.id}
-            title={toast.title}
-            message={toast.message}
-            type={toast.type}
-            onClose={() => removeToast(toast.id)}
+            title="Aggiornamento non riuscito"
+            message={staleWarning}
+            type="error"
+            onClose={clear}
           />
-        ))}
-      </div>
+        </div>
+      )}
     </>
   )
 }

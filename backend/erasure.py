@@ -60,7 +60,6 @@ from models import (
     TrainingPathAssignment,
     User,
     UserDebriefing,
-    UserSelection,
 )
 
 # Every table that holds rows *about* a user, keyed by user_id. TokenSession
@@ -68,7 +67,6 @@ from models import (
 # key at all (see the model), so no cascade has ever reached it and the
 # client IP and User-Agent of deleted accounts were surviving them.
 _USER_OWNED = (
-    UserSelection,
     TokenSession,
     NotificationRead,
     TrainingPathAssignment,

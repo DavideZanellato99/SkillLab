@@ -35,7 +35,6 @@ from models import (
     Organization,
     TechnicalSimulation,
     User,
-    UserSelection,
 )
 from schemas import (
     CreateOrganizationRequest,
@@ -399,16 +398,10 @@ def delete_organization(
             ],
         )
 
-    # The users with everything about them: conversations, sessions,
-    # selections and goals (see `erasure`, shared with the single-account
-    # deletion so neither path can forget a table).
+    # The users with everything about them: conversations, sessions and
+    # goals (see `erasure`, shared with the single-account deletion so
+    # neither path can forget a table).
     erase_users(db, user_ids)
-
-    # Selections other tenants' users may hold on the private avatars
-    if avatar_ids:
-        db.query(UserSelection).filter(UserSelection.avatar_id.in_(avatar_ids)).delete(
-            synchronize_session=False
-        )
 
     # Le simulazioni tecniche del tenant, con i passaggi del documento, le
     # domande e i tentativi che ne restassero: erase_users si è già portata

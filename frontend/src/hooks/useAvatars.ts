@@ -5,15 +5,18 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchAvatars, fetchAvatar, fetchCategories } from '../services/api'
 import { queryKeys } from './queryKeys'
 
-/** Gli avatar della galleria, filtrati per categoria se ne arriva una.
+/** Il catalogo intero, in una lettura sola.
  *
- *  `enabled` serve a chi la usa come sorgente di un selettore solo in certi
- *  ruoli, come il form dei percorsi di training. */
-export function useAvatars(categoryId?: string | null, enabled = true) {
+ *  La categoria era un parametro che finiva nella query string e quindi in
+ *  una voce di cache per categoria: ogni pastiglia premuta era un giro sul
+ *  server e un'attesa, per una lista che sta tutta in memoria e che la
+ *  testata sta già leggendo intera. Il filtro per categoria e la ricerca per
+ *  nome vivono ora nella galleria, su questi stessi dati (vedi
+ *  `avatarFilters`): la scelta è immediata e il server la sente una volta. */
+export function useAvatars() {
   return useQuery({
-    queryKey: queryKeys.avatars.list(categoryId ?? undefined),
-    queryFn: () => fetchAvatars(categoryId ?? undefined),
-    enabled,
+    queryKey: queryKeys.avatars.list(),
+    queryFn: fetchAvatars,
   })
 }
 

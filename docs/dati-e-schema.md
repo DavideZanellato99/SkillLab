@@ -8,44 +8,43 @@ valgono su tutte le righe. Tutto in
 
 **Chi usa la piattaforma**
 
-| Tabella | Cosa contiene |
-| --- | --- |
-| `organizations` | I tenant. Nome, slug, stato, motivo della sospensione |
-| `roles` | I tre ruoli, creati all'avvio se mancano |
-| `users` | L'account, legato all'identità Cognito da `cognito_sub`. Ultimo accesso e ultima attività sono due colonne diverse e rispondono a due domande diverse |
-| `user_selections` | Quale avatar una persona ha scelto, e quante volte |
+| Tabella         | Cosa contiene                                                                                                                                         |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `organizations` | I tenant. Nome, slug, stato, motivo della sospensione                                                                                                 |
+| `roles`         | I tre ruoli, creati all'avvio se mancano                                                                                                              |
+| `users`         | L'account, legato all'identità Cognito da `cognito_sub`. Ultimo accesso e ultima attività sono due colonne diverse e rispondono a due domande diverse |
 
 **Le sessioni**
 
-| Tabella | Cosa contiene |
-| --- | --- |
-| `token_session` | Il contesto (IP e User-Agent) per cui un token è stato emesso |
-| `revoked_jti` | I token uccisi prima della scadenza: logout, binding violato |
+| Tabella          | Cosa contiene                                                                                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `token_session`  | Il contesto (IP e User-Agent) per cui un token è stato emesso                                                                                                                                  |
+| `revoked_jti`    | I token uccisi prima della scadenza: logout, binding violato                                                                                                                                   |
 | `login_attempts` | Gli eventi contati a finestra scorrevole: i tentativi di accesso falliti e, con uno `scope` che comincia per `llm-`, le chiamate al modello fatte da una persona. Tiene il nome con cui è nata |
-| `voice_sessions` | Una chiamata autorizzata e non ancora aperta, con la sua copia della storia |
+| `voice_sessions` | Una chiamata autorizzata e non ancora aperta, con la sua copia della storia                                                                                                                    |
 
 **Le conversazioni**
 
-| Tabella | Cosa contiene |
-| --- | --- |
-| `chat_conversations` | Una conversazione, col suo canale (`voice` o `text`) fissato alla nascita |
-| `chat_messages` | I turni, in ordine di `created_at` |
-| `conversation_recordings` | L'audio della chiamata. La colonna del blob è `deferred`: non si legge se non la si chiede |
-| `conversation_evaluations` | Il giudizio dell'AI, col JSON dei sei criteri |
-| `conversation_reviews` | La revisione del docente sopra quel giudizio |
-| `message_annotations` | Le note del docente appuntate su singoli messaggi |
+| Tabella                    | Cosa contiene                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| `chat_conversations`       | Una conversazione, col suo canale (`voice` o `text`) fissato alla nascita                  |
+| `chat_messages`            | I turni, in ordine di `created_at`                                                         |
+| `conversation_recordings`  | L'audio della chiamata. La colonna del blob è `deferred`: non si legge se non la si chiede |
+| `conversation_evaluations` | Il giudizio dell'AI, col JSON dei sei criteri                                              |
+| `conversation_reviews`     | La revisione del docente sopra quel giudizio                                               |
+| `message_annotations`      | Le note del docente appuntate su singoli messaggi                                          |
 
 **Il resto**
 
-| Tabella | Cosa contiene |
-| --- | --- |
-| `avatars` | La persona simulata, con la sua scheda in `profile` |
-| `avatar_categories` | Come un'organizzazione raggruppa i propri avatar: nome e colore. Vedi [avatar-e-persona.md](avatar-e-persona.md) |
-| `training_paths`, `training_path_steps`, `training_path_assignments` | I percorsi a tappe, descritti in [training-e-report.md](training-e-report.md) |
-| `notification_reads` | L'unica cosa che si salva delle notifiche: cosa è già stato letto |
-| `technical_simulations`, `simulation_chunks`, `simulation_questions`, `simulation_attempts` | Il simulatore tecnico, descritto in [simulatore.md](simulatore.md). Sulla prima stanno anche l'esito dell'ultimo controllo del serbatoio e l'impronta delle domande su cui è girato |
-| `user_debriefings` | I quadri d'insieme su una persona, una riga per ogni volta che ne è stato chiesto uno, ciascuna con la fotografia delle prove che il modello aveva letto e con come si è mossa rispetto alla precedente. Vedi [training-e-report.md](training-e-report.md) |
-| `audit_logs` | Il registro delle azioni |
+| Tabella                                                                                     | Cosa contiene                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `avatars`                                                                                   | La persona simulata, con la sua scheda in `profile`                                                                                                                                                                                                        |
+| `avatar_categories`                                                                         | Come un'organizzazione raggruppa i propri avatar: nome e colore. Vedi [avatar-e-persona.md](avatar-e-persona.md)                                                                                                                                           |
+| `training_paths`, `training_path_steps`, `training_path_assignments`                        | I percorsi a tappe, descritti in [training-e-report.md](training-e-report.md)                                                                                                                                                                              |
+| `notification_reads`                                                                        | L'unica cosa che si salva delle notifiche: cosa è già stato letto                                                                                                                                                                                          |
+| `technical_simulations`, `simulation_chunks`, `simulation_questions`, `simulation_attempts` | Il simulatore tecnico, descritto in [simulatore.md](simulatore.md). Sulla prima stanno anche l'esito dell'ultimo controllo del serbatoio e l'impronta delle domande su cui è girato                                                                        |
+| `user_debriefings`                                                                          | I quadri d'insieme su una persona, una riga per ogni volta che ne è stato chiesto uno, ciascuna con la fotografia delle prove che il modello aveva letto e con come si è mossa rispetto alla precedente. Vedi [training-e-report.md](training-e-report.md) |
+| `audit_logs`                                                                                | Il registro delle azioni                                                                                                                                                                                                                                   |
 
 ## Due convenzioni che valgono ovunque
 
@@ -128,6 +127,17 @@ Tre proprietà da rispettare scrivendoci dentro:
 
 Il corollario pratico: **aggiornare l'applicazione non richiede nessun passo di
 migrazione da ricordare**. Si ricostruisce e si riparte.
+
+**Anche togliere una tabella passa di qui.** `user_selections` registrava quale
+avatar una persona aveva scelto: c'era la tabella, l'endpoint che la scriveva e
+un contatore in ogni risposta del catalogo, ma nessuna schermata chiamava
+quell'endpoint, perché la galleria apre direttamente la chat. Era quindi un
+dato personale conservato senza scopo, con una query aggregata pagata a ogni
+caricamento e una sezione sempre vuota nell'export dell'articolo 15. Quello che
+la selezione avrebbe dovuto dire lo dicono già le conversazioni, che hanno la
+persona, l'avatar e la data, ed è da lì che viene lo storico mostrato sulle
+tessere della galleria. Il modello è sparito, quindi su un database nuovo la
+tabella non nasce, e su uno esistente la porta via `_drop_user_selections`.
 
 ## Le scelte che ricorrono
 

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { Avatar } from '../../src/services/api'
 import AvatarCard from '../../src/components/AvatarCard'
 
-const avatar: Avatar = {
+const base: Avatar = {
   id: 'a-1',
   name: 'Cliente arrabbiato',
   image_url: '/static/avatars/a-1.png',
@@ -15,21 +15,22 @@ const avatar: Avatar = {
   category_color: 'violet',
   description: 'Chiama per un addebito che non riconosce',
   created_at: '2026-01-01T10:00:00Z',
-  selection_count: 3,
+  own_sessions: 0,
+  last_session_at: null,
 }
 
-function renderCard() {
+function renderCard(over: Partial<Avatar> = {}) {
   render(
     <MemoryRouter initialEntries={['/app']}>
       <Routes>
-        <Route path="/app" element={<AvatarCard avatar={avatar} index={0} />} />
+        <Route path="/app" element={<AvatarCard avatar={{ ...base, ...over }} index={0} />} />
         <Route path="/app/chat/:avatarId" element={<p>Chat aperta</p>} />
       </Routes>
     </MemoryRouter>,
   )
 }
 
-const scheda = () => screen.getByRole('button', { name: 'Parla con Cliente arrabbiato' })
+const scheda = () => screen.getByRole('link', { name: /Parla con Cliente arrabbiato/ })
 
 describe('AvatarCard', () => {
   it("presenta l'avatar con la sua targhetta", () => {
@@ -52,10 +53,16 @@ describe('AvatarCard', () => {
     expect(screen.getByText('Chat aperta')).toBeInTheDocument()
   })
 
-  /* La scheda è un div reso cliccabile, quindi la tastiera non la
-   * raggiungerebbe da sola: senza il ruolo, il focus e i due tasti, la
-   * galleria si potrebbe usare solo con il mouse. */
-  it('si apre anche da tastiera', async () => {
+  /* È un link vero e non un riquadro reso cliccabile: la tastiera lo
+   * raggiunge da sola, e con lui tornano il tasto centrale, «apri in una
+   * scheda nuova» e l'indirizzo da trascinare o copiare. */
+  it('è un link con il proprio indirizzo, non un riquadro cliccabile', () => {
+    renderCard()
+
+    expect(scheda()).toHaveAttribute('href', '/app/chat/a-1')
+  })
+
+  it('si apre da tastiera', async () => {
     renderCard()
 
     scheda().focus()
@@ -63,13 +70,53 @@ describe('AvatarCard', () => {
 
     expect(screen.getByText('Chat aperta')).toBeInTheDocument()
   })
+})
 
-  it('si apre anche con la barra spaziatrice', async () => {
+/* Quello che chi guarda ci ha già fatto: è l'informazione che si cerca
+ * scorrendo il catalogo, cioè da dove ricominciare e cosa non si è ancora
+ * provato. */
+describe('lo storico personale', () => {
+  it('dice quante sessioni e quando è stata l’ultima', () => {
+    renderCard({ own_sessions: 4, last_session_at: '2026-03-05T09:00:00Z' })
+
+    expect(screen.getByText(/4 sessioni/)).toBeInTheDocument()
+    expect(screen.getByText(/05 mar 2026/)).toBeInTheDocument()
+  })
+
+  it('al singolare non dice "1 sessioni"', () => {
+    renderCard({ own_sessions: 1, last_session_at: '2026-03-05T09:00:00Z' })
+
+    expect(screen.getByText(/^1 sessione,/)).toBeInTheDocument()
+  })
+
+  /* Una tessera mai affrontata non ha niente da raccontare: uno zero sarebbe
+   * rumore su ogni avatar nuovo del catalogo. */
+  it('su un avatar mai affrontato non mostra nessuno zero', () => {
     renderCard()
 
-    scheda().focus()
-    await userEvent.keyboard(' ')
+    expect(screen.queryByText(/session/)).not.toBeInTheDocument()
+  })
 
-    expect(screen.getByText('Chat aperta')).toBeInTheDocument()
+  /* L'invito cambia di conseguenza: la prima volta si comincia, dopo si
+   * rifà lo stesso scenario. */
+  it('invita a riprovare chi ci ha già parlato', () => {
+    renderCard()
+    expect(screen.getByText('Parla')).toBeInTheDocument()
+
+    renderCard({ own_sessions: 2 })
+    expect(screen.getByText('Riprova')).toBeInTheDocument()
+  })
+})
+
+/* Un ritratto che non arriva lasciava il testo alternativo su fondo scuro,
+ * che sembra una tessera rotta. */
+describe('quando il ritratto non arriva', () => {
+  it('mette una sagoma al posto della foto', () => {
+    renderCard()
+
+    fireEvent.error(screen.getByRole('img', { name: 'Cliente arrabbiato' }))
+
+    expect(screen.queryByRole('img', { name: 'Cliente arrabbiato' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Cliente arrabbiato' })).toBeInTheDocument()
   })
 })

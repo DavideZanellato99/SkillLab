@@ -14,7 +14,9 @@
 export const queryKeys = {
   avatars: {
     all: ['avatars'] as const,
-    list: (categoryId?: string) => ['avatars', 'list', categoryId ?? '__all__'] as const,
+    /** Il catalogo intero: il filtro per categoria è locale alla galleria,
+     *  quindi non ci sono più liste diverse per categoria da tenere in cache. */
+    list: () => ['avatars', 'list'] as const,
     detail: (id: string) => ['avatars', 'detail', id] as const,
   },
   categories: {

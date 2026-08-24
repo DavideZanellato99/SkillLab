@@ -22,7 +22,12 @@ export interface Avatar {
   category_color: string
   description: string | null
   created_at: string
-  selection_count: number
+  /** Quante sessioni ci ha già fatto chi guarda: sono le proprie, contate
+   *  dal server sull'utente della richiesta. Zero per un avatar mai
+   *  affrontato, e la tessera in quel caso non racconta niente. */
+  own_sessions: number
+  /** Quando è stata l'ultima delle proprie, null se non ce n'è nessuna. */
+  last_session_at: string | null
 }
 
 /** Una categoria del catalogo, come la vede chi si allena. */
@@ -274,21 +279,14 @@ export async function apiFetchBlob(endpoint: string, options: ApiFetchOptions = 
 
 // --- Avatars ---
 
-export const fetchAvatars = (categoryId?: string) =>
-  apiFetch<Avatar[]>('/api/avatars', {
-    params: categoryId ? { category_id: categoryId } : undefined,
-  })
+/** Il catalogo visibile a chi guarda. Intero: la galleria filtra per
+ *  categoria e cerca per nome sui dati che ha già (vedi `avatarFilters`). */
+export const fetchAvatars = () => apiFetch<Avatar[]>('/api/avatars')
 
 export const fetchAvatar = (avatarId: string) => apiFetch<Avatar>(`/api/avatars/${avatarId}`)
 
 /** Le categorie della propria organizzazione, nell'ordine deciso in admin. */
 export const fetchCategories = () => apiFetch<AvatarCategory[]>('/api/avatars/categories')
-
-export const selectAvatar = (avatarId: string) =>
-  apiFetch<MessageResponse>('/api/avatars/select', {
-    method: 'POST',
-    body: { avatar_id: avatarId },
-  })
 
 // --- Chat history (voice conversation transcripts) ---
 

@@ -287,3 +287,151 @@ export function SparkleIcon(props: IconProps) {
     </IconBase>
   )
 }
+
+/* ── Le icone della barra di navigazione ────────────────────────────────
+ *
+ * Erano disegnate riga per riga dentro Navbar, una per voce, e la stessa
+ * sagoma tornava altrove con un'altra misura: qui stanno sulla griglia di
+ * tutte le altre, e la barra le chiama per nome. */
+
+/** I quattro riquadri del catalogo: la galleria degli avatar. */
+export function GridIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+    </IconBase>
+  )
+}
+
+/* Due colonne di altezza diversa accanto a un asse: due prove messe una
+ * accanto all'altra, che è esattamente cosa fa la pagina di confronto. */
+export function CompareIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <rect x="4" y="9" width="5" height="11" rx="1" />
+      <rect x="15" y="5" width="5" height="15" rx="1" />
+    </IconBase>
+  )
+}
+
+/** I riquadri sbilanciati di un cruscotto, distinti dalla griglia regolare
+ *  della galleria: lì sono tutte celle uguali, qui riquadri diversi. */
+export function DashboardIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </IconBase>
+  )
+}
+
+/** La propria scheda: una sagoma sola, senza il più di chi ne crea una. */
+export function UserIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.58-6 8-6s8 2 8 6" />
+    </IconBase>
+  )
+}
+
+/** Il palazzo delle organizzazioni. */
+export function BuildingIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 21h18" />
+      <path d="M5 21V7l8-4v18" />
+      <path d="M19 21V11l-6-4" />
+      <line x1="9" y1="9" x2="9" y2="9.01" />
+      <line x1="9" y1="12" x2="9" y2="12.01" />
+      <line x1="9" y1="15" x2="9" y2="15.01" />
+    </IconBase>
+  )
+}
+
+/** Più sagome insieme: l'anagrafica degli avatar, che sono persone finte
+ *  ma pur sempre un gruppo di interlocutori. */
+export function UsersIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </IconBase>
+  )
+}
+
+/** Le tre colonne di un rendiconto: il report delle attività. */
+export function ChartIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+    </IconBase>
+  )
+}
+
+/** Il foglio scritto del registro di audit. */
+export function FileTextIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
+    </IconBase>
+  )
+}
+
+/** La porta con la freccia che ne esce: chiudere la sessione. */
+export function LogoutIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </IconBase>
+  )
+}
+
+/** Le tre righe che aprono la navigazione dove non ci sta in fila. */
+export function MenuIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </IconBase>
+  )
+}
+
+/** La lente della casella di ricerca e degli elenchi che non hanno dato
+ *  nessun risultato. */
+export function SearchIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </IconBase>
+  )
+}
+
+/** Il microfono: la telefonata, che è il gesto principale della galleria. */
+export function MicIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </IconBase>
+  )
+}

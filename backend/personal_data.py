@@ -54,7 +54,6 @@ from models import (
     TrainingPathStep,
     User,
     UserDebriefing,
-    UserSelection,
 )
 
 _RECORDINGS_DIR = "registrazioni"
@@ -382,20 +381,6 @@ def _debriefings(db: Session, user: User) -> list[dict]:
     ]
 
 
-def _selections(db: Session, user: User) -> list[dict]:
-    rows = (
-        db.query(UserSelection, Avatar)
-        .outerjoin(Avatar, Avatar.id == UserSelection.avatar_id)
-        .filter(UserSelection.user_id == user.id)
-        .order_by(UserSelection.selected_at.asc())
-        .all()
-    )
-    return [
-        {"avatar": avatar.name if avatar else None, "quando": _at(selection.selected_at)}
-        for selection, avatar in rows
-    ]
-
-
 def _sessions(db: Session, user: User) -> list[dict]:
     """Open sessions recorded against the account.
 
@@ -453,7 +438,6 @@ def _payload(db: Session, user: User) -> tuple[dict, dict[UUID, str]]:
         "percorsi_assegnati": _assignments(db, user),
         "simulazioni_tecniche": _simulation_attempts(db, user),
         "quadri_di_insieme": _debriefings(db, user),
-        "avatar_selezionati": _selections(db, user),
         "sessioni_di_accesso": _sessions(db, user),
         "registro_attivita": _activity(db, user),
     }, filenames

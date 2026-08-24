@@ -1,42 +1,50 @@
-﻿import { useState, useEffect } from 'react'
+/* La barra in cima, sempre presente: il logo, le sezioni e il proprio
+ * account.
+ *
+ * Qui resta solo l'impaginazione. Quali voci esistono e a chi si mostrano sta
+ * in `navEntries`, come si disegna una voce in `NavbarLink`, il menu del
+ * profilo e quello che sostituisce le voci su schermo stretto nei propri
+ * file: erano tutti dentro questo componente, che era diventato cinquecento
+ * righe in cui lo stesso blocco di classi compariva sei volte. */
+
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { OPEN_LOGIN_EVENT } from './public/openLogin'
 import { PublicNavLinks } from './public/PublicNav'
-import {
-  isSuperAdmin,
-  isAdmin,
-  isStandardUser,
-  ROLE_LABELS,
-  ROLE_BADGE_CLASSES,
-  getInitials,
-} from '../services/auth'
 import AuthModal from './AuthModal'
+import { UserIcon } from './icons'
+import NavbarLink from './NavbarLink'
+import NavbarMobileMenu from './NavbarMobileMenu'
+import NavbarUserMenu from './NavbarUserMenu'
+import { mainNavEntries } from './navEntries'
 import NotificationsBell from './NotificationsBell'
-import Badge from './Badge'
-
-const menuItemCls =
-  'flex w-full cursor-pointer items-center gap-2 rounded-lg border-none bg-transparent p-2 text-left text-[0.82rem] font-medium text-slate-400 no-underline transition hover:bg-white/8 hover:text-slate-100'
 
 export default function Navbar() {
-  const location = useLocation()
-  const { user, isAuthenticated, logout } = useAuth()
-
-  const isHome = location.pathname === '/app'
-  const isDashboardPage = location.pathname === '/app/admin/dashboard'
-  /* Anche dentro la mappa di un percorso la voce resta accesa: il singolo
-     percorso è dentro i propri percorsi, non accanto. */
-  const isPathsPage = location.pathname.startsWith('/app/percorsi')
-  const isComparisonPage = location.pathname === '/app/confronto'
-  /* Anche mentre si svolge un test la voce resta accesa: la pagina del
-     singolo test è dentro il simulatore, non accanto. */
-  const isSimulationPage = location.pathname.startsWith('/app/simulatore')
+  const { pathname } = useLocation()
+  const { user, isAuthenticated } = useAuth()
 
   /* Aperta o chiusa, niente di più: quello che c'è dentro (i campi, il passo
      del cambio password, l'errore) vive in AuthModal, che nasce alla sua
      apertura e muore alla sua chiusura. */
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
+
+  /* Quale dei due menu è aperto, e non due interruttori separati: escono
+     dallo stesso angolo della barra e aperti insieme si coprirebbero a
+     vicenda. Aprire l'uno chiude l'altro. */
+  const [openMenu, setOpenMenu] = useState<'user' | 'sections' | null>(null)
+  const closeMenus = useCallback(() => setOpenMenu(null), [])
+  const toggleMenu = useCallback(
+    (menu: 'user' | 'sections') => setOpenMenu((current) => (current === menu ? null : menu)),
+    [],
+  )
+
+  /* Arrivati alla pagina il menu non serve più. Chiuderlo al click della voce
+     non basterebbe: si va altrove anche dal logo o tornando indietro con il
+     browser, e resterebbe aperto sopra la pagina nuova. */
+  useEffect(() => {
+    setOpenMenu(null)
+  }, [pathname])
 
   /* I pulsanti delle pagine pubbliche chiedono di aprire la modale con
      questo evento: la modale vive qui, e loro non la conoscono. */
@@ -46,16 +54,14 @@ export default function Navbar() {
     return () => window.removeEventListener(OPEN_LOGIN_EVENT, openLogin)
   }, [])
 
-  const handleLogout = () => {
-    logout()
-    setShowUserMenu(false)
-  }
+  const entries = isAuthenticated ? mainNavEntries(user) : []
 
   return (
     <>
       <nav
         className="fixed inset-x-0 top-0 z-[100] h-16 animate-slide-down border-b border-white/6 bg-night/70 backdrop-blur-2xl backdrop-saturate-150"
         id="navbar"
+        aria-label="Barra di navigazione"
       >
         <div className="flex h-full w-full items-center justify-between px-4">
           {/* Logo. Porta a casa propria, che è la home pubblica per chi sta
@@ -91,460 +97,54 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Center nav links.
+          {/* Le sezioni, in fila al centro.
               Prima dell'accesso lo stesso posto ospita la voce del sito
-              pubblico, che è una sola e sta in fila alla stessa larghezza
-              delle altre. */}
-          <div className="flex items-center gap-1 max-md:hidden" id="navbar-links">
+              pubblico, che è una sola: resta in fila a qualunque larghezza,
+              quindi solo le voci di chi è collegato si ritirano nel pannello
+              a comparsa. */}
+          <div
+            className={`flex items-center gap-1 ${isAuthenticated ? 'max-md:hidden' : ''}`}
+            id="navbar-links"
+          >
             {!isAuthenticated && <PublicNavLinks />}
-            {isAuthenticated && (
-              <Link
-                to="/app"
-                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isHome
-                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                </svg>
-                Galleria Avatar
-              </Link>
-            )}
-            {/* Per tutti: le simulazioni della propria organizzazione, e
-                tutte quante per il super admin. */}
-            {isAuthenticated && (
-              <Link
-                to="/app/simulatore"
-                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isSimulationPage
-                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M9 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4" />
-                  <path d="m9 7 2 2 4-4" />
-                  <path d="M8 16h8" />
-                </svg>
-                Simulatore Tecnico
-              </Link>
-            )}
-            {/* I propri percorsi, per chi si allena. Chi amministra non ne
-                riceve: compone e assegna dalla gestione percorsi, che sta
-                nel menu del profilo, e questa voce porterebbe a una pagina
-                che il suo ruolo non apre. */}
-            {isAuthenticated && isStandardUser(user) && (
-              <Link
-                to="/app/percorsi"
-                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isPathsPage
-                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="12" r="6" />
-                  <circle cx="12" cy="12" r="2" />
-                </svg>
-                Percorsi
-              </Link>
-            )}
-            {/* Per tutti: lo studente confronta i propri tentativi, un
-                admin quelli delle persone del proprio tenant. */}
-            {isAuthenticated && (
-              <Link
-                to="/app/confronto"
-                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isComparisonPage
-                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="12" y1="20" x2="12" y2="4" />
-                  <rect x="4" y="9" width="5" height="11" rx="1" />
-                  <rect x="15" y="5" width="5" height="15" rx="1" />
-                </svg>
-                Confronto
-              </Link>
-            )}
-            {isAuthenticated && isAdmin(user) && (
-              <Link
-                to="/app/admin/dashboard"
-                className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-[0.85rem] font-medium no-underline transition ${
-                  isDashboardPage
-                    ? "bg-violet-600/10 text-slate-100 after:absolute after:-bottom-px after:left-1/2 after:h-0.5 after:w-5 after:-translate-x-1/2 after:rounded-sm after:bg-gradient-to-r after:from-violet-600 after:to-cyan-500 after:content-['']"
-                    : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
-                }`}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="3" width="7" height="9" rx="1" />
-                  <rect x="14" y="3" width="7" height="5" rx="1" />
-                  <rect x="14" y="12" width="7" height="9" rx="1" />
-                  <rect x="3" y="16" width="7" height="5" rx="1" />
-                </svg>
-                Dashboard
-              </Link>
-            )}
+            {entries.map((entry) => (
+              <NavbarLink key={entry.to} entry={entry} isActive={entry.isActive(pathname)} />
+            ))}
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-4" id="navbar-actions">
+          {/* A destra: le notifiche e il proprio account, o l'accesso */}
+          <div className="flex items-center gap-4 max-md:gap-2" id="navbar-actions">
             {isAuthenticated && user ? (
-              /* Authenticated — show user menu */
               <>
                 <NotificationsBell />
-                <div className="relative">
-                  <button
-                    className="flex cursor-pointer items-center gap-2 rounded-full border border-white/6 bg-white/4 py-1 pl-1 pr-2 text-[0.82rem] font-medium text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100 max-[480px]:p-1"
-                    onClick={() => setShowUserMenu(!showUserMenu)}
-                    id="user-menu-trigger"
-                  >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
-                      {getInitials(user.nome, user.cognome, user.email)}
-                    </div>
-                    <span className="max-w-[120px] truncate max-[480px]:hidden">
-                      {user.nome && user.cognome ? `${user.nome} ${user.cognome}` : user.email}
-                    </span>
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`shrink-0 opacity-50 transition-transform ${showUserMenu ? 'rotate-180' : ''}`}
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-
-                  {showUserMenu && (
-                    <div
-                      className="absolute right-0 top-[calc(100%+8px)] z-[100] min-w-60 animate-menu-in rounded-2xl border border-white/6 bg-gray-900/95 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
-                      id="user-menu-dropdown"
-                    >
-                      <div className="flex items-center gap-2 p-2">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-base font-bold text-white">
-                          {getInitials(user.nome, user.cognome, user.email)}
-                        </div>
-                        <div className="flex min-w-0 flex-col">
-                          <span className="truncate text-[0.85rem] font-semibold text-slate-100">
-                            {user.nome && user.cognome
-                              ? `${user.nome} ${user.cognome}`
-                              : user.email}
-                          </span>
-                          <span className="truncate text-xs text-slate-500">{user.email}</span>
-                          <Badge tone={ROLE_BADGE_CLASSES[user.ruolo] ?? ''} className="mt-1">
-                            {ROLE_LABELS[user.ruolo] ?? user.ruolo}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="my-1 h-px bg-white/6" />
-                      <Link
-                        to="/app/profile"
-                        className={menuItemCls}
-                        onClick={() => setShowUserMenu(false)}
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <circle cx="12" cy="8" r="4" />
-                          <path d="M4 20c0-4 3.58-6 8-6s8 2 8 6" />
-                        </svg>
-                        Il Mio Profilo
-                      </Link>
-                      {isAdmin(user) && (
-                        <>
-                          {isSuperAdmin(user) && (
-                            <Link
-                              to="/app/admin"
-                              className={menuItemCls}
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                <circle cx="8.5" cy="7" r="4" />
-                                <line x1="20" y1="8" x2="20" y2="14" />
-                                <line x1="23" y1="11" x2="17" y2="11" />
-                              </svg>
-                              Gestione Utenti
-                            </Link>
-                          )}
-                          {isSuperAdmin(user) && (
-                            <Link
-                              to="/app/admin/organizations"
-                              className={menuItemCls}
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M3 21h18" />
-                                <path d="M5 21V7l8-4v18" />
-                                <path d="M19 21V11l-6-4" />
-                                <line x1="9" y1="9" x2="9" y2="9.01" />
-                                <line x1="9" y1="12" x2="9" y2="12.01" />
-                                <line x1="9" y1="15" x2="9" y2="15.01" />
-                              </svg>
-                              Gestione Organizzazioni
-                            </Link>
-                          )}
-                          {isSuperAdmin(user) && (
-                            <Link
-                              to="/app/admin/avatars"
-                              className={menuItemCls}
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                <circle cx="9" cy="7" r="4" />
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                              </svg>
-                              Gestione Avatar
-                            </Link>
-                          )}
-                          {/* Scrivere i test tecnici è di entrambi i ruoli di
-                              amministrazione, come comporre i percorsi: chi
-                              amministra una sola organizzazione conosce le
-                              procedure su cui la sua gente va interrogata. */}
-                          <Link
-                            to="/app/admin/simulations"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M9 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4" />
-                              <path d="m9 7 2 2 4-4" />
-                              <path d="M8 16h8" />
-                            </svg>
-                            Gestione Simulazioni
-                          </Link>
-                          {/* Comporre i percorsi e assegnarli: sta qui e non
-                              in barra perché è il lavoro di chi insegna, non
-                              di chi si allena, e la voce in barra ora porta
-                              ai propri. */}
-                          <Link
-                            to="/app/admin/training"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <circle cx="12" cy="12" r="6" />
-                              <circle cx="12" cy="12" r="2" />
-                            </svg>
-                            Gestione Percorsi
-                          </Link>
-                          <Link
-                            to="/app/admin/report"
-                            className={menuItemCls}
-                            onClick={() => setShowUserMenu(false)}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <line x1="18" y1="20" x2="18" y2="10" />
-                              <line x1="12" y1="20" x2="12" y2="4" />
-                              <line x1="6" y1="20" x2="6" y2="14" />
-                            </svg>
-                            Report Attività
-                          </Link>
-                          {isSuperAdmin(user) && (
-                            <Link
-                              to="/app/admin/logs"
-                              className={menuItemCls}
-                              onClick={() => setShowUserMenu(false)}
-                            >
-                              <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="8" y1="13" x2="16" y2="13" />
-                                <line x1="8" y1="17" x2="13" y2="17" />
-                              </svg>
-                              Registro Attività
-                            </Link>
-                          )}
-                        </>
-                      )}
-                      <div className="my-1 h-px bg-white/6" />
-                      <button
-                        className={`${menuItemCls} hover:bg-red-500/10 hover:text-red-300`}
-                        onClick={handleLogout}
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                          <polyline points="16 17 21 12 16 7" />
-                          <line x1="21" y1="12" x2="9" y2="12" />
-                        </svg>
-                        Esci
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <NavbarUserMenu
+                  user={user}
+                  isOpen={openMenu === 'user'}
+                  onToggle={() => toggleMenu('user')}
+                  onClose={closeMenus}
+                />
+                {/* Le stesse sezioni della fila centrale, dove non ci stanno */}
+                <NavbarMobileMenu
+                  entries={entries}
+                  isOpen={openMenu === 'sections'}
+                  onToggle={() => toggleMenu('sections')}
+                  onClose={closeMenus}
+                />
               </>
             ) : (
               /* Prima dell'accesso: il pulsante che apre la modale */
-              <>
-                <button
-                  className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1.5 text-[0.82rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 hover:shadow-[0_4px_12px_rgba(124,58,237,0.15)]"
-                  onClick={() => setShowAuthModal(true)}
-                  id="auth-trigger-btn"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                  Accedi
-                </button>
-              </>
+              <button
+                className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1.5 text-[0.82rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 hover:shadow-[0_4px_12px_rgba(124,58,237,0.15)]"
+                onClick={() => setShowAuthModal(true)}
+                id="auth-trigger-btn"
+              >
+                <UserIcon size={16} />
+                Accedi
+              </button>
             )}
           </div>
         </div>
       </nav>
-
-      {/* Close user menu when clicking outside */}
-      {showUserMenu && (
-        <div className="fixed inset-0 z-[99]" onClick={() => setShowUserMenu(false)} />
-      )}
 
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
     </>

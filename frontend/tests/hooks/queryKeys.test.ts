@@ -10,8 +10,7 @@ import { queryKeys } from '../../src/hooks/queryKeys'
 /** Tutte le chiavi che l'app può produrre, con il nome del punto che le crea. */
 const chiavi: [string, readonly unknown[]][] = [
   ['avatars.all', queryKeys.avatars.all],
-  ['avatars.list', queryKeys.avatars.list('cat-1')],
-  ['avatars.list senza categoria', queryKeys.avatars.list()],
+  ['avatars.list', queryKeys.avatars.list()],
   ['avatars.detail', queryKeys.avatars.detail('a-1')],
   ['categories.all', queryKeys.categories.all],
   ['categories.mine', queryKeys.categories.mine],
@@ -84,7 +83,6 @@ describe('queryKeys', () => {
       expect(chiave.includes(undefined), `${nome} contiene undefined`).toBe(false)
     }
 
-    expect(queryKeys.avatars.list()).toEqual(['avatars', 'list', '__all__'])
     expect(queryKeys.training.assignments()).toEqual([
       'training',
       'assignments',
@@ -100,7 +98,7 @@ describe('queryKeys', () => {
    * scrittura. Un ramo che non comincia con `all` resterebbe vecchio. */
   it('tiene ogni area sotto il prefisso che le mutation invalidano', () => {
     const rami: [readonly unknown[], readonly (readonly unknown[])[]][] = [
-      [queryKeys.avatars.all, [queryKeys.avatars.list('cat-1'), queryKeys.avatars.detail('a-1')]],
+      [queryKeys.avatars.all, [queryKeys.avatars.list(), queryKeys.avatars.detail('a-1')]],
       [
         queryKeys.training.all,
         [

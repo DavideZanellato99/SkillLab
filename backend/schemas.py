@@ -73,7 +73,13 @@ class AvatarResponse(AvatarBase):
 
     id: UUID
     created_at: datetime
-    selection_count: int = 0
+    # Il proprio storico con questo interlocutore: quante sessioni ci ha già
+    # fatto chi sta guardando, e quando è stata l'ultima. Sono per definizione
+    # le proprie, contate sull'utente della richiesta (vedi routers/avatars),
+    # perché la galleria dice a ognuno cosa ha fatto lui e non quanto un
+    # avatar è frequentato dagli altri.
+    own_sessions: int = 0
+    last_session_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -86,15 +92,6 @@ class AvatarCategoryResponse(BaseModel):
     color: str
 
     model_config = {"from_attributes": True}
-
-
-# --- Selection Schemas ---
-
-
-class SelectionCreate(BaseModel):
-    """Schema for creating a new avatar selection."""
-
-    avatar_id: UUID
 
 
 # --- Chat Schemas (voice conversation transcripts) ---

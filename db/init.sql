@@ -150,18 +150,6 @@ CREATE TABLE public.token_session (
 
 
 --
--- Name: user_selections; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.user_selections (
-    id uuid NOT NULL,
-    user_id uuid NOT NULL,
-    avatar_id uuid NOT NULL,
-    selected_at timestamp without time zone
-);
-
-
---
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -249,14 +237,6 @@ ALTER TABLE ONLY public.roles
 
 ALTER TABLE ONLY public.token_session
     ADD CONSTRAINT token_session_pkey PRIMARY KEY (jti);
-
-
---
--- Name: user_selections user_selections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_selections
-    ADD CONSTRAINT user_selections_pkey PRIMARY KEY (id);
 
 
 --
@@ -380,20 +360,6 @@ CREATE INDEX ix_token_session_user_id ON public.token_session USING btree (user_
 
 
 --
--- Name: ix_user_selections_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_user_selections_id ON public.user_selections USING btree (id);
-
-
---
--- Name: ix_user_selections_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_user_selections_user_id ON public.user_selections USING btree (user_id);
-
-
---
 -- Name: ix_users_cognito_sub; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -467,22 +433,6 @@ ALTER TABLE ONLY public.conversation_evaluations
 
 ALTER TABLE ONLY public.conversation_recordings
     ADD CONSTRAINT conversation_recordings_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.chat_conversations(id) ON DELETE CASCADE;
-
-
---
--- Name: user_selections user_selections_avatar_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_selections
-    ADD CONSTRAINT user_selections_avatar_id_fkey FOREIGN KEY (avatar_id) REFERENCES public.avatars(id);
-
-
---
--- Name: user_selections user_selections_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.user_selections
-    ADD CONSTRAINT user_selections_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --

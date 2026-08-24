@@ -36,7 +36,6 @@ from models import (
     Organization,
     TrainingPathAssignment,
     User,
-    UserSelection,
 )
 
 BASE = "/api/admin/organizations"
@@ -445,7 +444,6 @@ def test_delete_takes_the_whole_tenant_with_it(
             result={"summary": "s", "criteria": []},
         )
     )
-    db_session.add(UserSelection(user_id=standard_user.id, avatar_id=avatar.id))
     make_assigned_path(
         standard_user, [{"avatar": avatar, "target": 8.0}], assigned_by=super_admin_user
     )
@@ -479,7 +477,6 @@ def test_delete_takes_the_whole_tenant_with_it(
         .count()
         == 0
     )
-    assert db_session.query(UserSelection).filter(UserSelection.user_id == user_id).count() == 0
     assert (
         db_session.query(TrainingPathAssignment)
         .filter(TrainingPathAssignment.user_id == user_id)

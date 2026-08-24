@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -240,5 +240,115 @@ describe('menu di chi è entrato', () => {
     await userEvent.click(screen.getByRole('link', { name: /Il Mio Profilo/ }))
 
     expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+  })
+})
+
+/* La chat di un avatar si apre dalla galleria e le appartiene: è la
+ * schermata in cui si passa più tempo, e con la voce spenta la barra non
+ * direbbe più dove si è. */
+describe('la voce della galleria', () => {
+  it('resta accesa mentre si parla con un avatar', () => {
+    renderNavbar('user', '/app/chat/a-1')
+
+    expect(screen.getByRole('link', { name: /Galleria Avatar/ }).className).toContain(
+      'bg-violet-600/10',
+    )
+  })
+})
+
+/* Sotto i 768px le voci non stanno in fila: il pannello a comparsa è l'unico
+ * modo di raggiungerle, e senza offrirebbe solo logo e profilo. */
+describe('la navigazione su schermo stretto', () => {
+  const apriPannello = () =>
+    userEvent.click(screen.getByRole('button', { name: 'Apri il menu di navigazione' }))
+
+  it('offre le stesse sezioni della fila', async () => {
+    renderNavbar('user')
+    await apriPannello()
+
+    const pannello = screen.getByRole('navigation', { name: 'Sezioni' })
+    for (const voce of [/Galleria Avatar/, /Simulatore Tecnico/, /Percorsi/, /Confronto/]) {
+      expect(within(pannello).getByRole('link', { name: voce })).toBeInTheDocument()
+    }
+  })
+
+  it('mostra a ciascuno le proprie', async () => {
+    renderNavbar('organization_admin')
+    await apriPannello()
+
+    const pannello = screen.getByRole('navigation', { name: 'Sezioni' })
+    expect(within(pannello).getByRole('link', { name: /Dashboard/ })).toBeInTheDocument()
+    expect(within(pannello).queryByRole('link', { name: /Percorsi/ })).not.toBeInTheDocument()
+  })
+
+  it('si chiude aprendo una sezione', async () => {
+    renderNavbar('user')
+    await apriPannello()
+
+    const pannello = screen.getByRole('navigation', { name: 'Sezioni' })
+    await userEvent.click(within(pannello).getByRole('link', { name: /Confronto/ }))
+
+    expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
+  })
+
+  it('si chiude con Esc', async () => {
+    renderNavbar('user')
+    await apriPannello()
+
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
+  })
+
+  /* Prima dell'accesso la barra ha una voce sola, che sta in fila a
+   * qualunque larghezza: nessun pannello da aprire. */
+  it('non compare prima di entrare', () => {
+    renderNavbar(null)
+
+    expect(
+      screen.queryByRole('button', { name: 'Apri il menu di navigazione' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('il menu del profilo, da tastiera', () => {
+  it('si chiude con Esc', async () => {
+    renderNavbar('user')
+    await apriMenu()
+
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+  })
+
+  it('dice se è aperto a chi non lo vede', async () => {
+    renderNavbar('user')
+
+    expect(menuUtente()).toHaveAttribute('aria-expanded', 'false')
+    await apriMenu()
+    expect(menuUtente()).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
+/* I due menu escono dallo stesso angolo: aperti insieme si coprirebbero. */
+describe('i due menu della barra', () => {
+  it('aprendo le sezioni si chiude il profilo', async () => {
+    renderNavbar('user')
+
+    await apriMenu()
+    await userEvent.click(screen.getByRole('button', { name: 'Apri il menu di navigazione' }))
+
+    expect(screen.getByRole('navigation', { name: 'Sezioni' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+  })
+
+  it('aprendo il profilo si chiudono le sezioni', async () => {
+    renderNavbar('user')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Apri il menu di navigazione' }))
+    await apriMenu()
+
+    expect(screen.getByRole('link', { name: /Il Mio Profilo/ })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
   })
 })

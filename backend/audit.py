@@ -156,7 +156,6 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     ("POST", "/api/admin/avatars/draft"): AuditAction(
         "avatar.draft", "Scheda persona generata", "avatar"
     ),
-    ("POST", "/api/avatars/select"): AuditAction("avatar.select", "Avatar selezionato", "avatar"),
     # Categorie degli avatar
     ("POST", "/api/admin/avatar-categories"): AuditAction(
         "avatar_category.create", "Categoria avatar creata", "avatar"

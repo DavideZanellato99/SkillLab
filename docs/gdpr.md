@@ -22,12 +22,12 @@ propri utenti, i propri avatar e le proprie conversazioni, isolati da quelli
 di ogni altra (`models.Organization`, e il filtro per tenant in ogni
 endpoint).
 
-| Soggetto | Ruolo |
-| --- | --- |
-| L'organizzazione cliente | **Titolare del trattamento**: decide di far allenare i propri dipendenti e di leggerne le valutazioni |
-| SkillLab | **Responsabile del trattamento** ex art. 28: tratta i dati per conto del cliente e secondo le sue istruzioni |
-| OpenAI, ElevenLabs, Cartesia, AWS | **Sub responsabili** (vedi sezione 6) |
-| Il dipendente che si allena | **Interessato** |
+| Soggetto                          | Ruolo                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| L'organizzazione cliente          | **Titolare del trattamento**: decide di far allenare i propri dipendenti e di leggerne le valutazioni        |
+| SkillLab                          | **Responsabile del trattamento** ex art. 28: tratta i dati per conto del cliente e secondo le sue istruzioni |
+| OpenAI, ElevenLabs, Cartesia, AWS | **Sub responsabili** (vedi sezione 6)                                                                        |
+| Il dipendente che si allena       | **Interessato**                                                                                              |
 
 Conseguenza pratica: **l'informativa ai dipendenti la deve dare il datore di
 lavoro, non SkillLab**. Il compito di SkillLab è fornirgli le informazioni di
@@ -35,22 +35,22 @@ questo documento e firmare l'accordo art. 28.
 
 ## 2. Quali dati personali tratta l'applicazione
 
-| Categoria | Dove | Origine |
-| --- | --- | --- |
-| Email | `users.email` | Inserita dall'amministratore che crea l'account |
-| Nome e cognome | `users.nome`, `users.cognome` | Inseriti dall'amministratore o dall'utente stesso |
-| Identificativo di autenticazione | `users.cognito_sub` | Generato da AWS Cognito |
-| Ruolo, stato, organizzazione, ultimo accesso | `users.*` | Generati dall'applicazione |
-| Ultima attività nell'applicazione | `users.last_activity_at` | Scritta a intervalli di pochi minuti a ogni richiesta autenticata (`backend/activity.py`) |
-| **Registrazione audio della chiamata** | `conversation_recordings.audio` | Registrata dal browser durante la telefonata simulata |
-| **Trascrizione della conversazione** | `chat_messages.content` | Prodotta dallo speech to text, oppure digitata in modalità chat |
-| **Valutazione automatica della prestazione** | `conversation_evaluations.result`, `.overall_score` | Generata da un modello linguistico |
-| Revisione umana e annotazioni del formatore | `conversation_reviews`, `message_annotations` | Scritte da un formatore |
-| **Quadro d'insieme sull'andamento della persona** | `user_debriefings.content` | Generato da un modello linguistico che ha letto le sue ultime prove e il quadro scritto la volta prima, su richiesta di un formatore. Se ne conserva uno per ogni volta che è stato chiesto, e dal secondo in poi ciascuno dice se la persona è migliorata o peggiorata |
-| Percorsi di formazione assegnati | `training_path_assignments` | Assegnati da un amministratore. Le tappe di cui sono fatti stanno sul percorso, che è dell'organizzazione e non della persona |
-| Indirizzo IP e User-Agent | `token_session`, `audit_logs` | Raccolti a ogni accesso e a ogni azione |
-| Registro delle azioni compiute | `audit_logs` | Scritto dal middleware a ogni richiesta che modifica qualcosa |
-| Email di chi ha creato o modificato una riga | `users`, `organizations`, `avatars`, `avatar_categories`, `technical_simulations`, `training_paths`, `user_debriefings`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`) |
+| Categoria                                         | Dove                                                                                                                                                            | Origine                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email                                             | `users.email`                                                                                                                                                   | Inserita dall'amministratore che crea l'account                                                                                                                                                                                                                         |
+| Nome e cognome                                    | `users.nome`, `users.cognome`                                                                                                                                   | Inseriti dall'amministratore o dall'utente stesso                                                                                                                                                                                                                       |
+| Identificativo di autenticazione                  | `users.cognito_sub`                                                                                                                                             | Generato da AWS Cognito                                                                                                                                                                                                                                                 |
+| Ruolo, stato, organizzazione, ultimo accesso      | `users.*`                                                                                                                                                       | Generati dall'applicazione                                                                                                                                                                                                                                              |
+| Ultima attività nell'applicazione                 | `users.last_activity_at`                                                                                                                                        | Scritta a intervalli di pochi minuti a ogni richiesta autenticata (`backend/activity.py`)                                                                                                                                                                               |
+| **Registrazione audio della chiamata**            | `conversation_recordings.audio`                                                                                                                                 | Registrata dal browser durante la telefonata simulata                                                                                                                                                                                                                   |
+| **Trascrizione della conversazione**              | `chat_messages.content`                                                                                                                                         | Prodotta dallo speech to text, oppure digitata in modalità chat                                                                                                                                                                                                         |
+| **Valutazione automatica della prestazione**      | `conversation_evaluations.result`, `.overall_score`                                                                                                             | Generata da un modello linguistico                                                                                                                                                                                                                                      |
+| Revisione umana e annotazioni del formatore       | `conversation_reviews`, `message_annotations`                                                                                                                   | Scritte da un formatore                                                                                                                                                                                                                                                 |
+| **Quadro d'insieme sull'andamento della persona** | `user_debriefings.content`                                                                                                                                      | Generato da un modello linguistico che ha letto le sue ultime prove e il quadro scritto la volta prima, su richiesta di un formatore. Se ne conserva uno per ogni volta che è stato chiesto, e dal secondo in poi ciascuno dice se la persona è migliorata o peggiorata |
+| Percorsi di formazione assegnati                  | `training_path_assignments`                                                                                                                                     | Assegnati da un amministratore. Le tappe di cui sono fatti stanno sul percorso, che è dell'organizzazione e non della persona                                                                                                                                           |
+| Indirizzo IP e User-Agent                         | `token_session`, `audit_logs`                                                                                                                                   | Raccolti a ogni accesso e a ogni azione                                                                                                                                                                                                                                 |
+| Registro delle azioni compiute                    | `audit_logs`                                                                                                                                                    | Scritto dal middleware a ogni richiesta che modifica qualcosa                                                                                                                                                                                                           |
+| Email di chi ha creato o modificato una riga      | `users`, `organizations`, `avatars`, `avatar_categories`, `technical_simulations`, `training_paths`, `user_debriefings`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`)                                                                                                                                                                                         |
 
 Due precisazioni che contano.
 
@@ -86,14 +86,14 @@ inviata a un modello linguistico di OpenAI, che assegna un punteggio da 1 a
 10 su sei criteri, con un peso ciascuno
 (`backend/openai_service.py`, `EVALUATION_CRITERIA`):
 
-| Criterio | Peso |
-| --- | --- |
-| Corretta identificazione del cliente | 22 |
-| Comprensione della casistica e risposte pertinenti | 22 |
-| Rispetto delle fasi della chiamata | 18 |
-| Empatia e gestione dello stato d'animo del cliente | 15 |
-| Sicurezza, competenza e autorevolezza | 13 |
-| Appropriatezza di linguaggio, cortesia e professionalità | 10 |
+| Criterio                                                 | Peso |
+| -------------------------------------------------------- | ---- |
+| Corretta identificazione del cliente                     | 22   |
+| Comprensione della casistica e risposte pertinenti       | 22   |
+| Rispetto delle fasi della chiamata                       | 18   |
+| Empatia e gestione dello stato d'animo del cliente       | 15   |
+| Sicurezza, competenza e autorevolezza                    | 13   |
+| Appropriatezza di linguaggio, cortesia e professionalità | 10   |
 
 Il punteggio complessivo è la media pesata. Sotto 8 il modello produce anche
 suggerimenti di miglioramento, e può citare fino a tre messaggi della
@@ -175,16 +175,16 @@ monitoraggio sistematico, dati trattati su larga scala) la **DPIA ex art. 35
 
 ## 6. Destinatari e trasferimenti extra UE
 
-| Fornitore | Cosa riceve | Quando |
-| --- | --- | --- |
-| **ElevenLabs** | L'audio del microfono dell'operatore, in streaming | Durante ogni telefonata simulata |
-| **OpenAI** | Il testo della conversazione (entrambe le parti) e la scheda dell'avatar, senza identità dell'operatore | Ad ogni battuta, e a fine chiamata per la valutazione |
-| **OpenAI** | I documenti caricati per le simulazioni tecniche, senza nessun dato dell'operatore | Al caricamento, alla generazione delle domande e al controllo del serbatoio, mai durante lo svolgimento di un test |
-| **OpenAI** | Il testo che un amministratore incolla per farsi scrivere la bozza di una scheda persona: un caso raccontato a parole, oppure una conversazione reale **che chi la incolla deve avere già anonimizzato** | Solo quando un amministratore preme "genera la scheda" |
-| **OpenAI** | Le trascrizioni delle ultime prove di una persona e i giudizi già scritti su di esse, senza la sua identità, per il quadro d'insieme | Solo quando un formatore lo fa scrivere dal report attività |
-| **OpenAI** | L'obiettivo formativo scritto da un amministratore e il catalogo dell'organizzazione (nomi, categorie e descrizioni degli avatar, titoli dei test), che non contengono dati di nessuna persona reale | Solo quando un amministratore chiede una bozza di percorso |
-| **Cartesia** | Il testo generato dell'avatar, per sintetizzarlo in voce | Durante ogni telefonata simulata |
-| **AWS Cognito** | Solo l'indirizzo email, più la password gestita da Cognito | Alla creazione dell'account e a ogni accesso |
+| Fornitore       | Cosa riceve                                                                                                                                                                                              | Quando                                                                                                             |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **ElevenLabs**  | L'audio del microfono dell'operatore, in streaming                                                                                                                                                       | Durante ogni telefonata simulata                                                                                   |
+| **OpenAI**      | Il testo della conversazione (entrambe le parti) e la scheda dell'avatar, senza identità dell'operatore                                                                                                  | Ad ogni battuta, e a fine chiamata per la valutazione                                                              |
+| **OpenAI**      | I documenti caricati per le simulazioni tecniche, senza nessun dato dell'operatore                                                                                                                       | Al caricamento, alla generazione delle domande e al controllo del serbatoio, mai durante lo svolgimento di un test |
+| **OpenAI**      | Il testo che un amministratore incolla per farsi scrivere la bozza di una scheda persona: un caso raccontato a parole, oppure una conversazione reale **che chi la incolla deve avere già anonimizzato** | Solo quando un amministratore preme "genera la scheda"                                                             |
+| **OpenAI**      | Le trascrizioni delle ultime prove di una persona e i giudizi già scritti su di esse, senza la sua identità, per il quadro d'insieme                                                                     | Solo quando un formatore lo fa scrivere dal report attività                                                        |
+| **OpenAI**      | L'obiettivo formativo scritto da un amministratore e il catalogo dell'organizzazione (nomi, categorie e descrizioni degli avatar, titoli dei test), che non contengono dati di nessuna persona reale     | Solo quando un amministratore chiede una bozza di percorso                                                         |
+| **Cartesia**    | Il testo generato dell'avatar, per sintetizzarlo in voce                                                                                                                                                 | Durante ogni telefonata simulata                                                                                   |
+| **AWS Cognito** | Solo l'indirizzo email, più la password gestita da Cognito                                                                                                                                               | Alla creazione dell'account e a ogni accesso                                                                       |
 
 Nome e cognome non escono mai dall'infrastruttura di SkillLab: restano nella
 tabella `users` (`backend/cognito_service.py`, `admin_create_user` invia solo
@@ -225,15 +225,15 @@ Sono configurati in `backend/.env` e applicati automaticamente. **I valori
 qui sotto devono coincidere con quelli dichiarati nell'informativa del
 cliente**: se si cambiano lì vanno cambiati anche nell'informativa.
 
-| Dato | Finestra attuale | Variabile |
-| --- | --- | --- |
-| Registrazione audio della chiamata | 90 giorni | `AUDIO_RECORDING_RETENTION_DAYS` |
-| Conversazione intera: messaggi, valutazione, revisione, annotazioni | 730 giorni | `CONVERSATION_RETENTION_DAYS` |
-| Tentativi delle simulazioni tecniche: risposte date e punteggio | 730 giorni | `SIMULATION_ATTEMPT_RETENTION_DAYS` |
-| Quadro d'insieme su una persona | Quella delle conversazioni, misurata sulla prova più recente che aveva letto | `CONVERSATION_RETENTION_DAYS` |
-| Registro delle azioni (con IP e User-Agent) | 180 giorni | `AUDIT_LOG_RETENTION_DAYS` |
-| Sessioni di accesso (IP e User-Agent) | Alla scadenza del token: 1 ora, 30 giorni per l'ancora di sessione | non configurabile |
-| Copie di sicurezza del database, che contengono tutto quanto sopra | 7 giorni: 28 dump, uno ogni 6 ore | `BACKUP_KEEP`, `BACKUP_INTERVAL_HOURS` |
+| Dato                                                                | Finestra attuale                                                             | Variabile                              |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------- |
+| Registrazione audio della chiamata                                  | 90 giorni                                                                    | `AUDIO_RECORDING_RETENTION_DAYS`       |
+| Conversazione intera: messaggi, valutazione, revisione, annotazioni | 730 giorni                                                                   | `CONVERSATION_RETENTION_DAYS`          |
+| Tentativi delle simulazioni tecniche: risposte date e punteggio     | 730 giorni                                                                   | `SIMULATION_ATTEMPT_RETENTION_DAYS`    |
+| Quadro d'insieme su una persona                                     | Quella delle conversazioni, misurata sulla prova più recente che aveva letto | `CONVERSATION_RETENTION_DAYS`          |
+| Registro delle azioni (con IP e User-Agent)                         | 180 giorni                                                                   | `AUDIT_LOG_RETENTION_DAYS`             |
+| Sessioni di accesso (IP e User-Agent)                               | Alla scadenza del token: 1 ora, 30 giorni per l'ancora di sessione           | non configurabile                      |
+| Copie di sicurezza del database, che contengono tutto quanto sopra  | 7 giorni: 28 dump, uno ogni 6 ore                                            | `BACKUP_KEEP`, `BACKUP_INTERVAL_HOURS` |
 
 L'audio scade per primo di proposito: è il dato più invasivo e dopo il
 debrief non aggiunge nulla alla trascrizione. La conversazione gli
@@ -281,13 +281,13 @@ giorni ma indefinito.
 
 ## 8. Diritti degli interessati
 
-| Diritto | Come è soddisfatto |
-| --- | --- |
+| Diritto                                 | Come è soddisfatto                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, tutti i quadri d'insieme scritti su di lui con la direzione che ciascuno indicava, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
-| **Cancellazione** (art. 17) | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, selezioni, percorsi assegnati e il quadro d'insieme, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`) |
-| **Rettifica** (art. 16) | L'anagrafica la tiene l'amministrazione: nome, cognome ed email li corregge un amministratore su richiesta dell'interessato, che dalla pagina Profilo li vede in sola lettura |
-| **Intervento umano** (art. 22) | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4) |
-| **Opposizione, limitazione** | Da gestire contrattualmente con il titolare: non esistono nel software |
+| **Cancellazione** (art. 17)             | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, percorsi assegnati e il quadro d'insieme, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`)                                                                                                                                                                                                                |
+| **Rettifica** (art. 16)                 | L'anagrafica la tiene l'amministrazione: nome, cognome ed email li corregge un amministratore su richiesta dell'interessato, che dalla pagina Profilo li vede in sola lettura                                                                                                                                                                                                                                                                                    |
+| **Intervento umano** (art. 22)          | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4)                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Opposizione, limitazione**            | Da gestire contrattualmente con il titolare: non esistono nel software                                                                                                                                                                                                                                                                                                                                                                                           |
 
 **Cosa sopravvive deliberatamente a una cancellazione**, e va dichiarato
 nell'informativa:
@@ -354,6 +354,7 @@ scrive niente sul dispositivo.
 ## 10. Misure di sicurezza (art. 32)
 
 **Autenticazione e sessioni**
+
 - Identità gestite da AWS Cognito, password mai in transito verso SkillLab
   se non per l'inoltro all'autenticazione.
 - Token trasportati solo in cookie `HttpOnly` `Secure` `SameSite=Lax`:
@@ -370,6 +371,7 @@ scrive niente sul dispositivo.
   sospesa, viene bloccato a ogni richiesta, non solo al login.
 
 **La pagina nel browser** (`caddy/Caddyfile`, blocco `header`)
+
 - `Content-Security-Policy` su ogni risposta: il codice può arrivare solo
   dall'applicazione e i dati possono essere mandati solo all'applicazione.
   È la misura che limita i danni di un'iniezione, perché il cookie `HttpOnly`
@@ -386,6 +388,7 @@ scrive niente sul dispositivo.
   davvero, su tutte e due le strade del proxy.
 
 **Isolamento e accessi**
+
 - Separazione rigida per organizzazione su ogni endpoint: un amministratore
   non vede mai dati di un altro tenant.
 - La scheda persona degli avatar (obiettivi nascosti, segreti dello scenario)
@@ -395,6 +398,7 @@ scrive niente sul dispositivo.
   nessun endpoint può cancellarne righe: le rimuove solo la scadenza.
 
 **Infrastruttura**
+
 - Container applicativo eseguito da utente non privilegiato, con
   `no-new-privileges` su tutti i servizi.
 - In produzione nessuna porta pubblicata oltre a quella del frontend, e solo

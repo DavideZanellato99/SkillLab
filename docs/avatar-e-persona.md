@@ -6,15 +6,25 @@ il roleplay sia il metro con cui la conversazione viene poi giudicata.
 
 ## Cosa contiene un avatar
 
-| Campo | Cosa è |
-| --- | --- |
-| `profile` | La scheda persona, in JSON. È il cuore: senza, l'avatar non esiste |
-| `name` | Derivato da `NOME` e `COGNOME` della scheda, non scritto a parte |
-| `category_id` | La categoria in cui è raggruppato, una riga di `avatar_categories` |
-| `description`, `image_url` | Come si presenta nella galleria |
-| `organization_id` | Il tenant a cui appartiene: si vede solo lì dentro |
-| `voice_id` | La voce Cartesia con cui parla al telefono |
-| `deleted_at` | La data di archiviazione, NULL finché è attivo |
+| Campo                      | Cosa è                                                             |
+| -------------------------- | ------------------------------------------------------------------ |
+| `profile`                  | La scheda persona, in JSON. È il cuore: senza, l'avatar non esiste |
+| `name`                     | Derivato da `NOME` e `COGNOME` della scheda, non scritto a parte   |
+| `category_id`              | La categoria in cui è raggruppato, una riga di `avatar_categories` |
+| `description`, `image_url` | Come si presenta nella galleria                                    |
+| `organization_id`          | Il tenant a cui appartiene: si vede solo lì dentro                 |
+| `voice_id`                 | La voce Cartesia con cui parla al telefono                         |
+| `deleted_at`               | La data di archiviazione, NULL finché è attivo                     |
+
+Nella risposta dell'API, accanto a questi, viaggiano due numeri che nel
+database non ci sono e che valgono solo per chi sta guardando: `own_sessions`,
+quante sessioni ci ha già fatto lui con quell'avatar, e `last_session_at`,
+quando è stata l'ultima. Li calcola `_own_history` in
+[routers/avatars.py](../backend/routers/avatars.py) con una query raggruppata
+sola, filtrata sull'utente della richiesta, e la galleria li mostra in fondo
+alla tessera. Sono le proprie e non esiste nessun parametro con cui chiedere
+quelle di un altro: la galleria racconta a ognuno cosa ha fatto, non quanto un
+interlocutore è frequentato dai colleghi.
 
 ## Le categorie
 
@@ -53,15 +63,15 @@ La riempie a mano il super admin da `/app/admin/avatars`
 ([AvatarAdminPage](../frontend/src/components/AvatarAdminPage.tsx)), ed è
 organizzata in sezioni:
 
-| Sezione | Cosa descrive |
-| --- | --- |
-| Anagrafica | Chi è: età, provenienza, famiglia, residenza |
-| Lavoro e situazione finanziaria | Professione, redditi, patrimonio, e quanto ne capisce di banca, investimenti, mutui |
-| Storia e vita personale | Eventi, paure, obiettivi, aspirazioni |
-| Personalità | Estroversione, empatia, pazienza, fiducia, propensione al conflitto e al rischio, capacità di ascolto, espressi in percentuali |
-| Stato emotivo | Emozione iniziale e intensità, e cosa lo calma o lo irrita |
-| Stile | Lunghezza delle risposte, velocità del parlato, ironia, dialetto, formalità |
-| Scenario | Tipo di caso, vera causa del problema, obiezioni previste, obiettivo nascosto, fatti immutabili, segreti, cosa non rivelare spontaneamente |
+| Sezione                         | Cosa descrive                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Anagrafica                      | Chi è: età, provenienza, famiglia, residenza                                                                                               |
+| Lavoro e situazione finanziaria | Professione, redditi, patrimonio, e quanto ne capisce di banca, investimenti, mutui                                                        |
+| Storia e vita personale         | Eventi, paure, obiettivi, aspirazioni                                                                                                      |
+| Personalità                     | Estroversione, empatia, pazienza, fiducia, propensione al conflitto e al rischio, capacità di ascolto, espressi in percentuali             |
+| Stato emotivo                   | Emozione iniziale e intensità, e cosa lo calma o lo irrita                                                                                 |
+| Stile                           | Lunghezza delle risposte, velocità del parlato, ironia, dialetto, formalità                                                                |
+| Scenario                        | Tipo di caso, vera causa del problema, obiezioni previste, obiettivo nascosto, fatti immutabili, segreti, cosa non rivelare spontaneamente |
 
 **I campi che non si applicano restano vuoti.** Non zero, non "/": un valore
 messo per riempire viene letto dal modello come un dato vero. Il codice si
@@ -96,9 +106,9 @@ la stessa richiesta.
 **Le due fonti non chiedono la stessa cosa al modello**, e sono due prompt
 diversi perché sono due lavori diversi:
 
-| Fonte | Cosa fa il modello |
-| --- | --- |
-| Un caso raccontato | Inventa attorno al caso un cliente completo, con l'unico vincolo che i dettagli non si contraddicano fra loro |
+| Fonte                                                      | Cosa fa il modello                                                                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Un caso raccontato                                         | Inventa attorno al caso un cliente completo, con l'unico vincolo che i dettagli non si contraddicano fra loro                   |
 | Una conversazione vera, già anonimizzata da chi la incolla | **Ricava** dal testo come parla, cosa lo ha portato a scrivere, cosa lo irrita e cosa ha dichiarato, e inventa solo il contorno |
 
 Nel secondo caso inventare al posto di leggere è l'errore, ed è scritto nel
@@ -174,11 +184,11 @@ monologo. Al telefono è il difetto peggiore, perché mezzo minuto di avatar è
 mezzo minuto in cui chi si sta addestrando sta zitto ad ascoltare.
 `_regola_lunghezza` traduce quindi l'etichetta in una misura:
 
-| Scheda | Di norma | Tetto | Prima battuta |
-| --- | --- | --- | --- |
-| Breve | Una frase, al massimo due | Venti parole | Quaranta parole |
-| Media, e ogni scheda che non lo dice | Due o tre frasi | Quaranta parole | Sessanta parole |
-| Lunga | Quattro o cinque frasi | Settanta parole | Novanta parole |
+| Scheda                               | Di norma                  | Tetto           | Prima battuta   |
+| ------------------------------------ | ------------------------- | --------------- | --------------- |
+| Breve                                | Una frase, al massimo due | Venti parole    | Quaranta parole |
+| Media, e ogni scheda che non lo dice | Due o tre frasi           | Quaranta parole | Sessanta parole |
+| Lunga                                | Quattro o cinque frasi    | Settanta parole | Novanta parole  |
 
 La battuta di apertura ha il tetto doppio perché presentarsi, dire nome e
 cognome ed esporre il motivo della chiamata non sta in una frase.
@@ -194,14 +204,14 @@ caso in cui parlava di più.
 **Il canale cambia il mezzo, non la persona.** Lo stesso avatar risponde al
 telefono e in chat, e la scheda è la stessa. Cambia solo la cornice:
 
-| | Telefono (`voice`) | Chat (`text`) |
-| --- | --- | --- |
-| Il mezzo | "Stai parlando al telefono" | "Stai scrivendo nella chat" |
-| Chi apre | L'operatore risponde, poi tocca all'avatar | L'operatore saluta, poi tocca all'avatar |
-| Tratti dello stile | Velocità del parlato inclusa | Velocità del parlato tolta, non vuol dire niente per iscritto |
-| Regole di realismo | Esitazioni, ripetizioni, non sovrapporsi | Messaggi brevi, uno alla volta, niente formattazione |
-| Limite di lunghezza | "Ogni tua risposta sta in…", misurato in parole dette | "Ogni tuo messaggio sta in…", stessa misura |
-| Intercalari | "guardi", "senta", "aspetti un attimo" | Le versioni che funzionano scritte |
+|                     | Telefono (`voice`)                                    | Chat (`text`)                                                 |
+| ------------------- | ----------------------------------------------------- | ------------------------------------------------------------- |
+| Il mezzo            | "Stai parlando al telefono"                           | "Stai scrivendo nella chat"                                   |
+| Chi apre            | L'operatore risponde, poi tocca all'avatar            | L'operatore saluta, poi tocca all'avatar                      |
+| Tratti dello stile  | Velocità del parlato inclusa                          | Velocità del parlato tolta, non vuol dire niente per iscritto |
+| Regole di realismo  | Esitazioni, ripetizioni, non sovrapporsi              | Messaggi brevi, uno alla volta, niente formattazione          |
+| Limite di lunghezza | "Ogni tua risposta sta in…", misurato in parole dette | "Ogni tuo messaggio sta in…", stessa misura                   |
+| Intercalari         | "guardi", "senta", "aspetti un attimo"                | Le versioni che funzionano scritte                            |
 
 In tutti e due i casi **è l'operatore ad aprire**, e c'è una regola esplicita
 contro lo scambio di ruolo: qualunque cosa dica l'operatore, anche se saluta in
@@ -250,11 +260,11 @@ Le tre funzioni che governano la cosa stanno in
 [routers/avatars.py](../backend/routers/avatars.py) e vale la pena distinguerle,
 perché fanno cose diverse:
 
-| Funzione | Cosa fa |
-| --- | --- |
-| `_visible_avatars` | Filtro per **tenant**. Gli archiviati passano di qui: chi ha studiato con loro deve continuare a raggiungere le proprie trascrizioni |
-| `active_avatars` | Toglie gli archiviati. Si usa dove il catalogo viene **offerto**: galleria, filtro delle categorie, selezione |
-| `ensure_trainable` | Rifiuta di **iniziare** qualcosa di nuovo su un archiviato, con un 409 e non un 404: l'avatar esiste, semplicemente non ci si allena più |
+| Funzione           | Cosa fa                                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `_visible_avatars` | Filtro per **tenant**. Gli archiviati passano di qui: chi ha studiato con loro deve continuare a raggiungere le proprie trascrizioni                                                       |
+| `active_avatars`   | Toglie gli archiviati. Si usa dove il catalogo viene **offerto**, cioè la galleria: il singolo avatar si serve comunque, perché una sessione passata ha bisogno di un nome e di una faccia |
+| `ensure_trainable` | Rifiuta di **iniziare** qualcosa di nuovo su un archiviato, con un 409 e non un 404: l'avatar esiste, semplicemente non ci si allena più                                                   |
 
 Una conversazione già aperta quando l'avatar viene archiviato si può finire. È
 solo l'inizio di una nuova che viene bloccato.

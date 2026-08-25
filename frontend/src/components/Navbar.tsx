@@ -8,6 +8,7 @@
  * righe in cui lo stesso blocco di classi compariva sei volte. */
 
 import { useCallback, useEffect, useState } from 'react'
+import type { MouseEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { OPEN_LOGIN_EVENT } from './public/openLogin'
@@ -18,6 +19,7 @@ import NavbarLink from './NavbarLink'
 import NavbarMobileMenu from './NavbarMobileMenu'
 import NavbarUserMenu from './NavbarUserMenu'
 import { mainNavEntries } from './navEntries'
+import { MAIN_CONTENT_ID } from './mainContent'
 import NotificationsBell from './NotificationsBell'
 
 export default function Navbar() {
@@ -56,8 +58,34 @@ export default function Navbar() {
 
   const entries = isAuthenticated ? mainNavEntries(user) : []
 
+  /* Il salto al contenuto sposta il fuoco a mano invece di lasciar fare
+     all'ancora: un href con il cancelletto resterebbe scritto nella barra
+     dell'indirizzo, e un indirizzo con dentro il salto è quello che poi
+     finisce in un segnalibro o in un collegamento mandato a qualcuno. */
+  const skipToContent = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    const main = document.getElementById(MAIN_CONTENT_ID)
+    if (!main) return
+    main.focus()
+    main.scrollIntoView({ behavior: 'instant', block: 'start' })
+  }
+
   return (
     <>
+      {/* Prima di ogni altra cosa raggiungibile da tastiera, e invisibile
+          finché non lo si raggiunge: la barra è montata sempre e sta in cima
+          a ogni pagina, quindi senza questo chi naviga da tastiera
+          riattraversa il logo, le sezioni, le notifiche e il menu del proprio
+          account a ogni cambio di schermata, prima di arrivare a quello per
+          cui è entrato. */}
+      <a
+        href={`#${MAIN_CONTENT_ID}`}
+        onClick={skipToContent}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-[110] focus:rounded-lg focus:border focus:border-violet-600/40 focus:bg-gray-900 focus:px-4 focus:py-2 focus:text-[0.82rem] focus:font-semibold focus:text-slate-100 focus:shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+      >
+        Salta al contenuto
+      </a>
+
       <nav
         className="fixed inset-x-0 top-0 z-[100] h-16 animate-slide-down border-b border-white/6 bg-night/70 backdrop-blur-2xl backdrop-saturate-150"
         id="navbar"
@@ -98,12 +126,17 @@ export default function Navbar() {
           </Link>
 
           {/* Le sezioni, in fila al centro.
+              Si ritirano nel pannello a comparsa sotto i 1024px e non sotto i
+              768: quattro voci con etichette come "Simulatore Tecnico"
+              occupano da sole più di metà barra, e fra le due misure non
+              sparivano né stavano, si schiacciavano contro il menu del
+              proprio account.
               Prima dell'accesso lo stesso posto ospita la voce del sito
               pubblico, che è una sola: resta in fila a qualunque larghezza,
               quindi solo le voci di chi è collegato si ritirano nel pannello
               a comparsa. */}
           <div
-            className={`flex items-center gap-1 ${isAuthenticated ? 'max-md:hidden' : ''}`}
+            className={`flex items-center gap-1 ${isAuthenticated ? 'max-lg:hidden' : ''}`}
             id="navbar-links"
           >
             {!isAuthenticated && <PublicNavLinks />}

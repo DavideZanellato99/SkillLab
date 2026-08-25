@@ -1619,7 +1619,7 @@ pulsante può aprire soltanto quello che il server gli manderebbe comunque.
 | `GET /api/simulations/attempts/{id}` | Chi lo ha svolto, o un admin del tenant a cui **chi lo ha svolto** appartiene | Un tentativo con la sua correzione completa. È quello che si apre cliccando una riga nella dashboard o un proprio tentativo passato |
 | `GET /api/simulations/{id}/results` | Admin, e per un organization admin solo i tentativi delle persone della sua organizzazione | Tutti i tentativi su una simulazione: è la linguetta "Risultati" accanto alle domande, e guarda la prova dal lato del test invece che da quello della persona. Serve a chi le domande le ha scritte, quindi sta dietro lo stesso ruolo della pagina che la apre |
 | `GET /api/admin/simulations-report` | Admin | Tutti i tentativi in un colpo solo, chi li ha svolti e come è andata: è la sezione del simulatore nella dashboard (vedi [training-e-report.md](training-e-report.md)) |
-| `GET /api/comparison/simulation-attempts` | L'utente, o un admin per una persona del proprio ambito | I test consegnati da una persona sola, dal più vecchio, con le risposte: è la linguetta del simulatore nella pagina di confronto |
+| `GET /api/comparison/simulation-attempts` | L'utente, o un admin per una persona del proprio ambito | I test consegnati da una persona sola, dal più vecchio, con l'esito di ogni domanda (id, testo, giusta o sbagliata): è la linguetta del simulatore nella pagina di confronto |
 
 Chi non ha diritto di leggere un tentativo riceve 404 e non 403: l'esistenza
 stessa della riga non è un'informazione da dare.

@@ -18,14 +18,17 @@ const errorToneCls: Record<BannerVariant, string> = {
 export default function FormError({
   message,
   variant = 'form',
+  className = '',
 }: {
   message: string
   variant?: BannerVariant
+  /** Solo quello che dipende da dove sta il banner, come la larghezza. */
+  className?: string
 }) {
   const iconSize = variant === 'page' ? 18 : 16
   return (
     <div
-      className={`${bannerBaseCls} ${bannerSizeCls[variant]} ${errorToneCls[variant]}`}
+      className={`${bannerBaseCls} ${bannerSizeCls[variant]} ${errorToneCls[variant]} ${className}`}
       role="alert"
     >
       <svg

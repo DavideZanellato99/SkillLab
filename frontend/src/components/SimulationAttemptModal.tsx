@@ -5,7 +5,7 @@ import DeleteAttemptDialog from './DeleteAttemptDialog'
 import ModalShell from './ModalShell'
 import ModalDeleteButton from './ModalDeleteButton'
 import LoadingState from './LoadingState'
-import FormError from './FormError'
+import LoadError from './LoadError'
 import SimulationResult from './SimulationResult'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
@@ -49,22 +49,33 @@ export default function SimulationAttemptModal({
   /** Vero quando a rileggere il test è chi lo ha svolto. */
   own?: boolean
 }) {
-  const { data: attempt, isLoading, error } = useAttempt(attemptId)
+  const { data: attempt, isLoading, error, refetch, isFetching } = useAttempt(attemptId)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
   const canDelete = !own && onDeleted !== undefined
 
   return (
-    <ModalShell onClose={onClose} size="full" padding="none" layout="column">
+    <ModalShell
+      onClose={onClose}
+      size="full"
+      padding="none"
+      layout="column"
+      closeLabel="Chiudi dettaglio tentativo"
+    >
       {isLoading ? (
         <LoadingState message="Caricamento del test..." variant="modal" />
       ) : error || !attempt ? (
-        <div className="p-8">
-          <FormError
-            message={
-              error instanceof Error ? error.message : 'Impossibile caricare questo tentativo.'
-            }
-          />
-        </div>
+        /* Con il comando per richiederlo, come nel dettaglio di una
+           conversazione: un caricamento caduto è l'unica cosa a cui si può
+           rimediare restando dov'è, e qui l'alternativa era chiudere la
+           schermata e riaprirla. */
+        <LoadError
+          message={
+            error instanceof Error ? error.message : 'Impossibile caricare questo tentativo.'
+          }
+          onRetry={() => void refetch()}
+          isRetrying={isFetching}
+          className="p-8"
+        />
       ) : (
         <>
           <header className="flex items-start justify-between gap-4 border-b border-white/6 px-8 py-5 pr-16">

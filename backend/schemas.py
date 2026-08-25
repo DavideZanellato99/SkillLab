@@ -1387,19 +1387,20 @@ class SimulationAnswerOutcome(BaseModel):
     The question travels with its own text and not just its id: two attempts
     at the same test are matched by question, and a question that has been
     rewritten since must still be readable next to the answer it got.
-    """
+
+    Three fields, and none of them is what was answered. The comparison draws
+    a green or a red mark per question, so `is_correct` is all it needs, and
+    it exists on all four kinds, which is why this screen needed no other
+    field when two more arrived. What was picked, what was right and where
+    the question sat in the run used to ride along unread: every attempt in
+    the list carried them, for the two that get opened to ignore them, and
+    what was actually answered is read from the attempt itself
+    (`GET /api/simulations/attempts/{id}`), which the screen already opens
+    for exactly that."""
 
     question_id: UUID
-    position: int
     text: str
     is_correct: bool
-    # None when the question was left blank
-    selected_option: int | None = None
-    # None on every kind but multiple choice, where there is nothing to pick:
-    # the two attempts are still matched question by question, and
-    # `is_correct` is what the comparison draws. It exists on all four kinds,
-    # which is why this screen needed no other field when two more arrived
-    correct_option: int | None = None
 
 
 class SimulationComparisonAttempt(BaseModel):

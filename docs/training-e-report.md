@@ -594,6 +594,40 @@ cui si guardano entrambe, ripetere il selettore in ciascuna metà sarebbe due
 modi di dire la stessa cosa, e un riquadro suo sopra i filtri faceva tre
 pannelli da attraversare prima di arrivare a un voto.
 
+Si sceglie **cercando**, con lo stesso `SearchSelect` della dashboard e non con
+una tendina: un'aula intera si scorreva voce per voce, mentre il nome che si
+cerca lo si sa già. Accanto a ciascuno **quante prove ha**, che è quello che
+decide se aprirlo, perché sotto le due non c'è confronto da fare: il conteggio
+arrivava dal server fin dal primo giorno e non lo leggeva nessuno.
+
+**Le due metà si caricano ognuna per conto suo.** Le due chiamate partono
+insieme, ma la linguetta aperta aspetta solo i propri dati: legarle faceva
+attendere alle conversazioni l'elenco dei test, che in quel momento nessuno sta
+guardando. Per la stessa ragione il numero fra parentesi compare **quando è
+quello vero**, e non prima: durante il caricamento le due liste sono vuote, e
+un "(0)" che diventa poi "(12)" ha detto una cosa falsa proprio mentre si
+decideva dove andare.
+
+**La persona e la linguetta stanno nell'indirizzo** (`?persona=&prova=`). Un
+confronto è una cosa che un docente tiene aperta accanto a un'altra scheda o
+riapre dopo essere andato a leggere una trascrizione, e il tasto indietro deve
+riportarlo sulla persona di prima invece di farlo uscire dalla pagina. La
+linguetta **sostituisce** il passo invece di aggiungerne uno, perché passare da
+una prova all'altra è guardare la stessa pagina da un'altra parte, mentre la
+persona è un'altra pagina. I filtri e la coppia restano invece locali: si
+cambiano di continuo mentre si guarda, e riempirebbero la cronologia di passi
+che nessuno vuole rifare a ritroso. A uno studente la persona nell'indirizzo
+non serve a niente ed è ignorata: il server gli risponderebbe comunque con le
+proprie prove, e la pagina intanto si scriverebbe accanto al titolo il nome di
+qualcun altro.
+
+Le due card in fondo, una per prova, sono la stessa card
+([ComparisonAttemptCard](../frontend/src/components/ComparisonAttemptCard.tsx)):
+la targhetta del posto, il titolo, le targhette della specie, il voto in
+piccolo, la riga di contorno e il comando per aprire erano scritti due volte, e
+cambia solo quello che sta in mezzo, cioè le parole della valutazione da una
+parte e quante risposte sono andate a segno dall'altra.
+
 | Metà          | Componente                                                                        | Cosa c'è sotto il verdetto                                                                                     |
 | ------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Conversazioni | [ComparisonConversations](../frontend/src/components/ComparisonConversations.tsx) | I sei criteri della valutazione, appaiati per chiave                                                           |
@@ -655,7 +689,12 @@ l'admin del suo tenant: lì `isOwn` cambia solo l'intestazione, che a chi rilegg
 il proprio test porta il suo nome.
 
 In nessuna delle due il cestino compare, perché il confronto non passa
-`onDeleted`: non è una schermata di amministrazione delle prove. Una revisione
+`onDeleted`: non è una schermata di amministrazione delle prove. Le due
+schermate si comportano allo stesso modo anche quando il caricamento cade: il
+motivo e accanto il comando per richiederlo
+([LoadError](../frontend/src/components/LoadError.tsx)), invece del solo
+messaggio, perché l’alternativa era chiudere quello che si stava leggendo e
+riaprirlo. Una revisione
 scritta dalla trascrizione ricarica invece i tentativi, o il docente
 correggerebbe un voto continuando a leggere il precedente.
 
@@ -744,6 +783,13 @@ tre ragioni per cui un confronto non si può fare): è l'unica delle tre a cui c
 guarda può rimediare sul momento, e il filtro da allargare deve restare a
 portata di mano.
 
+Al riquadro vuoto si aggiunge, **solo per chi può scegliere una persona**, cosa
+fare: un admin atterra sulle proprie prove, che sono quasi sempre zero, e
+leggeva soltanto che non c'è niente da confrontare mentre le prove della sua
+gente erano a un gesto di distanza, dall'altra parte della pagina. Il
+suggerimento non compare se non c'è ancora nessuno da scegliere, o manderebbe a
+un elenco vuoto.
+
 Il dettaglio domanda per domanda **compare solo fra due prove sullo stesso
 test**, e le domande si appaiano per id e mai per posizione: una domanda
 riscritta dopo il primo tentativo è una domanda diversa, e appaiarla sulla
@@ -760,7 +806,11 @@ l'altro non ha avuto, finivano sparse fra quelle che ripetono un esito già
 noto. Le
 risposte viaggiano già con l'elenco dei tentativi invece di aspettare una
 seconda chiamata sui due scelti: sono l'unica cosa che rende confrontabili due
-prove sullo stesso test, che è il motivo per cui uno lo rifà.
+prove sullo stesso test, che è il motivo per cui uno lo rifà. Ridotte però a
+**tre campi**, l'id della domanda, il testo e l'esito, che è quello che il
+confronto disegna: cosa fosse stato scelto e cosa fosse giusto si leggono
+aprendo il tentativo, e viaggiavano non letti per ognuno dei tentativi di un
+elenco che cresce con tutto quello che quella persona ha consegnato.
 
 Il selettore delle persone conta **entrambe le prove**: chi ha solo svolto dei
 test deve poterci finire, o la metà scritta si aprirebbe su nessuno.

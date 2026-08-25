@@ -215,7 +215,10 @@ def list_simulation_attempts(
     The answers ride along instead of waiting for a second call on the two
     that get picked: they are the only thing that makes two attempts at the
     SAME test comparable question by question, which is the whole point of
-    retaking one.
+    retaking one. They are cut down to what that comparison draws, three
+    fields per question: carried in full, the unread half of every answer
+    was the heaviest thing in a response that grows with everything the
+    person has ever delivered.
     """
     subject = _subject_or_404(db, current_user, user_id)
 
@@ -245,17 +248,14 @@ def list_simulation_attempts(
             score=attempt.score,
             # La fotografia scritta alla consegna, non le domande di adesso:
             # un tentativo resta leggibile anche se il test è stato riscritto.
+            # Tre campi e non l'intera risposta: lo schermo del confronto
+            # disegna un segno verde o rosso per domanda, e cosa fosse stato
+            # scelto si legge aprendo il tentativo.
             answers=[
                 SimulationAnswerOutcome(
                     question_id=answer["question_id"],
-                    position=answer["position"],
                     text=answer["text"],
                     is_correct=answer["is_correct"],
-                    # Assenti su un test a risposta aperta, dove non c'è
-                    # niente da scegliere: il confronto si regge su
-                    # is_correct, che i due tipi hanno entrambi
-                    selected_option=answer.get("selected_option"),
-                    correct_option=answer.get("correct_option"),
                 )
                 for answer in (attempt.answers or [])
             ],

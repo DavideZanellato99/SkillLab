@@ -29,16 +29,17 @@ export interface Attempt {
   criteria: EvaluationCriterionScore[]
 }
 
-/* Com'è andata una domanda, per appaiare due prove sullo stesso test. */
+/* Com'è andata una domanda, per appaiare due prove sullo stesso test.
+ *
+ * Tre campi, e nessuno dei tre è cosa sia stato risposto: il confronto
+ * disegna un segno verde o rosso per domanda, e cosa fosse stato scelto si
+ * legge aprendo il tentativo, che è quello che il comando in fondo alle card
+ * fa già. Ogni tentativo dell'elenco portava anche la scelta, la risposta
+ * giusta e la posizione, che nessuno leggeva. */
 export interface SimulationAnswerOutcome {
   question_id: string
-  position: number
   text: string
   is_correct: boolean
-  /** null quando la domanda è stata lasciata in bianco, o è aperta. */
-  selected_option: number | null
-  /** null sui test a risposta aperta, dove non c'è niente da scegliere. */
-  correct_option: number | null
 }
 
 /* Il gemello scritto di Attempt: un test tecnico consegnato.

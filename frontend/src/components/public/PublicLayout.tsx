@@ -10,6 +10,7 @@
 import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import PublicFooter from './PublicFooter'
+import { mainContentCls, mainContentProps } from '../mainContent'
 
 export default function PublicLayout() {
   const { pathname, hash } = useLocation()
@@ -21,9 +22,9 @@ export default function PublicLayout() {
 
   return (
     <>
-      <div className="flex-1">
+      <main {...mainContentProps} className={`${mainContentCls} flex-1`}>
         <Outlet />
-      </div>
+      </main>
       <PublicFooter />
     </>
   )

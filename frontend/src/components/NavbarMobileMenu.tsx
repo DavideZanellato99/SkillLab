@@ -1,10 +1,14 @@
 /* La navigazione su schermo stretto.
  *
- * Sotto i 768px le voci non stanno in fila e la barra le nascondeva senza
+ * Sotto i 1024px le voci non stanno in fila e la barra le nascondeva senza
  * metterci niente al posto: dal telefono restavano solo il logo e il menu
  * del profilo, e il simulatore, i percorsi e il confronto non si potevano
  * più raggiungere in nessun modo, benché le pagine esistessero e il ruolo le
  * aprisse. Qui le stesse voci tornano in un pannello a tutta larghezza.
+ *
+ * La soglia è quella della fila, e cambiarne una vuol dire cambiare
+ * l'altra: fra le due misure le voci resterebbero in fila schiacciate, o
+ * sparirebbero senza che questo pannello ci sia.
  *
  * Sono le stesse di `mainNavEntries`, non una copia scritta per il piccolo:
  * una sezione nuova compare in fila e nel pannello con lo stesso gesto.
@@ -43,7 +47,7 @@ export default function NavbarMobileMenu({
     <>
       <button
         type="button"
-        className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100 max-md:flex"
+        className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100 max-lg:flex"
         onClick={onToggle}
         aria-label={isOpen ? 'Chiudi il menu di navigazione' : 'Apri il menu di navigazione'}
         aria-expanded={isOpen}
@@ -58,14 +62,14 @@ export default function NavbarMobileMenu({
           {/* Il velo copre la pagina ma non la barra: il pulsante che ha
               aperto il pannello deve restare quello che lo richiude. */}
           <div
-            className="fixed inset-x-0 bottom-0 top-16 z-[98] bg-night/60 backdrop-blur-sm md:hidden"
+            className="fixed inset-x-0 bottom-0 top-16 z-[98] bg-night/60 backdrop-blur-sm lg:hidden"
             onClick={onClose}
             aria-hidden="true"
           />
           <nav
             id="navbar-mobile-menu"
             aria-label="Sezioni"
-            className="fixed inset-x-0 top-16 z-[99] animate-menu-in border-b border-white/6 bg-gray-900/95 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.5)] backdrop-blur-2xl md:hidden"
+            className="fixed inset-x-0 top-16 z-[99] animate-menu-in border-b border-white/6 bg-gray-900/95 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.5)] backdrop-blur-2xl lg:hidden"
           >
             <div className="flex flex-col gap-1">
               {entries.map((entry) => {

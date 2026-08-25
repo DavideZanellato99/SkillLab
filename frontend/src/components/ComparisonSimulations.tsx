@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { SimulationComparisonAttempt } from '../services/comparison'
 import ComparisonEmpty from './ComparisonEmpty'
+import ComparisonAttemptCard from './ComparisonAttemptCard'
 import ComparisonFilterBar, { ComparisonWarnings } from './ComparisonFilterBar'
-import ComparisonOpenButton from './ComparisonOpenButton'
 import ComparisonTimeline from './ComparisonTimeline'
 import ComparisonVerdict from './ComparisonVerdict'
 import SimulationAttemptModal from './SimulationAttemptModal'
@@ -20,7 +20,7 @@ import {
   survivingFilter,
 } from './comparisonFilters'
 import type { Pair } from './comparisonFilters'
-import { cardCls, formatScore, scoreTextColor } from './scoreFormat'
+import { cardCls } from './scoreFormat'
 import { formatDate } from './lastAccess'
 
 /* La metà scritta del confronto: due test consegnati, uno accanto all'altro.
@@ -49,10 +49,16 @@ interface QuestionRow {
   right: boolean
 }
 
-/** Il segno di come è andata una domanda, verde o rosso. */
+/** Il segno di come è andata una domanda, verde o rosso.
+ *
+ *  `role="img"`, che è quello che rende leggibile l'etichetta: su uno span
+ *  senza ruolo un `aria-label` viene ignorato, e la riga si sentiva come il
+ *  solo testo della domanda, cioè senza il suo esito, che è tutto quello che
+ *  la riga aveva da dire. */
 function Outcome({ correct }: { correct: boolean }) {
   return (
     <span
+      role="img"
       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
         correct ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-300'
       }`}
@@ -65,9 +71,9 @@ function Outcome({ correct }: { correct: boolean }) {
 
 /** Una delle due prove: quale test era, di che tipo e quante ne ha prese.
  *
- *  Il voto grande sta nel verdetto, come nella metà parlata: qui resta in
- *  piccolo accanto al nome del test, insieme alle cose che il verdetto non
- *  riassume. */
+ *  La forma della card è quella condivisa con la metà parlata; qui dentro
+ *  resta quello che il verdetto non riassume, cioè quante risposte sono
+ *  andate a segno. */
 function AttemptPanel({
   role,
   attempt,
@@ -78,46 +84,46 @@ function AttemptPanel({
   onOpen: () => void
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/6 bg-gray-900/60 p-5">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-white/6 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-slate-400">
-          {role}
-        </span>
-        <span className="text-[0.85rem] text-slate-200">{attempt.simulation_title}</span>
-        <SimulationKindBadge kind={attempt.simulation_kind} />
-        <SimulationSourceBadge source={attempt.simulation_source} />
-        <span className={`text-[0.85rem] font-bold ${scoreTextColor(attempt.score)}`}>
-          {formatScore(attempt.score)}
-        </span>
-      </div>
-      <p className="text-[0.72rem] text-slate-500">{formatDate(attempt.attempted_at)}</p>
+    <ComparisonAttemptCard
+      role={role}
+      title={attempt.simulation_title}
+      badges={
+        <>
+          <SimulationKindBadge kind={attempt.simulation_kind} />
+          <SimulationSourceBadge source={attempt.simulation_source} />
+        </>
+      }
+      score={attempt.score}
+      meta={formatDate(attempt.attempted_at)}
+      /* Il dettaglio domanda per domanda qui sopra dice solo se una domanda
+         è andata bene o male, e solo per quelle capitate in tutte e due le
+         prove: cosa fosse stato risposto, e cosa diceva il documento, stanno
+         nel tentativo per intero. */
+      openLabel="Apri il Tentativo"
+      openAriaLabel={`Apri il Tentativo su ${attempt.simulation_title} del ${formatDate(attempt.attempted_at)}`}
+      onOpen={onOpen}
+    >
       {/* Il voto in decimi nasconde quante domande erano: dieci su dieci e
           due su due sono lo stesso numero e non la stessa prova. */}
       <p className="mt-2 text-[0.72rem] text-slate-500">
         {attempt.correct_count} risposte corrette su {attempt.question_count}
       </p>
-
-      {/* Il dettaglio domanda per domanda qui sopra dice solo se una domanda
-          è andata bene o male, e solo per quelle capitate in tutte e due le
-          prove: cosa fosse stato risposto, e cosa diceva il documento, stanno
-          nel tentativo per intero. */}
-      <ComparisonOpenButton
-        label="Apri il Tentativo"
-        ariaLabel={`Apri il Tentativo su ${attempt.simulation_title} del ${formatDate(attempt.attempted_at)}`}
-        onClick={onOpen}
-      />
-    </div>
+    </ComparisonAttemptCard>
   )
 }
 
 export default function ComparisonSimulations({
   attempts,
   isOwn,
+  emptyHint,
 }: {
   attempts: SimulationComparisonAttempt[]
   /** Vero quando le prove sono di chi sta guardando: un tentativo aperto da
    *  chi l'ha svolto non porta il nome di nessun altro, e non si butta via. */
   isOwn: boolean
+  /** Cosa fare quando non c'è niente da confrontare, per chi può scegliere
+   *  una persona: le proprie prove sono quasi sempre zero. */
+  emptyHint?: string
 }) {
   /* Come per le conversazioni: prima si restringe, poi si sceglie, e i due
    * filtri partono aperti. */
@@ -238,12 +244,12 @@ export default function ComparisonSimulations({
       : []
 
   if (attempts.length === 0) {
-    return <ComparisonEmpty>Nessun test tecnico da confrontare</ComparisonEmpty>
+    return <ComparisonEmpty hint={emptyHint}>Nessun test tecnico da confrontare</ComparisonEmpty>
   }
 
   if (attempts.length === 1) {
     return (
-      <ComparisonEmpty>
+      <ComparisonEmpty hint={emptyHint}>
         È stato consegnato un solo test: ne serve un secondo per effettuare un confronto
       </ComparisonEmpty>
     )

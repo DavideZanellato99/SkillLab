@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { isAdmin } from '../services/auth'
 import { useAttempts, useComparableUsers, useSimulationAttempts } from '../hooks/useComparison'
 import ComparisonConversations from './ComparisonConversations'
 import ComparisonSimulations from './ComparisonSimulations'
-import Select from './Select'
-import TabBar from './TabBar'
+import SearchSelect from './SearchSelect'
+import TabBar, { TabPanel } from './TabBar'
 import LoadingState from './LoadingState'
 import FormError from './FormError'
 import { PageContainer, PageHeader } from './PageLayout'
@@ -20,18 +20,51 @@ import { PageContainer, PageHeader } from './PageLayout'
  * Due prove, una linguetta per ciascuna, come nella dashboard: una
  * conversazione valutata e un test tecnico si guardano una per volta, perché
  * il miglioramento in una non dice niente dell'altra. La persona invece si
- * sceglie una volta sola, accanto al titolo: è sempre la stessa. */
+ * sceglie una volta sola, accanto al titolo: è sempre la stessa.
+ *
+ * La persona e la linguetta stanno nell'indirizzo e non nello stato del
+ * componente: un confronto è una cosa che un docente tiene aperta accanto a
+ * un'altra scheda o riapre dopo essere andato a leggere una trascrizione, e
+ * il tasto indietro deve riportarlo sulla persona di prima invece di farlo
+ * uscire dalla pagina. I filtri e la coppia restano invece locali, perché si
+ * cambiano di continuo mentre si guarda e riempirebbero la cronologia di
+ * passi che nessuno vuole rifare a ritroso. */
 
 type ComparisonSection = 'conversazioni' | 'simulazioni'
+
+/** Come le due scelte si scrivono nell'indirizzo. */
+const PERSON_PARAM = 'persona'
+const SECTION_PARAM = 'prova'
 
 export default function ComparisonPage() {
   const { user } = useAuth()
   const canPickUser = isAdmin(user)
 
-  const [subjectId, setSubjectId] = useState('')
-  const [section, setSection] = useState<ComparisonSection>('conversazioni')
+  const [params, setParams] = useSearchParams()
+  const section: ComparisonSection =
+    params.get(SECTION_PARAM) === 'simulazioni' ? 'simulazioni' : 'conversazioni'
+  /* La persona nell'indirizzo vale solo per chi la può scegliere: a uno
+     studente il server risponderebbe comunque con le proprie prove, e la
+     pagina intanto si scriverebbe accanto al titolo il nome di qualcun
+     altro. */
+  const subjectId = canPickUser ? (params.get(PERSON_PARAM) ?? '') : ''
 
-  const { data: people = [] } = useComparableUsers(canPickUser)
+  /* La linguetta sostituisce il passo invece di aggiungerne uno: passare da
+     una prova all'altra è guardare la stessa pagina da un'altra parte,
+     mentre la persona è un'altra pagina, ed è quella su cui il tasto
+     indietro deve tornare. */
+  const setParam = (name: string, value: string, replace = false) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(name, value)
+    else next.delete(name)
+    setParams(next, { replace })
+  }
+
+  const {
+    data: people = [],
+    error: peopleError,
+    isPending: isLoadingPeople,
+  } = useComparableUsers(canPickUser)
   const {
     data: attempts = [],
     isPending: isLoadingAttempts,
@@ -44,8 +77,20 @@ export default function ComparisonPage() {
     error: simulationsError,
   } = useSimulationAttempts(subjectId)
 
-  const isLoading = isLoadingAttempts || isLoadingSimulations
-  const loadError = error ?? simulationsError
+  /* Un caricamento fallito si dice, e ognuno per conto suo: le tre chiamate
+     si rompono separatamente, e un elenco di persone caduto mentre le prove
+     ci sono è un guasto diverso dal contrario. L'elenco delle persone
+     falliva invece in silenzio, lasciando un selettore con dentro le sole
+     proprie prove e nessuna spiegazione. */
+  const loadErrors = [
+    peopleError ? 'Impossibile caricare le persone da confrontare.' : '',
+    error instanceof Error ? error.message : error ? 'Impossibile caricare i tentativi.' : '',
+    simulationsError instanceof Error
+      ? simulationsError.message
+      : simulationsError
+        ? 'Impossibile caricare i tentativi.'
+        : '',
+  ].filter(Boolean)
 
   /* Chi ha svolto le prove, che la metà parlata usa per aprire la
    * trascrizione: la persona scelta, o chi è collegato quando non se ne
@@ -61,6 +106,21 @@ export default function ComparisonPage() {
         isSelf: true,
       }
 
+  /* Un admin che non si allena atterra sulle proprie prove, che sono zero, e
+     leggeva soltanto che non c'è niente da confrontare: il selettore sta in
+     cima, dall'altra parte della pagina, ed è quella la cosa da fare. Solo
+     se c'è qualcuno da scegliere, altrimenti manderebbe a un elenco vuoto. */
+  const emptyHint =
+    canPickUser && subject.isSelf && !isLoadingPeople && people.length > 0
+      ? 'Scegli una persona in alto per leggere le sue prove'
+      : undefined
+
+  /* Il numero compare quando è quello vero: durante il caricamento le due
+     liste sono vuote, e una linguetta che dice "(0)" per diventare poi
+     "(12)" ha detto una cosa falsa proprio mentre si decideva dove andare. */
+  const tabLabel = (label: string, count: number, isLoading: boolean) =>
+    isLoading ? label : `${label} (${count})`
+
   return (
     <PageContainer width="split">
       <PageHeader
@@ -75,63 +135,90 @@ export default function ComparisonPage() {
            al titolo e non in un riquadro suo, che con i filtri sotto faceva
            tre pannelli sovrapposti prima di arrivare a un voto.
 
-           `relative z-30` perché la tendina cade sopra il pannello dei
+           `relative z-30` perché i suggerimenti cadono sopra il pannello dei
            filtri, che con il suo backdrop-blur apre un contesto di
-           impilamento e le passerebbe davanti. */
+           impilamento e gli passerebbe davanti. */
         actions={
           canPickUser && (
-            <div className="relative z-30 w-[260px] max-sm:w-full">
+            <div className="relative z-30 w-[380px] max-sm:w-full">
               <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="subject">
                 Persona
               </label>
-              <Select
+              {/* Lo stesso campo con cui si sceglie una persona nella
+                  dashboard, e non una tendina: un'aula intera si scorreva
+                  voce per voce, mentre il nome che si cerca lo si sa già.
+                  Accanto a ciascuno quante prove ha, che è quello che decide
+                  se aprirlo, perché sotto le due non c'è confronto da fare:
+                  il conteggio arrivava dal server e non lo leggeva nessuno. */}
+              <SearchSelect
                 id="subject"
                 value={subjectId}
-                onChange={setSubjectId}
-                options={[
-                  { value: '', label: 'Le Mie Prove' },
-                  ...people.map((p) => ({
-                    value: p.id,
-                    label: `${p.nome} ${p.cognome}`.trim() || p.email,
-                  })),
-                ]}
+                onChange={(value) => setParam(PERSON_PARAM, value)}
+                options={people.map((p) => ({
+                  value: p.id,
+                  label: `${p.nome} ${p.cognome}`.trim() || p.email,
+                  sub: `${p.email} · ${p.attempts} ${p.attempts === 1 ? 'prova' : 'prove'}`,
+                }))}
+                placeholder="Cerca per nome o email..."
+                emptyHint="Le Mie Prove"
               />
             </div>
           )
         }
       />
 
-      {loadError && (
-        <FormError
-          message={
-            loadError instanceof Error ? loadError.message : 'Impossibile caricare i tentativi.'
-          }
-          variant="page"
-        />
-      )}
+      {loadErrors.map((message) => (
+        <FormError key={message} message={message} variant="page" />
+      ))}
 
       <TabBar
         items={[
-          { value: 'conversazioni', label: `Conversazioni (${attempts.length})` },
-          { value: 'simulazioni', label: `Simulazioni tecniche (${simulationAttempts.length})` },
+          {
+            value: 'conversazioni',
+            label: tabLabel('Conversazioni', attempts.length, isLoadingAttempts),
+          },
+          {
+            value: 'simulazioni',
+            label: tabLabel(
+              'Simulazioni tecniche',
+              simulationAttempts.length,
+              isLoadingSimulations,
+            ),
+          },
         ]}
         value={section}
-        onChange={setSection}
+        onChange={(value) => setParam(SECTION_PARAM, value, true)}
         ariaLabel="Prova da confrontare"
+        panelBase="confronto"
         className="mb-6 border-b border-white/6 pb-2"
       />
 
-      {isLoading ? (
-        <LoadingState message="Caricamento tentativi..." />
-      ) : section === 'conversazioni' ? (
-        <ComparisonConversations
-          attempts={attempts}
-          subject={subject}
-          onReviewSaved={() => void refetchAttempts()}
-        />
-      ) : (
-        <ComparisonSimulations attempts={simulationAttempts} isOwn={subject.isSelf} />
-      )}
+      {/* Ogni metà aspetta i propri dati e non anche quelli dell'altra: le
+          due chiamate partono insieme, ma legarle faceva aspettare alle
+          conversazioni, che sono la linguetta aperta, l'elenco dei test, che
+          in quel momento nessuno sta guardando. */}
+      <TabPanel base="confronto" value={section}>
+        {section === 'conversazioni' ? (
+          isLoadingAttempts ? (
+            <LoadingState message="Caricamento tentativi..." />
+          ) : (
+            <ComparisonConversations
+              attempts={attempts}
+              subject={subject}
+              emptyHint={emptyHint}
+              onReviewSaved={() => void refetchAttempts()}
+            />
+          )
+        ) : isLoadingSimulations ? (
+          <LoadingState message="Caricamento tentativi..." />
+        ) : (
+          <ComparisonSimulations
+            attempts={simulationAttempts}
+            isOwn={subject.isSelf}
+            emptyHint={emptyHint}
+          />
+        )}
+      </TabPanel>
     </PageContainer>
   )
 }

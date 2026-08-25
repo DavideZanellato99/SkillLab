@@ -22,6 +22,7 @@ import MessageAnnotationEditor from './MessageAnnotationEditor'
 import MessageAnnotationNote from './MessageAnnotationNote'
 import MessageEmotions from './MessageEmotions'
 import { splitEmotionTag } from './emotionTag'
+import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import ModalShell from './ModalShell'
 import { useRecordingInfo } from '../hooks/useRecording'
@@ -325,34 +326,13 @@ export default function ConversationDetailModal({
         {isLoading ? (
           <LoadingState variant="modal" message="Caricamento conversazione..." />
         ) : error ? (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <div className="flex w-full items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2 text-[0.82rem] text-red-300">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="mt-px shrink-0 text-red-500"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span>
-                {error instanceof Error ? error.message : 'Impossibile caricare la conversazione.'}
-              </span>
-            </div>
-            <button
-              className="cursor-pointer rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-6 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)]"
-              onClick={() => void refetch()}
-            >
-              Riprova
-            </button>
-          </div>
+          <LoadError
+            message={
+              error instanceof Error ? error.message : 'Impossibile caricare la conversazione.'
+            }
+            onRetry={() => void refetch()}
+            className="py-8"
+          />
         ) : (
           detail && (
             <div className="grid grid-cols-2 gap-6 max-lg:grid-cols-1">

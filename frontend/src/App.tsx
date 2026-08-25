@@ -13,6 +13,7 @@ import SimulationRunner from './components/SimulationRunner'
 import ProfilePage from './components/ProfilePage'
 import RequireRole from './components/RequireRole'
 import LoadingState from './components/LoadingState'
+import { mainContentCls, mainContentProps } from './components/mainContent'
 import Spinner from './components/Spinner'
 import './index.css'
 
@@ -53,7 +54,10 @@ function HomePage() {
   return (
     <>
       <Header />
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 pb-12 max-md:p-4">
+      <main
+        {...mainContentProps}
+        className={`${mainContentCls} mx-auto w-full max-w-[1400px] flex-1 px-6 pb-12 max-md:p-4`}
+      >
         <AvatarGallery />
       </main>
     </>

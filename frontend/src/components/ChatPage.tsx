@@ -38,6 +38,7 @@ import ChatSidebar from './ChatSidebar'
 import ConversationDetailModal from './ConversationDetailModal'
 import EvaluationModal from './EvaluationModal'
 import ExpandedConversationsPanel from './ExpandedConversationsPanel'
+import { mainContentCls, mainContentProps } from './mainContent'
 import { matchesSearch } from './tableSearch'
 import TypingIndicator from './TypingIndicator'
 
@@ -445,7 +446,10 @@ export default function ChatPage() {
         </svg>
       </button>
 
-      <main className="relative flex min-w-0 flex-1 flex-col" id="chat-main">
+      <main
+        {...mainContentProps}
+        className={`${mainContentCls} relative flex min-w-0 flex-1 flex-col`}
+      >
         <ChatHeader
           avatar={avatar}
           title={currentTitle}

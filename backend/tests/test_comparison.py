@@ -253,6 +253,11 @@ def test_a_student_reads_their_own_delivered_tests(
     # confrontabili domanda per domanda due prove sullo stesso test
     assert [a["is_correct"] for a in attempts[0]["answers"]] == [True, False]
     assert attempts[0]["answers"][0]["text"] == "Domanda 1?"
+    # Tre campi e nessun altro: il confronto disegna un segno verde o rosso
+    # per domanda, e cosa fosse stato scelto si legge aprendo il tentativo.
+    # La scelta, la risposta giusta e la posizione viaggiavano non lette per
+    # ognuno dei tentativi dell elenco
+    assert set(attempts[0]["answers"][0]) == {"question_id", "text", "is_correct"}
 
 
 def test_a_student_asking_for_someone_elses_tests_gets_their_own(

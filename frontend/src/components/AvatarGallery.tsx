@@ -21,8 +21,7 @@ import AvatarCard from './AvatarCard'
 import AvatarGalleryEmpty, { type EmptyReason } from './AvatarGalleryEmpty'
 import { countByCategory, filterAvatars } from './avatarFilters'
 import FilterTabs from './FilterTabs'
-import FormError from './FormError'
-import PrimaryButton from './PrimaryButton'
+import LoadError from './LoadError'
 import SearchInput from './SearchInput'
 import Toast from './Toast'
 
@@ -116,15 +115,13 @@ export default function AvatarGallery() {
       ) : isError && avatars.length === 0 ? (
         /* Niente a schermo e il server non risponde: non è un catalogo
            vuoto, ed è l'unico caso in cui c'è qualcosa da riprovare. */
-        <div className="flex animate-fade-in flex-col items-center gap-4 p-16 max-md:p-8">
-          <FormError
-            variant="page"
-            message="Impossibile caricare il catalogo degli avatar. Verifica la connessione e riprova."
-          />
-          <PrimaryButton onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? 'Nuovo tentativo in corso...' : 'Riprova'}
-          </PrimaryButton>
-        </div>
+        <LoadError
+          variant="page"
+          message="Impossibile caricare il catalogo degli avatar. Verifica la connessione e riprova."
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
+          className="animate-fade-in p-16 max-md:p-8"
+        />
       ) : visibleAvatars.length === 0 ? (
         <AvatarGalleryEmpty
           reason={emptyReason}

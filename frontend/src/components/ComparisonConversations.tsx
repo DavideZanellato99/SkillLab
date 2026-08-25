@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { Attempt } from '../services/comparison'
 import ComparisonEmpty from './ComparisonEmpty'
+import ComparisonAttemptCard from './ComparisonAttemptCard'
 import ComparisonFilterBar, { ComparisonWarnings } from './ComparisonFilterBar'
-import ComparisonOpenButton from './ComparisonOpenButton'
 import ComparisonTimeline from './ComparisonTimeline'
 import ComparisonVerdict from './ComparisonVerdict'
 import ConversationDetailModal from './ConversationDetailModal'
@@ -82,10 +82,9 @@ function changeSummary(rows: CriterionRow[]): string | null {
 
 /** Una delle due prove: da dove viene il voto e cosa ne è stato detto.
  *
- *  Il voto grande sta nel verdetto e qui compare in piccolo, accanto al nome:
- *  scritto due volte in grande, il numero avrebbe fatto cercare la differenza
- *  fra le due card proprio dove è già stata calcolata. Qui restano le cose che
- *  il verdetto non può riassumere, cioè le parole della valutazione. */
+ *  La forma della card è quella condivisa con la metà scritta; qui dentro
+ *  restano le cose che il verdetto non può riassumere, cioè le parole della
+ *  valutazione. */
 function AttemptPanel({
   role,
   attempt,
@@ -98,21 +97,16 @@ function AttemptPanel({
   const hasWords = attempt.summary || attempt.review_reason || attempt.review_note
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/6 bg-gray-900/60 p-5">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-white/6 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-slate-400">
-          {role}
-        </span>
-        <span className="text-[0.85rem] text-slate-200">{attempt.title}</span>
-        <ConversationModeBadge mode={attempt.mode} />
-        <span className={`text-[0.85rem] font-bold ${scoreTextColor(attempt.final_score)}`}>
-          {formatScore(attempt.final_score)}
-        </span>
-      </div>
-      <p className="text-[0.72rem] text-slate-500">
-        {attempt.avatar_name} · {formatDate(attempt.conversation_at)}
-      </p>
-
+    <ComparisonAttemptCard
+      role={role}
+      title={attempt.title}
+      badges={<ConversationModeBadge mode={attempt.mode} />}
+      score={attempt.final_score}
+      meta={`${attempt.avatar_name} · ${formatDate(attempt.conversation_at)}`}
+      openLabel="Apri la Trascrizione"
+      openAriaLabel={`Apri la Trascrizione di ${attempt.title} del ${formatDate(attempt.conversation_at)}`}
+      onOpen={onOpen}
+    >
       {attempt.has_override && (
         <span className="mt-3 inline-flex rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[0.68rem] font-semibold text-violet-300">
           Corretto dal docente · AI {formatScore(attempt.ai_score)}
@@ -144,13 +138,7 @@ function AttemptPanel({
           )}
         </div>
       )}
-
-      <ComparisonOpenButton
-        label="Apri la Trascrizione"
-        ariaLabel={`Apri la Trascrizione di ${attempt.title} del ${formatDate(attempt.conversation_at)}`}
-        onClick={onOpen}
-      />
-    </div>
+    </ComparisonAttemptCard>
   )
 }
 
@@ -169,10 +157,14 @@ export interface ComparisonSubject {
 export default function ComparisonConversations({
   attempts,
   subject,
+  emptyHint,
   onReviewSaved,
 }: {
   attempts: Attempt[]
   subject: ComparisonSubject
+  /** Cosa fare quando non c'è niente da confrontare, per chi può scegliere
+   *  una persona: le proprie prove sono quasi sempre zero. */
+  emptyHint?: string
   /** Una correzione scritta dalla trascrizione cambia il voto di questa
    *  pagina, che sta mostrando il precedente. */
   onReviewSaved?: () => void
@@ -272,12 +264,16 @@ export default function ComparisonConversations({
       : []
 
   if (attempts.length === 0) {
-    return <ComparisonEmpty>Nessuna conversazione valutata da confrontare</ComparisonEmpty>
+    return (
+      <ComparisonEmpty hint={emptyHint}>
+        Nessuna conversazione valutata da confrontare
+      </ComparisonEmpty>
+    )
   }
 
   if (attempts.length === 1) {
     return (
-      <ComparisonEmpty>
+      <ComparisonEmpty hint={emptyHint}>
         È stato valutato un solo tentativo: ne serve un secondo per effettuare un confronto
       </ComparisonEmpty>
     )

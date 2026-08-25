@@ -9,6 +9,7 @@
  * dell'app sono la stessa intestazione. */
 
 import type { ReactNode } from 'react'
+import { mainContentCls, mainContentProps } from './mainContent'
 
 /* Le larghezze sono nominate per quello che contengono, non per i pixel:
  * così una pagina nuova sceglie in base al proprio contenuto invece di
@@ -29,8 +30,19 @@ interface PageContainerProps {
   children: ReactNode
 }
 
+/* È il `main` della schermata, non un contenitore qualunque: quattordici
+ * pagine passano di qui, e senza un landmark chi legge con uno screen reader
+ * non ha modo di saltare la barra per arrivare a quello che è venuto a fare.
+ * È anche dove atterra il collegamento "Salta al contenuto" della barra. */
 export function PageContainer({ width = 'default', children }: PageContainerProps) {
-  return <div className={`mx-auto w-full ${WIDTHS[width]} px-6 py-12 max-md:px-4`}>{children}</div>
+  return (
+    <main
+      {...mainContentProps}
+      className={`${mainContentCls} mx-auto w-full ${WIDTHS[width]} px-6 py-12 max-md:px-4`}
+    >
+      {children}
+    </main>
+  )
 }
 
 interface PageHeaderProps {

@@ -25,6 +25,7 @@ vi.mock('../../src/components/AuthModal', () => ({
 }))
 
 import Navbar from '../../src/components/Navbar'
+import { MAIN_CONTENT_ID } from '../../src/components/mainContent'
 import { OPEN_LOGIN_EVENT } from '../../src/components/public/openLogin'
 
 const utente = (ruolo: string) => ({
@@ -350,5 +351,48 @@ describe('i due menu della barra', () => {
 
     expect(screen.getByRole('link', { name: /Il Mio Profilo/ })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
+  })
+})
+
+/* La barra sta in cima a ogni pagina e con essa tutte le sue voci: senza il
+ * salto, chi naviga da tastiera le riattraversa a ogni cambio di schermata
+ * prima di arrivare al contenuto. */
+describe('il salto al contenuto', () => {
+  const salto = () => screen.getByRole('link', { name: 'Salta al contenuto' })
+
+  it('è la prima cosa che si raggiunge con Tab', async () => {
+    renderNavbar('user')
+
+    await userEvent.tab()
+
+    expect(salto()).toHaveFocus()
+  })
+
+  it('porta il fuoco sul contenuto della pagina', async () => {
+    renderNavbar('user')
+    const main = document.createElement('main')
+    main.id = MAIN_CONTENT_ID
+    main.tabIndex = -1
+    main.scrollIntoView = vi.fn()
+    document.body.appendChild(main)
+
+    await userEvent.click(salto())
+
+    expect(main).toHaveFocus()
+    /* L'indirizzo resta pulito: il salto non è un posto in cui si torna, e
+       un href scritto nella barra finirebbe nei segnalibri. */
+    expect(window.location.hash).toBe('')
+
+    main.remove()
+  })
+
+  /* Il fuoco si sposta a mano, quindi senza il bersaglio non c'è niente da
+     fare: nessun errore, e la pagina resta dov'è. */
+  it('non fa niente dove il contenuto non è ancora montato', async () => {
+    renderNavbar('user')
+
+    await userEvent.click(salto())
+
+    expect(salto()).toBeInTheDocument()
   })
 })

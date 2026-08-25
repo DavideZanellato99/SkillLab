@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { fetchAdminEvaluationPdf } from '../services/admin'
 import { fetchEvaluationPdf } from '../services/api'
@@ -200,9 +200,16 @@ export default function ConversationDetailModal({
     row.user_nome && row.user_cognome ? `${row.user_nome} ${row.user_cognome}` : row.user_email
 
   // Le note sono indicizzate per messaggio: la trascrizione le cerca riga
-  // per riga, e il server ne garantisce al massimo una per messaggio.
-  const annotationsByMessage = new Map<string, MessageAnnotation>(
-    (detail?.review?.annotations ?? []).map((a) => [a.message_id, a]),
+  // per riga, e il server ne garantisce al massimo una per messaggio. La
+  // mappa si rifà quando le note cambiano e non a ogni render, che qui vuol
+  // dire a ogni battuta scritta nel campo di una nota e a ogni secondo della
+  // registrazione che avanza.
+  const annotationsByMessage = useMemo(
+    () =>
+      new Map<string, MessageAnnotation>(
+        (detail?.review?.annotations ?? []).map((a) => [a.message_id, a]),
+      ),
+    [detail?.review?.annotations],
   )
 
   /* Una nota salvata o eliminata aggiorna il dettaglio già in memoria invece
@@ -322,7 +329,21 @@ export default function ConversationDetailModal({
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-8 py-5">
+      {/* Da 1024px in su le due colonne scorrono per conto loro e riempiono
+          quello che il pannello concede, che è fino al 90% dello schermo:
+          erano ferme a 62vh ciascuna dentro un corpo che scorreva a sua
+          volta, cioè tre scorrimenti annidati che sotto una certa altezza
+          diventavano l'unico modo di leggere. Più stretto le due colonne
+          diventano una, e lì a scorrere è il corpo e basta: dentro una
+          colonna sola, una trascrizione con la propria barra dentro la
+          pagina che ne ha già una è il modo più veloce per perdere il segno.
+
+          Le altezze sono una catena di flex e nessuna percentuale: la griglia
+          tiene una riga sola alta quanto lei (`grid-rows-1` vale
+          minmax(0,1fr)), altrimenti la riga si misurerebbe sul contenuto e le
+          due colonne, invece di scorrere, verrebbero tagliate dal corpo che
+          non scorre. */}
+      <div className="flex-1 px-8 py-5 max-lg:overflow-y-auto lg:flex lg:min-h-0 lg:flex-col lg:overflow-hidden">
         {isLoading ? (
           <LoadingState variant="modal" message="Caricamento conversazione..." />
         ) : error ? (
@@ -335,8 +356,8 @@ export default function ConversationDetailModal({
           />
         ) : (
           detail && (
-            <div className="grid grid-cols-2 gap-6 max-lg:grid-cols-1">
-              <section>
+            <div className="grid grid-cols-2 gap-6 max-lg:grid-cols-1 lg:min-h-0 lg:flex-1 lg:grid-rows-1">
+              <section className="lg:flex lg:min-h-0 lg:flex-col">
                 {/* La registrazione sta sopra la trascrizione e non più in
                   testa alla modale: è la stessa conversazione detta a voce,
                   e da aperta sui controlli ha qui lo spazio per allargarsi.
@@ -351,7 +372,7 @@ export default function ConversationDetailModal({
                     />
                   )}
                 </div>
-                <div className="flex max-h-[62vh] flex-col gap-3 overflow-y-auto rounded-2xl border border-white/6 bg-gray-950/40 p-4">
+                <div className="flex flex-col gap-3 rounded-2xl border border-white/6 bg-gray-950/40 p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                   {detail.messages.length === 0 ? (
                     <p className="py-8 text-center text-sm italic text-slate-500">
                       Nessun messaggio registrato.
@@ -434,7 +455,7 @@ export default function ConversationDetailModal({
                 </div>
               </section>
 
-              <section>
+              <section className="lg:flex lg:min-h-0 lg:flex-col">
                 {/* Il comando della revisione vive qui, in un posto fisso:
                     la revisione già scritta si legge dentro il blocco del
                     punteggio, e un riquadro sempre presente in cima alla
@@ -457,7 +478,7 @@ export default function ConversationDetailModal({
                     </button>
                   )}
                 </div>
-                <div className="flex max-h-[62vh] flex-col gap-5 overflow-y-auto pr-1">
+                <div className="flex flex-col gap-5 pr-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                   {!isOwn && isEditingReview && (
                     <TrainerReviewPanel
                       conversationId={row.conversation_id}

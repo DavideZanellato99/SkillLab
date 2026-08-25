@@ -24,6 +24,14 @@ export function useEvaluateConversation() {
 
     onSuccess: (data, conversationId) => {
       queryClient.setQueryData(queryKeys.evaluations.byConversation(conversationId), data)
+      /* Un voto nuovo può aver mosso una tappa: il progresso di un percorso lo
+         deriva il server dalle prove svolte, quindi è questa valutazione a
+         farlo cambiare, e con lui le notifiche che ne nascono. Senza,
+         l'obiettivo mostrato nella chat resterebbe quello di un minuto fa
+         proprio nel momento in cui si è appena raggiunto (vedi
+         PathStepNotice). */
+      queryClient.invalidateQueries({ queryKey: queryKeys.training.mine })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
     },
   })
 }

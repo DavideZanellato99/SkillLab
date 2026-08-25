@@ -16,6 +16,7 @@ conversazione è il modo in cui quella persona ha lavorato.
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -246,3 +247,54 @@ def test_il_super_admin_vede_il_report_di_tutti(
 
     assert standard_user.email in email
     assert utente_di_un_altro_tenant.email in email
+
+
+def test_il_periodo_taglia_le_valutazioni(
+    admin_client, db_session, standard_user, make_conversazione
+):
+    """Senza un limite la dashboard si porta dietro ogni valutazione di
+    sempre, criteri compresi, a ogni apertura della pagina."""
+    vecchia = make_conversazione(standard_user, voto=4.0)
+    vecchia.created_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=60)
+    make_conversazione(standard_user, voto=8.0)
+    db_session.flush()
+
+    righe = admin_client.get("/api/admin/evaluations-report?days=30").json()
+
+    assert [r["overall_score"] for r in righe] == [8.0]
+
+
+def test_senza_periodo_il_report_resta_quello_di_sempre(
+    admin_client, db_session, standard_user, make_conversazione
+):
+    """Il filtro è una scelta, non il nuovo comportamento di default: chi non
+    lo tocca continua a leggere tutto lo storico."""
+    vecchia = make_conversazione(standard_user, voto=4.0)
+    vecchia.created_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=400)
+    make_conversazione(standard_user, voto=8.0)
+    db_session.flush()
+
+    righe = admin_client.get("/api/admin/evaluations-report").json()
+
+    assert len(righe) == 2
+
+
+def test_l_esportazione_segue_il_periodo(
+    admin_client, db_session, standard_user, make_conversazione
+):
+    """Il foglio è quello che si sta guardando: un file che ignorasse il
+    periodo scelto risponderebbe a una domanda diversa da quella sullo
+    schermo."""
+    vecchia = make_conversazione(standard_user, voto=4.0)
+    vecchia.created_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=60)
+    make_conversazione(standard_user, voto=8.0)
+    db_session.flush()
+
+    intero = admin_client.get("/api/admin/evaluations-report/export")
+    recente = admin_client.get("/api/admin/evaluations-report/export?days=30")
+
+    assert intero.status_code == 200
+    assert recente.status_code == 200
+    # Una riga in meno pesa meno: il foglio del periodo è più corto di quello
+    # di sempre, senza dover riaprire il file per contarne le righe.
+    assert len(recente.content) < len(intero.content)

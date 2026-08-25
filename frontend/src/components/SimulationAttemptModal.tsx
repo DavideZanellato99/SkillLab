@@ -49,7 +49,7 @@ export default function SimulationAttemptModal({
   /** Vero quando a rileggere il test è chi lo ha svolto. */
   own?: boolean
 }) {
-  const { data: attempt, isLoading, error, refetch, isFetching } = useAttempt(attemptId)
+  const { data: attempt, isLoading, error, refetch } = useAttempt(attemptId)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
   const canDelete = !own && onDeleted !== undefined
 
@@ -73,7 +73,6 @@ export default function SimulationAttemptModal({
             error instanceof Error ? error.message : 'Impossibile caricare questo tentativo.'
           }
           onRetry={() => void refetch()}
-          isRetrying={isFetching}
           className="p-8"
         />
       ) : (

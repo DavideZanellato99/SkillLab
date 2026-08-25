@@ -313,7 +313,24 @@ describe('report', () => {
     await fetchSimulationsReport()
     expect(ultimaChiamata()).toEqual({
       endpoint: '/api/admin/simulations-report',
-      options: { params: undefined },
+      options: { params: {} },
+    })
+  })
+
+  /* Il periodo è l'unico filtro della dashboard che il server capisce: gli
+   * altri restringono righe già arrivate, questo decide quante ne arrivano.
+   * Senza, la pagina si porta dietro ogni valutazione di sempre. */
+  it('restringe i due report al periodo scelto', async () => {
+    await fetchEvaluationsReport('org-1', 30)
+    expect(ultimaChiamata()).toEqual({
+      endpoint: '/api/admin/evaluations-report',
+      options: { params: { organization_id: 'org-1', days: '30' } },
+    })
+
+    await fetchSimulationsReport(undefined, 90)
+    expect(ultimaChiamata()).toEqual({
+      endpoint: '/api/admin/simulations-report',
+      options: { params: { days: '90' } },
     })
   })
 
@@ -322,6 +339,13 @@ describe('report', () => {
     expect(ultimaChiamata(apiFetchBlob)).toEqual({
       endpoint: '/api/admin/evaluations-report/export',
       options: { params: { organization_id: 'org-1' } },
+    })
+
+    // Il foglio è quello che si sta guardando, periodo compreso
+    await fetchEvaluationsReportXlsx('org-1', 30)
+    expect(ultimaChiamata(apiFetchBlob)).toEqual({
+      endpoint: '/api/admin/evaluations-report/export',
+      options: { params: { organization_id: 'org-1', days: '30' } },
     })
   })
 })

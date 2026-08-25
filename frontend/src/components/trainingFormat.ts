@@ -6,7 +6,13 @@
  * volta che una tappa cambia forma una delle due resta indietro in
  * silenzio. */
 
-import type { AssignmentStatus, PathAssignment, PathStep, StepProgress } from '../services/training'
+import type {
+  AssignmentStatus,
+  PathAssignment,
+  PathStep,
+  StepKind,
+  StepProgress,
+} from '../services/training'
 import { parseInstant } from './instant'
 
 /** Il nome del bersaglio di una tappa: l'avatar o il titolo del test. */
@@ -130,13 +136,160 @@ export function currentStep(assignment: PathAssignment): StepProgress | undefine
 }
 
 /**
- * I percorsi con quelli ancora da chiudere in cima.
+ * I percorsi divisi in due: quelli da chiudere e quelli chiusi.
  *
  * Chi apre la propria pagina cerca cosa deve fare, non cosa ha già fatto; i
- * completati restano, perché sono la strada percorsa, ma dopo.
+ * completati restano, perché sono la strada percorsa, ma stanno da un'altra
+ * parte. Erano un solo elenco riordinato, e la differenza fra le due metà la
+ * portava la sola opacità delle schede: con più di quattro o cinque percorsi
+ * il confine fra il debito e l'archivio andava cercato scheda per scheda.
+ * L'ordine dentro ogni metà è quello in cui arrivano, cioè i più recenti in
+ * cima.
  */
-export function openFirst(assignments: PathAssignment[]): PathAssignment[] {
-  return [...assignments].sort(
-    (a, b) => Number(isOpenStatus(b.status)) - Number(isOpenStatus(a.status)),
-  )
+export function splitByOpen(assignments: PathAssignment[]): {
+  open: PathAssignment[]
+  done: PathAssignment[]
+} {
+  return {
+    open: assignments.filter((assignment) => isOpenStatus(assignment.status)),
+    done: assignments.filter((assignment) => !isOpenStatus(assignment.status)),
+  }
+}
+
+/**
+ * La tappa da cui si riprende, se il percorso ne ha una da fare.
+ *
+ * È quella di adesso, ma solo quando si può davvero cominciare: a percorso
+ * finito `currentStep` risponde con l'ultima, che è dove si è arrivati e non
+ * dove si sta andando, e un invito a riprendere da lì porterebbe a rifare una
+ * prova già superata.
+ */
+export function resumableStep(assignment: PathAssignment): StepProgress | undefined {
+  if (!isOpenStatus(assignment.status)) return undefined
+  const step = currentStep(assignment)
+  return step && !isStepLocked(step) ? step : undefined
+}
+
+/**
+ * La tappa che si sta percorrendo su un certo avatar o su un certo test, e il
+ * percorso a cui appartiene.
+ *
+ * Serve alla chat e al simulatore, che di percorsi non sanno niente e ci si
+ * arriva anche senza passare dalla mappa: è la domanda «quello che sto per
+ * fare conta per qualcosa?». La risposta la danno i dati e non da dove si
+ * arriva, quindi vale anche entrando dalla galleria, ed è la sola forma in cui
+ * può essere vera.
+ *
+ * Guarda la sola tappa di adesso di ogni percorso aperto, e non tutte quelle
+ * che puntano lì: una prova fatta prima del turno di una tappa non conta per
+ * quella tappa (vedi `stepProgress`), quindi annunciarla come obiettivo
+ * prometterebbe un avanzamento che non arriverà. Se due percorsi aperti
+ * aspettano la stessa prova vince il primo, cioè il più recente: sono due
+ * obiettivi sulla stessa conversazione, e conviene dirne uno che nessuno.
+ */
+export function stepInProgressFor(
+  assignments: PathAssignment[],
+  kind: StepKind,
+  targetId: string | undefined,
+): { assignment: PathAssignment; step: StepProgress } | null {
+  if (!targetId) return null
+  for (const assignment of assignments) {
+    const step = resumableStep(assignment)
+    if (!step || step.kind !== kind) continue
+    const id = kind === 'avatar' ? step.avatar_id : step.simulation_id
+    if (id === targetId) return { assignment, step }
+  }
+  return null
+}
+
+/**
+ * Una tappa ritrovata per id, con il percorso a cui appartiene.
+ *
+ * Serve a chi ha visto una tappa e vuole sapere com'è andata a finire: la
+ * striscia dentro la chat la ritrova così dopo una valutazione, quando quella
+ * tappa non è più «di adesso» perché è appena stata superata. Cercarla di
+ * nuovo per bersaglio non funzionerebbe, ed è il punto: la ricerca per
+ * bersaglio guarda solo la tappa di adesso, che a quel momento è già la
+ * successiva.
+ */
+export function stepById(
+  assignments: PathAssignment[],
+  stepId: string,
+): { assignment: PathAssignment; step: StepProgress } | null {
+  for (const assignment of assignments) {
+    const step = assignment.steps.find((candidate) => candidate.id === stepId)
+    if (step) return { assignment, step }
+  }
+  return null
+}
+
+/** Se una tappa è stata superata, in tempo o in ritardo. */
+export function isStepDone(step: StepProgress): boolean {
+  return step.status === 'completed' || step.status === 'completed_late'
+}
+
+/**
+ * Quante delle soglie sui criteri di una tappa sono state raggiunte.
+ *
+ * Su una tappa bloccata sono zero, per la stessa ragione per cui il suo
+ * avanzamento è zero: quei voti vengono da prove fatte prima del suo turno.
+ * Il conto è per criterio e sul meglio fatto su ognuno, quindi tutte
+ * raggiunte non vuol dire tappa superata: quella la supera una conversazione
+ * che li raggiunge insieme.
+ */
+export function criteriaMet(step: StepProgress): number {
+  if (isStepLocked(step)) return 0
+  return step.criteria_targets.filter(
+    (target) => (step.best_criteria_scores[target.key] ?? 0) >= target.target,
+  ).length
+}
+
+/** Quanto una scadenza pesa su chi la legge: passata, vicina, o lontana. */
+export type DeadlineTone = 'overdue' | 'soon' | 'plain'
+
+/**
+ * Quanti giorni prima una scadenza comincia a essere una notizia.
+ *
+ * È la stessa finestra con cui il server manda l'avviso (`DUE_SOON_DAYS` in
+ * notifications.py): una tappa che la campanella annuncia come vicina non può
+ * essere scritta come una data qualunque nella pagina che la mostra.
+ */
+export const DUE_SOON_DAYS = 3
+
+/** I giorni interi di distanza fra due momenti, contati sul calendario. */
+function daysApart(from: Date, to: Date): number {
+  const startOfDay = (date: Date) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  return Math.round((startOfDay(to) - startOfDay(from)) / 86_400_000)
+}
+
+/**
+ * La scadenza di una tappa come la si legge di sfuggita, con quanto pesa.
+ *
+ * Una data e basta ("27 ago, 18:00") va letta e confrontata con oggi ogni
+ * volta, e finché la scadenza è comparsa solo dentro il riquadro di una tappa
+ * aperta apposta quel conto lo faceva chi ci era già arrivato. Nell'elenco e
+ * sulla mappa serve invece la conclusione, perché è quella che decide da quale
+ * percorso si comincia: vicino si dice quanto manca, lontano basta il giorno.
+ *
+ * L'ora resta dove cambia qualcosa, cioè quando il termine è oggi o domani: a
+ * tre giorni di distanza sapere che è alle 18 non cambia cosa si fa adesso, e
+ * una tappa da chiudere entro le 18 annunciata come "domani" e basta manderebbe
+ * a provarci la sera.
+ */
+export function deadlineNote(
+  step: PathStep,
+  now: Date = new Date(),
+): { text: string; tone: DeadlineTone } | null {
+  if (!step.due_at) return null
+  const due = parseInstant(step.due_at)
+  if (due.getTime() <= now.getTime()) {
+    return { text: `Scaduta il ${formatShortDeadline(step.due_at)}`, tone: 'overdue' }
+  }
+  const days = daysApart(now, due)
+  const at = due.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+  if (days === 0) return { text: `Scade oggi alle ${at}`, tone: 'soon' }
+  if (days === 1) return { text: `Scade domani alle ${at}`, tone: 'soon' }
+  if (days <= DUE_SOON_DAYS) return { text: `Scade fra ${days} giorni`, tone: 'soon' }
+  return { text: `Scade il ${formatDate(step.due_at)}`, tone: 'plain' }
 }

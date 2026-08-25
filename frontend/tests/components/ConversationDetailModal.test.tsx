@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ConversationDetailModal from '../../src/components/ConversationDetailModal'
@@ -164,6 +165,47 @@ describe('ConversationDetailModal', () => {
 
     await screen.findByText('Verifico subito la pratica.')
     expect(screen.queryByText('Elimina Conversazione')).not.toBeInTheDocument()
+  })
+
+  /* Un caricamento caduto è l'unica cosa a cui si può rimediare restando
+   * dov'è: dentro una modale l'alternativa era chiudere la schermata e
+   * riaprirla, cioè perdere il punto in cui si stava leggendo.
+   *
+   * Premuto il bottone il riquadro rosso sparisce e torna il caricamento:
+   * TanStack Query riporta la lettura in attesa e si porta via l'errore, ed è
+   * per questo che qui non c'è nessun "sto riprovando" da cercare. */
+  it('offre di riprovare, e riprovando ricarica la conversazione', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('Rete assente'))
+    show('admin')
+
+    // La seconda lettura resta appesa, per guardare cosa c'è a schermo mentre
+    // il tentativo è in corso
+    let rispondi = () => {}
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          rispondi = () =>
+            resolve(json({ conversation_id: 'conv-1', messages, evaluation, review }))
+        }),
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Riprova' }))
+
+    expect(await screen.findByText('Caricamento conversazione...')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Riprova' })).not.toBeInTheDocument()
+
+    rispondi()
+    expect(await screen.findByText('Verifico subito la pratica.')).toBeInTheDocument()
+  })
+
+  /* Chi rilegge una conversazione sua la legge in due chiamate invece che in
+   * una, e il comando è lo stesso: le rilancia entrambe. */
+  it('riprova anche quando le letture sono due', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('Rete assente'))
+    show('own')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Riprova' }))
+
+    expect(await screen.findByText('Verifico subito la pratica.')).toBeInTheDocument()
   })
 
   it('per una conversazione propria non passa dagli endpoint di amministrazione', async () => {

@@ -63,12 +63,12 @@ export const queryKeys = {
     /** Recap per utente delle prove svolte, nel periodo scelto. */
     users: (organizationId?: string, days?: number) =>
       ['reports', 'users', organizationId ?? '__all__', days ?? '__ever__'] as const,
-    /** Punteggi delle valutazioni per la dashboard. */
-    evaluations: (organizationId?: string) =>
-      ['reports', 'evaluations', organizationId ?? '__all__'] as const,
+    /** Punteggi delle valutazioni per la dashboard, nel periodo scelto. */
+    evaluations: (organizationId?: string, days?: number) =>
+      ['reports', 'evaluations', organizationId ?? '__all__', days ?? '__ever__'] as const,
     /** Tentativi delle simulazioni tecniche, l'altra metà della dashboard. */
-    simulations: (organizationId?: string) =>
-      ['reports', 'simulations', organizationId ?? '__all__'] as const,
+    simulations: (organizationId?: string, days?: number) =>
+      ['reports', 'simulations', organizationId ?? '__all__', days ?? '__ever__'] as const,
   },
   /** I quadri d'insieme su una persona: una voce per persona, e dentro
    *  tutte le versioni scritte su di lei, dalla più recente. */

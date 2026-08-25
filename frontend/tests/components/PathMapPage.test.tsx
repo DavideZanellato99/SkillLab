@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const useMyAssignments = vi.hoisted(() => vi.fn())
@@ -54,10 +54,16 @@ const percorso = (over: Partial<PathAssignment> = {}): PathAssignment => ({
   ...over,
 })
 
+/** Quale tappa è aperta si legge nell'indirizzo, quindi i test lo guardano. */
+function Indirizzo() {
+  return <p data-testid="indirizzo">{useLocation().search}</p>
+}
+
 function renderPage(stato: Record<string, unknown>, id = 'as-1') {
   useMyAssignments.mockReturnValue({ isPending: false, error: null, ...stato })
   render(
     <MemoryRouter initialEntries={[`/app/percorsi/${id}`]}>
+      <Indirizzo />
       <Routes>
         <Route path="/app/percorsi" element={<p>Elenco dei percorsi</p>} />
         <Route path="/app/percorsi/:assignmentId" element={<PathMapPage />} />
@@ -145,6 +151,60 @@ describe('PathMapPage', () => {
     await userEvent.click(tappa(1))
 
     expect(screen.getByLabelText('Dettaglio della Tappa')).toBeInTheDocument()
+  })
+
+  /* La tappa aperta sta nell'indirizzo: ricaricando la pagina, o aprendo un
+     collegamento che la nomina, il riquadro è già quello giusto. */
+  it('apre la tappa scritta nell’indirizzo', () => {
+    renderPage({ data: [percorso()] }, 'as-1?tappa=1')
+
+    expect(screen.getByLabelText('Dettaglio della Tappa')).toBeInTheDocument()
+    expect(screen.getByText('Tappa 1 di 2')).toBeInTheDocument()
+  })
+
+  it('scrive nell’indirizzo la tappa che si sceglie', async () => {
+    renderPage({ data: [percorso()] })
+
+    await userEvent.click(tappa(2))
+
+    expect(screen.getByTestId('indirizzo')).toHaveTextContent('?tappa=2')
+  })
+
+  /* Una posizione che quel percorso non ha (un collegamento vecchio, una
+     tappa tolta) non apre niente: la mappa resta quella. */
+  it('ignora una tappa che non esiste', () => {
+    renderPage({ data: [percorso()] }, 'as-1?tappa=9')
+
+    expect(screen.queryByLabelText('Dettaglio della Tappa')).not.toBeInTheDocument()
+  })
+
+  /* Aprire la mappa e volerci entrare sono due gesti di seguito: il secondo
+     non deve passare dal nodo e dal riquadro. */
+  it('porta alla prova della tappa di adesso', () => {
+    renderPage({ data: [percorso()] })
+
+    expect(screen.getByRole('link', { name: /^Riprendi dalla tappa 2/ })).toHaveAttribute(
+      'href',
+      '/app/chat/a2',
+    )
+  })
+
+  it('non invita a riprendere un percorso già chiuso', () => {
+    renderPage({
+      data: [
+        percorso({
+          status: 'completed',
+          completed_steps: 2,
+          current_position: null,
+          steps: [
+            step({ id: 's-1', position: 1, status: 'completed' }),
+            step({ id: 's-2', position: 2, status: 'completed' }),
+          ],
+        }),
+      ],
+    })
+
+    expect(screen.queryByRole('link', { name: /^Riprendi/ })).not.toBeInTheDocument()
   })
 
   it("torna all'elenco dei percorsi", async () => {

@@ -48,11 +48,11 @@ Il ricalcolo della media pesata non difende da questo: i sei punteggi che
 entrano nella media li dà comunque il modello. La difesa è in tre pezzi, e
 nessuno dei tre basta da solo:
 
-| Pezzo | Cosa toglie a chi ci prova |
-| --- | --- |
-| Al contenuto si toglie la **forma**: il numero fra parentesi quadre, l'etichetta a inizio riga, i titoli di sezione, gli a capo | La possibilità di scrivere qualcosa che somigli a una riga vera |
-| Il blocco sta dentro un **recinto che cambia a ogni chiamata** | La possibilità di chiuderlo da dentro e far credere che il materiale sia finito |
-| Il prompt **dichiara** cosa c'è nel recinto e che non sono istruzioni | L'ambiguità su cosa il modello debba farne |
+| Pezzo                                                                                                                           | Cosa toglie a chi ci prova                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Al contenuto si toglie la **forma**: il numero fra parentesi quadre, l'etichetta a inizio riga, i titoli di sezione, gli a capo | La possibilità di scrivere qualcosa che somigli a una riga vera                 |
+| Il blocco sta dentro un **recinto che cambia a ogni chiamata**                                                                  | La possibilità di chiuderlo da dentro e far credere che il materiale sia finito |
+| Il prompt **dichiara** cosa c'è nel recinto e che non sono istruzioni                                                           | L'ambiguità su cosa il modello debba farne                                      |
 
 La regola sulle etichette guarda la **forma e non le parole**: un elenco di
 termini vietati coprirebbe `SISTEMA:` e lascerebbe passare `Traccia della
@@ -78,14 +78,14 @@ niente di più grave della chiave di correzione.
 
 ### I sei criteri
 
-| Criterio | Peso |
-| --- | --- |
-| Corretta identificazione del cliente | 22% |
-| Comprensione della casistica e risposte pertinenti | 22% |
-| Rispetto delle fasi della chiamata | 18% |
-| Empatia e gestione dello stato d'animo | 15% |
-| Sicurezza, competenza e autorevolezza | 13% |
-| Appropriatezza di linguaggio, cortesia e professionalità | 10% |
+| Criterio                                                 | Peso |
+| -------------------------------------------------------- | ---- |
+| Corretta identificazione del cliente                     | 22%  |
+| Comprensione della casistica e risposte pertinenti       | 22%  |
+| Rispetto delle fasi della chiamata                       | 18%  |
+| Empatia e gestione dello stato d'animo                   | 15%  |
+| Sicurezza, competenza e autorevolezza                    | 13%  |
+| Appropriatezza di linguaggio, cortesia e professionalità | 10%  |
 
 Ognuno porta con sé, dentro il prompt, cosa osservare e cosa penalizzare, in
 una guida scritta caso per caso. Etichette e pesi **non sono ripetuti** nella
@@ -126,15 +126,15 @@ Passa da `eval_json_completion`, lo stesso meccanismo che genera le domande del
 simulatore e che ne corregge le risposte aperte (vedi
 [simulatore.md](simulatore.md)):
 
-| Aspetto | Valore |
-| --- | --- |
-| Modello | `OPENAI_EVAL_MODEL`, con i modelli di riserva a seguire |
-| Ragionamento | `high` sui GPT-5, altrimenti temperatura bassa |
-| Formato | JSON forzato |
-| Timeout | 120 secondi, con un ritentativo |
-| Budget | 6144 token: sei criteri con commento e suggerimenti, più quello che il ragionamento spende prima di scriverne uno. Un budget stretto qui torna indietro come JSON troncato, non come valutazione più corta |
-| Passaggio al modello di riserva | Su sovraccarico o su JSON illeggibile |
-| Tetto per persona | Dieci valutazioni all'ora ([llm_limits.py](../backend/llm_limits.py)) |
+| Aspetto                         | Valore                                                                                                                                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Modello                         | `OPENAI_EVAL_MODEL`, con i modelli di riserva a seguire                                                                                                                                                    |
+| Ragionamento                    | `high` sui GPT-5, altrimenti temperatura bassa                                                                                                                                                             |
+| Formato                         | JSON forzato                                                                                                                                                                                               |
+| Timeout                         | 120 secondi, con un ritentativo                                                                                                                                                                            |
+| Budget                          | 6144 token: sei criteri con commento e suggerimenti, più quello che il ragionamento spende prima di scriverne uno. Un budget stretto qui torna indietro come JSON troncato, non come valutazione più corta |
+| Passaggio al modello di riserva | Su sovraccarico o su JSON illeggibile                                                                                                                                                                      |
+| Tetto per persona               | Dieci valutazioni all'ora ([llm_limits.py](../backend/llm_limits.py))                                                                                                                                      |
 
 Il tetto sta qui e non altrove perché questa è la chiamata più cara
 dell'applicazione ed è l'unica che si può **rifare quante volte si vuole sulla
@@ -158,12 +158,12 @@ chi insegna davvero ai propri studenti, dentro il solito confine del tenant
 
 Una revisione contiene:
 
-| Campo | Significato |
-| --- | --- |
-| `summary_note` | La nota di sintesi del docente |
+| Campo                                | Significato                                                                                               |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `summary_note`                       | La nota di sintesi del docente                                                                            |
 | `override_score` e `override_reason` | Il voto corretto e il perché. Vanno insieme o non vanno: un voto corretto porta sempre la sua motivazione |
-| `ai_score_at_review` | Il voto dell'AI al momento della revisione |
-| Annotazioni | Note appuntate su singoli messaggi della trascrizione |
+| `ai_score_at_review`                 | Il voto dell'AI al momento della revisione                                                                |
+| Annotazioni                          | Note appuntate su singoli messaggi della trascrizione                                                     |
 
 Due comportamenti che meritano una riga.
 
@@ -200,6 +200,15 @@ PDF, il foglio di calcolo, il confronto fra tentativi. Qualunque cosa saltasse
 questa funzione mostrerebbe un voto allo studente e ne conterebbe un altro
 verso il suo obiettivo.
 
+Per la stessa ragione una valutazione appena generata **fa rileggere i propri
+percorsi e le notifiche**
+([useEvaluateConversation](../frontend/src/hooks/useEvaluation.ts)): il
+progresso di una tappa non è memorizzato da nessuna parte, lo deriva il server
+da questi voti a ogni lettura, quindi è questo referto a poterlo aver mosso.
+Senza, la striscia della tappa dentro la chat direbbe ancora quanto mancava
+prima, proprio nell'istante in cui l'obiettivo è stato raggiunto (vedi
+[training-e-report.md](training-e-report.md)).
+
 Due proprietà:
 
 - **la correzione non viene mai copiata sulla riga della valutazione**: si
@@ -232,16 +241,16 @@ Due dettagli che sembrano piccoli:
 
 ## Come si legge, dove
 
-| Dove | Cosa |
-| --- | --- |
-| [EvaluationReport](../frontend/src/components/EvaluationReport.tsx) | Il referto: voto, sintesi, i sei criteri con commenti, suggerimenti e citazioni cliccabili |
-| [TrainerReviewPanel](../frontend/src/components/TrainerReviewPanel.tsx) | Il pannello con cui il docente scrive la revisione |
-| [MessageAnnotationEditor](../frontend/src/components/MessageAnnotationEditor.tsx) | Le note appuntate su un messaggio della trascrizione |
-| [ConversationDetailModal](../frontend/src/components/ConversationDetailModal.tsx) | Trascrizione e valutazione affiancate: la schermata da cui un docente corregge e da cui chi ha parlato rilegge |
-| [MessageAnnotationNote](../frontend/src/components/MessageAnnotationNote.tsx) | Una nota del docente in sola lettura, sotto la riga di cui parla |
-| [PdfDownloadButton](../frontend/src/components/PdfDownloadButton.tsx) | Il pulsante che scarica un referto in PDF, qui e nel simulatore: chi lo ospita gli passa la funzione che carica il file |
-| [ModalDeleteButton](../frontend/src/components/ModalDeleteButton.tsx) | Il cestino accanto al PDF, con cui un admin butta via la prova che sta leggendo. Ha la forma del pulsante qui sopra, perché sono le due cose che si fanno a una prova chiusa, e il rosso solo al passaggio del mouse |
-| PDF | Generato da [exports.py](../backend/exports.py), vestito da [pdf_kit.py](../backend/pdf_kit.py). Porta lo stesso contenuto dello schermo e, su pagine sue in fondo, la trascrizione della conversazione |
+| Dove                                                                              | Cosa                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [EvaluationReport](../frontend/src/components/EvaluationReport.tsx)               | Il referto: voto, sintesi, i sei criteri con commenti, suggerimenti e citazioni cliccabili                                                                                                                           |
+| [TrainerReviewPanel](../frontend/src/components/TrainerReviewPanel.tsx)           | Il pannello con cui il docente scrive la revisione                                                                                                                                                                   |
+| [MessageAnnotationEditor](../frontend/src/components/MessageAnnotationEditor.tsx) | Le note appuntate su un messaggio della trascrizione                                                                                                                                                                 |
+| [ConversationDetailModal](../frontend/src/components/ConversationDetailModal.tsx) | Trascrizione e valutazione affiancate: la schermata da cui un docente corregge e da cui chi ha parlato rilegge                                                                                                       |
+| [MessageAnnotationNote](../frontend/src/components/MessageAnnotationNote.tsx)     | Una nota del docente in sola lettura, sotto la riga di cui parla                                                                                                                                                     |
+| [PdfDownloadButton](../frontend/src/components/PdfDownloadButton.tsx)             | Il pulsante che scarica un referto in PDF, qui e nel simulatore: chi lo ospita gli passa la funzione che carica il file                                                                                              |
+| [ModalDeleteButton](../frontend/src/components/ModalDeleteButton.tsx)             | Il cestino accanto al PDF, con cui un admin butta via la prova che sta leggendo. Ha la forma del pulsante qui sopra, perché sono le due cose che si fanno a una prova chiusa, e il rosso solo al passaggio del mouse |
+| PDF                                                                               | Generato da [exports.py](../backend/exports.py), vestito da [pdf_kit.py](../backend/pdf_kit.py). Porta lo stesso contenuto dello schermo e, su pagine sue in fondo, la trascrizione della conversazione              |
 
 Il documento è uno solo, gli endpoint che lo servono sono due, perché sono due
 le persone che possono chiederlo. `GET /api/chat/conversation/{id}/evaluation/pdf`
@@ -285,17 +294,29 @@ Due scelte che spiegano il resto:
 La trascrizione ricalca la chat: chi ha parlato a destra in violetto, l'avatar a
 sinistra sul grigio chiaro, con nome e ora sopra ogni bolla.
 
+**Da 1024px in su le due colonne scorrono per conto loro** e riempiono quello
+che il pannello concede, che è fino al 90% dello schermo. Erano ferme a 62vh
+ciascuna dentro un corpo che scorreva a sua volta: tre barre di scorrimento
+annidate, e su uno schermo basso la più esterna diventava l'unico modo di
+arrivare in fondo a una colonna. Più stretto le due colonne diventano una, e lì
+a scorrere è il corpo e basta, perché dentro una colonna sola una trascrizione
+con la propria barra dentro la pagina che ne ha già una è il modo più veloce
+per perdere il segno. Le altezze sono una catena di flex senza percentuali, e
+la griglia tiene una riga sola alta quanto lei (`grid-rows-1`, cioè
+minmax(0,1fr)): altrimenti la riga si misurerebbe sul contenuto e le colonne,
+invece di scorrere, verrebbero tagliate dal corpo che non scorre.
+
 ### La stessa schermata per due lettori
 
 `ConversationDetailModal` ha una prop `scope`, e sono le sole quattro cose che
 cambiano fra un docente che corregge e chi rilegge una conversazione sua:
 
-| | `admin` | `own` |
-| --- | --- | --- |
+|                         | `admin`                                                                                      | `own`                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | Da dove arrivano i dati | `GET /api/admin/conversations/{id}`, che porta trascrizione, valutazione e revisione insieme | Le due letture che uno studente può fare, composte da [useOwnConversationDetail](../frontend/src/hooks/useOwnConversationDetail.ts) |
-| Chi compare in testa | Il nome di chi ha parlato | Solo l'avatar: a se stessi non ci si presenta |
-| La revisione | Si scrive, col pannello e le note sui messaggi | Si legge e basta |
-| Il cestino | In testa accanto al PDF, se chi ha aperto la schermata passa `onDeleted` | Mai: cancellarsi lo storico non è un gesto che l'app concede |
+| Chi compare in testa    | Il nome di chi ha parlato                                                                    | Solo l'avatar: a se stessi non ci si presenta                                                                                       |
+| La revisione            | Si scrive, col pannello e le note sui messaggi                                               | Si legge e basta                                                                                                                    |
+| Il cestino              | In testa accanto al PDF, se chi ha aperto la schermata passa `onDeleted`                     | Mai: cancellarsi lo storico non è un gesto che l'app concede                                                                        |
 
 Il resto è identico apposta, per la stessa ragione dei test consegnati: chi
 corregge deve leggere esattamente quello che legge chi è stato corretto. Le due

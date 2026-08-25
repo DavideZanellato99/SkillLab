@@ -1,4 +1,4 @@
-﻿/* Il report attività: una riga per persona, e su quella riga tutto quello
+/* Il report attività: una riga per persona, e su quella riga tutto quello
  * che quella persona ha fatto.
  *
  * La domanda è diversa da quella della dashboard: là si guarda un gruppo e

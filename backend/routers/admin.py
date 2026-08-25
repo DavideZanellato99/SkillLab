@@ -258,7 +258,7 @@ def users_activity_report(
     numero di chi si allena da un anno non dice cosa ha fatto adesso.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days) if days else None
+    since = _since(days)
 
     # Resolve the users in scope first so both the conversations and their
     # message stats can be restricted to them: an organization admin must not
@@ -396,6 +396,7 @@ def users_activity_report(
 @router.get("/evaluations-report", response_model=list[EvaluationReportRow])
 def evaluations_report(
     organization_id: UUID | None = None,
+    days: int | None = Query(None, ge=1, le=3650),
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -404,12 +405,22 @@ def evaluations_report(
     the evaluation scores, the data source for the dashboard charts. A Super
     Admin sees every organization (optionally filtered by `organization_id`);
     an Organization Admin only its own.
+
+    `days` restringe le righe alle conversazioni degli ultimi N giorni, come
+    nel report attività: è tutto quello che la dashboard poi aggrega, e senza
+    un limite chi si allena da un anno se lo porta dietro intero a ogni
+    apertura della pagina, criteri di ogni valutazione compresi.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    return _evaluation_report_rows(db, scope_org_id)
+    return _evaluation_report_rows(db, scope_org_id, _since(days))
 
 
-def _evaluation_report_rows(db: Session, scope_org_id) -> list[EvaluationReportRow]:
+def _since(days: int | None):
+    """L'istante da cui contare, o None per «da sempre»."""
+    return datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days) if days else None
+
+
+def _evaluation_report_rows(db: Session, scope_org_id, since=None) -> list[EvaluationReportRow]:
     """Every evaluated conversation in scope, oldest first (chart order).
 
     The trainer's review rides along on an outer join (most conversations
@@ -425,6 +436,8 @@ def _evaluation_report_rows(db: Session, scope_org_id) -> list[EvaluationReportR
     )
     if scope_org_id is not None:
         query = query.filter(User.organization_id == scope_org_id)
+    if since is not None:
+        query = query.filter(ChatConversation.created_at >= since)
     rows = query.order_by(ChatConversation.created_at.asc()).all()
     return [
         EvaluationReportRow(
@@ -461,6 +474,7 @@ def _evaluation_report_rows(db: Session, scope_org_id) -> list[EvaluationReportR
 @router.get("/simulations-report", response_model=list[SimulationReportRow])
 def simulations_report(
     organization_id: UUID | None = None,
+    days: int | None = Query(None, ge=1, le=3650),
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -473,8 +487,12 @@ def simulations_report(
     Scoped by the taker's organization and not by the simulation's: what the
     dashboard of a tenant is about is how ITS people are doing, and a test
     borrowed from elsewhere would otherwise disappear from their own numbers.
+
+    `days` restringe ai tentativi degli ultimi N giorni, come nella metà
+    parlata: i due selettori della dashboard sono lo stesso periodo.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
+    since = _since(days)
     query = (
         db.query(
             SimulationAttempt,
@@ -488,6 +506,8 @@ def simulations_report(
     )
     if scope_org_id is not None:
         query = query.filter(User.organization_id == scope_org_id)
+    if since is not None:
+        query = query.filter(SimulationAttempt.created_at >= since)
     # Oldest first, like the evaluations report: the charts plot in this order.
     rows = query.order_by(SimulationAttempt.created_at.asc()).all()
     return [
@@ -515,6 +535,7 @@ def simulations_report(
 @router.get("/evaluations-report/export")
 def export_evaluations_report(
     organization_id: UUID | None = None,
+    days: int | None = Query(None, ge=1, le=3650),
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -522,11 +543,13 @@ def export_evaluations_report(
 
     Same scope rules as /evaluations-report: a Super Admin exports every
     organization (optionally one via `organization_id`), an Organization
-    Admin only its own. Finer slicing (user, channel, dates) is what the
-    spreadsheet's own autofilter is for.
+    Admin only its own, e lo stesso `days`: il foglio è quello che si sta
+    guardando, e un file che ignorasse il periodo scelto risponderebbe a una
+    domanda diversa da quella sullo schermo. Le fette più fini (persona,
+    canale) restano all'autofiltro del foglio.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    content = evaluations_report_xlsx(_evaluation_report_rows(db, scope_org_id))
+    content = evaluations_report_xlsx(_evaluation_report_rows(db, scope_org_id, _since(days)))
     filename = f"report-valutazioni-{datetime.now(UTC).strftime('%Y-%m-%d')}.xlsx"
     return Response(
         content=content,

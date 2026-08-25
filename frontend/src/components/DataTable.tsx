@@ -1,5 +1,5 @@
 import { Children } from 'react'
-import type { HTMLAttributes, ReactNode, TdHTMLAttributes } from 'react'
+import type { HTMLAttributes, KeyboardEvent, ReactNode, TdHTMLAttributes } from 'react'
 import Tooltip from './Tooltip'
 import SearchInput from './SearchInput'
 import PaginationBar from './Pagination'
@@ -153,12 +153,42 @@ export default function DataTable({
 interface TrProps extends HTMLAttributes<HTMLTableRowElement> {
   /** Evidenzia la riga al passaggio del mouse (default: attivo) */
   hover?: boolean
+  /* La riga apre qualcosa: il dettaglio di una conversazione, un test
+   * consegnato, il pannello che si dispiega sotto. Da usare al posto di un
+   * `onClick` scritto a mano, che era il modo in cui queste righe si aprivano
+   * soltanto col mouse: qui arrivano anche il fuoco da tastiera, Invio e
+   * Spazio, e il puntatore a manina, che erano tre cose da ricordarsi ogni
+   * volta.
+   *
+   * Niente `role="button"`: sostituirebbe il ruolo di riga, e chi legge la
+   * tabella con uno screen reader perderebbe la griglia (quante righe, quale
+   * colonna) proprio nelle tabelle che si aprono. La riga resta una riga, e
+   * riceve il fuoco. */
+  onActivate?: () => void
 }
 
-export function Tr({ hover = true, className = '', ...props }: TrProps) {
+export function Tr({ hover = true, onActivate, className = '', ...props }: TrProps) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+    if (!onActivate) return
+    /* Solo sulla riga stessa: dentro le celle ci sono bottoni e menu, e
+       Invio là dentro è già il loro. */
+    if (event.target !== event.currentTarget) return
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    // Spazio su un elemento che ha il fuoco fa scorrere la pagina
+    event.preventDefault()
+    onActivate()
+  }
+
   return (
     <tr
-      className={`transition ${hover ? 'hover:[&>td]:bg-white/4' : ''} ${className}`}
+      className={`transition ${hover ? 'hover:[&>td]:bg-white/4' : ''} ${
+        onActivate
+          ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-violet-500'
+          : ''
+      } ${className}`}
+      onClick={onActivate}
+      onKeyDown={onActivate ? handleKeyDown : undefined}
+      tabIndex={onActivate ? 0 : undefined}
       {...props}
     />
   )

@@ -1119,6 +1119,16 @@ server per un istante, e il pulsante lo dice ("Preparazione del test...")
 invece di restare fermo: se l'estrazione fallisce l'errore compare sopra le
 regole e il pulsante è ancora lì.
 
+Sopra le regole, e poi sull'esito, c'è una striscia quando **questo test è la
+tappa di un percorso**
+([PathStepNotice](../frontend/src/components/PathStepNotice.tsx)): il voto che
+serve per superarla si legge mentre si leggono le regole, invece di restare
+sulla mappa da cui si è usciti, e dall'esito si torna al percorso. Fra le
+domande no: a cronometro acceso sarebbe una cosa in più da guardare. Chi
+decide se compaia sono i dati, cioè la tappa di adesso di un percorso aperto
+che punta a questo test, e non la strada fatta per arrivare qui: il perché sta
+in [training-e-report.md](training-e-report.md).
+
 Ogni domanda è un
 [SimulationQuestionStep](../frontend/src/components/SimulationQuestionStep.tsx)
 montato con `key={question.id}`, quindi il passo alla domanda dopo rimonta il

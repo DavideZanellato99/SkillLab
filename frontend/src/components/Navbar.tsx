@@ -7,7 +7,7 @@
  * file: erano tutti dentro questo componente, che era diventato cinquecento
  * righe in cui lo stesso blocco di classi compariva sei volte. */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { MouseEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
@@ -22,6 +22,9 @@ import { mainNavEntries } from './navEntries'
 import { MAIN_CONTENT_ID } from './mainContent'
 import NotificationsBell from './NotificationsBell'
 
+/** I pannelli che escono dall'angolo destro della barra, uno per volta. */
+type NavbarMenu = 'user' | 'sections' | 'notifications'
+
 export default function Navbar() {
   const { pathname } = useLocation()
   const { user, isAuthenticated } = useAuth()
@@ -31,13 +34,13 @@ export default function Navbar() {
      apertura e muore alla sua chiusura. */
   const [showAuthModal, setShowAuthModal] = useState(false)
 
-  /* Quale dei due menu è aperto, e non due interruttori separati: escono
-     dallo stesso angolo della barra e aperti insieme si coprirebbero a
-     vicenda. Aprire l'uno chiude l'altro. */
-  const [openMenu, setOpenMenu] = useState<'user' | 'sections' | null>(null)
+  /* Quale dei tre pannelli è aperto, e non tre interruttori separati:
+     escono tutti dallo stesso angolo della barra e aperti insieme si
+     coprirebbero a vicenda. Aprirne uno chiude quello di prima. */
+  const [openMenu, setOpenMenu] = useState<NavbarMenu | null>(null)
   const closeMenus = useCallback(() => setOpenMenu(null), [])
   const toggleMenu = useCallback(
-    (menu: 'user' | 'sections') => setOpenMenu((current) => (current === menu ? null : menu)),
+    (menu: NavbarMenu) => setOpenMenu((current) => (current === menu ? null : menu)),
     [],
   )
 
@@ -56,7 +59,13 @@ export default function Navbar() {
     return () => window.removeEventListener(OPEN_LOGIN_EVENT, openLogin)
   }, [])
 
-  const entries = isAuthenticated ? mainNavEntries(user) : []
+  /* Le voci dipendono solo da chi è entrato, e la barra è montata su ogni
+     pagina: senza memoria si rifarebbero a ogni render, comprese le funzioni
+     che decidono quale voce è accesa. */
+  const entries = useMemo(
+    () => (isAuthenticated ? mainNavEntries(user) : []),
+    [isAuthenticated, user],
+  )
 
   /* Il salto al contenuto sposta il fuoco a mano invece di lasciar fare
      all'ancora: un href con il cancelletto resterebbe scritto nella barra
@@ -149,7 +158,11 @@ export default function Navbar() {
           <div className="flex items-center gap-4 max-md:gap-2" id="navbar-actions">
             {isAuthenticated && user ? (
               <>
-                <NotificationsBell />
+                <NotificationsBell
+                  isOpen={openMenu === 'notifications'}
+                  onToggle={() => toggleMenu('notifications')}
+                  onClose={closeMenus}
+                />
                 <NavbarUserMenu
                   user={user}
                   isOpen={openMenu === 'user'}

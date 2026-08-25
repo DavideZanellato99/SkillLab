@@ -14,6 +14,7 @@ import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
 import FormError from './FormError'
 import SimulationResult from './SimulationResult'
+import PathStepNotice from './PathStepNotice'
 import SimulationIntro from './SimulationIntro'
 import SimulationQuestionStep from './SimulationQuestionStep'
 import SimulationOpenQuestionStep from './SimulationOpenQuestionStep'
@@ -200,6 +201,9 @@ export default function SimulationRunner() {
     return (
       <PageContainer>
         <PageHeader title={simulation.title} description="Esito del test appena consegnato." />
+        {/* Anche a test consegnato: da qui si torna al percorso, che è dove si
+            vede se la tappa è stata superata e cosa viene dopo. */}
+        <PathStepNotice kind="simulation" targetId={simulationId} className="mb-6" />
         <SimulationResult
           attempt={result}
           actions={
@@ -336,6 +340,11 @@ export default function SimulationRunner() {
               }
             />
           )}
+          {/* Prima di cominciare, se questo test è la tappa di un percorso:
+              il voto che serve va saputo mentre si leggono le regole, non
+              cercato nella mappa da cui si è usciti. Non durante le domande,
+              dove sarebbe una cosa in più da guardare a cronometro acceso. */}
+          <PathStepNotice kind="simulation" targetId={simulationId} className="mb-6" />
           <SimulationIntro simulation={simulation} onStart={begin} starting={start.isPending} />
         </>
       )}

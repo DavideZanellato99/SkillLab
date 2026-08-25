@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
@@ -24,12 +25,26 @@ const avviso = (over: Partial<AppNotification> = {}): AppNotification => ({
   ...over,
 })
 
+/* Aperta o chiusa lo decide la barra, che tiene aperto un pannello solo:
+ * qui quel poco di stato lo tiene questo involucro, così i test premono la
+ * campanella come si fa davvero. */
+function Campanella() {
+  const [aperta, setAperta] = useState(false)
+  return (
+    <NotificationsBell
+      isOpen={aperta}
+      onToggle={() => setAperta((v) => !v)}
+      onClose={() => setAperta(false)}
+    />
+  )
+}
+
 function renderBell(items: AppNotification[] = [], unread = items.filter((i) => !i.read).length) {
   useNotifications.mockReturnValue({ data: { items, unread } })
   render(
     <MemoryRouter initialEntries={['/app']}>
       <Routes>
-        <Route path="/app" element={<NotificationsBell />} />
+        <Route path="/app" element={<Campanella />} />
         <Route path="/app/percorsi/:id" element={<p>Sentiero aperto</p>} />
       </Routes>
     </MemoryRouter>,
@@ -170,11 +185,32 @@ describe('NotificationsBell', () => {
     useNotifications.mockReturnValue({ data: undefined })
     render(
       <MemoryRouter>
-        <NotificationsBell />
+        <Campanella />
       </MemoryRouter>,
     )
 
     expect(screen.getByRole('button', { name: 'Notifiche' })).toBeInTheDocument()
+  })
+
+  /* Come gli altri due pannelli della barra: chi naviga da tastiera lo
+   * richiude senza cercare il velo, e il fuoco torna sulla campanella invece
+   * di finire in cima alla pagina. */
+  it('si chiude con Esc e restituisce il fuoco alla campanella', async () => {
+    renderBell([avviso()])
+
+    await userEvent.click(campanella())
+    await userEvent.keyboard('{Escape}')
+
+    expect(screen.queryByText('Nuovo percorso assegnato')).not.toBeInTheDocument()
+    expect(campanella()).toHaveFocus()
+  })
+
+  it('dice se è aperta a chi non la vede', async () => {
+    renderBell([avviso()])
+
+    expect(campanella()).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(campanella())
+    expect(campanella()).toHaveAttribute('aria-expanded', 'true')
   })
 
   it("disegna un'icona diversa per ogni tipo di avviso", async () => {

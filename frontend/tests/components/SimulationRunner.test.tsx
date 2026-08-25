@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+/* Dentro il runner c'è la striscia che dice se questo test è la tappa di un
+   percorso, e quella chiede chi è entrato: qui non c'è nessuna sessione, e
+   senza questo l'hook del contesto protesta. Con nessun utente la striscia
+   non compare, che è quello che serve a questi test. */
+vi.mock('../../src/hooks/useAuth', () => ({ useAuth: () => ({ user: null }) }))
+
 import SimulationRunner from '../../src/components/SimulationRunner'
 
 /* Il tratto che nessun altro test copre: dalla risposta data al corpo della

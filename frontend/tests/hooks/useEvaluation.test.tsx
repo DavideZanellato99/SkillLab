@@ -71,6 +71,22 @@ describe('useEvaluateConversation', () => {
     expect(servizio.fetchConversationEvaluation).not.toHaveBeenCalled()
   })
 
+  /* Il progresso di una tappa lo deriva il server dalle prove svolte, quindi
+     è questo voto a farlo cambiare: senza rileggerli, l'obiettivo mostrato
+     nella chat resterebbe quello di prima proprio nel momento in cui lo si è
+     appena raggiunto. Le notifiche nascono dalle stesse tappe. */
+  it('fa rileggere i propri percorsi e le notifiche', async () => {
+    servizio.evaluateConversation.mockResolvedValue({ id: 'e-1' })
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useEvaluateConversation(), { wrapper })
+
+    result.current.mutate('c-1')
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.training.mine })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.notifications })
+  })
+
   it('non tocca la cache quando la valutazione fallisce', async () => {
     servizio.evaluateConversation.mockRejectedValue(new Error('modello non disponibile'))
     const { result } = renderHook(() => useEvaluateConversation(), { wrapper })

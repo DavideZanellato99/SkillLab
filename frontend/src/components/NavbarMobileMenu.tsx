@@ -17,6 +17,7 @@
  * quello del profilo escono dallo stesso angolo e sovrapposti sarebbero
  * illeggibili. */
 
+import { useRef } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { CloseIcon, MenuIcon } from './icons'
@@ -41,11 +42,13 @@ export default function NavbarMobileMenu({
   onClose,
 }: NavbarMobileMenuProps) {
   const { pathname } = useLocation()
-  useCloseOnEscape(isOpen, onClose)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  useCloseOnEscape(isOpen, onClose, triggerRef)
 
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100 max-lg:flex"
         onClick={onToggle}

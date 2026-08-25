@@ -74,4 +74,30 @@ describe('PathStepDrawer', () => {
 
     expect(onClose).toHaveBeenCalled()
   })
+
+  /* Su schermo stretto il riquadro copre tutto quello che non è lui: chi
+     naviga da tastiera resterebbe dietro al velo, sul nodo appena premuto. */
+  it('prende il fuoco appena si apre', () => {
+    renderDrawer()
+
+    expect(screen.getByLabelText('Dettaglio della Tappa')).toHaveFocus()
+  })
+
+  /* Chiuso il riquadro si torna sulla tappa da cui lo si era aperto: senza,
+     il fuoco finisce sul body e il Tab successivo ricomincia dalla cima. */
+  it('restituisce il fuoco al nodo da cui è stato aperto', () => {
+    const nodo = document.createElement('button')
+    document.body.append(nodo)
+    nodo.focus()
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <PathStepDrawer step={step} total={5} onClose={vi.fn()} />
+      </MemoryRouter>,
+    )
+    unmount()
+
+    expect(nodo).toHaveFocus()
+    nodo.remove()
+  })
 })

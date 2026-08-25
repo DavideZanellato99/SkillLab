@@ -40,7 +40,7 @@ const trail = [
   step({ id: '3', position: 3 }),
 ]
 
-const renderMap = (onSelect: (id: string) => void = () => {}, completedSteps = 1) =>
+const renderMap = (onSelect: (step: StepProgress) => void = () => {}, completedSteps = 1) =>
   render(
     <PathTrailMap
       steps={trail}
@@ -66,7 +66,7 @@ describe('PathTrailMap', () => {
 
     await userEvent.click(nodes()[2])
 
-    expect(onSelect).toHaveBeenCalledWith('3')
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: '3' }))
   })
 
   it('rimpicciolita accorcia il sentiero senza perdere tappe', async () => {
@@ -111,5 +111,30 @@ describe('PathTrailMap', () => {
     renderMap()
 
     expect(screen.queryAllByRole('link')).toHaveLength(0)
+  })
+
+  /* Il termine sotto il nodo, ma solo dove c'è ancora qualcosa da fare: su
+     una tappa già superata sarebbe la data di una corsa già corsa. */
+  it('scrive la scadenza sotto le tappe che restano da fare', () => {
+    const fraDueGiorni = new Date(Date.now() + 2 * 86_400_000).toISOString()
+    render(
+      <PathTrailMap
+        steps={[
+          step({ id: '1', position: 1, status: 'completed', due_at: fraDueGiorni }),
+          step({
+            id: '2',
+            position: 2,
+            status: 'active',
+            unlocked_at: '2026-01-02',
+            due_at: fraDueGiorni,
+          }),
+        ]}
+        completedSteps={1}
+        selectedId=""
+        onSelect={() => {}}
+      />,
+    )
+
+    expect(screen.getAllByText('Scade fra 2 giorni')).toHaveLength(1)
   })
 })

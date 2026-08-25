@@ -4,6 +4,7 @@ import StepCriteriaProgress from './StepCriteriaProgress'
 import { CheckIcon, LockIcon } from './icons'
 import {
   formatScore,
+  isStepDone,
   formatShortDeadline,
   isStepLocked,
   stepKindLabel,
@@ -33,7 +34,7 @@ const numberBaseCls =
   'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[0.78rem] font-bold tabular-nums'
 
 function StepNumber({ step }: { step: StepProgress }) {
-  const done = step.status === 'completed' || step.status === 'completed_late'
+  const done = isStepDone(step)
   if (done) {
     return (
       <span className={`${numberBaseCls} border-emerald-500/40 bg-emerald-500/15 text-emerald-400`}>

@@ -236,13 +236,6 @@ describe('quando il catalogo non arriva', () => {
     expect(refetch).toHaveBeenCalledOnce()
   })
 
-  it('mentre il nuovo tentativo è in corso non se ne accettano altri', () => {
-    stato.avatars = { ...stato.avatars, data: [], isError: true, isFetching: true }
-    renderGallery()
-
-    expect(screen.getByRole('button', { name: 'Nuovo tentativo in corso...' })).toBeDisabled()
-  })
-
   /* Il catalogo letto prima resta a schermo: si avvisa soltanto che
    * potrebbe non essere l'ultima parola. */
   it('avvisa senza togliere il catalogo già letto', async () => {

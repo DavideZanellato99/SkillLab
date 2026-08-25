@@ -14,8 +14,16 @@ vi.mock('../../src/hooks/useAuth', () => ({
 }))
 
 /* La campanella e la modale hanno i loro test: qui sostituirle tiene il
- * banco a quello che la barra decide, cioè chi vede cosa. */
-vi.mock('../../src/components/NotificationsBell', () => ({ default: () => <div>campanella</div> }))
+ * banco a quello che la barra decide, cioè chi vede cosa. Della campanella
+ * resta il pulsante, perché è la barra a dire se il suo pannello è aperto. */
+vi.mock('../../src/components/NotificationsBell', () => ({
+  default: ({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) => (
+    <div>
+      <button onClick={onToggle}>campanella</button>
+      {isOpen && <p>pannello notifiche</p>}
+    </div>
+  ),
+}))
 vi.mock('../../src/components/AuthModal', () => ({
   default: ({ onClose }: { onClose: () => void }) => (
     <div>
@@ -292,13 +300,14 @@ describe('la navigazione su schermo stretto', () => {
     expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
   })
 
-  it('si chiude con Esc', async () => {
+  it('si chiude con Esc, e il fuoco torna al suo pulsante', async () => {
     renderNavbar('user')
     await apriPannello()
 
     await userEvent.keyboard('{Escape}')
 
     expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apri il menu di navigazione' })).toHaveFocus()
   })
 
   /* Prima dell'accesso la barra ha una voce sola, che sta in fila a
@@ -329,10 +338,33 @@ describe('il menu del profilo, da tastiera', () => {
     await apriMenu()
     expect(menuUtente()).toHaveAttribute('aria-expanded', 'true')
   })
+
+  /* Chiuso il menu il fuoco tornerebbe sul body, cioè in cima alla pagina:
+   * il Tab successivo ricomincerebbe dal salto al contenuto invece di
+   * riprendere da dove si era. */
+  it('con Esc il fuoco torna al pulsante che lo aveva aperto', async () => {
+    renderNavbar('user')
+    await apriMenu()
+
+    await userEvent.keyboard('{Escape}')
+
+    expect(menuUtente()).toHaveFocus()
+  })
+
+  /* Il nome resta il nome del pulsante anche dove non si legge: sotto i
+   * 480px sparisce per far posto, e resterebbero due lettere. */
+  it('porta il nome di chi è entrato anche per chi non lo vede', () => {
+    renderNavbar('user')
+
+    expect(
+      screen.getByRole('button', { name: 'Anna Rossi, menu del proprio account' }),
+    ).toBeInTheDocument()
+  })
 })
 
-/* I due menu escono dallo stesso angolo: aperti insieme si coprirebbero. */
-describe('i due menu della barra', () => {
+/* I tre pannelli escono dallo stesso angolo: aperti insieme si
+ * coprirebbero. */
+describe('i pannelli della barra', () => {
   it('aprendo le sezioni si chiude il profilo', async () => {
     renderNavbar('user')
 
@@ -351,6 +383,36 @@ describe('i due menu della barra', () => {
 
     expect(screen.getByRole('link', { name: /Il Mio Profilo/ })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
+  })
+
+  it('aprendo le notifiche si chiude il profilo', async () => {
+    renderNavbar('user')
+
+    await apriMenu()
+    await userEvent.click(screen.getByRole('button', { name: 'campanella' }))
+
+    expect(screen.getByText('pannello notifiche')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+  })
+
+  it('aprendo il profilo si chiudono le notifiche', async () => {
+    renderNavbar('user')
+
+    await userEvent.click(screen.getByRole('button', { name: 'campanella' }))
+    await apriMenu()
+
+    expect(screen.getByRole('link', { name: /Il Mio Profilo/ })).toBeInTheDocument()
+    expect(screen.queryByText('pannello notifiche')).not.toBeInTheDocument()
+  })
+
+  /* Cambiando pagina non resta niente di aperto sopra la schermata nuova. */
+  it('le notifiche si chiudono cambiando sezione', async () => {
+    renderNavbar('user')
+
+    await userEvent.click(screen.getByRole('button', { name: 'campanella' }))
+    await userEvent.click(screen.getByRole('link', { name: /Confronto/ }))
+
+    expect(screen.queryByText('pannello notifiche')).not.toBeInTheDocument()
   })
 })
 

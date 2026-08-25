@@ -104,14 +104,37 @@ describe('scelta della persona', () => {
     expect(screen.getByRole('option', { name: /Marco Bianchi/ })).toBeInTheDocument()
   })
 
-  /* Quante prove ha decide se aprirlo: sotto le due non c'è confronto da
-     fare, e il conteggio arrivava dal server senza che lo leggesse nessuno. */
-  it('dice quante prove ha ciascuno', async () => {
+  /* Sotto al nome soltanto l'email, che distingue due omonimi: quante prove
+     ha si legge nelle linguette appena scelto, e accanto all'indirizzo
+     allungava ogni voce senza cambiare chi si sta cercando. */
+  it("mostra solo l'email sotto al nome", async () => {
     renderPage('organization_admin')
 
     await userEvent.click(campoPersona())
 
-    expect(screen.getByText('marco@test.it · 4 prove')).toBeInTheDocument()
+    expect(screen.getByText('marco@test.it')).toBeInTheDocument()
+    expect(screen.queryByText(/prove$/)).not.toBeInTheDocument()
+  })
+
+  /* In ordine alfabetico sul nome che si legge, come nella dashboard: chi
+     scorre l'elenco a occhio invece di digitare cerca nello stesso posto in
+     entrambe le pagine. Il server li dà per cognome, che è un altro ordine. */
+  it('elenca le persone in ordine alfabetico', async () => {
+    stato.people = [
+      { id: 'u-3', nome: 'Sara', cognome: 'Alberti', email: 'sara@test.it', attempts: 2 },
+      { id: 'u-2', nome: 'Marco', cognome: 'Bianchi', email: 'marco@test.it', attempts: 4 },
+      { id: 'u-4', nome: 'Anna', cognome: 'Conti', email: 'anna@test.it', attempts: 1 },
+    ]
+    renderPage('organization_admin')
+
+    await userEvent.click(campoPersona())
+
+    const nomi = screen.getAllByRole('option').map((o) => o.textContent)
+    expect(nomi).toEqual([
+      expect.stringContaining('Anna Conti'),
+      expect.stringContaining('Marco Bianchi'),
+      expect.stringContaining('Sara Alberti'),
+    ])
   })
 
   it('parte dalle proprie prove anche per un admin', () => {

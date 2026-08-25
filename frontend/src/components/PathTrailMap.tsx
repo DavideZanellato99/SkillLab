@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { AssignmentStatus, StepProgress } from '../services/training'
 import { STATUS_META } from './assignmentStatus'
@@ -23,7 +23,14 @@ import {
   trailNodes,
   trailPath,
 } from './pathMapLayout'
-import { currentStepOf, isStepLocked, stepKindLabel, stepTarget } from './trainingFormat'
+import StepDeadline from './StepDeadline'
+import {
+  currentStepOf,
+  isStepDone,
+  isStepLocked,
+  stepKindLabel,
+  stepTarget,
+} from './trainingFormat'
 
 /* Il percorso disegnato come un sentiero da percorrere con lo sguardo: le
  * tappe sono nodi su una linea che scende serpeggiando, il tratto già
@@ -80,7 +87,7 @@ const controlCls =
 const DRAG_SLOP = 4
 
 function NodeFace({ step, scale }: { step: StepProgress; scale: number }) {
-  if (step.status === 'completed' || step.status === 'completed_late') {
+  if (isStepDone(step)) {
     return <CheckIcon size={Math.round(24 * scale)} />
   }
   // Il lucchetto lo decide lo sblocco e non lo stato: una tappa chiusa la cui
@@ -107,18 +114,28 @@ export default function PathTrailMap({
   /** Quante tappe sono chiuse: è fin lì che il sentiero è acceso. */
   completedSteps: number
   selectedId: string
-  onSelect: (stepId: string) => void
+  /** La tappa intera e non il suo id: chi la riceve la scrive nell'indirizzo
+   *  per numero, e ripescarla da una lista per ricavarlo sarebbe un giro per
+   *  tornare a un dato che il click aveva già in mano. */
+  onSelect: (step: StepProgress) => void
 }) {
   const [zoomIndex, setZoomIndex] = useState(ZOOM_LEVELS.length - 1)
   const [shade, setShade] = useState({ top: false, bottom: false })
   const viewportRef = useRef<HTMLDivElement>(null)
   const dragged = useRef(false)
-  const centered = useRef(false)
-  const shownAt = useRef(zoomIndex)
 
   const zoom = ZOOM_LEVELS[zoomIndex]
-  const nodes = trailNodes(steps.length, zoom)
-  const height = trailHeight(steps.length, zoom)
+
+  /* Le posizioni delle tappe e il tracciato si rifanno solo quando cambia
+     davvero il sentiero, cioè al cambio di riduzione o di numero di tappe.
+     Non è memoria di principio: le sfumature ai bordi si aggiornano mentre si
+     scorre, quindi durante un trascinamento questo componente si ridisegna a
+     ogni fotogramma, e senza memoria ognuno rifarebbe da capo il conto di
+     tutti i nodi e la stringa del tracciato. */
+  const nodes = useMemo(() => trailNodes(steps.length, zoom), [steps.length, zoom])
+  const height = useMemo(() => trailHeight(steps.length, zoom), [steps.length, zoom])
+  const path = useMemo(() => trailPath(nodes), [nodes])
+
   const litY = litUntil(nodes, completedSteps)
   const withLabels = zoom >= ZOOM_WITH_LABELS
   const currentId = currentStepOf(steps)?.id
@@ -130,8 +147,17 @@ export default function PathTrailMap({
     viewport.scrollTo({ top: nodes[index].y - viewport.clientHeight / 2, behavior })
   }
 
+  /* Su quale tappa ci si centra è quello che c'è adesso, tenuto in un ref e
+     non fra le dipendenze dell'effetto qui sotto: scegliere un nodo non deve
+     spostare la mappa, o aprire una tappa lontana porterebbe via il tratto di
+     sentiero che si sta guardando. */
+  const focusId = useRef<string | undefined>(undefined)
+  focusId.current = selectedId || currentId
+
   /* Due volte la finestra si sposta da sola, e tutte e due prima che il
-     disegno appaia, perché uno scatto dopo si vedrebbe.
+     disegno appaia, perché uno scatto dopo si vedrebbe: sono l'apertura e il
+     cambio di riduzione, cioè i due soli momenti in cui questo effetto viene
+     eseguito.
      All'apertura si porta sulla tappa in cui ci si trova: è lì che la pagina
      risponde alla domanda con cui la si è aperta, e su un percorso lungo quel
      punto sarebbe fuori dallo schermo. Cambiando riduzione tiene ferma la
@@ -139,28 +165,28 @@ export default function PathTrailMap({
      non a perderla di vista, e se non ce n'è nessuna aperta torna a quella di
      adesso, che è il punto attorno a cui si guarda quando non si sta
      guardando niente in particolare. Il resto del tempo è chi guarda a
-     decidere dove stare, e la mappa non gli toglie il posto. */
+     decidere dove stare, e la mappa non gli toglie il posto: per questo
+     dipende dalla sola riduzione, e non da cosa è scelto o da dove si è
+     arrivati, che cambiano mentre si legge (vedi `focusId`). */
   useLayoutEffect(() => {
-    if (!centered.current) {
-      centered.current = true
-      shownAt.current = zoomIndex
-      scrollToStep(selectedId || currentId, 'instant')
-    } else if (shownAt.current !== zoomIndex) {
-      shownAt.current = zoomIndex
-      scrollToStep(selectedId || currentId, 'instant')
-    } else {
-      return
-    }
-    handleScroll()
-  })
+    scrollToStep(focusId.current, 'instant')
+    syncShade()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoomIndex])
 
-  const handleScroll = () => {
+  /* Le sfumature ai bordi sono quattro combinazioni in tutto, e lo scorrimento
+     manda un evento per fotogramma: senza questo confronto ogni evento
+     scriverebbe un oggetto nuovo, che per React è comunque uno stato diverso,
+     e la mappa si ridisegnerebbe tutta anche restando in mezzo al sentiero,
+     dove non c'è niente da cambiare. */
+  const syncShade = () => {
     const viewport = viewportRef.current
     if (!viewport) return
-    setShade({
-      top: viewport.scrollTop > 8,
-      bottom: viewport.scrollTop + viewport.clientHeight < viewport.scrollHeight - 8,
-    })
+    const top = viewport.scrollTop > 8
+    const bottom = viewport.scrollTop + viewport.clientHeight < viewport.scrollHeight - 8
+    setShade((current) =>
+      current.top === top && current.bottom === bottom ? current : { top, bottom },
+    )
   }
 
   /* Il trascinamento è solo del mouse: al dito il riquadro risponde già da
@@ -236,7 +262,7 @@ export default function PathTrailMap({
         role="region"
         aria-label="Mappa del Percorso"
         tabIndex={0}
-        onScroll={handleScroll}
+        onScroll={syncShade}
         onPointerDown={handlePointerDown}
         className="relative max-h-[68vh] cursor-grab overflow-y-auto overscroll-contain outline-none active:cursor-grabbing focus-visible:ring-1 focus-visible:ring-violet-500/40"
         style={{ height }}
@@ -281,7 +307,7 @@ export default function PathTrailMap({
                 si sgrana in una collana di pallini. A dire cosa è fatto e cosa
                 no basta la luce che ci passa sopra. */}
             <path
-              d={trailPath(nodes)}
+              d={path}
               fill="none"
               stroke="rgba(255,255,255,0.09)"
               strokeWidth={TRAIL_STROKE * zoom}
@@ -292,7 +318,7 @@ export default function PathTrailMap({
                 a stabilire dove finire è la maschera qui sopra. */}
             {litY > 0 && (
               <path
-                d={trailPath(nodes)}
+                d={path}
                 fill="none"
                 stroke="url(#trail-lit)"
                 strokeWidth={TRAIL_STROKE * zoom}
@@ -311,6 +337,7 @@ export default function PathTrailMap({
               const selected = step.id === selectedId
               const isActive = step.status === 'active'
               const locked = isStepLocked(step)
+              const done = isStepDone(step)
               const size = Math.round((isActive ? ACTIVE_NODE_SIZE : NODE_SIZE) * zoom)
               const badge = Math.round(24 * zoom)
 
@@ -342,7 +369,7 @@ export default function PathTrailMap({
                       type="button"
                       onClick={() => {
                         if (dragged.current) return
-                        onSelect(step.id)
+                        onSelect(step)
                       }}
                       aria-pressed={selected}
                       aria-label={`Tappa ${step.position}, ${stepTarget(step)}, ${
@@ -381,6 +408,13 @@ export default function PathTrailMap({
                           <span className="block text-[0.68rem] text-slate-500">
                             {stepKindLabel(step)}
                           </span>
+                          {/* Il termine sotto le tappe che restano da fare,
+                              bloccate comprese: una tappa che scade fra due
+                              giorni e non è ancora il proprio turno è il
+                              motivo per cui si guarda avanti sul sentiero.
+                              Sotto una superata sarebbe la data di una corsa
+                              già corsa. */}
+                          {!done && <StepDeadline step={step} compact className="mt-0.5" />}
                         </span>
                       )}
                     </button>

@@ -7,13 +7,17 @@ import FormError from './FormError'
 import LoadingState from './LoadingState'
 import PathProgressRing from './PathProgressRing'
 import PathStepDots from './PathStepDots'
+import StepDeadline from './StepDeadline'
 import { PageContainer, PageHeader } from './PageLayout'
+import { primaryActionCls } from './PrimaryButton'
 import {
   assignedByLabel,
   currentStep,
   isOpenStatus,
-  openFirst,
+  resumableStep,
+  splitByOpen,
   stepKindLabel,
+  stepLink,
   stepTarget,
 } from './trainingFormat'
 
@@ -25,28 +29,41 @@ import {
  * degli avatar: una striscia va bene per ricordare cosa c'è da fare mentre si
  * sta facendo altro, non per andarci apposta.
  *
- * I completati restano in fondo e attenuati invece di sparire: sono la strada
- * già percorsa, e un elenco che dimentica quello che si è chiuso racconta
- * solo il debito. */
+ * I completati restano, in fondo e sotto il proprio titolo, invece di
+ * sparire: sono la strada già percorsa, e un elenco che dimentica quello che
+ * si è chiuso racconta solo il debito. Stanno però in una metà loro, perché
+ * l'unica differenza era l'opacità delle schede, e con più di quattro o cinque
+ * percorsi il confine andava cercato scheda per scheda.
+ *
+ * **La scheda porta anche il bottone che riprende il percorso**, che salta la
+ * mappa e va dritto alla prova della tappa di adesso: la domanda con cui si
+ * apre questa pagina è quasi sempre «cosa devo fare», e la risposta stava a
+ * tre clic, la scheda, il nodo sul sentiero, il bottone nel riquadro. La mappa
+ * resta a un clic dal titolo, per la domanda che invece riguarda tutto il
+ * percorso. */
 
 function AssignmentCard({ assignment }: { assignment: PathAssignment }) {
   const open = isOpenStatus(assignment.status)
   const now = currentStep(assignment)
+  const resume = resumableStep(assignment)
 
   return (
-    <li>
+    <li className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/6 bg-gray-900/60 p-5 backdrop-blur-md transition hover:-translate-y-0.5 hover:border-violet-600/30 hover:bg-gray-900/80 hover:shadow-[0_8px_28px_rgba(124,58,237,0.12)]">
+      {/* Il collegamento avvolge il contenuto e non la scheda intera: il
+          bottone che riprende è un secondo indirizzo, e un link dentro un
+          link non esiste. Steso sopra tutto con uno pseudo-elemento
+          spegnerebbe invece i tooltip dei trattini delle tappe, che sono
+          l'unico posto in cui i nomi compaiono in questa pagina. */}
       <Link
         to={`/app/percorsi/${assignment.id}`}
-        className={`flex gap-4 rounded-2xl border border-white/6 bg-gray-900/60 p-5 no-underline backdrop-blur-md transition hover:-translate-y-0.5 hover:border-violet-600/30 hover:bg-gray-900/80 hover:shadow-[0_8px_28px_rgba(124,58,237,0.12)] ${
-          open ? '' : 'opacity-70 hover:opacity-100'
-        }`}
+        className="flex min-w-0 flex-1 items-start gap-4 rounded-xl no-underline outline-none focus-visible:ring-1 focus-visible:ring-violet-500/50"
       >
         <PathProgressRing done={assignment.completed_steps} total={assignment.steps.length} />
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="truncate font-heading text-[1.05rem] font-bold text-slate-100">
+            <h3 className="truncate font-heading text-[1.05rem] font-bold text-slate-100">
               {assignment.path_title}
-            </h2>
+            </h3>
             <AssignmentStatusBadge status={assignment.status} />
           </div>
           <p className="mb-3 truncate text-[0.82rem] text-slate-400">
@@ -63,6 +80,10 @@ function AssignmentCard({ assignment }: { assignment: PathAssignment }) {
               {stepKindLabel(now).toLowerCase()}
             </p>
           )}
+          {/* Il termine solo finché c'è qualcosa da chiudere entro quel
+              giorno: su un percorso finito sarebbe la data di una corsa già
+              corsa. */}
+          {open && now && <StepDeadline step={now} className="mt-1.5" />}
           {/* Da chi arriva il percorso, in coda e attenuato: non è quello che
               si viene a fare, è quello che si cerca quando si vuole sapere a
               chi chiedere. */}
@@ -71,12 +92,51 @@ function AssignmentCard({ assignment }: { assignment: PathAssignment }) {
           </p>
         </div>
       </Link>
+      {resume && (
+        <Link
+          to={stepLink(resume)}
+          className={`${primaryActionCls} shrink-0 max-md:w-full`}
+          aria-label={`Riprendi dalla tappa ${resume.position}, ${stepTarget(resume)}`}
+        >
+          Riprendi
+        </Link>
+      )}
     </li>
+  )
+}
+
+/* Una metà dell'elenco. Il titolo compare solo quando le metà sono due: con
+   una sola, dice quello che l'intestazione della pagina ha già detto. */
+function AssignmentGroup({
+  title,
+  assignments,
+}: {
+  title: string | null
+  assignments: PathAssignment[]
+}) {
+  return (
+    <section>
+      {title && (
+        <h2 className="mb-3 flex items-baseline gap-2 font-heading text-[0.82rem] font-semibold uppercase tracking-wider text-slate-500">
+          {title}
+          <span className="text-[0.78rem] font-normal normal-case tracking-normal text-slate-600">
+            {assignments.length}
+          </span>
+        </h2>
+      )}
+      <ul className="flex flex-col gap-4">
+        {assignments.map((assignment) => (
+          <AssignmentCard key={assignment.id} assignment={assignment} />
+        ))}
+      </ul>
+    </section>
   )
 }
 
 export default function MyPathsPage() {
   const { data: assignments = [], isPending, error } = useMyAssignments()
+  const { open, done } = splitByOpen(assignments)
+  const bothHalves = open.length > 0 && done.length > 0
 
   return (
     <PageContainer>
@@ -94,13 +154,19 @@ export default function MyPathsPage() {
       {isPending ? (
         <LoadingState message="Caricamento percorsi..." />
       ) : assignments.length === 0 ? (
-        <EmptyState title="Nessun percorso assegnato" />
+        <EmptyState
+          title="Nessun percorso assegnato"
+          hint="Quando il tuo formatore te ne affida uno lo trovi qui, con le sue tappe"
+        />
       ) : (
-        <ul className="flex flex-col gap-4">
-          {openFirst(assignments).map((assignment) => (
-            <AssignmentCard key={assignment.id} assignment={assignment} />
-          ))}
-        </ul>
+        <div className="flex flex-col gap-8">
+          {open.length > 0 && (
+            <AssignmentGroup title={bothHalves ? 'Da completare' : null} assignments={open} />
+          )}
+          {done.length > 0 && (
+            <AssignmentGroup title={bothHalves ? 'Completati' : null} assignments={done} />
+          )}
+        </div>
       )}
     </PageContainer>
   )

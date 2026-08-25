@@ -147,18 +147,27 @@ export default function ComparisonPage() {
               {/* Lo stesso campo con cui si sceglie una persona nella
                   dashboard, e non una tendina: un'aula intera si scorreva
                   voce per voce, mentre il nome che si cerca lo si sa già.
-                  Accanto a ciascuno quante prove ha, che è quello che decide
-                  se aprirlo, perché sotto le due non c'è confronto da fare:
-                  il conteggio arrivava dal server e non lo leggeva nessuno. */}
+                  Sotto a ciascuno solo l'email, che è quello che distingue
+                  due omonimi: quante prove ha si legge nelle linguette
+                  appena scelto, e accanto all'indirizzo allungava ogni voce
+                  con un numero che non cambia chi si sta cercando.
+
+                  In ordine alfabetico sul nome che si legge, come nella
+                  dashboard: è lo stesso campo sulla stessa aula, e chi lo
+                  scorre a occhio invece di digitare cerca due volte nello
+                  stesso posto. Qui e non nel server, perché l'ordine deve
+                  seguire la label, che per chi non ha nome è l'email. */}
               <SearchSelect
                 id="subject"
                 value={subjectId}
                 onChange={(value) => setParam(PERSON_PARAM, value)}
-                options={people.map((p) => ({
-                  value: p.id,
-                  label: `${p.nome} ${p.cognome}`.trim() || p.email,
-                  sub: `${p.email} · ${p.attempts} ${p.attempts === 1 ? 'prova' : 'prove'}`,
-                }))}
+                options={people
+                  .map((p) => ({
+                    value: p.id,
+                    label: `${p.nome} ${p.cognome}`.trim() || p.email,
+                    sub: p.email,
+                  }))
+                  .sort((a, b) => a.label.localeCompare(b.label, 'it'))}
                 placeholder="Cerca per nome o email..."
                 emptyHint="Le Mie Prove"
               />

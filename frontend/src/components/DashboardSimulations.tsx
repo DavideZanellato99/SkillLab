@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { SimulationReportRow } from '../services/admin'
 import type { SimulationKind } from '../services/simulations'
 import DataTable, { Td, Tr } from './DataTable'
+import Notice from './Notice'
 import Tooltip from './Tooltip'
 import SimulationAttemptModal from './SimulationAttemptModal'
 import SimulationKindBadge from './SimulationKindBadge'
@@ -48,30 +49,6 @@ const KIND_SUFFIX: Record<SimulationKind | 'all', string> = {
 
 /** Quante volte, scritto come si legge: "1 tentativo", "4 tentativi". */
 const conteggio = (n: number) => `${n} ${n === 1 ? TENTATIVI[0] : TENTATIVI[1]}`
-
-/** La riga con il punto interrogativo che dice perché non c'è un grafico. */
-function Notice({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="shrink-0 text-slate-500"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="16" x2="12" y2="12" />
-        <line x1="12" y1="8" x2="12.01" y2="8" />
-      </svg>
-      <span>{children}</span>
-    </div>
-  )
-}
 
 interface SimulationAvg {
   simulationId: string
@@ -268,7 +245,7 @@ export default function DashboardSimulations({
 
       {/* Andamento nel tempo */}
       <div className={`${cardCls} mb-6`}>
-        <h3 className="text-sm font-semibold text-slate-300">Andamento nel Tempo</h3>
+        <h2 className="text-sm font-semibold text-slate-300">Andamento nel Tempo</h2>
         <p className="mb-4 text-xs text-slate-500">
           Media giornaliera dei voti dei test{KIND_SUFFIX[kindFilter]} consegnati
           {selectedUserId ? ', per l’utente selezionato' : ''}
@@ -284,7 +261,7 @@ export default function DashboardSimulations({
 
       {/* Media per simulazione */}
       <div className={`${cardCls} mb-6`}>
-        <h3 className="text-sm font-semibold text-slate-300">Media per Simulazione</h3>
+        <h2 className="text-sm font-semibold text-slate-300">Media per Simulazione</h2>
         <p className="mb-4 text-xs text-slate-500">
           Voto medio di ogni test, dal più critico al migliore
         </p>
@@ -312,7 +289,7 @@ export default function DashboardSimulations({
 
       {/* Confronto tra utenti */}
       <div className={`${cardCls} mb-6`}>
-        <h3 className="text-sm font-semibold text-slate-300">Confronto tra Utenti</h3>
+        <h2 className="text-sm font-semibold text-slate-300">Confronto tra Utenti</h2>
         <p className="mb-4 text-xs text-slate-500">
           Voto medio per utente, su tutti i test{KIND_SUFFIX[kindFilter]} che ha consegnato
         </p>
@@ -353,7 +330,7 @@ export default function DashboardSimulations({
       >
         {searchedRows.map((r) => (
           <Tooltip key={r.attempt_id} content="Vedi il test svolto" anchor="cursor">
-            <Tr className="cursor-pointer" onClick={() => setOpenAttemptId(r.attempt_id)}>
+            <Tr onActivate={() => setOpenAttemptId(r.attempt_id)}>
               <Td>
                 <div className="flex items-center justify-center gap-2">
                   <SimulationKindBadge kind={r.simulation_kind} iconOnly />

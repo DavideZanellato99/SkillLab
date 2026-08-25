@@ -18,13 +18,4 @@ describe('quello che non è arrivato', () => {
 
     expect(riprova).toHaveBeenCalledOnce()
   })
-
-  /* Un bottone che non dice niente mentre lavora si preme tre volte. */
-  it('mentre riprova lo dice e non si lascia premere', () => {
-    const riprova = vi.fn()
-    render(<LoadError message="Sessione scaduta." onRetry={riprova} isRetrying />)
-
-    expect(screen.getByRole('button', { name: 'Nuovo tentativo in corso...' })).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'Riprova' })).not.toBeInTheDocument()
-  })
 })

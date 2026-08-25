@@ -245,6 +245,16 @@ fra sei tappe è un gesto, non un viaggio in fondo alla pagina che si porta via
 anche il pannello. Da qualunque punto si torna alla tappa di adesso con un
 bottone solo, e all'apertura la finestra ci è già sopra.
 
+La finestra si sposta da sola due volte soltanto, all'apertura e al cambio di
+riduzione, e su quale tappa si centri è quello che c'è in quel momento, letto
+da un riferimento e non dalle dipendenze dell'effetto: scegliere un nodo non
+deve spostare la mappa, o aprire una tappa lontana porterebbe via il tratto di
+sentiero che si sta guardando. Scorrendo cambiano solo le sfumature ai bordi,
+che sono quattro combinazioni in tutto e si riscrivono solo quando cambiano
+davvero: le posizioni dei nodi e la stringa del tracciato restano quelle, o
+ogni fotogramma di un trascinamento rifarebbe da capo il conto dell'intera
+mappa.
+
 La riduzione **rifà il conto delle posizioni** invece di rimpicciolire con un
 `transform` il disegno già fatto: a stringersi sono le distanze fra le tappe,
 mentre la larghezza è una percentuale e resta quella della finestra, che è
@@ -290,12 +300,58 @@ coprirebbe le tappe di destra, cioè metà di quelle che si guardano mentre lo
 si legge. Le posizioni sono percentuali della larghezza, e restringere il
 riquadro della mappa ricompone il sentiero invece di tagliarlo.
 
+Il riquadro **prende il fuoco appena si apre e lo restituisce al nodo quando si
+chiude**. Su schermo stretto è un foglio con un velo dietro, cioè copre tutto
+quello che non è lui, e chi naviga da tastiera restava sul nodo appena premuto,
+dietro al velo. Non trattiene il fuoco, però, e non è una dimenticanza: un
+riquadro che chiude la strada da tastiera è una promessa che vale finché è una
+modale, e questo lo è solo sotto una certa larghezza.
+
 Dove il sentiero non ci sta (l'elenco) il percorso si riduce a un anello di
 avanzamento
 ([PathProgressRing](../frontend/src/components/PathProgressRing.tsx)) e a una
 fila di trattini colorati
 ([PathStepDots](../frontend/src/components/PathStepDots.tsx)): quante tappe
 sono, in che ordine e a che punto, senza i nomi.
+
+**Da entrambe le schermate si riprende in un colpo solo.** La scheda
+dell'elenco e l'intestazione della mappa portano il bottone che va dritto alla
+prova della tappa di adesso
+([resumableStep](../frontend/src/components/trainingFormat.ts)), saltando il
+nodo e il riquadro: la domanda con cui si apre questa sezione è quasi sempre
+«cosa devo fare», e la risposta stava a tre clic. Su un percorso chiuso il
+bottone non c'è, perché la tappa "di adesso" è l'ultima, cioè una prova già
+superata, e invitare a rifarla sarebbe mandare indietro.
+
+**Il termine si legge senza aprire niente**
+([StepDeadline](../frontend/src/components/StepDeadline.tsx)): sulla scheda,
+per la tappa in corso, e sulla mappa sotto ogni tappa che resta da fare,
+lucchetti compresi, perché una tappa che scade fra due giorni ed è ancora
+chiusa è il motivo per cui si guarda avanti sul sentiero. Non è la data così
+com'è, ma la conclusione: "scade oggi alle 18:00", "scade fra 3 giorni", "il 02
+apr", "scaduta il 08 mar"
+([deadlineNote](../frontend/src/components/trainingFormat.ts)). L'ora resta
+dove cambia qualcosa, cioè oggi e domani; la finestra dentro cui il termine si
+accende è la stessa con cui il server manda l'avviso, tre giorni, perché una
+scadenza annunciata dalla campanella non può essere scritta come una data
+qualunque nella pagina che la mostra. Su un percorso chiuso non compare: è la
+data di una corsa già corsa.
+
+L'elenco tiene **i percorsi da chiudere e quelli chiusi in due metà distinte**
+([splitByOpen](../frontend/src/components/trainingFormat.ts)), ognuna sotto il
+proprio titolo quando esistono entrambe. I chiusi restano perché sono la strada
+percorsa, ma l'unica cosa che li distingueva era l'opacità delle schede, e con
+più di quattro o cinque percorsi il confine fra il debito e l'archivio andava
+cercato scheda per scheda.
+
+**Quale tappa è aperta sta nell'indirizzo**, come `?tappa=<numero>`: è la
+seconda cosa che la mappa mostra, e tenuta in uno stato locale spariva a ogni
+ricarica e non si poteva mandare a nessuno. Il numero e non l'id, perché è
+quello scritto sul nodo, quindi un indirizzo copiato dice già di cosa parla; una
+posizione che quel percorso non ha non apre niente. La prima apertura aggiunge
+un passo alla cronologia e tutto il resto lo sostituisce, così "indietro"
+chiude il riquadro invece di uscire dalla mappa, senza che dieci nodi guardati
+di fila diventino dieci passi da rifare per tornare all'elenco.
 
 La home è solo la galleria degli avatar. Prima aveva in cima una striscia con i
 percorsi aperti, perché era l'unico posto in cui i percorsi esistevano; adesso
@@ -493,6 +549,59 @@ percorrerlo. Le persone si cercano per nome o per email e si spuntano tutte
 insieme, e il "seleziona tutti" segue la ricerca, perché è l'unico modo in cui
 quel bottone risponde a quello che si sta guardando.
 
+## La tappa dentro la prova
+
+La chat e il simulatore non sapevano niente dei percorsi: si usciva dalla mappa
+sapendo che serviva un 7,5 e si arrivava su una schermata che quel numero non
+lo nominava, quindi l'obiettivo andava tenuto a mente per tutta la
+conversazione, e per tornare al percorso si premeva indietro. Adesso le due
+schermate portano in testa una striscia
+([PathStepNotice](../frontend/src/components/PathStepNotice.tsx)) con la tappa,
+il percorso, il voto che serve, le eventuali soglie sui criteri contate, il
+termine, e il ritorno alla propria tappa già aperta sulla mappa.
+
+**Lo dicono i dati e non da dove si arriva.** Non è uno stato passato dal
+collegamento della tappa: la striscia c'è quando la tappa di adesso di un
+percorso aperto punta proprio a quell'avatar o a quel test
+([stepInProgressFor](../frontend/src/components/trainingFormat.ts)). Con lo
+stato del collegamento sarebbe comparsa venendo dalla mappa e sparita entrando
+dalla galleria, pur essendo la stessa prova che conta allo stesso modo, e
+sarebbe sparita anche solo ricaricando la pagina. Guarda la sola tappa di
+adesso, perché una prova fatta prima del turno di una tappa non conta per
+quella tappa: annunciare l'obiettivo di una tappa futura prometterebbe un
+avanzamento che non arriva.
+
+Nel simulatore compare sulle regole e sull'esito, non fra le domande, dove
+sarebbe una cosa in più da guardare a cronometro acceso. A chi amministra non
+compare mai, e la domanda non gliela facciamo nemmeno: `useMyAssignments` resta
+spento fuori dal ruolo `user`, che è la stessa cosa che il server direbbe con
+un 403.
+
+**Accanto all'obiettivo c'è quanto ci si è andati vicino**, cioè il meglio
+fatto sulla tappa e quante delle soglie sui criteri sono state raggiunte
+([criteriaMet](../frontend/src/components/trainingFormat.ts)) — che è la
+ragione per cui una tappa con il voto già preso può restare aperta. Non è il
+voto della conversazione a schermo, che la testata mostra già nella propria
+pastiglia: la domanda a cui la striscia risponde è un'altra, se quel voto
+basta, e la risposta la dà il server insieme all'obiettivo.
+
+Perché i due numeri si parlino davvero, **la valutazione di una conversazione
+fa rileggere i propri percorsi e le notifiche**
+([useEvaluateConversation](../frontend/src/hooks/useEvaluation.ts)): il
+progresso di una tappa lo deriva il server dalle prove svolte, quindi è quel
+voto a farlo cambiare, e senza l'invalidazione la striscia mostrerebbe il
+numero di un minuto fa proprio nell'istante in cui l'obiettivo si è appena
+raggiunto.
+
+**Superata la tappa la striscia resta e cambia parola**, verde, con la spunta e
+il ritorno al percorso. La tappa di adesso a quel punto è la successiva, quindi
+la ricerca per bersaglio non troverebbe più niente e la striscia sparirebbe
+nell'unico momento in cui c'è una bella notizia da dare: quella vista in corso
+su quella schermata resta ricordata e si ritrova per id
+([stepById](../frontend/src/components/trainingFormat.ts)). La memoria vale per
+la schermata che si sta guardando e non oltre: su un avatar la cui tappa è
+chiusa da settimane, aperto dalla galleria, non compare niente.
+
 ## Le notifiche
 
 Cose che succedono a uno studente mentre non sta guardando: gli viene
@@ -596,9 +705,15 @@ pannelli da attraversare prima di arrivare a un voto.
 
 Si sceglie **cercando**, con lo stesso `SearchSelect` della dashboard e non con
 una tendina: un'aula intera si scorreva voce per voce, mentre il nome che si
-cerca lo si sa già. Accanto a ciascuno **quante prove ha**, che è quello che
-decide se aprirlo, perché sotto le due non c'è confronto da fare: il conteggio
-arrivava dal server fin dal primo giorno e non lo leggeva nessuno.
+cerca lo si sa già. Sotto a ciascuno **solo l'email**, che è quello che
+distingue due omonimi: quante prove ha si legge nelle linguette appena scelto,
+e accanto all'indirizzo allungava ogni voce con un numero che non cambia chi si
+sta cercando.
+
+**In ordine alfabetico sul nome che si legge**, come nella dashboard: è lo
+stesso campo sulla stessa aula, e chi lo scorre a occhio invece di digitare
+cerca due volte nello stesso posto. L'ordine si dà nella pagina e non nel
+server, perché deve seguire la label, che per chi non ha nome è l'email.
 
 **Le due metà si caricano ognuna per conto suo.** Le due chiamate partono
 insieme, ma la linguetta aperta aspetta solo i propri dati: legarle faceva
@@ -840,10 +955,15 @@ sanno" sono due domande, e in una colonna sola i grafici della seconda si
 leggerebbero come il seguito della prima. Il conteggio sulla linguetta dice
 subito da che parte ci sono dati.
 
-Stessi filtri in cima (organizzazione e utente) e stessi disegni
+Stessi filtri in cima (periodo, organizzazione e utente) e stessi disegni
 ([scoreCharts](../frontend/src/components/scoreCharts.tsx):
 andamento nel tempo, righe a barra, card dei KPI), perché la domanda è la
-stessa e cambia solo la prova su cui si risponde. Sull'asse orizzontale della
+stessa e cambia solo la prova su cui si risponde.
+
+**Le due metà non si aspettano a vicenda.** La linguetta che si sta guardando
+disegna appena i suoi dati sono pronti, e il conteggio dell'altra compare
+quando arriva: prima la pagina restava ferma dietro la più lenta delle due
+letture, cioè si guardava una scansione che non si stava nemmeno leggendo. Sull'asse orizzontale della
 sezione scritta, al posto dei sei criteri di una valutazione, ci sono le
 simulazioni svolte: quale test la gente non passa è la cosa che quella metà sa
 dire e l'altra no.
@@ -853,6 +973,27 @@ scansione dei tentativi dentro la lettura delle valutazioni. I tentativi sono
 raccolti per **organizzazione di chi ha svolto il test**, non della simulazione:
 la dashboard di un tenant parla della propria gente, e un test preparato
 altrove sparirebbe dai suoi numeri.
+
+**Il periodo è l'unico filtro, con l'organizzazione, che il server capisce.**
+Gli altri restringono righe già arrivate; `days` decide quante ne arrivano, ed
+è lo stesso parametro del report attività (`_since` in
+[admin.py](../backend/routers/admin.py) è scritto una volta per tutte e tre le
+letture). Senza, la pagina si portava dietro **ogni valutazione di sempre**, i
+criteri di ognuna compresi, a ogni apertura: la sola lettura dell'app che
+cresceva senza limite con l'uso. Parte da "Sempre", come nel report attività,
+perché un filtro già acceso mostrerebbe una pagina mezza vuota a chi non sa che
+esiste, e quella si legge come un dato sbagliato invece che come una scelta.
+
+**I filtri stanno nell'indirizzo** (`?periodo=30&organizzazione=…&persona=…&canale=text&prova=simulazioni&tipo=open`),
+che ne è l'unica copia: tenerli anche in memoria vorrebbe dire due verità da
+riallineare a ogni passo indietro del browser. Una dashboard è la schermata che
+si guarda in due davanti allo stesso schermo, e senza questo un ricaricamento
+riportava tutti al punto di partenza e un collegamento mandato a qualcuno gli
+apriva un'altra pagina. I valori di partenza non si scrivono, e uno inventato a
+mano viene ignorato in favore del proprio default. Ogni scelta **sostituisce**
+il passo di cronologia invece di aggiungerne uno: qui si cambia filtro di
+continuo, e un tasto indietro che riporta al canale di prima invece che alla
+pagina di prima non è quello che nessuno si aspetta.
 
 **Ogni metà ha il proprio selettore di prova**, nello stesso posto della barra
 dei filtri e con lo stesso gruppo di pulsanti
@@ -960,6 +1101,15 @@ di calcolo con le stesse righe che si vedono a schermo
 valutazione e quello di un test consegnato, vestiti da
 [pdf_kit.py](../backend/pdf_kit.py)). Come ogni altra lettura, i voti sono
 quelli finali.
+
+Prende **gli stessi due parametri della pagina**, organizzazione e periodo: il
+foglio è quello che si sta guardando, e un file che ignorasse il periodo scelto
+risponderebbe a una domanda diversa da quella sullo schermo. Le fette più fini
+(la persona, il canale) restano all'autofiltro del foglio, e il tooltip del
+bottone lo dice invece di lasciarlo scoprire aprendo il file. Se l'esportazione
+cade, il messaggio compare **accanto al bottone che l'ha chiesta** e i grafici
+restano dove sono: un file non prodotto non è una pagina senza dati, e
+mescolare i due errori faceva sembrare rotta una dashboard che funzionava.
 
 ## Il report attività
 

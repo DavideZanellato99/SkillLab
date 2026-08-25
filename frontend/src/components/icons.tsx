@@ -54,6 +54,17 @@ export function TrashIcon(props: IconProps) {
   )
 }
 
+/* L'orologio della scadenza di una tappa: sta accanto al termine ovunque
+ * compaia, così quella riga si riconosce come termine prima di leggerla. */
+export function ClockIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </IconBase>
+  )
+}
+
 /* Il lucchetto di una tappa che non è ancora il suo turno, e la spunta di
  * quella superata: le due estremità di un percorso a tappe. */
 export function LockIcon(props: IconProps) {

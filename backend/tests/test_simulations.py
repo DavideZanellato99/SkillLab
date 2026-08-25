@@ -12,6 +12,7 @@ con le domande, chiunque apra gli strumenti del browser prende dieci.
 """
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -729,6 +730,32 @@ def test_il_report_di_un_admin_si_ferma_al_proprio_tenant(
     act_as(org_admin_user)
     email = [r["user_email"] for r in client.get("/api/admin/simulations-report").json()]
     assert email == [standard_user.email]
+
+
+def test_il_periodo_taglia_i_tentativi(
+    client, act_as, db_session, make_simulation, standard_user, org_admin_user
+):
+    """Il gemello del periodo sulle valutazioni: i due selettori della
+    dashboard sono lo stesso periodo."""
+    simulation = make_simulation()
+    act_as(standard_user)
+    vecchio = client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=False)},
+    ).json()
+    recente = client.post(
+        f"/api/simulations/{simulation.id}/attempts",
+        json={"answers": _answers(simulation, correct=True)},
+    ).json()
+    db_session.query(SimulationAttempt).filter(SimulationAttempt.id == vecchio["id"]).update(
+        {"created_at": datetime.now(UTC).replace(tzinfo=None) - timedelta(days=60)}
+    )
+    db_session.flush()
+
+    act_as(org_admin_user)
+    righe = client.get("/api/admin/simulations-report?days=30").json()
+
+    assert [r["attempt_id"] for r in righe] == [recente["id"]]
 
 
 def test_una_simulazione_senza_domande_non_si_consegna(db_session, user_client, organization):

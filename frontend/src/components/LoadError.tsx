@@ -15,19 +15,24 @@ import PrimaryButton from './PrimaryButton'
  * invece ricopiato a mano il riquadro rosso, la sua icona e il gradiente del
  * bottone, cioè un banner che esiste (`FormError`) e un bottone che esiste
  * (`PrimaryButton`), sessanta righe che si sarebbero scolorite ognuna per
- * conto suo. */
+ * conto suo.
+ *
+ * Non dice "sto riprovando", e non è una dimenticanza: premuto il bottone,
+ * TanStack Query riporta la lettura allo stato di attesa e si porta via
+ * l'errore, quindi ogni schermata che passa di qui smonta questo riquadro e
+ * mette il proprio caricamento. C'era un `isRetrying` che bloccava il bottone
+ * durante il tentativo, passato da quattro schermate: in nessuna delle quattro
+ * poteva accendersi, perché quando sarebbe servito il riquadro non era più
+ * sullo schermo. Chi lo tiene acceso mentre riprova (un errore che non venga
+ * da una query) può rimetterlo, ma consapevolmente. */
 export default function LoadError({
   message,
   onRetry,
-  isRetrying = false,
   variant = 'form',
   className = '',
 }: {
   message: string
   onRetry: () => void
-  /** Vero mentre il nuovo tentativo è in corso: il bottone lo dice e si
-   *  blocca, o si preme tre volte credendo che non abbia sentito. */
-  isRetrying?: boolean
   /** `form` dentro una modale, `page` la fascia in cima a una schermata. */
   variant?: BannerVariant
   className?: string
@@ -42,9 +47,7 @@ export default function LoadError({
         message={message}
         className={variant === 'form' ? 'w-full' : ''}
       />
-      <PrimaryButton onClick={onRetry} disabled={isRetrying}>
-        {isRetrying ? 'Nuovo tentativo in corso...' : 'Riprova'}
-      </PrimaryButton>
+      <PrimaryButton onClick={onRetry}>Riprova</PrimaryButton>
     </div>
   )
 }

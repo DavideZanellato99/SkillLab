@@ -1,4 +1,4 @@
-﻿import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import type { AuditLog } from '../services/auditLogs'
 import { useAuditLogs, useAuditActions, AUDIT_WINDOW_SIZE } from '../hooks/useAuditLogs'

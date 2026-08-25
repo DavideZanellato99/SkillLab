@@ -38,6 +38,7 @@ import ChatSidebar from './ChatSidebar'
 import ConversationDetailModal from './ConversationDetailModal'
 import EvaluationModal from './EvaluationModal'
 import ExpandedConversationsPanel from './ExpandedConversationsPanel'
+import PathStepNotice from './PathStepNotice'
 import { mainContentCls, mainContentProps } from './mainContent'
 import { matchesSearch } from './tableSearch'
 import TypingIndicator from './TypingIndicator'
@@ -458,6 +459,12 @@ export default function ChatPage() {
           evaluation={voiceActive ? null : (evaluation ?? null)}
           onOpenDetail={() => setShowDetail(true)}
         />
+
+        {/* Se questa conversazione è la tappa di un percorso, l'obiettivo da
+            raggiungere sta qui e non solo sulla mappa da cui si è usciti.
+            Sotto la testata e non dentro: parla della prova, non di con chi la
+            si sta facendo, e non compare quasi mai. */}
+        <PathStepNotice kind="avatar" targetId={avatarId} className="mx-8 mt-3 max-[480px]:mx-4" />
 
         <ChatMessages
           avatar={avatar}

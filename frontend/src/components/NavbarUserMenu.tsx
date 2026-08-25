@@ -7,6 +7,7 @@
  * Aperto o chiuso lo decide la barra, che tiene aperto un menu solo: questo e
  * il pannello delle sezioni escono dallo stesso angolo. */
 
+import { useRef } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
@@ -35,17 +36,27 @@ interface NavbarUserMenuProps {
 export default function NavbarUserMenu({ user, isOpen, onToggle, onClose }: NavbarUserMenuProps) {
   const { logout } = useAuth()
   const { pathname } = useLocation()
-  useCloseOnEscape(isOpen, onClose)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  useCloseOnEscape(isOpen, onClose, triggerRef)
 
   const groups = profileMenuGroups(user)
 
   return (
     <>
       <div className="relative">
+        {/* Niente aria-haspopup: dentro ci sono collegamenti in un
+            riquadro, non un menu con la sua navigazione a frecce, e
+            annunciarlo come tale prometterebbe tasti che non ci sono. Che
+            sia aperto o chiuso lo dicono aria-expanded e aria-controls.
+
+            Il nome scritto per intero anche per chi non lo vede: sotto i
+            480px il nome sparisce per far posto, e il pulsante resterebbe
+            due lettere. */}
         <button
+          ref={triggerRef}
           className="flex cursor-pointer items-center gap-2 rounded-full border border-white/6 bg-white/4 py-1 pl-1 pr-2 text-[0.82rem] font-medium text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100 max-[480px]:p-1"
           onClick={onToggle}
-          aria-haspopup="true"
+          aria-label={`${displayName(user)}, menu del proprio account`}
           aria-expanded={isOpen}
           aria-controls="user-menu-dropdown"
           id="user-menu-trigger"

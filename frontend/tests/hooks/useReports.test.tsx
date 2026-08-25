@@ -69,23 +69,40 @@ describe('useUsersReport', () => {
 })
 
 describe('report della dashboard', () => {
-  it('legge le valutazioni del tenant scelto', async () => {
-    const { result } = renderHook(() => useEvaluationsReport('org-1'), { wrapper })
+  it('legge le valutazioni del tenant e del periodo scelti', async () => {
+    const { result } = renderHook(() => useEvaluationsReport('org-1', 30), { wrapper })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(servizio.fetchEvaluationsReport).toHaveBeenCalledWith('org-1')
+    expect(servizio.fetchEvaluationsReport).toHaveBeenCalledWith('org-1', 30)
   })
 
-  it('legge i tentativi sulle simulazioni del tenant scelto', async () => {
-    const { result } = renderHook(() => useSimulationsReport('org-1'), { wrapper })
+  it('legge i tentativi sulle simulazioni del tenant e del periodo scelti', async () => {
+    const { result } = renderHook(() => useSimulationsReport('org-1', 30), { wrapper })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(servizio.fetchSimulationsReport).toHaveBeenCalledWith('org-1')
+    expect(servizio.fetchSimulationsReport).toHaveBeenCalledWith('org-1', 30)
+  })
+
+  /* Come nel recap per utente: il periodo fa parte della chiave, o tornando a
+   * "ultimi 30 giorni" si leggerebbero i numeri di "sempre". */
+  it('tiene periodi diversi in voci di cache diverse', async () => {
+    servizio.fetchEvaluationsReport.mockResolvedValueOnce([{ conversation_id: 'c-1' }])
+    const trenta = renderHook(() => useEvaluationsReport('org-1', 30), { wrapper })
+    await waitFor(() => expect(trenta.result.current.isSuccess).toBe(true))
+
+    servizio.fetchEvaluationsReport.mockResolvedValueOnce([])
+    const sempre = renderHook(() => useEvaluationsReport('org-1'), { wrapper })
+    await waitFor(() => expect(sempre.result.current.isSuccess).toBe(true))
+
+    expect(client.getQueryData(queryKeys.reports.evaluations('org-1', 30))).toEqual([
+      { conversation_id: 'c-1' },
+    ])
+    expect(client.getQueryData(queryKeys.reports.evaluations('org-1'))).toEqual([])
   })
 
   it('restano spenti finché non servono', () => {
-    renderHook(() => useEvaluationsReport('org-1', false), { wrapper })
-    renderHook(() => useSimulationsReport('org-1', false), { wrapper })
+    renderHook(() => useEvaluationsReport('org-1', undefined, false), { wrapper })
+    renderHook(() => useSimulationsReport('org-1', undefined, false), { wrapper })
 
     expect(servizio.fetchEvaluationsReport).not.toHaveBeenCalled()
     expect(servizio.fetchSimulationsReport).not.toHaveBeenCalled()

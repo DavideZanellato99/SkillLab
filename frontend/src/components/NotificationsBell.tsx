@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef } from 'react'
 import { useNavigate } from 'react-router'
+import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { useNotifications, useMarkNotificationsRead } from '../hooks/useNotifications'
 import type { AppNotification, NotificationKind } from '../services/notifications'
 
@@ -10,7 +11,12 @@ import type { AppNotification, NotificationKind } from '../services/notification
  * niente da tenere sincronizzato: basta richiedere la lista. Viene
  * ricontrollata a intervalli e al ritorno sulla scheda, perché il fatto che
  * l'annuncia (un obiettivo assegnato, una revisione pubblicata) accade
- * altrove mentre questa pagina è aperta. */
+ * altrove mentre questa pagina è aperta.
+ *
+ * Aperta o chiusa lo decide la barra, come per il menu del profilo e per il
+ * pannello delle sezioni: i tre escono dallo stesso angolo, e finché questa
+ * teneva uno stato suo si apriva sopra il menu del profilo senza chiuderlo,
+ * lasciando due riquadri sovrapposti nello stesso punto. */
 
 const ICONS: Record<NotificationKind, { path: React.ReactNode; cls: string }> = {
   'assignment.assigned': {
@@ -90,9 +96,16 @@ function relativeTime(iso: string): string {
   return at.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export default function NotificationsBell() {
+interface NotificationsBellProps {
+  isOpen: boolean
+  onToggle: () => void
+  onClose: () => void
+}
+
+export default function NotificationsBell({ isOpen, onToggle, onClose }: NotificationsBellProps) {
   const navigate = useNavigate()
-  const [isOpen, setIsOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  useCloseOnEscape(isOpen, onClose, triggerRef)
 
   /* Gli errori restano silenziosi di proposito: la campanella è un
    * accessorio, un errore di rete qui non deve piazzare un avviso rosso in
@@ -105,7 +118,7 @@ export default function NotificationsBell() {
   const markAll = () => markRead.mutate(undefined)
 
   const open = (notification: AppNotification) => {
-    setIsOpen(false)
+    onClose()
     if (!notification.read) markRead.mutate([notification.key])
     if (notification.link) navigate(notification.link)
   }
@@ -113,9 +126,13 @@ export default function NotificationsBell() {
   return (
     <div className="relative">
       <button
+        ref={triggerRef}
         className="relative flex cursor-pointer items-center justify-center rounded-full border border-white/6 bg-white/4 p-2 text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100"
-        onClick={() => setIsOpen((v) => !v)}
+        onClick={onToggle}
         aria-label={unread > 0 ? `Notifiche, ${unread} non lette` : 'Notifiche'}
+        aria-expanded={isOpen}
+        aria-controls="notifications-panel"
+        id="notifications-trigger"
       >
         <svg
           width="17"
@@ -139,8 +156,19 @@ export default function NotificationsBell() {
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-[99]" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-[calc(100%+8px)] z-[100] w-[360px] animate-menu-in rounded-2xl border border-white/6 bg-gray-900/95 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl max-[480px]:w-[calc(100vw-2rem)]">
+          {/* Il velo copre la pagina ma non la barra, come per gli altri due
+              pannelli: il pulsante che ha aperto la campanella resta quello
+              che la richiude, e le altre voci della barra restano
+              raggiungibili con un colpo solo. */}
+          <div
+            className="fixed inset-x-0 bottom-0 top-16 z-[99]"
+            onClick={onClose}
+            aria-hidden="true"
+          />
+          <div
+            id="notifications-panel"
+            className="absolute right-0 top-[calc(100%+8px)] z-[100] w-[360px] animate-menu-in rounded-2xl border border-white/6 bg-gray-900/95 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl max-[480px]:w-[calc(100vw-2rem)]"
+          >
             <div className="flex items-center justify-between gap-2 px-2 py-1.5">
               <span className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">
                 Notifiche

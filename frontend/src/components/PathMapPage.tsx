@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { useCallback } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { useMyAssignments } from '../hooks/useTraining'
+import type { StepProgress } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
 import EmptyState from './EmptyState'
 import FormError from './FormError'
@@ -9,8 +10,9 @@ import PathProgressRing from './PathProgressRing'
 import PathStepDrawer from './PathStepDrawer'
 import PathTrailMap from './PathTrailMap'
 import { PageContainer } from './PageLayout'
+import { primaryActionCls } from './PrimaryButton'
 import { ArrowLeftIcon } from './icons'
-import { assignedByLabel } from './trainingFormat'
+import { assignedByLabel, resumableStep, stepLink, stepTarget } from './trainingFormat'
 
 /* Un percorso come mappa: il sentiero largo quanto la pagina, e la tappa
  * scelta che si apre di lato sopra di lui (vedi PathStepDrawer).
@@ -25,7 +27,8 @@ import { assignedByLabel } from './trainingFormat'
  * domanda con cui la si apre è dove si è arrivati, e a quella il sentiero
  * risponde da solo, con la luce che si ferma e l'alone attorno alla tappa di
  * adesso. Il dettaglio di una tappa è una seconda domanda, e arriva quando la
- * si fa scegliendo un nodo.
+ * si fa scegliendo un nodo, oppure già scritta nell'indirizzo se si è entrati
+ * da un collegamento che la nomina.
  *
  * Aprendo il riquadro la mappa gli fa posto invece di sparirci sotto: il
  * sentiero si scosta dal centro fin quasi al bordo, e un pannello appoggiato
@@ -37,7 +40,34 @@ import { assignedByLabel } from './trainingFormat'
 export default function PathMapPage() {
   const { assignmentId } = useParams()
   const { data: assignments = [], isPending, error } = useMyAssignments()
-  const [chosenId, setChosenId] = useState<string | null>(null)
+
+  /* Quale tappa è aperta sta nell'indirizzo, come `?tappa=<numero>`: è la
+     seconda cosa che questa pagina mostra, e tenuta in uno stato locale
+     spariva a ogni ricarica e non si poteva mandare a nessuno. Il numero e non
+     l'id perché è quello che si legge sul nodo, quindi un indirizzo copiato
+     dice già di cosa parla.
+     La prima apertura aggiunge un passo alla cronologia e il resto lo
+     sostituisce: così "indietro" chiude il riquadro invece di uscire dalla
+     mappa, ma dieci nodi guardati di fila non diventano dieci passi da
+     rifare all'indietro per tornare all'elenco. */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const chosen = searchParams.get('tappa')
+
+  /* Ricliccare la tappa aperta richiude il riquadro: il nodo è l'interruttore
+     con cui lo si è acceso, e cercare il bottone di chiusura per tornare a
+     guardare il sentiero sarebbe un giro in più per disfare un gesto solo. */
+  const showStep = useCallback(
+    (position: number | null) => {
+      const wasOpen = searchParams.get('tappa')
+      const next = new URLSearchParams(searchParams)
+      if (position === null || String(position) === wasOpen) next.delete('tappa')
+      else next.set('tappa', String(position))
+      setSearchParams(next, { replace: wasOpen !== null })
+    },
+    [searchParams, setSearchParams],
+  )
+  const handleSelect = useCallback((step: StepProgress) => showStep(step.position), [showStep])
+  const closePanel = useCallback(() => showStep(null), [showStep])
 
   const assignment = assignments.find((a) => a.id === assignmentId)
 
@@ -80,14 +110,8 @@ export default function PathMapPage() {
   }
 
   const steps = assignment.steps
-  const selected = steps.find((step) => step.id === chosenId) ?? null
-
-  /* Ricliccare la tappa aperta richiude il riquadro: il nodo è l'interruttore
-     con cui lo si è acceso, e cercare il bottone di chiusura per tornare a
-     guardare il sentiero sarebbe un giro in più per disfare un gesto solo. */
-  const handleSelect = (stepId: string) => {
-    setChosenId((current) => (current === stepId ? null : stepId))
-  }
+  const selected = steps.find((step) => String(step.position) === chosen) ?? null
+  const resume = resumableStep(assignment)
 
   return (
     <PageContainer>
@@ -114,6 +138,20 @@ export default function PathMapPage() {
               anche dalla notifica, senza passare da lì. */}
           <p className="mt-1 text-[0.78rem] text-slate-600">{assignedByLabel(assignment)}</p>
         </div>
+        {/* La prova della tappa di adesso, senza passare dal riquadro: aprire
+            la mappa e volerci entrare sono due gesti che si fanno di seguito,
+            e il secondo stava dietro a un nodo da trovare sul sentiero. Il
+            riquadro resta per tutto il resto, cioè l'obiettivo, le prove fatte
+            e le tappe che non sono il proprio turno. */}
+        {resume && (
+          <Link
+            to={stepLink(resume)}
+            className={primaryActionCls}
+            aria-label={`Riprendi dalla tappa ${resume.position}, ${stepTarget(resume)}`}
+          >
+            Riprendi la tappa {resume.position}
+          </Link>
+        )}
       </header>
 
       <div className="relative">
@@ -147,9 +185,7 @@ export default function PathMapPage() {
           </div>
         </div>
 
-        {selected && (
-          <PathStepDrawer step={selected} total={steps.length} onClose={() => setChosenId(null)} />
-        )}
+        {selected && <PathStepDrawer step={selected} total={steps.length} onClose={closePanel} />}
       </div>
     </PageContainer>
   )

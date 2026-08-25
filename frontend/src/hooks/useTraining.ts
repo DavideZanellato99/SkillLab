@@ -45,11 +45,21 @@ export function useAssignments(organizationId?: string, pathId?: string, enabled
   })
 }
 
-/** I propri percorsi, per la striscia in cima alla home. */
-export function useMyAssignments() {
+/**
+ * I propri percorsi, con il progresso di ogni tappa.
+ *
+ * Li chiedono l'elenco e la mappa, dove ci arriva solo chi si allena, ma
+ * anche la chat e il simulatore, per dire che la prova che si sta per fare è
+ * la tappa di un percorso: quelle due schermate le apre anche chi amministra,
+ * e a lui questa rotta risponde 403, non un elenco vuoto. Da qui l'interruttore,
+ * che è dove il chiamante dichiara di essere in un posto dove la domanda ha
+ * senso, invece di far scoprire il ruolo a questo file.
+ */
+export function useMyAssignments(enabled = true) {
   return useQuery({
     queryKey: queryKeys.training.mine,
     queryFn: fetchMyAssignments,
+    enabled,
   })
 }
 

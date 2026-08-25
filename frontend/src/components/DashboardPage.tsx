@@ -1,4 +1,5 @@
-﻿import { useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import { useSearchParams } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { fetchEvaluationsReportXlsx } from '../services/admin'
 import { useEvaluationsReport, useSimulationsReport } from '../hooks/useReports'
@@ -15,16 +16,21 @@ import type { ModeFilter } from './conversationMode'
 import { KIND_FILTERS } from './simulationFormat'
 import type { KindFilter } from './simulationFormat'
 import DataTable, { Td, Tr } from './DataTable'
+import EmptyState from './EmptyState'
 import FilterTabs from './FilterTabs'
+import Notice from './Notice'
 import Tooltip from './Tooltip'
 import { matchesSearch } from './tableSearch'
 import ConversationDetailModal from './ConversationDetailModal'
 import DashboardSimulations from './DashboardSimulations'
-import TabBar from './TabBar'
+import TabBar, { TabPanel } from './TabBar'
 import Spinner from './Spinner'
 import LoadingState from './LoadingState'
+import LoadError from './LoadError'
 import { PageContainer, PageHeader } from './PageLayout'
 import FormError from './FormError'
+import { PERIOD_OPTIONS } from './reportFormat'
+import type { PeriodValue } from './reportFormat'
 import { KpiCard, MeterRow, TrendChart } from './scoreCharts'
 import {
   cardCls,
@@ -43,9 +49,26 @@ import {
  * del simulatore, corretti da soli. Sono due modi di misurare la stessa
  * persona, quindi stanno nella stessa pagina, sotto gli stessi filtri e con
  * gli stessi disegni (vedi scoreCharts), ma non nella stessa colonna: si
- * guarda una prova per volta. */
+ * guarda una prova per volta.
+ *
+ * I filtri stanno nell'indirizzo e non solo in memoria: una dashboard è la
+ * schermata che si guarda in due davanti allo stesso schermo, e senza di
+ * questo un ricaricamento riportava tutti al punto di partenza e un
+ * collegamento mandato a qualcuno gli apriva un'altra pagina. */
 
 type DashboardSection = 'conversazioni' | 'simulazioni'
+
+/* Come le scelte si scrivono nell'indirizzo. In italiano come le rotte, e
+ * corte: è un indirizzo che finisce copiato in una chat. */
+const SECTION_PARAM = 'prova'
+const ORG_PARAM = 'organizzazione'
+const USER_PARAM = 'persona'
+const MODE_PARAM = 'canale'
+const KIND_PARAM = 'tipo'
+const PERIOD_PARAM = 'periodo'
+
+/** La radice degli id che legano le due linguette ai loro pannelli. */
+const TAB_BASE = 'dashboard'
 
 interface CriterionAvg {
   key: string
@@ -108,25 +131,62 @@ const MODE_SUFFIX: Record<ModeFilter, string> = {
   all: 'su chiamate e chat',
 }
 
+/** Il valore letto dall'indirizzo, se è uno di quelli che esistono. */
+function pickOption<T extends string>(
+  raw: string | null,
+  options: readonly { value: T }[],
+  fallback: T,
+): T {
+  return options.some((o) => o.value === raw) ? (raw as T) : fallback
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const showOrgFilter = isSuperAdmin(user)
   const { data: organizations = [] } = useOrganizations(isSuperAdmin(user))
-  const [orgFilter, setOrgFilter] = useState('')
-  const [selectedUserId, setSelectedUserId] = useState('')
-  const [section, setSection] = useState<DashboardSection>('conversazioni')
-  /* I due selettori (le opzioni stanno in MODE_FILTERS e KIND_FILTERS, che
-   * anche il report attività usa) scopano l'intera metà in cui vivono: ogni
-   * conteggio, media e grafico parte dalle righe già ristrette.
-   *
-   * Due default diversi, e non è una svista. Il canale parte dalle chiamate
+
+  /* Le scelte stanno nei parametri dell'indirizzo, che è la loro unica copia:
+     tenerle anche in uno `useState` vorrebbe dire due verità da riallineare a
+     ogni passo indietro del browser. */
+  const [params, setParams] = useSearchParams()
+  const setParam = (name: string, value: string, extra?: [string, string]) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(name, value)
+    else next.delete(name)
+    if (extra) {
+      const [otherName, otherValue] = extra
+      if (otherValue) next.set(otherName, otherValue)
+      else next.delete(otherName)
+    }
+    /* Sempre sostituendo il passo: qui si cambia filtro di continuo, e ogni
+       scelta lasciata in cronologia sarebbe un tasto indietro che non riporta
+       alla pagina di prima ma al canale di prima. */
+    setParams(next, { replace: true })
+  }
+
+  /* L'organizzazione nell'indirizzo vale solo per chi la può scegliere: a un
+     org admin il server risponde comunque con la sua, e la pagina intanto si
+     scriverebbe accanto al titolo il nome di un'altra. */
+  const orgFilter = showOrgFilter ? (params.get(ORG_PARAM) ?? '') : ''
+  const selectedUserId = params.get(USER_PARAM) ?? ''
+  const section: DashboardSection =
+    params.get(SECTION_PARAM) === 'simulazioni' ? 'simulazioni' : 'conversazioni'
+  /* Due default diversi, e non è una svista. Il canale parte dalle chiamate
    * perché al telefono e in chat non si è valutati alla pari e mescolarli
    * darebbe una media ambigua. Il tipo parte da "Tutti" perché i tipi di
    * test sono quattro e tre di loro sono arrivati dopo il primo: un default
    * che ne mostrasse uno solo terrebbe nascosta la maggior parte della
    * dashboard a chi non sa che il selettore esiste. */
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('voice')
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
+  const modeFilter = pickOption<ModeFilter>(params.get(MODE_PARAM), MODE_FILTERS, 'voice')
+  const kindFilter = pickOption<KindFilter>(params.get(KIND_PARAM), KIND_FILTERS, 'all')
+  /* Il periodo è l'unico filtro che il server capisce insieme
+     all'organizzazione: gli altri restringono righe già arrivate, questo
+     decide quante ne arrivano. Parte da "Sempre" come nel report attività,
+     perché un filtro già acceso mostrerebbe una pagina mezza vuota a chi non
+     sa che esiste, e quella si legge come un dato sbagliato. */
+  const period = pickOption<PeriodValue>(params.get(PERIOD_PARAM), PERIOD_OPTIONS, 'all')
+  const days = period === 'all' ? undefined : Number(period)
+
   const [search, setSearch] = useState('')
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null)
   const [isExporting, setIsExporting] = useState(false)
@@ -137,7 +197,7 @@ export default function DashboardPage() {
     isPending: isLoadingEvaluations,
     error: loadError,
     refetch,
-  } = useEvaluationsReport(orgFilter, isAdmin(user))
+  } = useEvaluationsReport(orgFilter, days, isAdmin(user))
 
   /* L'altra metà della pagina. È una query a parte e non un campo in più
    * della prima: le due prove hanno una riga per volta ciascuna, e chi non
@@ -147,19 +207,40 @@ export default function DashboardPage() {
     data: simulationRows = [],
     isPending: isLoadingSimulations,
     error: simulationsError,
-  } = useSimulationsReport(orgFilter, isAdmin(user))
+    refetch: refetchSimulations,
+  } = useSimulationsReport(orgFilter, days, isAdmin(user))
 
-  const isLoading = isLoadingEvaluations || isLoadingSimulations
+  /* Le due metà si aspettano solo quando serve: la linguetta che si sta
+   * guardando disegna appena i suoi dati sono pronti, senza restare ferma
+   * dietro la scansione dell'altra prova. Il conteggio sulla linguetta
+   * dell'altra compare quando arriva. */
+  const isLoadingSection = section === 'conversazioni' ? isLoadingEvaluations : isLoadingSimulations
+  const isSettled = !isLoadingEvaluations && !isLoadingSimulations
+  const hasNothing = isSettled && rows.length === 0 && simulationRows.length === 0
 
-  /* L'errore mostrato è quello del caricamento, o quello dell'esportazione se
-   * è lei a essere andata storta: sono due modi di non avere il report. */
-  const error =
-    exportError ||
-    (loadError instanceof Error ? loadError.message : '') ||
-    (simulationsError instanceof Error ? simulationsError.message : '')
+  /* Un caricamento caduto è l'unica cosa a cui si può rimediare restando
+   * dov'è, quindi il messaggio arriva con il comando per riprovare. Distinto
+   * dall'errore dell'esportazione, che è un file non prodotto e non una
+   * pagina senza dati: quello si dice accanto al bottone che l'ha causato,
+   * altrimenti un download fallito si legge come una dashboard rotta. */
+  const loadErrorMessage =
+    loadError instanceof Error
+      ? loadError.message
+      : simulationsError instanceof Error
+        ? simulationsError.message
+        : loadError || simulationsError
+          ? 'Impossibile caricare la dashboard.'
+          : ''
 
-  /* Excel del report: stesse righe della dashboard (stesso scope server
-   * per organizzazione), i filtri più fini li offre il foglio stesso.
+  const retryLoad = () => {
+    void refetch()
+    void refetchSimulations()
+  }
+
+  /* Excel del report: le stesse righe che il server ha mandato a questa
+   * pagina, cioè la stessa organizzazione e lo stesso periodo. Le fette più
+   * fini (la persona, il canale) restano all'autofiltro del foglio, e il
+   * tooltip lo dice invece di lasciarlo scoprire aprendo il file.
    * Resta fuori da TanStack perché produce un file da salvare, non uno
    * stato da tenere in cache. */
   const handleExportXlsx = async () => {
@@ -167,7 +248,7 @@ export default function DashboardPage() {
     setIsExporting(true)
     setExportError('')
     try {
-      const blob = await fetchEvaluationsReportXlsx(orgFilter || undefined)
+      const blob = await fetchEvaluationsReportXlsx(orgFilter || undefined, days)
       saveBlob(blob, `report-valutazioni-${new Date().toISOString().slice(0, 10)}.xlsx`)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Esportazione non riuscita.')
@@ -314,56 +395,53 @@ export default function DashboardPage() {
     [detailRows, search],
   )
 
+  /** Il conteggio sulla linguetta, finché la sua metà non è arrivata. */
+  const tabLabel = (label: string, count: number, isPending: boolean) =>
+    isPending ? label : `${label} (${count})`
+
   return (
     <PageContainer>
       <PageHeader
         title="Dashboard"
         description="Riepilogo dei punteggi delle conversazioni valutate e dei test tecnici svolti, globale o per singolo utente."
+        /* Periodo e organizzazione stanno insieme, in cima: sono i due filtri
+           che il server capisce, cioè quelli che decidono quali righe
+           arrivano. Quelli della riga sotto restringono righe già qui. */
         actions={
-          showOrgFilter && (
-            <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 max-sm:w-full">
+            <FilterTabs<PeriodValue>
+              value={period}
+              onChange={(value) => setParam(PERIOD_PARAM, value === 'all' ? '' : value)}
+              options={[...PERIOD_OPTIONS]}
+              ariaLabel="Periodo delle prove"
+            />
+            {showOrgFilter && (
               <Select
                 id="dashboard-org-filter"
+                ariaLabel="Organizzazione"
                 className="min-w-[220px] max-sm:flex-1"
                 value={orgFilter}
-                onChange={(value) => {
-                  setOrgFilter(value)
-                  setSelectedUserId('')
-                }}
+                /* Cambiando organizzazione la persona scelta non è più fra
+                   quelle in elenco: se ne va con il filtro che l'ha portata. */
+                onChange={(value) => setParam(ORG_PARAM, value, [USER_PARAM, ''])}
                 options={orgFilterOptions}
               />
-            </div>
-          )
+            )}
+          </div>
         }
       />
 
-      {error && <FormError message={error} variant="page" />}
-
-      {isLoading ? (
-        <LoadingState message="Caricamento dashboard..." />
-      ) : rows.length === 0 && simulationRows.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-white/6 bg-gray-900/60 p-16 text-center">
-          <svg
-            width="40"
-            height="40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-slate-600"
-          >
-            <line x1="18" y1="20" x2="18" y2="10" />
-            <line x1="12" y1="20" x2="12" y2="4" />
-            <line x1="6" y1="20" x2="6" y2="14" />
-          </svg>
-          <h2 className="font-heading text-xl text-slate-100">Nessun dato disponibile</h2>
-          <p className="max-w-[420px] text-sm text-slate-500">
-            I grafici saranno disponibili quando le conversazioni con gli avatar verranno valutate,
-            oppure quando verrà svolto un test tecnico.
-          </p>
-        </div>
+      {loadErrorMessage ? (
+        <LoadError message={loadErrorMessage} onRetry={retryLoad} variant="page" />
+      ) : hasNothing ? (
+        <EmptyState
+          title="Nessun dato disponibile"
+          hint={
+            period === 'all'
+              ? 'I grafici saranno disponibili quando le conversazioni con gli avatar verranno valutate, oppure quando verrà svolto un test tecnico'
+              : 'Nessuna prova nel periodo selezionato, scegline uno più ampio per vedere i dati disponibili'
+          }
+        />
       ) : (
         <>
           {/* Le due prove non si guardano insieme: una linguetta per volta,
@@ -374,12 +452,23 @@ export default function DashboardPage() {
            * che tiene insieme la pagina. */}
           <TabBar
             items={[
-              { value: 'conversazioni', label: `Conversazioni (${rows.length})` },
-              { value: 'simulazioni', label: `Simulazioni tecniche (${simulationRows.length})` },
+              {
+                value: 'conversazioni',
+                label: tabLabel('Conversazioni', rows.length, isLoadingEvaluations),
+              },
+              {
+                value: 'simulazioni',
+                label: tabLabel(
+                  'Simulazioni tecniche',
+                  simulationRows.length,
+                  isLoadingSimulations,
+                ),
+              },
             ]}
             value={section}
-            onChange={setSection}
+            onChange={(value) => setParam(SECTION_PARAM, value === 'conversazioni' ? '' : value)}
             ariaLabel="Tipo di prova da visualizzare"
+            panelBase={TAB_BASE}
             className="mb-5 border-b border-white/6 pb-2"
           />
 
@@ -394,7 +483,7 @@ export default function DashboardPage() {
             <SearchSelect
               id="dashboard-user-filter"
               value={selectedUserId}
-              onChange={setSelectedUserId}
+              onChange={(value) => setParam(USER_PARAM, value)}
               options={usersInData.map((u) => ({ value: u.id, label: u.name, sub: u.email }))}
               placeholder="Cerca per nome o email..."
               emptyHint="Tutti gli utenti"
@@ -411,7 +500,7 @@ export default function DashboardPage() {
                 </span>
                 <FilterTabs
                   value={modeFilter}
-                  onChange={setModeFilter}
+                  onChange={(value) => setParam(MODE_PARAM, value === 'voice' ? '' : value)}
                   options={MODE_FILTERS}
                   ariaLabel="Canale delle conversazioni"
                 />
@@ -423,7 +512,7 @@ export default function DashboardPage() {
                 </span>
                 <FilterTabs
                   value={kindFilter}
-                  onChange={setKindFilter}
+                  onChange={(value) => setParam(KIND_PARAM, value === 'all' ? '' : value)}
                   options={KIND_FILTERS}
                   ariaLabel="Tipo dei test tecnici"
                 />
@@ -431,56 +520,24 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {section === 'conversazioni' && (
-            <>
+          {isLoadingSection ? (
+            <LoadingState message="Caricamento dashboard..." />
+          ) : section === 'conversazioni' ? (
+            <TabPanel base={TAB_BASE} value="conversazioni">
               {/* Il canale può non avere nessuna conversazione: senza questo avviso
                * i KPI a zero si leggerebbero come un errore di caricamento. */}
               {rows.length > 0 && scopedRows.length === 0 && (
-                <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="shrink-0 text-slate-500"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <span>
-                    Nessuna valutazione {MODE_SUFFIX[modeFilter]}. Cambia canale per vedere i dati
-                    disponibili.
-                  </span>
-                </div>
+                <Notice className="mb-6">
+                  Nessuna valutazione {MODE_SUFFIX[modeFilter]}. Cambia canale per vedere i dati
+                  disponibili
+                </Notice>
               )}
 
               {rows.length === 0 ? (
-                <div className="mb-6 flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/40 px-6 py-4 text-sm text-slate-400">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="shrink-0 text-slate-500"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <span>
-                    Nessuna conversazione ancora valutata. I grafici saranno disponibili quando le
-                    sessioni con gli avatar verranno valutate
-                  </span>
-                </div>
+                <Notice className="mb-6">
+                  Nessuna conversazione ancora valutata. I grafici saranno disponibili quando le
+                  sessioni con gli avatar verranno valutate
+                </Notice>
               ) : (
                 <>
                   {/* KPI */}
@@ -606,6 +663,11 @@ export default function DashboardPage() {
                     )}
                   </div>
 
+                  {/* L'esportazione fallita si dice qui, accanto al bottone
+                      che l'ha chiesta: è un file non prodotto, non una
+                      pagina senza dati. */}
+                  {exportError && <FormError message={exportError} variant="page" />}
+
                   {/* Vista tabellare: tutti i valori raggiungibili senza hover */}
                   <DataTable
                     columns={evaluationTable.columns}
@@ -614,11 +676,11 @@ export default function DashboardPage() {
                     onSearchChange={setSearch}
                     searchPlaceholder="Cerca per conversazione, utente o avatar..."
                     searchActions={
-                      <Tooltip content="Scarica il report delle valutazioni in Excel">
+                      <Tooltip content="Scarica in Excel le valutazioni del periodo e dell'organizzazione selezionati, senza i filtri per utente e canale">
                         <button
                           className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                           onClick={handleExportXlsx}
-                          disabled={isExporting || isLoading || rows.length === 0}
+                          disabled={isExporting || rows.length === 0}
                         >
                           {isExporting ? (
                             <Spinner variant="small" />
@@ -655,7 +717,7 @@ export default function DashboardPage() {
                         content="Vedi conversazione e valutazione"
                         anchor="cursor"
                       >
-                        <Tr className="cursor-pointer" onClick={() => setDetailRow(r)}>
+                        <Tr onActivate={() => setDetailRow(r)}>
                           <Td>
                             <div className="flex items-center justify-center gap-2">
                               <ConversationModeBadge mode={r.mode} iconOnly />
@@ -722,15 +784,15 @@ export default function DashboardPage() {
                   </DataTable>
                 </>
               )}
-            </>
-          )}
-
-          {section === 'simulazioni' && (
-            <DashboardSimulations
-              rows={simulationRows}
-              selectedUserId={selectedUserId}
-              kindFilter={kindFilter}
-            />
+            </TabPanel>
+          ) : (
+            <TabPanel base={TAB_BASE} value="simulazioni">
+              <DashboardSimulations
+                rows={simulationRows}
+                selectedUserId={selectedUserId}
+                kindFilter={kindFilter}
+              />
+            </TabPanel>
           )}
         </>
       )}

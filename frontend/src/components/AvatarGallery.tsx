@@ -43,7 +43,7 @@ export default function AvatarGallery() {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
 
-  const { data: avatars = [], isLoading, isError, isFetching, refetch } = useAvatars()
+  const { data: avatars = [], isLoading, isError, refetch } = useAvatars()
   const { data: categories = [] } = useCategories()
 
   const counts = useMemo(() => countByCategory(avatars), [avatars])
@@ -119,7 +119,6 @@ export default function AvatarGallery() {
           variant="page"
           message="Impossibile caricare il catalogo degli avatar. Verifica la connessione e riprova."
           onRetry={() => refetch()}
-          isRetrying={isFetching}
           className="animate-fade-in p-16 max-md:p-8"
         />
       ) : visibleAvatars.length === 0 ? (

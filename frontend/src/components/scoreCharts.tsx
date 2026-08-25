@@ -75,12 +75,22 @@ export function TrendChart({
   const hover = hoverIdx !== null ? points[hoverIdx] : null
   const last = points[points.length - 1]
 
+  /* Un disegno senza parole, per chi legge con uno screen reader, è un buco
+     in mezzo alla pagina: qui c'è quello che il grafico dice a colpo d'occhio,
+     cioè da dove parte, dove arriva e su quanti giorni. I valori uno per uno
+     stanno nella tabella in fondo alla stessa schermata. */
+  const chartLabel = points.length
+    ? `Andamento del voto medio su ${points.length} ${points.length === 1 ? 'giorno' : 'giorni'}, da ${formatScore(points[0].avg)} del ${formatDay(points[0].date)} a ${formatScore(last.avg)} del ${formatDay(last.date)}`
+    : 'Andamento del voto medio, nessun dato'
+
   return (
     <div ref={containerRef} className="relative w-full">
       {width > 0 && (
         <svg
           width={width}
           height={H}
+          role="img"
+          aria-label={chartLabel}
           onPointerMove={handleMove}
           onPointerLeave={() => setHoverIdx(null)}
         >
@@ -209,8 +219,16 @@ export function MeterRow({
   score: number
   dimmed?: boolean
   highlighted?: boolean
-  /* Etichetta sempre per intero su una riga (mai troncata): la mette sopra
-   * la barra invece che affiancata, così non deve condividere spazio con nulla. */
+  /* Etichetta sopra la barra invece che affiancata, così non deve
+   * condividere lo spazio con nessuno: ci sta per intero anche quando è il
+   * titolo di una simulazione, che lo scrive chi la compone e può essere
+   * lungo quanto vuole.
+   *
+   * "Per intero" fin dove la card è larga, però: era `whitespace-nowrap` e
+   * basta, e un titolo abbastanza lungo usciva dal riquadro portandosi
+   * dietro lo scorrimento orizzontale di tutta la pagina. Oltre quella
+   * misura si tronca con i puntini e il testo intero si legge nel tooltip,
+   * come nell'altra forma. */
   fullLabel?: boolean
 }) {
   if (fullLabel) {
@@ -221,12 +239,17 @@ export function MeterRow({
         }`}
       >
         <div className="mb-1.5 flex items-baseline justify-between gap-3">
-          <p className="whitespace-nowrap text-[0.82rem] font-medium text-slate-300">{label}</p>
+          <Tooltip content={label} truncateOnly>
+            <p className="min-w-0 truncate text-[0.82rem] font-medium text-slate-300">{label}</p>
+          </Tooltip>
           <span className={`shrink-0 text-right text-sm font-bold ${scoreTextColor(score)}`}>
             {formatScore(score)}
           </span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-white/6">
+        {/* La barra ridisegna il numero che sta già scritto accanto
+            all'etichetta: per chi ascolta la pagina è un doppione, non
+            un'informazione. */}
+        <div className="h-2 overflow-hidden rounded-full bg-white/6" aria-hidden="true">
           <div
             className={`h-full rounded-full transition-all ${scoreBarColor(score)}`}
             style={{ width: `${Math.max(0, Math.min(100, score * 10))}%` }}
@@ -248,7 +271,7 @@ export function MeterRow({
         </Tooltip>
         {sub && <p className="truncate text-[0.68rem] text-slate-500">{sub}</p>}
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/6">
+      <div className="h-2 overflow-hidden rounded-full bg-white/6" aria-hidden="true">
         <div
           className={`h-full rounded-full transition-all ${scoreBarColor(score)}`}
           style={{ width: `${Math.max(0, Math.min(100, score * 10))}%` }}

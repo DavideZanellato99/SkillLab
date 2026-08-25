@@ -562,22 +562,31 @@ export const deleteAdminConversation = (conversationId: string) =>
 export const fetchAdminEvaluationPdf = (conversationId: string) =>
   apiFetchBlob(`/api/admin/conversations/${conversationId}/evaluation/pdf`)
 
+/* I tre parametri che il server capisce sono gli stessi per le tre letture,
+ * e il foglio Excel non fa eccezione: è quello che si sta guardando, non un
+ * estratto suo. `days` restringe agli ultimi N giorni, come nel report
+ * attività, e assente vuol dire "da sempre". */
+const reportParams = (organizationId?: string, days?: number) => ({
+  ...(organizationId ? { organization_id: organizationId } : {}),
+  ...(days ? { days: String(days) } : {}),
+})
+
 /**
  * The evaluations report as a formatted .xlsx file, same admin scope rules
  * as fetchEvaluationsReport.
  */
-export const fetchEvaluationsReportXlsx = (organizationId?: string) =>
+export const fetchEvaluationsReportXlsx = (organizationId?: string, days?: number) =>
   apiFetchBlob('/api/admin/evaluations-report/export', {
-    params: organizationId ? { organization_id: organizationId } : undefined,
+    params: reportParams(organizationId, days),
   })
 
-export const fetchEvaluationsReport = (organizationId?: string) =>
+export const fetchEvaluationsReport = (organizationId?: string, days?: number) =>
   apiFetch<EvaluationReportRow[]>('/api/admin/evaluations-report', {
-    params: organizationId ? { organization_id: organizationId } : undefined,
+    params: reportParams(organizationId, days),
   })
 
 /** I tentativi sulle simulazioni tecniche, stesse regole di scope. */
-export const fetchSimulationsReport = (organizationId?: string) =>
+export const fetchSimulationsReport = (organizationId?: string, days?: number) =>
   apiFetch<SimulationReportRow[]>('/api/admin/simulations-report', {
-    params: organizationId ? { organization_id: organizationId } : undefined,
+    params: reportParams(organizationId, days),
   })

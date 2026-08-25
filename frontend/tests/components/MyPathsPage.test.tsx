@@ -78,12 +78,16 @@ describe('MyPathsPage', () => {
   it('porta al sentiero del percorso', () => {
     renderPage({ data: [percorso()] })
 
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/app/percorsi/as-1')
+    expect(screen.getByRole('heading', { name: 'Onboarding' }).closest('a')).toHaveAttribute(
+      'href',
+      '/app/percorsi/as-1',
+    )
   })
 
   /* Chi apre questa pagina cerca cosa deve fare: i percorsi ancora aperti
-   * vanno in cima, i chiusi restano sotto perché sono la strada percorsa. */
-  it('mette in cima i percorsi ancora da chiudere', () => {
+   * stanno nella prima metà, i chiusi sotto la propria intestazione perché
+   * sono la strada percorsa. */
+  it('separa i percorsi da chiudere da quelli chiusi', () => {
     renderPage({
       data: [
         percorso({ id: 'as-1', path_title: 'Finito', status: 'completed' }),
@@ -91,8 +95,77 @@ describe('MyPathsPage', () => {
       ],
     })
 
-    const titoli = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
-    expect(titoli).toEqual(['Da fare', 'Finito'])
+    const sezioni = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+    expect(sezioni).toEqual(['Da completare1', 'Completati1'])
+    const percorsi = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
+    expect(percorsi).toEqual(['Da fare', 'Finito'])
+  })
+
+  /* Con una metà sola l'intestazione direbbe quello che il titolo della
+   * pagina ha già detto. */
+  it('non intitola le metà quando ce n’è una sola', () => {
+    renderPage({ data: [percorso()] })
+
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument()
+  })
+
+  /* La domanda con cui si apre questa pagina è «cosa devo fare»: la risposta
+   * è un bottone, non tre clic fra mappa e riquadro. */
+  it('porta alla prova della tappa di adesso in un colpo solo', () => {
+    renderPage({ data: [percorso()] })
+
+    expect(screen.getByRole('link', { name: /^Riprendi dalla tappa 2/ })).toHaveAttribute(
+      'href',
+      '/app/chat/a2',
+    )
+  })
+
+  it('non invita a riprendere un percorso già chiuso', () => {
+    renderPage({
+      data: [
+        percorso({
+          status: 'completed',
+          completed_steps: 2,
+          current_position: null,
+          steps: [
+            step({ id: 's-1', position: 1, status: 'completed' }),
+            step({ id: 's-2', position: 2, status: 'completed' }),
+          ],
+        }),
+      ],
+    })
+
+    expect(screen.queryByRole('link', { name: /^Riprendi/ })).not.toBeInTheDocument()
+  })
+
+  /* Il termine decide da quale percorso si comincia, quindi si legge senza
+   * aprire niente. */
+  it('mostra la scadenza della tappa in corso', () => {
+    const domani = new Date(Date.now() + 86_400_000)
+    domani.setHours(18, 0, 0, 0)
+    renderPage({
+      data: [
+        percorso({
+          steps: [
+            step({
+              id: 's-1',
+              position: 1,
+              status: 'completed',
+              unlocked_at: '2026-03-01T10:00:00Z',
+            }),
+            step({
+              id: 's-2',
+              position: 2,
+              status: 'active',
+              unlocked_at: '2026-03-02T10:00:00Z',
+              due_at: domani.toISOString(),
+            }),
+          ],
+        }),
+      ],
+    })
+
+    expect(screen.getByText('Scade domani alle 18:00')).toBeInTheDocument()
   })
 
   it('dice a che tappa si è arrivati', () => {
@@ -167,10 +240,11 @@ describe('MyPathsPage', () => {
     expect(screen.getByText('Caricamento percorsi...')).toBeInTheDocument()
   })
 
-  it("dice quando non c'è nessun percorso", () => {
+  it("dice quando non c'è nessun percorso, e da dove ne arriverà uno", () => {
     renderPage({ data: [] })
 
     expect(screen.getByText('Nessun percorso assegnato')).toBeInTheDocument()
+    expect(screen.getByText(/Quando il tuo formatore te ne affida uno/)).toBeInTheDocument()
   })
 
   it('riporta il motivo di un caricamento fallito', () => {

@@ -30,21 +30,24 @@ export function useUsersReport(organizationId?: string, days?: number, enabled =
   })
 }
 
-/** Le righe delle valutazioni, una per conversazione valutata. */
-export function useEvaluationsReport(organizationId?: string, enabled = true) {
+/** Le righe delle valutazioni, una per conversazione valutata.
+ *
+ * `days` fa parte della chiave come nel recap per utente: cambiare periodo è
+ * una domanda diversa, non lo stesso elenco filtrato dopo. */
+export function useEvaluationsReport(organizationId?: string, days?: number, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.reports.evaluations(organizationId || undefined),
-    queryFn: () => fetchEvaluationsReport(organizationId || undefined),
+    queryKey: queryKeys.reports.evaluations(organizationId || undefined, days),
+    queryFn: () => fetchEvaluationsReport(organizationId || undefined, days),
     enabled,
     staleTime: REPORT_STALE_TIME,
   })
 }
 
 /** Le righe dei tentativi, una per test tecnico consegnato. */
-export function useSimulationsReport(organizationId?: string, enabled = true) {
+export function useSimulationsReport(organizationId?: string, days?: number, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.reports.simulations(organizationId || undefined),
-    queryFn: () => fetchSimulationsReport(organizationId || undefined),
+    queryKey: queryKeys.reports.simulations(organizationId || undefined, days),
+    queryFn: () => fetchSimulationsReport(organizationId || undefined, days),
     enabled,
     staleTime: REPORT_STALE_TIME,
   })

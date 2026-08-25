@@ -32,6 +32,7 @@ const saveBlob = vi.hoisted(() => vi.fn())
 vi.mock('../../src/services/api', () => ({ saveBlob }))
 
 import ProfilePage from '../../src/components/ProfilePage'
+import { SYSTEM_ACCOUNT_SUB } from '../../src/services/auth'
 
 const utente = {
   id: 'u-1',
@@ -178,9 +179,71 @@ describe('i propri dati', () => {
 
     expect(screen.queryByRole('button', { name: /Salva Modifiche/ })).not.toBeInTheDocument()
   })
+
+  /* Due campi spenti senza una riga che dica perché mandano via chi era
+   * arrivato fin qui per correggere il proprio cognome: la strada per farlo
+   * correggere deve essere scritta accanto ai campi che non si toccano. */
+  it.each([['user'], ['organization_admin']])(
+    'dice al ruolo %s a chi rivolgersi per correggere il nome',
+    (ruolo) => {
+      renderPage({ ruolo })
+
+      expect(screen.getByText(/rivolgiti a un amministratore/i)).toBeInTheDocument()
+    },
+  )
+
+  it('non spiega niente a chi il nome se lo cambia da sé', () => {
+    renderPageComeSuperAdmin()
+
+    expect(screen.queryByText(/rivolgiti a un amministratore/i)).not.toBeInTheDocument()
+  })
+
+  /* Un messaggio verde parla del modulo com'era quando è comparso: lasciarlo
+   * sopra a un campo già rimesso a mano lo farebbe leggere come la conferma
+   * di quello che c'è scritto adesso. */
+  it('toglie la conferma appena si torna a scrivere', async () => {
+    renderPageComeSuperAdmin()
+
+    await userEvent.type(screen.getByLabelText('Nome'), 'lisa')
+    await userEvent.click(salva())
+    expect(await screen.findByText('Dati aggiornati con successo.')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Cognome'), 'x')
+
+    expect(screen.queryByText('Dati aggiornati con successo.')).not.toBeInTheDocument()
+  })
 })
 
 describe('cambio password', () => {
+  /* Il riscontro arriva quando si è finito di scrivere la conferma, non dopo
+   * aver premuto: chi si accorge lì dello sbaglio corregge un campo invece di
+   * ricompilare un modulo respinto. */
+  it('avvisa che le due password non coincidono senza aspettare il pulsante', async () => {
+    renderPage()
+
+    await userEvent.type(screen.getByLabelText('Nuova Password'), 'Nuova-Lunga1!')
+    await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'Nuova-Lunga2!')
+    await userEvent.tab()
+
+    expect(await screen.findByText('Le nuove password non coincidono.')).toBeInTheDocument()
+    expect(passwordMutation.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it("toglie l'avviso appena le due password coincidono", async () => {
+    renderPage()
+
+    await userEvent.type(screen.getByLabelText('Nuova Password'), 'Nuova-Lunga1!')
+    const conferma = screen.getByLabelText('Conferma Nuova Password')
+    await userEvent.type(conferma, 'Nuova-Lunga2!')
+    await userEvent.tab()
+    expect(await screen.findByText('Le nuove password non coincidono.')).toBeInTheDocument()
+
+    await userEvent.clear(conferma)
+    await userEvent.type(conferma, 'Nuova-Lunga1!')
+
+    expect(screen.queryByText('Le nuove password non coincidono.')).not.toBeInTheDocument()
+  })
+
   it('rifiuta due password che non coincidono', async () => {
     renderPage()
 
@@ -238,7 +301,7 @@ describe('cambio password', () => {
    * resto non funziona: la sua password non passa da Cognito, quindi il
    * modulo non c'è proprio invece di fallire al salvataggio. */
   it("non offre il cambio password sull'account di sistema", () => {
-    renderPage({ cognito_sub: 'mock-admin' })
+    renderPage({ cognito_sub: SYSTEM_ACCOUNT_SUB })
 
     expect(screen.queryByLabelText('Password Attuale')).not.toBeInTheDocument()
     expect(
@@ -265,6 +328,19 @@ describe('copia dei propri dati', () => {
     await waitFor(() => expect(saveBlob).toHaveBeenCalled())
     const [, nomeFile] = saveBlob.mock.calls[0]
     expect(nomeFile).toMatch(/^dati-personali-\d{4}-\d{2}-\d{2}\.zip$/)
+  })
+
+  /* L'archivio porta dentro gli audio, quindi l'attesa può durare: lo
+   * spinner dentro il bottone lo vede solo chi ha il bottone davanti, e chi
+   * nel frattempo ha scorso la pagina deve trovare scritto che sta
+   * succedendo qualcosa. */
+  it("dice che l'archivio si sta preparando mentre si aspetta", async () => {
+    fetchMyDataExport.mockReturnValue(new Promise(() => {}))
+    renderPage()
+
+    await userEvent.click(screen.getByRole('button', { name: /Scarica i Miei Dati/ }))
+
+    expect(await screen.findByText(/L'archivio si sta preparando/)).toBeInTheDocument()
   })
 
   it("riporta un'esportazione fallita senza lasciare il bottone bloccato", async () => {

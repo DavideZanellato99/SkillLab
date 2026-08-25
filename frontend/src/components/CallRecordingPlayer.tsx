@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 're
 import { fetchRecordingBlob } from '../services/voice'
 import Spinner from './Spinner'
 import { useRecordingInfo } from '../hooks/useRecording'
+import { DownloadIcon } from './icons'
 
 /* Playback of a finished call: the operator and the avatar mixed in one
  * track, as recorded in the browser during the call itself.
@@ -142,20 +143,7 @@ export default forwardRef<CallRecordingPlayerHandle, CallRecordingPlayerProps>(
               href={audioUrl}
               download={`chiamata-${conversationId}.${extensionFor(info.mime_type)}`}
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
+              <DownloadIcon size={13} />
               Scarica l’Audio
             </a>
           </>

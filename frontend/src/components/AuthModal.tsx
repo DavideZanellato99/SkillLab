@@ -13,16 +13,12 @@
 import { useState } from 'react'
 
 import { useAuth } from '../hooks/useAuth'
-import {
-  PASSWORD_MIN_LENGTH,
-  PASSWORD_RULES,
-  getUnmetPasswordRules,
-  isNewPasswordRequired,
-} from '../services/auth'
-import { fieldCls, inputCls, labelCls, litIconCls, litInputWrapperCls } from './Field'
+import { PASSWORD_MIN_LENGTH, getUnmetPasswordRules, isNewPasswordRequired } from '../services/auth'
+import Field, { TextInput, litIconCls } from './Field'
 import FormError from './FormError'
 import ModalShell from './ModalShell'
-import PasswordToggle from './PasswordToggle'
+import PasswordField from './PasswordField'
+import PasswordRules from './PasswordRules'
 import PrimaryButton from './PrimaryButton'
 import Spinner from './Spinner'
 import { LockIcon, MailIcon, ShieldIcon } from './icons'
@@ -74,29 +70,6 @@ function AuthHeader({ step }: { step: AuthStep }) {
   )
 }
 
-/** Le regole della password che si accendono man mano che vengono soddisfatte. */
-function PasswordRules({ password }: { password: string }) {
-  return (
-    <div className="rounded-xl border border-white/6 bg-white/3 px-4 py-2">
-      <p className="mb-1 text-xs font-semibold text-slate-400">Requisiti password:</p>
-      <ul className="flex list-none flex-col gap-1">
-        {PASSWORD_RULES.map((rule) => {
-          const met = rule.test(password)
-          return (
-            <li
-              key={rule.label}
-              className={`text-xs transition-colors ${met ? 'text-emerald-500' : 'text-slate-500'}`}
-            >
-              <span className="mr-2">{met ? '●' : '○'}</span>
-              {rule.label}
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
 export default function AuthModal({ onClose }: { onClose: () => void }) {
   const { login, completeNewPassword } = useAuth()
 
@@ -105,12 +78,16 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
   const [password, setPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  /* La conferma si giudica quando si è finito di scriverla: confrontarla a
+   * ogni tasto vorrebbe dire un "non coincidono" acceso per tutta la
+   * digitazione, cioè un rimprovero a chi sta facendo la cosa giusta. */
+  const [confirmTouched, setConfirmTouched] = useState(false)
   const [cognitoSession, setCognitoSession] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
+
+  const passwordsMismatch =
+    confirmTouched && confirmNewPassword !== '' && newPassword !== confirmNewPassword
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -139,8 +116,10 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     setErrorMessage('')
 
+    /* Le due password diverse le dice il campo, non il banner in cima: chi
+     * ha premuto sta guardando i campi, ed è lì che c'è da rimettere mano. */
     if (newPassword !== confirmNewPassword) {
-      setErrorMessage('Le password non coincidono.')
+      setConfirmTouched(true)
       return
     }
 
@@ -172,52 +151,33 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
 
       {step === 'login' && (
         <form className="flex flex-col gap-4" onSubmit={handleLogin} id="auth-form">
-          <div className={fieldCls}>
-            <label className={labelCls} htmlFor="auth-email">
-              Email
-            </label>
-            <div className={litInputWrapperCls}>
-              <MailIcon size={16} className={litIconCls} />
-              <input
-                type="text"
-                id="auth-email"
-                className={inputCls}
-                placeholder="nome@esempio.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="username"
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
+          <Field label="Email" htmlFor="auth-email">
+            <TextInput
+              type="text"
+              id="auth-email"
+              placeholder="nome@esempio.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="username"
+              disabled={isSubmitting}
+              litIcon
+              icon={<MailIcon size={16} className={litIconCls} />}
+            />
+          </Field>
 
-          <div className={fieldCls}>
-            <label className={labelCls} htmlFor="auth-password">
-              Password
-            </label>
-            <div className={litInputWrapperCls}>
-              <LockIcon size={16} className={litIconCls} />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                id="auth-password"
-                className={inputCls}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={1}
-                autoComplete="current-password"
-                disabled={isSubmitting}
-              />
-              <PasswordToggle
-                visible={showPassword}
-                onToggle={() => setShowPassword((v) => !v)}
-                disabled={isSubmitting}
-                controls="auth-password"
-              />
-            </div>
-          </div>
+          <PasswordField
+            id="auth-password"
+            label="Password"
+            value={password}
+            onChange={setPassword}
+            Icon={LockIcon}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            minLength={1}
+            required
+            disabled={isSubmitting}
+          />
 
           <PrimaryButton
             type="submit"
@@ -244,61 +204,38 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
           onSubmit={handleNewPassword}
           id="auth-new-password-form"
         >
-          <div className={fieldCls}>
-            <label className={labelCls} htmlFor="auth-new-password">
-              Nuova Password
-            </label>
-            <div className={litInputWrapperCls}>
-              <LockIcon size={16} className={litIconCls} />
-              <input
-                type={showNewPassword ? 'text' : 'password'}
-                id="auth-new-password"
-                className={inputCls}
-                placeholder="Inserisci la nuova password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={PASSWORD_MIN_LENGTH}
-                autoComplete="new-password"
-                disabled={isSubmitting}
-              />
-              <PasswordToggle
-                visible={showNewPassword}
-                onToggle={() => setShowNewPassword((v) => !v)}
-                disabled={isSubmitting}
-                controls="auth-new-password"
-              />
-            </div>
-          </div>
+          <PasswordField
+            id="auth-new-password"
+            label="Nuova Password"
+            value={newPassword}
+            onChange={setNewPassword}
+            Icon={LockIcon}
+            placeholder="Inserisci la nuova password"
+            autoComplete="new-password"
+            minLength={PASSWORD_MIN_LENGTH}
+            required
+            disabled={isSubmitting}
+          />
 
-          <div className={fieldCls}>
-            <label className={labelCls} htmlFor="auth-confirm-new-password">
-              Conferma Nuova Password
-            </label>
-            <div className={litInputWrapperCls}>
-              <ShieldIcon size={16} className={litIconCls} />
-              <input
-                type={showConfirmNewPassword ? 'text' : 'password'}
-                id="auth-confirm-new-password"
-                className={inputCls}
-                placeholder="Conferma la nuova password"
-                value={confirmNewPassword}
-                onChange={(e) => setConfirmNewPassword(e.target.value)}
-                required
-                minLength={PASSWORD_MIN_LENGTH}
-                autoComplete="new-password"
-                disabled={isSubmitting}
-              />
-              <PasswordToggle
-                visible={showConfirmNewPassword}
-                onToggle={() => setShowConfirmNewPassword((v) => !v)}
-                disabled={isSubmitting}
-                controls="auth-confirm-new-password"
-              />
-            </div>
-          </div>
-
+          {/* I requisiti stanno sotto il campo che descrivono, non in fondo
+              al modulo: si leggono mentre si sceglie la password, che è
+              l'unico momento in cui servono. */}
           <PasswordRules password={newPassword} />
+
+          <PasswordField
+            id="auth-confirm-new-password"
+            label="Conferma Nuova Password"
+            value={confirmNewPassword}
+            onChange={setConfirmNewPassword}
+            onBlur={() => setConfirmTouched(true)}
+            Icon={ShieldIcon}
+            placeholder="Conferma la nuova password"
+            autoComplete="new-password"
+            minLength={PASSWORD_MIN_LENGTH}
+            required
+            disabled={isSubmitting}
+            error={passwordsMismatch ? 'Le password non coincidono.' : undefined}
+          />
 
           <PrimaryButton
             type="submit"

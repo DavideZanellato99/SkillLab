@@ -72,6 +72,20 @@ export function isStandardUser(user: AuthUser | null): boolean {
   return user?.ruolo === 'user'
 }
 
+/* L'account di sistema: la via di servizio che resta quando Cognito non
+ * risponde. Non ha una password su Cognito, quindi non la si cambia, e il suo
+ * ruolo e il suo stato non si toccano dall'anagrafica.
+ *
+ * Il `sub` è quello che riconosce il server (MOCK_ADMIN_SUB in
+ * backend/auth_dependency.py) e il confronto è esatto come là: è quell'unico
+ * account, non una famiglia di account, e un prefisso avrebbe spento i moduli
+ * a chiunque si fosse ritrovato un `sub` che comincia allo stesso modo. */
+export const SYSTEM_ACCOUNT_SUB = 'mock-admin-sub-0000-0000-0000'
+
+export function isSystemAccount(user: { cognito_sub: string }): boolean {
+  return user.cognito_sub === SYSTEM_ACCOUNT_SUB
+}
+
 /** Two-letter initials for an avatar badge (first name + last name); falls back to the email's first letter. */
 export function getInitials(nome: string, cognome: string, email: string): string {
   const initials = `${nome?.trim()?.[0] ?? ''}${cognome?.trim()?.[0] ?? ''}`.toUpperCase()

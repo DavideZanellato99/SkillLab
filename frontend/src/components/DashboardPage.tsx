@@ -40,6 +40,7 @@ import {
   personName,
   scoreTextColor,
 } from './scoreFormat'
+import { DownloadIcon } from './icons'
 
 /* Dashboard admin: grafici di riepilogo sui punteggi, globali o filtrati per
  * singolo utente tramite la ricerca in alto.
@@ -682,24 +683,7 @@ export default function DashboardPage() {
                           onClick={handleExportXlsx}
                           disabled={isExporting || rows.length === 0}
                         >
-                          {isExporting ? (
-                            <Spinner variant="small" />
-                          ) : (
-                            <svg
-                              width="15"
-                              height="15"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                              <polyline points="7 10 12 15 17 10" />
-                              <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                          )}
+                          {isExporting ? <Spinner variant="small" /> : <DownloadIcon size={15} />}
                           Esporta Excel
                         </button>
                       </Tooltip>

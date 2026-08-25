@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AdminUser } from '../../src/services/admin'
+import { SYSTEM_ACCOUNT_SUB } from '../../src/services/auth'
 import UserRow from '../../src/components/UserRow'
 
 /* Le protezioni della riga: il proprio account e quello di sistema non si
@@ -86,7 +87,7 @@ describe('UserRow', () => {
   })
 
   it("non lascia eliminare l'account di sistema", () => {
-    renderRow({ cognito_sub: 'mock-admin' })
+    renderRow({ cognito_sub: SYSTEM_ACCOUNT_SUB })
     expect(screen.getByRole('button', { name: /Elimina/ })).toBeDisabled()
   })
 

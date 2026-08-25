@@ -8,7 +8,7 @@
 
 import type { AdminUser } from '../services/admin'
 import type { UserStatus } from '../services/auth'
-import { getInitials, ROLE_BADGE_CLASSES, ROLE_LABELS } from '../services/auth'
+import { getInitials, isSystemAccount, ROLE_BADGE_CLASSES, ROLE_LABELS } from '../services/auth'
 import {
   disableIcon,
   NEVER_ACCESSED_BADGE_CLASSES,
@@ -47,11 +47,11 @@ export default function UserRow({
   onResend,
   onChangeStatus,
 }: UserRowProps) {
-  const isSystemAccount = user.cognito_sub.startsWith('mock-')
+  const systemAccount = isSystemAccount(user)
   /* Il proprio account e quello di sistema sono intoccabili: il primo
    * perché ci si taglierebbe fuori da soli, il secondo perché è la via di
    * servizio che resta quando tutto il resto non funziona. */
-  const isProtected = isSelf || isSystemAccount
+  const isProtected = isSelf || systemAccount
   const isActive = user.status === 'active'
 
   const statusBlockedReason = isSelf
@@ -60,7 +60,7 @@ export default function UserRow({
 
   const resendBlockedReason = isSelf
     ? 'Non puoi rinviare le credenziali del tuo stesso account'
-    : isSystemAccount
+    : systemAccount
       ? "Non è possibile rinviare le credenziali dell'account di sistema"
       : user.status === 'disabled'
         ? "L'account è disabilitato definitivamente"
@@ -165,7 +165,7 @@ export default function UserRow({
             tooltip={
               isSelf
                 ? 'Non puoi eliminare il tuo stesso account'
-                : isSystemAccount
+                : systemAccount
                   ? "Non è possibile eliminare l'account di sistema"
                   : 'Elimina Utente'
             }

@@ -9,6 +9,7 @@ import { useState } from 'react'
 
 import type { AdminUser } from '../services/admin'
 import type { RoleName } from '../services/auth'
+import { isSystemAccount } from '../services/auth'
 import { useUpdateUser } from '../hooks/useAdminUsers'
 import { ROLE_OPTIONS } from './adminUsersConfig'
 import Field, { fieldCls, labelCls, TextInput } from './Field'
@@ -43,7 +44,7 @@ export default function UserEditModal({
   const [organizationId, setOrganizationId] = useState(user.organization_id ?? '')
   const [validationError, setValidationError] = useState('')
 
-  const isSystemAccount = user.cognito_sub.startsWith('mock-')
+  const systemAccount = isSystemAccount(user)
   const isPending = updateMutation.isPending
   const error =
     validationError ||
@@ -55,7 +56,7 @@ export default function UserEditModal({
 
   const roleLockedReason = isSelf
     ? 'Non puoi modificare il ruolo del tuo stesso account.'
-    : isSystemAccount
+    : systemAccount
       ? "Il ruolo dell'account di sistema non è modificabile."
       : ''
 
@@ -148,7 +149,7 @@ export default function UserEditModal({
               value={organizationId}
               onChange={setOrganizationId}
               options={organizationOptions}
-              disabled={isPending || isSystemAccount}
+              disabled={isPending || systemAccount}
             />
           </div>
         )}

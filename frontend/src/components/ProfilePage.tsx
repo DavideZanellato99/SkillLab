@@ -1,4 +1,15 @@
-import { useState, type FormEvent } from 'react'
+/* La propria scheda: chi si è, la password, e la copia dei propri dati.
+ *
+ * Tre sezioni e tre gesti distinti, ognuno con il proprio modulo e il proprio
+ * banner: un solo messaggio in cima alla pagina non direbbe a quale dei tre
+ * si riferisce.
+ *
+ * Quasi tutti i campi qui sono in sola lettura, perché l'anagrafica la tiene
+ * l'amministrazione. Un campo spento senza una riga che dica perché è la cosa
+ * che fa tornare indietro chi è arrivato fin qui per correggere il proprio
+ * cognome, quindi ogni blocco porta la propria spiegazione. */
+
+import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { saveBlob } from '../services/api'
 import { fetchMyDataExport } from '../services/profile'
@@ -7,22 +18,26 @@ import {
   ROLE_LABELS,
   ROLE_BADGE_CLASSES,
   PASSWORD_MIN_LENGTH,
-  PASSWORD_RULES,
   getUnmetPasswordRules,
   getInitials,
   isSuperAdmin,
+  isSystemAccount,
 } from '../services/auth'
-import PasswordToggle from './PasswordToggle'
 import Spinner from './Spinner'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
+import Notice from './Notice'
 import { PageContainer, PageHeader } from './PageLayout'
 import Badge from './Badge'
-import Field, { fieldCls, labelCls, inputWrapperCls, inputCls, TextInput } from './Field'
+import Field, { TextInput } from './Field'
+import PasswordField from './PasswordField'
+import PasswordRules from './PasswordRules'
 import PrimaryButton from './PrimaryButton'
+import { DownloadIcon, LockIcon, MailIcon, ShieldIcon } from './icons'
 
 /* Shared form styles (same look as the other admin/auth forms) */
 const sectionCls = 'mb-8 rounded-3xl border border-white/6 bg-gray-900/60 p-8 max-[480px]:p-6'
+const hintCls = 'text-xs text-slate-500'
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth()
@@ -37,11 +52,12 @@ export default function ProfilePage() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  /* La conferma si giudica quando si è finito di scriverla: confrontarla a
+   * ogni tasto vorrebbe dire un "non coincidono" acceso per tutta la
+   * digitazione, cioè un rimprovero a chi sta facendo la cosa giusta. */
+  const [confirmTouched, setConfirmTouched] = useState(false)
   const [passwordValidationError, setPasswordValidationError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
 
   /* L'esportazione dei propri dati resta fuori dalle mutation: produce uno
    * ZIP da salvare su disco, non uno stato da tenere. */
@@ -63,18 +79,43 @@ export default function ProfilePage() {
 
   if (!user) return null
 
-  const isSystemAccount = user.cognito_sub.startsWith('mock-')
   /* L'anagrafica la tiene l'amministrazione, non l'interessato: chi si
    * allena e chi amministra un'organizzazione legge nome e cognome come
    * legge l'email, e per cambiarli passa da un amministratore. */
   const canEditName = isSuperAdmin(user)
   const isProfileDirty = nome.trim() !== user.nome || cognome.trim() !== user.cognome
+  const passwordsMismatch =
+    confirmTouched && confirmNewPassword !== '' && newPassword !== confirmNewPassword
+
+  /* Un esito parla del modulo com'era quando è comparso: appena si torna a
+   * scriverci dentro non descrive più quello che c'è a schermo, quindi se ne
+   * va. La mutation si azzera solo se ha davvero un errore da dimenticare,
+   * altrimenti sarebbe un ridisegno a ogni tasto premuto. */
+  const clearProfileFeedback = () => {
+    setProfileSuccess('')
+    setProfileValidationError('')
+    if (profileMutation.error) profileMutation.reset()
+  }
+
+  const clearPasswordFeedback = () => {
+    setPasswordSuccess('')
+    setPasswordValidationError('')
+    if (passwordMutation.error) passwordMutation.reset()
+  }
+
+  const editProfileField = (set: (value: string) => void) => (e: ChangeEvent<HTMLInputElement>) => {
+    set(e.target.value)
+    clearProfileFeedback()
+  }
+
+  const editPasswordField = (set: (value: string) => void) => (value: string) => {
+    set(value)
+    clearPasswordFeedback()
+  }
 
   const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault()
-    setProfileValidationError('')
-    setProfileSuccess('')
-    profileMutation.reset()
+    clearProfileFeedback()
 
     const trimmedNome = nome.trim()
     const trimmedCognome = cognome.trim()
@@ -117,12 +158,12 @@ export default function ProfilePage() {
 
   const handleChangePassword = async (e: FormEvent) => {
     e.preventDefault()
-    setPasswordValidationError('')
-    setPasswordSuccess('')
-    passwordMutation.reset()
+    clearPasswordFeedback()
 
+    /* Le due password diverse le dice il campo, non il banner in cima: chi
+     * ha premuto sta guardando i campi, ed è lì che c'è da rimettere mano. */
     if (newPassword !== confirmNewPassword) {
-      setPasswordValidationError('Le nuove password non coincidono.')
+      setConfirmTouched(true)
       return
     }
 
@@ -143,9 +184,7 @@ export default function ProfilePage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmNewPassword('')
-      setShowCurrentPassword(false)
-      setShowNewPassword(false)
-      setShowConfirmNewPassword(false)
+      setConfirmTouched(false)
     } catch {
       // Il messaggio è nella mutation, il banner lo mostra
     }
@@ -182,35 +221,24 @@ export default function ProfilePage() {
         {profileError && <FormError message={profileError} />}
 
         <form className="flex flex-col gap-4" onSubmit={handleSaveProfile}>
-          <div className={fieldCls}>
-            <label className={labelCls} htmlFor="profile-email">
-              Email
-            </label>
-            <div className={inputWrapperCls}>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="shrink-0 text-slate-500"
-              >
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-              </svg>
-              <input
-                type="email"
-                id="profile-email"
-                className={inputCls}
-                value={user.email}
-                readOnly
-                disabled
-              />
-            </div>
-          </div>
+          <Field
+            label="Email"
+            htmlFor="profile-email"
+            hint={
+              <p className={hintCls}>
+                L'indirizzo identifica il tuo account e non si modifica da qui.
+              </p>
+            }
+          >
+            <TextInput
+              type="email"
+              id="profile-email"
+              value={user.email}
+              icon={<MailIcon size={16} className="shrink-0 text-slate-500" />}
+              readOnly
+              disabled
+            />
+          </Field>
 
           <div className="grid grid-cols-2 gap-3 max-[480px]:grid-cols-1">
             <Field label="Nome" htmlFor="profile-nome">
@@ -219,7 +247,7 @@ export default function ProfilePage() {
                 id="profile-nome"
                 placeholder={canEditName ? 'Mario' : undefined}
                 value={nome}
-                onChange={(e) => setNome(e.target.value)}
+                onChange={editProfileField(setNome)}
                 required={canEditName}
                 readOnly={!canEditName}
                 disabled={!canEditName || profileMutation.isPending}
@@ -232,7 +260,7 @@ export default function ProfilePage() {
                 id="profile-cognome"
                 placeholder={canEditName ? 'Rossi' : undefined}
                 value={cognome}
-                onChange={(e) => setCognome(e.target.value)}
+                onChange={editProfileField(setCognome)}
                 required={canEditName}
                 readOnly={!canEditName}
                 disabled={!canEditName || profileMutation.isPending}
@@ -240,7 +268,7 @@ export default function ProfilePage() {
             </Field>
           </div>
 
-          {canEditName && (
+          {canEditName ? (
             <PrimaryButton
               type="submit"
               variant="submit"
@@ -256,6 +284,15 @@ export default function ProfilePage() {
                 'Salva Modifiche'
               )}
             </PrimaryButton>
+          ) : (
+            /* Chi legge i due campi spenti ha diritto di sapere perché, e
+               soprattutto a chi rivolgersi: senza questa riga la strada per
+               correggere un cognome sbagliato non è scritta da nessuna
+               parte. */
+            <p className={hintCls}>
+              Nome e cognome sono registrati dalla tua organizzazione. Per correggerli, rivolgiti a
+              un amministratore.
+            </p>
           )}
         </form>
       </section>
@@ -269,7 +306,7 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        {isSystemAccount ? (
+        {isSystemAccount(user) ? (
           <p className="text-[0.85rem] text-slate-500">
             Non è possibile cambiare la password dell'account di sistema.
           </p>
@@ -279,141 +316,50 @@ export default function ProfilePage() {
             {passwordError && <FormError message={passwordError} />}
 
             <form className="flex flex-col gap-4" onSubmit={handleChangePassword}>
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="profile-current-password">
-                  Password Attuale
-                </label>
-                <div className={inputWrapperCls}>
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="shrink-0 text-slate-500"
-                  >
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <input
-                    type={showCurrentPassword ? 'text' : 'password'}
-                    id="profile-current-password"
-                    className={inputCls}
-                    placeholder="••••••••"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                    disabled={passwordMutation.isPending}
-                  />
-                  <PasswordToggle
-                    visible={showCurrentPassword}
-                    onToggle={() => setShowCurrentPassword((v) => !v)}
-                    disabled={passwordMutation.isPending}
-                    controls="profile-current-password"
-                  />
-                </div>
-              </div>
+              <PasswordField
+                id="profile-current-password"
+                label="Password Attuale"
+                value={currentPassword}
+                onChange={editPasswordField(setCurrentPassword)}
+                Icon={LockIcon}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+                disabled={passwordMutation.isPending}
+              />
 
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="profile-new-password">
-                  Nuova Password
-                </label>
-                <div className={inputWrapperCls}>
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="shrink-0 text-slate-500"
-                  >
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    id="profile-new-password"
-                    className={inputCls}
-                    placeholder="Inserisci la nuova password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={PASSWORD_MIN_LENGTH}
-                    autoComplete="new-password"
-                    disabled={passwordMutation.isPending}
-                  />
-                  <PasswordToggle
-                    visible={showNewPassword}
-                    onToggle={() => setShowNewPassword((v) => !v)}
-                    disabled={passwordMutation.isPending}
-                    controls="profile-new-password"
-                  />
-                </div>
-              </div>
+              <PasswordField
+                id="profile-new-password"
+                label="Nuova Password"
+                value={newPassword}
+                onChange={editPasswordField(setNewPassword)}
+                Icon={LockIcon}
+                placeholder="Inserisci la nuova password"
+                autoComplete="new-password"
+                minLength={PASSWORD_MIN_LENGTH}
+                required
+                disabled={passwordMutation.isPending}
+              />
 
-              <div className={fieldCls}>
-                <label className={labelCls} htmlFor="profile-confirm-new-password">
-                  Conferma Nuova Password
-                </label>
-                <div className={inputWrapperCls}>
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="shrink-0 text-slate-500"
-                  >
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
-                  <input
-                    type={showConfirmNewPassword ? 'text' : 'password'}
-                    id="profile-confirm-new-password"
-                    className={inputCls}
-                    placeholder="Conferma la nuova password"
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    required
-                    minLength={PASSWORD_MIN_LENGTH}
-                    autoComplete="new-password"
-                    disabled={passwordMutation.isPending}
-                  />
-                  <PasswordToggle
-                    visible={showConfirmNewPassword}
-                    onToggle={() => setShowConfirmNewPassword((v) => !v)}
-                    disabled={passwordMutation.isPending}
-                    controls="profile-confirm-new-password"
-                  />
-                </div>
-              </div>
+              {/* I requisiti stanno sotto il campo che descrivono, non in
+                  fondo al modulo: si leggono mentre si sceglie la password,
+                  che è l'unico momento in cui servono. */}
+              <PasswordRules password={newPassword} />
 
-              <div className="rounded-xl border border-white/6 bg-white/3 px-4 py-2">
-                <p className="mb-1 text-xs font-semibold text-slate-400">Requisiti password:</p>
-                <ul className="flex list-none flex-col gap-1">
-                  {PASSWORD_RULES.map((rule) => {
-                    const met = rule.test(newPassword)
-                    return (
-                      <li
-                        key={rule.label}
-                        className={`text-xs transition-colors ${met ? 'text-emerald-500' : 'text-slate-500'}`}
-                      >
-                        <span className="mr-2">{met ? '●' : '○'}</span>
-                        {rule.label}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
+              <PasswordField
+                id="profile-confirm-new-password"
+                label="Conferma Nuova Password"
+                value={confirmNewPassword}
+                onChange={editPasswordField(setConfirmNewPassword)}
+                onBlur={() => setConfirmTouched(true)}
+                Icon={ShieldIcon}
+                placeholder="Conferma la nuova password"
+                autoComplete="new-password"
+                minLength={PASSWORD_MIN_LENGTH}
+                required
+                disabled={passwordMutation.isPending}
+                error={passwordsMismatch ? 'Le nuove password non coincidono.' : undefined}
+              />
 
               <PrimaryButton
                 type="submit"
@@ -435,10 +381,10 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* I miei dati personali */}
+      {/* La copia dei propri dati */}
       <section className={sectionCls}>
         <div className="mb-6">
-          <h2 className="font-heading text-lg font-bold text-slate-100">I Miei Dati Personali</h2>
+          <h2 className="font-heading text-lg font-bold text-slate-100">Copia dei Miei Dati</h2>
           <p className="text-[0.85rem] text-slate-500">
             Scarica una copia di tutti i dati che la piattaforma conserva sul tuo conto.
           </p>
@@ -468,25 +414,20 @@ export default function ProfilePage() {
             </>
           ) : (
             <>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="shrink-0"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
+              <DownloadIcon size={16} className="shrink-0" />
               Scarica i Miei Dati
             </>
           )}
         </PrimaryButton>
+
+        {/* L'attesa può durare, e lo spinner dentro il bottone lo vede solo
+            chi ha il bottone davanti: questa riga resta leggibile anche a chi
+            nel frattempo ha scorso la pagina. */}
+        {isExporting && (
+          <Notice className="mt-4">
+            L'archivio si sta preparando, il download parte da solo appena è pronto
+          </Notice>
+        )}
       </section>
     </PageContainer>
   )

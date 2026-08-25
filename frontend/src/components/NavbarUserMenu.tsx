@@ -93,9 +93,14 @@ export default function NavbarUserMenu({ user, isOpen, onToggle, onClose }: Navb
 
             {/* Un separatore per gruppo, e nessun gruppo vuoto: chi non
                 amministra vede la propria scheda e l'uscita, senza righe
-                grigie a segnare dei vuoti. */}
-            {groups.map((group, index) => (
-              <div key={index}>
+                grigie a segnare dei vuoti.
+
+                La chiave è la prima voce del gruppo, non la sua posizione:
+                i gruppi compaiono e spariscono con il ruolo, e con l'indice
+                React riuserebbe il riquadro di quello sparito per il gruppo
+                che ne prende il posto. */}
+            {groups.map((group) => (
+              <div key={group[0].to}>
                 <div className={separatorCls} />
                 {group.map((entry) => {
                   const isActive = entry.isActive(pathname)

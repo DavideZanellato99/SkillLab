@@ -137,7 +137,10 @@ registrato da chi ha creato l'account, e cambiarlo passa da
 `PUT /api/admin/users/{id}` come già succede per l'email e per il ruolo. La
 pagina Profilo mostra i due campi in sola lettura e non offre il salvataggio,
 mentre `PUT /api/auth/me` risponde 403 a chi non è super admin: è quest'ultimo
-il controllo che conta, il modulo spento è solo il modo di dirlo prima.
+il controllo che conta, il modulo spento è solo il modo di dirlo prima. Al
+posto del salvataggio la pagina scrive a chi rivolgersi per far correggere il
+proprio nome: due campi spenti senza quella riga mandano via chi era arrivato
+lì apposta.
 
 La cancellazione di una persona è il diritto all'oblio, ed è descritta in
 [sicurezza-e-privacy.md](sicurezza-e-privacy.md): cosa sparisce, cosa resta di

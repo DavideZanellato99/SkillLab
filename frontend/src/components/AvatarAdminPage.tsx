@@ -17,6 +17,7 @@ import { useFlashMessage } from '../hooks/useFlashMessage'
 import { useOrganizations } from '../hooks/useOrganizations'
 import type { AdminAvatar } from '../services/admin'
 import { isSuperAdmin } from '../services/auth'
+import { errorMessage } from '../services/errors'
 import AvatarCategoriesModal from './AvatarCategoriesModal'
 import AvatarDetailModal from './AvatarDetailModal'
 import AvatarFormModal from './AvatarFormModal'
@@ -52,9 +53,6 @@ const STATUS_OPTIONS = [
   { value: STATUS_ARCHIVED, label: 'Archiviati' },
   { value: '', label: 'Tutti' },
 ]
-
-const errorOf = (error: unknown, fallback: string) =>
-  error ? (error instanceof Error ? error.message : fallback) : ''
 
 export default function AvatarAdminPage() {
   const { user } = useAuth()
@@ -206,7 +204,9 @@ export default function AvatarAdminPage() {
       </div>
 
       {successMsg && <FormSuccess message={successMsg} variant="page" />}
-      {loadError && <FormError message={errorOf(loadError, 'Impossibile caricare gli avatar.')} />}
+      {loadError && (
+        <FormError message={errorMessage(loadError, 'Impossibile caricare gli avatar.')} />
+      )}
 
       {isLoading ? (
         <LoadingState message="Caricamento avatar..." />
@@ -298,7 +298,7 @@ export default function AvatarAdminPage() {
               </span>
             </>
           }
-          error={errorOf(deleteMutation.error, "Errore durante l'archiviazione.") || undefined}
+          error={errorMessage(deleteMutation.error, "Errore durante l'archiviazione.") || undefined}
           confirmLabel="Elimina Avatar"
           pendingLabel="Eliminazione..."
           confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"

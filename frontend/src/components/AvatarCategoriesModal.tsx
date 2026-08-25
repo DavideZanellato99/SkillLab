@@ -20,6 +20,7 @@ import {
   useDeleteAvatarCategory,
 } from '../hooks/useAvatarCategories'
 import { useOrganizations } from '../hooks/useOrganizations'
+import { errorMessage } from '../services/errors'
 import ModalShell, { ModalHeader } from './ModalShell'
 import Select from './Select'
 import Badge from './Badge'
@@ -78,16 +79,13 @@ export default function AvatarCategoriesModal({
   const isSaving = createMutation.isPending || updateMutation.isPending
   const isBusy = isSaving || deleteMutation.isPending
 
-  const errorOf = (error: unknown, fallback: string) =>
-    error ? (error instanceof Error ? error.message : fallback) : ''
-
   /* Il banner è uno solo, quindi mostra il primo problema: quello del form,
    * poi quello dell'ultima scrittura. Il rifiuto di una cancellazione (la
    * categoria è ancora in uso) arriva da qui. */
   const error =
     validationError ||
-    errorOf(createMutation.error ?? updateMutation.error, 'Errore durante il salvataggio.') ||
-    errorOf(deleteMutation.error, "Errore durante l'eliminazione.")
+    errorMessage(createMutation.error ?? updateMutation.error, 'Errore durante il salvataggio.') ||
+    errorMessage(deleteMutation.error, "Errore durante l'eliminazione.")
 
   const resetErrors = () => {
     setValidationError('')

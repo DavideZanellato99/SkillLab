@@ -26,10 +26,22 @@ export interface PaginationBarProps {
 }
 
 /** Divide una lista in pagine: `visible` sono gli elementi da mostrare, `bar`
- * è quello che serve alla barra e si passa con lo spread. */
-export function usePagination<T>(items: T[]): { visible: T[]; bar: PaginationBarProps } {
+ * è quello che serve alla barra e si passa con lo spread.
+ *
+ * `resetKey` è cosa rende l'elenco un elenco diverso, per chi ne ha uno: i
+ * filtri di una tabella, di solito. Quando cambia si torna a pagina uno,
+ * perché restare alla terza pagina di una domanda a cui si è appena smesso di
+ * rispondere non vuol dire niente. */
+export function usePagination<T>(
+  items: T[],
+  resetKey?: unknown,
+): { visible: T[]; bar: PaginationBarProps } {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
+
+  useEffect(() => {
+    setPage(1)
+  }, [resetKey])
 
   const total = items.length
   const totalPages = Math.max(1, Math.ceil(total / pageSize))

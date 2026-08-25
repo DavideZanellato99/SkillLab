@@ -1,6 +1,10 @@
 /* L'utente in sola lettura, aperto dal clic sulla riga: tutto quello che
  * l'account porta con sé, comprese le due date che si somigliano e non sono
- * la stessa cosa (vedi sotto). La matita resta l'unica strada per cambiarlo. */
+ * la stessa cosa (vedi sotto).
+ *
+ * In fondo c'è la strada per modificarlo: si guarda una scheda per decidere
+ * se cambiare qualcosa, e senza quel bottone bisognava chiudere, ritrovare la
+ * riga nella tabella e cercarle la matita. */
 
 import type { AdminUser } from '../services/admin'
 import { getInitials, ROLE_BADGE_CLASSES, ROLE_LABELS } from '../services/auth'
@@ -12,7 +16,9 @@ import {
 import AuthorshipFields from './AuthorshipFields'
 import Badge from './Badge'
 import DetailModal, { DetailField } from './DetailModal'
+import { PencilIcon } from './icons'
 import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
+import PrimaryButton from './PrimaryButton'
 
 /** Data e ora estese, con quanto tempo fa è stata: "il 3 marzo (2 giorni fa)". */
 const withRelative = (iso: string) => `${formatDateTime(iso)} (${formatRelativeDay(iso)})`
@@ -20,13 +26,21 @@ const withRelative = (iso: string) => `${formatDateTime(iso)} (${formatRelativeD
 export default function UserDetailModal({
   user,
   onClose,
+  onEdit,
 }: {
   user: AdminUser
   onClose: () => void
+  /** Passa alla modifica di questo account, chiudendo la scheda. */
+  onEdit: () => void
 }) {
   return (
     <DetailModal
       onClose={onClose}
+      footer={
+        <PrimaryButton variant="submit" icon={<PencilIcon size={16} />} onClick={onEdit}>
+          Modifica Utente
+        </PrimaryButton>
+      }
       title={user.nome && user.cognome ? `${user.nome} ${user.cognome}` : user.email}
       subtitle={user.email}
       header={

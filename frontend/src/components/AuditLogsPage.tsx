@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import type { AuditLog } from '../services/auditLogs'
 import { useAuditLogs, useAuditActions, AUDIT_WINDOW_SIZE } from '../hooks/useAuditLogs'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useOrganizations } from '../hooks/useOrganizations'
 import { isSuperAdmin, ROLE_BADGE_CLASSES, ROLE_LABELS } from '../services/auth'
 import DataTable, { Td, Tr } from './DataTable'
@@ -77,13 +78,8 @@ export default function AuditLogsPage() {
   const [search, setSearch] = useState('')
   // La ricerca interroga il server, non solo le righe già caricate: senza
   // il rinvio partirebbe una richiesta per ogni tasto premuto.
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 400)
-    return () => clearTimeout(timer)
-  }, [search])
 
   /* I filtri fanno parte della chiave di cache: cambiarne uno è una domanda
    * diversa, quindi la finestra riparte da capo invece di sovrascrivere le

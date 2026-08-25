@@ -158,6 +158,10 @@ export default function Select({
       case 'Escape':
         if (isOpen) {
           e.preventDefault()
+          /* Esc chiude la tendina e si ferma qui: dentro una modale
+             risalirebbe fino alla scatola, che chiuderebbe la finestra
+             intera mentre si stava solo rinunciando a una scelta. */
+          e.stopPropagation()
           setIsOpen(false)
         }
         break

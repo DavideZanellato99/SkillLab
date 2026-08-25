@@ -65,7 +65,14 @@ export default function PathDraftModal({
   }
 
   return (
-    <ModalShell onClose={onClose} locked={isPending} size="md" padding="md" elevated>
+    <ModalShell
+      onClose={onClose}
+      locked={isPending}
+      size="md"
+      padding="md"
+      elevated
+      label="Proponi un Percorso"
+    >
       <div className="mb-6">
         <h2 className="mb-1 font-heading text-[1.2rem] font-bold text-slate-100">
           Proponi un Percorso

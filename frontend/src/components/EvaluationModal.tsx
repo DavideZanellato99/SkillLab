@@ -90,6 +90,7 @@ export default function EvaluationModal({
       size="lg"
       padding="md"
       closeLabel="Chiudi valutazione"
+      label="Valutazione della Chiamata"
     >
       <div className="mb-6 text-center">
         <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">

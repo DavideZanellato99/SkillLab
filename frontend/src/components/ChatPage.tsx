@@ -169,15 +169,10 @@ export default function ChatPage() {
     setConversationSearch('')
   }, [])
 
-  // Esc chiude il pannello, a meno che dentro non si stia scrivendo un titolo
-  useEffect(() => {
-    if (!conversationsExpanded) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !rename.renamingId) closeConversationsPanel()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [conversationsExpanded, rename.renamingId, closeConversationsPanel])
+  /* Esc chiude il pannello, ma non lo ascolta più questa pagina: il pannello
+     è una modale, e la scatola delle modali chiude con Esc tutto quello che
+     apre. Il caso da salvare, Esc mentre si sta riscrivendo un titolo, lo
+     tiene il campo stesso, che ferma il tasto prima che arrivi lì. */
 
   const handleDeleteConversation = useCallback(
     (conversationId: string, e: React.MouseEvent) => {

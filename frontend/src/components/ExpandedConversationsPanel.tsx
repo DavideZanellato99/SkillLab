@@ -57,7 +57,14 @@ export default function ExpandedConversationsPanel({
   onClose,
 }: ExpandedConversationsPanelProps) {
   return (
-    <ModalShell onClose={onClose} size="xl" padding="none" layout="tall" hideClose>
+    <ModalShell
+      onClose={onClose}
+      size="xl"
+      padding="none"
+      layout="tall"
+      hideClose
+      label={`Conversazioni con ${avatarName}`}
+    >
       {/* Panel header */}
       <div className="flex items-center gap-4 border-b border-white/6 px-8 py-6 max-[480px]:px-5 max-[480px]:py-4">
         <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/6">
@@ -135,6 +142,9 @@ export default function ExpandedConversationsPanel({
                             onCommitRename(conv)
                           } else if (e.key === 'Escape') {
                             e.preventDefault()
+                            // Esc qui rinuncia al titolo, non chiude il
+                            // pannello: si ferma prima di arrivargli.
+                            e.stopPropagation()
                             onCancelRename()
                           }
                         }}

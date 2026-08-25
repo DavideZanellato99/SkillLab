@@ -101,7 +101,13 @@ export default function UserRow({
   const fullName = user.nome && user.cognome ? `${user.nome} ${user.cognome}` : '—'
 
   return (
-    <Tr className={`cursor-pointer ${isActive ? '' : 'opacity-60'}`} onClick={() => onView(user)}>
+    /* `onActivate` e non un `onClick`: la riga si apre anche da tastiera, col
+       fuoco e con Invio, come le righe delle altre tabelle dell'app.
+
+       Niente velatura sugli account non attivi: lo stato è già scritto nella
+       sua colonna, e attenuare tutta la riga portava l'email, che è grigia di
+       suo, sotto la soglia in cui si legge. */
+    <Tr onActivate={() => onView(user)}>
       {/* L'unica colonna dell'app allineata a sinistra: l'intestazione resta
           al centro come tutte, ma qui sotto ci sono un'iniziale, un nome e
           un'email, e incolonnati a sinistra si scorrono con l'occhio invece

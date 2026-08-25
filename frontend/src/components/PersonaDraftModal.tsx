@@ -80,7 +80,14 @@ export default function PersonaDraftModal({ onClose, onDrafted }: Props) {
   }
 
   return (
-    <ModalShell onClose={onClose} locked={isPending} size="md" padding="md" elevated>
+    <ModalShell
+      onClose={onClose}
+      locked={isPending}
+      size="md"
+      padding="md"
+      elevated
+      label="Genera la Scheda"
+    >
       <div className="mb-6">
         <h2 className="mb-1 font-heading text-[1.2rem] font-bold text-slate-100">
           Genera la Scheda

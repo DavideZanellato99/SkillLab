@@ -150,6 +150,9 @@ export default function KebabMenu({ items, label, buttonClassName = kebabBtnCls 
       case 'Escape':
         if (isOpen) {
           e.preventDefault()
+          // Si ferma qui: il menu si apre anche da dentro una modale, e
+          // chiudendolo non si sta chiedendo di chiudere anche quella.
+          e.stopPropagation()
           close(true)
         }
         break

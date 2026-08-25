@@ -10,6 +10,7 @@ import { useState } from 'react'
 import type { AdminUser } from '../services/admin'
 import type { RoleName } from '../services/auth'
 import { isSystemAccount } from '../services/auth'
+import { errorMessage } from '../services/errors'
 import { useUpdateUser } from '../hooks/useAdminUsers'
 import { ROLE_OPTIONS } from './adminUsersConfig'
 import Field, { fieldCls, labelCls, TextInput } from './Field'
@@ -48,11 +49,17 @@ export default function UserEditModal({
   const isPending = updateMutation.isPending
   const error =
     validationError ||
-    (updateMutation.error instanceof Error
-      ? updateMutation.error.message
-      : updateMutation.error
-        ? "Errore durante l'aggiornamento dell'utente."
-        : '')
+    errorMessage(updateMutation.error, "Errore durante l'aggiornamento dell'utente.")
+
+  /* Una scheda intatta non si salva: la richiesta partirebbe lo stesso, e
+   * scriverebbe chi ha toccato l'account e quando, lasciando nel registro
+   * attività la traccia di una modifica che non c'è stata. Gli spazi ai bordi
+   * non contano, perché il server li toglie comunque. */
+  const isUnchanged =
+    nome.trim() === user.nome &&
+    cognome.trim() === user.cognome &&
+    ruolo === user.ruolo &&
+    organizationId === (user.organization_id ?? '')
 
   const roleLockedReason = isSelf
     ? 'Non puoi modificare il ruolo del tuo stesso account.'
@@ -154,7 +161,12 @@ export default function UserEditModal({
           </div>
         )}
 
-        <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isPending}>
+        <PrimaryButton
+          type="submit"
+          variant="submit"
+          className="mt-4"
+          disabled={isPending || isUnchanged}
+        >
           {isPending ? (
             <>
               <Spinner variant="button" />
@@ -164,6 +176,14 @@ export default function UserEditModal({
             'Salva Modifiche'
           )}
         </PrimaryButton>
+        {/* Il motivo per cui il bottone è spento, come per il ruolo bloccato
+            qui sopra: un controllo disabilitato senza spiegazione sembra un
+            guasto. */}
+        {isUnchanged && (
+          <p className="text-center text-[0.7rem] text-slate-500">
+            Cambia un campo per abilitare il salvataggio.
+          </p>
+        )}
       </form>
     </ModalShell>
   )

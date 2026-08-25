@@ -4,6 +4,7 @@ import {
   useSaveMessageAnnotation,
   useDeleteMessageAnnotation,
 } from '../hooks/useConversationReview'
+import { errorMessage } from '../services/errors'
 import Tooltip from './Tooltip'
 import { PlusIcon } from './icons'
 
@@ -37,12 +38,10 @@ export default function MessageAnnotationEditor({
   const saveMutation = useSaveMessageAnnotation(conversationId)
   const deleteMutation = useDeleteMessageAnnotation()
   const isSaving = saveMutation.isPending || deleteMutation.isPending
-  const errorOf = (err: unknown, fallback: string) =>
-    err ? (err instanceof Error ? err.message : fallback) : ''
   const error =
     validationMessage ||
-    errorOf(saveMutation.error, 'Salvataggio non riuscito.') ||
-    errorOf(deleteMutation.error, 'Eliminazione non riuscita.')
+    errorMessage(saveMutation.error, 'Salvataggio non riuscito.') ||
+    errorMessage(deleteMutation.error, 'Eliminazione non riuscita.')
 
   const handleSave = async () => {
     const trimmed = note.trim()

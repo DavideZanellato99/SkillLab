@@ -13,13 +13,14 @@ import type { UsersFiltersValue } from '../../src/components/UsersFilters'
 const empty: UsersFiltersValue = { organizationId: '', ruolo: '', status: '', access: '' }
 const organizationOptions = [{ value: 'org-1', label: 'Banca Esempio' }]
 
-function renderFilters(value: UsersFiltersValue = empty) {
+function renderFilters(value: UsersFiltersValue = empty, isSearching = false) {
   const onChange = vi.fn()
   const onReset = vi.fn()
   render(
     <UsersFilters
       value={value}
       organizationOptions={organizationOptions}
+      isSearching={isSearching}
       onChange={onChange}
       onReset={onReset}
     />,
@@ -52,5 +53,13 @@ describe('UsersFilters', () => {
     const { onReset } = renderFilters({ ...empty, status: 'suspended' })
     await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
     expect(onReset).toHaveBeenCalledOnce()
+  })
+
+  /* La casella di ricerca sta nella tabella, ma è un filtro come gli altri:
+   * se azzerare non la comprendesse, si premerebbe «Azzera Filtri» per
+   * ritrovarsi davanti un elenco ancora filtrato. */
+  it('si offre di azzerare anche quando a filtrare è solo la ricerca', () => {
+    renderFilters(empty, true)
+    expect(screen.getByRole('button', { name: 'Azzera Filtri' })).toBeInTheDocument()
   })
 })

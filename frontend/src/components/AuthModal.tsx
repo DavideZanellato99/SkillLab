@@ -144,7 +144,10 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <ModalShell onClose={onClose}>
+    <ModalShell
+      onClose={onClose}
+      label={step === 'login' ? 'Accedi a SkillLab' : 'Imposta una nuova password'}
+    >
       <AuthHeader step={step} />
 
       {errorMessage && <FormError message={errorMessage} />}

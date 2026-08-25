@@ -2,7 +2,12 @@
  * accesso, più il pulsante che li azzera tutti.
  *
  * I filtri girano sul server, quindi coprono l'intero elenco e non solo la
- * finestra già caricata: qui è solo il pannello che li sceglie. */
+ * finestra già caricata: qui è solo il pannello che li sceglie.
+ *
+ * Anche la ricerca è un filtro, benché la casella stia dentro la tabella:
+ * «Azzera Filtri» riporta l'elenco completo, quindi comprende pure quella e
+ * compare anche quando è l'unica cosa attiva. Restringere il pulsante alle
+ * sole tendine voleva dire azzerare e vedere ancora un elenco filtrato. */
 
 import type { UserStatus } from '../services/auth'
 import { ROLE_OPTIONS, STATUS_LABELS } from './adminUsersConfig'
@@ -33,6 +38,8 @@ export interface UsersFiltersValue {
 interface UsersFiltersProps {
   value: UsersFiltersValue
   organizationOptions: { value: string; label: string }[]
+  /** Se c'è una ricerca in corso nella casella della tabella. */
+  isSearching: boolean
   onChange: (patch: Partial<UsersFiltersValue>) => void
   onReset: () => void
 }
@@ -40,12 +47,13 @@ interface UsersFiltersProps {
 export default function UsersFilters({
   value,
   organizationOptions,
+  isSearching,
   onChange,
   onReset,
 }: UsersFiltersProps) {
-  // La ricerca testuale non conta: vive dentro la tabella e ha già il suo
-  // modo di essere svuotata.
-  const hasFilters = Boolean(value.organizationId || value.ruolo || value.status || value.access)
+  const hasFilters = Boolean(
+    value.organizationId || value.ruolo || value.status || value.access || isSearching,
+  )
 
   return (
     <div className="mb-8 flex flex-wrap items-end gap-4">

@@ -5,7 +5,7 @@
  * restano l'elenco, le scritture che agiscono su una riga sola (eliminazione,
  * rinvio credenziali, cambio di stato) e le conferme che le precedono. */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
 import {
@@ -16,11 +16,13 @@ import {
   USERS_WINDOW_SIZE,
 } from '../hooks/useAdminUsers'
 import { useAuth } from '../hooks/useAuth'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useFlashMessage } from '../hooks/useFlashMessage'
 import { useOrganizations } from '../hooks/useOrganizations'
 import type { AdminUser } from '../services/admin'
 import type { RoleName, UserStatus } from '../services/auth'
 import { isSuperAdmin } from '../services/auth'
+import { errorMessage } from '../services/errors'
 import { STATUS_ACTIONS, USER_COLUMNS } from './adminUsersConfig'
 import ConfirmModal from './ConfirmModal'
 import DataTable from './DataTable'
@@ -40,9 +42,8 @@ import { ResendIcon, TrashIcon, UserPlusIcon } from './icons'
 
 const NO_FILTERS: UsersFiltersValue = { organizationId: '', ruolo: '', status: '', access: '' }
 
-/** Messaggio di una scrittura fallita, con il testo di ripiego che le spetta. */
-const errorOf = (error: unknown, fallback: string) =>
-  error ? (error instanceof Error ? error.message : fallback) : ''
+const loadMoreBtnCls =
+  'flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-60'
 
 export default function AdminPage() {
   const { user } = useAuth()
@@ -74,22 +75,27 @@ export default function AdminPage() {
     [setSearchParams],
   )
 
-  const resetFilters = useCallback(() => changeFilters(NO_FILTERS), [changeFilters])
-
-  // La ricerca sta nella tabella, ma il server la applica a tutto l'elenco:
-  // aspetta che si smetta di scrivere per non chiedere una pagina per tasto.
+  /* La ricerca sta nella tabella, ma il server la applica a tutto l'elenco:
+   * aspetta che si smetta di scrivere per non chiedere una pagina per tasto. */
   const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 400)
-    return () => clearTimeout(timer)
-  }, [search])
+  const debouncedSearch = useDebouncedValue(search)
+
+  /* Azzerare comprende la ricerca: è un filtro anche lei, e lasciarla scritta
+   * voleva dire premere «Azzera Filtri» e continuare a vedere un elenco
+   * filtrato. */
+  const resetFilters = useCallback(() => {
+    setSearch('')
+    changeFilters(NO_FILTERS)
+  }, [changeFilters])
 
   const hasFilters = Boolean(
     search || filters.organizationId || filters.ruolo || filters.status || filters.access,
   )
 
-  const organizationOptions = organizations.map((o) => ({ value: o.id, label: o.name }))
+  const organizationOptions = useMemo(
+    () => organizations.map((o) => ({ value: o.id, label: o.name })),
+    [organizations],
+  )
 
   /* La finestra di utenti: i filtri stanno nella chiave, quindi cambiarne uno
    * riparte da capo, mentre "carica altri" aggiunge una pagina a quelle già
@@ -99,6 +105,7 @@ export default function AdminPage() {
     users,
     total,
     isPending: isLoading,
+    isPlaceholderData: isStale,
     error: loadError,
     hasNextPage,
     fetchNextPage,
@@ -183,6 +190,7 @@ export default function AdminPage() {
       <UsersFilters
         value={filters}
         organizationOptions={organizationOptions}
+        isSearching={Boolean(search)}
         onChange={changeFilters}
         onReset={resetFilters}
       />
@@ -190,7 +198,7 @@ export default function AdminPage() {
       {successMsg && <FormSuccess message={successMsg} variant="page" />}
       {loadError && (
         <FormError
-          message={errorOf(loadError, 'Impossibile caricare gli utenti.')}
+          message={errorMessage(loadError, 'Impossibile caricare gli utenti.')}
           variant="page"
         />
       )}
@@ -198,15 +206,50 @@ export default function AdminPage() {
       {isLoading ? (
         <LoadingState message="Caricamento utenti del sistema..." />
       ) : (
-        <>
+        /* Mentre arriva la risposta a un filtro nuovo restano a video le righe
+           di prima, attenuate: sono ancora quelle vecchie, e `aria-busy` lo
+           dice a chi la pagina non la guarda. Sostituirle con il riquadro di
+           caricamento faceva sparire la tabella e saltare la pagina a ogni
+           tasto premuto nella ricerca. */
+        <div aria-busy={isStale} className={`transition-opacity ${isStale ? 'opacity-60' : ''}`}>
           <DataTable
             columns={USER_COLUMNS}
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder="Cerca per nome, email o organizzazione..."
+            /* Cambiare un filtro riporta alla prima pagina: le righe di prima
+               restano a video mentre la risposta arriva, e senza questo si
+               resterebbe alla terza pagina di un elenco che nel frattempo è
+               diventato un altro. */
+            pageResetKey={`${filters.organizationId}|${filters.ruolo}|${filters.status}|${filters.access}|${debouncedSearch}`}
             isEmpty={users.length === 0}
             emptyMessage={
               hasFilters ? 'Nessun utente corrisponde ai filtri.' : 'Nessun utente trovato.'
+            }
+            footerNote={
+              hasNextPage && (
+                <>
+                  <span className="tabular-nums">
+                    Caricati {users.length} utenti {hasFilters ? 'dei' : 'di'} {total}
+                    {hasFilters ? ' che corrispondono ai filtri' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    className={loadMoreBtnCls}
+                    onClick={() => fetchNextPage()}
+                    disabled={isLoadingMore}
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Spinner variant="button" />
+                        Caricamento...
+                      </>
+                    ) : (
+                      `Carica altri ${Math.min(USERS_WINDOW_SIZE, total - users.length)}`
+                    )}
+                  </button>
+                </>
+              )
             }
           >
             {users.map((u) => (
@@ -231,34 +274,19 @@ export default function AdminPage() {
               />
             ))}
           </DataTable>
-
-          <div className="mt-4 flex items-center justify-center gap-4 text-xs text-slate-500">
-            <span className="tabular-nums">
-              {users.length} di {total} utenti
-              {hasFilters ? ' che corrispondono ai filtri' : ''}
-            </span>
-            {hasNextPage && (
-              <button
-                type="button"
-                className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => fetchNextPage()}
-                disabled={isLoadingMore}
-              >
-                {isLoadingMore ? (
-                  <>
-                    <Spinner variant="button" />
-                    Caricamento...
-                  </>
-                ) : (
-                  `Carica altri ${Math.min(USERS_WINDOW_SIZE, total - users.length)}`
-                )}
-              </button>
-            )}
-          </div>
-        </>
+        </div>
       )}
 
-      {viewingUser && <UserDetailModal user={viewingUser} onClose={() => setViewingUser(null)} />}
+      {viewingUser && (
+        <UserDetailModal
+          user={viewingUser}
+          onClose={() => setViewingUser(null)}
+          onEdit={() => {
+            setEditingUser(viewingUser)
+            setViewingUser(null)
+          }}
+        />
+      )}
 
       {isCreating && (
         <UserCreateModal
@@ -293,7 +321,7 @@ export default function AdminPage() {
           title={statusCfg.title}
           description={statusCfg.description(statusAction.user.email)}
           error={
-            errorOf(statusMutation.error, "Errore durante il cambio di stato dell'account.") ||
+            errorMessage(statusMutation.error, "Errore durante il cambio di stato dell'account.") ||
             undefined
           }
           confirmLabel={statusCfg.confirmLabel}
@@ -318,7 +346,7 @@ export default function AdminPage() {
             </>
           }
           error={
-            errorOf(resendMutation.error, 'Errore durante il rinvio delle credenziali.') ||
+            errorMessage(resendMutation.error, 'Errore durante il rinvio delle credenziali.') ||
             undefined
           }
           confirmLabel="Invia Nuova Password"
@@ -342,7 +370,8 @@ export default function AdminPage() {
             </>
           }
           error={
-            errorOf(deleteMutation.error, "Errore durante l'eliminazione dell'utente.") || undefined
+            errorMessage(deleteMutation.error, "Errore durante l'eliminazione dell'utente.") ||
+            undefined
           }
           confirmLabel="Elimina Definitivamente"
           pendingLabel="Eliminazione..."

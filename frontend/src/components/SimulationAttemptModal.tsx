@@ -60,6 +60,7 @@ export default function SimulationAttemptModal({
       padding="none"
       layout="column"
       closeLabel="Chiudi dettaglio tentativo"
+      label="Dettaglio del tentativo"
     >
       {isLoading ? (
         <LoadingState message="Caricamento del test..." variant="modal" />

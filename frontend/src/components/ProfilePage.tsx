@@ -23,6 +23,7 @@ import {
   isSuperAdmin,
   isSystemAccount,
 } from '../services/auth'
+import { errorMessage } from '../services/errors'
 import Spinner from './Spinner'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
@@ -69,13 +70,12 @@ export default function ProfilePage() {
 
   /* Ogni form ha un banner solo: mostra il messaggio della validazione
    * locale, oppure quello della scrittura che è andata storta. */
-  const errorOf = (error: unknown, fallback: string) =>
-    error ? (error instanceof Error ? error.message : fallback) : ''
   const profileError =
     profileValidationError ||
-    errorOf(profileMutation.error, "Errore durante l'aggiornamento dei dati.")
+    errorMessage(profileMutation.error, "Errore durante l'aggiornamento dei dati.")
   const passwordError =
-    passwordValidationError || errorOf(passwordMutation.error, 'Errore durante il cambio password.')
+    passwordValidationError ||
+    errorMessage(passwordMutation.error, 'Errore durante il cambio password.')
 
   if (!user) return null
 

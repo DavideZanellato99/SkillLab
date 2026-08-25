@@ -254,7 +254,14 @@ export default function SimulationEditorModal({
     (setStatus.error as Error | null)?.message
 
   return (
-    <ModalShell onClose={onClose} locked={busy} size="full" padding="none" layout="column">
+    <ModalShell
+      onClose={onClose}
+      locked={busy}
+      size="full"
+      padding="none"
+      layout="column"
+      label="Modifica del test tecnico"
+    >
       {isLoading || !simulation ? (
         <LoadingState message="Caricamento simulazione..." variant="modal" />
       ) : (

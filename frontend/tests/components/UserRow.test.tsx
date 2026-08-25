@@ -61,6 +61,19 @@ describe('UserRow', () => {
     expect(onView).toHaveBeenCalledOnce()
   })
 
+  /* La riga si apre anche da tastiera, come quelle delle altre tabelle: il
+   * fuoco ci arriva e Invio fa quello che fa il clic. */
+  it('apre il dettaglio anche da tastiera', async () => {
+    const { onView } = renderRow()
+
+    const riga = screen.getByRole('row')
+    riga.focus()
+    expect(riga).toHaveFocus()
+
+    await userEvent.keyboard('{Enter}')
+    expect(onView).toHaveBeenCalledOnce()
+  })
+
   /* L'unica colonna dell'app allineata a sinistra: nome ed email incolonnati
    * si scorrono con l'occhio. L'intestazione sopra resta al centro come tutte
    * le altre, e quella la disegna la tabella. Le altre celle della riga non

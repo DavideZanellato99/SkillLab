@@ -4,6 +4,7 @@ import {
   useSaveConversationReview,
   useDeleteConversationReview,
 } from '../hooks/useConversationReview'
+import { errorMessage } from '../services/errors'
 import { hasReviewContent } from './trainerReview'
 import { CloseIcon } from './icons'
 import NumberInput from './NumberInput'
@@ -59,12 +60,10 @@ export default function TrainerReviewPanel({
   const deleteMutation = useDeleteConversationReview(conversationId)
   const isSaving = saveMutation.isPending
   const isDeleting = deleteMutation.isPending
-  const errorOf = (err: unknown, fallback: string) =>
-    err ? (err instanceof Error ? err.message : fallback) : ''
   const error =
     validationMessage ||
-    errorOf(saveMutation.error, 'Salvataggio non riuscito.') ||
-    errorOf(deleteMutation.error, 'Eliminazione non riuscita.')
+    errorMessage(saveMutation.error, 'Salvataggio non riuscito.') ||
+    errorMessage(deleteMutation.error, 'Eliminazione non riuscita.')
 
   const trimmedNote = summaryNote.trim()
   const trimmedReason = overrideReason.trim()

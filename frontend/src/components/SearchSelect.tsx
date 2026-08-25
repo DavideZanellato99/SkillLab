@@ -130,6 +130,9 @@ export default function SearchSelect({
       case 'Escape':
         if (isOpen) {
           e.preventDefault()
+          // Si ferma qui, come nelle altre tendine: dentro una modale
+          // chiuderebbe la finestra invece della sola lista.
+          e.stopPropagation()
           setIsOpen(false)
         }
         break

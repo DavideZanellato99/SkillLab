@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import ModalShell from './ModalShell'
+import ModalShell, { useModalTitleId } from './ModalShell'
 
 /* Modale di sola lettura per mostrare tutti i dati di una riga della tabella
  * (utente o organizzazione). Header con badge/icona, titolo e sottotitolo, poi
@@ -27,21 +27,39 @@ export default function DetailModal({
 }: DetailModalProps) {
   return (
     <ModalShell onClose={onClose} size="md" padding="md" closeLabel="Chiudi dettaglio">
-      {/* pr-12 tiene il titolo lontano dal pulsante di chiusura */}
-      <header className="mb-6 flex items-center gap-4 pr-12">
-        {header}
-        <div className="min-w-0">
-          <h2 className="truncate font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-            {title}
-          </h2>
-          {subtitle && <p className="truncate text-[0.85rem] text-slate-500">{subtitle}</p>}
-        </div>
-      </header>
+      <DetailHeader header={header} title={title} subtitle={subtitle} />
 
       <dl className="flex flex-col">{children}</dl>
 
       {footer && <div className="mt-6 flex gap-3">{footer}</div>}
     </ModalShell>
+  )
+}
+
+/* L'intestazione sta in un componente suo perché è lei a dire alla scatola
+ * qual è il titolo della finestra, e `useModalTitleId` va chiamato da dentro
+ * la scatola, non da chi la monta. */
+function DetailHeader({
+  header,
+  title,
+  subtitle,
+}: Pick<DetailModalProps, 'header' | 'title' | 'subtitle'>) {
+  const titleId = useModalTitleId()
+
+  return (
+    // pr-12 tiene il titolo lontano dal pulsante di chiusura
+    <header className="mb-6 flex items-center gap-4 pr-12">
+      {header}
+      <div className="min-w-0">
+        <h2
+          id={titleId}
+          className="truncate font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl"
+        >
+          {title}
+        </h2>
+        {subtitle && <p className="truncate text-[0.85rem] text-slate-500">{subtitle}</p>}
+      </div>
+    </header>
   )
 }
 

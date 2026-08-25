@@ -6,6 +6,7 @@ import {
   useDeleteAssignment,
 } from '../hooks/useTraining'
 import type { PathAssignment, TrainingPath } from '../services/training'
+import { errorMessage } from '../services/errors'
 import ConfirmModal from './ConfirmModal'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
@@ -120,11 +121,9 @@ export default function AssignPathModal({
   )
 
   const isPending = assignMutation.isPending || withdrawMutation.isPending
-  const errorOf = (error: unknown, fallback: string) =>
-    error ? (error instanceof Error ? error.message : fallback) : ''
   const error =
-    errorOf(assignMutation.error, 'Assegnazione non riuscita.') ||
-    errorOf(withdrawMutation.error, 'Ritiro non riuscito.')
+    errorMessage(assignMutation.error, 'Assegnazione non riuscita.') ||
+    errorMessage(withdrawMutation.error, 'Ritiro non riuscito.')
 
   /* Prima si affida e poi si ritira, con una richiesta per ritiro perché il
    * server ne conosce una alla volta. Un ritiro fallito lascia la conferma

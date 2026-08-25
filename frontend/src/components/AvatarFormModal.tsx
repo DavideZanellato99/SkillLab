@@ -20,6 +20,7 @@ import { useAvatarCategories } from '../hooks/useAvatarCategories'
 import { getAvatarImageUrl } from '../services/api'
 import type { AdminAvatar } from '../services/admin'
 import { fetchVoicePreview } from '../services/admin'
+import { errorMessage } from '../services/errors'
 import type { AvatarFormState } from './avatarForm'
 import {
   applyDraft,
@@ -115,12 +116,10 @@ export default function AvatarFormModal({
   ]
 
   const isSaving = createMutation.isPending || updateMutation.isPending
-  const errorOf = (error: unknown, fallback: string) =>
-    error ? (error instanceof Error ? error.message : fallback) : ''
   const formError =
     validationError ||
-    errorOf(uploadMutation.error, "Errore durante il caricamento dell'immagine.") ||
-    errorOf(createMutation.error ?? updateMutation.error, 'Errore durante il salvataggio.') ||
+    errorMessage(uploadMutation.error, "Errore durante il caricamento dell'immagine.") ||
+    errorMessage(createMutation.error ?? updateMutation.error, 'Errore durante il salvataggio.') ||
     voicePreviewError
 
   /** Ripulisce i messaggi che il form può aver lasciato dietro di sé. */
@@ -215,7 +214,13 @@ export default function AvatarFormModal({
   const missing = missingEssentials(form.profile)
 
   return (
-    <ModalShell onClose={onClose} locked={isSaving} size="sheet" padding="md">
+    <ModalShell
+      onClose={onClose}
+      locked={isSaving}
+      size="sheet"
+      padding="md"
+      label={isNew ? 'Crea Nuovo Avatar' : `Modifica ${target.name}`}
+    >
       <div className="mb-8 text-center">
         <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
           <svg

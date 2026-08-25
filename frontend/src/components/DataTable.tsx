@@ -38,8 +38,19 @@ interface DataTableProps {
   searchPlaceholder?: string
   /** Contenuto opzionale allineato a destra sulla stessa riga della ricerca (es. un bottone azione) */
   searchActions?: ReactNode
+  /* Una fascia in fondo alla scheda, sotto quella per sfogliare: la usano gli
+   * elenchi che dal server arrivano a finestre, per dire quante righe sono
+   * state scaricate sul totale e offrire di chiederne altre. Sta dentro la
+   * scheda e non sotto, insieme all'altro conteggio, perché due numeri sulla
+   * stessa tabella a distanza di un centimetro si leggono come una
+   * contraddizione: qui uno dice quante righe si stanno guardando, l'altro
+   * quante ne sono arrivate. */
+  footerNote?: ReactNode
   /** Disattiva la paginazione, mostrando tutte le righe senza footer (default: attiva) */
   paginate?: boolean
+  /** Cosa rende queste righe un elenco diverso (i filtri attivi, di solito):
+   *  quando cambia si torna alla prima pagina. */
+  pageResetKey?: unknown
   /* Misura sotto la quale le colonne smettono di stringersi e a scorrere è
    * il contenitore. Le percentuali restano quelle dichiarate, ma di una
    * tabella troppo stretta sono percentuali di niente: su un telefono, o
@@ -58,15 +69,19 @@ export default function DataTable({
   onSearchChange,
   searchPlaceholder = 'Cerca...',
   searchActions,
+  footerNote,
   paginate = true,
+  pageResetKey,
   minWidth = '880px',
   children,
 }: DataTableProps) {
   const rows = Children.toArray(children)
-  const { visible, bar } = usePagination(rows)
+  const { visible, bar } = usePagination(rows, pageResetKey)
 
   const visibleRows = paginate ? visible : rows
   const showFooter = paginate && !isEmpty && rows.length > 0
+  // Su una tabella vuota non c'è nessuna finestra da allargare
+  const showNote = Boolean(footerNote) && !isEmpty && rows.length > 0
 
   const hasToolbar = Boolean(onSearchChange || searchActions)
 
@@ -92,7 +107,7 @@ export default function DataTable({
       {/* "overflow-x-auto" serve allo scroll orizzontale e ritaglia anche gli
        * angoli arrotondati che tocca a questo blocco disegnare. */}
       <div
-        className={`overflow-x-auto ${hasToolbar ? '' : 'rounded-t-2xl'} ${showFooter ? '' : 'rounded-b-2xl'}`}
+        className={`overflow-x-auto ${hasToolbar ? '' : 'rounded-t-2xl'} ${showFooter || showNote ? '' : 'rounded-b-2xl'}`}
       >
         {/* Layout fisso: le colonne stanno alle misure dichiarate qui sotto e
          * non a quelle del contenuto. Senza, la stessa tabella cambia forma a
@@ -144,7 +159,15 @@ export default function DataTable({
         </table>
       </div>
       {showFooter && (
-        <PaginationBar {...bar} className="rounded-b-2xl border-t border-white/6 bg-gray-900/80" />
+        <PaginationBar
+          {...bar}
+          className={`border-t border-white/6 bg-gray-900/80 ${showNote ? '' : 'rounded-b-2xl'}`}
+        />
+      )}
+      {showNote && (
+        <div className="flex flex-wrap items-center justify-center gap-3 rounded-b-2xl border-t border-white/6 bg-gray-900/80 px-4 py-3 text-xs text-slate-500">
+          {footerNote}
+        </div>
       )}
     </div>
   )

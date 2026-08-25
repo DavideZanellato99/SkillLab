@@ -8,6 +8,7 @@ import { useState } from 'react'
 
 import type { AdminUser } from '../services/admin'
 import type { RoleName } from '../services/auth'
+import { errorMessage } from '../services/errors'
 import { useCreateUser } from '../hooks/useAdminUsers'
 import { ROLE_OPTIONS } from './adminUsersConfig'
 import Field, { fieldCls, labelCls, TextInput } from './Field'
@@ -44,11 +45,7 @@ export default function UserCreateModal({
   const isPending = createMutation.isPending
   const error =
     validationError ||
-    (createMutation.error instanceof Error
-      ? createMutation.error.message
-      : createMutation.error
-        ? "Errore durante la creazione dell'utente."
-        : '')
+    errorMessage(createMutation.error, "Errore durante la creazione dell'utente.")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -145,11 +142,15 @@ export default function UserCreateModal({
             <label className={labelCls} htmlFor="admin-org">
               Organizzazione
             </label>
+            {/* Il campo nasce vuoto, e senza il testo di richiamo la tendina
+                si presentava con un trattino: un campo da compilare non deve
+                sembrare un campo senza valore. */}
             <Select
               id="admin-org"
               value={organizationId}
               onChange={setOrganizationId}
               options={organizationOptions}
+              placeholder="Seleziona un'organizzazione"
               disabled={isPending}
             />
             {organizationOptions.length === 0 && (

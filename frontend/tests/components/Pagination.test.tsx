@@ -8,8 +8,8 @@ import { usePagination } from '../../src/hooks/usePagination'
 /* La paginazione è la stessa per le tabelle e per le griglie di schede: quello
  * che vale qui vale in tutti e due i posti. */
 
-function Elenco({ items }: { items: string[] }) {
-  const { visible, bar } = usePagination(items)
+function Elenco({ items, resetKey }: { items: string[]; resetKey?: unknown }) {
+  const { visible, bar } = usePagination(items, resetKey)
   return (
     <>
       <ul>
@@ -82,6 +82,19 @@ describe('Pagination', () => {
 
     expect(screen.getByText(/Pagina 2 di 2/)).toBeInTheDocument()
     expect(screen.getByText('voce 11')).toBeInTheDocument()
+  })
+
+  /* Cambiare un filtro fa dell'elenco un altro elenco: restare alla terza
+   * pagina di una domanda a cui si è smesso di rispondere non vuol dire
+   * niente, e le righe che si vedrebbero non sono quelle che si cercava. */
+  it("torna alla prima pagina quando l'elenco diventa un altro", async () => {
+    const { rerender } = render(<Elenco items={voci(34)} resetKey="tutti" />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ultima Pagina' }))
+    expect(screen.getByText(/Pagina 4 di 4/)).toBeInTheDocument()
+
+    rerender(<Elenco items={voci(34)} resetKey="sospesi" />)
+    expect(screen.getByText(/Pagina 1 di 4/)).toBeInTheDocument()
   })
 
   /* "Righe" è il default della tabella; un elenco di schede si fa chiamare

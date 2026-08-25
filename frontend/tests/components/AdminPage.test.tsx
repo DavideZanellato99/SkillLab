@@ -61,7 +61,12 @@ vi.mock('../../src/components/UserEditModal', () => ({
   ),
 }))
 vi.mock('../../src/components/UserDetailModal', () => ({
-  default: () => <div>dettaglio utente</div>,
+  default: ({ onEdit }: { onEdit: () => void }) => (
+    <div>
+      dettaglio utente
+      <button onClick={onEdit}>modifica dal dettaglio</button>
+    </div>
+  ),
 }))
 
 import type { AdminUser } from '../../src/services/admin'
@@ -137,18 +142,29 @@ describe('elenco', () => {
     expect(screen.getByText('anna@test.it')).toBeInTheDocument()
   })
 
-  it('dice quanti se ne stanno guardando sul totale', () => {
+  /* Il conteggio della finestra vive in fondo alla scheda, sotto la barra per
+   * sfogliare: uno dice quante righe si stanno guardando, l'altro quante ne
+   * sono arrivate dal server. Compare solo quando ne restano davvero altre,
+   * altrimenti sarebbe un secondo numero sullo stesso totale. */
+  it('dice quante righe sono arrivate sul totale, finché ne restano', () => {
+    stato.elenco = { ...stato.elenco, hasNextPage: true }
     renderPage('/app/admin', [utente(), utente({ id: 'u-2', email: 'marco@test.it' })], 350)
 
-    expect(screen.getByText(/2 di 350 utenti/)).toBeInTheDocument()
+    expect(screen.getByText(/Caricati 2 utenti di 350/)).toBeInTheDocument()
+  })
+
+  it("tace sulla finestra quando l'elenco è tutto lì", () => {
+    renderPage('/app/admin', [utente()], 1)
+
+    expect(screen.queryByText(/Caricati/)).not.toBeInTheDocument()
   })
 
   /* Con dei filtri attivi il totale è quello dei filtri, non quello di
    * tutta l'anagrafica: senza dirlo, "2 di 350" farebbe pensare che manchino
    * 348 righe da caricare. */
   it('dice che il totale è quello dei filtri', async () => {
-    stato.elenco.total = 5
-    renderPage()
+    stato.elenco = { ...stato.elenco, hasNextPage: true, total: 5 }
+    renderPage('/app/admin', [utente()], 5)
 
     await userEvent.click(screen.getByLabelText('Ruolo'))
     await userEvent.click(screen.getByRole('option', { name: 'Utente' }))
@@ -245,6 +261,18 @@ describe('filtri', () => {
     expect(stato.filtriChiesti.ruolo).toBeUndefined()
   })
 
+  /* La casella di ricerca sta dentro la tabella, ma filtra come le tendine:
+   * azzerare senza svuotarla lasciava davanti un elenco ancora ristretto. */
+  it('azzera anche la ricerca', async () => {
+    renderPage()
+    const casella = screen.getByPlaceholderText(/Cerca per nome/)
+
+    await userEvent.type(casella, 'anna')
+    await userEvent.click(screen.getByRole('button', { name: /Azzera Filtri/ }))
+
+    expect(casella).toHaveValue('')
+  })
+
   /* La ricerca la applica il server a tutto l'elenco, non alle sole righe
    * caricate: aspetta che si smetta di scrivere per non chiedere una
    * finestra per ogni tasto. */
@@ -269,6 +297,18 @@ describe('azioni su una riga', () => {
     await userEvent.click(screen.getByText('Anna Rossi'))
 
     expect(screen.getByText('dettaglio utente')).toBeInTheDocument()
+  })
+
+  /* Si guarda una scheda per decidere se cambiare qualcosa: senza questa
+   * strada bisognava chiudere, ritrovare la riga e cercarle la matita. */
+  it('dal dettaglio si passa alla modifica dello stesso account', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByText('Anna Rossi'))
+    await userEvent.click(screen.getByRole('button', { name: 'modifica dal dettaglio' }))
+
+    expect(screen.queryByText('dettaglio utente')).not.toBeInTheDocument()
+    expect(screen.getByText('modulo di modifica')).toBeInTheDocument()
   })
 
   it('crea un utente e lo annuncia', async () => {

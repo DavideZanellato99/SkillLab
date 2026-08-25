@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { usePersonaPromptPreview } from '../hooks/usePersonaPrompt'
 import type { PersonaChannel } from '../services/admin'
+import { errorMessage } from '../services/errors'
 import { fieldLabel } from './avatarProfileConfig'
 import LoadingState from './LoadingState'
 import ModalShell from './ModalShell'
@@ -38,20 +39,7 @@ export default function PersonaPromptPreview({ profile, onClose }: Props) {
     isPending: isLoading,
     error: previewError,
   } = usePersonaPromptPreview(profile, channel)
-  const error = previewError
-    ? previewError instanceof Error
-      ? previewError.message
-      : "Impossibile generare l'anteprima."
-    : ''
-
-  // Esc chiude, come negli altri modali della pagina
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+  const error = errorMessage(previewError, "Impossibile generare l'anteprima.")
 
   const copy = async () => {
     if (!preview) return
@@ -60,8 +48,19 @@ export default function PersonaPromptPreview({ profile, onClose }: Props) {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  /* `label` è il nome della finestra per chi non la vede, passato a mano:
+     qui l'intestazione è una fascia sua, non il `ModalHeader` da cui la
+     scatola lo prenderebbe da sola. */
   return (
-    <ModalShell onClose={onClose} size="xl" padding="sm" layout="column" elevated hideClose>
+    <ModalShell
+      onClose={onClose}
+      size="xl"
+      padding="sm"
+      layout="column"
+      elevated
+      hideClose
+      label="Anteprima del Prompt"
+    >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-heading text-[1.25rem] font-bold text-slate-100">

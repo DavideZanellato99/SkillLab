@@ -11,7 +11,12 @@
  * una appena creata potrebbe non rientrarci affatto: ritoccare la lista in
  * memoria vorrebbe dire riscrivere qui la regola del filtro. */
 
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query'
 import type { CreateUserPayload, UpdateUserPayload, UserFilters } from '../services/admin'
 import {
   fetchUsers,
@@ -49,6 +54,13 @@ export function useAdminUsers(filters: AdminUserFilters, enabled = true) {
     },
     enabled,
     staleTime: USERS_STALE_TIME,
+    /* Cambiare un filtro o scrivere nella ricerca è una chiave di cache
+     * nuova, cioè una query che non ha ancora dati: senza questo, la tabella
+     * spariva e al suo posto compariva il riquadro di caricamento, e la
+     * pagina saltava a ogni tasto premuto. Con le righe di prima al loro
+     * posto (`isPlaceholderData` dice che sono quelle vecchie, e la pagina le
+     * attenua) resta solo il tempo di attesa, senza il salto. */
+    placeholderData: keepPreviousData,
   })
 
   const pages = query.data?.pages ?? []

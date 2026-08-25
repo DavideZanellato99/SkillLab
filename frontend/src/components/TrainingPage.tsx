@@ -5,6 +5,7 @@ import { useOrganizations } from '../hooks/useOrganizations'
 import { usePagination } from '../hooks/usePagination'
 import { useAssignments, useDeleteAssignment, useDeletePath, usePaths } from '../hooks/useTraining'
 import type { PathAssignment, TrainingPath } from '../services/training'
+import { errorMessage } from '../services/errors'
 import AssignPathModal from './AssignPathModal'
 import ConfirmModal from './ConfirmModal'
 import EmptyState from './EmptyState'
@@ -89,11 +90,9 @@ export default function TrainingPage() {
   )
   const { visible: visiblePaths, bar: pathsBar } = usePagination(filteredPaths)
 
-  const errorOf = (error: unknown, fallback: string) =>
-    error ? (error instanceof Error ? error.message : fallback) : ''
   const loadError =
-    errorOf(pathsError, 'Impossibile caricare i percorsi.') ||
-    errorOf(assignmentsError, 'Impossibile caricare le assegnazioni.')
+    errorMessage(pathsError, 'Impossibile caricare i percorsi.') ||
+    errorMessage(assignmentsError, 'Impossibile caricare le assegnazioni.')
 
   const handleDeletePath = async () => {
     if (!pathToDelete) return
@@ -237,7 +236,7 @@ export default function TrainingPage() {
               Le conversazioni e i test già svolti restano dove sono.
             </>
           }
-          error={errorOf(deletePathMutation.error, 'Eliminazione non riuscita.')}
+          error={errorMessage(deletePathMutation.error, 'Eliminazione non riuscita.')}
           confirmLabel="Elimina il percorso"
           pendingLabel="Eliminazione..."
           confirmClassName="bg-red-500/90 text-white hover:bg-red-500"
@@ -258,7 +257,7 @@ export default function TrainingPage() {
               conversazioni e i test già svolti restano dove sono.
             </>
           }
-          error={errorOf(withdrawMutation.error, 'Operazione non riuscita.')}
+          error={errorMessage(withdrawMutation.error, 'Operazione non riuscita.')}
           confirmLabel="Ritira il percorso"
           pendingLabel="Ritiro..."
           confirmClassName="bg-red-500/90 text-white hover:bg-red-500"

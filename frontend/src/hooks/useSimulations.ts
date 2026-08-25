@@ -7,7 +7,11 @@
  * quale delle due liste sia in cache in quel momento non lo sa nessuno. */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { SimulationAnswerPayload, SimulationQuestionPayload } from '../services/simulations'
+import type {
+  Simulation,
+  SimulationAnswerPayload,
+  SimulationQuestionPayload,
+} from '../services/simulations'
 import {
   createSimulation,
   deleteSimulation,
@@ -39,11 +43,36 @@ export function useSimulations() {
   })
 }
 
+/**
+ * Il test prima di cominciarlo: il titolo, il tipo, quante domande sono.
+ *
+ * Ci si arriva quasi sempre dall'elenco, che ha già in cache esattamente
+ * questa riga: il dettaglio è lo stesso schema della lista, senza un campo
+ * in più. Quindi si parte da quella invece che da una schermata di
+ * caricamento, e le regole del test compaiono nell'istante in cui si preme
+ * la scheda.
+ *
+ * Non è una copia che resta lì: `initialDataUpdatedAt` porta con sé anche
+ * *quando* la lista era stata letta, quindi il dettaglio nasce vecchio
+ * quanto lei e si ricontrolla da solo appena scade, invece di fidarsi per
+ * un minuto di dati che sullo schermo erano già da dieci. Chi apre
+ * l'indirizzo di un test direttamente non trova niente in cache, e la
+ * chiamata parte come prima.
+ */
 export function useSimulation(simulationId: string | undefined) {
+  const queryClient = useQueryClient()
+  const fromList = () =>
+    queryClient
+      .getQueryData<Simulation[]>(queryKeys.simulations.list)
+      ?.find((simulation) => simulation.id === simulationId)
+
   return useQuery({
     queryKey: queryKeys.simulations.detail(simulationId!),
     queryFn: () => fetchSimulation(simulationId!),
     enabled: Boolean(simulationId),
+    initialData: fromList,
+    initialDataUpdatedAt: () =>
+      fromList() ? queryClient.getQueryState(queryKeys.simulations.list)?.dataUpdatedAt : undefined,
   })
 }
 

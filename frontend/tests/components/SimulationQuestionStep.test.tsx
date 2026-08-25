@@ -82,7 +82,7 @@ describe('SimulationQuestionStep', () => {
     const onAnswer = vi.fn()
     render(<SimulationQuestionStep {...baseProps} onAnswer={onAnswer} />)
 
-    premi('Salta la domanda')
+    premi('Salta la Domanda')
     expect(onAnswer).toHaveBeenCalledWith(null, expect.any(Number))
   })
 
@@ -110,7 +110,7 @@ describe('SimulationQuestionStep', () => {
     const onAnswer = vi.fn()
     render(<SimulationQuestionStep {...baseProps} onAnswer={onAnswer} />)
 
-    premi('Salta la domanda')
+    premi('Salta la Domanda')
     passano(QUESTION_SECONDS + 5)
     expect(onAnswer).toHaveBeenCalledOnce()
   })
@@ -121,7 +121,7 @@ describe('SimulationQuestionStep', () => {
 
     passano(QUESTION_SECONDS + 1)
     scegli('Mai')
-    premi('Salta la domanda')
+    premi('Salta la Domanda')
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith(null, expect.any(Number))
   })
 
@@ -158,6 +158,6 @@ describe('SimulationQuestionStep', () => {
 
   it("sull'ultima domanda il pulsante consegna il test", () => {
     render(<SimulationQuestionStep {...baseProps} isLast number={10} />)
-    expect(screen.getByRole('button', { name: 'Consegna il test' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Consegna il Test' })).toBeInTheDocument()
   })
 })

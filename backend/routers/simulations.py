@@ -59,7 +59,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
 
 import audit
 import llm_limits
@@ -108,7 +109,12 @@ def visible_query(db: Session, user: User, include_drafts: bool = False):
     una simulazione in bozza è una simulazione le cui domande nessuno ha
     ancora riletto.
     """
-    query = db.query(TechnicalSimulation)
+    query = db.query(TechnicalSimulation).options(
+        # Il nome dell'organizzazione sta in ogni risposta (vedi
+        # ``to_response``), e senza questo arriverebbe con una lettura in più
+        # per ogni tenant presente nell'elenco.
+        joinedload(TechnicalSimulation.organization)
+    )
     if not include_drafts:
         query = query.filter(TechnicalSimulation.status == SIMULATION_STATUS_PUBLISHED)
     if user.ruolo != ROLE_SUPER_ADMIN:
@@ -174,7 +180,27 @@ def attempt_stats(db: Session, user_id: UUID, simulation_ids: list[UUID]) -> dic
     return stats
 
 
-def drawn_count(simulation: TechnicalSimulation) -> int:
+def question_counts(db: Session, simulation_ids: list[UUID]) -> dict[UUID, int]:
+    """Quante domande ha in serbatoio ognuna di queste simulazioni.
+
+    Una query di conteggio invece delle domande vere: agli elenchi e alla
+    pagina delle regole serve solo il numero, e caricare cinquanta righe per
+    simulazione (il testo, le alternative, la risposta attesa, la
+    spiegazione e i passaggi citati) per poi fermarsi a contarle vorrebbe
+    dire leggere mezzo megabyte di documento per scrivere "10 domande".
+    """
+    if not simulation_ids:
+        return {}
+    rows = (
+        db.query(SimulationQuestion.simulation_id, func.count(SimulationQuestion.id))
+        .filter(SimulationQuestion.simulation_id.in_(simulation_ids))
+        .group_by(SimulationQuestion.simulation_id)
+        .all()
+    )
+    return dict(rows)
+
+
+def drawn_count(pool_size: int) -> int:
     """Quante domande ha un tentativo di questa simulazione.
 
     Dieci, cioè quante ne promette la pagina, tranne che su una simulazione
@@ -186,8 +212,13 @@ def drawn_count(simulation: TechnicalSimulation) -> int:
     chi svolge il test interessa quante domande deve rispondere, non quante
     ne sono state scritte in tutto. Il serbatoio è una cosa di chi il test
     lo prepara, e si legge dalle pagine di amministrazione.
+
+    Prende la dimensione del serbatoio e non la simulazione: dove le domande
+    servono davvero (l'estrazione, la consegna) sono già in memoria e si
+    contano da lì, dove serve solo il numero lo si è chiesto al database con
+    ``question_counts``.
     """
-    return min(SIMULATION_QUESTION_COUNT, len(simulation.questions))
+    return min(SIMULATION_QUESTION_COUNT, pool_size)
 
 
 def to_response(
@@ -223,13 +254,12 @@ def list_simulations(
 ):
     """Le simulazioni pubblicate che questo utente può svolgere."""
     simulations = (
-        visible_query(db, current_user)
-        .options(selectinload(TechnicalSimulation.questions))
-        .order_by(TechnicalSimulation.created_at.desc())
-        .all()
+        visible_query(db, current_user).order_by(TechnicalSimulation.created_at.desc()).all()
     )
-    stats = attempt_stats(db, current_user.id, [s.id for s in simulations])
-    return [to_response(s, drawn_count(s), stats.get(s.id)) for s in simulations]
+    ids = [s.id for s in simulations]
+    counts = question_counts(db, ids)
+    stats = attempt_stats(db, current_user.id, ids)
+    return [to_response(s, drawn_count(counts.get(s.id, 0)), stats.get(s.id)) for s in simulations]
 
 
 @router.get("/{simulation_id}", response_model=SimulationDetailResponse)
@@ -247,7 +277,8 @@ def get_simulation(
     """
     simulation = get_visible_or_404(db, current_user, simulation_id)
     stats = attempt_stats(db, current_user.id, [simulation.id])
-    return to_response(simulation, drawn_count(simulation), stats.get(simulation.id))
+    pool = question_counts(db, [simulation.id]).get(simulation.id, 0)
+    return to_response(simulation, drawn_count(pool), stats.get(simulation.id))
 
 
 @router.post("/{simulation_id}/start", response_model=list[SimulationQuestionResponse])
@@ -285,7 +316,7 @@ def start_attempt(
             status_code=status.HTTP_409_CONFLICT,
             detail="Questa simulazione non ha ancora domande.",
         )
-    drawn = random.sample(simulation.questions, drawn_count(simulation))
+    drawn = random.sample(simulation.questions, drawn_count(len(simulation.questions)))
     return [
         SimulationQuestionResponse(
             id=q.id,
@@ -455,7 +486,7 @@ def _submitted_questions(
         seen.add(answer.question_id)
         questions.append(question)
 
-    expected = drawn_count(simulation)
+    expected = drawn_count(len(simulation.questions))
     if len(questions) != expected:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

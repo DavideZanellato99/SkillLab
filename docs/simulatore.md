@@ -131,7 +131,11 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [backend/models.py:653-848](../backend/models.py#L653-L848) | Le quattro tabelle |
 | [frontend/src/services/simulations.ts](../frontend/src/services/simulations.ts) | I tipi e le chiamate HTTP |
 | [frontend/src/hooks/useSimulations.ts](../frontend/src/hooks/useSimulations.ts) | Gli hook TanStack Query |
+| [frontend/src/components/SimulationsPage.tsx](../frontend/src/components/SimulationsPage.tsx) | L'elenco dei test da svolgere: la ricerca, i filtri e le schede |
+| [frontend/src/components/simulationFilters.ts](../frontend/src/components/simulationFilters.ts) | Quali test restano dopo la ricerca e il filtro, su una lista già in memoria |
 | [frontend/src/components/SimulationRunner.tsx](../frontend/src/components/SimulationRunner.tsx) | Le tre schermate dello svolgimento: regole, domande, esito |
+| [frontend/src/components/SimulationProgress.tsx](../frontend/src/components/SimulationProgress.tsx) | A che punto è il test: un trattino per domanda, sopra il riquadro |
+| [frontend/src/hooks/useLeaveConfirmation.ts](../frontend/src/hooks/useLeaveConfirmation.ts) | La conferma prima di chiudere o ricaricare, finché il test è a metà |
 | [frontend/src/components/SimulationQuestionStep.tsx](../frontend/src/components/SimulationQuestionStep.tsx) | Una domanda a scelta multipla e il suo cronometro |
 | [frontend/src/components/SimulationOpenQuestionStep.tsx](../frontend/src/components/SimulationOpenQuestionStep.tsx) | Una domanda aperta e la casella in cui si scrive |
 | [frontend/src/components/SimulationOrderingStep.tsx](../frontend/src/components/SimulationOrderingStep.tsx) | Una domanda di ordinamento: i passi mescolati e le frecce per disporli |
@@ -906,7 +910,7 @@ pulsante di pubblicazione nel pannello salva prima le domande, così quello che
 finisce davanti agli utenti è quello che si sta guardando.
 
 Finché è in bozza, la simulazione esiste solo per chi amministra: il filtro sta
-in [visible_query](../backend/routers/simulations.py#L101-L116) e le bozze restano
+in [visible_query](../backend/routers/simulations.py#L102-L122) e le bozze restano
 fuori ovunque tranne che nelle pagine di amministrazione.
 
 ---
@@ -929,6 +933,36 @@ tutto l'elenco che legge quattro colonne e conta in Python: i tentativi di UNA
 persona sono decine, e farsi dare dal database l'ultimo di ogni gruppo
 costerebbe o una query per riga o una window function.
 
+**L'elenco non legge nessuna domanda.** Di tutto il serbatoio gli serve un
+numero solo, quante domande avrà il tentativo, e quel numero arriva da una
+query di conteggio raggruppata per simulazione
+([question_counts](../backend/routers/simulations.py)). Caricare le domande
+vere per poi fermarsi a contarle vorrebbe dire cinquanta righe per ogni test
+in elenco, con dentro il testo, le alternative, la risposta attesa, la
+spiegazione e i passaggi citati: mezzo megabyte di documento letto e buttato
+per scrivere «10 domande». Vale nello stesso modo per la pagina delle regole,
+che di domande non ne mostra nessuna, e per la tabella di gestione, dove il
+numero che si legge è invece il serbatoio intero.
+
+Il nome dell'organizzazione arriva insieme alla simulazione e non con una
+lettura per riga: il `joinedload` sta dentro `visible_query`, cioè
+nell'unico punto da cui ogni elenco di questa sezione passa, perché
+`organization_name` sta in ogni risposta e senza sarebbe una query in più
+per ogni tenant presente nell'elenco.
+
+Sopra le schede stanno una ricerca e tre linguette (da svolgere, svolti,
+tutti), come nella galleria degli avatar e con la stessa meccanica: i test
+arrivano tutti in una lettura sola, quindi restringere è un giro su una lista
+già in memoria ([simulationFilters](../frontend/src/components/simulationFilters.ts))
+e la griglia risponde nell'istante in cui si preme. Con una decina di test
+pubblicati "quali non ho ancora fatto" era una domanda a cui si rispondeva
+leggendo la riga in fondo a ogni scheda, una per una. La ricerca guarda anche
+il tipo, l'origine e l'organizzazione, che sulla scheda si leggono come una
+targhetta o non si leggono affatto: cercare «aperta» trova i test in cui si
+scrive, cercare «manuale» quelli scritti da una persona. La barra compare solo
+se c'è qualcosa da restringere, e quando il vuoto viene dalla ricerca o dal
+filtro il testo lo dice, così una pagina ristretta non sembra guasta.
+
 Nella stessa riga arrivano `kind` e `source`, cioè le due targhette: la scheda
 del test nell'elenco dice quante domande sono, come si risponde e se le domande
 vengono da un documento o le ha scritte qualcuno. Di quale organizzazione sia
@@ -936,6 +970,13 @@ lo legge il **solo super admin**, che è l'unico ad avere davanti i test di più
 tenant: `organization_name` arriva a tutti nella risposta, perché per chiunque
 altro è la propria, ma su quella riga sarebbe la stessa parola su ogni scheda,
 in un posto che esiste per dire cosa distingue un test dall'altro.
+In fondo alla scheda stanno quante volte il test è stato svolto e quanto
+tempo fa: il voto in alto dice com'è andata l'ultima prova, non se quell'ultima
+è di ieri o di sei mesi fa, che è la differenza fra un test da ripassare e uno
+appena fatto. La distanza da adesso si legge senza calcoli
+([formatRelativeDay](../frontend/src/components/lastAccess.ts)) e la data
+esatta resta nel tooltip, come nella colonna dell'ultimo accesso.
+
 `source` prosegue poi su ogni tentativo consegnato, come `simulation_source`,
 in tutte e cinque le risposte che portano già `simulation_kind`: l'esito, i
 riepiloghi, il report attività, la dashboard e il confronto. Un tentativo
@@ -954,6 +995,19 @@ preferibile a un errore.
 `GET /api/simulations/{id}` **non porta nessuna domanda**: porta il titolo, il
 tipo, quante domande saranno e i tentativi passati, che è quello che serve alla
 schermata delle regole. Aprire la pagina non decide più niente.
+
+La risposta è lo stesso schema della riga dell'elenco, senza un campo in più
+(`SimulationDetailResponse` eredita da `SimulationResponse` e non
+aggiunge niente), e chi apre un test ci arriva quasi sempre dall'elenco, che
+quella riga ce l'ha già in cache. Per questo
+[useSimulation](../frontend/src/hooks/useSimulations.ts) parte da lì
+(`initialData`) invece che da una schermata di caricamento: le regole
+compaiono nell'istante in cui si preme la scheda. Non è una copia che resta
+ferma, perché con il dato viaggia anche *quando* la lista era stata letta
+(`initialDataUpdatedAt`): il dettaglio nasce vecchio quanto lei e si
+ricontrolla da solo appena scade, invece di fidarsi per un minuto di dati che
+sullo schermo erano già da dieci. Chi apre l'indirizzo di un test direttamente
+non trova niente in cache, e la chiamata parte come prima.
 
 `POST /api/simulations/{id}/start` è il momento in cui il test comincia:
 [start_attempt](../backend/routers/simulations.py) estrae **dieci domande a
@@ -1009,13 +1063,30 @@ dalle regole e quello che si era risposto è perso: le risposte vivono nel
 browser finché non si consegna, perché un test a metà non è un tentativo. Non
 c'è nessun limite ai tentativi.
 
+Perché sia perso per scelta e non per sbaglio, finché il test è cominciato e
+non consegnato il browser chiede conferma prima di chiudere o ricaricare
+([useLeaveConfirmation](../frontend/src/hooks/useLeaveConfirmation.ts)). Copre
+il ricaricare, il chiudere la scheda e l'uscire dall'applicazione, **non la
+navigazione interna**: fermare una voce della barra o il tasto indietro
+vorrebbe dire `useBlocker`, che funziona solo con un data router, e le
+rotte stanno su `<BrowserRouter>`.
+
+A che punto è il test lo dice una fila di trattini sopra la domanda
+([SimulationProgress](../frontend/src/components/SimulationProgress.tsx)), uno
+per domanda, accesi fino a quella a schermo. Sta fuori dal riquadro perché è
+del test e non della domanda, e perché dentro, sulla scelta multipla, ci
+sarebbe già la barra del tempo: due barre a un centimetro l'una dall'altra che
+misurano cose diverse. A trattini invece che continua per lo stesso motivo, e
+`aria-hidden` perché "Domanda 3 di 10" è scritto in lettere subito
+sotto.
+
 Le domande stanno nello stato del componente e **non nella cache di TanStack
 Query**, che è l'unica deroga alla regola del progetto, e per una ragione:
 [useStartSimulation](../frontend/src/hooks/useSimulations.ts) è una mutation
 perché le domande sono l'esito di un'estrazione fatta una volta, non un dato da
 riprendere. Una query le rifarebbe estrarre quando la finestra torna in primo
 piano, cambiando le domande sotto le mani di chi sta rispondendo. Per la stessa
-ragione "Riprova il test" le butta e torna alle regole: il tentativo nuovo avrà
+ragione "Riprova il Test" le butta e torna alle regole: il tentativo nuovo avrà
 le sue.
 
 Il passo che monta a ogni domanda è uno dei quattro, scelto in base a `kind`:
@@ -1061,9 +1132,17 @@ pena conoscere:
 | La consegna della domanda passa da un `answered` in ref | Il tempo può finire nello stesso istante in cui si preme il pulsante, e consegnare due volte farebbe saltare un avanzamento |
 | Finché non si va avanti la scelta si può cambiare, dopo no | I trenta secondi sono per decidere, non per battere sul pulsante |
 
+Le alternative sono etichette attorno a un radio nascosto, quindi da tastiera
+si entra nel gruppo con il tabulatore e si scorre con le frecce, che è il
+comportamento normale di un gruppo di radio: la selezione segue il fuoco, e
+l'alternativa si accende. Prima di aver scelto niente però il fuoco non si
+vedeva, perché l'unica cosa accesa era la scelta: c'è quindi un anello
+(`has-[:focus-visible]`) che dice dove si è anche quando ancora non si è
+scelto.
+
 Allo scadere si passa avanti con l'opzione selezionata, se ce n'è una, o in
 bianco. Chi non sa la risposta non deve aspettare il tempo per forza: il
-pulsante diventa "Salta la domanda" e la consegna in bianco.
+pulsante diventa "Salta la Domanda" e la consegna in bianco.
 
 **Nessun riscontro durante il percorso.** Giusto e sbagliato arrivano insieme
 alla fine, perché sapere di aver sbagliato la seconda mentre si legge la terza
@@ -1120,6 +1199,12 @@ destra mescolata. Una tendina per riga e non il trascinamento: si usa con un
 dito senza prendere la mira, si usa con la tastiera senza sapere nessuna
 scorciatoia, e non chiede una libreria a un'applicazione che dopo il primo
 deploy non si tocca più.
+
+Ogni tendina porta il nome della voce che sta abbinando ("Abbinamento per
+Carta"): sono cinque, tutte con lo stesso invito scritto sopra, e chi le sente
+lette una dopo l'altra sentirebbe cinque volte la stessa frase senza sapere a
+cosa si riferisce. A schermo la voce è lì di fianco e basta guardarla, quindi
+il nome vive solo per chi legge con la voce.
 
 **Lo stesso abbinato si può scegliere due volte.** Impedirlo vorrebbe dire
 toglierlo dalle tendine che restano, e chi si accorge a metà di aver sbagliato
@@ -1411,7 +1496,7 @@ punteggio.
 
 La risposta alla consegna, e ogni rilettura successiva del tentativo, mescola
 due sorgenti apposta
-([_answer_results](../backend/routers/simulations.py#L198-L227)):
+([_answer_results](../backend/routers/simulations.py#L383-L437)):
 
 | Cosa si mostra | Da dove viene | Perché |
 | --- | --- | --- |

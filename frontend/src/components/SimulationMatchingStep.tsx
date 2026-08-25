@@ -75,17 +75,20 @@ export default function SimulationMatchingStep({
       <ul className="flex list-none flex-col gap-2">
         {question.left.map((left, index) => (
           <li key={left} className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-            <span
-              id={`left-${question.id}-${index}`}
-              className="min-w-0 flex-1 rounded-xl border border-white/6 bg-white/4 px-3 py-2 text-[0.92rem] leading-snug text-slate-100"
-            >
+            <span className="min-w-0 flex-1 rounded-xl border border-white/6 bg-white/4 px-3 py-2 text-[0.92rem] leading-snug text-slate-100">
               {left}
             </span>
             <span aria-hidden className="shrink-0 text-slate-600">
               →
             </span>
+            {/* Quale voce sta abbinando, e non solo che sta abbinando: le
+                tendine sono una per riga e tutte con lo stesso invito, quindi
+                chi le sente lette una dopo l'altra sentirebbe cinque volte la
+                stessa frase senza sapere a cosa si riferisce. A schermo la
+                voce è lì di fianco e basta guardarla. */}
             <Select
               id={`match-${question.id}-${index}`}
+              ariaLabel={`Abbinamento per ${left}`}
               className="min-w-0 flex-1 max-sm:w-full"
               value={chosen[left] ?? ''}
               onChange={(value) => setChosen((prev) => ({ ...prev, [left]: value }))}
@@ -109,7 +112,7 @@ export default function SimulationMatchingStep({
             : 'Le voci lasciate senza abbinamento vengono considerate errate'}
         </span>
         <PrimaryButton onClick={() => onAnswer(pairs.length ? pairs : null)}>
-          {isLast ? 'Consegna il test' : pairs.length ? 'Avanti' : 'Salta la domanda'}
+          {isLast ? 'Consegna il Test' : pairs.length ? 'Avanti' : 'Salta la Domanda'}
         </PrimaryButton>
       </div>
     </div>

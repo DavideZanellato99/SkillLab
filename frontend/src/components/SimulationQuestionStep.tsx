@@ -151,9 +151,14 @@ export default function SimulationQuestionStep({
           {question.options.map((option, index) => {
             const chosen = selected === index
             return (
+              /* Il pallino vero è nascosto e l'alternativa si accende da sola
+                 quando è scelta, ma il fuoco della tastiera non è la scelta:
+                 chi entra nel gruppo con il tabulatore, prima di aver scelto
+                 niente, non vedrebbe dove si trova. L'anello lo dice, e sta
+                 sull'etichetta perché è lei la cosa che si vede. */
               <label
                 key={index}
-                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-[0.9rem] transition ${
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-[0.9rem] transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-violet-500/40 ${
                   chosen
                     ? 'border-violet-600 bg-violet-600/12 text-slate-100'
                     : 'border-white/6 bg-white/2 text-slate-400 hover:border-white/12 hover:bg-white/5'
@@ -190,7 +195,7 @@ export default function SimulationQuestionStep({
             : 'La selezione è modificabile fino alla conferma, ma il tempo continua a scorrere'}
         </span>
         <PrimaryButton onClick={() => answer(selected)}>
-          {isLast ? 'Consegna il test' : selected === null ? 'Salta la domanda' : 'Avanti'}
+          {isLast ? 'Consegna il Test' : selected === null ? 'Salta la Domanda' : 'Avanti'}
         </PrimaryButton>
       </div>
     </div>

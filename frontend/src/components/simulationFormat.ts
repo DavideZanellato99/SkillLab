@@ -5,6 +5,7 @@
  * una schermata e giallo in quella accanto è un voto che non si legge. */
 
 import type { SimulationKind, SimulationSource, SimulationStatus } from '../services/simulations'
+import { parseInstant } from './instant'
 
 /* La scala del punteggio a tempo, gemella di `backend/simulation_scoring.py`.
  *
@@ -149,8 +150,16 @@ export const KIND_FILTERS: { value: KindFilter; label: string }[] = [
   { value: 'all', label: 'Tutti' },
 ]
 
+/* Quando un tentativo è stato consegnato, come si legge nell'elenco dei
+ * propri tentativi e in testa a un test riletto.
+ *
+ * Il momento passa da `parseInstant` e non da `new Date`: le colonne dello
+ * schema sono in UTC e senza fuso scritto, quindi la risposta porta
+ * "2026-08-12T17:00:00" e basta, e `new Date` la leggerebbe come ora locale.
+ * Su una data si nota appena, su un orario sono due ore sbagliate d'estate,
+ * ed è un orario che qui si legge accanto a un voto. */
 export function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('it-IT', {
+  return parseInstant(value).toLocaleString('it-IT', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

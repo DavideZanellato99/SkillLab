@@ -103,7 +103,7 @@ export default function SimulationOrderingStep({
             : 'Sposta i passi con le frecce, dal primo da eseguire'}
         </span>
         <PrimaryButton onClick={() => onAnswer(touched ? steps : null)}>
-          {isLast ? 'Consegna il test' : touched ? 'Avanti' : 'Salta la domanda'}
+          {isLast ? 'Consegna il Test' : touched ? 'Avanti' : 'Salta la Domanda'}
         </PrimaryButton>
       </div>
     </div>

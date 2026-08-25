@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import { useMyAssignments } from '../hooks/useTraining'
 import type { PathAssignment } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
+import EmptyState from './EmptyState'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import PathProgressRing from './PathProgressRing'
@@ -93,9 +94,7 @@ export default function MyPathsPage() {
       {isPending ? (
         <LoadingState message="Caricamento percorsi..." />
       ) : assignments.length === 0 ? (
-        <p className="rounded-2xl border border-white/6 bg-gray-900/60 p-16 text-center text-slate-500 backdrop-blur-md">
-          Nessun percorso assegnato
-        </p>
+        <EmptyState title="Nessun percorso assegnato" />
       ) : (
         <ul className="flex flex-col gap-4">
           {openFirst(assignments).map((assignment) => (

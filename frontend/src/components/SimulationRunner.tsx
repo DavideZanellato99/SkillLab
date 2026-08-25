@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { useLeaveConfirmation } from '../hooks/useLeaveConfirmation'
 import { useSimulation, useStartSimulation, useSubmitSimulation } from '../hooks/useSimulations'
 import type {
   SimulationAnswerPayload,
@@ -8,6 +9,7 @@ import type {
   SimulationQuestion,
 } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
+import EmptyState from './EmptyState'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
 import FormError from './FormError'
@@ -17,6 +19,7 @@ import SimulationQuestionStep from './SimulationQuestionStep'
 import SimulationOpenQuestionStep from './SimulationOpenQuestionStep'
 import SimulationOrderingStep from './SimulationOrderingStep'
 import SimulationMatchingStep from './SimulationMatchingStep'
+import SimulationProgress from './SimulationProgress'
 import { isTimed, kindHint, QUESTION_SECONDS } from './simulationFormat'
 
 /* Lo svolgimento di un test e, alla fine, il suo esito.
@@ -69,6 +72,13 @@ export default function SimulationRunner() {
   /** question_id -> opzione scelta (null se in bianco) e tempo impiegato. */
   const [answers, setAnswers] = useState<Record<string, SimulationAnswerPayload>>({})
   const [result, setResult] = useState<SimulationAttempt | null>(null)
+
+  /* Il test è cominciato e non è ancora consegnato: qui dentro ci sono le
+   * domande estratte e le risposte già date, e nessuna delle due cose vive
+   * altrove. Ricaricare per sbaglio le butta via, quindi si chiede conferma
+   * prima. Sta prima delle uscite di sopra perché un hook si chiama sempre,
+   * e con il test non cominciato la condizione è falsa e non fa niente. */
+  useLeaveConfirmation(questions.length > 0 && result === null)
 
   if (isLoading) {
     return (
@@ -209,10 +219,10 @@ export default function SimulationRunner() {
     return (
       <PageContainer>
         <PageHeader title={simulation.title} description="Simulazione non ancora disponibile." />
-        <div className="rounded-2xl border border-white/6 bg-gray-900/60 p-16 text-center text-slate-500 backdrop-blur-md">
-          <p className="mb-1 text-[0.95rem]">Questa simulazione non contiene ancora domande</p>
-          <p className="text-sm">Sarà disponibile appena chi la gestisce le avrà predisposte</p>
-        </div>
+        <EmptyState
+          title="Questa simulazione non contiene ancora domande"
+          hint="Sarà disponibile appena chi la gestisce le avrà predisposte"
+        />
         <Link to="/app/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
           Torna all'Elenco
         </Link>
@@ -265,49 +275,56 @@ export default function SimulationRunner() {
           <PrimaryButton onClick={() => send(answers)}>Riprova la Consegna</PrimaryButton>
         </>
       ) : started ? (
-        /* La chiave rimonta il passo a ogni domanda, e con lui il cronometro
-           o la casella: è il rimontaggio a rimettere a trenta i secondi e a
-           svuotare quello che si era scritto, non un effetto. */
-        (() => {
-          /* La chiave sta fuori da questi campi e si scrive su ogni passo:
-             è quella che rimonta il componente a ogni domanda, e React non
-             la legge se arriva dentro uno spread. */
-          const key = questions[index].id
-          const step = {
-            question: questions[index],
-            number: index + 1,
-            total,
-            isLast: index + 1 === total,
-          }
-          if (kind === 'open') {
-            return (
-              <SimulationOpenQuestionStep
-                key={key}
-                {...step}
-                onAnswer={(answer_text: string | null) => handleGiven({ answer_text })}
-              />
-            )
-          }
-          if (kind === 'ordering') {
-            return (
-              <SimulationOrderingStep
-                key={key}
-                {...step}
-                onAnswer={(ordered_steps: string[] | null) => handleGiven({ ordered_steps })}
-              />
-            )
-          }
-          if (kind === 'matching') {
-            return (
-              <SimulationMatchingStep
-                key={key}
-                {...step}
-                onAnswer={(pairs: SimulationPair[] | null) => handleGiven({ pairs })}
-              />
-            )
-          }
-          return <SimulationQuestionStep key={key} {...step} onAnswer={handleChoice} />
-        })()
+        <>
+          {/* A che punto è il test: sta qui e non dentro il passo perché è del
+              test e non della domanda, e perché nella scelta multipla dentro
+              al riquadro ci sarebbe già la barra del tempo. Le domande
+              consegnate sono quelle prima di questa. */}
+          <SimulationProgress answered={index} total={total} />
+          {/* La chiave rimonta il passo a ogni domanda, e con lui il cronometro
+              o la casella: è il rimontaggio a rimettere a trenta i secondi e a
+              svuotare quello che si era scritto, non un effetto. */}
+          {(() => {
+            /* La chiave sta fuori da questi campi e si scrive su ogni passo:
+               è quella che rimonta il componente a ogni domanda, e React non
+               la legge se arriva dentro uno spread. */
+            const key = questions[index].id
+            const step = {
+              question: questions[index],
+              number: index + 1,
+              total,
+              isLast: index + 1 === total,
+            }
+            if (kind === 'open') {
+              return (
+                <SimulationOpenQuestionStep
+                  key={key}
+                  {...step}
+                  onAnswer={(answer_text: string | null) => handleGiven({ answer_text })}
+                />
+              )
+            }
+            if (kind === 'ordering') {
+              return (
+                <SimulationOrderingStep
+                  key={key}
+                  {...step}
+                  onAnswer={(ordered_steps: string[] | null) => handleGiven({ ordered_steps })}
+                />
+              )
+            }
+            if (kind === 'matching') {
+              return (
+                <SimulationMatchingStep
+                  key={key}
+                  {...step}
+                  onAnswer={(pairs: SimulationPair[] | null) => handleGiven({ pairs })}
+                />
+              )
+            }
+            return <SimulationQuestionStep key={key} {...step} onAnswer={handleChoice} />
+          })()}
+        </>
       ) : (
         <>
           {start.isError && (

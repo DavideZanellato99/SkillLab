@@ -155,7 +155,7 @@ export default function SimulationIntro({
             ) : attempts.length > 0 ? (
               'Riprova il Test'
             ) : (
-              'Inizia il test'
+              'Inizia il Test'
             )}
           </PrimaryButton>
         </div>

@@ -79,7 +79,13 @@ from models import (
     User,
 )
 from openai_service import embed_texts
-from routers.simulations import attempt_stats, get_visible_or_404, to_response, visible_query
+from routers.simulations import (
+    attempt_stats,
+    get_visible_or_404,
+    question_counts,
+    to_response,
+    visible_query,
+)
 from schemas import (
     AdminSimulationResponse,
     MessageResponse,
@@ -427,8 +433,13 @@ def list_all_simulations(
         .order_by(TechnicalSimulation.created_at.desc())
         .all()
     )
-    stats = attempt_stats(db, current_admin.id, [s.id for s in simulations])
-    return [_admin_response(s, len(s.questions), stats.get(s.id)) for s in simulations]
+    ids = [s.id for s in simulations]
+    # Il serbatoio si conta con una query sola: qui le domande non si
+    # mostrano, se ne scrive il numero, e leggerle davvero vorrebbe dire
+    # cinquanta righe di documento per ogni riga della tabella.
+    counts = question_counts(db, ids)
+    stats = attempt_stats(db, current_admin.id, ids)
+    return [_admin_response(s, counts.get(s.id, 0), stats.get(s.id)) for s in simulations]
 
 
 @router.get("/{simulation_id}", response_model=SimulationAdminDetailResponse)

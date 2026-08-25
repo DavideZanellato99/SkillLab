@@ -160,13 +160,13 @@ describe('SimulationRunner', () => {
     const user = userEvent.setup()
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
 
     await user.click(await screen.findByText('Alfa'))
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
 
     await user.click(await screen.findByText('Delta'))
-    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
     const body = submittedBody()
@@ -185,10 +185,10 @@ describe('SimulationRunner', () => {
     const user = userEvent.setup()
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
-    await user.click(await screen.findByRole('button', { name: 'Salta la domanda' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
+    await user.click(await screen.findByRole('button', { name: 'Salta la Domanda' }))
     await user.click(await screen.findByText('Gamma'))
-    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
     const [saltata] = submittedBody().answers
@@ -200,13 +200,13 @@ describe('SimulationRunner', () => {
     const user = userEvent.setup()
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
     await user.click(await screen.findByText('Alfa'))
     expect(screen.queryByText(/risposte corrette/i)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
     await user.click(await screen.findByText('Gamma'))
-    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     expect(await screen.findByText(/1 risposte corrette su 2/)).toBeInTheDocument()
   })
@@ -216,13 +216,13 @@ describe('SimulationRunner', () => {
     serveOpenSimulation()
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
 
     await user.type(await screen.findByRole('textbox'), 'Prima risposta scritta')
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
 
     await user.type(await screen.findByRole('textbox'), 'Seconda risposta scritta')
-    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
     const body = submittedBody()
@@ -244,11 +244,11 @@ describe('SimulationRunner', () => {
     serveOpenSimulation()
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
-    await user.click(await screen.findByRole('button', { name: 'Salta la domanda' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
+    await user.click(await screen.findByRole('button', { name: 'Salta la Domanda' }))
 
     await user.type(await screen.findByRole('textbox'), 'Solo la seconda')
-    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
     const [saltata] = submittedBody().answers
@@ -263,7 +263,7 @@ describe('SimulationRunner', () => {
     // La pagina è aperta sulle regole e nessuna domanda è stata ancora
     // decisa: se l'estrazione partisse qui, il test sarebbe già composto
     // per chi si limita a guardare
-    const inizia = await screen.findByRole('button', { name: 'Inizia il test' })
+    const inizia = await screen.findByRole('button', { name: 'Inizia il Test' })
     expect(startCalls()).toBe(0)
 
     await user.click(inizia)
@@ -275,15 +275,15 @@ describe('SimulationRunner', () => {
     const user = userEvent.setup()
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
     await user.click(await screen.findByText('Alfa'))
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
     await user.click(await screen.findByText('Gamma'))
-    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await user.click(await screen.findByRole('button', { name: 'Riprova il Test' }))
     // Si torna alle regole, e il test nuovo comincia da un'altra estrazione
-    await user.click(await screen.findByRole('button', { name: /il test$/ }))
+    await user.click(await screen.findByRole('button', { name: /il Test$/ }))
     expect(await screen.findByText('Alfa')).toBeInTheDocument()
     expect(startCalls()).toBe(2)
   })
@@ -293,7 +293,7 @@ describe('SimulationRunner', () => {
     serveOpenSimulation()
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
 
     expect(await screen.findByRole('textbox')).toBeInTheDocument()
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
@@ -304,14 +304,14 @@ describe('SimulationRunner', () => {
     serve(orderingSimulation, orderingQuestions, 'ordering')
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
 
     // I passi arrivano mescolati: rimetterli a posto è la risposta
     await user.click(await screen.findByRole('button', { name: 'Sposta in Alto: Alfa' }))
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
 
     await user.click(await screen.findByRole('button', { name: 'Sposta in Basso: Delta' }))
-    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
     const body = submittedBody()
@@ -331,13 +331,13 @@ describe('SimulationRunner', () => {
     serve(orderingSimulation, orderingQuestions, 'ordering')
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
     /* Consegnare la sequenza così com'era arrivata sarebbe una risposta, e
        chi non tocca niente non ne sta dando una: il pulsante lo dice, e il
        corpo della richiesta pure. */
-    await user.click(await screen.findByRole('button', { name: 'Salta la domanda' }))
+    await user.click(await screen.findByRole('button', { name: 'Salta la Domanda' }))
     await user.click(await screen.findByRole('button', { name: 'Sposta in Alto: Gamma' }))
-    await user.click(screen.getByRole('button', { name: 'Consegna il test' }))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
     const [saltata] = submittedBody().answers
@@ -349,21 +349,64 @@ describe('SimulationRunner', () => {
     serve(matchingSimulation, matchingQuestions, 'matching')
     renderRunner()
 
-    await user.click(await screen.findByRole('button', { name: 'Inizia il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
 
-    await user.click(await screen.findByRole('combobox'))
+    /* La tendina si trova dal nome della voce che sta abbinando: sono una per
+       riga e tutte con lo stesso invito, quindi senza quel nome chi le sente
+       lette una dopo l'altra non saprebbe a cosa si riferiscono. */
+    await user.click(await screen.findByRole('combobox', { name: 'Abbinamento per Carta' }))
     await user.click(await screen.findByRole('option', { name: 'Sportello' }))
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
 
     /* La seconda si lascia scoperta: vale sbagliata, e non viaggia. Sul
        passo finale il pulsante consegna, quindi non dice "salta" nemmeno
        quando non è stato scelto niente. */
-    await user.click(await screen.findByRole('button', { name: 'Consegna il test' }))
+    await user.click(await screen.findByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
     const body = submittedBody()
 
     expect(body.answers[0].pairs).toEqual([{ left: 'Carta', right: 'Sportello' }])
     expect(body.answers[1].pairs).toBeNull()
+  })
+
+  /* Le domande estratte e le risposte date vivono solo qui dentro: un F5
+     involontario a metà test rimanda alle regole con le mani vuote, quindi il
+     browser chiede conferma finché c'è qualcosa da perdere. Prima di
+     cominciare e dopo la consegna non c'è niente, e l'avviso non deve
+     comparire. */
+  describe("l'avviso prima di lasciare la pagina", () => {
+    /** Vero se qualcuno ha fermato la chiusura della pagina. */
+    const chiedeConferma = () => {
+      const event = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+
+    it('non avvisa sulle regole, avvisa a test cominciato', async () => {
+      const user = userEvent.setup()
+      renderRunner()
+
+      const inizia = await screen.findByRole('button', { name: 'Inizia il Test' })
+      expect(chiedeConferma()).toBe(false)
+
+      await user.click(inizia)
+      await screen.findByText('Prima domanda?')
+      expect(chiedeConferma()).toBe(true)
+    })
+
+    it('smette di avvisare quando il test è consegnato', async () => {
+      const user = userEvent.setup()
+      renderRunner()
+
+      await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
+      await user.click(await screen.findByText('Alfa'))
+      await user.click(screen.getByRole('button', { name: 'Avanti' }))
+      await user.click(await screen.findByText('Delta'))
+      await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
+
+      await screen.findByRole('button', { name: 'Riprova il Test' })
+      expect(chiedeConferma()).toBe(false)
+    })
   })
 })

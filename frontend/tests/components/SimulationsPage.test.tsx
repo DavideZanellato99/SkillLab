@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -131,5 +132,64 @@ describe('SimulationsPage', () => {
     renderPage({ data: [simulazione({ description: null })] })
 
     expect(screen.queryByText(/Le verifiche da fare/)).not.toBeInTheDocument()
+  })
+
+  /* Il voto dice com'è andata l'ultima prova, non se quell'ultima è di ieri
+   * o di sei mesi fa: la distanza da adesso sta accanto al conteggio. */
+  it("dice quanto tempo fa è stato svolto l'ultima volta", () => {
+    renderPage({
+      data: [
+        simulazione({
+          attempt_count: 2,
+          last_attempt_score: 7,
+          last_attempt_at: new Date().toISOString(),
+        }),
+      ],
+    })
+
+    expect(screen.getByText(/Svolto 2 volte, l'ultima oggi/)).toBeInTheDocument()
+  })
+
+  /* Con una decina di test pubblicati, "quali non ho ancora fatto" era una
+   * domanda a cui si rispondeva leggendo la riga in fondo a ogni scheda. */
+  describe('ricerca e filtri', () => {
+    const mai = simulazione({ id: 'mai', title: 'Mai svolto' })
+    const fatto = simulazione({ id: 'fatto', title: 'Già svolto', attempt_count: 1 })
+
+    it('restringe alle sole prove ancora da svolgere', async () => {
+      renderPage({ data: [mai, fatto] })
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Da svolgere' }))
+
+      expect(screen.getByRole('heading', { name: 'Mai svolto' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Già svolto' })).not.toBeInTheDocument()
+    })
+
+    it('cerca fra i test a schermo', async () => {
+      renderPage({ data: [mai, fatto] })
+
+      await userEvent.type(screen.getByLabelText('Cerca un test tecnico'), 'già')
+
+      expect(screen.getByRole('heading', { name: 'Già svolto' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Mai svolto' })).not.toBeInTheDocument()
+    })
+
+    /* Una pagina ristretta non deve sembrare guasta: il vuoto dice che a
+       mancare sono i risultati della ricerca, non i test. */
+    it('spiega un vuoto che viene dalla ricerca', async () => {
+      renderPage({ data: [mai, fatto] })
+
+      await userEvent.type(screen.getByLabelText('Cerca un test tecnico'), 'sportello')
+
+      expect(screen.getByText('Nessun test corrisponde alla ricerca')).toBeInTheDocument()
+      expect(screen.queryByText('Nessuna simulazione disponibile')).not.toBeInTheDocument()
+    })
+
+    /* Sopra un elenco vuoto sarebbe una casella che non trova mai niente. */
+    it('non mostra la barra quando non c’è niente da restringere', () => {
+      renderPage({ data: [] })
+
+      expect(screen.queryByLabelText('Cerca un test tecnico')).not.toBeInTheDocument()
+    })
   })
 })

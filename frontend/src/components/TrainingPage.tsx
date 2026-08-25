@@ -7,6 +7,7 @@ import { useAssignments, useDeleteAssignment, useDeletePath, usePaths } from '..
 import type { PathAssignment, TrainingPath } from '../services/training'
 import AssignPathModal from './AssignPathModal'
 import ConfirmModal from './ConfirmModal'
+import EmptyState from './EmptyState'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import PaginationBar from './Pagination'
@@ -46,9 +47,6 @@ import { PlusIcon, TrashIcon } from './icons'
  * è per metà spazio vuoto. */
 
 type Tab = 'paths' | 'assignments'
-
-const emptyStateCls =
-  'rounded-2xl border border-white/6 bg-gray-900/60 p-16 text-center text-slate-500 backdrop-blur-md'
 
 export default function TrainingPage() {
   const { user } = useAuth()
@@ -164,7 +162,7 @@ export default function TrainingPage() {
         isLoadingPaths ? (
           <LoadingState message="Caricamento percorsi..." />
         ) : paths.length === 0 ? (
-          <p className={emptyStateCls}>Nessun percorso ancora composto</p>
+          <EmptyState title="Nessun percorso ancora composto" />
         ) : (
           <>
             <SearchInput
@@ -179,7 +177,7 @@ export default function TrainingPage() {
               className="mb-4 max-w-[340px]"
             />
             {filteredPaths.length === 0 ? (
-              <p className={emptyStateCls}>Nessun percorso corrisponde alla ricerca</p>
+              <EmptyState title="Nessun percorso corrisponde alla ricerca" />
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">

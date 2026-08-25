@@ -91,7 +91,7 @@ export default function SimulationOpenQuestionStep({
             : 'Rispondi con parole tue, senza riprodurre il testo del manuale'}
         </span>
         <PrimaryButton onClick={() => onAnswer(written || null)}>
-          {isLast ? 'Consegna il test' : written ? 'Avanti' : 'Salta la domanda'}
+          {isLast ? 'Consegna il Test' : written ? 'Avanti' : 'Salta la Domanda'}
         </PrimaryButton>
       </div>
     </div>

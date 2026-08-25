@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMyAssignments } from '../hooks/useTraining'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
+import EmptyState from './EmptyState'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import PathProgressRing from './PathProgressRing'
@@ -73,9 +74,7 @@ export default function PathMapPage() {
     return (
       <PageContainer>
         {backLink}
-        <p className="rounded-2xl border border-white/6 bg-gray-900/60 p-16 text-center text-slate-500 backdrop-blur-md">
-          Questo percorso non è più fra i tuoi
-        </p>
+        <EmptyState title="Questo percorso non è più fra i tuoi" />
       </PageContainer>
     )
   }

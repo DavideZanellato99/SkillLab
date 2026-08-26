@@ -31,7 +31,7 @@ L'export è nel registro perché una richiesta di accesso ai propri dati non è
 navigazione: è esattamente la cosa di cui serve poter dimostrare di aver dato
 seguito.
 
-Due garanzie su cui il resto del codice conta:
+Tre garanzie su cui il resto del codice conta:
 
 - **scrivere una riga di registro non può far cadere la richiesta che
   descrive.** La scrittura gira su una sessione tutta sua, dentro un
@@ -39,7 +39,13 @@ Due garanzie su cui il resto del codice conta:
 - **niente qui legge il corpo della richiesta.** Nel campo dei dettagli
   finiscono solo gli extra che un endpoint ha attaccato esplicitamente con
   `describe()`, quindi password, token e contenuto delle conversazioni restano
-  fuori per costruzione.
+  fuori per costruzione;
+- **e non gira sul ciclo di eventi.** La riga è un giro completo sul database,
+  cioè un'attesa bloccante, e fatta lì dentro teneva ferme tutte le richieste
+  in volo mentre una risposta già pronta aspettava di uscire. Passa da
+  `run_in_threadpool`, quindi su un thread di servizio: l'ordine non cambia (la
+  riga è ancora scritta prima che la risposta parta), cambia chi resta fermo ad
+  aspettarla, cioè nessuno.
 
 Una regola su quegli extra: **quando la riga descrive qualcosa che sparisce,
 nei dettagli ci vanno i nomi e non i soli identificativi**. Un percorso
@@ -57,7 +63,18 @@ di essere un registro.
 
 Il super admin lo legge da `/app/admin/logs`
 ([routers/audit_logs.py](../backend/routers/audit_logs.py)), con i filtri per
-azione, utente e periodo.
+azione, organizzazione e periodo, più una ricerca che copre le quattro colonne
+che nominano qualcosa: chi ha agito, quale organizzazione, quale indirizzo,
+quale riga. Il registro cresce senza limite, quindi si legge a finestre:
+`total` conta le righe che corrispondono ai filtri, non quelle rese.
+
+Una nota sul periodo, che è l'unico filtro dove il fuso conta. Il giorno scelto
+è quello di chi lo sceglie, non quello di Greenwich: il client manda i due
+estremi della propria giornata come momenti veri, con l'offset scritto, e
+`_naive` lo **applica** invece di buttarlo via. Toglierlo e basta spostava il
+confine di un fuso intero, cioè un'ora o due di azioni prese dal giorno
+sbagliato a ciascun estremo, ed è la differenza fra «le azioni di oggi» e le
+azioni di una giornata UTC che nessuno ha vissuto.
 
 ## Le difese sugli accessi
 

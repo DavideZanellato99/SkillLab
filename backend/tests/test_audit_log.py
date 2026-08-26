@@ -234,6 +234,50 @@ def test_registry_filters_by_date_range(
     assert before["total"] == 0
 
 
+def test_registry_date_range_applies_the_offset_it_is_given(
+    admin_client, act_as, standard_user, super_admin_user, db_session, make_avatar
+):
+    """A calendar day belongs to whoever picked it, not to Greenwich.
+
+    The client sends the two ends of its own day as real instants, offset
+    written. Dropping that offset instead of applying it moved the boundary
+    by a whole timezone, which is how "today's actions" turned into the
+    actions of a UTC day nobody lived through. Both bounds here sit around
+    the row on the timeline and would fall on the wrong side of it if the
+    offset were stripped.
+    """
+    from datetime import UTC, datetime, timedelta, timezone
+
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
+    act_as(standard_user)
+    admin_client.patch(f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"})
+    act_as(super_admin_user)
+    now = datetime.now(UTC)
+
+    # Mezz'ora prima della riga, scritto in un fuso avanti: buttato via
+    # l'offset diventerebbe un'ora e mezza DOPO, e la riga sparirebbe.
+    da = (now - timedelta(minutes=30)).astimezone(timezone(timedelta(hours=2)))
+    dopo = admin_client.get("/api/admin/audit-logs", params={"date_from": da.isoformat()}).json()
+    assert dopo["total"] >= 1
+
+    # Mezz'ora dopo la riga, scritto in un fuso indietro: buttato via
+    # l'offset diventerebbe quattro ore e mezza PRIMA, stessa sparizione.
+    al = (now + timedelta(minutes=30)).astimezone(timezone(timedelta(hours=-5)))
+    prima = admin_client.get("/api/admin/audit-logs", params={"date_to": al.isoformat()}).json()
+    assert prima["total"] >= 1
+
+    # E il confine resta un confine: mezz'ora dopo la riga, come inizio.
+    vuoto = admin_client.get(
+        "/api/admin/audit-logs",
+        params={
+            "date_from": (now + timedelta(minutes=30))
+            .astimezone(timezone(timedelta(hours=2)))
+            .isoformat()
+        },
+    ).json()
+    assert vuoto["total"] == 0
+
+
 def test_registry_search_spans_the_columns_that_name_things(
     admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
 ):

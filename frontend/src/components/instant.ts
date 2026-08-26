@@ -39,3 +39,35 @@ export function fromLocalInputValue(value: string): string | null {
   const when = new Date(value)
   return Number.isNaN(when.getTime()) ? null : when.toISOString()
 }
+
+/* Un giorno di calendario scelto in un campo `<input type="date">` non è un
+ * momento, è un intervallo: comincia a mezzanotte e finisce un istante prima
+ * della successiva, nell'ora di chi lo ha scelto. Le due funzioni qui sotto
+ * ne danno i due estremi come momenti veri, con il fuso scritto, perché il
+ * server confronti con la propria colonna in UTC senza doverlo indovinare.
+ *
+ * Mandare la data nuda ("2026-03-01T00:00:00") vuol dire chiedere la giornata
+ * UTC invece della propria: in Italia sono una o due ore di azioni prese dal
+ * giorno sbagliato a ciascun estremo, ed è la differenza fra "le azioni di
+ * oggi" e le azioni di una giornata che nessuno ha vissuto. */
+
+const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/** Anno, mese (da zero) e giorno di un campo data, se ne porta uno valido. */
+function dayParts(value: string): [number, number, number] | null {
+  const match = DAY_PATTERN.exec(value)
+  if (!match) return null
+  return [Number(match[1]), Number(match[2]) - 1, Number(match[3])]
+}
+
+/** Il momento in cui quel giorno comincia, in ora locale. */
+export function startOfDayInstant(value: string): string | null {
+  const parts = dayParts(value)
+  return parts ? new Date(parts[0], parts[1], parts[2], 0, 0, 0, 0).toISOString() : null
+}
+
+/** L'ultimo istante di quel giorno: "fino al 3" comprende tutto il 3. */
+export function endOfDayInstant(value: string): string | null {
+  const parts = dayParts(value)
+  return parts ? new Date(parts[0], parts[1], parts[2], 23, 59, 59, 999).toISOString() : null
+}

@@ -38,15 +38,34 @@ describe('fetchAuditLogs', () => {
     })
   })
 
-  /* "Fino al 3" deve comprendere tutto il 3: senza l'orario di fine giornata
-   * la data verrebbe letta come mezzanotte e le azioni di quel giorno
-   * sparirebbero dal registro proprio nel giorno che si sta guardando. */
-  it('allarga le date a giornate intere', async () => {
+  /* Un giorno di calendario è un intervallo, e quello che si intende è il
+   * proprio, non quello di Greenwich: i due estremi partono come momenti veri,
+   * con il fuso scritto, così il server confronta con la propria colonna in
+   * UTC senza doverlo indovinare. Mandare la data nuda chiedeva la giornata
+   * UTC, cioè un'ora o due di azioni prese dal giorno sbagliato a ogni
+   * estremo. Il confronto qui non dipende dal fuso della macchina. */
+  it('manda il periodo come momenti veri, non come date nude', async () => {
     await fetchAuditLogs({ dateFrom: '2026-03-01', dateTo: '2026-03-03' })
-    expect(ultimiParametri()).toEqual({
-      date_from: '2026-03-01T00:00:00',
-      date_to: '2026-03-03T23:59:59',
-    })
+    const { date_from: dal, date_to: al } = ultimiParametri()
+
+    expect(dal).toMatch(/Z$/)
+    expect(al).toMatch(/Z$/)
+
+    const inizio = new Date(dal)
+    expect(inizio.getDate()).toBe(1)
+    expect(inizio.getHours()).toBe(0)
+
+    /* "Fino al 3" comprende tutto il 3: fermarsi a mezzanotte butterebbe via
+     * l'intera giornata che si sta chiedendo. */
+    const fine = new Date(al)
+    expect(fine.getDate()).toBe(3)
+    expect(fine.getHours()).toBe(23)
+    expect(fine.getMinutes()).toBe(59)
+  })
+
+  it('lascia fuori un periodo scritto male invece di inventarlo', async () => {
+    await fetchAuditLogs({ dateFrom: '01/03/2026', dateTo: '' })
+    expect(ultimiParametri()).toEqual({})
   })
 
   /* Zero è una risposta valida sia per la pagina sia per lo scorrimento:

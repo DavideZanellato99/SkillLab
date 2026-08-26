@@ -8,7 +8,7 @@
  * una chiave nuova e quindi ricomincia da capo, che è il comportamento
  * voluto. */
 
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { fetchAuditActions, fetchAuditLogs } from '../services/auditLogs'
 import { queryKeys } from './queryKeys'
 
@@ -43,6 +43,13 @@ export function useAuditLogs(filters: AuditLogFilters, enabled = true) {
     },
     enabled,
     staleTime: AUDIT_STALE_TIME,
+    /* Cambiare un filtro o scrivere nella ricerca è una chiave di cache
+     * nuova, cioè una query che non ha ancora dati: senza questo la tabella
+     * spariva e al suo posto compariva il riquadro di caricamento, con la
+     * pagina che saltava a ogni tasto premuto. Con le righe di prima al loro
+     * posto (`isPlaceholderData` dice che sono quelle vecchie, e la pagina le
+     * attenua) resta solo il tempo di attesa, senza il salto. */
+    placeholderData: keepPreviousData,
   })
 
   const pages = query.data?.pages ?? []

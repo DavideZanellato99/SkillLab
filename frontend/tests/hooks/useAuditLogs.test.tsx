@@ -103,6 +103,36 @@ describe('useAuditLogs', () => {
     await waitFor(() => expect(result.current.logs).toHaveLength(2))
   })
 
+  /* Un filtro nuovo è una chiave di cache senza dati: senza questo la pagina
+   * perdeva la tabella e metteva al suo posto il riquadro di caricamento, e
+   * con la ricerca che scrive un filtro per tasto premuto era un salto a ogni
+   * lettera. Le righe di prima restano finché non arrivano quelle nuove, e
+   * `isPlaceholderData` dice alla pagina di attenuarle. */
+  it('tiene a schermo le righe di prima mentre arriva la risposta a un filtro nuovo', async () => {
+    servizio.fetchAuditLogs.mockResolvedValueOnce(pagina(2, 2))
+    const { result, rerender } = renderHook((f: typeof filtri) => useAuditLogs(f), {
+      wrapper,
+      initialProps: filtri,
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    let arriva!: (page: unknown) => void
+    servizio.fetchAuditLogs.mockReturnValueOnce(
+      new Promise((resolve) => {
+        arriva = resolve
+      }),
+    )
+    rerender({ ...filtri, action: 'user.create' })
+
+    await waitFor(() => expect(result.current.isPlaceholderData).toBe(true))
+    expect(result.current.logs).toHaveLength(2)
+    expect(result.current.isPending).toBe(false)
+
+    arriva(pagina(1, 1))
+    await waitFor(() => expect(result.current.logs).toHaveLength(1))
+    expect(result.current.isPlaceholderData).toBe(false)
+  })
+
   it('mostra un registro vuoto finché non è arrivato niente', () => {
     servizio.fetchAuditLogs.mockResolvedValue(pagina(0, 0))
     const { result } = renderHook(() => useAuditLogs(filtri), { wrapper })

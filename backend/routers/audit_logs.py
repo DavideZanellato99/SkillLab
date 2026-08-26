@@ -10,7 +10,7 @@ with `resolve_admin_scope` like the rest of the admin API: an organization
 admin gets a 403 here, including for the log of its own organization.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -87,8 +87,15 @@ def list_audit_logs(
 
 
 def _naive(value: datetime) -> datetime:
-    """Drop the offset of an ISO datetime: the column is naive UTC."""
-    return value.replace(tzinfo=None) if value.tzinfo else value
+    """The same instant in UTC and without an offset, like the column.
+
+    Converted, not stripped. The client sends the two ends of a calendar day
+    as its reader has them, offset written, and dropping that offset instead
+    of applying it moves the boundary by a whole timezone: it is exactly the
+    difference between "today's actions" and the actions of a UTC day nobody
+    lived through. Dates arriving without an offset are already UTC.
+    """
+    return value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
 
 
 def _response(row: AuditLog) -> AuditLogResponse:

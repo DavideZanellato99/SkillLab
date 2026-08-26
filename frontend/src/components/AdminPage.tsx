@@ -29,9 +29,9 @@ import DataTable from './DataTable'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
 import LoadingState from './LoadingState'
+import LoadMoreButton from './LoadMoreButton'
 import { PageContainer, PageHeader } from './PageLayout'
 import PrimaryButton from './PrimaryButton'
-import Spinner from './Spinner'
 import UserCreateModal from './UserCreateModal'
 import UserDetailModal from './UserDetailModal'
 import UserEditModal from './UserEditModal'
@@ -41,9 +41,6 @@ import type { UsersFiltersValue } from './UsersFilters'
 import { ResendIcon, TrashIcon, UserPlusIcon } from './icons'
 
 const NO_FILTERS: UsersFiltersValue = { organizationId: '', ruolo: '', status: '', access: '' }
-
-const loadMoreBtnCls =
-  'flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-60'
 
 export default function AdminPage() {
   const { user } = useAuth()
@@ -233,21 +230,9 @@ export default function AdminPage() {
                     Caricati {users.length} utenti {hasFilters ? 'dei' : 'di'} {total}
                     {hasFilters ? ' che corrispondono ai filtri' : ''}
                   </span>
-                  <button
-                    type="button"
-                    className={loadMoreBtnCls}
-                    onClick={() => fetchNextPage()}
-                    disabled={isLoadingMore}
-                  >
-                    {isLoadingMore ? (
-                      <>
-                        <Spinner variant="button" />
-                        Caricamento...
-                      </>
-                    ) : (
-                      `Carica altri ${Math.min(USERS_WINDOW_SIZE, total - users.length)}`
-                    )}
-                  </button>
+                  <LoadMoreButton onClick={() => fetchNextPage()} isLoading={isLoadingMore}>
+                    {`Carica altri ${Math.min(USERS_WINDOW_SIZE, total - users.length)}`}
+                  </LoadMoreButton>
                 </>
               )
             }

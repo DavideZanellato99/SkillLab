@@ -12,6 +12,7 @@
 import type { UserStatus } from '../services/auth'
 import { ROLE_OPTIONS, STATUS_LABELS } from './adminUsersConfig'
 import { fieldCls, labelCls } from './Field'
+import ResetFiltersButton from './ResetFiltersButton'
 import Select from './Select'
 
 const ACCESS_OPTIONS = [
@@ -105,15 +106,7 @@ export default function UsersFilters({
           options={ACCESS_OPTIONS}
         />
       </div>
-      {hasFilters && (
-        <button
-          type="button"
-          className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-          onClick={onReset}
-        >
-          Azzera Filtri
-        </button>
-      )}
+      {hasFilters && <ResetFiltersButton onClick={onReset} />}
     </div>
   )
 }

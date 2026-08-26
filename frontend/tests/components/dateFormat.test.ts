@@ -5,6 +5,7 @@ import {
   formatDateTime,
   formatRelativeDay,
   formatTime,
+  formatTimestamp,
 } from '../../src/components/dateFormat'
 
 /* `now` è iniettato in ogni caso: un test che dipendesse dall'orologio reale
@@ -81,5 +82,23 @@ describe('formatTime', () => {
    * report accanto mostrava l'ora giusta. */
   it('reads a timestamp without a timezone as UTC', () => {
     expect(formatTime('2026-03-05T09:05:00')).toBe(formatTime('2026-03-05T09:05:00Z'))
+  })
+})
+
+describe('formatTimestamp', () => {
+  /* Tutto in cifre e con i secondi: il registro attività deve poter stare su
+   * una riga sola, e deve poter distinguere due azioni dello stesso minuto. */
+  it('returns a numeric Italian date down to the second', () => {
+    expect(formatTimestamp('2026-03-05T09:05:07Z')).toMatch(
+      /^\d{2}\/\d{2}\/\d{4},? \d{2}:\d{2}:\d{2}$/,
+    )
+  })
+
+  /* Era l'ultima data dell'app letta con `new Date`: il registro mostrava
+   * ogni azione spostata del fuso di chi guardava, cioè due ore prima in
+   * estate, proprio nella schermata che esiste per dire quando le cose sono
+   * successe. */
+  it('reads a timestamp without a timezone as UTC', () => {
+    expect(formatTimestamp('2026-03-05T09:05:07')).toBe(formatTimestamp('2026-03-05T09:05:07Z'))
   })
 })

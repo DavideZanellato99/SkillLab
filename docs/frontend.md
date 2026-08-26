@@ -338,6 +338,7 @@ l'impaginazione dell'app è fatta di questi pezzi:
 | [SearchInput](../frontend/src/components/SearchInput.tsx) e [FilterTabs](../frontend/src/components/FilterTabs.tsx)                                                                                          | La casella con cui si cerca dentro un elenco, e il gruppo di pulsanti con cui si sceglie fra poche alternative. `FilterTabs` è sempre un `radiogroup` e mai una fila di bottoni sciolti, e ha due forme: `compact`, il gruppo stretto dentro una barra di filtri, e `pills`, la fila larga e centrata della galleria, che va a capo e porta accanto a ogni voce quanti elementi contiene                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | [TabBar](../frontend/src/components/TabBar.tsx)                                                                                                                                                              | Le linguette con cui si cambia l’oggetto del discorso, diverse dal segmented control di `FilterTabs`, che invece restringe quello che si sta già guardando. Da tastiera si scorrono con le frecce, con Home e Fine per le estremità, e dentro il gruppo Tab si ferma una volta sola: è quello che le rende un gruppo di alternative invece di una fila di pulsanti. Dove il contenuto porta il proprio `TabPanel`, ogni linguetta cita il pannello che comanda; senza pannello non cita niente, perché un `aria-controls` verso un id inesistente dice una cosa falsa                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | [NumberInput](../frontend/src/components/NumberInput.tsx)                                                                                                                                                    | Ogni campo numerico dell'app. Le frecce del browser sono spente da una regola sola in `index.css`, valida per tutti i campi numerici, e queste sono disegnate da noi: quelle di sistema sono due triangolini grigi che cambiano forma fra un browser e l'altro e in Chrome compaiono solo passandoci sopra. A muovere il valore sono `stepUp` e `stepDown` del campo stesso, le stesse funzioni che stanno dietro le frecce della tastiera, quindi `min`, `max` e `step` valgono senza rifare quel conto. La larghezza va sul riquadro (`wrapperClassName`) e non sul campo, altrimenti dentro una colonna di flex le frecce finiscono fuori dal bordo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| [ResetFiltersButton](../frontend/src/components/ResetFiltersButton.tsx) e [LoadMoreButton](../frontend/src/components/LoadMoreButton.tsx) | I due comandi di un elenco filtrato che dal server arriva a finestre: quello che riporta l'elenco intero, in fondo alla barra dei filtri, e quello che chiede la finestra successiva, dentro il `footerNote` di `DataTable`. Erano ricopiati fra la gestione utenti e il registro attività, e nelle due copie la regola era già diversa: uno azzerava anche la casella di ricerca, l'altro la lasciava scritta, quindi si premeva «Azzera Filtri» e l'elenco restava filtrato. Azzerare comprende sempre la ricerca, che è un filtro anche lei benché la casella stia dentro la tabella; il pulsante della finestra si spegne mentre quella arriva, perché due clic di seguito chiederebbero due volte le stesse righe |
 
 Questi file esistono quasi tutti perché la stessa cosa era stata ricopiata in
 otto o undici posti, e nelle copie i valori avevano cominciato a divergere
@@ -479,14 +480,27 @@ stessa in tutta l'app, deve stare scritta una volta.
   runtime non finirebbe mai nel CSS compilato.
 - **Un momento che arriva dal server si legge sempre con `parseInstant`**
   ([instant.ts](../frontend/src/components/instant.ts)) e si scrive sempre con
-  le tre funzioni di [dateFormat.ts](../frontend/src/components/dateFormat.ts):
-  la data, la data con l'ora, l'ora sola. Le colonne dello schema sono in UTC e
-  senza fuso scritto, quindi la risposta porta `2026-08-12T17:00:00` e basta, e
+  le quattro funzioni di [dateFormat.ts](../frontend/src/components/dateFormat.ts):
+  la data, la data con l'ora, l'ora sola, e il momento al secondo
+  (`formatTimestamp`, che serve al registro attività, dove due azioni possono
+  cadere nello stesso minuto). Le colonne dello schema sono in UTC e senza fuso
+  scritto, quindi la risposta porta `2026-08-12T17:00:00` e basta, e
   `new Date` la legge come ora locale: su una data lo scarto non si vede, su un
   orario sono due ore sbagliate. Erano quattro copie della stessa
   formattazione, due delle quali con la lettura sbagliata, e nel report
   attività si vedevano una accanto all'altra: la riga con l'ora giusta e la
-  trascrizione che si apre da lì con quella spostata.
+  trascrizione che si apre da lì con quella spostata. Il registro attività è
+  stata l'ultima a passare di qui, e fino ad allora mostrava ogni azione
+  spostata del fuso di chi guardava, cioè due ore prima in estate, proprio
+  nella schermata che esiste per dire quando le cose sono successe.
+- **Un giorno di calendario scelto in un filtro non è una data, è un
+  intervallo**, e parte come tale: `startOfDayInstant` e `endOfDayInstant`
+  ([instant.ts](../frontend/src/components/instant.ts)) danno i due estremi di
+  quel giorno nell'ora di chi lo ha scelto, come momenti veri con il fuso
+  scritto. Mandare la data nuda (`2026-03-01T00:00:00`) chiede al server la
+  giornata UTC invece della propria: in Italia sono un'ora o due di righe prese
+  dal giorno sbagliato a ciascun estremo, cioè un filtro che risponde a una
+  domanda diversa da quella scritta sullo schermo.
 
 ## I test
 

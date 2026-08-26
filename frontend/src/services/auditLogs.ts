@@ -4,6 +4,7 @@
  * recorded action, so there is nothing to write here either. Rows leave the
  * registry only when the server-side retention expires them.
  */
+import { endOfDayInstant, startOfDayInstant } from '../components/instant'
 import { apiFetch } from './api'
 
 export interface AuditLog {
@@ -45,7 +46,7 @@ export interface AuditLogFilters {
   userId?: string
   organizationId?: string
   action?: string
-  /** ISO date (yyyy-mm-dd), inclusive. */
+  /** Calendar day (yyyy-mm-dd) as the reader's clock has it, inclusive. */
   dateFrom?: string
   dateTo?: string
   search?: string
@@ -58,20 +59,28 @@ export interface AuditLogFilters {
  * bound, so the caller always asks for a slice and uses `total` to know
  * how much is left behind it.
  */
-export const fetchAuditLogs = (filters: AuditLogFilters = {}) =>
-  apiFetch<AuditLogPage>('/api/admin/audit-logs', {
+export const fetchAuditLogs = (filters: AuditLogFilters = {}) => {
+  /* A calendar day is an interval, and the one meant here is the reader's,
+   * not UTC's: both ends leave as real instants with their offset written,
+   * so "fino al 3" covers the 3rd as the clock on the wall had it. Sending
+   * the bare date asked for the UTC day instead, which in Italy takes an
+   * hour or two of actions from the wrong day at each end. */
+  const dateFrom = filters.dateFrom ? startOfDayInstant(filters.dateFrom) : null
+  const dateTo = filters.dateTo ? endOfDayInstant(filters.dateTo) : null
+
+  return apiFetch<AuditLogPage>('/api/admin/audit-logs', {
     params: {
       ...(filters.userId ? { user_id: filters.userId } : {}),
       ...(filters.organizationId ? { organization_id: filters.organizationId } : {}),
       ...(filters.action ? { action: filters.action } : {}),
-      // The end of the day, so "fino al 3" includes everything of the 3rd
-      ...(filters.dateFrom ? { date_from: `${filters.dateFrom}T00:00:00` } : {}),
-      ...(filters.dateTo ? { date_to: `${filters.dateTo}T23:59:59` } : {}),
+      ...(dateFrom ? { date_from: dateFrom } : {}),
+      ...(dateTo ? { date_to: dateTo } : {}),
       ...(filters.search ? { q: filters.search } : {}),
       ...(filters.limit !== undefined ? { limit: String(filters.limit) } : {}),
       ...(filters.offset !== undefined ? { offset: String(filters.offset) } : {}),
     },
   })
+}
 
 /** The catalogue of recordable actions, for the filter dropdown. */
 export const fetchAuditActions = () =>

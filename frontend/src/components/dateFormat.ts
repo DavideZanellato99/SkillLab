@@ -93,3 +93,19 @@ export function formatTime(dateStr: string): string {
     minute: '2-digit',
   })
 }
+
+/* Data e ora al secondo, tutto in cifre: "31/12/2025, 23:59:59". La usa il
+ * registro attività, l'unico posto dove i secondi servono davvero, perché due
+ * azioni possono cadere nello stesso minuto e l'ordine fra le due è proprio
+ * quello che si sta guardando. In cifre e non col mese scritto perché la
+ * colonna deve stare su una riga sola. */
+export function formatTimestamp(dateStr: string): string {
+  return parseInstant(dateStr).toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}

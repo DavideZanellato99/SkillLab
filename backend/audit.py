@@ -31,6 +31,7 @@ from typing import Any, NamedTuple
 
 from sqlalchemy import delete
 from sqlalchemy.engine import Connection
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -363,7 +364,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         try:
-            self._record(request, response.status_code)
+            # In a worker thread, not on the event loop. The write is a
+            # blocking round trip to the database, and done inline it held
+            # up every other request in flight while a response that was
+            # already finished waited to go out.
+            await run_in_threadpool(self._record, request, response.status_code)
         except Exception:
             # The response must go out whatever happens to its audit row.
             logger.exception("Audit middleware")

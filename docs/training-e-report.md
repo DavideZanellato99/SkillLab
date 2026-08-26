@@ -1166,6 +1166,26 @@ consegnato ([SimulationResult](../frontend/src/components/SimulationResult.tsx))
 in terza persona invece che in seconda: chi corregge deve leggere esattamente
 quello che leggerà chi ha sbagliato.
 
+**La tabella delle valutazioni sta dentro la pagina, e per starci ha le
+colonne strette.** È l'unica tabella dell'app le cui colonne non sono note in
+anticipo, perché i criteri arrivano dal server e ognuno porta la sua: undici
+colonne in tutto, e alle misure di prima ne chiedevano quasi milleseicento di
+pixel contro i millecentocinquanta che la pagina ha. Il riquadro scorreva di
+lato su qualunque schermo, che qui è il modo peggiore di leggere una riga:
+arrivati all'ultimo criterio si è perso di vista di quale conversazione si sta
+guardando il voto. Adesso la somma fa 1130px e ci sta, con il padding stretto
+su tutte le colonne e non solo su quelle dei numeri. A pagare sono i titoli
+lunghi, che vanno a capo su due righe, ed è il verso giusto dello scambio: una
+riga alta il doppio si legge, una tabella che scappa a destra no.
+
+Le colonne dei criteri sono larghe novanta pixel, e il nome accorciato ci deve
+stare: per questo `identificazione_cliente` in intestazione è "Cliente" e non
+"Identificazione", che da sola ne chiedeva centotrenta. Il nome intero resta
+nel tooltip dell'intestazione, dove è sempre stato. Nel foglio Excel invece i
+nomi accorciati sono quelli di `CRITERION_SHORT_LABELS` in
+[exports.py](../backend/exports.py), che sono una lista a parte e restano più
+lunghi: là la colonna è larga quanto serve.
+
 **L'esportazione.** `GET /api/admin/evaluations-report/export` produce un foglio
 di calcolo con le stesse righe che si vedono a schermo
 ([exports.py](../backend/exports.py), che genera anche i due PDF, quello di una

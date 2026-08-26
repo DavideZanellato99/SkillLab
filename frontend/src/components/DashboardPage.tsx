@@ -81,15 +81,28 @@ interface CriterionAvg {
  * essere note in anticipo: i criteri arrivano dal backend, quindi il riparto
  * si calcola invece di essere scritto a mano. Si parte dalla misura che ogni
  * colonna vuole in pixel, e da lì escono sia le percentuali sia la larghezza
- * minima della tabella: sotto quella è il riquadro a scorrere, perché sei
- * criteri più il contorno in milleduecento pixel non ci stanno. */
+ * minima della tabella.
+ *
+ * Le misure sono strette apposta. Sotto la larghezza minima è il riquadro a
+ * scorrere di lato, e con undici colonne larghe si scorreva sempre: la
+ * pagina è larga 1200px, il contenuto 1152, e la somma di prima ne chiedeva
+ * quasi milleseicento. Scorrere di lato è il modo peggiore di leggere questa
+ * tabella, perché per arrivare all'ultimo criterio si perde di vista la
+ * conversazione di cui si sta guardando il voto. La somma di adesso è 1130px
+ * e ci sta, e a pagare sono i titoli lunghi, che vanno a capo su due righe:
+ * una riga alta il doppio si legge, una tabella che scappa a destra no.
+ *
+ * Il padding stretto (`compact`) è per tutte le colonne e non solo per
+ * quelle dei criteri: dodici pixel per lato invece di ventiquattro sono
+ * centoventi pixel di testo in più su undici colonne, cioè la differenza fra
+ * un titolo su due righe e uno su tre. */
 const EVALUATION_COLUMN_PX = {
-  conversazione: 240,
-  data: 120,
-  utente: 160,
-  avatar: 130,
-  criterio: 140,
-  voto: 100,
+  conversazione: 170,
+  data: 110,
+  utente: 125,
+  avatar: 100,
+  criterio: 90,
+  voto: 85,
 }
 
 function evaluationColumns(criteria: CriterionAvg[]) {
@@ -101,10 +114,15 @@ function evaluationColumns(criteria: CriterionAvg[]) {
   return {
     minWidth: `${totalPx}px`,
     columns: [
-      { key: 'conversazione', label: 'Conversazione', width: width(px.conversazione) },
-      { key: 'data', label: 'Data', width: width(px.data) },
-      { key: 'utente', label: 'Utente', width: width(px.utente) },
-      { key: 'avatar', label: 'Avatar', width: width(px.avatar) },
+      {
+        key: 'conversazione',
+        label: 'Conversazione',
+        compact: true,
+        width: width(px.conversazione),
+      },
+      { key: 'data', label: 'Data', compact: true, width: width(px.data) },
+      { key: 'utente', label: 'Utente', compact: true, width: width(px.utente) },
+      { key: 'avatar', label: 'Avatar', compact: true, width: width(px.avatar) },
       ...criteria.map((c) => ({
         key: c.key,
         label: shortCriterionLabel(c.key, c.label),
@@ -112,7 +130,7 @@ function evaluationColumns(criteria: CriterionAvg[]) {
         compact: true,
         width: width(px.criterio),
       })),
-      { key: 'voto', label: 'Voto', width: width(px.voto) },
+      { key: 'voto', label: 'Voto', compact: true, width: width(px.voto) },
     ],
   }
 }
@@ -702,7 +720,7 @@ export default function DashboardPage() {
                         anchor="cursor"
                       >
                         <Tr onActivate={() => setDetailRow(r)}>
-                          <Td>
+                          <Td compact>
                             <div className="flex items-center justify-center gap-2">
                               <ConversationModeBadge mode={r.mode} iconOnly />
                               <span className="text-[0.85rem] font-medium text-slate-100">
@@ -710,15 +728,17 @@ export default function DashboardPage() {
                               </span>
                             </div>
                           </Td>
-                          <Td className="text-[0.82rem] text-slate-400">
+                          <Td compact className="text-[0.82rem] text-slate-400">
                             {formatDateTime(r.conversation_at)}
                           </Td>
-                          <Td>
+                          <Td compact>
                             <span className="text-[0.85rem] font-medium text-slate-100">
                               {personName(r)}
                             </span>
                           </Td>
-                          <Td className="text-[0.82rem] text-slate-400">{r.avatar_name}</Td>
+                          <Td compact className="text-[0.82rem] text-slate-400">
+                            {r.avatar_name}
+                          </Td>
                           {criteriaAvgs.map((c) => {
                             const crit = r.criteria.find((rc) => rc.key === c.key)
                             return (
@@ -735,7 +755,7 @@ export default function DashboardPage() {
                               </Td>
                             )
                           })}
-                          <Td>
+                          <Td compact>
                             {/* Il voto in colonna è quello che conta: se un docente
                         l'ha corretto va detto, altrimenti la tabella
                         sembrerebbe contraddire la valutazione automatica.

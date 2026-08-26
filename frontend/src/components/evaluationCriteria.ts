@@ -19,13 +19,19 @@
  */
 
 /* La prima parola dell'etichetta intera non basterebbe a distinguerli:
- * "Corretta identificazione del cliente" diventerebbe "Corretta". */
+ * "Corretta identificazione del cliente" diventerebbe "Corretta".
+ *
+ * Una parola sola e corta, perché la colonna che la porta è larga novanta
+ * pixel: "Identificazione" ne chiedeva centotrenta e usciva dalla propria
+ * cella, e la parola che quel criterio individua è comunque "cliente", visto
+ * che nessun altro criterio parla di chi c'è dall'altra parte. L'etichetta
+ * intera resta nel tooltip dell'intestazione. */
 const CRITERION_SHORT_LABELS: Record<string, string> = {
   rispetto_fasi_chiamata: 'Fasi',
   empatia: 'Empatia',
   sicurezza_competenza: 'Sicurezza',
   appropriatezza_linguaggio: 'Linguaggio',
-  identificazione_cliente: 'Identificazione',
+  identificazione_cliente: 'Cliente',
   comprensione_casistica: 'Casistica',
 }
 

@@ -9,7 +9,7 @@
  * si preme, senza tornare sul server.
  */
 
-import type { Simulation } from '../services/simulations'
+import type { AdminSimulation, Simulation, SimulationStatus } from '../services/simulations'
 import { kindLabel, sourceLabel } from './simulationFormat'
 import { matchesSearch } from './tableSearch'
 
@@ -49,6 +49,55 @@ export function filterSimulations(
       kindLabel(simulation.kind),
       sourceLabel(simulation.source),
       simulation.organization_name,
+    )
+  })
+}
+
+/* ── La gestione, che è l'altra metà ──────────────────────────────────
+ *
+ * Chi prepara i test guarda le stesse righe da un'altra parte, e la domanda
+ * che si fa aprendo la pagina non è quali abbia già svolto ma **quali siano
+ * ancora da finire**: una simulazione vive in bozza finché il serbatoio non è
+ * pieno e riletto, e le bozze sono quelle su cui si torna. Sta qui accanto
+ * all'altro filtro perché sono due modi di restringere lo stesso elenco, e
+ * separarli vorrebbe dire due file che parlano di simulazioni filtrate. */
+
+/** Quali simulazioni guardare nella gestione: le bozze, le pubblicate, tutte. */
+export type SimulationStatusFilter = SimulationStatus | 'all'
+
+/* "Tutte" resta in fondo come negli altri filtri dell'app: è il punto di
+ * partenza, non una terza scelta. Prima le bozze, che sono il lavoro
+ * rimasto indietro. */
+export const STATUS_FILTERS: { value: SimulationStatusFilter; label: string }[] = [
+  { value: 'draft', label: 'Bozze' },
+  { value: 'published', label: 'Pubblicate' },
+  { value: 'all', label: 'Tutte' },
+]
+
+/**
+ * Le simulazioni che restano dopo lo stato e la ricerca.
+ *
+ * La ricerca guarda anche il tipo e l'origine, che nella tabella si leggono
+ * come targhette: cercare "aperta" trova i test in cui si scrive, cercare
+ * "manuale" quelli scritti da una persona. L'organizzazione entra solo dove
+ * si vede, cioè per chi ne amministra più di una: per un organization admin
+ * sarebbe la propria su ogni riga, e cercarla restituirebbe tutto.
+ */
+export function filterAdminSimulations(
+  simulations: AdminSimulation[],
+  status: SimulationStatusFilter,
+  search: string,
+  showOrganization: boolean,
+): AdminSimulation[] {
+  return simulations.filter((simulation) => {
+    if (status !== 'all' && simulation.status !== status) return false
+    return matchesSearch(
+      search,
+      simulation.title,
+      showOrganization ? simulation.organization_name : '',
+      simulation.document_name,
+      kindLabel(simulation.kind),
+      sourceLabel(simulation.source),
     )
   })
 }

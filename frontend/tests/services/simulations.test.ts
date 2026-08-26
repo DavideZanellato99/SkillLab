@@ -8,11 +8,13 @@ vi.mock('../../src/services/api', () => ({
 }))
 
 import {
+  MAX_DOCUMENT_BYTES,
   POOL_COUNT,
   QUESTION_COUNT,
   createSimulation,
   deleteSimulation,
   deleteSimulationAttempt,
+  documentRejection,
   fetchAdminSimulation,
   fetchAdminSimulations,
   fetchAttempt,
@@ -234,5 +236,39 @@ describe('gestione dei test', () => {
       endpoint: '/api/admin/simulation-attempts/t-1',
       options: { method: 'DELETE' },
     })
+  })
+})
+
+/* Le tre domande che il server pone a un upload, poste al momento in cui il
+ * file si sceglie: un documento da trenta megabyte non deve occupare la linea
+ * per il tempo di un caricamento che finisce in un errore. */
+describe('documentRejection', () => {
+  const documento = (name: string, size: number): File => {
+    const file = new File(['x'], name)
+    Object.defineProperty(file, 'size', { value: size })
+    return file
+  }
+
+  it('accetta i formati che il server sa leggere', () => {
+    for (const nome of ['procedura.pdf', 'PROCEDURA.PDF', 'note.docx', 'testo.txt', 'guida.md']) {
+      expect(documentRejection(documento(nome, 1024))).toBeNull()
+    }
+  })
+
+  it('rifiuta un formato che il server non legge', () => {
+    expect(documentRejection(documento('foto.png', 1024))).toMatch(/Formato non supportato/)
+  })
+
+  it('rifiuta un file vuoto', () => {
+    expect(documentRejection(documento('procedura.pdf', 0))).toMatch(/vuoto/)
+  })
+
+  /* Il tetto è quello del server, e il messaggio pure: lo stesso rifiuto
+     detto in due modi sembrerebbero due problemi diversi. */
+  it('rifiuta un documento oltre il tetto', () => {
+    expect(documentRejection(documento('procedura.pdf', MAX_DOCUMENT_BYTES + 1))).toBe(
+      'Il documento non può superare 10 MB.',
+    )
+    expect(documentRejection(documento('procedura.pdf', MAX_DOCUMENT_BYTES))).toBeNull()
   })
 })

@@ -160,6 +160,35 @@ describe('elenco', () => {
     expect(screen.getByText('Nessuna simulazione corrisponde alla ricerca')).toBeInTheDocument()
   })
 
+  /* La domanda che si fa chi apre questa pagina è quali test siano rimasti a
+     metà: la ricerca da sola non sa rispondere, perché «bozza» non è scritto
+     da nessuna parte nella riga. */
+  it('separa le bozze da finire dalle simulazioni pubblicate', async () => {
+    renderPage([simulazione(), simulazione({ id: 's-2', title: 'Privacy', status: 'draft' })])
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Bozze' }))
+    expect(screen.getByText('Privacy')).toBeInTheDocument()
+    expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Pubblicate' }))
+    expect(screen.getByText('Normativa antiriciclaggio')).toBeInTheDocument()
+    expect(screen.queryByText('Privacy')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Tutte' }))
+    expect(screen.getByText('Privacy')).toBeInTheDocument()
+    expect(screen.getByText('Normativa antiriciclaggio')).toBeInTheDocument()
+  })
+
+  /* «Nessuna simulazione presente» sotto un filtro attivo farebbe credere
+     che siano sparite. */
+  it('dice quale filtro sta svuotando la tabella', async () => {
+    renderPage([simulazione()])
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Bozze' }))
+
+    expect(screen.getByText('Nessuna bozza da finire')).toBeInTheDocument()
+  })
+
   it('mostra il caricamento', () => {
     stato.elenco = { data: [], isLoading: true }
     render(<SimulationAdminPage />)

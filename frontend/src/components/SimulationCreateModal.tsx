@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useCreateSimulation } from '../hooks/useSimulations'
 import type { Organization } from '../services/organizations'
+import { DOCUMENT_ACCEPT, documentRejection } from '../services/simulations'
 import type { SimulationKind, SimulationSource } from '../services/simulations'
 import ModalShell, { ModalHeader } from './ModalShell'
 import Field, { textareaCls, TextInput } from './Field'
@@ -8,6 +9,7 @@ import Select from './Select'
 import PrimaryButton from './PrimaryButton'
 import Spinner from './Spinner'
 import FormError from './FormError'
+import { FileTextIcon, UploadIcon } from './icons'
 import { kindLabel } from './simulationFormat'
 
 /* La creazione di una simulazione: titolo, organizzazione, tipo, chi scrive
@@ -26,9 +28,6 @@ import { kindLabel } from './simulationFormat'
  * abbinate. E chi le scrive, perché un test scritto a
  * mano non ha documento e uno generato ne ha uno indicizzato. Chi si accorge
  * di aver scelto male ne crea una nuova. */
-
-/** Le estensioni che il backend sa leggere (vedi document_text). */
-const ACCEPTED = '.pdf,.docx,.txt,.md,.markdown'
 
 /* I quattro tipi nell'ordine in cui sono nati, che è anche quello dal più
  * usato al meno. Le stesse parole del badge, prese da `kindLabel`: qui si
@@ -67,6 +66,18 @@ export default function SimulationCreateModal({
   const [kind, setKind] = useState<SimulationKind>('multiple')
   const [source, setSource] = useState<SimulationSource>('ai')
   const [file, setFile] = useState<File | null>(null)
+  /** Il file scelto che il server rifiuterebbe, con il perché. */
+  const [rejected, setRejected] = useState<string | null>(null)
+
+  /* Le tre domande che il server porrebbe all'upload, poste qui: un
+   * documento da trenta megabyte, o un PDF che è in realtà un'immagine con
+   * l'estensione sbagliata, non deve occupare la linea per il tempo di un
+   * caricamento che finisce in un errore. */
+  const chooseFile = (chosen: File | null) => {
+    const rejection = chosen ? documentRejection(chosen) : null
+    setRejected(rejection)
+    setFile(rejection ? null : chosen)
+  }
 
   const fromDocument = source === 'ai'
   /* L'organizzazione la si deve scegliere solo dove c'è da scegliere: senza
@@ -97,23 +108,7 @@ export default function SimulationCreateModal({
   return (
     <ModalShell onClose={onClose} locked={create.isPending} size="md" padding="md">
       <ModalHeader
-        icon={
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="9" y1="15" x2="15" y2="15" />
-            <line x1="9" y1="11" x2="15" y2="11" />
-          </svg>
-        }
+        icon={<FileTextIcon size={24} />}
         iconWrapperCls="border border-violet-600/20 bg-violet-600/10 text-violet-400"
         title="Nuova Simulazione"
         description={
@@ -205,9 +200,9 @@ export default function SimulationCreateModal({
             <input
               ref={fileInput}
               type="file"
-              accept={ACCEPTED}
+              accept={DOCUMENT_ACCEPT}
               className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => chooseFile(e.target.files?.[0] ?? null)}
               disabled={create.isPending}
             />
             <button
@@ -216,21 +211,7 @@ export default function SimulationCreateModal({
               disabled={create.isPending}
               className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-dashed border-white/12 bg-slate-800/50 px-4 py-3 text-left text-sm text-slate-400 transition hover:border-violet-600/50 hover:bg-violet-600/8 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="shrink-0 text-slate-500"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
+              <UploadIcon size={18} className="shrink-0 text-slate-500" />
               <span className="min-w-0 flex-1 truncate">
                 {file ? file.name : 'Scegli un file dal computer'}
               </span>
@@ -238,6 +219,7 @@ export default function SimulationCreateModal({
           </Field>
         )}
 
+        {rejected && <FormError message={rejected} />}
         {create.isError && <FormError message={(create.error as Error).message} />}
 
         <PrimaryButton type="submit" variant="submit" className="mt-1" disabled={!canSubmit}>

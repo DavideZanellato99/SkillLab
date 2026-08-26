@@ -1696,10 +1696,15 @@ class SimulationReviewResponse(BaseModel):
 
 class SimulationAdminDetailResponse(AdminSimulationResponse):
     """La simulazione come la vede il super admin: domande con le chiavi,
-    il testo del documento e quanti l'hanno svolta."""
+    in quanti passaggi il documento è stato spezzato e quanti l'hanno svolta.
+
+    Il testo del documento non c'è, per quanto sia scritto nella riga: nessuna
+    schermata lo mostra, e a rileggerlo sono il modello che genera le domande
+    e quello che le controlla, tutti e due dentro al server. Viaggiava in ogni
+    risposta di questo router, salvataggio delle domande compreso, e un
+    documento sta fino a dieci megabyte."""
 
     questions: list[SimulationQuestionAdminResponse]
-    document_text: str
     chunk_count: int
     total_attempts: int
     # Assente finché nessuno ha chiesto il controllo, che è diverso da un

@@ -72,6 +72,41 @@ export function requiredPool(source: SimulationSource): number {
   return source === 'manual' ? QUESTION_COUNT : POOL_COUNT
 }
 
+/* Le estensioni che il server sa leggere, il gemello di
+ * `SUPPORTED_EXTENSIONS` in `document_text.py`.
+ *
+ * Sta qui e non nella modale che carica il documento perché i posti da cui un
+ * documento entra sono due, la creazione e la sostituzione: un elenco copiato
+ * sarebbe un formato accettato da una schermata e rifiutato dall'altra. */
+export const DOCUMENT_ACCEPT = '.pdf,.docx,.txt,.md,.markdown'
+
+/** Quanto può pesare, il gemello di `MAX_DOCUMENT_BYTES` in `document_text.py`. */
+export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+
+/**
+ * Perché questo file non si può caricare, o null se si può.
+ *
+ * Le stesse tre domande che il server pone a un upload, poste qui nel momento
+ * in cui il file si sceglie: senza, un documento da trenta megabyte parte,
+ * occupa la linea per il tempo che ci vuole e torna indietro come errore.
+ *
+ * Le parole sono quelle del server, alla lettera: lo stesso rifiuto detto in
+ * due modi diversi a seconda di chi se ne accorge per primo sembrano due
+ * problemi. A controllare per davvero resta comunque lui, che è l'unico a
+ * vedere il contenuto del file.
+ */
+export function documentRejection(file: File): string | null {
+  const name = file.name.toLowerCase()
+  if (!DOCUMENT_ACCEPT.split(',').some((extension) => name.endsWith(extension))) {
+    return 'Formato non supportato: carica un file PDF, DOCX, TXT o Markdown.'
+  }
+  if (file.size === 0) return 'Il file caricato è vuoto.'
+  if (file.size > MAX_DOCUMENT_BYTES) {
+    return `Il documento non può superare ${MAX_DOCUMENT_BYTES / (1024 * 1024)} MB.`
+  }
+  return null
+}
+
 export interface SimulationQuestion {
   id: string
   position: number
@@ -158,7 +193,9 @@ export interface SimulationReview {
 
 export interface SimulationAdminDetail extends AdminSimulation {
   questions: SimulationQuestionAdmin[]
-  document_text: string
+  /* In quanti passaggi il documento è stato spezzato. Il testo del documento
+   * non arriva: nessuna schermata lo mostra, e a rileggerlo sono il modello
+   * che scrive le domande e quello che le controlla, tutti e due nel server. */
   chunk_count: number
   total_attempts: number
   /** Assente finché nessuno ha chiesto il controllo, che è diverso da un

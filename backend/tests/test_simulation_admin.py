@@ -100,18 +100,23 @@ def _crea(admin_client, organization, *, kind=SIMULATION_KIND_MULTIPLE, file=Non
 
 
 def test_il_documento_caricato_diventa_passaggi_indicizzati(
-    admin_client, organization, indicizzazione
+    admin_client, organization, indicizzazione, db_session
 ):
     """Il testo si conserva per intero e spezzato: il primo serve a chi
-    rilegge, i passaggi servono a scrivere le domande."""
+    rilegge, i passaggi servono a scrivere le domande.
+
+    Il testo intero resta in banca dati e non nella risposta: chi amministra
+    ne legge il nome e quanti passaggi ne sono usciti, mentre il testo lo
+    rilegge il modello quando genera e quando controlla."""
     risposta = _crea(admin_client, organization)
 
     assert risposta.status_code == 201
     corpo = risposta.json()
     assert corpo["document_name"] == "procedura.txt"
     assert corpo["chunk_count"] == 1
-    assert "La carta si sblocca" in corpo["document_text"]
     assert corpo["status"] == SIMULATION_STATUS_DRAFT
+    salvata = db_session.query(TechnicalSimulation).filter_by(id=corpo["id"]).one()
+    assert "La carta si sblocca" in salvata.document_text
 
 
 def test_una_simulazione_nasce_sempre_in_bozza_e_senza_domande(
@@ -242,8 +247,9 @@ def test_ricaricare_il_documento_rifa_i_passaggi_e_lascia_stare_le_domande(
     assert risposta.status_code == 200
     corpo = risposta.json()
     assert corpo["document_name"] == "procedura-v2.txt"
-    assert "Secondo paragrafo" in corpo["document_text"]
     assert len(corpo["questions"]) == 1
+    salvata = db_session.query(TechnicalSimulation).filter_by(id=corpo["id"]).one()
+    assert "Secondo paragrafo" in salvata.document_text
 
 
 def test_sostituire_il_documento_di_una_simulazione_che_non_esiste_risponde_404(
@@ -384,6 +390,19 @@ def test_una_descrizione_svuotata_torna_a_non_esserci(admin_client, organization
     )
 
     assert risposta.json()["description"] is None
+
+
+def test_un_titolo_di_soli_spazi_non_si_salva(admin_client, organization, indicizzazione):
+    """La lunghezza minima dello schema conta i caratteri, e la barra
+    spaziatrice ne è uno: un titolo così arriverebbe vuoto in tabella."""
+    simulazione = _crea(admin_client, organization).json()
+
+    risposta = admin_client.put(
+        f"{SIMULAZIONI}/{simulazione['id']}", json={"title": "   ", "description": ""}
+    )
+
+    assert risposta.status_code == 400
+    assert "titolo" in risposta.json()["detail"].lower()
 
 
 def test_cancellare_una_simulazione_porta_via_anche_i_suoi_passaggi(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { filterSimulations } from '../../src/components/simulationFilters'
-import type { Simulation } from '../../src/services/simulations'
+import { filterAdminSimulations, filterSimulations } from '../../src/components/simulationFilters'
+import type { AdminSimulation, Simulation } from '../../src/services/simulations'
 
 /* Restringere l'elenco dei test è un giro su una lista già in memoria, e la
  * regola sta qui invece che dentro la pagina. Le due cose che questo file
@@ -24,6 +24,15 @@ const simulazione = (over: Partial<Simulation> = {}): Simulation => ({
   last_attempt_at: null,
   last_attempt_score: null,
   attempt_count: 0,
+  ...over,
+})
+
+/** La stessa riga come la vede chi i test li prepara, con la firma di chi
+ *  l'ha scritta. */
+const adminSimulazione = (over: Partial<AdminSimulation> = {}): AdminSimulation => ({
+  ...simulazione(),
+  created_by_email: 'admin@esempio.it',
+  updated_by_email: 'admin@esempio.it',
   ...over,
 })
 
@@ -61,5 +70,60 @@ describe('filterSimulations', () => {
     const elenco = [mai, fatto, altroFatto]
 
     expect(filterSimulations(elenco, 'done', 'bonifici').map((s) => s.id)).toEqual(['altro'])
+  })
+})
+
+describe('filterAdminSimulations', () => {
+  const bozza = adminSimulazione({ id: 'bozza', title: 'Reclami', status: 'draft' })
+  const pubblicata = adminSimulazione({ id: 'pubblicata', title: 'Bonifici esteri' })
+
+  it('mostra tutto finché non si sceglie uno stato', () => {
+    expect(filterAdminSimulations([bozza, pubblicata], 'all', '', true)).toHaveLength(2)
+  })
+
+  /* La domanda che si fa chi apre la gestione: quali test sono rimasti a
+     metà. */
+  it('separa le bozze da finire dalle simulazioni pubblicate', () => {
+    const elenco = [bozza, pubblicata]
+
+    expect(filterAdminSimulations(elenco, 'draft', '', true).map((s) => s.id)).toEqual(['bozza'])
+    expect(filterAdminSimulations(elenco, 'published', '', true).map((s) => s.id)).toEqual([
+      'pubblicata',
+    ])
+  })
+
+  it('cerca nel titolo, nel documento, nel tipo e in chi ha scritto le domande', () => {
+    const aperta = adminSimulazione({ id: 'aperta', title: 'Cassa', kind: 'open' })
+    const aMano = adminSimulazione({ id: 'mano', title: 'Sportello', source: 'manual' })
+    const elenco = [pubblicata, aperta, aMano]
+
+    expect(filterAdminSimulations(elenco, 'all', 'bonifici', true).map((s) => s.id)).toEqual([
+      'pubblicata',
+    ])
+    expect(filterAdminSimulations(elenco, 'all', 'normativa.pdf', true)).toHaveLength(3)
+    expect(filterAdminSimulations(elenco, 'all', 'risposta aperta', true).map((s) => s.id)).toEqual(
+      ['aperta'],
+    )
+    expect(filterAdminSimulations(elenco, 'all', 'manuale', true).map((s) => s.id)).toEqual([
+      'mano',
+    ])
+  })
+
+  /* Per chi ne amministra una sola l'organizzazione non è in tabella, e
+     cercarla restituirebbe tutto: quella riga non si cerca dove non si vede. */
+  it("cerca l'organizzazione solo dove la si legge", () => {
+    const elenco = [pubblicata]
+
+    expect(filterAdminSimulations(elenco, 'all', 'Banca Esempio', true)).toHaveLength(1)
+    expect(filterAdminSimulations(elenco, 'all', 'Banca Esempio', false)).toHaveLength(0)
+  })
+
+  it('applica insieme lo stato e la ricerca', () => {
+    const altraBozza = adminSimulazione({ id: 'altra', title: 'Bonifici interni', status: 'draft' })
+    const elenco = [bozza, pubblicata, altraBozza]
+
+    expect(filterAdminSimulations(elenco, 'draft', 'bonifici', true).map((s) => s.id)).toEqual([
+      'altra',
+    ])
   })
 })

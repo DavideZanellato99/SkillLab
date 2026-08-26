@@ -12,15 +12,17 @@ import PrimaryButton from './PrimaryButton'
 import Badge from './Badge'
 import ConfirmModal from './ConfirmModal'
 import Tooltip from './Tooltip'
+import FilterTabs from './FilterTabs'
 import { PencilIcon, PlusIcon, TrashIcon } from './icons'
-import { matchesSearch } from './tableSearch'
+import { filterAdminSimulations, STATUS_FILTERS } from './simulationFilters'
+import type { SimulationStatusFilter } from './simulationFilters'
 import SimulationCreateModal from './SimulationCreateModal'
 import SimulationDetailModal from './SimulationDetailModal'
 import SimulationEditorModal from './SimulationEditorModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import { formatDate } from './lastAccess'
-import { kindLabel, sourceLabel, statusBadgeTone, statusLabel } from './simulationFormat'
+import { statusBadgeTone, statusLabel } from './simulationFormat'
 import { iconActionCls as actionBtnCls } from './IconButton'
 
 /* La gestione delle simulazioni tecniche, per entrambi i ruoli di
@@ -63,6 +65,16 @@ function simulationColumns(showOrg: boolean): DataTableColumn[] {
   ]
 }
 
+/* Cosa dice la tabella vuota, che non è sempre la stessa cosa: senza righe
+ * per via di un filtro, il messaggio deve dire quale, altrimenti "nessuna
+ * simulazione presente" fa credere che siano sparite. */
+function emptyMessage(search: string, status: SimulationStatusFilter): string {
+  if (search) return 'Nessuna simulazione corrisponde alla ricerca'
+  if (status === 'draft') return 'Nessuna bozza da finire'
+  if (status === 'published') return 'Nessuna simulazione pubblicata'
+  return 'Nessuna simulazione presente'
+}
+
 export default function SimulationAdminPage() {
   const { user } = useAuth()
   const showOrg = isSuperAdmin(user)
@@ -73,6 +85,10 @@ export default function SimulationAdminPage() {
   const remove = useDeleteSimulation()
 
   const [search, setSearch] = useState('')
+  /* Lo stato è la prima domanda che si fa chi apre questa pagina: quali test
+   * sono ancora da finire. Si parte da tutte, perché è l'elenco intero, e le
+   * bozze sono a un clic. */
+  const [status, setStatus] = useState<SimulationStatusFilter>('all')
   const [creating, setCreating] = useState(false)
   /* Il pannello di revisione, aperto dalla matita. Tiene l'id e non la riga
    * perché si ricarica dal server: le domande non stanno nell'elenco. */
@@ -82,17 +98,7 @@ export default function SimulationAdminPage() {
   const [viewing, setViewing] = useState<AdminSimulation | null>(null)
   const [toDelete, setToDelete] = useState<AdminSimulation | null>(null)
 
-  const filtered = simulations.filter((s) =>
-    // Il tipo e l'origine si cercano con le stesse parole che i badge mostrano
-    matchesSearch(
-      search,
-      s.title,
-      showOrg ? s.organization_name : '',
-      s.document_name,
-      kindLabel(s.kind),
-      sourceLabel(s.source),
-    ),
-  )
+  const filtered = filterAdminSimulations(simulations, status, search, showOrg)
 
   const confirmDelete = () => {
     if (!toDelete) return
@@ -127,9 +133,7 @@ export default function SimulationAdminPage() {
         <DataTable
           columns={columns}
           isEmpty={filtered.length === 0}
-          emptyMessage={
-            search ? 'Nessuna simulazione corrisponde alla ricerca' : 'Nessuna simulazione presente'
-          }
+          emptyMessage={emptyMessage(search, status)}
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder={
@@ -137,6 +141,18 @@ export default function SimulationAdminPage() {
               ? 'Cerca per titolo, organizzazione o documento...'
               : 'Cerca per titolo o documento...'
           }
+          /* Accanto alla ricerca, come nel report attività: sono i due modi
+             di restringere lo stesso elenco, e su due fasce diverse si
+             leggerebbero come comandi di due schermate. */
+          searchActions={
+            <FilterTabs
+              value={status}
+              onChange={setStatus}
+              options={STATUS_FILTERS}
+              ariaLabel="Stato delle simulazioni"
+            />
+          }
+          pageResetKey={`${status}|${search}`}
         >
           {filtered.map((simulation) => (
             <Tr

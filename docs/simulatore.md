@@ -148,6 +148,10 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationSourceBadge.tsx](../frontend/src/components/SimulationSourceBadge.tsx) | La targhetta dell'origine, che le sta sempre accanto: domande di un modello o di una persona |
 | [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, la chiave del suo tipo, la spiegazione, e le segnalazioni del controllo sopra il testo |
 | [frontend/src/components/SimulationReviewPanel.tsx](../frontend/src/components/SimulationReviewPanel.tsx) | L'esito del controllo in testa alle domande, dalla segnalazione più grave, con il salto alla domanda di cui parla |
+| [frontend/src/components/SimulationSettingsPanel.tsx](../frontend/src/components/SimulationSettingsPanel.tsx) | I dati del test accanto alle domande: titolo, descrizione e la sostituzione del documento |
+| [frontend/src/components/SimulationAdminPage.tsx](../frontend/src/components/SimulationAdminPage.tsx) | La tabella di gestione: ricerca, filtro per stato, e le tre finestre che apre |
+| [frontend/src/components/SimulationEditorModal.tsx](../frontend/src/components/SimulationEditorModal.tsx) | Il pannello dove una simulazione diventa un test: domande, risultati, dati, pubblicazione |
+| [frontend/src/hooks/useCloseGuard.ts](../frontend/src/hooks/useCloseGuard.ts) | La conferma fra un gesto di chiusura e una finestra piena di lavoro non salvato, condivisa con il resto dell'app |
 | [frontend/src/components/SimulationStepsEditor.tsx](../frontend/src/components/SimulationStepsEditor.tsx) | La chiave di un ordinamento: i passi nella sequenza corretta |
 | [frontend/src/components/SimulationPairsEditor.tsx](../frontend/src/components/SimulationPairsEditor.tsx) | La chiave di un abbinamento: le coppie già accoppiate |
 | [frontend/src/components/simulationFormat.ts](../frontend/src/components/simulationFormat.ts) | Come si scrivono voti, punti e tempi, i nomi dei tipi, e la copia della scala che si legge durante la domanda |
@@ -264,6 +268,16 @@ Nell'ordine, in `create_simulation`:
    legge un byte in più del limite proprio per accorgersi del superamento
    senza caricare in memoria un file enorme.
 
+I punti 5 e 6 li pone anche il browser, nel momento in cui il file si sceglie
+(`documentRejection` in
+[services/simulations.ts](../frontend/src/services/simulations.ts), che serve
+sia alla creazione sia alla sostituzione del documento): senza, un file da
+trenta megabyte occuperebbe la linea per tutto il tempo di un caricamento
+destinato a tornare indietro come errore. Le parole del rifiuto sono le stesse
+del server, alla lettera, perché lo stesso rifiuto detto in due modi sembrano
+due problemi. A controllare per davvero resta comunque il server, l'unico che
+vede il contenuto del file.
+
 Poi la riga `TechnicalSimulation` nasce in stato `draft`, e solo dopo si
 indicizza il documento. Su una simulazione a mano `document_name` e
 `document_text` restano vuoti e non c'è nessun passaggio indicizzato: non è un
@@ -358,6 +372,13 @@ passaggi di prima vengono cancellati, **le domande no**: le domande sono il
 test, e un test non si azzera perché è stata caricata una versione aggiornata
 della procedura. Restano lì con le loro citazioni che ora puntano ai passaggi
 nuovi, ed è chi amministra a decidere se rigenerarle.
+
+Nell'interfaccia si arriva da **Dati del test**, la terza linguetta del
+pannello di revisione (§ [I dati del test](#i-dati-del-test)), e c'è solo sui
+test generati: su una simulazione scritta a mano un documento non è mai
+esistito, e la chiamata risponde 409. Prima di partire chiede conferma, dicendo
+quale documento prende il posto di quale e che le domande restano quelle di
+adesso.
 
 ---
 
@@ -673,10 +694,94 @@ fa.
 
 Chi amministra vede le domande **con le chiavi** (`SimulationQuestionAdminResponse`
 aggiunge `correct_option`, `expected_answer`, `ordered_steps`, `pairs`,
-`explanation` e `source_chunks`), più il testo del documento e quante persone
-hanno già svolto il test. Delle chiavi se ne legge una sola, quella del tipo
-del test. I passi arrivano **in ordine**, al contrario di come li riceve chi
-svolge il test: qui la chiave si rilegge, non si indovina.
+`explanation` e `source_chunks`), più in quanti passaggi il documento è stato
+spezzato e quante persone hanno già svolto il test. Delle chiavi se ne legge
+una sola, quella del tipo del test. I passi arrivano **in ordine**, al
+contrario di come li riceve chi svolge il test: qui la chiave si rilegge, non
+si indovina.
+
+Il **testo del documento non viaggia**, per quanto sia scritto nella riga:
+nessuna schermata lo mostra, e a rileggerlo sono la generazione e il
+controllo, tutti e due dentro al server. Stava in ogni risposta di questo
+router, salvataggio delle domande compreso, e un documento arriva fino a dieci
+megabyte.
+
+Il pannello ha tre linguette: **Domande**, dove si lavora quasi sempre,
+**Risultati**, cioè i tentativi già consegnati con il loro voto, e **Dati del
+test** ([SimulationSettingsPanel](../frontend/src/components/SimulationSettingsPanel.tsx)),
+che è titolo, descrizione e documento. Le azioni in fondo (generare, salvare,
+pubblicare, ritirare) restano le stesse qualunque linguetta si stia guardando:
+riguardano il test, non la linguetta. Il numero accanto a «Domande» conta
+quelle **scritte**, come il conteggio in fondo: una riga aggiunta e ancora
+vuota non è una domanda, e due numeri diversi per la stessa cosa nella stessa
+finestra si leggono come un errore.
+
+Nei risultati ogni riga si apre, e dentro c'è il tentativo per intero, le
+domande come sono state viste e cosa è stato risposto: è la stessa finestra
+della dashboard e del report attività
+([SimulationAttemptModal](../frontend/src/components/SimulationAttemptModal.tsx),
+qui `elevated` perché sta sopra il pannello). Senza il cestino, però: buttare
+via un tentativo è un gesto del report, non di chi sta preparando il test.
+
+La tabella da cui il pannello si apre ha, accanto alla ricerca, il filtro per
+**stato** (`STATUS_FILTERS` in
+[simulationFilters](../frontend/src/components/simulationFilters.ts)): bozze,
+pubblicate, tutte. È la domanda che si fa chi apre la pagina, quali test siano
+rimasti a metà, e la ricerca da sola non sa rispondere perché «bozza» non è
+scritto in nessuna riga.
+
+### I dati del test
+
+`PUT /api/admin/simulations/{id}` cambia **titolo e descrizione**, e nient'altro.
+Non l'organizzazione, che si porterebbe dietro i tentativi di persone che
+nell'organizzazione nuova non esistono; non il tipo di test e non l'origine
+delle domande, perché le domande sono già nate dell'una o dell'altra forma e
+cambiarle vorrebbe dire buttarle senza dirlo. Quei campi nel pannello non
+compaiono proprio: un campo spento sarebbe una promessa che nessuno mantiene.
+
+Sta insieme alle domande e non in una modale a parte perché è lo stesso test
+visto da un altro lato: chi apre la matita per correggere un refuso nel titolo
+e chi la apre per rileggere la trentesima domanda stanno lavorando sulla stessa
+cosa, e uscire di qui vorrebbe dire riaprire da capo e ritrovarsi in cima
+all'elenco.
+
+Accanto ai campi, sui test generati, c'è la sostituzione del documento
+(§ [1.5](#15-ricaricare-il-documento)), che chiede conferma prima di partire:
+cancella i passaggi di prima, ne indicizza di nuovi, e lascia le domande dove
+sono. Su un test scritto a mano la sezione non c'è, come non c'è l'endpoint che
+la servirebbe.
+
+#### Quello che si sta scrivendo non si perde
+
+Le domande si modificano su una **copia locale** che si riallinea a quella del
+server solo quando il serbatoio cambia davvero, cioè dopo una generazione o un
+salvataggio. Il confronto è sul contenuto e non sull'oggetto, che a ogni
+lettura è nuovo: senza, la copia locale verrebbe buttata a ogni ricontrollo
+della query, e chi ha scritto venti domande, è passato al documento aperto in
+un'altra finestra ed è tornato qui se le ritroverebbe com'erano sul server.
+Titolo e descrizione in scrittura vivono nel pannello e non nella linguetta che
+li disegna, per la stessa ragione: passare alle domande e tornare non li
+riporta com'erano.
+
+Le tre cose che tengono in piedi questa promessa:
+
+- **il dettaglio non si ricontrolla al ritorno sulla finestra**
+  (`useAdminSimulation`), al contrario di tutto il resto dell'app: è il dato su
+  cui si sta scrivendo, e una lettura in sottofondo in quel momento non ha
+  niente da aggiungere;
+- **ogni scrittura lascia in cache il dettaglio che ha appena ricevuto**
+  (`useApplyDetail`) invece di farlo rileggere. Le risposte di questo router
+  sono già il dettaglio intero e aggiornato, quindi rileggerlo sarebbe un
+  secondo giro sul server per avere quello che si ha in mano, e su cinquanta
+  domande non è un giro leggero. Gli elenchi invece si rileggono, perché il
+  conteggio delle domande e lo stato stanno lì e non nella risposta;
+- **chiudere chiede conferma** quando c'è del lavoro non salvato
+  ([useCloseGuard](../frontend/src/hooks/useCloseGuard.ts) e
+  [UnsavedChangesModal](../frontend/src/components/UnsavedChangesModal.tsx)),
+  su tutte e quattro le vie di uscita (la X, Esc, lo sfondo, i bottoni), e il
+  ricaricare la pagina lo ferma il browser con `useLeaveConfirmation`, come
+  durante un test in corso. Una riga aggiunta e lasciata vuota non conta come
+  lavoro: chiedere conferma per quella insegna a rispondere senza leggere.
 
 ### Il controllo del serbatoio
 

@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useCloseGuard } from '../hooks/useCloseGuard'
+import { useLeaveConfirmation } from '../hooks/useLeaveConfirmation'
 import {
   useAdminSimulation,
   useGenerateQuestions,
+  useReplaceSimulationDocument,
   useReviewPool,
   useSaveQuestions,
   useSimulationResults,
+  useUpdateSimulation,
   useUpdateSimulationStatus,
 } from '../hooks/useSimulations'
 import {
@@ -28,8 +32,11 @@ import FormSuccess from './FormSuccess'
 import Badge from './Badge'
 import TabBar from './TabBar'
 import { PlusIcon } from './icons'
+import SimulationAttemptModal from './SimulationAttemptModal'
 import SimulationQuestionEditor from './SimulationQuestionEditor'
 import SimulationReviewPanel from './SimulationReviewPanel'
+import SimulationSettingsPanel from './SimulationSettingsPanel'
+import UnsavedChangesModal from './UnsavedChangesModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import {
@@ -185,21 +192,55 @@ export default function SimulationEditorModal({
   const review = useReviewPool(simulationId)
   const save = useSaveQuestions(simulationId)
   const setStatus = useUpdateSimulationStatus(simulationId)
+  const updateDetails = useUpdateSimulation(simulationId)
+  const replaceDocument = useReplaceSimulationDocument(simulationId)
 
-  const [tab, setTab] = useState<'questions' | 'results'>('questions')
+  const [tab, setTab] = useState<'questions' | 'results' | 'settings'>('questions')
   const { data: results = [] } = useSimulationResults(simulationId, tab === 'results')
 
   const [draft, setDraft] = useState<SimulationQuestionPayload[]>([])
   const [saved, setSaved] = useState(false)
+  /** Il tentativo che si sta rileggendo, aperto da una riga dei risultati. */
+  const [openAttempt, setOpenAttempt] = useState<string | null>(null)
 
-  /* La copia locale si riallinea a quella del server ogni volta che il server
-   * ne manda una nuova: dopo una generazione le domande sono altre, e tenere
-   * quelle di prima significherebbe mostrare un test che non esiste più. */
+  /* La copia locale si riallinea quando il serbatoio del server cambia
+   * davvero, e non a ogni lettura.
+   *
+   * Le domande arrivano in un array nuovo ogni volta, quindi riallinearsi
+   * all'oggetto vorrebbe dire buttare il lavoro in corso a ogni ricontrollo
+   * della query: chi ha scritto venti domande, è passato al documento aperto
+   * in un'altra finestra e torna qui se le ritroverebbe com'erano sul
+   * server. Il confronto è sul contenuto, che cambia dopo una generazione o
+   * un salvataggio e resta uguale quando il server rimanda quelle di prima. */
+  const synced = useRef<string | null>(null)
   useEffect(() => {
-    if (simulation) setDraft(toPayload(simulation.questions))
+    if (!simulation) return
+    const questions = toPayload(simulation.questions)
+    const signature = JSON.stringify(questions)
+    if (signature === synced.current) return
+    synced.current = signature
+    setDraft(questions)
   }, [simulation])
 
-  const busy = generate.isPending || save.isPending || setStatus.isPending || review.isPending
+  /* Titolo e descrizione in scrittura stanno qui e non nel pannello che li
+   * disegna: chi corregge il titolo e passa alle domande non deve ritrovarlo
+   * com'era. Si riallineano quando li cambia il server, non a ogni lettura,
+   * perché le dipendenze sono i due valori e non la simulazione intera. */
+  const [details, setDetails] = useState({ title: '', description: '' })
+  const serverTitle = simulation?.title
+  const serverDescription = simulation?.description ?? ''
+  useEffect(() => {
+    if (serverTitle === undefined) return
+    setDetails({ title: serverTitle, description: serverDescription })
+  }, [serverTitle, serverDescription])
+
+  const busy =
+    generate.isPending ||
+    save.isPending ||
+    setStatus.isPending ||
+    review.isPending ||
+    updateDetails.isPending ||
+    replaceDocument.isPending
   const isPublished = simulation?.status === 'published'
   const kind = simulation?.kind ?? 'multiple'
   const isManual = simulation?.source === 'manual'
@@ -210,6 +251,32 @@ export default function SimulationEditorModal({
   const enough = written.length >= required
   const allWritten = written.every((q) => isComplete(q, kind))
   const complete = enough && allWritten
+
+  /* Cosa andrebbe perso chiudendo adesso: le domande scritte e diverse da
+   * quelle del server, o un titolo corretto e non ancora salvato. Le righe
+   * vuote appena aggiunte non contano, come non contano nel salvataggio: una
+   * finestra che chiede conferma per una riga aperta e mai riempita insegna
+   * a rispondere senza leggere. */
+  const questionsChanged = JSON.stringify(written) !== synced.current
+  const detailsChanged =
+    simulation !== undefined &&
+    (details.title !== simulation.title || details.description !== (simulation.description ?? ''))
+  const unsaved = questionsChanged || detailsChanged
+
+  /* Le due vie di uscita, che vanno presidiate tutte e due: la X, Esc e lo
+   * sfondo passano dalla conferma, mentre il ricaricare o chiudere la scheda
+   * lo ferma il browser, come durante un test in corso. */
+  const closeGuard = useCloseGuard(unsaved, onClose)
+  useLeaveConfirmation(unsaved)
+
+  /* Il buon esito non resta a schermo: quando è ancora lì cinque minuti
+   * dopo, «Domande salvate» sembra riferirsi all'ultima cosa scritta invece
+   * che al salvataggio di prima. */
+  useEffect(() => {
+    if (!saved) return
+    const timer = setTimeout(() => setSaved(false), 4000)
+    return () => clearTimeout(timer)
+  }, [saved])
 
   const addQuestion = () => {
     setSaved(false)
@@ -234,10 +301,17 @@ export default function SimulationEditorModal({
 
   /* Dalla segnalazione alla domanda. Il pannello sta in cima a un elenco che
    * può essere lungo cinquanta schede, e senza questo "la domanda 37" sarebbe
-   * un numero da andare a cercare a mano. */
+   * un numero da andare a cercare a mano.
+   *
+   * Insieme alla pagina si sposta il fuoco, sul testo della domanda: senza,
+   * chi lavora da tastiera vedrebbe scorrere lo schermo e poi ripartirebbe
+   * col Tab dal pannello del controllo, cioè da cinquanta schede più in su.
+   * Lo scorrimento resta quello morbido di sopra, quindi il fuoco non deve
+   * saltarci sopra di suo. */
   const goToQuestion = (position: number) => {
     const node = document.getElementById(`simulation-question-${position}`)
     node?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    node?.querySelector('textarea')?.focus({ preventScroll: true })
   }
 
   /* Pubblicare salva prima le domande: quello che finisce davanti agli utenti
@@ -255,7 +329,7 @@ export default function SimulationEditorModal({
 
   return (
     <ModalShell
-      onClose={onClose}
+      onClose={closeGuard.requestClose}
       locked={busy}
       size="full"
       padding="none"
@@ -297,8 +371,15 @@ export default function SimulationEditorModal({
 
           <TabBar
             items={[
-              { value: 'questions', label: `Domande (${draft.length})` },
+              /* Le domande scritte, che sono anche quelle che si salvano e
+                 quelle contate in fondo: la riga vuota appena aggiunta non è
+                 ancora una domanda, e due numeri diversi per la stessa cosa
+                 nella stessa finestra si leggono come un errore. */
+              { value: 'questions', label: `Domande (${written.length})` },
               { value: 'results', label: `Risultati (${simulation.total_attempts})` },
+              /* In fondo perché è quello che si apre di rado: il titolo si
+                 corregge una volta, le domande si rileggono tutte. */
+              { value: 'settings', label: 'Dati del test' },
             ]}
             value={tab}
             onChange={setTab}
@@ -307,8 +388,8 @@ export default function SimulationEditorModal({
           />
 
           <div className="flex-1 overflow-y-auto px-8 py-5">
-            {tab === 'questions' ? (
-              draft.length === 0 ? (
+            {tab === 'questions' &&
+              (draft.length === 0 ? (
                 <div className="flex flex-col items-center gap-4 py-16 text-center">
                   <p className="text-[0.95rem] text-slate-400">
                     {isManual
@@ -402,40 +483,78 @@ export default function SimulationEditorModal({
                     </button>
                   )}
                 </>
-              )
-            ) : results.length === 0 ? (
-              <p className="py-16 text-center text-sm text-slate-500">
-                Nessun tentativo registrato per questo test
-              </p>
-            ) : (
-              <ul className="flex list-none flex-col gap-2">
-                {results.map((attempt) => (
-                  <li
-                    key={attempt.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/3 px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <span className="block truncate text-[0.9rem] text-slate-100">
-                        {attempt.user_name}
-                      </span>
-                      <span className="block truncate text-xs text-slate-500">
-                        {attempt.user_email}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-slate-500">
-                        {formatDateTime(attempt.created_at)}
-                      </span>
-                      <span className="text-xs tabular-nums text-slate-400">
-                        {attempt.correct_count}/{attempt.question_count}
-                      </span>
-                      <Badge tone={scoreBadgeTone(attempt.score)}>
-                        {formatScore(attempt.score)}
-                      </Badge>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              ))}
+
+            {tab === 'results' &&
+              (results.length === 0 ? (
+                <p className="py-16 text-center text-sm text-slate-500">
+                  Nessun tentativo registrato per questo test
+                </p>
+              ) : (
+                <ul className="flex list-none flex-col gap-2">
+                  {results.map((attempt) => (
+                    <li key={attempt.id}>
+                      {/* La riga si apre, come nella dashboard e nel report
+                          attività: qui ci sono il voto e i conteggi, mentre
+                          quello che dice davvero com'è andata sono le
+                          risposte, e stanno un clic più in là. */}
+                      <button
+                        type="button"
+                        onClick={() => setOpenAttempt(attempt.id)}
+                        aria-label={`Rileggi il test di ${attempt.user_name}`}
+                        className="flex w-full cursor-pointer flex-wrap items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/3 px-4 py-3 text-left transition hover:border-violet-600/40 hover:bg-white/6"
+                      >
+                        <div className="min-w-0">
+                          <span className="block truncate text-[0.9rem] text-slate-100">
+                            {attempt.user_name}
+                          </span>
+                          <span className="block truncate text-xs text-slate-500">
+                            {attempt.user_email}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-slate-500">
+                            {formatDateTime(attempt.created_at)}
+                          </span>
+                          <span className="text-xs tabular-nums text-slate-400">
+                            {attempt.correct_count}/{attempt.question_count}
+                          </span>
+                          <Badge tone={scoreBadgeTone(attempt.score)}>
+                            {formatScore(attempt.score)}
+                          </Badge>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+
+            {tab === 'settings' && (
+              <SimulationSettingsPanel
+                simulation={simulation}
+                title={details.title}
+                description={details.description}
+                onChange={setDetails}
+                onSave={() => {
+                  setSaved(false)
+                  updateDetails.reset()
+                  updateDetails.mutate({
+                    title: details.title.trim(),
+                    description: details.description.trim(),
+                  })
+                }}
+                isSaving={updateDetails.isPending}
+                saved={updateDetails.isSuccess}
+                error={(updateDetails.error as Error | null)?.message ?? ''}
+                onReplaceDocument={(file, onDone) => {
+                  setSaved(false)
+                  replaceDocument.reset()
+                  replaceDocument.mutate(file, { onSuccess: onDone })
+                }}
+                isReplacing={replaceDocument.isPending}
+                documentError={(replaceDocument.error as Error | null)?.message ?? ''}
+                disabled={busy}
+              />
             )}
           </div>
 
@@ -490,7 +609,11 @@ export default function SimulationEditorModal({
                     setSaved(false)
                     save.mutate(written, { onSuccess: () => setSaved(true) })
                   }}
-                  disabled={busy || written.length === 0}
+                  /* Un elenco vuoto si salva solo se sul server qualcosa
+                     c'era: è il modo di svuotare un serbatoio scritto a mano
+                     per rifarlo da capo. Su una simulazione appena creata
+                     invece non c'è niente da registrare. */
+                  disabled={busy || (written.length === 0 && simulation.questions.length === 0)}
                 >
                   {save.isPending ? (
                     <>
@@ -542,6 +665,31 @@ export default function SimulationEditorModal({
               </div>
             </div>
           </footer>
+
+          {/* Un tentativo riletto per intero, con le risposte date. È la
+              stessa finestra della dashboard e del report attività, e sta
+              sopra questa perché è l'ultima cosa aperta. Senza il cestino:
+              buttare via un tentativo è un gesto del report, non di chi sta
+              preparando il test. */}
+          {openAttempt && (
+            <SimulationAttemptModal
+              attemptId={openAttempt}
+              elevated
+              onClose={() => setOpenAttempt(null)}
+            />
+          )}
+
+          {closeGuard.isAsking && (
+            <UnsavedChangesModal
+              description={
+                questionsChanged
+                  ? 'Le domande scritte dopo l’ultimo salvataggio andranno perse.'
+                  : 'Il titolo e la descrizione non ancora salvati torneranno come erano.'
+              }
+              onKeepEditing={closeGuard.keepEditing}
+              onDiscard={closeGuard.discard}
+            />
+          )}
         </>
       )}
     </ModalShell>

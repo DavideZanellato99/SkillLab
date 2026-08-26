@@ -158,6 +158,10 @@ describe('scritture', () => {
     )
   })
 
+  /* Il dettaglio che ogni scrittura di amministrazione restituisce, già
+     aggiornato: è quello che finisce in cache al posto di una rilettura. */
+  const dettaglio = { id: 's-1', title: 'Test', questions: [] }
+
   const casi: [string, () => { mutate: (v: never) => void }, unknown, ReturnType<typeof vi.fn>][] =
     [
       ['creazione', () => useCreateSimulation(), { title: 'Test' }, servizio.createSimulation],
@@ -191,19 +195,47 @@ describe('scritture', () => {
         'published',
         servizio.updateSimulationStatus,
       ],
-      ['eliminazione', () => useDeleteSimulation(), 's-1', servizio.deleteSimulation],
     ]
 
-  it.each(casi)('la %s rilegge gli elenchi', async (_nome, hook, variabili, chiamata) => {
+  /* Gli elenchi sì, perché il conteggio delle domande e lo stato stanno lì e
+     non nella risposta della scrittura. Il dettaglio no: la risposta lo
+     porta già con sé, e su cinquanta domande rileggerlo è un giro sul server
+     per avere quello che si ha in mano. */
+  it.each(casi)(
+    'la %s scrive il dettaglio in cache e rilegge gli elenchi',
+    async (_nome, hook, variabili, chiamata) => {
+      chiamata.mockResolvedValue(dettaglio)
+      const invalida = vi.spyOn(client, 'invalidateQueries')
+      const { result } = renderHook(hook, { wrapper })
+
+      result.current.mutate(variabili as never)
+
+      await waitFor(() => expect(chiamata).toHaveBeenCalled())
+      await waitFor(() =>
+        expect(client.getQueryData(queryKeys.simulations.adminDetail('s-1'))).toEqual(dettaglio),
+      )
+      expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.simulations.adminList })
+      expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.simulations.list })
+      expect(invalida).not.toHaveBeenCalledWith({
+        queryKey: queryKeys.simulations.adminDetail('s-1'),
+      })
+    },
+  )
+
+  /* Un test eliminato non ha un dettaglio da aggiornare: quella voce si
+     butta, o riaprendo la riga ricomparirebbe per un istante. */
+  it("l'eliminazione butta il dettaglio e rilegge tutto il ramo", async () => {
+    client.setQueryData(queryKeys.simulations.adminDetail('s-1'), dettaglio)
     const invalida = vi.spyOn(client, 'invalidateQueries')
-    const { result } = renderHook(hook, { wrapper })
+    const { result } = renderHook(() => useDeleteSimulation(), { wrapper })
 
-    result.current.mutate(variabili as never)
+    result.current.mutate('s-1')
 
-    await waitFor(() => expect(chiamata).toHaveBeenCalled())
+    await waitFor(() => expect(servizio.deleteSimulation).toHaveBeenCalledWith('s-1'))
     await waitFor(() =>
-      expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.simulations.all }),
+      expect(client.getQueryData(queryKeys.simulations.adminDetail('s-1'))).toBeUndefined(),
     )
+    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.simulations.all })
   })
 
   /* La generazione non ritenta da sola: sono minuti di modello, e ripartire

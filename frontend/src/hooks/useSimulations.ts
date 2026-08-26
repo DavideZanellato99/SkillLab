@@ -1,14 +1,17 @@
 /* Il simulatore tecnico, lato dati.
  *
  * Due famiglie di hook che stanno insieme perché guardano le stesse righe:
- * quelli di chi svolge il test e quelli di chi lo crea. Ogni scrittura del
- * super admin invalida tutto il prefisso `simulations`, perché pubblicare o
- * ritirare una simulazione cambia anche l'elenco di chi la deve svolgere, e
- * quale delle due liste sia in cache in quel momento non lo sa nessuno. */
+ * quelli di chi svolge il test e quelli di chi lo crea. Una scrittura di
+ * amministrazione tocca sempre le due liste, perché pubblicare o ritirare una
+ * simulazione cambia anche l'elenco di chi la deve svolgere, e quale delle due
+ * sia in cache in quel momento non lo sa nessuno: quello che non si rilegge è
+ * il dettaglio, che la risposta della scrittura porta già con sé (vedi
+ * `useApplyDetail`). */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   Simulation,
+  SimulationAdminDetail,
   SimulationAnswerPayload,
   SimulationQuestionPayload,
 } from '../services/simulations'
@@ -139,32 +142,68 @@ export function useAdminSimulations(enabled = true) {
   })
 }
 
+/**
+ * Il dettaglio di gestione: le domande con le chiavi, il controllo e i
+ * risultati.
+ *
+ * Non si ricontrolla al ritorno sulla finestra, al contrario di tutto il
+ * resto dell'app. È il dato su cui si sta scrivendo: chi rivede cinquanta
+ * domande passa al documento aperto in un'altra finestra e torna qui, e una
+ * lettura in sottofondo in quel momento non avrebbe niente da aggiungere,
+ * perché ogni scrittura lascia in cache il dettaglio che ha appena ricevuto
+ * (vedi `useApplyDetail`). Alla riapertura del pannello si rilegge come
+ * qualsiasi altra query, quando è passato il tempo di scadenza.
+ */
 export function useAdminSimulation(simulationId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.simulations.adminDetail(simulationId!),
     queryFn: () => fetchAdminSimulation(simulationId!),
     enabled: Boolean(simulationId),
+    refetchOnWindowFocus: false,
   })
 }
 
-function useInvalidateSimulations() {
+/**
+ * Cosa lascia in cache una scrittura di amministrazione.
+ *
+ * Ognuna di queste chiamate torna il dettaglio intero e già aggiornato,
+ * quindi **il dettaglio si scrive invece di richiederlo**: rileggerlo
+ * significherebbe un secondo giro sul server per avere quello che si ha già
+ * in mano, e cinquanta domande non sono un giro leggero. È anche quello che
+ * tiene ferma la copia locale del pannello, che si riallinea solo quando le
+ * domande cambiano davvero.
+ *
+ * Gli elenchi invece si rileggono, perché quello che cambia lì non sta in
+ * questa risposta: la riga di gestione porta il conteggio delle domande e lo
+ * stato, e l'elenco di chi i test li svolge si popola o si svuota quando una
+ * simulazione viene pubblicata o ritirata.
+ */
+function useApplyDetail() {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: queryKeys.simulations.all })
+  return (detail: SimulationAdminDetail) => {
+    queryClient.setQueryData(queryKeys.simulations.adminDetail(detail.id), detail)
+    queryClient.invalidateQueries({ queryKey: queryKeys.simulations.adminList })
+    queryClient.invalidateQueries({ queryKey: queryKeys.simulations.list })
+    queryClient.invalidateQueries({ queryKey: queryKeys.simulations.detail(detail.id) })
+  }
 }
 
 export function useCreateSimulation() {
-  const invalidate = useInvalidateSimulations()
+  const applyDetail = useApplyDetail()
   return useMutation({
     mutationFn: createSimulation,
-    onSuccess: invalidate,
+    /* La simulazione appena creata si apre subito sul pannello di revisione:
+     * il dettaglio in cache è quello che la creazione ha già restituito, e
+     * quel pannello si apre senza una schermata di caricamento. */
+    onSuccess: applyDetail,
   })
 }
 
 export function useReplaceSimulationDocument(simulationId: string) {
-  const invalidate = useInvalidateSimulations()
+  const applyDetail = useApplyDetail()
   return useMutation({
     mutationFn: (file: File) => replaceSimulationDocument(simulationId, file),
-    onSuccess: invalidate,
+    onSuccess: applyDetail,
   })
 }
 
@@ -177,11 +216,11 @@ export function useReplaceSimulationDocument(simulationId: string) {
  * l'attesa proprio quando è già lunga.
  */
 export function useGenerateQuestions(simulationId: string) {
-  const invalidate = useInvalidateSimulations()
+  const applyDetail = useApplyDetail()
   return useMutation({
     mutationFn: () => generateSimulationQuestions(simulationId),
     retry: false,
-    onSuccess: invalidate,
+    onSuccess: applyDetail,
   })
 }
 
@@ -193,45 +232,52 @@ export function useGenerateQuestions(simulationId: string) {
  * modello, e ripartire da capo da solo raddoppierebbe un'attesa già lunga.
  */
 export function useReviewPool(simulationId: string) {
-  const invalidate = useInvalidateSimulations()
+  const applyDetail = useApplyDetail()
   return useMutation({
     mutationFn: () => reviewSimulationPool(simulationId),
     retry: false,
-    onSuccess: invalidate,
+    onSuccess: applyDetail,
   })
 }
 
 export function useUpdateSimulation(simulationId: string) {
-  const invalidate = useInvalidateSimulations()
+  const applyDetail = useApplyDetail()
   return useMutation({
     mutationFn: (payload: { title: string; description: string }) =>
       updateSimulation(simulationId, payload),
-    onSuccess: invalidate,
+    onSuccess: applyDetail,
   })
 }
 
 export function useSaveQuestions(simulationId: string) {
-  const invalidate = useInvalidateSimulations()
+  const applyDetail = useApplyDetail()
   return useMutation({
     mutationFn: (questions: SimulationQuestionPayload[]) =>
       saveSimulationQuestions(simulationId, questions),
-    onSuccess: invalidate,
+    onSuccess: applyDetail,
   })
 }
 
 export function useUpdateSimulationStatus(simulationId: string) {
-  const invalidate = useInvalidateSimulations()
+  const applyDetail = useApplyDetail()
   return useMutation({
     mutationFn: (status: 'draft' | 'published') => updateSimulationStatus(simulationId, status),
-    onSuccess: invalidate,
+    onSuccess: applyDetail,
   })
 }
 
 export function useDeleteSimulation() {
-  const invalidate = useInvalidateSimulations()
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (simulationId: string) => deleteSimulation(simulationId),
-    onSuccess: invalidate,
+    onSuccess: (_result, simulationId) => {
+      /* Qui il dettaglio non si aggiorna, si butta: tenerlo vorrebbe dire
+       * che riaprendo quella riga, per un istante, ricomparirebbe un test
+       * che non esiste più. Il resto del ramo si rilegge, perché una
+       * simulazione eliminata porta via anche i tentativi che la citavano. */
+      queryClient.removeQueries({ queryKey: queryKeys.simulations.adminDetail(simulationId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.simulations.all })
+    },
   })
 }
 

@@ -178,7 +178,6 @@ def _admin_detail(db: Session, simulation: TechnicalSimulation, admin: User) -> 
             )
             for q in simulation.questions
         ],
-        "document_text": simulation.document_text,
         "chunk_count": len(simulation.chunks),
         "total_attempts": total_attempts,
         "review": _review_response(simulation),
@@ -704,7 +703,16 @@ def update_simulation(
     dell'altra, e cambiarlo vorrebbe dire buttarle senza dirlo.
     """
     simulation = _scoped_or_404(db, current_admin, simulation_id)
-    simulation.title = payload.title.strip()
+    # Come alla creazione: un titolo di soli spazi passa la lunghezza minima
+    # dello schema e diventa vuoto qui, e una riga senza titolo non si
+    # riconosce più né in tabella né nell'elenco di chi il test lo deve
+    # svolgere.
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Il titolo è obbligatorio."
+        )
+    simulation.title = title
     simulation.description = (payload.description or "").strip() or None
     db.commit()
     db.refresh(simulation)

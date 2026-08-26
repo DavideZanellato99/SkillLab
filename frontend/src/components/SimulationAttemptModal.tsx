@@ -32,6 +32,7 @@ export default function SimulationAttemptModal({
   onClose,
   onDeleted,
   own = false,
+  elevated = false,
 }: {
   attemptId: string
   onClose: () => void
@@ -48,6 +49,10 @@ export default function SimulationAttemptModal({
   onDeleted?: () => void
   /** Vero quando a rileggere il test è chi lo ha svolto. */
   own?: boolean
+  /* Sopra la finestra da cui è stato aperto, quando ne ha una: dal pannello
+   * di gestione di un test si aprono i suoi tentativi, e questa è l'ultima
+   * cosa comparsa. */
+  elevated?: boolean
 }) {
   const { data: attempt, isLoading, error, refetch } = useAttempt(attemptId)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
@@ -59,6 +64,7 @@ export default function SimulationAttemptModal({
       size="full"
       padding="none"
       layout="column"
+      elevated={elevated}
       closeLabel="Chiudi dettaglio tentativo"
       label="Dettaglio del tentativo"
     >

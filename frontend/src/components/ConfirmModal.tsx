@@ -28,6 +28,11 @@ interface ConfirmModalProps {
   /** Messaggio d'errore dell'ultima azione fallita, se presente. */
   error?: string
   confirmLabel: string
+  /* Il bottone che non fa niente. «Annulla» va bene dove l'azione è un gesto
+   * solo, meno dove il rifiuto è a sua volta qualcosa che si sceglie: davanti
+   * a delle modifiche non salvate, «Annulla» si può leggere sia come «lascia
+   * perdere l'uscita» sia come «annulla le modifiche». */
+  cancelLabel?: string
   /** Etichetta mostrata accanto allo spinner mentre l'azione è in corso. */
   pendingLabel: string
   /** Classi che colorano il bottone di conferma (l'accento dell'azione). */
@@ -53,6 +58,7 @@ export default function ConfirmModal({
   description,
   error,
   confirmLabel,
+  cancelLabel = 'Annulla',
   pendingLabel,
   confirmClassName,
   isPending,
@@ -77,7 +83,7 @@ export default function ConfirmModal({
 
       <div className="flex gap-3">
         <button className={cancelBtnCls} onClick={onClose} disabled={isPending}>
-          Annulla
+          {cancelLabel}
         </button>
         <button
           className={`${confirmBaseCls} ${confirmClassName}`}

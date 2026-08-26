@@ -30,15 +30,24 @@ interface TooltipProps {
    * che non emettono eventi mouse */
   wrap?: boolean
   /** Per testo semplice (non bottoni/icone): mostra il tooltip solo se il
-   * figlio è effettivamente troncato (ellissi). Su testo non troncato il
-   * tooltip sarebbe ridondante col testo già visibile, quindi resta nascosto. */
+   * figlio è effettivamente troncato, su una riga (`.truncate`) o su più
+   * righe (`line-clamp-*`). Su testo intero il tooltip sarebbe ridondante col
+   * testo già visibile, quindi resta nascosto. */
   truncateOnly?: boolean
   children: ReactElement<Record<string, unknown>>
 }
 
-/* Troncato = il contenuto reale è più largo dello spazio visibile
- * (funziona con .truncate / overflow-hidden + white-space: nowrap) */
-const isTruncated = (el: Element) => el.scrollWidth > el.clientWidth + 1
+/* Troncato = il contenuto reale non entra nello spazio visibile, in larghezza
+ * o in altezza. Il primo confronto è quello di `.truncate`, che tiene il testo
+ * su una riga sola e lo taglia con i puntini; il secondo è quello di
+ * `line-clamp-*`, che di righe ne lascia vedere due o tre e taglia in basso.
+ *
+ * Senza il confronto sull'altezza un testo tagliato in basso non poteva usare
+ * `truncateOnly`: restava senza tooltip quando era tagliato davvero, oppure,
+ * se glielo si metteva comunque, lo mostrava anche sulle descrizioni corte,
+ * ripetendo parola per parola quello che si stava già leggendo. */
+const isTruncated = (el: Element) =>
+  el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1
 
 interface Pos {
   x: number

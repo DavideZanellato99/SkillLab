@@ -150,6 +150,42 @@ describe('PathStepEditor', () => {
     ).not.toBeInTheDocument()
   })
 
+  /* Il campo dell'obiettivo si svuota per riscriverlo, e in quel momento la
+   * tappa non ha un obiettivo. Scritto come zero, il form la credeva a posto
+   * e lasciava premere: tornava indietro il rifiuto del server, che non è una
+   * frase da leggere. */
+  it('svuotare l’obiettivo lascia il campo vuoto, senza scriverci uno zero', () => {
+    render(<Harness initial={{ ...emptyDraft(), avatarId: 'a1' }} />)
+    const obiettivo = screen.getByLabelText('Obiettivo (1-10)')
+    expect(obiettivo).toHaveValue(7)
+
+    fireEvent.change(obiettivo, { target: { value: '' } })
+
+    expect(screen.getByLabelText('Obiettivo (1-10)')).toHaveValue(null)
+  })
+
+  /* Una scadenza già passata non è un errore, ma è l'unico momento in cui la
+   * si può ancora correggere: dopo la scopre chi riceve un percorso che nasce
+   * scaduto. Capita riaffidando un modello dell'anno prima. */
+  it('avverte quando la scadenza scritta è già passata', () => {
+    render(<Harness />)
+    const scadenza = screen.getByLabelText('Da completare entro')
+
+    fireEvent.change(scadenza, { target: { value: '2020-01-02T09:00' } })
+
+    expect(screen.getByText('Data già passata: la tappa nasce scaduta')).toBeInTheDocument()
+  })
+
+  it('non avverte per una data che deve ancora arrivare', () => {
+    render(<Harness />)
+
+    fireEvent.change(screen.getByLabelText('Da completare entro'), {
+      target: { value: '2099-01-02T09:00' },
+    })
+
+    expect(screen.queryByText('Data già passata: la tappa nasce scaduta')).not.toBeInTheDocument()
+  })
+
   it('svuotare il campo di un criterio ne toglie la soglia', async () => {
     /* Un campo vuoto non è una soglia a zero: è un criterio che non pone
      * nessuna condizione, e a dirlo resta il numero sul bottone. */

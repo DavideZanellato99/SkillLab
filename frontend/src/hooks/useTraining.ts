@@ -94,13 +94,28 @@ export function useAssignableUsers(organizationId: string | null, enabled = true
 }
 
 /* Comporre, affidare o ritirare cambia anche le notifiche di chi il percorso
- * ce l'ha. */
-function useInvalidateTraining() {
+ * ce l'ha.
+ *
+ * È esportata perché una passata può fare più scritture di fila: la finestra
+ * di assegnazione affida a chi è stato spuntato e ritira a chi è stato tolto,
+ * cioè una richiesta più una per ritiro. Con ogni mutation che rilegge per
+ * conto suo, ritirare a cinque persone vorrebbe dire cinque giri di rilettura
+ * dei percorsi e delle assegnazioni, che sono le due query più costose della
+ * sezione, mentre la passata è ancora in corso. Chi ne incatena più d'una le
+ * spegne (`invalidate: false`) e chiama questa una volta sola in fondo. */
+export function useInvalidateTraining() {
   const queryClient = useQueryClient()
   return () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.training.all })
     queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
   }
+}
+
+/** Come si comporta una scrittura quando riesce. */
+interface WriteOptions {
+  /** Se rilegge da sola. Da spegnere solo per invalidare a mano in fondo a
+   *  una passata di più scritture (vedi `useInvalidateTraining`). */
+  invalidate?: boolean
 }
 
 export function useCreatePath() {
@@ -143,18 +158,18 @@ export function useDeletePath() {
   })
 }
 
-export function useAssignPath() {
-  const invalidate = useInvalidateTraining()
+export function useAssignPath({ invalidate = true }: WriteOptions = {}) {
+  const invalidateTraining = useInvalidateTraining()
   return useMutation({
     mutationFn: (payload: AssignPathPayload) => assignPath(payload),
-    onSuccess: invalidate,
+    onSuccess: invalidate ? invalidateTraining : undefined,
   })
 }
 
-export function useDeleteAssignment() {
-  const invalidate = useInvalidateTraining()
+export function useDeleteAssignment({ invalidate = true }: WriteOptions = {}) {
+  const invalidateTraining = useInvalidateTraining()
   return useMutation({
     mutationFn: (assignmentId: string) => deleteAssignment(assignmentId),
-    onSuccess: invalidate,
+    onSuccess: invalidate ? invalidateTraining : undefined,
   })
 }

@@ -366,13 +366,48 @@ stava sopra la tabella e ogni assegnazione ricominciava dalla scelta
 dell'avatar; comporre e seguire sono due lavori, e si fanno in due momenti
 diversi della settimana. Nella tabella la riga dice quante tappe sono chiuse e
 qual è quella aperta, e la fila intera si apre solo sulla riga che interessa:
-sei tappe per venti persone tutte insieme sono una tabella che non si legge.
+sei tappe per venti persone tutte insieme sono una tabella che non si legge. La
+riga si apre col mouse e col fuoco, perché è `onActivate` di
+[DataTable](../frontend/src/components/DataTable.tsx) ad aprirla e non un
+`onClick` scritto a mano: era l'ultima tabella dell'applicazione a rispondere
+al solo clic, e chi naviga col Tab aveva la sola freccia in fondo alla riga.
+
+**Le due linguette non sono due schermate separate.** Sulla scheda di un
+percorso il numero di chi lo sta percorrendo è un collegamento: porta alla
+linguetta accanto già ristretta su quel percorso, che è la domanda che quel
+numero fa venire («chi sono, e a che punto»). Il filtro sta nella fascia della
+tabella, accanto alla ricerca, e non in cima alla pagina insieme a quello per
+organizzazione: quello vale per entrambe le linguette, questo parla delle sole
+righe sotto. Lavora sulle righe già scaricate invece di richiedere al server le
+assegnazioni di un percorso, perché sono un sottoinsieme di quelle che si
+stanno già guardando; la rotta col `path_id` resta quella che serve alla
+finestra di assegnazione, che di quel percorso ha bisogno da sola. Cambiando
+organizzazione il filtro se ne va, perché quel percorso non è più fra quelli
+che la tendina offre.
 
 La finestra che affida il percorso
 ([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)) elenca le
 persone del tenant con la spunta già messa a chi il percorso ce l'ha, e
 **togliere quella spunta lo ritira**: la casella dice chi lo sta percorrendo,
-quindi deve poterlo dire anche al contrario. Prima era spenta, e il ritiro
+quindi deve poterlo dire anche al contrario.
+
+Per questo **aspetta tutte e due le letture** prima di mostrare l'elenco: le
+persone arrivano da una richiesta e chi il percorso ce l'ha già da un'altra, e
+mostrando la prima da sola, nella finestra fra le due, chi ce l'ha compariva
+non spuntato come chiunque altro. In quell'istante «seleziona tutti» lo
+rimetteva in fila per un'assegnazione che ha già, e una spunta tolta si
+registrava come una spunta messa: la casella dice due cose diverse a seconda di
+come stava prima, quindi finché non si sa come stava non si può mostrare.
+
+Una passata scrive più volte, una richiesta per le assegnazioni e una per ogni
+ritiro, e **rilegge una volta sola alla fine**
+([useInvalidateTraining](../frontend/src/hooks/useTraining.ts)). Con
+l'invalidazione attaccata a ogni mutation, togliere il percorso a cinque
+persone voleva dire cinque giri di rilettura dei percorsi e delle assegnazioni,
+che sono le due query più costose della sezione, mentre la passata era ancora
+in corso. La rilettura c'è anche quando qualcosa si rompe a metà: quello che è
+stato scritto prima dell'errore è nel database, e la pagina dietro deve
+raccontarlo. Prima era spenta, e il ritiro
 viveva solo nel cestino della tabella accanto, che è un posto in cui chi
 apriva questa finestra per togliere una persona non veniva mandato da niente.
 I ritiri però non partono dal clic sulla casella: si accumulano, e prima di
@@ -392,7 +427,11 @@ tappe, perché chi cerca un avatar sta cercando i percorsi che lo attraversano,
 e sotto stanno una griglia di due schede per riga e la barra condivisa
 ([Pagination](../frontend/src/components/Pagination.tsx)). Un elenco che
 cresce di una scheda a settimana era diventato un muro da scorrere, e chi
-apre questa pagina di solito sa già quale percorso vuole toccare. Sulla scheda
+apre questa pagina di solito sa già quale percorso vuole toccare. Riscrivendo
+la ricerca o cambiando organizzazione si torna alla prima pagina, in tutti e
+due gli elenchi: restare alla terza pagina di una domanda a cui si è appena
+smesso di rispondere vuol dire guardare delle schede in mezzo a un elenco di
+cui non si è ancora visto l'inizio. Sulla scheda
 ([TrainingPathCard](../frontend/src/components/TrainingPathCard.tsx)) si
 leggono le prime tre tappe e le altre si contano in coda, con i loro nomi nel
 tooltip: in una griglia sono le schede a doversi somigliare, e una da otto
@@ -542,6 +581,37 @@ riga intera non ci sta
 Un campo vuoto e uno zero sono due cose diverse e il form non le confonde,
 perché svuotarlo toglie la soglia mentre uno zero sarebbe una condizione che
 chiunque soddisfa. Su una tappa su un test il bottone non c'è affatto.
+
+**Cosa impedisce di salvare si legge, invece di restare sottinteso.** Il
+bottone resta acceso anche su un percorso incompleto, e a fermarlo è un
+messaggio che nomina la tappa e cosa le manca: «Tappa 2: scegli l'avatar con
+cui si parla». Spento non diceva niente, e le tappe di un percorso si
+somigliano: chi ne aveva lasciata una senza bersaglio si trovava davanti un
+bottone morto, con la cosa da correggere in mezzo a una fila di schede uguali.
+Il motivo lo scrive `draftProblem`
+([pathStepDraft](../frontend/src/components/pathStepDraft.ts)), che è anche la
+definizione di tappa finita: `isDraftComplete` vuol dire «non c'è niente da
+dire».
+
+**L'obiettivo può restare vuoto mentre lo si riscrive**, e nella bozza è `null`
+e non zero: per cambiare il numero lo si cancella, e in quel momento la tappa
+un obiettivo non ce l'ha. Scritto come zero il form la credeva a posto e
+lasciava premere, e quello che tornava indietro era il rifiuto di Pydantic, che
+arriva come elenco di errori e non come frase da leggere.
+
+**Una scadenza già passata la tappa la scrive sotto il campo.** Non è un errore
+e non ferma il salvataggio: la data vale per chiunque riceva il percorso e
+corre anche mentre la tappa è chiusa, quindi un modello dell'anno prima
+riaffidato oggi nasce con le tappe già scadute. Questo è il momento in cui si
+può ancora correggere, e dopo la scopre solo chi il percorso se lo ritrova
+scaduto.
+
+**Il percorso nuovo nasce nell'organizzazione che si sta guardando.** Il super
+admin che ha filtrato su un tenant compone per quello: partendo dalla prima
+organizzazione dell'elenco, il percorso appena creato sarebbe nato altrove e
+sarebbe sparito dalla schermata da cui lo si è composto. Senza filtro la scelta
+resta da fare nella tendina del form, perché un percorso di «tutte le
+organizzazioni» non esiste.
 
 **Assegnare fa una domanda sola**
 ([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)): chi deve

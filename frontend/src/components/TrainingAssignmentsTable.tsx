@@ -1,8 +1,9 @@
 import { Fragment, useMemo, useState } from 'react'
-import type { PathAssignment } from '../services/training'
+import type { PathAssignment, TrainingPath } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
 import DataTable, { Td, Tr } from './DataTable'
 import PathStepsTrail from './PathStepsTrail'
+import Select from './Select'
 import Tooltip from './Tooltip'
 import { STATUS_META } from './assignmentStatus'
 import { ChevronDownIcon, ChevronUpIcon, TrashIcon } from './icons'
@@ -19,7 +20,12 @@ import { formatDate, formatDeadline, stepTarget } from './trainingFormat'
  *
  * La ricerca guarda anche il nome della tappa corrente e la parola dello
  * stato, che sono quelle che si leggono sulla riga: chi cerca "scaduto" si
- * aspetta di trovare chi è in ritardo. */
+ * aspetta di trovare chi è in ritardo.
+ *
+ * Il filtro per percorso risponde invece alla domanda opposta, quella che si
+ * fa dopo aver assegnato: non «dov'è Anna» ma «a che punto sono i dodici che
+ * stanno facendo l'onboarding». Ci si arriva anche dalla scheda del percorso,
+ * dal numero di chi lo sta percorrendo, che è dove quella domanda nasce. */
 
 function ProgressBar({ done, total }: { done: number; total: number }) {
   const ratio = total === 0 ? 0 : done / total
@@ -42,19 +48,32 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
 
 export default function TrainingAssignmentsTable({
   assignments,
+  paths,
+  pathFilter,
+  onPathFilterChange,
   showOrganization,
   onWithdraw,
 }: {
   assignments: PathAssignment[]
+  /** I percorsi su cui si può restringere l'elenco, quelli dello scope. */
+  paths: TrainingPath[]
+  /** Il percorso su cui si sta guardando, vuoto per tutti quanti. */
+  pathFilter: string
+  onPathFilterChange: (pathId: string) => void
   showOrganization: boolean
   onWithdraw: (assignment: PathAssignment) => void
 }) {
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
 
+  /* Il filtro per percorso lavora sulle righe già in mano e non su una
+   * seconda chiamata: le assegnazioni dello scope sono già tutte qui, e
+   * chiederle di nuovo al server per percorso vorrebbe dire aspettare una
+   * risposta per un sottoinsieme di quello che si sta già guardando. */
   const rows = useMemo(
     () =>
       assignments.filter((a) => {
+        if (pathFilter && a.path_id !== pathFilter) return false
         const current = a.current_position ? a.steps[a.current_position - 1] : null
         return matchesSearch(
           search,
@@ -66,8 +85,10 @@ export default function TrainingAssignmentsTable({
           STATUS_META[a.status].label,
         )
       }),
-    [assignments, search],
+    [assignments, search, pathFilter],
   )
+
+  const filteredPath = paths.find((path) => path.id === pathFilter)
 
   return (
     <DataTable
@@ -86,11 +107,34 @@ export default function TrainingAssignmentsTable({
       searchValue={search}
       onSearchChange={setSearch}
       searchPlaceholder="Cerca per utente, percorso o stato..."
+      /* La tendina dei percorsi solo quando ce n'è più d'uno: con un percorso
+         solo sarebbe un filtro che non toglie niente. Sta nella fascia della
+         tabella e non in cima alla pagina, accanto a quello delle
+         organizzazioni, perché quello vale per entrambe le linguette mentre
+         questo parla delle sole righe qui sotto. */
+      searchActions={
+        paths.length > 1 ? (
+          <Select
+            id="assignments-path-filter"
+            ariaLabel="Percorso"
+            className="min-w-[220px]"
+            value={pathFilter}
+            onChange={onPathFilterChange}
+            options={[
+              { value: '', label: 'Tutti i Percorsi' },
+              ...paths.map((path) => ({ value: path.id, label: path.title })),
+            ]}
+          />
+        ) : undefined
+      }
+      pageResetKey={`${pathFilter}|${search}`}
       isEmpty={rows.length === 0}
       emptyMessage={
         search
           ? 'Nessun percorso corrisponde alla ricerca'
-          : 'Nessun percorso ancora assegnato per la selezione corrente'
+          : filteredPath
+            ? `Nessuno sta percorrendo «${filteredPath.title}»`
+            : 'Nessun percorso ancora assegnato per la selezione corrente'
       }
     >
       {rows.map((a) => {
@@ -98,7 +142,12 @@ export default function TrainingAssignmentsTable({
         const current = a.current_position ? a.steps[a.current_position - 1] : null
         return (
           <Fragment key={a.id}>
-            <Tr className="cursor-pointer" onClick={() => setOpenId(isOpen ? null : a.id)}>
+            {/* `onActivate` e non un `onClick` scritto a mano: la riga si apre
+                anche da tastiera, con il fuoco, Invio e Spazio, che è come
+                si aprono tutte le righe che si aprono in questa applicazione
+                (vedi `DataTable`). Prima rispondeva al solo mouse, e chi
+                naviga con il Tab aveva la sola freccia in fondo alla riga. */}
+            <Tr aria-expanded={isOpen} onActivate={() => setOpenId(isOpen ? null : a.id)}>
               {/* Chi è: il nome, l'email sotto e l'organizzazione sotto
                   ancora, una riga per cosa. Stavano su due righe con
                   organizzazione ed email separate da un punto, che è una riga

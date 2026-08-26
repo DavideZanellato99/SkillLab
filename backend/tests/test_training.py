@@ -17,6 +17,7 @@ from models import (
     ROLE_USER,
     SIMULATION_STATUS_DRAFT,
     SIMULATION_STATUS_PUBLISHED,
+    AuditLog,
     ChatConversation,
     ConversationEvaluation,
     ConversationReview,
@@ -868,6 +869,56 @@ def test_withdrawing_a_path_leaves_the_proofs_alone(
     assert response.status_code == 200
     assert db_session.query(TrainingPathAssignment).count() == 0
     assert db_session.query(ChatConversation).count() == 1
+
+
+def test_a_withdrawal_says_who_lost_what(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """Il registro deve poter rispondere «a chi è stato tolto cosa».
+
+    Senza i dettagli restava l'identificativo di una riga che dopo il ritiro
+    non esiste più, cioè un fatto che non si può nemmeno andare a rileggere.
+    """
+    avatar = make_avatar(category="clienti")
+    path = _create_path(admin_client, organization, [_avatar_step(avatar)])
+    created = _assign(admin_client, path, standard_user)
+
+    assert admin_client.delete(f"/api/training/assignments/{created['id']}").status_code == 200
+
+    row = db_session.query(AuditLog).filter(AuditLog.action == "training.delete").one()
+    assert row.details["percorso"] == "Onboarding"
+    assert row.details["utente"] == standard_user.email
+    assert row.details["organizzazione"] == organization.name
+
+
+def test_assigning_to_several_people_answers_with_all_of_them(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """Le assegnazioni nate insieme si rileggono in una query sola.
+
+    Erano un ``refresh`` per riga, cioè un SELECT a testa: quello che qui si
+    tiene fermo è che la risposta resti quella di prima, con tutte le persone
+    e il progresso di ogni tappa già dentro, e che la riga di audit le nomini
+    tutte.
+    """
+    avatar = make_avatar(category="clienti")
+    path = _create_path(admin_client, organization, [_avatar_step(avatar)])
+    newcomer = _make_user_in(db_session, organization)
+
+    response = admin_client.post(
+        "/api/training/assignments",
+        json={"path_id": path["id"], "user_ids": [str(standard_user.id), str(newcomer.id)]},
+    )
+
+    assert response.status_code == 201
+    assegnazioni = response.json()
+    assert {a["user_id"] for a in assegnazioni} == {str(standard_user.id), str(newcomer.id)}
+    # Il progresso viaggia con la risposta, come in ogni altra lettura
+    assert all(a["steps"][0]["status"] == "active" for a in assegnazioni)
+    assert all(a["path_title"] == "Onboarding" for a in assegnazioni)
+
+    row = db_session.query(AuditLog).filter(AuditLog.action == "training.assign").one()
+    assert set(row.details["utenti"]) == {standard_user.email, newcomer.email}
 
 
 # ── Di cosa può essere fatta una tappa ────────────────

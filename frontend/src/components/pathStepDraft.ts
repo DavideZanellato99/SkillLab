@@ -29,7 +29,16 @@ export interface PathStepDraft {
   /** Il bersaglio scelto dentro il tipo, ancora vuoto appena lo si cambia. */
   avatarId: string | null
   simulationId: string | null
-  targetScore: number
+  /* L'obiettivo della tappa, o null mentre il campo è vuoto.
+   *
+   * Vuoto è uno stato che si attraversa: per riscrivere il numero lo si
+   * cancella, e in quel momento la tappa non ha un obiettivo. Scritto come
+   * zero sarebbe un obiettivo che il server rifiuta (la scala parte da 1) e,
+   * peggio, il form crederebbe la tappa a posto e lascerebbe premere: quello
+   * che tornava indietro era il rifiuto di Pydantic, che non è una frase da
+   * leggere. Null lo dice invece a chi sta ancora scrivendo (vedi
+   * `draftProblem`). */
+  targetScore: number | null
   /* Le soglie sui singoli criteri, `{chiave: voto}`.
    *
    * Ci stanno solo i criteri su cui la tappa pone una condizione: togliere
@@ -64,6 +73,12 @@ export interface PathStepDraft {
 
 /** L'obiettivo di partenza di una tappa nuova: la sufficienza piena. */
 const DEFAULT_TARGET = 7
+
+/* La scala dei voti, la stessa del referto e la stessa che il server pretende
+ * su ogni tappa (`TrainingPathStepInput`). Sta qui perché il form la deve dire
+ * prima, mentre si scrive, invece di farla scoprire da una richiesta rifiutata. */
+export const MIN_TARGET = 1
+export const MAX_TARGET = 10
 
 export function emptyDraft(): PathStepDraft {
   return {
@@ -130,9 +145,34 @@ export function draftTarget(draft: PathStepDraft): string | null {
   return draft.kind === 'avatar' ? draft.avatarId : draft.simulationId
 }
 
-/** Se la tappa è finita, cioè se un bersaglio è stato scelto. */
+/**
+ * Cosa manca a una tappa perché si possa salvare, o null se non manca niente.
+ *
+ * Il motivo e non il solo sì o no: le tappe di un percorso sono più d'una, e
+ * «una tappa non è a posto» costringe a riaprirle tutte per capire quale.
+ * Chi lo mostra ci mette davanti il numero della tappa (vedi
+ * `TrainingPathEditorModal`).
+ *
+ * L'ordine dei controlli è quello in cui si compone: prima si sceglie la
+ * prova, poi si scrive l'obiettivo.
+ */
+export function draftProblem(draft: PathStepDraft): string | null {
+  if (draftTarget(draft) === null) {
+    return draft.kind === 'avatar'
+      ? 'scegli l’avatar con cui si parla'
+      : 'scegli il test da svolgere'
+  }
+  if (draft.targetScore === null)
+    return `scrivi l’obiettivo, un voto fra ${MIN_TARGET} e ${MAX_TARGET}`
+  if (draft.targetScore < MIN_TARGET || draft.targetScore > MAX_TARGET) {
+    return `l’obiettivo sta fra ${MIN_TARGET} e ${MAX_TARGET}`
+  }
+  return null
+}
+
+/** Se la tappa è finita, cioè se non le manca più niente. */
 export function isDraftComplete(draft: PathStepDraft): boolean {
-  return draftTarget(draft) !== null
+  return draftProblem(draft) === null
 }
 
 /** La soglia di un criterio, scritta o cancellata: senza valore, la chiave se ne va. */
@@ -159,7 +199,10 @@ export function toStepInput(draft: PathStepDraft): PathStepInput {
   return {
     avatar_id: draft.kind === 'avatar' ? draft.avatarId : null,
     simulation_id: draft.kind === 'simulation' ? draft.simulationId : null,
-    target_score: draft.targetScore,
+    // Si arriva qui solo da una tappa completa, che un obiettivo ce l'ha
+    // (vedi `draftProblem`): il ripiego è per il compilatore, non un valore
+    // che qualcuno possa vedere partire.
+    target_score: draft.targetScore ?? DEFAULT_TARGET,
     // Come per il bersaglio: parte solo quello che il tipo attivo prevede.
     // Un test tecnico non si valuta per criteri, e mandarne al server una
     // tappa che ne porta è una tappa che il server rifiuta.

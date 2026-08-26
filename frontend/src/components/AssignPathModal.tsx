@@ -4,6 +4,7 @@ import {
   useAssignableUsers,
   useAssignments,
   useDeleteAssignment,
+  useInvalidateTraining,
 } from '../hooks/useTraining'
 import type { PathAssignment, TrainingPath } from '../services/training'
 import { errorMessage } from '../services/errors'
@@ -75,9 +76,18 @@ export default function AssignPathModal({
   const [isConfirming, setIsConfirming] = useState(false)
 
   const { data: users = [], isPending: isLoadingUsers } = useAssignableUsers(path.organization_id)
-  const { data: assignments = [] } = useAssignments(path.organization_id, path.id)
-  const assignMutation = useAssignPath()
-  const withdrawMutation = useDeleteAssignment()
+  const { data: assignments = [], isPending: isLoadingAssignments } = useAssignments(
+    path.organization_id,
+    path.id,
+  )
+  /* Le due scritture non rileggono da sole: la passata ne fa una per
+   * l'assegnazione e una per ogni ritiro, e con l'invalidazione attaccata a
+   * ognuna i percorsi e le assegnazioni si sarebbero riletti tante volte
+   * quante le richieste, mentre la passata era ancora in corso. Si rilegge
+   * una volta sola in fondo (vedi `apply`). */
+  const assignMutation = useAssignPath({ invalidate: false })
+  const withdrawMutation = useDeleteAssignment({ invalidate: false })
+  const invalidateTraining = useInvalidateTraining()
 
   // L'assegnazione intera, non solo il fatto che ci sia: per ritirarla serve
   // il suo id, e per raccontarla serve il punto a cui è arrivata.
@@ -120,6 +130,7 @@ export default function AssignPathModal({
     [removed, assigned],
   )
 
+  const isLoading = isLoadingUsers || isLoadingAssignments
   const isPending = assignMutation.isPending || withdrawMutation.isPending
   const error =
     errorMessage(assignMutation.error, 'Assegnazione non riuscita.') ||
@@ -143,6 +154,12 @@ export default function AssignPathModal({
       onClose()
     } catch {
       // Il messaggio è nella mutation, il banner qui sotto lo mostra
+    } finally {
+      /* Una rilettura sola per l'intera passata, e anche quando qualcosa si
+       * è rotto a metà: quello che era già stato scritto prima dell'errore è
+       * nel database, e la pagina dietro, insieme alle caselle qui, deve
+       * raccontare com'è adesso e non com'era all'apertura. */
+      invalidateTraining()
     }
   }
 
@@ -184,7 +201,7 @@ export default function AssignPathModal({
             placeholder="Cerca per nome o email..."
             className="flex-1"
           />
-          {selectable.length > 0 && (
+          {!isLoading && selectable.length > 0 && (
             <button
               type="button"
               onClick={toggleAll}
@@ -195,7 +212,15 @@ export default function AssignPathModal({
           )}
         </div>
 
-        {isLoadingUsers ? (
+        {/* Si aspettano tutte e due le letture, non solo l'elenco: chi il
+            percorso ce l'ha già arriva dall'altra, e nella finestra fra le
+            due comparirebbe non spuntato come chiunque altro. In quel momento
+            "Seleziona tutti" lo avrebbe rimesso in fila per un'assegnazione
+            che ha già, e una spunta tolta si sarebbe registrata come una
+            spunta messa: la casella dice due cose diverse a seconda di come
+            stava prima, quindi finché non si sa come stava non si può
+            mostrare. */}
+        {isLoading ? (
           <LoadingState message="Caricamento delle persone..." variant="panel" />
         ) : visible.length === 0 ? (
           <p className="py-8 text-center text-sm italic text-slate-500">

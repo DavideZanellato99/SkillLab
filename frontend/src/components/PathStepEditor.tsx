@@ -18,7 +18,7 @@ import {
 } from './icons'
 import { formInputCls, labelCls } from './Field'
 import type { PathStepDraft } from './pathStepDraft'
-import { draftTarget, withCriterionTarget } from './pathStepDraft'
+import { MAX_TARGET, MIN_TARGET, draftTarget, withCriterionTarget } from './pathStepDraft'
 
 /* Una tappa mentre la si compone: cosa chiede, a chi, con che obiettivo ed
  * entro quando.
@@ -53,7 +53,16 @@ import { draftTarget, withCriterionTarget } from './pathStepDraft'
  * La scadenza è facoltativa ed è una data con l'ora, sul calendario: vale
  * per chiunque percorra il percorso e corre anche mentre la tappa è ancora
  * chiusa, quindi un percorso vecchio va ridatato prima di affidarlo di nuovo
- * (vedi il backend, `TrainingPathStep`).
+ * (vedi il backend, `TrainingPathStep`). Quando la data è già passata la
+ * tappa lo scrive sotto il campo: non è un errore e non ferma niente, ma è
+ * l'unico momento in cui quella data si può ancora correggere, perché dopo
+ * la scopre solo chi il percorso se lo ritrova già scaduto.
+ *
+ * L'obiettivo invece può restare vuoto mentre lo si riscrive, e una tappa
+ * senza obiettivo è incompleta come una senza bersaglio: il form dice quale
+ * tappa e cosa le manca al salvataggio (vedi `draftProblem`). Scritto come
+ * zero, com'era prima, il form la credeva a posto e lasciava premere, e
+ * quello che tornava indietro era il rifiuto di Pydantic.
  *
  * Accanto all'obiettivo, su una tappa di conversazione, c'è il bottone che
  * apre le soglie sui singoli criteri (`PathStepCriteria`). Sta chiuso e non
@@ -74,6 +83,21 @@ const KINDS = [
 
 const kindBtnCls =
   'cursor-pointer rounded-lg border-none px-2.5 py-1 text-[0.75rem] font-medium transition disabled:cursor-not-allowed disabled:opacity-50'
+
+/** Il numero che si sta scrivendo, o null se il campo è vuoto. */
+function parseTarget(value: string): number | null {
+  if (value === '') return null
+  const parsed = Number(value)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+/** Se la scadenza scritta è già alle spalle: il campo dà l'ora locale, e
+ *  `new Date` la legge nello stesso fuso in cui è stata scelta. */
+function isPastDeadline(dueAt: string | null): boolean {
+  if (!dueAt) return false
+  const due = new Date(dueAt).getTime()
+  return !Number.isNaN(due) && due <= Date.now()
+}
 
 /** Un campo della fila di sotto: l'etichetta sopra, il campo largo quanto serve. */
 function StepField({
@@ -143,6 +167,7 @@ export default function PathStepEditor({
   // sul bottone.
   const criteriaCount = Object.keys(step.criteriaTargets).length
   const showCriteria = kind === 'avatar' && step.criteriaOpen
+  const duePassed = isPastDeadline(step.dueAt)
 
   const menuItems: KebabMenuItem[] = [
     {
@@ -220,15 +245,20 @@ export default function PathStepEditor({
       {/* Cosa chiede la tappa. I campi vanno a capo su schermo stretto invece
           di stringersi, perché un campo data stretto non si legge. */}
       <div className="flex flex-wrap items-end gap-x-4 gap-y-2.5">
-        <StepField label="Obiettivo (1-10)" htmlFor={`${fieldId}-score`}>
+        <StepField label={`Obiettivo (${MIN_TARGET}-${MAX_TARGET})`} htmlFor={`${fieldId}-score`}>
           <NumberInput
             id={`${fieldId}-score`}
-            min={1}
-            max={10}
+            min={MIN_TARGET}
+            max={MAX_TARGET}
             step={0.5}
             disabled={disabled}
-            value={step.targetScore}
-            onValueChange={(value) => onChange({ ...step, targetScore: Number(value) })}
+            /* Il campo svuotato è una tappa senza obiettivo, non una tappa
+               con obiettivo zero: per riscrivere il numero lo si cancella, e
+               in quel momento la tappa è incompleta come lo è senza
+               bersaglio. A dirlo è il form al salvataggio (vedi
+               `draftProblem`), invece del rifiuto del server. */
+            value={step.targetScore ?? ''}
+            onValueChange={(value) => onChange({ ...step, targetScore: parseTarget(value) })}
             wrapperClassName="w-24"
             className={`w-full pr-6 pl-6 text-center ${formInputCls}`}
           />
@@ -278,8 +308,19 @@ export default function PathStepEditor({
             disabled={disabled}
             value={step.dueAt ?? ''}
             onChange={(e) => onChange({ ...step, dueAt: e.target.value || null })}
+            aria-describedby={duePassed ? `${fieldId}-due-note` : undefined}
             className={`min-w-[13rem] ${formInputCls}`}
           />
+          {/* Una data alle spalle non è un errore e non ferma il salvataggio:
+              la scadenza vale per chiunque riceva il percorso, quindi un
+              modello dell'anno scorso riaffidato oggi nasce con tutte le
+              tappe scadute. Va detto qui, dove la si può correggere, invece
+              di farlo scoprire a chi lo riceve. */}
+          {duePassed && (
+            <p id={`${fieldId}-due-note`} className="text-[0.7rem] text-orange-400">
+              Data già passata: la tappa nasce scaduta
+            </p>
+          )}
         </StepField>
       </div>
 

@@ -39,6 +39,7 @@ function stepDetail(step: PathStep): string {
 export default function TrainingPathCard({
   path,
   showOrganization,
+  onShowAssigned,
   onAssign,
   onEdit,
   onDelete,
@@ -46,6 +47,8 @@ export default function TrainingPathCard({
   path: TrainingPath
   /** L'organizzazione si scrive solo a chi ne vede più di una. */
   showOrganization: boolean
+  /** Porta all'elenco di chi lo sta percorrendo, già filtrato su questo. */
+  onShowAssigned: () => void
   onAssign: () => void
   onEdit: () => void
   onDelete: () => void
@@ -65,11 +68,26 @@ export default function TrainingPathCard({
           <p className="mt-0.5 text-[0.78rem] text-slate-500">
             {showOrganization && <span>{path.organization_name} · </span>}
             {path.steps.length} {path.steps.length === 1 ? 'tappa' : 'tappe'} ·{' '}
-            {path.assigned_count === 0
-              ? 'non ancora assegnato'
-              : `${path.assigned_count} ${
-                  path.assigned_count === 1 ? 'persona' : 'persone'
-                } in percorso`}
+            {/* Quante persone lo stanno percorrendo era un numero e basta, e
+                la domanda che viene dopo averlo letto è sempre la stessa: chi
+                sono, e a che punto. La risposta sta nella linguetta accanto,
+                che senza questo passaggio andava aperta e poi filtrata a mano
+                cercando il titolo del percorso fra tutti gli altri. */}
+            {path.assigned_count === 0 ? (
+              'non ancora assegnato'
+            ) : (
+              <Tooltip content="Guarda a che punto sono">
+                <button
+                  type="button"
+                  onClick={onShowAssigned}
+                  aria-label={`Mostra chi sta percorrendo ${path.title}`}
+                  className="cursor-pointer border-none bg-transparent p-0 text-[0.78rem] text-violet-400 underline decoration-dotted underline-offset-2 transition hover:text-violet-300"
+                >
+                  {path.assigned_count} {path.assigned_count === 1 ? 'persona' : 'persone'} in
+                  percorso
+                </button>
+              </Tooltip>
+            )}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -102,7 +120,11 @@ export default function TrainingPathCard({
       {/* La descrizione si ferma a due righe: in una griglia una scheda con
           cinque righe di testo sposta in basso le tappe di quella accanto. */}
       {path.description && (
-        <Tooltip content={path.description}>
+        /* Il tooltip solo quando la descrizione è davvero tagliata: su due
+           righe intere ripeteva parola per parola quello che si stava già
+           leggendo. Il riconoscimento del taglio in altezza sta in `Tooltip`,
+           perché vale per qualunque testo con `line-clamp`. */
+        <Tooltip content={path.description} truncateOnly>
           <p className="mb-3 line-clamp-2 text-[0.85rem] text-slate-400">{path.description}</p>
         </Tooltip>
       )}

@@ -17,12 +17,14 @@
 
 import { useState } from 'react'
 import { useDraftPath } from '../hooks/useTraining'
+import { errorMessage } from '../services/errors'
 import type { TrainingPathDraft } from '../services/training'
 import { fieldCls, labelCls, textareaCls } from './Field'
 import FormError from './FormError'
-import ModalShell from './ModalShell'
+import ModalShell, { ModalHeader } from './ModalShell'
 import PrimaryButton from './PrimaryButton'
 import Spinner from './Spinner'
+import { SparkleIcon } from './icons'
 
 /* Lo stesso minimo che il server pretende sull'obiettivo, ripetuto qui solo
  * per dirlo prima di far partire una richiesta che verrebbe rifiutata. Da tre
@@ -44,11 +46,7 @@ export default function PathDraftModal({
   const draft = useDraftPath()
   const isPending = draft.isPending
 
-  const error = draft.error
-    ? draft.error instanceof Error
-      ? draft.error.message
-      : 'Generazione non riuscita.'
-    : ''
+  const error = errorMessage(draft.error, 'Generazione non riuscita.')
 
   const tooShort = goal.trim().length < MIN_GOAL
 
@@ -65,24 +63,18 @@ export default function PathDraftModal({
   }
 
   return (
-    <ModalShell
-      onClose={onClose}
-      locked={isPending}
-      size="md"
-      padding="md"
-      elevated
-      label="Proponi un Percorso"
-    >
-      <div className="mb-6">
-        <h2 className="mb-1 font-heading text-[1.2rem] font-bold text-slate-100">
-          Proponi un Percorso
-        </h2>
-        <p className="text-[0.8rem] leading-relaxed text-slate-500">
-          Il modello seleziona gli avatar e i test di questa organizzazione e li dispone in
-          sequenza. È una proposta da rileggere: le tappe restano modificabili nel form, e il
-          percorso viene creato solo alla conferma.
-        </p>
-      </div>
+    <ModalShell onClose={onClose} locked={isPending} size="md" padding="md" elevated>
+      {/* L'intestazione è quella di tutte le altre finestre e non una scritta
+          disegnata qui: le tre modali di questa sezione si aprono una dentro
+          l'altra, e l'icona in cima è il modo in cui si distinguono a colpo
+          d'occhio. Da `ModalHeader` arriva anche il nome che il pannello si
+          dà da tastiera, che prima andava ripetuto a mano in `label`. */}
+      <ModalHeader
+        icon={<SparkleIcon size={24} stroke="#a78bfa" />}
+        iconWrapperCls="border border-violet-500/30 bg-violet-500/10"
+        title="Proponi un Percorso"
+        description="Il modello seleziona gli avatar e i test di questa organizzazione e li dispone in sequenza. È una proposta da rileggere: le tappe restano modificabili nel form, e il percorso viene creato solo alla conferma."
+      />
 
       {error && <FormError message={error} />}
 

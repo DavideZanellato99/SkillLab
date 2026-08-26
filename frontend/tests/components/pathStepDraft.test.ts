@@ -5,6 +5,7 @@ import { toLocalInputValue } from '../../src/components/instant'
 import {
   draftFromProposal,
   draftFromStep,
+  draftProblem,
   draftTarget,
   emptyDraft,
   isDraftComplete,
@@ -176,5 +177,38 @@ describe('la bozza di una tappa', () => {
     expect(toStepInput({ ...draft, kind: 'avatar', avatarId: 'a1' }).criteria_targets).toEqual({
       empatia: 8,
     })
+  })
+})
+
+/* Perché una tappa non si può ancora salvare, detto con parole invece che con
+ * un bottone spento: le tappe di un percorso sono più d'una, e «una tappa non
+ * è a posto» costringe a riaprirle tutte per scoprire quale. */
+describe('cosa manca a una tappa', () => {
+  it('chiede il bersaglio del tipo che si sta componendo', () => {
+    expect(draftProblem(emptyDraft())).toBe('scegli l’avatar con cui si parla')
+    expect(draftProblem({ ...emptyDraft(), kind: 'simulation' })).toBe('scegli il test da svolgere')
+  })
+
+  it('chiede l’obiettivo quando il campo è stato svuotato', () => {
+    const draft = { ...emptyDraft(), avatarId: 'a1', targetScore: null }
+
+    expect(draftProblem(draft)).toBe('scrivi l’obiettivo, un voto fra 1 e 10')
+    expect(isDraftComplete(draft)).toBe(false)
+  })
+
+  /* La stessa scala del referto e la stessa che il server pretende: dirla qui
+   * la fa leggere mentre si scrive, invece che dentro un rifiuto. */
+  it('tiene l’obiettivo dentro la scala dei voti', () => {
+    const draft = { ...emptyDraft(), avatarId: 'a1' }
+
+    expect(draftProblem({ ...draft, targetScore: 0 })).toBe('l’obiettivo sta fra 1 e 10')
+    expect(draftProblem({ ...draft, targetScore: 11 })).toBe('l’obiettivo sta fra 1 e 10')
+  })
+
+  it('non trova niente da dire su una tappa finita', () => {
+    const draft = { ...emptyDraft(), avatarId: 'a1' }
+
+    expect(draftProblem(draft)).toBeNull()
+    expect(isDraftComplete(draft)).toBe(true)
   })
 })

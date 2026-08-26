@@ -34,7 +34,12 @@ const percorso = (over: Partial<TrainingPath> = {}): TrainingPath => ({
 })
 
 function renderCard(over: Partial<TrainingPath> = {}, showOrganization = false) {
-  const azioni = { onAssign: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() }
+  const azioni = {
+    onShowAssigned: vi.fn(),
+    onAssign: vi.fn(),
+    onEdit: vi.fn(),
+    onDelete: vi.fn(),
+  }
   render(<TrainingPathCard path={percorso(over)} showOrganization={showOrganization} {...azioni} />)
   return azioni
 }
@@ -104,6 +109,22 @@ describe('TrainingPathCard', () => {
     renderCard()
 
     expect(screen.getByText(/non ancora assegnato/)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Mostra chi sta percorrendo/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  /* Letto il numero di chi lo sta percorrendo, la domanda dopo è chi sono e a
+   * che punto: il numero stesso ci porta, invece di lasciare l'altra linguetta
+   * da aprire e filtrare a mano. */
+  it('dal numero di chi lo sta percorrendo si passa a chi sono', async () => {
+    const { onShowAssigned } = renderCard({ assigned_count: 3 })
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Mostra chi sta percorrendo Onboarding' }),
+    )
+
+    expect(onShowAssigned).toHaveBeenCalled()
   })
 
   /* L'organizzazione si scrive solo a chi ne vede più di una: all'org admin
@@ -113,6 +134,7 @@ describe('TrainingPathCard', () => {
       <TrainingPathCard
         path={percorso()}
         showOrganization
+        onShowAssigned={vi.fn()}
         onAssign={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}

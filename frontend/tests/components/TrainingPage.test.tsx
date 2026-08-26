@@ -2,7 +2,9 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const sessione = vi.hoisted(() => ({ current: { ruolo: 'super_admin', organization_id: 'org-1' } }))
+const sessione = vi.hoisted(() => ({
+  current: { ruolo: 'super_admin', organization_id: 'org-1' as string | null },
+}))
 vi.mock('../../src/hooks/useAuth', () => ({ useAuth: () => ({ user: sessione.current }) }))
 
 const stato = vi.hoisted(() => ({
@@ -11,11 +13,13 @@ const stato = vi.hoisted(() => ({
 }))
 const deletePath = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
+  reset: vi.fn(),
   isPending: false,
   error: null as Error | null,
 }))
 const deleteAssignment = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
+  reset: vi.fn(),
   isPending: false,
   error: null as Error | null,
 }))
@@ -32,8 +36,20 @@ vi.mock('../../src/hooks/useOrganizations', () => ({
 /* Le due modali hanno i loro moduli e i loro test: qui sostituirle tiene il
  * banco a quello che la pagina decide, cioè quando si aprono. */
 vi.mock('../../src/components/TrainingPathEditorModal', () => ({
-  default: ({ path }: { path: { title?: string } | null }) => (
-    <div>editor: {path?.title ?? 'nuovo percorso'}</div>
+  default: ({
+    path,
+    defaultOrganizationId,
+  }: {
+    path: { title?: string } | null
+    defaultOrganizationId: string | null
+  }) => (
+    <div>
+      <span>editor: {path?.title ?? 'nuovo percorso'}</span>
+      {/* In due scritte separate: l'organizzazione di partenza si prova da
+          sola, senza infilarsi dentro la riga che dice quale percorso si sta
+          aprendo. */}
+      <span>org: {defaultOrganizationId ?? 'nessuna'}</span>
+    </div>
   ),
 }))
 vi.mock('../../src/components/AssignPathModal', () => ({
@@ -87,10 +103,12 @@ beforeEach(() => {
   stato.assignments = { data: [assegnazione()], isPending: false, error: null }
   deletePath.mutateAsync.mockReset()
   deletePath.mutateAsync.mockResolvedValue({ success: true })
+  deletePath.reset.mockReset()
   deletePath.isPending = false
   deletePath.error = null
   deleteAssignment.mutateAsync.mockReset()
   deleteAssignment.mutateAsync.mockResolvedValue({ success: true })
+  deleteAssignment.reset.mockReset()
   deleteAssignment.isPending = false
   deleteAssignment.error = null
 })
@@ -225,6 +243,67 @@ describe('filtro per organizzazione', () => {
   })
 })
 
+/* Le due linguette non sono due schermate separate: dal numero di chi sta
+ * percorrendo un percorso si arriva a chi sono, che è la domanda che quel
+ * numero fa venire. */
+describe('dalla scheda a chi lo sta percorrendo', () => {
+  const dueSuDuePercorsi = () => {
+    stato.paths = {
+      data: [
+        percorso({ assigned_count: 1 }),
+        percorso({ id: 'p-2', title: 'Gestione reclami', assigned_count: 1 }),
+      ],
+      isPending: false,
+      error: null,
+    }
+    stato.assignments = {
+      data: [
+        assegnazione(),
+        assegnazione({
+          id: 'as-2',
+          path_id: 'p-2',
+          path_title: 'Gestione reclami',
+          user_id: 'u-2',
+          user_name: 'Luca Verdi',
+          user_email: 'luca@test.it',
+        }),
+      ],
+      isPending: false,
+      error: null,
+    }
+  }
+
+  it('passa alla linguetta accanto, già ristretta su quel percorso', async () => {
+    dueSuDuePercorsi()
+    renderPage()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Mostra chi sta percorrendo Onboarding' }),
+    )
+
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(screen.getByText('Anna Rossi')).toBeInTheDocument()
+    expect(screen.queryByText('Luca Verdi')).not.toBeInTheDocument()
+  })
+
+  /* Cambiando organizzazione cambia l'elenco dei percorsi, e quello su cui si
+   * stava guardando non è più fra questi: il filtro resterebbe a nominare un
+   * percorso che la tendina non offre più, e la tabella resterebbe vuota
+   * senza che si capisca perché. */
+  it('lascia andare il filtro quando si cambia organizzazione', async () => {
+    dueSuDuePercorsi()
+    renderPage()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Mostra chi sta percorrendo Onboarding' }),
+    )
+    await userEvent.click(screen.getByRole('combobox', { name: 'Organizzazione' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Banca Esempio' }))
+
+    expect(screen.getByText('Luca Verdi')).toBeInTheDocument()
+  })
+})
+
 describe('composizione e assegnazione', () => {
   it("apre l'editor su un percorso nuovo", async () => {
     renderPage()
@@ -248,6 +327,41 @@ describe('composizione e assegnazione', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Assegna Onboarding' }))
 
     expect(screen.getByText('assegna: Onboarding')).toBeInTheDocument()
+  })
+
+  /* Il super admin che sta guardando una sola organizzazione compone per
+   * quella: partendo dalla prima dell'elenco, il percorso appena creato
+   * sarebbe nato altrove e sarebbe sparito dalla schermata da cui lo si è
+   * composto. */
+  it("parte dall'organizzazione che si sta guardando", async () => {
+    sessione.current = { ruolo: 'super_admin', organization_id: null }
+    render(<TrainingPage />)
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Organizzazione' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Banca Esempio' }))
+    await userEvent.click(screen.getByRole('button', { name: /Nuovo Percorso/ }))
+
+    expect(screen.getByText('org: org-1')).toBeInTheDocument()
+  })
+
+  /* Senza filtro non c'è nessuna organizzazione da imporre, e a chi ne vede
+   * più di una la scelta resta da fare nella tendina del form. */
+  it('senza filtro lascia scegliere al form', async () => {
+    sessione.current = { ruolo: 'super_admin', organization_id: null }
+    render(<TrainingPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /Nuovo Percorso/ }))
+
+    expect(screen.getByText('org: nessuna')).toBeInTheDocument()
+  })
+
+  /* Un org admin non ha filtro da guardare: il tenant è il suo. */
+  it('per un org admin parte sempre dal proprio tenant', async () => {
+    renderPage('organization_admin')
+
+    await userEvent.click(screen.getByRole('button', { name: /Nuovo Percorso/ }))
+
+    expect(screen.getByText('org: org-1')).toBeInTheDocument()
   })
 })
 
@@ -292,6 +406,18 @@ describe('eliminazione di un percorso', () => {
 
     expect(screen.getByText('Percorso in uso.')).toBeInTheDocument()
   })
+
+  /* Quel motivo però è di quell'eliminazione: la mutation è una sola per
+   * tutta la pagina, e senza azzerarla il rifiuto delle nove restava dentro
+   * la conferma aperta alle nove e cinque su un altro percorso, che di suo
+   * non aveva ancora fatto niente. */
+  it('apre la conferma senza il rifiuto di quella di prima', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Onboarding' }))
+
+    expect(deletePath.reset).toHaveBeenCalled()
+  })
 })
 
 describe("ritiro di un'assegnazione", () => {
@@ -313,6 +439,15 @@ describe("ritiro di un'assegnazione", () => {
 
     await waitFor(() => expect(deleteAssignment.mutateAsync).toHaveBeenCalledWith('as-1'))
   })
+
+  it('apre la conferma senza il rifiuto di quella di prima', async () => {
+    renderPage()
+
+    await userEvent.click(linguetta(/Assegnati/))
+    await userEvent.click(screen.getByRole('button', { name: 'Ritira il percorso di Anna Rossi' }))
+
+    expect(deleteAssignment.reset).toHaveBeenCalled()
+  })
 })
 
 describe('caricamento ed errori', () => {
@@ -332,11 +467,14 @@ describe('caricamento ed errori', () => {
     expect(screen.getByText('Caricamento assegnazioni...')).toBeInTheDocument()
   })
 
-  it("dice quando non c'è ancora nessun percorso", () => {
+  /* Due righe: cosa manca, e cosa lo farebbe comparire. La prima da sola
+   * lascia in mezzo a una pagina vuota chi non sa da dove si comincia. */
+  it("dice quando non c'è ancora nessun percorso, e come se ne compone uno", () => {
     stato.paths = { data: [], isPending: false, error: null }
     renderPage()
 
     expect(screen.getByText('Nessun percorso ancora composto')).toBeInTheDocument()
+    expect(screen.getByText(/Si compone con «Nuovo Percorso»/)).toBeInTheDocument()
   })
 
   it('riporta il motivo di un caricamento fallito', () => {

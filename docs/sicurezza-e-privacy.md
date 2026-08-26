@@ -41,6 +41,15 @@ Due garanzie su cui il resto del codice conta:
   `describe()`, quindi password, token e contenuto delle conversazioni restano
   fuori per costruzione.
 
+Una regola su quegli extra: **quando la riga descrive qualcosa che sparisce,
+nei dettagli ci vanno i nomi e non i soli identificativi**. Un percorso
+eliminato o ritirato non si può più andare a rileggere, quindi un `target_id`
+da solo è un fatto che nessuno può ricostruire; il ritiro di un percorso
+scrive il titolo, la persona e l'organizzazione, l'eliminazione scrive il
+titolo e quante persone lo stavano percorrendo. Vanno letti **prima** della
+cancellazione e prima del commit, finché gli oggetti sono ancora caricati:
+dopo, ogni campo sarebbe una query su righe che non ci sono più.
+
 L'attore viene da `request.state.audit_user`, pubblicato da `get_current_user`.
 Le righe portano anche email, ruolo e organizzazione **fotografati**: il
 registro deve restare leggibile dopo che l'account è stato cancellato, o smette

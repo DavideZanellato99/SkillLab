@@ -781,34 +781,53 @@ def assign_path(
             TrainingPathAssignment.user_id.in_(unique_ids),
         )
     }
+    newcomers = [user for user in users if user.id not in already]
     assignments = [
         TrainingPathAssignment(
             path_id=path.id,
             user_id=user.id,
             assigned_by_id=current_admin.id,
         )
-        for user in users
-        if user.id not in already
+        for user in newcomers
     ]
     db.add_all(assignments)
-    db.commit()
-    for assignment in assignments:
-        db.refresh(assignment)
+    # Il flush assegna gli id senza chiudere la transazione: al commit gli
+    # oggetti scadono, e chiedere l'id a ognuno sarebbe una query per riga.
+    db.flush()
+    new_ids = [assignment.id for assignment in assignments]
 
-    # Una chiamata affida lo stesso percorso a più persone: la riga di audit
-    # le nomina tutte invece di perdere tutto tranne il conteggio.
-    audit.describe(
-        http_request,
-        percorso=path.title,
-        utenti=[u.email for u in users if u.id not in already],
-        gia_assegnato=[u.email for u in users if u.id in already] or None,
+    # Quello che la riga di audit racconta si legge adesso, mentre gli oggetti
+    # sono ancora caricati: dopo il commit ogni email costerebbe una query.
+    audit_details = {
+        "percorso": path.title,
+        # Una chiamata affida lo stesso percorso a più persone: la riga di
+        # audit le nomina tutte invece di perdere tutto tranne il conteggio.
+        "utenti": [user.email for user in newcomers],
+        "gia_assegnato": [user.email for user in users if user.id in already] or None,
+    }
+    db.commit()
+
+    audit.describe(http_request, **audit_details)
+
+    # Le assegnazioni appena nate, rilette in una query sola con dentro tutto
+    # quello che la risposta legge. Erano un ``refresh`` per riga, cioè un
+    # SELECT a testa: affidare un percorso a trenta persone ne faceva trenta,
+    # più quelli che le relazioni si tiravano dietro una per una.
+    created = (
+        _loaded_assignments(db)
+        .filter(TrainingPathAssignment.id.in_(new_ids))
+        .order_by(TrainingPathAssignment.created_at.desc())
+        .all()
+        if new_ids
+        else []
     )
-    return _assignment_responses(db, assignments)
+    return _assignment_responses(db, created)
 
 
 @router.delete("/assignments/{assignment_id}", response_model=MessageResponse)
 def delete_assignment(
     assignment_id: UUID,
+    http_request: Request,
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -818,6 +837,11 @@ def delete_assignment(
     Un organization admin raggiunge solo i percorsi dei propri utenti: uno
     di un altro tenant risponde 404, lo stesso niente che l'elenco gli
     mostra.
+
+    Nel registro la riga dice a chi è stato tolto cosa, come quella
+    dell'eliminazione dice quale percorso è sparito: senza, di un ritiro
+    resterebbe l'identificativo di una riga che a quel punto non esiste più,
+    cioè un fatto che non si può nemmeno andare a rileggere.
     """
     scope_org_id = resolve_admin_scope(current_admin, None)
     query = db.query(TrainingPathAssignment).filter(TrainingPathAssignment.id == assignment_id)
@@ -828,6 +852,15 @@ def delete_assignment(
     assignment = query.first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Percorso assegnato non trovato.")
+
+    # Prima della cancellazione: dopo, il percorso e la persona sono due
+    # righe da ritrovare per id, e l'oggetto in mano non li porta più.
+    audit.describe(
+        http_request,
+        percorso=assignment.path.title,
+        utente=assignment.user.email,
+        organizzazione=assignment.user.organization_name,
+    )
     db.delete(assignment)
     db.commit()
     return MessageResponse(message="Percorso ritirato.", success=True)

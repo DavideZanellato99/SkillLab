@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { PathAssignment, StepProgress } from '../../src/services/training'
+import type { PathAssignment, StepProgress, TrainingPath } from '../../src/services/training'
 import TrainingAssignmentsTable from '../../src/components/TrainingAssignmentsTable'
 
 const step = (
@@ -50,16 +50,37 @@ const assegnazione = (over: Partial<PathAssignment> = {}): PathAssignment => ({
   ...over,
 })
 
-function renderTable(righe: PathAssignment[] = [assegnazione()], showOrganization = false) {
+const percorso = (id: string, title: string): TrainingPath => ({
+  id,
+  organization_id: 'org-1',
+  organization_name: 'Banca Esempio',
+  title,
+  description: null,
+  steps: [],
+  assigned_count: 1,
+  created_at: '2026-01-01T10:00:00Z',
+  updated_at: '2026-01-01T10:00:00Z',
+})
+
+function renderTable(
+  righe: PathAssignment[] = [assegnazione()],
+  showOrganization = false,
+  percorsi: TrainingPath[] = [],
+  pathFilter = '',
+) {
   const onWithdraw = vi.fn()
+  const onPathFilterChange = vi.fn()
   render(
     <TrainingAssignmentsTable
       assignments={righe}
+      paths={percorsi}
+      pathFilter={pathFilter}
+      onPathFilterChange={onPathFilterChange}
       showOrganization={showOrganization}
       onWithdraw={onWithdraw}
     />,
   )
-  return onWithdraw
+  return { onWithdraw, onPathFilterChange }
 }
 
 const ricerca = () => screen.getByPlaceholderText(/Cerca per utente/)
@@ -102,6 +123,9 @@ describe('la riga', () => {
     const { unmount } = render(
       <TrainingAssignmentsTable
         assignments={[assegnazione()]}
+        paths={[]}
+        pathFilter=""
+        onPathFilterChange={vi.fn()}
         showOrganization
         onWithdraw={vi.fn()}
       />,
@@ -219,9 +243,56 @@ describe('ricerca', () => {
   })
 })
 
+/* La domanda che si fa dopo aver assegnato non è «dov'è Anna» ma «a che punto
+ * sono i dodici che stanno facendo l'onboarding»: il filtro per percorso è
+ * quella domanda, e ci si arriva anche dalla scheda del percorso. */
+describe('filtro per percorso', () => {
+  const dueRighe = [
+    assegnazione(),
+    assegnazione({
+      id: 'as-2',
+      path_id: 'p-2',
+      path_title: 'Gestione reclami',
+      user_id: 'u-2',
+      user_name: 'Luca Verdi',
+      user_email: 'luca@test.it',
+    }),
+  ]
+  const duePercorsi = [percorso('p-1', 'Onboarding'), percorso('p-2', 'Gestione reclami')]
+
+  it('tiene solo chi sta percorrendo quello scelto', () => {
+    renderTable(dueRighe, false, duePercorsi, 'p-2')
+
+    expect(screen.getByText('Luca Verdi')).toBeInTheDocument()
+    expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument()
+  })
+
+  it('lascia scegliere quale guardare', async () => {
+    const { onPathFilterChange } = renderTable(dueRighe, false, duePercorsi)
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Percorso' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Gestione reclami' }))
+
+    expect(onPathFilterChange).toHaveBeenCalledWith('p-2')
+  })
+
+  /* Con un percorso solo sarebbe una tendina che non toglie niente. */
+  it('non compare quando i percorsi sono uno solo', () => {
+    renderTable(dueRighe, false, [percorso('p-1', 'Onboarding')])
+
+    expect(screen.queryByRole('combobox', { name: 'Percorso' })).not.toBeInTheDocument()
+  })
+
+  it('dice che quel percorso non lo sta percorrendo nessuno', () => {
+    renderTable([assegnazione()], false, duePercorsi, 'p-2')
+
+    expect(screen.getByText('Nessuno sta percorrendo «Gestione reclami»')).toBeInTheDocument()
+  })
+})
+
 describe('ritiro', () => {
   it('chiede di ritirare il percorso di quella persona', async () => {
-    const onWithdraw = renderTable()
+    const { onWithdraw } = renderTable()
 
     await userEvent.click(screen.getByRole('button', { name: 'Ritira il percorso di Anna Rossi' }))
 
@@ -239,11 +310,40 @@ describe('ritiro', () => {
   })
 
   it('nemmeno la freccia apre il ritiro', async () => {
-    const onWithdraw = renderTable()
+    const { onWithdraw } = renderTable()
 
     await userEvent.click(screen.getByRole('button', { name: 'Mostra le tappe di Anna Rossi' }))
 
     expect(onWithdraw).not.toHaveBeenCalled()
     expect(within(screen.getByRole('table')).getByText('Avatar 1')).toBeInTheDocument()
+  })
+})
+
+/* La riga si apre come tutte le righe che si aprono nell'applicazione: col
+ * mouse e col fuoco. Rispondeva al solo clic, e chi naviga col Tab aveva la
+ * sola freccia in fondo alla riga. */
+describe('da tastiera', () => {
+  const rigaDiAnna = () => screen.getAllByRole('row')[1]
+
+  it('la riga riceve il fuoco e si apre con Invio', () => {
+    renderTable()
+    const riga = rigaDiAnna()
+
+    expect(riga).toHaveAttribute('tabindex', '0')
+    expect(riga).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.keyDown(riga, { key: 'Enter' })
+
+    expect(within(screen.getByRole('table')).getByText('Avatar 1')).toBeInTheDocument()
+    expect(rigaDiAnna()).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('si richiude con Spazio', () => {
+    renderTable()
+
+    fireEvent.keyDown(rigaDiAnna(), { key: 'Enter' })
+    fireEvent.keyDown(rigaDiAnna(), { key: ' ' })
+
+    expect(within(screen.getByRole('table')).queryByText('Avatar 1')).not.toBeInTheDocument()
   })
 })

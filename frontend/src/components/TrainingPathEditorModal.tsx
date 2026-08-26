@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAssignableContent, useCreatePath, useUpdatePath } from '../hooks/useTraining'
 import type { TrainingPath } from '../services/training'
+import { errorMessage } from '../services/errors'
 import Field, { formInputCls, textareaCls } from './Field'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
@@ -10,12 +11,13 @@ import PathStepEditor from './PathStepEditor'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
 import Spinner from './Spinner'
-import { PlusIcon, SparkleIcon } from './icons'
+import { PencilIcon, PlusIcon, SparkleIcon } from './icons'
 import { moved } from './listOrder'
 import type { PathStepDraft } from './pathStepDraft'
 import {
   draftFromProposal,
   draftFromStep,
+  draftProblem,
   emptyDraft,
   isDraftComplete,
   toStepInput,
@@ -89,13 +91,20 @@ export default function TrainingPathEditorModal({
     organizationId || null,
   )
 
-  const failure = createMutation.error ?? updateMutation.error
   const error =
     validationError ||
-    (failure ? (failure instanceof Error ? failure.message : 'Salvataggio non riuscito.') : '')
+    errorMessage(createMutation.error ?? updateMutation.error, 'Salvataggio non riuscito.')
 
-  const isComplete = useMemo(() => steps.every(isDraftComplete), [steps])
-  const canSubmit = !isSaving && title.trim() !== '' && organizationId !== '' && isComplete
+  /* La prima tappa a cui manca qualcosa, con il proprio numero davanti.
+   *
+   * Le tappe di un percorso sono più d'una, e «una tappa non è a posto»
+   * costringe a riaprirle una per una per scoprire quale: qui il messaggio
+   * dice la tappa e cosa le manca, e si legge accanto al bottone che non ha
+   * salvato. */
+  const stepIssue = useMemo(() => {
+    const index = steps.findIndex((step) => !isDraftComplete(step))
+    return index === -1 ? null : `Tappa ${index + 1}: ${draftProblem(steps[index])}.`
+  }, [steps])
 
   const setStep = (index: number, next: PathStepDraft) =>
     setSteps((prev) => prev.map((s, i) => (i === index ? next : s)))
@@ -123,13 +132,19 @@ export default function TrainingPathEditorModal({
     setValidationError('')
   }
 
+  /* Il bottone resta acceso anche su un percorso incompleto, e a fermarlo è
+   * questo controllo, che dice cosa manca. Spento non lo diceva: chi aveva
+   * lasciato una tappa senza bersaglio si trovava davanti un bottone morto,
+   * e la cosa da correggere stava dieci righe più in alto, dentro una fila
+   * di tappe che si somigliano. */
   const handleSubmit = async () => {
-    if (!canSubmit) {
-      setValidationError(
-        isComplete
-          ? 'Serve un titolo e un’organizzazione.'
-          : 'Ogni tappa deve puntare a un avatar o a un test.',
-      )
+    if (isSaving) return
+    if (title.trim() === '' || organizationId === '') {
+      setValidationError('Serve un titolo e un’organizzazione.')
+      return
+    }
+    if (stepIssue) {
+      setValidationError(stepIssue)
       return
     }
     setValidationError('')
@@ -153,7 +168,15 @@ export default function TrainingPathEditorModal({
   return (
     <ModalShell onClose={onClose} locked={isSaving} size="xl" padding="md">
       <ModalHeader
-        icon={<PlusIcon size={24} stroke="#a78bfa" />}
+        /* L'icona dice la stessa cosa del titolo: un percorso che esiste già
+           si corregge, non si aggiunge. */
+        icon={
+          isEditing ? (
+            <PencilIcon size={24} stroke="#a78bfa" />
+          ) : (
+            <PlusIcon size={24} stroke="#a78bfa" />
+          )
+        }
         iconWrapperCls="border border-violet-500/30 bg-violet-500/10"
         title={isEditing ? 'Modifica il percorso' : 'Nuovo Percorso'}
         description={
@@ -306,7 +329,7 @@ export default function TrainingPathEditorModal({
 
         {error && <FormError message={error} />}
 
-        <PrimaryButton variant="submit" onClick={handleSubmit} disabled={!canSubmit}>
+        <PrimaryButton variant="submit" onClick={handleSubmit} disabled={isSaving}>
           {isSaving && <Spinner variant="button" />}
           {isEditing ? 'Salva il percorso' : 'Crea il percorso'}
         </PrimaryButton>

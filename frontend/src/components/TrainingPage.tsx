@@ -45,7 +45,13 @@ import { PlusIcon, TrashIcon } from './icons'
  * un elenco che cresce di una scheda a settimana diventa un muro da scorrere,
  * e chi arriva qui di solito sa già quale percorso vuole toccare. La griglia
  * ne mette due per riga perché una scheda a tutta pagina, di quel contenuto,
- * è per metà spazio vuoto. */
+ * è per metà spazio vuoto.
+ *
+ * Le due linguette non sono due schermate separate: dal numero di chi sta
+ * percorrendo un percorso si passa all'elenco di chi sono, già filtrato su
+ * quello. È la domanda che viene subito dopo aver letto quel numero, e prima
+ * voleva dire aprire l'altra linguetta e ritrovare il titolo a mano in mezzo
+ * a tutte le assegnazioni. */
 
 type Tab = 'paths' | 'assignments'
 
@@ -56,6 +62,10 @@ export default function TrainingPage() {
   const [tab, setTab] = useState<Tab>('paths')
   const [orgFilter, setOrgFilter] = useState('')
   const [pathSearch, setPathSearch] = useState('')
+  /* Su quale percorso si stanno guardando le assegnazioni, vuoto per tutti.
+   * Vive qui e non nella tabella perché ci si arriva anche dall'altra
+   * linguetta, dalla scheda del percorso. */
+  const [pathFilter, setPathFilter] = useState('')
   const [editing, setEditing] = useState<TrainingPath | null>(null)
   const [isComposing, setIsComposing] = useState(false)
   const [assigning, setAssigning] = useState<TrainingPath | null>(null)
@@ -73,6 +83,23 @@ export default function TrainingPage() {
   const deletePathMutation = useDeletePath()
   const withdrawMutation = useDeleteAssignment()
 
+  /* Cambiando organizzazione cambia l'elenco dei percorsi, e quello su cui si
+   * stava guardando non è più fra questi: il filtro tornerebbe a nominare un
+   * percorso che la tendina non offre più, e la tabella resterebbe vuota
+   * senza che si capisca perché. */
+  const changeOrganization = (value: string) => {
+    setOrgFilter(value)
+    setPathFilter('')
+  }
+
+  /* Dal numero di chi sta percorrendo un percorso all'elenco di chi sono:
+   * si cambia linguetta e si restringe su quel percorso, invece di aprirla e
+   * ritrovare il titolo a mano fra tutte le assegnazioni dello scope. */
+  const showAssignedOf = (path: TrainingPath) => {
+    setPathFilter(path.id)
+    setTab('assignments')
+  }
+
   /* Si cerca con quello che la scheda mostra, nomi delle tappe compresi: chi
    * cerca un avatar sta cercando i percorsi che lo attraversano. */
   const filteredPaths = useMemo(
@@ -88,11 +115,34 @@ export default function TrainingPage() {
       ),
     [paths, pathSearch, isSuper],
   )
-  const { visible: visiblePaths, bar: pathsBar } = usePagination(filteredPaths)
+  /* La chiave dice cosa rende questo un elenco diverso: cambiata la domanda,
+   * si torna alla prima pagina. Restare alla terza pagina di una ricerca
+   * appena riscritta vuol dire guardare le schede in mezzo a un elenco di cui
+   * non si è ancora visto l'inizio. */
+  const { visible: visiblePaths, bar: pathsBar } = usePagination(
+    filteredPaths,
+    `${orgFilter}|${pathSearch}`,
+  )
 
   const loadError =
     errorMessage(pathsError, 'Impossibile caricare i percorsi.') ||
     errorMessage(assignmentsError, 'Impossibile caricare le assegnazioni.')
+
+  /* Aprire una conferma azzera l'esito di quella di prima.
+   *
+   * L'errore vive nella mutation, che è una sola per tutta la pagina: senza
+   * questo passaggio, un'eliminazione rifiutata alle nove lasciava il proprio
+   * banner rosso dentro la conferma aperta alle nove e cinque su un altro
+   * percorso, che di suo non aveva ancora fatto niente. */
+  const askDeletePath = (path: TrainingPath | null) => {
+    deletePathMutation.reset()
+    setPathToDelete(path)
+  }
+
+  const askWithdraw = (assignment: PathAssignment | null) => {
+    withdrawMutation.reset()
+    setToWithdraw(assignment)
+  }
 
   const handleDeletePath = async () => {
     if (!pathToDelete) return
@@ -124,9 +174,13 @@ export default function TrainingPage() {
             {isSuper && (
               <Select
                 id="training-org-filter"
+                /* Il nome della tendina, che accanto non ha nessuna etichetta:
+                   senza, chi la incontra da tastiera sente leggere la sola
+                   scelta corrente, senza sapere di cosa sia la scelta. */
+                ariaLabel="Organizzazione"
                 className="min-w-[220px] shrink-0 max-sm:w-full"
                 value={orgFilter}
-                onChange={setOrgFilter}
+                onChange={changeOrganization}
                 options={[
                   { value: '', label: 'Tutte le Organizzazioni' },
                   ...organizations.map((o) => ({ value: o.id, label: o.name })),
@@ -161,7 +215,10 @@ export default function TrainingPage() {
         isLoadingPaths ? (
           <LoadingState message="Caricamento percorsi..." />
         ) : paths.length === 0 ? (
-          <EmptyState title="Nessun percorso ancora composto" />
+          <EmptyState
+            title="Nessun percorso ancora composto"
+            hint="Si compone con «Nuovo Percorso», qui sopra, mettendo in fila le prove da superare"
+          />
         ) : (
           <>
             <SearchInput
@@ -185,9 +242,10 @@ export default function TrainingPage() {
                       key={path.id}
                       path={path}
                       showOrganization={isSuper}
+                      onShowAssigned={() => showAssignedOf(path)}
                       onAssign={() => setAssigning(path)}
                       onEdit={() => setEditing(path)}
-                      onDelete={() => setPathToDelete(path)}
+                      onDelete={() => askDeletePath(path)}
                     />
                   ))}
                 </div>
@@ -203,8 +261,11 @@ export default function TrainingPage() {
       ) : (
         <TrainingAssignmentsTable
           assignments={assignments}
+          paths={paths}
+          pathFilter={pathFilter}
+          onPathFilterChange={setPathFilter}
           showOrganization={isSuper}
-          onWithdraw={setToWithdraw}
+          onWithdraw={askWithdraw}
         />
       )}
 
@@ -212,7 +273,12 @@ export default function TrainingPage() {
         <TrainingPathEditorModal
           path={editing}
           organizations={isSuper ? organizations : []}
-          defaultOrganizationId={user?.organization_id ?? null}
+          /* Il super admin che sta guardando una sola organizzazione compone
+             per quella: partendo dalla prima dell'elenco, il percorso appena
+             creato sarebbe nato altrove e sarebbe sparito dalla schermata da
+             cui lo si è composto. Senza filtro resta il proprio tenant, che
+             per il super admin è vuoto e lascia decidere alla tendina. */
+          defaultOrganizationId={orgFilter || user?.organization_id || null}
           onClose={() => {
             setIsComposing(false)
             setEditing(null)

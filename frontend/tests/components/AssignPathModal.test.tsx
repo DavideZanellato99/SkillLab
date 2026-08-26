@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const stato = vi.hoisted(() => ({
   users: [] as unknown[],
   assignments: [] as unknown[],
+  isLoadingUsers: false,
+  isLoadingAssignments: false,
 }))
+const invalidate = vi.hoisted(() => vi.fn())
 const assign = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
   reset: vi.fn(),
@@ -19,10 +22,11 @@ const withdraw = vi.hoisted(() => ({
   error: null as Error | null,
 }))
 vi.mock('../../src/hooks/useTraining', () => ({
-  useAssignableUsers: () => ({ data: stato.users, isPending: false }),
-  useAssignments: () => ({ data: stato.assignments }),
+  useAssignableUsers: () => ({ data: stato.users, isPending: stato.isLoadingUsers }),
+  useAssignments: () => ({ data: stato.assignments, isPending: stato.isLoadingAssignments }),
   useAssignPath: () => assign,
   useDeleteAssignment: () => withdraw,
+  useInvalidateTraining: () => invalidate,
 }))
 
 import type { AuthUser } from '../../src/services/auth'
@@ -97,6 +101,22 @@ describe('AssignPathModal', () => {
     withdraw.error = null
     stato.users = [utente(), utente({ id: 'u-2', nome: 'Luca', cognome: 'Verdi', email: 'l@t.it' })]
     stato.assignments = [assegnazione()]
+    stato.isLoadingUsers = false
+    stato.isLoadingAssignments = false
+  })
+
+  /* Le due letture sono due richieste: l'elenco delle persone e chi il
+   * percorso ce l'ha già. Mostrando la prima da sola, chi ce l'ha appariva
+   * non spuntato come chiunque altro, e in quella finestra "Seleziona tutti"
+   * lo rimetteva in fila mentre una spunta tolta si registrava come una
+   * spunta messa. */
+  it('aspetta di sapere chi ce l’ha già prima di mostrare le persone', () => {
+    stato.isLoadingAssignments = true
+    render(<AssignPathModal path={percorso} onClose={vi.fn()} />)
+
+    expect(screen.getByText('Caricamento delle persone...')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Seleziona tutti' })).not.toBeInTheDocument()
   })
 
   it('mostra spuntato chi il percorso ce l’ha già', () => {
@@ -162,6 +182,40 @@ describe('AssignPathModal', () => {
       expect(assign.mutateAsync).toHaveBeenCalledWith({ path_id: 'p-1', user_ids: ['u-2'] }),
     )
     expect(screen.queryByText('Ritirare il percorso?')).not.toBeInTheDocument()
+  })
+
+  /* Una passata scrive più volte: una richiesta per le assegnazioni e una per
+   * ogni ritiro. Con l'invalidazione attaccata a ognuna, i percorsi e le
+   * assegnazioni si rileggevano tante volte quante le richieste, mentre la
+   * passata era ancora in corso. */
+  it('rilegge una volta sola in fondo alla passata', async () => {
+    stato.users = [utente(), utente({ id: 'u-2', nome: 'Luca', cognome: 'Verdi', email: 'l@t.it' })]
+    stato.assignments = [
+      assegnazione(),
+      assegnazione({ id: 'as-2', user_id: 'u-2', user_name: 'Luca Verdi', user_email: 'l@t.it' }),
+    ]
+    render(<AssignPathModal path={percorso} onClose={vi.fn()} />)
+
+    await userEvent.click(casella('Anna Rossi'))
+    await userEvent.click(casella('Luca Verdi'))
+    await userEvent.click(screen.getByRole('button', { name: /Ritira a 2 persone/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Ritira a 2' }))
+
+    await waitFor(() => expect(withdraw.mutateAsync).toHaveBeenCalledTimes(2))
+    expect(invalidate).toHaveBeenCalledTimes(1)
+  })
+
+  /* Anche quando si rompe a metà: quello che era già stato scritto prima
+   * dell'errore è nel database, e la pagina dietro deve raccontarlo. */
+  it('rilegge anche se la passata si ferma a metà', async () => {
+    withdraw.mutateAsync.mockRejectedValue(new Error('Ritiro non riuscito.'))
+    render(<AssignPathModal path={percorso} onClose={vi.fn()} />)
+
+    await userEvent.click(casella('Anna Rossi'))
+    await userEvent.click(screen.getByRole('button', { name: /Ritira a 1 persona/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Ritira il percorso' }))
+
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1))
   })
 
   it('il bottone di massa non ritira nessuno', async () => {

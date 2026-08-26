@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ConversationDetailModal from '../../src/components/ConversationDetailModal'
+import { formatTime } from '../../src/components/dateFormat'
 
 /* La stessa schermata per due lettori: un docente che corregge e chi rilegge
  * una conversazione sua.
@@ -129,6 +130,20 @@ describe('ConversationDetailModal', () => {
     // correzione del voto.
     expect(screen.getByText('Aggiungi Revisione')).toBeInTheDocument()
     expect(calledPaths().some((p) => p.includes('/api/admin/conversations/'))).toBe(true)
+  })
+
+  /* Gli orari della trascrizione passavano da due funzioni scritte qui
+   * dentro, che leggevano il momento con `new Date`: le colonne dello schema
+   * sono in UTC senza fuso scritto, quindi l'ora di ogni messaggio scorreva
+   * del fuso di chi guardava, mentre la riga del report da cui questa
+   * schermata si apre mostrava quella giusta. */
+  it("scrive l'ora dei messaggi come la scrive il resto dell'applicazione", async () => {
+    show('admin')
+
+    await screen.findByText('Verifico subito la pratica.')
+    // Le due letture della stessa data non dipendono dal fuso della macchina
+    expect(screen.getAllByText(formatTime('2026-03-05T09:05:00Z')).length).toBeGreaterThan(0)
+    expect(formatTime('2026-03-05T09:05:00')).toBe(formatTime('2026-03-05T09:05:00Z'))
   })
 
   it('a chi rilegge una conversazione sua non offre la revisione', async () => {

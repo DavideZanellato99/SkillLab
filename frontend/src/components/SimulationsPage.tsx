@@ -13,10 +13,11 @@ import SearchInput from './SearchInput'
 import Badge from './Badge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import Tooltip from './Tooltip'
-import { formatRelativeDay } from './lastAccess'
+import { formatRelativeDay } from './dateFormat'
 import { filterSimulations, SIMULATION_FILTERS } from './simulationFilters'
 import type { SimulationFilter } from './simulationFilters'
-import { scoreBadgeTone, formatDateTime, formatScore, kindLabel } from './simulationFormat'
+import { scoreBadgeTone, formatScore, kindLabel } from './simulationFormat'
+import { formatDateTime } from './dateFormat'
 
 /* L'elenco dei test tecnici che si possono svolgere.
  *

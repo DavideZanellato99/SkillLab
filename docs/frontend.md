@@ -472,11 +472,21 @@ stessa in tutta l'app, deve stare scritta una volta.
   già il suo tooltip) vince il più interno, che spegne quello che lo contiene.
 - **Le formattazioni condivise stanno in un modulo a parte** accanto ai
   componenti che le usano: [simulationFormat.ts](../frontend/src/components/simulationFormat.ts),
-  [chatFormat.ts](../frontend/src/components/chatFormat.ts),
+  [dateFormat.ts](../frontend/src/components/dateFormat.ts),
   [categoryStyles.ts](../frontend/src/components/categoryStyles.ts), che tiene
   anche le tinte selezionabili per le categorie degli avatar: sono un elenco
   chiuso di classi scritte per intero, perché una classe Tailwind composta a
   runtime non finirebbe mai nel CSS compilato.
+- **Un momento che arriva dal server si legge sempre con `parseInstant`**
+  ([instant.ts](../frontend/src/components/instant.ts)) e si scrive sempre con
+  le tre funzioni di [dateFormat.ts](../frontend/src/components/dateFormat.ts):
+  la data, la data con l'ora, l'ora sola. Le colonne dello schema sono in UTC e
+  senza fuso scritto, quindi la risposta porta `2026-08-12T17:00:00` e basta, e
+  `new Date` la legge come ora locale: su una data lo scarto non si vede, su un
+  orario sono due ore sbagliate. Erano quattro copie della stessa
+  formattazione, due delle quali con la lettura sbagliata, e nel report
+  attività si vedevano una accanto all'altra: la riga con l'ora giusta e la
+  trascrizione che si apre da lì con quella spostata.
 
 ## I test
 

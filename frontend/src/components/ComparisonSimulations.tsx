@@ -21,7 +21,7 @@ import {
 } from './comparisonFilters'
 import type { Pair } from './comparisonFilters'
 import { cardCls } from './scoreFormat'
-import { formatDate } from './lastAccess'
+import { formatDate } from './dateFormat'
 
 /* La metà scritta del confronto: due test consegnati, uno accanto all'altro.
  *

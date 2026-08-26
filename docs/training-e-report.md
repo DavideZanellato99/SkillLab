@@ -1008,7 +1008,8 @@ Tre schermate per chi amministra, tutte confinate dallo stesso `resolve_admin_sc
 | ---------------------- | ----------------------------------- | ---------------------------------------------------------------------------- |
 | `/app/admin/dashboard` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie                            |
 | `/app/admin/dashboard` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte                        |
-| `/app/admin/report`    | `GET /api/admin/users-report`       | Una riga per persona: le due prove svolte, apribili e cancellabili una a una |
+| `/app/admin/report`    | `GET /api/admin/users-report`       | Una riga per persona: quanto ha fatto nel periodo, in conteggi               |
+| `/app/admin/report`    | `GET /api/admin/users-report/{id}`  | Le prove di quella persona, quando la sua riga si apre                       |
 | `/app/admin`           | `GET /api/admin/users`              | La tabella degli utenti, filtrata e paginata                                 |
 
 **La dashboard e il report rispondono a due domande diverse**, ed è quello che
@@ -1185,7 +1186,7 @@ mescolare i due errori faceva sembrare rotta una dashboard che funzionava.
 
 `/app/admin/report`
 ([UserReportPage](../frontend/src/components/UserReportPage.tsx)): una riga per
-persona, e su quella riga tutto quello che quella persona ha fatto.
+persona, e sotto quella riga tutto quello che quella persona ha fatto.
 
 Prima la riga diceva **quante conversazioni** e **quanti minuti**, cioè solo
 quanto l'app era stata usata. Sono i due numeri che dicono meno: mezz'ora di
@@ -1197,6 +1198,15 @@ come una riga vuota. Ora la riga porta:
 | Conversazioni | Quante ne ha avute nel periodo                           |
 | Simulazioni   | Quante ne ha consegnate nel periodo                      |
 | Durata        | Il tempo passato a parlare, che resta ma non comanda più |
+
+**Nella riga ci sono i conteggi, e nient'altro.** Le prove una per una arrivano
+da una seconda lettura (`GET /api/admin/users-report/{user_id}`), che parte
+quando quella riga si apre. Stavano dentro l'elenco, cioè ogni conversazione e
+ogni tentativo di ogni persona: su un tenant avviato sono decine di migliaia di
+righe scaricate a ogni apertura della pagina e a ogni cambio di periodo, per
+aprirne una alla volta. Il periodo viaggia anche su questa lettura, così i
+conteggi della riga e le prove che si aprono sotto sono la stessa cosa contata
+due volte.
 
 **Nella riga non c'è nessuna media.** Il voto appartiene alla singola prova e
 si legge lì, nello storico che si apre sotto; una media per persona accanto a
@@ -1223,9 +1233,28 @@ tipo di test nella dashboard parte da "entrambi": un filtro già acceso mostra
 una tabella mezza vuota a chi non sa che esiste, e quella si legge come un
 dato sbagliato invece che come una scelta. Il periodo e la durata stanno in
 [reportFormat.ts](../frontend/src/components/reportFormat.ts), le date le
-scrive [lastAccess.ts](../frontend/src/components/lastAccess.ts), lo stesso
-file della tabella degli utenti, così due punti dell'area di amministrazione
-non dicono la stessa data in due modi diversi.
+scrive [dateFormat.ts](../frontend/src/components/dateFormat.ts), lo stesso
+file di tutta l'applicazione, così due punti dell'area di amministrazione non
+dicono la stessa data in due modi diversi.
+
+**Cambiando periodo o organizzazione le righe di prima restano**, attenuate e
+non cliccabili, finché non arrivano quelle nuove (`placeholderData` in
+[useReports](../frontend/src/hooks/useReports.ts)): ogni periodo è una voce di
+cache a sé, e senza, al loro posto compariva una rotella, cioè la pagina si
+svuotava di tabella, ricerca e filtri per tutto il tempo della lettura più
+lenta dell'applicazione. La ricerca aspetta la fine della digitazione
+(`useDebouncedValue`, la stessa attesa della gestione utenti), e ogni cambio
+fra i tre filtri riporta alla prima pagina (`pageResetKey`): restare alla terza
+pagina di un elenco che non è più quello vuol dire guardare righe che non
+rispondono a niente.
+
+**Una lettura caduta non è una tabella vuota.** Al posto delle righe c'è il
+motivo e il comando per richiederla
+([LoadError](../frontend/src/components/LoadError.tsx)), come nelle finestre
+che questa pagina apre: prima sotto la fascia rossa restava la tabella con
+scritto "Nessun utente trovato", che si legge come un'organizzazione senza
+nessuno dentro, e per riprovare bisognava ricaricare la pagina. Vale anche per
+le prove che si aprono sotto una riga, che si riprovano senza richiuderla.
 
 **Gli utenti restano tutti in elenco** anche quando il periodo non lascia loro
 nessuna prova: una riga a zero è la risposta a "chi non si sta allenando", e
@@ -1357,9 +1386,18 @@ riquadro della tabella sfoca lo sfondo, e una schermata intera aperta lì
 dentro resterebbe confinata al riquadro. Dentro la riga, il cestino è un
 bersaglio separato dal resto e il suo clic si ferma lì, senza arrivare alla
 riga che aprirebbe la prova: aprire e cancellare sono due gesti sulla stessa
-riga, ed è lì che si confondono. La riga si apre da tutta la sua larghezza,
-ma il titolo è comunque un pulsante: la riga è comoda col mouse, il pulsante
-è l'unico appiglio per chi gira con il tabulatore.
+riga, ed è lì che si confondono.
+
+**Ogni riga che si apre si apre anche da tastiera**, sia quella della persona
+sia quelle delle sue prove: lo dichiarano con `onActivate`
+([DataTable](../frontend/src/components/DataTable.tsx)), che porta insieme il
+puntatore a manina, il fuoco, Invio e Spazio, e la riga della persona dice
+anche se è aperta (`aria-expanded`). Erano `onClick` scritti a mano, cioè il
+solo mouse, e aprire una riga è l'unica cosa che questa pagina fa: la freccia
+in fondo è un disegno, non un comando. Il titolo di una prova ha smesso di
+essere un pulsante nel momento in cui la riga ne è diventata uno: era
+l'appiglio da tastiera di prima, e adesso sarebbe una seconda fermata del Tab
+per lo stesso gesto.
 
 **Le due prove si buttano anche da aperte.** Il cestino non è solo sulla riga:
 sta anche in testa alla schermata che apre una prova per intero, accanto al
@@ -1408,9 +1446,32 @@ tutto quello che le sta attaccato, cioè trascrizione, valutazione e revisione:
 il commento di un docente su qualcosa che non si può più rileggere non
 servirebbe a nessuno.
 
-Lato server è una lettura sola ([admin.py](../backend/routers/admin.py)) con
-due query separate, una per prova: chi non usa il simulatore non deve pagare
-la scansione dei tentativi dentro quella delle conversazioni.
+Lato server sono **due letture** ([admin.py](../backend/routers/admin.py)),
+l'elenco e il dettaglio di una persona, e ciascuna tiene le due prove in query
+separate: chi non usa il simulatore non deve pagare la scansione dei tentativi
+dentro quella delle conversazioni.
+
+I conteggi dell'elenco li fa il database, non Python: `conversation_count`,
+`simulation_count` e `total_duration_seconds` escono da due `GROUP BY`, e la
+durata è la stessa espressione SQL che scrive quella della singola prova
+(`_duration_seconds`), così la somma della riga e le durate che si aprono sotto
+tornano. Prima si materializzava ogni prova di ogni persona per contarle in
+memoria, cioè la stessa somma fatta due volte, una dal server per costruire le
+liste e una da chi le riceveva per non guardarle.
+
+Anche il confine del tenant è sceso dentro il database: era una lista di id
+letta prima e legata a ogni query come `IN (...)`, che cresce con il tenant fino
+a diventare migliaia di parametri per interrogazione, ed è una sottoquery
+(`_tenant_user_ids`). Nella stessa direzione, l'aggregato dei messaggi porta
+adesso dentro di sé i filtri delle conversazioni (`_message_stats`): stavano
+fuori, quindi il raggruppamento girava su tutta la tabella dei messaggi e si
+scartava dopo, anche quando a guardare era un org admin o il periodo era una
+settimana. Adesso il raggruppamento vede solo le conversazioni in vista, e
+quando si guarda una persona sola sono le sue.
+
+Il dettaglio è confinato come tutto il resto: fuori dal proprio tenant la
+persona **non esiste**, cioè risponde 404 come per un id inventato, e un utente
+normale prende 403 anche sul proprio.
 
 ## Il quadro d'insieme su una persona
 
@@ -1648,6 +1709,12 @@ aggiunge comincia quando le prove sono tante abbastanza da avere qualcosa in
 comune. Sotto la soglia la schermata non offre il bottone e al suo posto
 scrive il motivo, perché un bottone spento senza spiegazione manda a cercare
 cosa si è sbagliato.
+
+La soglia però la controlla il server, che le prove le conta **tutte**, mentre
+il report guarda un periodo: per questo il conto arriva al pannello solo quando
+il periodo è "Sempre", e negli altri casi è sconosciuto, cioè il bottone si
+offre e a rispondere di no è il 409. Con il conto della settimana in mano la
+schermata negava il quadro a chi aveva venti prove in un anno.
 
 **Chi si allena non lo vede**, ed è una scelta: il debriefing dice a un
 docente cosa ripetere a voce, non è la pagella, che invece è la valutazione e

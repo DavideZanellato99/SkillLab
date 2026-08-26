@@ -39,13 +39,8 @@ import SimulationSettingsPanel from './SimulationSettingsPanel'
 import UnsavedChangesModal from './UnsavedChangesModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
-import {
-  formatDateTime,
-  formatScore,
-  scoreBadgeTone,
-  statusBadgeTone,
-  statusLabel,
-} from './simulationFormat'
+import { formatScore, scoreBadgeTone, statusBadgeTone, statusLabel } from './simulationFormat'
+import { formatDateTime } from './dateFormat'
 
 /* Il pannello in cui una simulazione diventa un test: si scrivono le domande,
  * si rileggono, si correggono e si pubblica. Si apre dalla matita nella

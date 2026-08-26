@@ -25,7 +25,7 @@ import FormError from './FormError'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
 import Tooltip from './Tooltip'
-import { formatDateTime } from './lastAccess'
+import { formatDateTime } from './dateFormat'
 
 /* Quante prove servono al server per accettare di scriverlo. Ripetuto qui
  * solo per dirlo prima di far partire una richiesta che verrebbe rifiutata,
@@ -42,9 +42,16 @@ export default function UserDebriefingPanel({
   /* Il nome serve solo alla frase che spiega cosa si sta per far scrivere:
    * la richiesta viaggia sull'id. */
   userName: string
-  /* Quante prove ha questa persona nel periodo che la pagina sta guardando,
-   * per non offrire un bottone che il server rifiuterebbe. */
-  evidenceCount: number
+  /* Quante prove ha in tutto questa persona, per non offrire un bottone che
+   * il server rifiuterebbe, oppure null quando chi ci monta non lo sa.
+   *
+   * Sono due cose diverse e prima erano una sola: il report contava le prove
+   * del periodo che stava guardando, mentre il server, che il periodo non lo
+   * conosce, legge tutte le prove che esistono. Con un periodo stretto la
+   * schermata negava così il quadro a chi ne aveva venti in un anno. Non
+   * saperlo vuol dire mostrare il bottone e lasciar rispondere il server, che
+   * è comunque la regola che vale. */
+  evidenceCount: number | null
 }) {
   const { data: debriefings, isPending, error } = useUserDebriefings(userId)
   const generate = useGenerateDebriefing(userId)
@@ -72,7 +79,8 @@ export default function UserDebriefingPanel({
 
   /* Sotto la soglia il bottone non c'è, e al suo posto c'è il motivo. Un
    * bottone spento senza spiegazione manda a cercare cosa si è sbagliato. */
-  const tooFewProofs = storico.length === 0 && evidenceCount < MIN_EVIDENCE
+  const tooFewProofs =
+    storico.length === 0 && evidenceCount !== null && evidenceCount < MIN_EVIDENCE
   /* Rigenerare senza prove nuove darebbe una versione che dice le stesse
    * cose, e il server la rifiuta: il bottone lo dice prima invece di far
    * partire una richiesta che tornerà indietro. */

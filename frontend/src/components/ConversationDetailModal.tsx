@@ -22,6 +22,11 @@ import MessageAnnotationEditor from './MessageAnnotationEditor'
 import MessageAnnotationNote from './MessageAnnotationNote'
 import MessageEmotions from './MessageEmotions'
 import { splitEmotionTag } from './emotionTag'
+/* Le stesse due funzioni che usa la riga da cui questa schermata si apre.
+   Erano scritte qui, e leggevano il momento con `new Date`: la data in testa
+   e l'ora di ogni messaggio uscivano spostate del fuso di chi guardava,
+   mentre la riga del report accanto mostrava quella giusta. */
+import { formatDateTime, formatTime } from './dateFormat'
 import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import ModalShell from './ModalShell'
@@ -59,20 +64,6 @@ import { PlusIcon } from './icons'
 const CITATION_HIGHLIGHT_MS = 2500
 
 const sectionTitleCls = 'mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400'
-
-function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-}
 
 /** Quel poco che serve per aprire una conversazione: chi ha parlato con chi
  * e quando, cioè l'intestazione. Il resto (trascrizione, valutazione,

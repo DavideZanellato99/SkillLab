@@ -21,7 +21,7 @@
 import type { UserDebriefing } from '../services/admin'
 import Tooltip from './Tooltip'
 import { directionStyle } from './debriefingFormat'
-import { formatDateTime } from './lastAccess'
+import { formatDateTime } from './dateFormat'
 import { Delta } from './scoreCharts'
 import { formatScore, scoreBadgeTone } from './simulationFormat'
 

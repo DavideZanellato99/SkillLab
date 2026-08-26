@@ -1,9 +1,12 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import UserReportDetail from '../../src/components/UserReportDetail'
-import type { UserActivityReport } from '../../src/services/admin'
+import type {
+  ConversationReport,
+  SimulationAttemptReport,
+  UserActivityReport,
+} from '../../src/services/admin'
 
 /* Le due linguette dello storico di una persona.
  *
@@ -11,9 +14,46 @@ import type { UserActivityReport } from '../../src/services/admin'
  * quale delle due si apre (chi ha solo svolto simulazioni deve trovarsi
  * davanti le proprie, non una linguetta vuota da cui indovinare che l'altra
  * non lo è) e che ogni riga si apra o si cancelli senza che i due gesti si
- * confondano. */
+ * confondano.
+ *
+ * Le prove arrivano da una lettura sua, che parte quando la riga si apre: qui
+ * è finta, e quello che conta è che le chieda per la persona giusta e nel
+ * periodo che la pagina sta guardando. */
 
-function report(over: Partial<UserActivityReport> = {}): UserActivityReport {
+const lettura = vi.hoisted(() => ({
+  stato: {
+    data: undefined as { conversations: unknown[]; simulation_attempts: unknown[] } | undefined,
+    isPending: false,
+    error: null as unknown,
+    refetch: vi.fn(),
+  },
+  chiesto: { userId: '', days: undefined as number | undefined },
+}))
+
+vi.mock('../../src/hooks/useReports', () => ({
+  useUserReportDetail: (userId: string, days: number | undefined) => {
+    lettura.chiesto = { userId, days }
+    return lettura.stato
+  },
+}))
+
+/* Il quadro d'insieme ha i suoi test: qui conta solo con che conto ci
+ * arriva, perché è quello a decidere se il bottone si offre. */
+vi.mock('../../src/components/UserDebriefingPanel', () => ({
+  default: ({ evidenceCount }: { evidenceCount: number | null }) => (
+    <div>quadro: {evidenceCount === null ? 'sconosciuto' : evidenceCount}</div>
+  ),
+}))
+
+import UserReportDetail from '../../src/components/UserReportDetail'
+
+/** Le prove che la lettura riporta, e la riga da cui si è aperta. */
+interface Prove {
+  conversations?: ConversationReport[]
+  simulation_attempts?: SimulationAttemptReport[]
+}
+
+function report(over: Partial<UserActivityReport> & Prove = {}): UserActivityReport & Prove {
   return {
     id: 'u1',
     email: 'tizio@example.com',
@@ -23,11 +63,9 @@ function report(over: Partial<UserActivityReport> = {}): UserActivityReport {
     organization_id: 'org-1',
     organization_name: 'Organizzazione',
     created_at: '2026-01-01T10:00:00Z',
-    conversation_count: 0,
+    conversation_count: over.conversations?.length ?? 0,
     total_duration_seconds: 0,
-    simulation_count: 0,
-    conversations: [],
-    simulation_attempts: [],
+    simulation_count: over.simulation_attempts?.length ?? 0,
     ...over,
   }
 }
@@ -58,16 +96,27 @@ const attempt = {
   score: 6.5,
 }
 
-function show(user: UserActivityReport) {
+function show(
+  user: UserActivityReport & Prove,
+  { days, evidenceCount = null }: { days?: number; evidenceCount?: number | null } = {},
+) {
+  const { conversations = [], simulation_attempts = [], ...riga } = user
+  lettura.stato = { ...lettura.stato, data: { conversations, simulation_attempts } }
+
   const handlers = {
     onOpenConversation: vi.fn(),
     onDeleteConversation: vi.fn(),
     onOpenAttempt: vi.fn(),
     onDeleteAttempt: vi.fn(),
   }
-  render(<UserReportDetail user={user} {...handlers} />)
+  render(<UserReportDetail user={riga} days={days} evidenceCount={evidenceCount} {...handlers} />)
   return handlers
 }
+
+beforeEach(() => {
+  lettura.stato = { data: undefined, isPending: false, error: null, refetch: vi.fn() }
+  lettura.chiesto = { userId: '', days: undefined }
+})
 
 describe('UserReportDetail', () => {
   it('si apre sulle conversazioni quando ce ne sono', () => {
@@ -219,5 +268,92 @@ describe('UserReportDetail', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Elimina Tentativo' }))
     expect(handlers.onDeleteAttempt).toHaveBeenCalledWith(attempt)
     expect(handlers.onOpenAttempt).toHaveBeenCalledTimes(1)
+  })
+
+  /* Aprire la riga è l'unica cosa che la pagina fa, e con il solo clic chi
+   * gira con il tabulatore non poteva farlo. Vale anche per queste righe,
+   * che aprono la prova per intero. */
+  it('la prova si apre anche da tastiera', async () => {
+    const handlers = show(report({ conversations: [conversation] }))
+
+    const riga = screen
+      .getAllByRole('row')
+      .find((r) => within(r).queryByText('Reclamo sul rimborso'))
+    riga?.focus()
+    expect(riga).toHaveFocus()
+
+    await userEvent.keyboard('{Enter}')
+    expect(handlers.onOpenConversation).toHaveBeenCalledWith(conversation)
+  })
+})
+
+describe('la lettura delle prove', () => {
+  it('le chiede per questa persona e in questo periodo', () => {
+    show(report({ conversations: [conversation] }), { days: 30 })
+
+    expect(lettura.chiesto).toEqual({ userId: 'u1', days: 30 })
+  })
+
+  /* I conteggi la riga li ha già: aspettare la lettura per scriverli
+   * vorrebbe dire partire da zero e saltare al valore vero sotto gli occhi
+   * di chi guarda. */
+  it('mentre carica, le linguette portano già i conteggi della riga', () => {
+    lettura.stato = { ...lettura.stato, isPending: true }
+    render(
+      <UserReportDetail
+        user={report({ conversation_count: 3, simulation_count: 2 })}
+        evidenceCount={null}
+        onOpenConversation={vi.fn()}
+        onDeleteConversation={vi.fn()}
+        onOpenAttempt={vi.fn()}
+        onDeleteAttempt={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('radio', { name: 'Conversazioni (3)' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Simulazioni (2)' })).toBeInTheDocument()
+    expect(screen.getByText(/Caricamento delle prove svolte/)).toBeInTheDocument()
+  })
+
+  /* Una lettura caduta si rimedia restando dov'è: la riga è aperta, e
+   * richiuderla e riaprirla non è un comando. */
+  it('caduta, si può riprovare senza richiudere la riga', async () => {
+    const refetch = vi.fn()
+    lettura.stato = { data: undefined, isPending: false, error: new Error('Rete assente'), refetch }
+    render(
+      <UserReportDetail
+        user={report()}
+        evidenceCount={null}
+        onOpenConversation={vi.fn()}
+        onDeleteConversation={vi.fn()}
+        onOpenAttempt={vi.fn()}
+        onDeleteAttempt={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Rete assente')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Riprova' }))
+    expect(refetch).toHaveBeenCalled()
+  })
+})
+
+describe("il conto delle prove per il quadro d'insieme", () => {
+  /* Il quadro legge tutte le prove che esistono, il periodo restringe solo
+   * quello che si sta guardando: passargli il conto di una settimana negava
+   * il bottone a chi ne ha venti in un anno. */
+  it('arriva da chi monta la schermata, e può essere sconosciuto', async () => {
+    show(report({ conversations: [conversation] }), { evidenceCount: null })
+
+    await userEvent.click(screen.getByRole('radio', { name: "Quadro d'insieme" }))
+
+    expect(screen.getByText('quadro: sconosciuto')).toBeInTheDocument()
+  })
+
+  it('quando si sa, è quello che gli arriva', async () => {
+    show(report({ conversations: [conversation] }), { evidenceCount: 7 })
+
+    await userEvent.click(screen.getByRole('radio', { name: "Quadro d'insieme" }))
+
+    expect(screen.getByText('quadro: 7')).toBeInTheDocument()
   })
 })

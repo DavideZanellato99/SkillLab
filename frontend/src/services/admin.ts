@@ -326,6 +326,11 @@ export interface SimulationAttemptReport {
   score: number
 }
 
+/** Una riga del report: quanto una persona ha fatto nel periodo scelto.
+ *
+ *  I conteggi e basta. Le prove una per una stanno in `UserActivityDetail`,
+ *  che si legge aprendo la riga: erano dentro questa, e voleva dire
+ *  scaricare le conversazioni e i tentativi di tutti per aprirne uno. */
 export interface UserActivityReport {
   id: string
   email: string
@@ -338,15 +343,20 @@ export interface UserActivityReport {
   conversation_count: number
   total_duration_seconds: number
   simulation_count: number
+}
+
+/** Le prove di una persona sola, nel periodo scelto: quello che si apre
+ *  sotto la sua riga. */
+export interface UserActivityDetail {
   conversations: ConversationReport[]
   simulation_attempts: SimulationAttemptReport[]
 }
 
 /**
- * Fetch the read-only users activity recap: le prove di ogni persona, con il
- * voto di ciascuna e le durate (Super Admin + Organization Admin). The Super
- * Admin may filter by organization; the Organization Admin is always scoped
- * to its own. `days` restringe le prove agli ultimi N giorni.
+ * Fetch the read-only users activity recap: quanto ha fatto ogni persona
+ * (Super Admin + Organization Admin). The Super Admin may filter by
+ * organization; the Organization Admin is always scoped to its own. `days`
+ * restringe i conteggi agli ultimi N giorni.
  */
 export const fetchUsersReport = (organizationId?: string, days?: number) =>
   apiFetch<UserActivityReport[]>('/api/admin/users-report', {
@@ -354,6 +364,15 @@ export const fetchUsersReport = (organizationId?: string, days?: number) =>
       ...(organizationId ? { organization_id: organizationId } : {}),
       ...(days ? { days: String(days) } : {}),
     },
+  })
+
+/**
+ * Le prove di una persona, una per una, nello stesso periodo dell'elenco:
+ * la riga dice "tre conversazioni" e sotto se ne devono aprire tre.
+ */
+export const fetchUserReportDetail = (userId: string, days?: number) =>
+  apiFetch<UserActivityDetail>(`/api/admin/users-report/${userId}`, {
+    params: { ...(days ? { days: String(days) } : {}) },
   })
 
 // ── Debriefing di una persona ────────────────

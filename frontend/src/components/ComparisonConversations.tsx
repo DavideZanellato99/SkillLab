@@ -21,7 +21,7 @@ import {
 import type { Pair } from './comparisonFilters'
 import { Delta } from './scoreCharts'
 import { cardCls, formatScore, scoreBarColor, scoreTextColor } from './scoreFormat'
-import { formatDate } from './lastAccess'
+import { formatDate } from './dateFormat'
 
 /* La metà parlata del confronto: due conversazioni valutate, una accanto
  * all'altra, con lo scarto dei voti e quello di ogni criterio.

@@ -1,6 +1,7 @@
 import type { ConversationEvaluation, EvaluationCitation } from '../services/api'
 import TrainerReviewNote from './TrainerReviewNote'
 import Tooltip from './Tooltip'
+import { formatDate, formatDateTime } from './dateFormat'
 
 /* Corpo della valutazione: punteggio complessivo, punteggi per criterio e
  * spunti di miglioramento. Usato sia dalla EvaluationModal post-chiamata sia
@@ -100,12 +101,8 @@ export default function EvaluationReport({
           <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5 px-6 text-xs text-slate-500">
             <DeltaBadge delta={finalScore - previous.overall_score} />
             <span>
-              rispetto a «{previous.title}» del{' '}
-              {new Date(previous.conversation_at).toLocaleDateString('it-IT', {
-                day: '2-digit',
-                month: 'short',
-              })}{' '}
-              ({formatScore(previous.overall_score)} / 10)
+              rispetto a «{previous.title}» del {formatDate(previous.conversation_at)} (
+              {formatScore(previous.overall_score)} / 10)
             </span>
           </div>
         )}
@@ -220,14 +217,7 @@ export default function EvaluationReport({
       </div>
 
       <p className="mt-6 text-center text-[0.7rem] text-slate-500">
-        Valutazione generata il{' '}
-        {new Date(evaluation.updated_at).toLocaleString('it-IT', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })}
+        Valutazione generata il {formatDateTime(evaluation.updated_at)}
       </p>
     </>
   )

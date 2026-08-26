@@ -66,7 +66,7 @@ const recente = quadro({
 
 let client: QueryClient
 
-function renderPanel(evidenceCount = 6) {
+function renderPanel(evidenceCount: number | null = 6) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -146,6 +146,17 @@ describe('UserDebriefingPanel', () => {
 
     expect(await screen.findByText(/Servono almeno 3 prove/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Genera/ })).not.toBeInTheDocument()
+  })
+
+  /* Quante prove abbia in tutto questa persona, chi monta il pannello può
+   * non saperlo: il report guarda un periodo, il quadro le legge tutte.
+   * Nel dubbio il bottone si offre e a dire di no è il server, che è
+   * comunque la regola che vale. */
+  it('quando non si sa quante prove ci sono, il bottone si offre lo stesso', async () => {
+    renderPanel(null)
+
+    expect(await screen.findByRole('button', { name: /Genera/ })).toBeInTheDocument()
+    expect(screen.queryByText(/Servono almeno 3 prove/)).not.toBeInTheDocument()
   })
 
   /* Senza prove nuove il server rifiuta, quindi il bottone lo dice prima:

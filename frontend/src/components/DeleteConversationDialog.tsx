@@ -1,7 +1,7 @@
 import { useDeleteConversation } from '../hooks/useConversations'
 import ConfirmModal from './ConfirmModal'
 import { TrashIcon } from './icons'
-import { formatDateTime } from './lastAccess'
+import { formatDateTime } from './dateFormat'
 
 /* La conferma con cui si elimina una conversazione, da qualunque parte la si
  * chieda: il cestino sulla riga del report attività e quello in testa alla

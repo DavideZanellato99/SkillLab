@@ -2,6 +2,11 @@
  * sue conversazioni con gli avatar da una parte, le sue simulazioni
  * dall'altra, una prova per volta, e il quadro d'insieme nella terza.
  *
+ * Le prove le legge questo componente, quando la riga si apre, e non
+ * arrivano dentro l'elenco: quello porta i conteggi, e le prove di ogni
+ * persona ci stavano dentro tutte, cioè si scaricava lo storico di un tenant
+ * intero per aprirne una riga alla volta.
+ *
  * Due linguette e non una lista sola, come nella dashboard e nel confronto:
  * "come parla" e "cosa sa" sono due domande, e mescolate in una colonna la
  * seconda si leggerebbe come il seguito della prima. Il conteggio sulla
@@ -38,6 +43,9 @@ import type {
   SimulationAttemptReport,
   UserActivityReport,
 } from '../services/admin'
+import { useUserReportDetail } from '../hooks/useReports'
+import LoadingState from './LoadingState'
+import LoadError from './LoadError'
 import { categoryDotClass } from './categoryStyles'
 import ConversationModeBadge from './ConversationModeBadge'
 import { conversationModeLabel, MODE_FILTERS } from './conversationMode'
@@ -58,7 +66,7 @@ import {
   KIND_FILTERS,
 } from './simulationFormat'
 import type { KindFilter } from './simulationFormat'
-import { formatDateTime } from './lastAccess'
+import { formatDateTime } from './dateFormat'
 import { formatDuration } from './reportFormat'
 import { matchesSearch } from './tableSearch'
 
@@ -132,11 +140,11 @@ const KIND_OPTIONS = [
   ...KIND_FILTERS.filter((o) => o.value !== 'all'),
 ]
 
-/* `w-full` perché il bottone sta al centro della cella: senza, si stringe sul
- * proprio testo e il taglio dei titoli lunghi cadrebbe in un punto diverso a
- * ogni riga. */
+/* `block` con `w-full` perché il titolo sta al centro della cella: senza, si
+ * stringe sul proprio testo e il taglio dei titoli lunghi cadrebbe in un
+ * punto diverso a ogni riga. */
 const titleCls =
-  'w-full cursor-pointer truncate text-center text-[0.85rem] font-semibold text-slate-100 transition hover:text-violet-300'
+  'block w-full truncate text-center text-[0.85rem] font-semibold text-slate-100 transition group-hover:text-violet-300'
 
 const deleteCls =
   'flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
@@ -178,9 +186,10 @@ function DeleteButton({ label, onDelete }: { label: string; onDelete: () => void
  * qui c'è il voto ma non quello che l'ha prodotto, e il voto da solo non
  * dice a chi corregge dove si è girato male.
  *
- * Si apre da tutta la riga, e il titolo è comunque un pulsante: la riga è
- * comoda col mouse, il pulsante è l'unico appiglio per chi gira con il
- * tabulatore. */
+ * Si apre da tutta la riga, con il mouse e con il tabulatore: è `onActivate`
+ * a portare il fuoco, Invio e Spazio. Il titolo era un pulsante nel pulsante,
+ * cioè l'appiglio da tastiera quando la riga rispondeva al solo mouse: adesso
+ * sarebbe una seconda fermata del Tab per lo stesso gesto. */
 function ConversationRow({
   conversation,
   onOpen,
@@ -191,21 +200,12 @@ function ConversationRow({
   onDelete: (conversation: ConversationReport) => void
 }) {
   return (
-    <Tr className="cursor-pointer" onClick={() => onOpen(conversation)}>
+    <Tr className="group" onActivate={() => onOpen(conversation)}>
       <Td>
         <ConversationModeBadge mode={conversation.mode} />
       </Td>
       <Td>
-        <button
-          type="button"
-          className={titleCls}
-          onClick={(e) => {
-            e.stopPropagation()
-            onOpen(conversation)
-          }}
-        >
-          {conversation.title}
-        </button>
+        <span className={titleCls}>{conversation.title}</span>
       </Td>
       <Td>
         {/* La categoria dell'avatar è il pallino colorato e la parola sotto
@@ -265,7 +265,7 @@ function SimulationRow({
   onDelete: (attempt: SimulationAttemptReport) => void
 }) {
   return (
-    <Tr className="cursor-pointer" onClick={() => onOpen(attempt.id)}>
+    <Tr className="group" onActivate={() => onOpen(attempt.id)}>
       <Td>
         <span className="flex items-center justify-center gap-2">
           <SimulationKindBadge kind={attempt.simulation_kind} />
@@ -273,16 +273,7 @@ function SimulationRow({
         </span>
       </Td>
       <Td>
-        <button
-          type="button"
-          className={titleCls}
-          onClick={(e) => {
-            e.stopPropagation()
-            onOpen(attempt.id)
-          }}
-        >
-          {attempt.simulation_title}
-        </button>
+        <span className={titleCls}>{attempt.simulation_title}</span>
       </Td>
       <Td>
         <span className="whitespace-nowrap text-xs text-slate-500">
@@ -306,12 +297,21 @@ function SimulationRow({
 
 export default function UserReportDetail({
   user,
+  days,
+  evidenceCount,
   onOpenConversation,
   onDeleteConversation,
   onOpenAttempt,
   onDeleteAttempt,
 }: {
   user: UserActivityReport
+  /** Il periodo scelto in cima alla pagina, che taglia queste prove come
+   *  taglia i conteggi della riga. */
+  days?: number
+  /** Quante prove ha in tutto la persona, o null quando non si sa: serve
+   *  solo al quadro d'insieme, per non offrire un bottone che il server
+   *  rifiuterebbe. */
+  evidenceCount: number | null
   /* Le due prove si aprono da fuori: le modali sono a schermo intero, e
    * dentro il riquadro della tabella, che sfoca lo sfondo, resterebbero
    * confinate lì. Le conferme di eliminazione stanno lì per lo stesso
@@ -321,13 +321,20 @@ export default function UserReportDetail({
   onOpenAttempt: (attemptId: string) => void
   onDeleteAttempt: (attempt: SimulationAttemptReport) => void
 }) {
+  /* Le prove si leggono qui, aprendo la riga, e non arrivano con l'elenco:
+   * la pagina ne mostra una persona alla volta, e portarle tutte voleva dire
+   * scaricare le conversazioni e i tentativi di chiunque per aprirne uno.
+   * Il periodo è quello scelto in cima, così i conteggi della riga e le
+   * prove che si contano qui sotto sono la stessa cosa. */
+  const { data: detail, isPending, error, refetch } = useUserReportDetail(user.id, days)
+
   /* Si apre sulla prova che la persona ha davvero svolto: chi ha solo fatto
    * simulazioni troverebbe altrimenti una linguetta vuota e dovrebbe
-   * scoprire da sé che l'altra non lo è. */
+   * scoprire da sé che l'altra non lo è. I conteggi arrivano dalla riga, che
+   * li ha già: aspettare la lettura vorrebbe dire aprire sulla linguetta
+   * sbagliata e spostarsi sotto le mani di chi guarda. */
   const [tab, setTab] = useState<Tab>(
-    user.conversations.length === 0 && user.simulation_attempts.length > 0
-      ? 'simulations'
-      : 'conversations',
+    user.conversation_count === 0 && user.simulation_count > 0 ? 'simulations' : 'conversations',
   )
   /* Un filtro e una ricerca per ciascuna prova, e non un paio in comune.
    * Sono due elenchi con due contenuti diversi: una ricerca scritta sulle
@@ -349,7 +356,7 @@ export default function UserReportDetail({
   /* La prova si cerca con la stessa parola che il badge mostra, come nelle
    * tabelle della dashboard: chi legge "Chat" su una riga si aspetta che
    * scrivere "chat" gliele trovi. */
-  const conversations = user.conversations.filter(
+  const conversations = (detail?.conversations ?? []).filter(
     (c) =>
       (modeFilter === 'all' || c.mode === modeFilter) &&
       matchesSearch(
@@ -360,7 +367,7 @@ export default function UserReportDetail({
         conversationModeLabel(c.mode),
       ),
   )
-  const attempts = user.simulation_attempts.filter(
+  const attempts = (detail?.simulation_attempts ?? []).filter(
     (a) =>
       (kindFilter === 'all' || a.simulation_kind === kindFilter) &&
       matchesSearch(
@@ -371,8 +378,16 @@ export default function UserReportDetail({
       ),
   )
 
-  const total = isConversations ? user.conversations.length : user.simulation_attempts.length
-  const shown = isConversations ? conversations.length : attempts.length
+  /* Quante prove ci sono in tutto: dalla riga finché la lettura non è
+   * arrivata, così le linguette portano subito il numero che la riga mostra
+   * invece di partire da zero e saltare al valore vero. */
+  const conversationsTotal = detail ? detail.conversations.length : user.conversation_count
+  const attemptsTotal = detail ? detail.simulation_attempts.length : user.simulation_count
+  const conversationsShown = detail ? conversations.length : conversationsTotal
+  const attemptsShown = detail ? attempts.length : attemptsTotal
+
+  const total = isConversations ? conversationsTotal : attemptsTotal
+  const shown = isConversations ? conversationsShown : attemptsShown
 
   /* Niente per il periodo scelto e niente per i filtri sono due notizie
    * diverse: "nessuna conversazione" davanti a una ricerca attiva si legge
@@ -398,11 +413,11 @@ export default function UserReportDetail({
         options={[
           {
             value: 'conversations',
-            label: tabLabel('Conversazioni', conversations.length, user.conversations.length),
+            label: tabLabel('Conversazioni', conversationsShown, conversationsTotal),
           },
           {
             value: 'simulations',
-            label: tabLabel('Simulazioni', attempts.length, user.simulation_attempts.length),
+            label: tabLabel('Simulazioni', attemptsShown, attemptsTotal),
           },
           /* Senza conteggio, al contrario delle altre due: non è un
            * elenco che i filtri possono accorciare, è un testo solo. */
@@ -417,12 +432,22 @@ export default function UserReportDetail({
           /* Le prove che il quadro leggerebbe sono tutte quelle della
              persona, non quelle rimaste sotto il periodo scelto in cima
              alla pagina: il periodo restringe cosa si sta guardando, il
-             debriefing guarda comunque le ultime prove che esistono. Il
-             conto serve solo a non offrire un bottone che il server
-             rifiuterebbe, quindi conta le prove del periodo più largo che
-             questa schermata conosce. */
-          evidenceCount={user.conversation_count + user.simulation_count}
+             debriefing guarda comunque le ultime prove che esistono. Per
+             questo il conto arriva da qui solo quando il periodo è "Sempre",
+             e negli altri casi è sconosciuto: contando le prove di una
+             settimana si negava il quadro a chi ne ha venti in un anno. */
+          evidenceCount={evidenceCount}
         />
+      ) : error ? (
+        /* La lettura delle prove è caduta, e il resto della pagina è ancora
+           lì: si riprova senza richiudere la riga. */
+        <LoadError
+          message={error instanceof Error ? error.message : 'Impossibile caricare le prove.'}
+          onRetry={() => void refetch()}
+          className="py-6"
+        />
+      ) : isPending ? (
+        <LoadingState message="Caricamento delle prove svolte..." variant="modal" />
       ) : (
         /* Una tabella per linguetta, e non una che cambia colonne sotto le
            mani: passando da una prova all'altra la pagina aperta e la
@@ -455,6 +480,14 @@ export default function UserReportDetail({
             )
           }
           paginate={total > PAGINATE_OVER}
+          /* Cambiare filtro o ricerca riporta alla prima pagina: restare
+             alla terza di un elenco che non è più quello vuol dire guardare
+             righe che non rispondono a niente. */
+          pageResetKey={
+            isConversations
+              ? `${modeFilter}|${conversationSearch}`
+              : `${kindFilter}|${simulationSearch}`
+          }
           isEmpty={shown === 0}
           emptyMessage={emptyMessage}
         >

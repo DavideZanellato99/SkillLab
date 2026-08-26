@@ -25,7 +25,7 @@ import KebabMenu from './KebabMenu'
 import type { KebabMenuItem } from './KebabMenu'
 import Tooltip from './Tooltip'
 import { PencilIcon, TrashIcon } from './icons'
-import { formatDate, formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
+import { formatDate, formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './dateFormat'
 
 interface UserRowProps {
   user: AdminUser

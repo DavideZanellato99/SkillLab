@@ -1158,15 +1158,20 @@ class SimulationAttemptReport(BaseModel):
 
 
 class UserActivityReport(BaseModel):
-    """Read-only recap of a user: le sue prove svolte e come sono andate.
+    """Read-only recap of a user: quanto ha fatto, nel periodo scelto.
 
     Le due prove stanno sulla stessa riga perché la domanda del report è
     "questa persona cosa ha fatto", e chi ha solo svolto delle simulazioni
     con i soli conteggi delle conversazioni sembrerebbe fermo.
 
-    I conteggi riguardano il periodo scelto. Le medie non ci sono: il voto
-    appartiene alla singola prova, che se lo porta dentro l'elenco, e una
-    media per persona la scrive già la dashboard su tutto il gruppo.
+    Qui ci sono i conteggi e basta. Le prove una per una sono in
+    `UserActivityDetail`, che si legge quando quella riga si apre: erano qui
+    dentro, e voleva dire scaricare le conversazioni e i tentativi di tutti
+    per mostrarne una riga alla volta.
+
+    Le medie non ci sono: il voto appartiene alla singola prova, che se lo
+    porta dentro l'elenco, e una media per persona la scrive già la dashboard
+    su tutto il gruppo.
     """
 
     id: UUID
@@ -1180,7 +1185,18 @@ class UserActivityReport(BaseModel):
     conversation_count: int
     total_duration_seconds: int
     simulation_count: int = 0
-    conversations: list[ConversationReport]
+
+
+class UserActivityDetail(BaseModel):
+    """Le prove di una persona sola, una per una, nel periodo scelto.
+
+    È quello che si apre sotto la riga del report attività: le conversazioni
+    con gli avatar da una parte, i test consegnati dall'altra, ciascuna con
+    com'è andata. La persona non si ripete qui dentro, perché chi la chiede
+    ha già la riga da cui è partito.
+    """
+
+    conversations: list[ConversationReport] = []
     simulation_attempts: list[SimulationAttemptReport] = []
 
 

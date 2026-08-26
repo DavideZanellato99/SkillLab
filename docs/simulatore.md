@@ -1079,7 +1079,7 @@ In fondo alla scheda stanno quante volte il test è stato svolto e quanto
 tempo fa: il voto in alto dice com'è andata l'ultima prova, non se quell'ultima
 è di ieri o di sei mesi fa, che è la differenza fra un test da ripassare e uno
 appena fatto. La distanza da adesso si legge senza calcoli
-([formatRelativeDay](../frontend/src/components/lastAccess.ts)) e la data
+([formatRelativeDay](../frontend/src/components/dateFormat.ts)) e la data
 esatta resta nel tooltip, come nella colonna dell'ultimo accesso.
 
 `source` prosegue poi su ogni tentativo consegnato, come `simulation_source`,

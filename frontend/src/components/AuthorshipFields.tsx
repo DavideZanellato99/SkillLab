@@ -1,5 +1,5 @@
 import { DetailField } from './DetailModal'
-import { formatDateTime } from './lastAccess'
+import { formatDateTime } from './dateFormat'
 import { authorLabel, isPlaceholderAuthor } from '../services/authorship'
 import type { Authored } from '../services/authorship'
 

@@ -1,4 +1,4 @@
-/* Il report attività: una riga per persona, e su quella riga tutto quello
+/* Il report attività: una riga per persona, e sotto quella riga tutto quello
  * che quella persona ha fatto.
  *
  * La domanda è diversa da quella della dashboard: là si guarda un gruppo e
@@ -6,6 +6,11 @@
  * ha fatto. Per questo le due prove (le conversazioni con gli avatar e le
  * simulazioni) stanno sulla stessa riga: chi ha solo svolto simulazioni, con
  * i soli conteggi delle conversazioni, sembrerebbe fermo.
+ *
+ * In riga ci sono i conteggi, le prove una per una arrivano quando la riga si
+ * apre. Venivano insieme, cioè ogni conversazione e ogni tentativo di ogni
+ * persona per aprirne una alla volta, ed era la richiesta più pesante
+ * dell'applicazione fatta a ogni cambio di periodo.
  *
  * I voti stanno una riga più sotto, nello storico che si apre: qui la
  * domanda è quanto una persona si è allenata, e una media in tabella la
@@ -15,6 +20,7 @@ import { Fragment, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import type { ConversationReport, SimulationAttemptReport } from '../services/admin'
 import { useUsersReport } from '../hooks/useReports'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useOrganizations } from '../hooks/useOrganizations'
 import {
   isAdmin,
@@ -27,8 +33,9 @@ import DataTable, { Td, Tr } from './DataTable'
 import Select from './Select'
 import FilterTabs from './FilterTabs'
 import LoadingState from './LoadingState'
+import LoadError from './LoadError'
+import { ChevronDownIcon } from './icons'
 import { PageContainer, PageHeader } from './PageLayout'
-import FormError from './FormError'
 import ConversationDetailModal from './ConversationDetailModal'
 import type { ConversationDetailTarget } from './ConversationDetailModal'
 import DeleteAttemptDialog from './DeleteAttemptDialog'
@@ -106,16 +113,26 @@ export default function UserReportPage() {
   const [deletingConversation, setDeletingConversation] = useState<ConversationReport | null>(null)
   const [deletingAttempt, setDeletingAttempt] = useState<SimulationAttemptReport | null>(null)
 
+  /* Il periodo scelto viaggia fin dentro le prove che si aprono sotto una
+     riga: la riga dice "tre conversazioni" e sotto se ne devono aprire tre. */
+  const days = period === 'all' ? undefined : Number(period)
   const {
     data: report = [],
     isPending: isLoading,
+    isPlaceholderData,
     error,
     refetch,
-  } = useUsersReport(orgFilter, period === 'all' ? undefined : Number(period), isAdmin(user))
+  } = useUsersReport(orgFilter, days, isAdmin(user))
+
+  /* La ricerca filtra un elenco già in mano, ma è l'elenco intero di un
+     tenant: senza attesa, ogni tasto premuto rifiltra e ridisegna la tabella
+     mentre si sta ancora scrivendo. È la stessa attesa della gestione
+     utenti. */
+  const debouncedSearch = useDebouncedValue(search)
 
   const visibleReport = report.filter((u) =>
     matchesSearch(
-      search,
+      debouncedSearch,
       `${u.nome} ${u.cognome}`,
       u.email,
       u.organization_name ?? '',
@@ -133,7 +150,8 @@ export default function UserReportPage() {
    * stessa conferma che si legge dalla schermata che apre una prova per
    * intero, e la frase che spiega cosa sparisce non va scritta due volte.
    *
-   * L'eliminazione invalida il report, che si rilegge dal server: prima i
+   * L'eliminazione invalida i rendiconti, cioè sia questo elenco sia le
+   * prove aperte sotto una riga, che si rileggono dal server: prima i
    * conteggi e la durata totale della riga venivano ricalcolati qui a mano,
    * cioè si riscriveva lato client una somma che il server fa già. */
 
@@ -146,150 +164,187 @@ export default function UserReportPage() {
         description="Attività di ogni persona: le conversazioni con gli avatar e le simulazioni consegnate."
       />
 
-      {error && (
-        <FormError
+      {error ? (
+        /* Con il comando per richiederlo, come nelle finestre che questa
+           pagina apre. Prima sotto la fascia rossa restava la tabella vuota,
+           che diceva "Nessun utente trovato": una lettura caduta si leggeva
+           come un'organizzazione senza nessuno dentro, e per riprovare
+           bisognava ricaricare la pagina. */
+        <LoadError
           message={error instanceof Error ? error.message : 'Impossibile caricare il report.'}
           variant="page"
+          onRetry={() => void refetch()}
+          className="py-8"
         />
-      )}
-
-      {isLoading ? (
+      ) : isLoading ? (
         <LoadingState message="Caricamento report attività..." />
       ) : (
-        <DataTable
-          columns={columns}
-          searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Cerca per nome, email, organizzazione o ruolo..."
-          /* Periodo e organizzazione stanno nella barra della tabella, con la
+        /* Le righe di prima restano finché non arrivano quelle del periodo
+           appena chiesto, attenuate e non cliccabili: dicono ancora di che
+           cosa si sta parlando, e che non sono più loro lo dice il grigio.
+           Prima al loro posto compariva una rotella, cioè la pagina si
+           svuotava di tabella, ricerca e filtri a ogni cambio di periodo. */
+        <div
+          className={
+            isPlaceholderData ? 'pointer-events-none opacity-50 transition-opacity' : undefined
+          }
+          aria-busy={isPlaceholderData || undefined}
+        >
+          <DataTable
+            columns={columns}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Cerca per nome, email, organizzazione o ruolo..."
+            /* Periodo e organizzazione stanno nella barra della tabella, con la
              ricerca: sono i tre modi di restringere lo stesso elenco, e messi
              su due fasce diverse (due sotto il titolo, uno sopra le righe) si
              leggevano come comandi di due schermate diverse. L'etichetta
              scritta sopra ciascuno era una seconda riga di parole per dire
              quello che le voci dicono da sé. */
-          searchActions={
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterTabs<PeriodValue>
-                value={period}
-                onChange={setPeriod}
-                options={[...PERIOD_OPTIONS]}
-                ariaLabel="Periodo delle prove svolte"
-              />
-              {showOrg && (
-                <Select
-                  ariaLabel="Organizzazione"
-                  className="w-[220px]"
-                  value={orgFilter}
-                  onChange={setOrgFilter}
-                  options={orgFilterOptions}
+            searchActions={
+              <div className="flex flex-wrap items-center gap-2">
+                <FilterTabs<PeriodValue>
+                  value={period}
+                  onChange={setPeriod}
+                  options={[...PERIOD_OPTIONS]}
+                  ariaLabel="Periodo delle prove svolte"
                 />
-              )}
-            </div>
-          }
-          isEmpty={visibleReport.length === 0}
-          emptyMessage={search ? 'Nessun utente corrisponde alla ricerca' : 'Nessun utente trovato'}
-        >
-          {visibleReport.map((u) => {
-            const isExpanded = expandedUserId === u.id
-            return (
-              <Fragment key={u.id}>
-                <Tr
-                  hover={!isExpanded}
-                  className={`cursor-pointer ${isExpanded ? '[&>td]:bg-violet-600/6' : ''}`}
-                  onClick={() => setExpandedUserId(isExpanded ? null : u.id)}
-                >
-                  {/* Come nella gestione utenti e nella tabella degli avatar:
+                {showOrg && (
+                  <Select
+                    ariaLabel="Organizzazione"
+                    className="w-[220px]"
+                    value={orgFilter}
+                    onChange={setOrgFilter}
+                    options={orgFilterOptions}
+                  />
+                )}
+              </div>
+            }
+            isEmpty={visibleReport.length === 0}
+            emptyMessage={
+              debouncedSearch ? 'Nessun utente corrisponde alla ricerca' : 'Nessun utente trovato'
+            }
+            /* Cambiare periodo, organizzazione o ricerca riporta alla prima
+             pagina: restare alla terza di un elenco che non è più quello
+             mostrava le righe dalla ventunesima in poi di una domanda che
+             nessuno ha fatto. */
+            pageResetKey={`${orgFilter}|${period}|${debouncedSearch}`}
+          >
+            {visibleReport.map((u) => {
+              const isExpanded = expandedUserId === u.id
+              return (
+                <Fragment key={u.id}>
+                  {/* `onActivate` e non un `onClick` scritto a mano: aprire la
+                    riga è l'unica cosa che questa pagina fa, e con il solo
+                    clic chi gira con il tabulatore non aveva nessun modo di
+                    farlo. Da lì arrivano il fuoco, Invio e Spazio. */}
+                  <Tr
+                    hover={!isExpanded}
+                    className={isExpanded ? '[&>td]:bg-violet-600/6' : ''}
+                    aria-expanded={isExpanded}
+                    onActivate={() => setExpandedUserId(isExpanded ? null : u.id)}
+                  >
+                    {/* Come nella gestione utenti e nella tabella degli avatar:
                       l'intestazione resta al centro, i valori vanno a
                       sinistra, perché un'iniziale, un nome e un'email
                       incolonnati si scorrono con l'occhio. */}
-                  <Td align="left">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
-                        {getInitials(u.nome, u.cognome, u.email)}
+                    <Td align="left">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
+                          {getInitials(u.nome, u.cognome, u.email)}
+                        </div>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate font-semibold text-slate-100">
+                            {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}
+                          </span>
+                          <span className="truncate text-xs text-slate-500">{u.email}</span>
+                        </div>
                       </div>
-                      <div className="flex min-w-0 flex-col">
-                        <span className="truncate font-semibold text-slate-100">
-                          {u.nome && u.cognome ? `${u.nome} ${u.cognome}` : '—'}
-                        </span>
-                        <span className="truncate text-xs text-slate-500">{u.email}</span>
-                      </div>
-                    </div>
-                  </Td>
-                  {showOrg && (
-                    <Td>
-                      {u.organization_name ? (
-                        <span className="text-[0.85rem] text-slate-300">{u.organization_name}</span>
-                      ) : (
-                        <span className="text-[0.75rem] italic text-slate-500">—</span>
-                      )}
                     </Td>
-                  )}
-                  <Td>
-                    <Badge tone={ROLE_BADGE_CLASSES[u.ruolo] ?? ''}>
-                      {ROLE_LABELS[u.ruolo] ?? u.ruolo}
-                    </Badge>
-                  </Td>
-                  <Td>
-                    <CountCell count={u.conversation_count} />
-                  </Td>
-                  <Td>
-                    <CountCell count={u.simulation_count} />
-                  </Td>
-                  <Td>
-                    <span className="text-[0.85rem] text-slate-400">
-                      {formatDuration(u.total_duration_seconds)}
-                    </span>
-                  </Td>
-                  <Td>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`inline-block text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </Td>
-                </Tr>
-
-                {isExpanded && (
-                  <tr>
-                    {/* Il dettaglio che si apre porta la propria tabella, che
-                        centra le proprie colonne da sé: qui il testo torna a
-                        sinistra, perché non è una riga di questa. */}
-                    <Td colSpan={columns.length} align="left" className="bg-gray-950/40">
-                      <UserReportDetail
-                        user={u}
-                        onOpenAttempt={setOpenAttemptId}
-                        /* La modale della conversazione vuole sapere chi ha
-                           parlato con chi: l'intestazione arriva da qui, il
-                           resto lo carica lei dall'id. */
-                        onOpenConversation={(conversation) =>
-                          setOpenConversation({
-                            conversation_id: conversation.id,
-                            mode: conversation.mode,
-                            user_nome: u.nome,
-                            user_cognome: u.cognome,
-                            user_email: u.email,
-                            avatar_name: conversation.avatar_name,
-                            conversation_at: conversation.created_at,
-                          })
-                        }
-                        onDeleteConversation={setDeletingConversation}
-                        onDeleteAttempt={setDeletingAttempt}
+                    {showOrg && (
+                      <Td>
+                        {u.organization_name ? (
+                          <span className="text-[0.85rem] text-slate-300">
+                            {u.organization_name}
+                          </span>
+                        ) : (
+                          <span className="text-[0.75rem] italic text-slate-500">—</span>
+                        )}
+                      </Td>
+                    )}
+                    <Td>
+                      <Badge tone={ROLE_BADGE_CLASSES[u.ruolo] ?? ''}>
+                        {ROLE_LABELS[u.ruolo] ?? u.ruolo}
+                      </Badge>
+                    </Td>
+                    <Td>
+                      <CountCell count={u.conversation_count} />
+                    </Td>
+                    <Td>
+                      <CountCell count={u.simulation_count} />
+                    </Td>
+                    <Td>
+                      <span className="text-[0.85rem] text-slate-400">
+                        {formatDuration(u.total_duration_seconds)}
+                      </span>
+                    </Td>
+                    <Td>
+                      {/* La freccia dell'app e non una disegnata qui: era la
+                        stessa forma ricopiata, e si sarebbe scolorita per
+                        conto suo. */}
+                      <ChevronDownIcon
+                        size={16}
+                        className={`inline-block text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                       />
                     </Td>
-                  </tr>
-                )}
-              </Fragment>
-            )
-          })}
-        </DataTable>
+                  </Tr>
+
+                  {isExpanded && (
+                    <tr>
+                      {/* Il dettaglio che si apre porta la propria tabella, che
+                        centra le proprie colonne da sé: qui il testo torna a
+                        sinistra, perché non è una riga di questa. */}
+                      <Td colSpan={columns.length} align="left" className="bg-gray-950/40">
+                        <UserReportDetail
+                          user={u}
+                          days={days}
+                          /* Quante prove ha in tutto, per non offrire un quadro
+                           d'insieme che il server rifiuterebbe. Solo sul
+                           periodo "Sempre": su un periodo stretto il conto
+                           della riga sono le prove di quella settimana,
+                           mentre il quadro le legge tutte, e chi ne aveva
+                           venti in un anno si vedeva negare il bottone.
+                           Sconosciuto vuol dire mostrarlo e lasciar
+                           rispondere il server. */
+                          evidenceCount={
+                            days === undefined ? u.conversation_count + u.simulation_count : null
+                          }
+                          onOpenAttempt={setOpenAttemptId}
+                          /* La modale della conversazione vuole sapere chi ha
+                           parlato con chi: l'intestazione arriva da qui, il
+                           resto lo carica lei dall'id. */
+                          onOpenConversation={(conversation) =>
+                            setOpenConversation({
+                              conversation_id: conversation.id,
+                              mode: conversation.mode,
+                              user_nome: u.nome,
+                              user_cognome: u.cognome,
+                              user_email: u.email,
+                              avatar_name: conversation.avatar_name,
+                              conversation_at: conversation.created_at,
+                            })
+                          }
+                          onDeleteConversation={setDeletingConversation}
+                          onDeleteAttempt={setDeletingAttempt}
+                        />
+                      </Td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+          </DataTable>
+        </div>
       )}
 
       {openAttemptId && (
@@ -307,10 +362,10 @@ export default function UserReportPage() {
         <ConversationDetailModal
           row={openConversation}
           onClose={() => setOpenConversation(null)}
-          /* Correggere un voto di lì cambia il voto che questo elenco sta
-             mostrando: senza rileggerlo, il docente corregge e continua a
-             vedere il numero di prima. */
-          onReviewSaved={() => void refetch()}
+          /* Niente `onReviewSaved`: correggere un voto invalida già i
+             rendiconti da dentro la mutation, e una query attiva invalidata
+             si rilegge da sola. Chiedere anche di qui voleva dire far
+             partire due volte la lettura più pesante dell'applicazione. */
           /* Le due prove si possono anche buttare da aperte, ed è lo stesso
              gesto del cestino sulla riga: chi ha appena letto la
              trascrizione è già dentro la conversazione che vuole togliere,

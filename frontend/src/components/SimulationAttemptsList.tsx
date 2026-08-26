@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useMyAttempts } from '../hooks/useSimulations'
 import Badge from './Badge'
 import SimulationAttemptModal from './SimulationAttemptModal'
-import { formatDateTime, formatScore, scoreBadgeTone } from './simulationFormat'
+import { formatScore, scoreBadgeTone } from './simulationFormat'
+import { formatDateTime } from './dateFormat'
 
 /* I propri tentativi su un test, sotto le regole, uno per riga.
  *

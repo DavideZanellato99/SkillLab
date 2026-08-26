@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import Tooltip from './Tooltip'
 import type { PairRole } from './comparisonFilters'
-import { formatDate } from './lastAccess'
+import { formatDate } from './dateFormat'
 import { formatScore, scoreTextColor } from './scoreFormat'
 
 /* Le prove svolte, in fila e in ordine di tempo, da cui si scelgono le due da

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatDateTime, formatRelativeDay } from '../../src/components/lastAccess'
+import {
+  formatDate,
+  formatDateTime,
+  formatRelativeDay,
+  formatTime,
+} from '../../src/components/dateFormat'
 
 /* `now` è iniettato in ogni caso: un test che dipendesse dall'orologio reale
  * cambierebbe risultato a ogni esecuzione. Le date sono costruite in ora
@@ -53,5 +58,28 @@ describe('formatDateTime', () => {
    * Il confronto fra le due forme non dipende dal fuso della macchina. */
   it('reads a timestamp without a timezone as UTC', () => {
     expect(formatDateTime('2026-03-05T09:05:00')).toBe(formatDateTime('2026-03-05T09:05:00Z'))
+  })
+})
+
+describe('formatDate', () => {
+  it('returns a "DD mon YYYY" Italian short date', () => {
+    expect(formatDate('2026-03-05T09:05:00Z')).toMatch(/^\d{2} \p{L}{3,} \d{4}$/u)
+  })
+
+  it('reads a timestamp without a timezone as UTC', () => {
+    expect(formatDate('2026-03-05T09:05:00')).toBe(formatDate('2026-03-05T09:05:00Z'))
+  })
+})
+
+describe('formatTime', () => {
+  it('returns a zero-padded HH:MM string', () => {
+    expect(formatTime('2026-03-05T09:05:00Z')).toMatch(/^\d{2}:\d{2}$/)
+  })
+
+  /* L'orario dei messaggi di una trascrizione: era l'unico letto con
+   * `new Date`, quindi scorreva del fuso di chi guardava mentre la riga del
+   * report accanto mostrava l'ora giusta. */
+  it('reads a timestamp without a timezone as UTC', () => {
+    expect(formatTime('2026-03-05T09:05:00')).toBe(formatTime('2026-03-05T09:05:00Z'))
   })
 })

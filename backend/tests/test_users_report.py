@@ -1,10 +1,14 @@
-"""Il report attività: una riga per persona con tutte le sue prove.
+"""Il report attività: una riga per persona, e le sue prove quando si apre.
 
-La riga risponde a "cosa ha fatto questa persona", quindi tiene insieme le
-due prove che stanno in due tabelle diverse: le conversazioni con gli avatar
-e le simulazioni. Questi test fissano quello che la riga promette: il voto è
-quello finale, il periodo taglia le prove, il confine del tenant vale qui
-come altrove, e da qui una prova si può togliere.
+La riga risponde a "cosa ha fatto questa persona", quindi tiene insieme i
+conteggi delle due prove che stanno in due tabelle diverse: le conversazioni
+con gli avatar e le simulazioni. Le prove una per una arrivano dalla lettura
+di dettaglio, che la schermata chiede solo quando quella riga si apre.
+
+Questi test fissano quello che le due letture promettono: i conteggi tornano
+con le prove che si aprono sotto, il voto è quello finale, il periodo taglia
+allo stesso modo di qua e di là, il confine del tenant vale su entrambe, e da
+qui una prova si può togliere.
 """
 
 import uuid
@@ -93,6 +97,13 @@ def _row_of(response, user) -> dict:
     return rows[0]
 
 
+def _detail_of(client, user, query="") -> dict:
+    """Le prove di una persona, cioè quello che si legge aprendo la sua riga."""
+    response = client.get(f"/api/admin/users-report/{user.id}{query}")
+    assert response.status_code == 200
+    return response.json()
+
+
 def test_la_riga_tiene_insieme_le_due_prove(
     admin_client, db_session, standard_user, organization, make_avatar
 ):
@@ -106,9 +117,30 @@ def test_la_riga_tiene_insieme_le_due_prove(
 
     assert row["conversation_count"] == 2
     assert row["simulation_count"] == 1
-    assert len(row["conversations"]) == 2
-    assert len(row["simulation_attempts"]) == 1
-    assert row["simulation_attempts"][0]["simulation_title"] == "Procedura rimborsi"
+
+    # I conteggi della riga e le prove che si aprono sotto sono la stessa
+    # cosa contata due volte: se non tornassero, la riga prometterebbe prove
+    # che aprendola non ci sono
+    dettaglio = _detail_of(admin_client, standard_user)
+    assert len(dettaglio["conversations"]) == 2
+    assert len(dettaglio["simulation_attempts"]) == 1
+    assert dettaglio["simulation_attempts"][0]["simulation_title"] == "Procedura rimborsi"
+
+
+def test_l_elenco_non_porta_le_prove(admin_client, db_session, standard_user, make_avatar):
+    """L'elenco conta e basta.
+
+    Le prove di ogni persona ci stavano dentro, e chi apriva la pagina le
+    scaricava tutte per aprirne una riga alla volta: su un tenant avviato
+    sono decine di migliaia di righe a ogni apertura.
+    """
+    _conversation(db_session, standard_user, make_avatar(), score=6.0, messages=2)
+
+    row = _row_of(admin_client.get("/api/admin/users-report"), standard_user)
+
+    assert row["conversation_count"] == 1
+    assert "conversations" not in row
+    assert "simulation_attempts" not in row
 
 
 def test_una_conversazione_non_valutata_non_e_uno_zero(
@@ -121,9 +153,10 @@ def test_una_conversazione_non_valutata_non_e_uno_zero(
     _conversation(db_session, standard_user, avatar)
 
     row = _row_of(admin_client.get("/api/admin/users-report"), standard_user)
+    dettaglio = _detail_of(admin_client, standard_user)
 
     assert row["conversation_count"] == 2
-    assert sorted(c["score"] is None for c in row["conversations"]) == [False, True]
+    assert sorted(c["score"] is None for c in dettaglio["conversations"]) == [False, True]
 
 
 def test_il_voto_e_quello_corretto_dal_docente(
@@ -143,9 +176,9 @@ def test_il_voto_e_quello_corretto_dal_docente(
     )
     db_session.flush()
 
-    row = _row_of(admin_client.get("/api/admin/users-report"), standard_user)
+    dettaglio = _detail_of(admin_client, standard_user)
 
-    assert row["conversations"][0]["score"] == 7.5
+    assert dettaglio["conversations"][0]["score"] == 7.5
 
 
 def test_il_periodo_taglia_le_prove(
@@ -162,8 +195,14 @@ def test_il_periodo_taglia_le_prove(
 
     # Solo la prova recente
     assert row["conversation_count"] == 1
-    assert len(row["conversations"]) == 1
     assert row["simulation_count"] == 0
+
+    # E il periodo taglia allo stesso modo di là: la riga dice una
+    # conversazione, e aprendola se ne deve trovare una
+    dettaglio = _detail_of(admin_client, standard_user, "?days=30")
+    assert len(dettaglio["conversations"]) == 1
+    assert dettaglio["simulation_attempts"] == []
+    assert len(_detail_of(admin_client, standard_user)["conversations"]) == 2
 
 
 def test_la_durata_esce_dai_messaggi(admin_client, db_session, standard_user, make_avatar):
@@ -172,12 +211,82 @@ def test_la_durata_esce_dai_messaggi(admin_client, db_session, standard_user, ma
     _conversation(db_session, standard_user, avatar, at=at, messages=3)
 
     row = _row_of(admin_client.get("/api/admin/users-report"), standard_user)
+    conversazione = _detail_of(admin_client, standard_user)["conversations"][0]
 
     # Tre messaggi a trenta secondi l'uno dall'altro: un minuto dal primo
-    # all'ultimo, e il conteggio dei messaggi accanto
-    assert row["conversations"][0]["message_count"] == 3
-    assert row["conversations"][0]["duration_seconds"] == 60
+    # all'ultimo, e il conteggio dei messaggi accanto. La somma in testa alla
+    # riga la fa il database, il minuto della prova lo fa la stessa
+    # espressione: se si scollassero, la riga direbbe una durata e le prove
+    # sotto un'altra
+    assert conversazione["message_count"] == 3
+    assert conversazione["duration_seconds"] == 60
     assert row["total_duration_seconds"] == 60
+
+
+def test_una_conversazione_con_un_messaggio_solo_non_e_durata(
+    admin_client, db_session, standard_user, make_avatar
+):
+    """Aperta e mai iniziata: la durata è zero e non un istante."""
+    _conversation(db_session, standard_user, make_avatar(), messages=1)
+
+    row = _row_of(admin_client.get("/api/admin/users-report"), standard_user)
+    conversazione = _detail_of(admin_client, standard_user)["conversations"][0]
+
+    assert conversazione["message_count"] == 1
+    assert conversazione["duration_seconds"] == 0
+    assert row["total_duration_seconds"] == 0
+
+
+def test_una_conversazione_senza_messaggi_sta_comunque_nell_elenco(
+    admin_client, db_session, standard_user, make_avatar
+):
+    """I messaggi arrivano in outer join: senza, la conversazione sparirebbe
+    dal conto invece di valere zero."""
+    _conversation(db_session, standard_user, make_avatar())
+
+    row = _row_of(admin_client.get("/api/admin/users-report"), standard_user)
+    conversazione = _detail_of(admin_client, standard_user)["conversations"][0]
+
+    assert row["conversation_count"] == 1
+    assert conversazione["message_count"] == 0
+    assert conversazione["duration_seconds"] == 0
+
+
+def test_il_dettaglio_di_un_altro_tenant_non_esiste(org_admin_client, db_session, make_avatar):
+    """Il confine del tenant vale sulla lettura di dettaglio come sull'elenco:
+    fuori dalla propria organizzazione la persona è un id inventato."""
+    altrove = Organization(name="Altrove", slug=f"altrove-{uuid.uuid4().hex[:8]}")
+    db_session.add(altrove)
+    db_session.flush()
+    estraneo = User(
+        cognito_sub=f"test-{uuid.uuid4()}",
+        email="estraneo-dettaglio@test.invalid",
+        nome="Estraneo",
+        cognome="Altrove",
+        role_id=ensure_roles(db_session)[ROLE_USER].id,
+        organization_id=altrove.id,
+    )
+    db_session.add(estraneo)
+    db_session.flush()
+    _conversation(db_session, estraneo, make_avatar(), score=6.0, messages=2)
+
+    response = org_admin_client.get(f"/api/admin/users-report/{estraneo.id}")
+
+    assert response.status_code == 404
+
+
+def test_il_dettaglio_di_un_id_inventato_e_un_404(admin_client):
+    response = admin_client.get(f"/api/admin/users-report/{uuid.uuid4()}")
+
+    assert response.status_code == 404
+
+
+def test_un_utente_normale_non_legge_il_dettaglio_di_nessuno(user_client, standard_user):
+    """Nemmeno il proprio: le prove di una persona si leggono dall'area di
+    amministrazione, e chi si allena ha le proprie schermate."""
+    response = user_client.get(f"/api/admin/users-report/{standard_user.id}")
+
+    assert response.status_code == 403
 
 
 def test_un_org_admin_non_vede_i_tentativi_di_un_altro_tenant(

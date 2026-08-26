@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,13 +9,32 @@ vi.mock('../../src/hooks/useOrganizations', () => ({
 }))
 
 const stato = vi.hoisted(() => ({
-  report: { data: [] as unknown[], isPending: false, error: null as unknown, refetch: vi.fn() },
+  report: {
+    data: [] as unknown[],
+    isPending: false,
+    isPlaceholderData: false,
+    error: null as unknown,
+    refetch: vi.fn(),
+  },
   chiesto: { organizationId: '', days: undefined as number | undefined },
+  /* Le prove di una persona sono una lettura a parte, che parte quando la
+   * riga si apre: qui è finta, e si guarda anche con che periodo arriva. */
+  dettaglio: {
+    data: undefined as unknown,
+    isPending: false,
+    error: null as unknown,
+    refetch: vi.fn(),
+  },
+  dettaglioChiesto: { userId: '', days: undefined as number | undefined },
 }))
 vi.mock('../../src/hooks/useReports', () => ({
   useUsersReport: (organizationId: string, days: number | undefined) => {
     stato.chiesto = { organizationId, days }
     return stato.report
+  },
+  useUserReportDetail: (userId: string, days: number | undefined) => {
+    stato.dettaglioChiesto = { userId, days }
+    return stato.dettaglio
   },
 }))
 
@@ -25,9 +44,16 @@ vi.mock('../../src/components/SimulationAttemptModal', () => ({
   default: ({ attemptId }: { attemptId: string }) => <div>tentativo: {attemptId}</div>,
 }))
 vi.mock('../../src/components/ConversationDetailModal', () => ({
-  default: ({ row }: { row: { conversation_id: string; avatar_name: string } }) => (
+  default: ({
+    row,
+    onReviewSaved,
+  }: {
+    row: { conversation_id: string; avatar_name: string }
+    onReviewSaved?: () => void
+  }) => (
     <div>
       conversazione: {row.conversation_id} con {row.avatar_name}
+      <button onClick={() => onReviewSaved?.()}>salva revisione</button>
     </div>
   ),
 }))
@@ -81,10 +107,11 @@ const riga = (over: Partial<UserActivityReport> = {}): UserActivityReport => ({
   conversation_count: 1,
   total_duration_seconds: 600,
   simulation_count: 1,
-  conversations: [conversazione],
-  simulation_attempts: [tentativo],
   ...over,
 })
+
+/** Le prove che la lettura di dettaglio riporta quando la riga si apre. */
+const prove = { conversations: [conversazione], simulation_attempts: [tentativo] }
 
 function renderPage(righe: UserActivityReport[] = [riga()], ruolo = 'super_admin') {
   sessione.current = { ruolo }
@@ -93,8 +120,16 @@ function renderPage(righe: UserActivityReport[] = [riga()], ruolo = 'super_admin
 }
 
 beforeEach(() => {
-  stato.report = { data: [], isPending: false, error: null, refetch: vi.fn() }
+  stato.report = {
+    data: [],
+    isPending: false,
+    isPlaceholderData: false,
+    error: null,
+    refetch: vi.fn(),
+  }
   stato.chiesto = { organizationId: '', days: undefined }
+  stato.dettaglio = { data: prove, isPending: false, error: null, refetch: vi.fn() }
+  stato.dettaglioChiesto = { userId: '', days: undefined }
 })
 
 describe('la riga di una persona', () => {
@@ -125,7 +160,7 @@ describe('la riga di una persona', () => {
   /* Zero è un trattino e non uno zero in evidenza: è un'assenza, e una
    * pastiglia con dentro uno zero pesa quanto una con dentro un numero. */
   it('mette un trattino dove una prova non è stata svolta', () => {
-    renderPage([riga({ simulation_count: 0, simulation_attempts: [] })])
+    renderPage([riga({ simulation_count: 0 })])
 
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
   })
@@ -147,13 +182,16 @@ describe('la riga di una persona', () => {
     expect(screen.queryByLabelText('Organizzazione')).not.toBeInTheDocument()
   })
 
+  /* La ricerca aspetta la fine della digitazione: l'elenco è quello intero
+   * di un tenant, e rifiltrarlo a ogni tasto vuol dire ridisegnare la
+   * tabella mentre si sta ancora scrivendo. */
   it('cerca per nome, email, organizzazione e ruolo', async () => {
     renderPage([riga(), riga({ id: 'u-2', nome: 'Marco', cognome: 'Bianchi', email: 'm@test.it' })])
 
     await userEvent.type(screen.getByPlaceholderText(/Cerca per nome/), 'bianchi')
 
-    expect(screen.getByText('Marco Bianchi')).toBeInTheDocument()
-    expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument()
+    expect(await screen.findByText('Marco Bianchi')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument())
   })
 
   it('distingue una tabella vuota da una ricerca senza esiti', async () => {
@@ -162,7 +200,7 @@ describe('la riga di una persona', () => {
 
     renderPage([riga()])
     await userEvent.type(screen.getAllByPlaceholderText(/Cerca per nome/)[1], 'nessuno')
-    expect(screen.getByText('Nessun utente corrisponde alla ricerca')).toBeInTheDocument()
+    expect(await screen.findByText('Nessun utente corrisponde alla ricerca')).toBeInTheDocument()
   })
 
   it('mostra il caricamento', () => {
@@ -172,11 +210,29 @@ describe('la riga di una persona', () => {
     expect(screen.getByText('Caricamento report attività...')).toBeInTheDocument()
   })
 
-  it('riporta il motivo di un caricamento fallito', () => {
-    stato.report = { ...stato.report, error: new Error('Sessione scaduta.') }
+  /* Una lettura caduta non è un'organizzazione senza nessuno dentro: al
+   * posto della tabella c'è il motivo, e il comando per richiederla. */
+  it('riporta il motivo di un caricamento fallito, e lo si può riprovare', async () => {
+    const refetch = vi.fn()
+    stato.report = { ...stato.report, error: new Error('Sessione scaduta.'), refetch }
     render(<UserReportPage />)
 
     expect(screen.getByText('Sessione scaduta.')).toBeInTheDocument()
+    expect(screen.queryByText('Nessun utente trovato')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Riprova' }))
+    expect(refetch).toHaveBeenCalled()
+  })
+
+  /* Cambiando periodo le righe di prima restano, attenuate: al loro posto
+   * c'era una rotella, cioè la pagina si svuotava di tabella, ricerca e
+   * filtri a ogni cambio. */
+  it('mentre arriva un altro periodo tiene le righe di prima, spente', () => {
+    stato.report = { ...stato.report, isPlaceholderData: true }
+    renderPage()
+
+    expect(screen.getByText('Anna Rossi')).toBeInTheDocument()
+    expect(screen.getByRole('table').closest('[aria-busy="true"]')).not.toBeNull()
   })
 })
 
@@ -233,6 +289,34 @@ describe('storico di una persona', () => {
     expect(screen.queryByText('Reclamo sul rimborso')).not.toBeInTheDocument()
   })
 
+  /* Aprire la riga è l'unica cosa che questa pagina fa, e con il solo clic
+   * chi gira con il tabulatore non aveva nessun modo di farlo: la freccia
+   * in fondo alla riga è un disegno, non un comando. */
+  it('si apre anche da tastiera, e lo dice a chi non la vede', async () => {
+    renderPage()
+
+    const riga = screen.getAllByRole('row').find((r) => within(r).queryByText('Anna Rossi'))
+    expect(riga).toHaveAttribute('aria-expanded', 'false')
+
+    riga?.focus()
+    await userEvent.keyboard('{Enter}')
+
+    expect(screen.getByText('Reclamo sul rimborso')).toBeInTheDocument()
+    expect(riga).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  /* Le prove arrivano quando la riga si apre, e nel periodo che la pagina
+   * sta guardando: la riga dice "una conversazione" e sotto se ne deve
+   * aprire una. */
+  it('chiede le prove della persona aperta, nel periodo scelto', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByRole('radio', { name: '30 giorni' }))
+    await userEvent.click(screen.getByText('Anna Rossi'))
+
+    expect(stato.dettaglioChiesto).toEqual({ userId: 'u-1', days: 30 })
+  })
+
   /* Una persona alla volta: aprire la seconda chiude la prima, o la tabella
    * si allungherebbe fino a perdere di vista quello che si confrontava. */
   it('ne tiene aperta una sola', async () => {
@@ -282,5 +366,18 @@ describe('storico di una persona', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Elimina Tentativo' }))
 
     expect(screen.getByText('elimina tentativo: t-1')).toBeInTheDocument()
+  })
+
+  /* Correggere un voto invalida già i rendiconti da dentro la mutation, e
+   * una query attiva invalidata si rilegge da sola: chiedere anche di qui
+   * faceva partire due volte la lettura più pesante dell'applicazione. */
+  it('non richiede il report dopo una revisione salvata', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByText('Anna Rossi'))
+    await userEvent.click(screen.getByText('Reclamo sul rimborso'))
+    await userEvent.click(screen.getByRole('button', { name: 'salva revisione' }))
+
+    expect(stato.report.refetch).not.toHaveBeenCalled()
   })
 })

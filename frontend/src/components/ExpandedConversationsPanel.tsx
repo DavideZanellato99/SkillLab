@@ -10,7 +10,7 @@ import SearchInput from './SearchInput'
 import Tooltip from './Tooltip'
 import { TrashIcon, CloseIcon } from './icons'
 import ModalShell from './ModalShell'
-import { formatDate } from './chatFormat'
+import { formatDate } from './dateFormat'
 
 interface ExpandedConversationsPanelProps {
   avatarImageUrl: string

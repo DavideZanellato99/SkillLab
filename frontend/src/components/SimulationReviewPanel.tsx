@@ -22,7 +22,7 @@ import FormError from './FormError'
 import PrimaryButton from './PrimaryButton'
 import Spinner from './Spinner'
 import Tooltip from './Tooltip'
-import { formatDateTime } from './lastAccess'
+import { formatDateTime } from './dateFormat'
 import { SparkleIcon } from './icons'
 
 /* Le tre gravità, con il colore che hanno ovunque nell'app: rosso dove

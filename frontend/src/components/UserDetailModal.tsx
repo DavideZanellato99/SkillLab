@@ -17,7 +17,7 @@ import AuthorshipFields from './AuthorshipFields'
 import Badge from './Badge'
 import DetailModal, { DetailField } from './DetailModal'
 import { PencilIcon } from './icons'
-import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
+import { formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './dateFormat'
 import PrimaryButton from './PrimaryButton'
 
 /** Data e ora estese, con quanto tempo fa è stata: "il 3 marzo (2 giorni fa)". */

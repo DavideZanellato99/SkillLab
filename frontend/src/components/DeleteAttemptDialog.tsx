@@ -2,7 +2,8 @@ import type { SimulationKind } from '../services/simulations'
 import { useDeleteSimulationAttempt } from '../hooks/useSimulations'
 import ConfirmModal from './ConfirmModal'
 import { TrashIcon } from './icons'
-import { formatDateTime, kindLabel } from './simulationFormat'
+import { kindLabel } from './simulationFormat'
+import { formatDateTime } from './dateFormat'
 
 /* La conferma con cui si elimina un test consegnato, il gemello di
  * [DeleteConversationDialog](./DeleteConversationDialog.tsx): stessi due posti

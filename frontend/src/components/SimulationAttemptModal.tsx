@@ -10,7 +10,7 @@ import SimulationResult from './SimulationResult'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import PdfDownloadButton from './PdfDownloadButton'
-import { formatDateTime } from './simulationFormat'
+import { formatDateTime } from './dateFormat'
 
 /* Un test consegnato, riletto per intero: le domande come sono state viste,
  * cosa è stato risposto, cosa era giusto e il passaggio del documento che lo

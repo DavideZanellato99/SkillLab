@@ -21,7 +21,7 @@ import SimulationDetailModal from './SimulationDetailModal'
 import SimulationEditorModal from './SimulationEditorModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
-import { formatDate } from './lastAccess'
+import { formatDate } from './dateFormat'
 import { statusBadgeTone, statusLabel } from './simulationFormat'
 import { iconActionCls as actionBtnCls } from './IconButton'
 

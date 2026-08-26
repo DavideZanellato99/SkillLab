@@ -13,7 +13,7 @@ import type { Avatar } from '../services/api'
 import { getAvatarImageUrl } from '../services/api'
 import Badge from './Badge'
 import { categoryBadgeClasses } from './categoryStyles'
-import { formatDate } from './chatFormat'
+import { formatDate } from './dateFormat'
 import { ChatIcon, MicIcon, UserIcon } from './icons'
 
 interface AvatarCardProps {

@@ -67,6 +67,11 @@ export const queryKeys = {
     /** Recap per utente delle prove svolte, nel periodo scelto. */
     users: (organizationId?: string, days?: number) =>
       ['reports', 'users', organizationId ?? '__all__', days ?? '__ever__'] as const,
+    /** Le prove di una persona sola, che si leggono aprendo la sua riga.
+     *  Il periodo entra nella chiave come nell'elenco: sono due domande
+     *  diverse, non lo stesso elenco filtrato dopo. */
+    userDetail: (userId: string, days?: number) =>
+      ['reports', 'user-detail', userId, days ?? '__ever__'] as const,
     /** Punteggi delle valutazioni per la dashboard, nel periodo scelto. */
     evaluations: (organizationId?: string, days?: number) =>
       ['reports', 'evaluations', organizationId ?? '__all__', days ?? '__ever__'] as const,

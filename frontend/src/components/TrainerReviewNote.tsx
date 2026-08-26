@@ -1,5 +1,6 @@
 import type { ConversationReview } from '../services/api'
 import { hasReviewContent } from './trainerReview'
+import { formatDate } from './dateFormat'
 
 /* La voce del docente dentro il blocco del punteggio, non accanto.
  *
@@ -16,14 +17,6 @@ import { hasReviewContent } from './trainerReview'
  * Il numero corretto non si ripete: lo dice già il punteggio grande sopra.
  * Le annotazioni sui messaggi nemmeno: vivono attaccate alla riga di cui
  * parlano, l'unico posto in cui insegnano qualcosa. */
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
 
 export default function TrainerReviewNote({ review }: { review: ConversationReview }) {
   if (!hasReviewContent(review)) return null

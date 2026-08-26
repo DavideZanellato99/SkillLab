@@ -13,7 +13,7 @@
 
 import type { UserDebriefing } from '../services/admin'
 import { directionStyle } from './debriefingFormat'
-import { formatDateTime } from './lastAccess'
+import { formatDateTime } from './dateFormat'
 import { Delta } from './scoreCharts'
 import { formatScore } from './simulationFormat'
 

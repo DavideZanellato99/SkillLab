@@ -96,14 +96,31 @@ export default function AvatarAdminPage() {
     statusFilter === '' ||
     (statusFilter === STATUS_ARCHIVED ? a.deleted_at !== null : a.deleted_at === null)
 
+  const matchesOrg = (a: AdminAvatar) => !orgFilter || a.organization_id === orgFilter
+
   const visibleAvatars = avatars.filter(
     (a) =>
-      (!orgFilter || a.organization_id === orgFilter) &&
-      matchesStatus(a) &&
-      matchesSearch(search, a.name, a.description, a.category),
+      matchesOrg(a) && matchesStatus(a) && matchesSearch(search, a.name, a.description, a.category),
   )
 
-  const archivedCount = avatars.filter((a) => a.deleted_at !== null).length
+  /* Quanti ne tiene l'archivio, contati dentro l'organizzazione che si sta
+   * guardando: il numero sta accanto alla voce "Archiviati", e un totale di
+   * tutti i tenant accanto a una tabella che ne mostra uno solo è un numero
+   * che non torna con le righe che compaiono scegliendolo. */
+  const archivedCount = avatars.filter((a) => a.deleted_at !== null && matchesOrg(a)).length
+
+  /* Cosa sta restringendo la tabella, ricerca compresa: è quello che il
+   * bottone azzera, ed è la condizione per cui esiste. Prima la ricerca
+   * restava fuori da entrambe le cose, quindi "Azzera Filtri" spariva con
+   * una tabella ancora filtrata e, quando c'era, lasciava il testo cercato
+   * dov'era. */
+  const hasFilters = Boolean(search) || Boolean(orgFilter) || statusFilter !== STATUS_ACTIVE
+
+  const clearFilters = () => {
+    setSearch('')
+    setOrgFilter('')
+    setStatusFilter(STATUS_ACTIVE)
+  }
 
   // Cosa è aperto sopra la tabella: 'new' crea, un avatar modifica
   const [editing, setEditing] = useState<AdminAvatar | 'new' | null>(null)
@@ -189,14 +206,11 @@ export default function AvatarAdminPage() {
             )}
           />
         </div>
-        {(orgFilter || statusFilter !== STATUS_ACTIVE) && (
+        {hasFilters && (
           <button
             type="button"
             className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-            onClick={() => {
-              setOrgFilter('')
-              setStatusFilter(STATUS_ACTIVE)
-            }}
+            onClick={clearFilters}
           >
             Azzera Filtri
           </button>
@@ -215,12 +229,12 @@ export default function AvatarAdminPage() {
           columns={AVATAR_COLUMNS}
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Cerca per nome o categoria..."
+          searchPlaceholder="Cerca per nome, brief o categoria..."
           isEmpty={visibleAvatars.length === 0}
           emptyMessage={
             statusFilter === STATUS_ARCHIVED && !search && !orgFilter
               ? 'Nessun avatar archiviato. Gli avatar eliminati vengono raccolti qui, con tutte le loro conversazioni'
-              : search || orgFilter || statusFilter !== STATUS_ACTIVE
+              : hasFilters
                 ? 'Nessun avatar corrisponde ai filtri'
                 : 'Nessun avatar presente. Crea il primo con "Nuovo Avatar"'
           }
@@ -242,7 +256,20 @@ export default function AvatarAdminPage() {
         </DataTable>
       )}
 
-      {viewing && <AvatarDetailModal avatar={viewing} onClose={() => setViewing(null)} />}
+      {/* Dal dettaglio si passa alla modifica senza tornare a cercare la
+          matita nella riga: è la domanda che viene dopo aver letto la scheda,
+          e la riga da cui si era partiti nel frattempo può essere finita
+          sotto un filtro o su un'altra pagina. */}
+      {viewing && (
+        <AvatarDetailModal
+          avatar={viewing}
+          onClose={() => setViewing(null)}
+          onEdit={() => {
+            setEditing(viewing)
+            setViewing(null)
+          }}
+        />
+      )}
 
       {editing && (
         <AvatarFormModal

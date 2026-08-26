@@ -231,6 +231,6 @@ describe('scritture', () => {
     await waitFor(() =>
       expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.simulations.all }),
     )
-    expect(invalida).toHaveBeenCalledWith({ queryKey: ['reports'] })
+    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.reports.all })
   })
 })

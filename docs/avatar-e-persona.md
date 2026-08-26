@@ -57,10 +57,47 @@ il server risponde 409 e non tocca niente. Un avatar senza categoria non può
 esistere, e sceglierne una al posto dell'amministratore vorrebbe dire
 spostargli il gruppo di nascosto.
 
+Qui la cancellazione è vera e non l'archiviazione di un avatar, quindi il
+cestino apre una conferma invece di eseguire: è l'unica eliminazione della
+sezione che prima partiva al primo clic. La conferma dice se la categoria
+risulta già in uso, ma non si spegne: quel numero è l'ultima lettura, e
+spegnere il bottone su un numero vecchio impedirebbe di eliminare una
+categoria che nel frattempo si è svuotata. A contare gli avatar nel momento
+giusto resta il server, e il suo rifiuto compare dentro la conferma da cui la
+richiesta è partita.
+
+## La pagina di gestione
+
+Il catalogo lo governa il super admin da `/app/admin/avatars`
+([AvatarAdminPage](../frontend/src/components/AvatarAdminPage.tsx)): una
+tabella con i filtri per organizzazione e stato, e l'archivio a portata di
+filtro.
+
+L'elenco arriva **dal più recente**, come quello degli utenti, delle
+organizzazioni e delle simulazioni. Con i più vecchi in cima un avatar appena
+creato finiva in fondo all'ultima pagina di una tabella che si sfoglia a dieci
+righe, mentre il banner diceva «creato con successo».
+
+Il conteggio accanto ad «Archiviati» segue il filtro organizzazione, altrimenti
+sarebbe un totale di tutti i tenant accanto a righe che ne mostrano uno solo.
+E la ricerca è un filtro come gli altri: fa comparire «Azzera Filtri» e viene
+azzerata insieme agli altri, invece di restare a restringere la tabella dopo
+averlo premuto.
+
+Il clic su una riga apre il dettaglio in sola lettura, che porta un pulsante
+per passare alla scheda modificabile: è la domanda che viene dopo aver letto,
+e la riga da cui si era partiti nel frattempo può essere finita sotto un filtro
+o su un'altra pagina. Per un avatar archiviato quel pulsante non c'è, perché
+la sua scheda è in sola lettura finché non torna in catalogo, e il server dice
+lo stesso con un 409.
+
+Sia l'elenco degli avatar sia quello delle categorie si portano dietro
+l'organizzazione con un `joinedload`: la risposta ne mostra il nome su ogni
+riga, e senza sarebbe una lettura in più per ogni riga dell'elenco.
+
 ## La scheda persona
 
-La riempie a mano il super admin da `/app/admin/avatars`
-([AvatarAdminPage](../frontend/src/components/AvatarAdminPage.tsx)), ed è
+La riempie a mano il super admin dalla scheda di un avatar, ed è
 organizzata in sezioni:
 
 | Sezione                         | Cosa descrive                                                                                                                              |
@@ -83,6 +120,20 @@ resta intatto.
 causa del problema e l'obiettivo nascosto, cioè la soluzione dell'esercizio.
 L'API di chi studia la toglie, e l'export dei dati personali la esclude
 esplicitamente.
+
+Le sezioni stanno a fisarmonica, una alla volta: aperte tutte insieme sono uno
+scroll di parecchi schermi. Si aprono tutte in un gesto, e si aprono da sole
+dopo una bozza, che è il momento in cui quella scelta si rovescia (vedi sotto).
+
+**Chiudere la scheda non è mai un gesto a perdere.** Finché quello che c'è
+dentro è diverso da come si è aperta, la X, Esc e il clic sullo sfondo passano
+da una conferma, e il browser ne chiede una sua per il ricaricamento e la
+chiusura della scheda (`useLeaveConfirmation`). Il confronto lo fa
+`avatarFormChanged` campo per campo e non con `JSON.stringify`: l'ordine in cui
+le chiavi finiscono nell'oggetto cambia a ogni bozza applicata, e con quello
+una scheda intatta risulterebbe modificata. Tornare indietro su una modifica
+conta come non aver toccato niente, perché la conferma esiste per quello che si
+perderebbe.
 
 ## La bozza scritta dal modello
 
@@ -161,6 +212,13 @@ riempiti e quanti sono stati lasciati stare, e ricorda che è una proposta da
 rileggere. Non è un messaggio di successo: la scheda in quel momento è piena
 di roba che non ha scritto nessuno.
 
+E la fisarmonica si apre tutta, perché quel «rileggila» sia una cosa che si può
+fare: la bozza riempie campi in ogni sezione, e con i pannelli chiusi sarebbero
+otto aperture prima di poter leggere la prima riga, cioè il passo che la
+revisione umana esiste per far fare. Il segnale che le apre è un contatore di
+bozze e non un interruttore, così anche la seconda rigenerazione riapre quello
+che nel frattempo era stato richiuso.
+
 **Il testo che si incolla arriva a OpenAI**, ed è un destinatario in più
 rispetto a prima: vedi [gdpr.md](gdpr.md), sezione 6.
 
@@ -238,6 +296,14 @@ che la firma dimostra.
 Senza file, il backend genera un SVG con le iniziali e una delle palette
 predefinite.
 
+Accanto al caricamento c'è un campo per il percorso, e accetta **solo un
+percorso di qui**: un ritratto ospitato altrove non si vedrebbe comunque, la
+Content-Security-Policy ammette immagini solo dalla propria origine, e sarebbe
+una richiesta a un dominio di terzi fatta dal browser di ogni persona che apre
+la galleria (vedi [gdpr.md](gdpr.md)). Il campo invitava però a incollare un
+URL e poi il salvataggio lo rifiutava, a scheda già compilata: adesso lo dice
+il segnaposto, e l'avviso compare mentre si scrive invece che alla fine.
+
 ## La voce
 
 Il campo `voice_id` è un id di voce Cartesia. Se manca si usa quella di default
@@ -247,6 +313,19 @@ Si assegnano dall'interfaccia (l'elenco delle voci arriva da
 `/api/admin/voices`, con anteprima) oppure dalla riga di comando con
 [assign_voices.py](../backend/assign_voices.py), che elenca le voci
 disponibili e le associa per nome dell'avatar.
+
+L'anteprima resta accesa finché la battuta non è finita, e si può interrompere
+dallo stesso bottone. Non è un dettaglio di stile: `play()` mantiene la
+promessa appena il suono comincia, non quando finisce, quindi spegnere lo
+stato lì dava una rotella che lampeggiava per un istante, il bottone di nuovo
+premibile con la voce ancora in corso, e due anteprime sovrapposte al secondo
+clic.
+
+Un identificativo di trentasei caratteri non dice però con che voce parla il
+personaggio, e il nome sta soltanto nel catalogo del fornitore: il dettaglio
+in sola lettura di un avatar lo risolve leggendo quel catalogo (una volta per
+sessione, `staleTime: Infinity`) e mostra il nome sopra l'identificativo, che
+resta perché è quello che si incolla altrove.
 
 ## Archiviare, non cancellare
 

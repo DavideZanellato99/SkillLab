@@ -131,9 +131,9 @@ describe('scritture', () => {
     )
   })
 
-  /* Eliminare un tenant porta via utenti, avatar e conversazioni: fermarsi
-   * a invalidare le organizzazioni lascerebbe a schermo le righe di dati
-   * che non esistono più. */
+  /* Eliminare un tenant porta via le persone, gli avatar, le conversazioni,
+   * i test tecnici e i percorsi: fermarsi alle organizzazioni lascerebbe a
+   * schermo righe di dati che non esistono più. */
   it("l'eliminazione azzera tutto quello che mostrava quel tenant", async () => {
     const invalida = vi.spyOn(client, 'invalidateQueries')
     const { result } = renderHook(() => useDeleteOrganization(), { wrapper })
@@ -144,9 +144,29 @@ describe('scritture', () => {
     await waitFor(() =>
       expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.organizations.all }),
     )
-    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.users.all })
-    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.avatars.all })
-    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.conversations.all })
-    expect(invalida).toHaveBeenCalledWith({ queryKey: ['reports'] })
+    for (const queryKey of [
+      queryKeys.users.all,
+      queryKeys.avatars.all,
+      queryKeys.categories.all,
+      queryKeys.conversations.all,
+      queryKeys.simulations.all,
+      queryKeys.training.all,
+      queryKeys.reports.all,
+      queryKeys.comparison.all,
+    ]) {
+      expect(invalida).toHaveBeenCalledWith({ queryKey })
+    }
+  })
+
+  /* Il registro attività resta dov'è di proposito: le sue righe sopravvivono
+   * al tenant con il nome che avevano, quindi non diventano sbagliate. */
+  it('lascia stare il registro attività', async () => {
+    const invalida = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useDeleteOrganization(), { wrapper })
+
+    result.current.mutate('org-1')
+
+    await waitFor(() => expect(servizio.deleteOrganization).toHaveBeenCalledWith('org-1'))
+    expect(invalida).not.toHaveBeenCalledWith({ queryKey: queryKeys.auditLogs.all })
   })
 })

@@ -12,7 +12,7 @@ import { categoryBadgeClasses } from './categoryStyles'
 import { Td, Tr } from './DataTable'
 import IconButton from './IconButton'
 import Spinner from './Spinner'
-import { PencilIcon, TrashIcon } from './icons'
+import { PencilIcon, RestoreIcon, TrashIcon } from './icons'
 
 const archivedDate = (iso: string) =>
   new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -38,10 +38,13 @@ export default function AvatarRow({
   const isArchived = avatar.deleted_at !== null
 
   return (
-    <Tr
-      className={`cursor-pointer ${isArchived ? 'opacity-60' : ''}`}
-      onClick={() => onView(avatar)}
-    >
+    /* `onActivate` e non un `onClick`: la riga si apre anche da tastiera, col
+       fuoco e con Invio, come le righe delle altre tabelle dell'app.
+
+       Niente velatura su un avatar archiviato: la targhetta accanto al nome lo
+       dice già, e attenuare tutta la riga portava la data di archiviazione, che
+       è grigia di suo, sotto la soglia in cui si legge. */
+    <Tr onActivate={() => onView(avatar)}>
       {/* Come la colonna delle persone nella gestione utenti: l'intestazione
           resta al centro, i valori vanno a sinistra. Sono un'immagine, un
           nome e una descrizione, e incolonnati si scorrono con l'occhio
@@ -104,23 +107,7 @@ export default function AvatarRow({
               onClick={() => onRestore(avatar)}
               disabled={isRestoring}
             >
-              {isRestoring ? (
-                <Spinner variant="button" />
-              ) : (
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-                  <polyline points="3 3 3 8 8 8" />
-                </svg>
-              )}
+              {isRestoring ? <Spinner variant="button" /> : <RestoreIcon />}
             </IconButton>
           ) : (
             <>
@@ -134,7 +121,7 @@ export default function AvatarRow({
               <IconButton
                 tone="danger"
                 label={`Elimina ${avatar.name}`}
-                tooltip="Elimina Avatar"
+                tooltip="Elimina avatar"
                 onClick={() => onDelete(avatar)}
               >
                 <TrashIcon />

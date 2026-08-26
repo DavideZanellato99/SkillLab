@@ -154,7 +154,7 @@ describe('scritture su un account', () => {
     await waitFor(() => expect(servizio.deleteUser).toHaveBeenCalledWith('u-1'))
     await waitFor(() => expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.users.all }))
     expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.conversations.all })
-    expect(invalida).toHaveBeenCalledWith({ queryKey: ['reports'] })
+    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.reports.all })
   })
 
   it('non rilegge niente quando la scrittura fallisce', async () => {

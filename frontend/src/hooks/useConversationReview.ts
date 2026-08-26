@@ -29,7 +29,7 @@ function useInvalidateReview(conversationId: string) {
     queryClient.invalidateQueries({
       queryKey: queryKeys.conversations.adminDetail(conversationId),
     })
-    queryClient.invalidateQueries({ queryKey: ['reports'] })
+    queryClient.invalidateQueries({ queryKey: queryKeys.reports.all })
     queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
   }
 }

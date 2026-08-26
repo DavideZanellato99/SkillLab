@@ -46,7 +46,12 @@ vi.mock('../../src/components/AvatarFormModal', () => ({
   ),
 }))
 vi.mock('../../src/components/AvatarDetailModal', () => ({
-  default: ({ avatar }: { avatar: { name: string } }) => <div>dettaglio: {avatar.name}</div>,
+  default: ({ avatar, onEdit }: { avatar: { name: string }; onEdit?: () => void }) => (
+    <div>
+      dettaglio: {avatar.name}
+      {onEdit && <button onClick={onEdit}>modifica dal dettaglio</button>}
+    </div>
+  ),
 }))
 vi.mock('../../src/components/AvatarCategoriesModal', () => ({
   default: ({ organizationId }: { organizationId?: string }) => (
@@ -179,6 +184,23 @@ describe('catalogo', () => {
     expect(screen.queryByText('Cliente arrabbiato')).not.toBeInTheDocument()
   })
 
+  /* Il contatore segue il filtro organizzazione: un totale di tutti i tenant
+   * accanto a una tabella che ne mostra uno solo è un numero che non torna
+   * con le righe che compaiono scegliendolo. */
+  it("conta gli archiviati dentro l'organizzazione filtrata", async () => {
+    renderPage([
+      avatar(),
+      archiviato(),
+      archiviato({ id: 'a-10', name: 'Altrove', organization_id: 'org-2' }),
+    ])
+
+    await userEvent.click(screen.getByLabelText('Organizzazione'))
+    await userEvent.click(screen.getByRole('option', { name: 'Banca Esempio' }))
+    await userEvent.click(screen.getByLabelText('Stato'))
+
+    expect(screen.getByRole('option', { name: 'Archiviati (1)' })).toBeInTheDocument()
+  })
+
   it('azzera i filtri riportando al catalogo', async () => {
     renderPage([avatar(), archiviato()])
 
@@ -187,6 +209,31 @@ describe('catalogo', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
 
     expect(screen.getByText('Cliente arrabbiato')).toBeInTheDocument()
+  })
+
+  /* La ricerca è un filtro come gli altri: se il bottone che li azzera la
+   * lascia dov'è, la tabella resta ristretta dopo averlo premuto. */
+  it('azzera anche la ricerca', async () => {
+    renderPage([avatar(), avatar({ id: 'a-2', name: 'Collega scettico' })])
+
+    await userEvent.type(screen.getByPlaceholderText(/Cerca per nome/), 'collega')
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
+
+    expect(screen.getByText('Cliente arrabbiato')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Cerca per nome/)).toHaveValue('')
+  })
+
+  /* Con la sola ricerca attiva il bottone c'era da nascondere: spariva
+   * lasciando una tabella filtrata e nessun modo evidente di tornare
+   * indietro. */
+  it('offre di azzerare anche quando a filtrare è solo la ricerca', async () => {
+    renderPage()
+
+    expect(screen.queryByRole('button', { name: 'Azzera Filtri' })).not.toBeInTheDocument()
+
+    await userEvent.type(screen.getByPlaceholderText(/Cerca per nome/), 'cli')
+
+    expect(screen.getByRole('button', { name: 'Azzera Filtri' })).toBeInTheDocument()
   })
 
   it('cerca per nome e categoria', async () => {
@@ -253,6 +300,20 @@ describe('scheda persona', () => {
     await userEvent.click(screen.getByRole('button', { name: /Nuovo Avatar/ }))
 
     expect(screen.getByText('scheda: nuovo avatar')).toBeInTheDocument()
+  })
+
+  /* Dal dettaglio si passa alla modifica senza richiudere e ricercare la
+   * riga, che nel frattempo può essere finita sotto un filtro o su un'altra
+   * pagina. Il dettaglio si chiude: due modali sullo stesso avatar, una
+   * sopra l'altra, sarebbero due volte la stessa cosa. */
+  it('dal dettaglio si passa alla scheda modificabile', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByText('Cliente arrabbiato'))
+    await userEvent.click(screen.getByRole('button', { name: 'modifica dal dettaglio' }))
+
+    expect(screen.getByText('scheda: Cliente arrabbiato')).toBeInTheDocument()
+    expect(screen.queryByText('dettaglio: Cliente arrabbiato')).not.toBeInTheDocument()
   })
 
   it("la matita apre la scheda di quell'avatar", async () => {

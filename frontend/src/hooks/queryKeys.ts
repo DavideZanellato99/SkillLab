@@ -60,6 +60,10 @@ export const queryKeys = {
     actions: ['audit-logs', 'actions'] as const,
   },
   reports: {
+    /** Da invalidare quando spariscono le prove su cui i rendiconti si
+     *  calcolano: il periodo e l'organizzazione stanno dentro ogni chiave,
+     *  quindi non c'è una voce sola da rifare ma tutte quelle in cache. */
+    all: ['reports'] as const,
     /** Recap per utente delle prove svolte, nel periodo scelto. */
     users: (organizationId?: string, days?: number) =>
       ['reports', 'users', organizationId ?? '__all__', days ?? '__ever__'] as const,
@@ -107,6 +111,7 @@ export const queryKeys = {
     adminDetail: (id: string) => ['simulations', 'admin-detail', id] as const,
   },
   comparison: {
+    all: ['comparison'] as const,
     /** Persone di cui un admin può leggere i tentativi. */
     people: ['comparison', 'people'] as const,
     attempts: (subjectId?: string) => ['comparison', 'attempts', subjectId ?? '__me__'] as const,

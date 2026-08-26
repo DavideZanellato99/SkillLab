@@ -229,7 +229,7 @@ describe('useDeleteConversation', () => {
     await waitFor(() =>
       expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.conversations.all }),
     )
-    expect(invalida).toHaveBeenCalledWith({ queryKey: ['reports'] })
+    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.reports.all })
   })
 
   it("non rilegge niente quando l'eliminazione fallisce", async () => {

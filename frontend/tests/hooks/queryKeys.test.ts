@@ -30,6 +30,7 @@ const chiavi: [string, readonly unknown[]][] = [
   ['auditLogs.all', queryKeys.auditLogs.all],
   ['auditLogs.list', queryKeys.auditLogs.list({ action: 'user.create' })],
   ['auditLogs.actions', queryKeys.auditLogs.actions],
+  ['reports.all', queryKeys.reports.all],
   ['reports.users', queryKeys.reports.users('org-1', 30)],
   ['reports.users senza filtri', queryKeys.reports.users()],
   ['reports.evaluations', queryKeys.reports.evaluations('org-1')],
@@ -51,6 +52,7 @@ const chiavi: [string, readonly unknown[]][] = [
   ['simulations.results', queryKeys.simulations.results('s-1')],
   ['simulations.adminList', queryKeys.simulations.adminList],
   ['simulations.adminDetail', queryKeys.simulations.adminDetail('s-1')],
+  ['comparison.all', queryKeys.comparison.all],
   ['comparison.people', queryKeys.comparison.people],
   ['comparison.attempts', queryKeys.comparison.attempts('u-1')],
   ['comparison.attempts propri', queryKeys.comparison.attempts()],
@@ -128,6 +130,22 @@ describe('queryKeys', () => {
       [
         queryKeys.conversations.all,
         [queryKeys.conversations.byAvatar('a-1'), queryKeys.conversations.detail('c-1')],
+      ],
+      [
+        queryKeys.reports.all,
+        [
+          queryKeys.reports.users(),
+          queryKeys.reports.evaluations(),
+          queryKeys.reports.simulations(),
+        ],
+      ],
+      [
+        queryKeys.comparison.all,
+        [
+          queryKeys.comparison.people,
+          queryKeys.comparison.attempts(),
+          queryKeys.comparison.simulationAttempts(),
+        ],
       ],
     ]
 

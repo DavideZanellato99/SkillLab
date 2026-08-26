@@ -34,7 +34,10 @@ from models import (
     ChatMessage,
     ConversationEvaluation,
     Organization,
+    TechnicalSimulation,
+    TrainingPath,
     TrainingPathAssignment,
+    TrainingPathStep,
     User,
 )
 
@@ -444,8 +447,15 @@ def test_delete_takes_the_whole_tenant_with_it(
             result={"summary": "s", "criteria": []},
         )
     )
-    make_assigned_path(
-        standard_user, [{"avatar": avatar, "target": 8.0}], assigned_by=super_admin_user
+    simulation = TechnicalSimulation(
+        organization_id=organization.id, title="Antiriciclaggio", document_name="policy.pdf"
+    )
+    db_session.add(simulation)
+    db_session.flush()
+    assignment = make_assigned_path(
+        standard_user,
+        [{"avatar": avatar, "target": 8.0}, {"simulation": simulation, "target": 6.0}],
+        assigned_by=super_admin_user,
     )
     db_session.flush()
 
@@ -453,6 +463,7 @@ def test_delete_takes_the_whole_tenant_with_it(
     # and the objects that carry them would raise on any access afterwards.
     org_id, user_id, email = organization.id, standard_user.id, standard_user.email
     conversation_id, avatar_id, category_id = conversation.id, avatar.id, avatar.category_id
+    path_id, simulation_id = assignment.path_id, simulation.id
 
     response = admin_client.delete(f"{BASE}/{org_id}")
     assert response.status_code == 200, response.text
@@ -482,6 +493,18 @@ def test_delete_takes_the_whole_tenant_with_it(
         .filter(TrainingPathAssignment.user_id == user_id)
         .count()
         == 0
+    )
+    # Quello che l'organizzazione ha composto se ne va con lei, tappe
+    # comprese: è anche quello che la conferma promette a chi la cancella.
+    assert db_session.query(TrainingPath).filter(TrainingPath.id == path_id).first() is None
+    assert (
+        db_session.query(TrainingPathStep).filter(TrainingPathStep.path_id == path_id).count() == 0
+    )
+    assert (
+        db_session.query(TechnicalSimulation)
+        .filter(TechnicalSimulation.id == simulation_id)
+        .first()
+        is None
     )
 
 

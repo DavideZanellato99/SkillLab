@@ -78,13 +78,42 @@ describe('AvatarCategoriesModal', () => {
     expect(screen.getByText('3 avatar')).toBeInTheDocument()
   })
 
-  it('riporta il rifiuto del server quando la categoria è ancora in uso', async () => {
+  /* Il cestino non cancella: apre una conferma. Qui la cancellazione è vera
+   * e non l'archiviazione di un avatar, quindi un dito fuori posto su una
+   * riga alta due centimetri non deve poter far sparire niente. */
+  it('chiede conferma prima di eliminare, e senza conferma non chiama il server', async () => {
     renderModal()
     await screen.findByText('Clienti')
 
     await userEvent.click(screen.getByRole('button', { name: 'Elimina Clienti' }))
 
+    expect(await screen.findByRole('dialog', { name: 'Elimina Categoria' })).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+  })
+
+  /* Il conteggio è quello dell'ultima lettura, quindi la conferma avvisa ma
+   * non si spegne: a contare gli avatar nel momento giusto è il server. */
+  it('avvisa che la categoria è in uso senza impedire di provarci', async () => {
+    renderModal()
+    await screen.findByText('Clienti')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Clienti' }))
+
+    const conferma = await screen.findByRole('dialog', { name: 'Elimina Categoria' })
+    expect(conferma).toHaveTextContent('risulta usata da 3 avatar')
+    expect(screen.getByRole('button', { name: 'Elimina Categoria' })).toBeEnabled()
+  })
+
+  it('riporta il rifiuto del server quando la categoria è ancora in uso', async () => {
+    renderModal()
+    await screen.findByText('Clienti')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Elimina Clienti' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Elimina Categoria' }))
+
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(IN_USE_DETAIL))
-    expect(screen.getByText('Clienti')).toBeInTheDocument()
+    // La riga è ancora al suo posto: il nome da solo non basta a dirlo,
+    // perché adesso compare anche dentro la conferma rimasta aperta.
+    expect(screen.getByRole('button', { name: 'Modifica Clienti' })).toBeInTheDocument()
   })
 })

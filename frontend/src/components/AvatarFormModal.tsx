@@ -6,9 +6,14 @@
  *
  * Quattro cose possono andare storte qui dentro: la validazione, il
  * caricamento dell'immagine, il salvataggio e l'anteprima vocale. Il banner
- * è uno solo e mostra la prima che è successa. */
+ * è uno solo e mostra la prima che è successa.
+ *
+ * Chiudere non è mai un gesto a perdere: finché la scheda è diversa da come
+ * si è aperta, la X, Esc e il clic sullo sfondo passano da una conferma (vedi
+ * `avatarFormChanged`), e il browser ne chiede un'altra sua per il
+ * ricaricamento e la chiusura della scheda. */
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   useCreateAvatar,
@@ -17,6 +22,7 @@ import {
   useVoices,
 } from '../hooks/useAdminAvatars'
 import { useAvatarCategories } from '../hooks/useAvatarCategories'
+import { useLeaveConfirmation } from '../hooks/useLeaveConfirmation'
 import { getAvatarImageUrl } from '../services/api'
 import type { AdminAvatar } from '../services/admin'
 import { fetchVoicePreview } from '../services/admin'
@@ -24,13 +30,16 @@ import { errorMessage } from '../services/errors'
 import type { AvatarFormState } from './avatarForm'
 import {
   applyDraft,
+  avatarFormChanged,
   avatarFormError,
   avatarFormFrom,
   avatarPayload,
   emptyAvatarForm,
+  isExternalImageUrl,
 } from './avatarForm'
 import { ALL_PROFILE_KEYS, countFilled, missingEssentials } from './avatarProfileConfig'
 import AvatarProfileSections from './AvatarProfileSections'
+import ConfirmModal from './ConfirmModal'
 import PersonaDraftModal from './PersonaDraftModal'
 import { fieldCls, inputCls, inputWrapperCls, labelCls, textareaCls } from './Field'
 import FormError from './FormError'
@@ -40,6 +49,7 @@ import PersonaPromptPreview from './PersonaPromptPreview'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
 import Spinner from './Spinner'
+import { EyeIcon, InfoIcon, PlayIcon, SparkleIcon, StopIcon } from './icons'
 
 const sectionTitleCls =
   'mb-3 mt-2 border-b border-white/6 pb-2 text-[0.72rem] font-semibold uppercase tracking-widest text-violet-400'
@@ -68,9 +78,18 @@ export default function AvatarFormModal({
   )
   const [validationError, setValidationError] = useState('')
   const [voicePreviewError, setVoicePreviewError] = useState('')
-  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null)
+  /* A che punto è l'ascolto di una voce: la battuta va chiesta al fornitore
+   * (`loading`) e poi dura qualche secondo (`playing`). Sono due momenti
+   * diversi anche per chi guarda, una rotella e un quadrato da premere per
+   * fermare, quindi sono due stati e non un booleano. */
+  const [voicePreview, setVoicePreview] = useState<'idle' | 'loading' | 'playing'>('idle')
   const [showPromptPreview, setShowPromptPreview] = useState(false)
   const [showDraft, setShowDraft] = useState(false)
+  /* Quante bozze sono entrate nella scheda: alla fisarmonica basta che il
+   * numero cambi per aprirsi tutta, così quello che ha scritto il modello si
+   * rilegge invece di restare dietro otto pannelli chiusi. */
+  const [draftCount, setDraftCount] = useState(0)
+  const [confirmingClose, setConfirmingClose] = useState(false)
   /* Quali campi vengono dalla bozza e non dalle mani di chi compila: è la
    * memoria che permette di rigenerare senza portare via le correzioni (vedi
    * applyDraft). Vive qui e non nel form salvato perché riguarda questa
@@ -116,6 +135,26 @@ export default function AvatarFormModal({
   ]
 
   const isSaving = createMutation.isPending || updateMutation.isPending
+
+  /* La scheda com'era all'apertura, per sapere se c'è qualcosa da perdere.
+     Un ref e non uno stato: è il termine di paragone, non cambia mai, e non
+     deve far ridisegnare niente quando lo si legge. */
+  const openedWith = useRef(form)
+  const isDirty = avatarFormChanged(form, openedWith.current)
+
+  // Il ricaricamento e la chiusura della scheda del browser, che non passano
+  // di qui: l'avviso lo scrive il browser, con parole sue.
+  useLeaveConfirmation(isDirty)
+
+  /* Ogni strada per chiudere passa da qui: la X, Esc, il clic sullo sfondo.
+     Con la scheda toccata si ferma su una conferma, perché quello che si
+     perderebbe sono fino a settanta campi, e a volte una bozza appena
+     generata. */
+  const requestClose = () => {
+    if (isDirty) setConfirmingClose(true)
+    else onClose()
+  }
+
   const formError =
     validationError ||
     errorMessage(uploadMutation.error, "Errore durante il caricamento dell'immagine.") ||
@@ -145,6 +184,7 @@ export default function AvatarFormModal({
     setForm((prev) => ({ ...prev, profile: merge.profile }))
     setDraftedKeys(merge.draftedKeys)
     setShowDraft(false)
+    setDraftCount((n) => n + 1)
     setDraftNotice(
       merge.kept > 0
         ? `Bozza inserita in ${merge.written} campi. ${merge.kept} erano già compilati e sono rimasti invariati.`
@@ -163,24 +203,54 @@ export default function AvatarFormModal({
     }
   }
 
+  /* La battuta che si sta ascoltando. Sta in un ref perché non si disegna:
+     quello che si vede è `voicePreview`. Serve a fermarla e a non lasciarne
+     due addosso. */
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  /** Ferma l'ascolto e libera l'oggetto che lo teneva in memoria. */
+  const stopVoicePreview = useCallback(() => {
+    const audio = audioRef.current
+    audioRef.current = null
+    setVoicePreview('idle')
+    if (!audio) return
+    audio.pause()
+    URL.revokeObjectURL(audio.src)
+  }, [])
+
+  // La scheda si chiude mentre una voce parla: l'audio non le sopravvive.
+  useEffect(() => stopVoicePreview, [stopVoicePreview])
+
   /* Ascolta una voce prima di assegnarla. L'audio viene riprodotto e poi
-   * buttato: è un confronto fra voci, non un file da tenere. */
+   * buttato: è un confronto fra voci, non un file da tenere.
+   *
+   * Lo stato resta acceso fino alla fine della battuta e non fino a quando
+   * parte. `play()` mantiene la promessa appena il suono comincia, quindi
+   * spegnere lì dava una rotella che lampeggiava per un istante, il bottone
+   * di nuovo premibile con la voce ancora in corso, e due anteprime
+   * sovrapposte al secondo clic. Da qui anche la possibilità di fermare:
+   * un'anteprima che è partita per sbaglio deve poter tacere. */
   const playVoicePreview = async (voiceId: string) => {
     if (!voiceId) return
-    setPlayingVoiceId(voiceId)
+    setVoicePreview('loading')
     setVoicePreviewError('')
+    let url = ''
     try {
       const blob = await fetchVoicePreview(voiceId)
-      const url = URL.createObjectURL(blob)
+      url = URL.createObjectURL(blob)
       const audio = new Audio(url)
-      audio.onended = () => URL.revokeObjectURL(url)
+      audioRef.current = audio
+      audio.onended = stopVoicePreview
+      audio.onerror = stopVoicePreview
       await audio.play()
+      setVoicePreview('playing')
     } catch (err) {
+      if (url) URL.revokeObjectURL(url)
+      audioRef.current = null
+      setVoicePreview('idle')
       setVoicePreviewError(
         err instanceof Error ? err.message : "Impossibile riprodurre l'anteprima vocale.",
       )
-    } finally {
-      setPlayingVoiceId(null)
     }
   }
 
@@ -212,10 +282,11 @@ export default function AvatarFormModal({
 
   const filledCount = countFilled(form.profile)
   const missing = missingEssentials(form.profile)
+  const hasExternalImage = isExternalImageUrl(form.imageUrl)
 
   return (
     <ModalShell
-      onClose={onClose}
+      onClose={requestClose}
       locked={isSaving}
       size="sheet"
       padding="md"
@@ -256,39 +327,16 @@ export default function AvatarFormModal({
             onClick={() => setShowDraft(true)}
             disabled={isSaving}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z" />
-              <path d="M19 15.5 19.8 17.4 21.7 18.2 19.8 19 19 20.9 18.2 19 16.3 18.2 18.2 17.4 19 15.5Z" />
-            </svg>
+            <SparkleIcon />
             Genera la Scheda
           </button>
           <button
             type="button"
-            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={() => setShowPromptPreview(true)}
+            disabled={isSaving}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
+            <EyeIcon />
             Anteprima del Prompt
           </button>
         </div>
@@ -398,29 +446,31 @@ export default function AvatarFormModal({
                   placeholder="Voce Predefinita"
                   disabled={isSaving}
                 />
+                {/* Lo stesso bottone avvia e ferma: una battuta dura qualche
+                    secondo, e chi l'ha fatta partire per sbaglio deve poterla
+                    zittire senza aspettare che finisca. */}
                 <IconButton
                   tone="play"
                   className="shrink-0"
-                  label="Ascolta Anteprima della Voce"
-                  tooltip="Ascolta questa voce"
-                  onClick={() => playVoicePreview(form.voiceId)}
-                  disabled={!form.voiceId || playingVoiceId !== null || isSaving}
+                  label={
+                    voicePreview === 'playing'
+                      ? 'Interrompi Anteprima della Voce'
+                      : 'Ascolta Anteprima della Voce'
+                  }
+                  tooltip={
+                    voicePreview === 'playing' ? "Interrompi l'ascolto" : 'Ascolta questa voce'
+                  }
+                  onClick={() =>
+                    voicePreview === 'playing' ? stopVoicePreview() : playVoicePreview(form.voiceId)
+                  }
+                  disabled={!form.voiceId || voicePreview === 'loading' || isSaving}
                 >
-                  {playingVoiceId ? (
+                  {voicePreview === 'loading' ? (
                     <Spinner variant="button" />
+                  ) : voicePreview === 'playing' ? (
+                    <StopIcon />
                   ) : (
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
+                    <PlayIcon />
                   )}
                 </IconButton>
               </div>
@@ -492,29 +542,42 @@ export default function AvatarFormModal({
                   </button>
                 )}
               </div>
+              {/* Un percorso di qui, non un indirizzo altrove: il campo
+                  invitava a incollare un URL e poi il salvataggio lo
+                  rifiutava, a scheda già compilata. Adesso lo dice il
+                  segnaposto, e l'avviso arriva mentre si scrive. */}
               <div className={inputWrapperCls}>
                 <input
                   type="text"
                   id="av-image"
                   className={inputCls}
-                  placeholder="oppure inserisci un URL"
+                  placeholder="oppure il percorso di un'immagine già caricata"
                   value={form.imageUrl}
                   onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
                   disabled={isSaving}
+                  aria-invalid={hasExternalImage}
                 />
               </div>
             </div>
           </div>
-          <p className="text-[0.7rem] text-slate-500">
-            PNG, JPEG o WebP fino a 2 MB. Lasciando il campo vuoto viene generata un'immagine con le
-            iniziali.
-          </p>
+          {hasExternalImage ? (
+            <p className="text-[0.7rem] text-amber-400">
+              Il ritratto deve stare sull'applicazione: carica il file invece di incollare
+              l'indirizzo di un altro sito.
+            </p>
+          ) : (
+            <p className="text-[0.7rem] text-slate-500">
+              PNG, JPEG o WebP fino a 2 MB. Lasciando il campo vuoto viene generata un'immagine con
+              le iniziali.
+            </p>
+          )}
         </div>
 
         <AvatarProfileSections
           profile={form.profile}
           onFieldChange={setProfileField}
           disabled={isSaving}
+          expandSignal={draftCount}
         />
 
         <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isSaving}>
@@ -540,6 +603,29 @@ export default function AvatarFormModal({
           quello che sta per essere riempito. */}
       {showDraft && (
         <PersonaDraftModal onClose={() => setShowDraft(false)} onDrafted={handleDrafted} />
+      )}
+
+      {/* Non è una conferma di cortesia: qui dietro ci sono fino a settanta
+          campi, e la bozza che ne ha riempita una parte è costata una
+          chiamata a un modello. Chiudere per sbaglio li porta via tutti. */}
+      {confirmingClose && (
+        <ConfirmModal
+          elevated
+          icon={<InfoIcon size={24} stroke="#fbbf24" />}
+          iconWrapperCls="border border-amber-500/25 bg-amber-500/10"
+          title="Chiudi senza Salvare"
+          description={
+            isNew
+              ? "L'avatar non è ancora stato creato: chiudendo, quello che è stato compilato non resta da nessuna parte."
+              : `Le modifiche alla scheda di ${target.name} non sono state salvate e verranno perse.`
+          }
+          confirmLabel="Chiudi senza Salvare"
+          pendingLabel="Chiusura..."
+          confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
+          isPending={false}
+          onConfirm={onClose}
+          onClose={() => setConfirmingClose(false)}
+        />
       )}
     </ModalShell>
   )

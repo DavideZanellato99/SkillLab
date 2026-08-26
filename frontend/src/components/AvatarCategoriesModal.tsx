@@ -28,11 +28,11 @@ import FormError from './FormError'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
 import CategoryColorPicker from './CategoryColorPicker'
+import ConfirmModal from './ConfirmModal'
 import { categoryBadgeClasses } from './categoryStyles'
 import { TrashIcon, PencilIcon, PlusIcon } from './icons'
-import Tooltip from './Tooltip'
 import { fieldCls, labelCls, inputWrapperCls, inputCls } from './Field'
-import { iconActionCls as actionBtnCls } from './IconButton'
+import IconButton from './IconButton'
 
 const DEFAULT_COLOR = 'violet'
 
@@ -73,19 +73,21 @@ export default function AvatarCategoriesModal({
 
   /** Quale riga si sta modificando; null significa "ne sto creando una". */
   const [editing, setEditing] = useState<AdminAvatarCategory | null>(null)
+  /** Quale riga sta aspettando una conferma prima di sparire. */
+  const [deleting, setDeleting] = useState<AdminAvatarCategory | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm())
   const [validationError, setValidationError] = useState('')
 
   const isSaving = createMutation.isPending || updateMutation.isPending
   const isBusy = isSaving || deleteMutation.isPending
 
-  /* Il banner è uno solo, quindi mostra il primo problema: quello del form,
-   * poi quello dell'ultima scrittura. Il rifiuto di una cancellazione (la
-   * categoria è ancora in uso) arriva da qui. */
+  /* Il banner è uno solo, quindi mostra il primo problema: quello del form e
+   * poi quello dell'ultimo salvataggio. Il rifiuto di una cancellazione non
+   * passa di qui: sta nella conferma da cui è partita, dove chi ha premuto
+   * sta ancora guardando. */
   const error =
     validationError ||
-    errorMessage(createMutation.error ?? updateMutation.error, 'Errore durante il salvataggio.') ||
-    errorMessage(deleteMutation.error, "Errore durante l'eliminazione.")
+    errorMessage(createMutation.error ?? updateMutation.error, 'Errore durante il salvataggio.')
 
   const resetErrors = () => {
     setValidationError('')
@@ -132,13 +134,15 @@ export default function AvatarCategoriesModal({
     }
   }
 
-  const handleDelete = async (category: AdminAvatarCategory) => {
-    resetErrors()
+  const handleDelete = async () => {
+    if (!deleting) return
     try {
-      await deleteMutation.mutateAsync(category.id)
-      if (editing?.id === category.id) startCreate()
+      await deleteMutation.mutateAsync(deleting.id)
+      if (editing?.id === deleting.id) startCreate()
+      setDeleting(null)
     } catch {
-      // idem: un 409 significa che la categoria è ancora addosso a qualcuno
+      // Un 409 significa che la categoria è ancora addosso a qualcuno: la
+      // conferma resta aperta a dirlo
     }
   }
 
@@ -209,37 +213,29 @@ export default function AvatarCategoriesModal({
               <span className="ml-auto shrink-0 text-[0.75rem] text-slate-500">
                 {c.avatar_count === 1 ? '1 avatar' : `${c.avatar_count} avatar`}
               </span>
-              <Tooltip content="Modifica">
-                <button
-                  type="button"
-                  className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/10 hover:text-violet-400`}
-                  onClick={() => startEdit(c)}
-                  disabled={isBusy}
-                  aria-label={`Modifica ${c.name}`}
-                >
-                  <PencilIcon size={14} />
-                </button>
-              </Tooltip>
-              <Tooltip
-                content={
-                  c.avatar_count
-                    ? 'Sposta prima gli avatar in un’altra categoria'
-                    : 'Elimina la categoria'
-                }
+              <IconButton
+                label={`Modifica ${c.name}`}
+                tooltip="Modifica categoria"
+                onClick={() => startEdit(c)}
+                disabled={isBusy}
               >
-                {/* Il bottone resta attivo anche con avatar attaccati: il
-                    rifiuto arriva dal server e spiega cosa fare, che è più
-                    onesto di un bottone spento senza spiegazione. */}
-                <button
-                  type="button"
-                  className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-400`}
-                  onClick={() => handleDelete(c)}
-                  disabled={isBusy}
-                  aria-label={`Elimina ${c.name}`}
-                >
-                  <TrashIcon size={14} />
-                </button>
-              </Tooltip>
+                <PencilIcon />
+              </IconButton>
+              {/* Il bottone resta attivo anche con avatar attaccati: dire
+                  perché non si può fare è compito della conferma, che lo
+                  scrive, mentre un bottone spento non spiegherebbe niente. */}
+              <IconButton
+                tone="danger"
+                label={`Elimina ${c.name}`}
+                tooltip="Elimina categoria"
+                onClick={() => {
+                  deleteMutation.reset()
+                  setDeleting(c)
+                }}
+                disabled={isBusy}
+              >
+                <TrashIcon />
+              </IconButton>
             </li>
           ))}
         </ul>
@@ -293,6 +289,46 @@ export default function AvatarCategoriesModal({
           </PrimaryButton>
         </div>
       </form>
+
+      {/* Qui la cancellazione è vera, non l'archiviazione di un avatar: la
+          riga sparisce e non torna. È l'unica eliminazione della sezione che
+          non passava da una conferma, e bastava un dito fuori posto.
+
+          Con degli avatar attaccati la conferma lo dice, ma non si spegne:
+          a decidere resta il server, che conta gli avatar nel momento in cui
+          la richiesta arriva. Il numero qui è quello dell'ultima lettura, e
+          spegnere il bottone su un numero vecchio vorrebbe dire impedire di
+          eliminare una categoria che nel frattempo si è svuotata. */}
+      {deleting && (
+        <ConfirmModal
+          elevated
+          icon={<TrashIcon size={24} stroke="#ef4444" />}
+          iconWrapperCls="border border-red-500/25 bg-red-500/10"
+          title="Elimina Categoria"
+          description={
+            deleting.avatar_count > 0 ? (
+              <>
+                <strong className="text-slate-100">{deleting.name}</strong> risulta usata da{' '}
+                {deleting.avatar_count === 1 ? '1 avatar' : `${deleting.avatar_count} avatar`},
+                archiviati compresi. Finché sono lì l'eliminazione viene rifiutata: spostali in
+                un'altra categoria, perché un avatar senza categoria non può esistere.
+              </>
+            ) : (
+              <>
+                <strong className="text-slate-100">{deleting.name}</strong> viene eliminata
+                definitivamente. Non la usa nessun avatar, quindi non si perde nient'altro.
+              </>
+            )
+          }
+          error={errorMessage(deleteMutation.error, "Errore durante l'eliminazione.") || undefined}
+          confirmLabel="Elimina Categoria"
+          pendingLabel="Eliminazione..."
+          confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"
+          isPending={deleteMutation.isPending}
+          onConfirm={handleDelete}
+          onClose={() => setDeleting(null)}
+        />
+      )}
     </ModalShell>
   )
 }

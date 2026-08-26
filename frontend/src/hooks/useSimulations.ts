@@ -246,7 +246,7 @@ export function useDeleteSimulationAttempt() {
     mutationFn: (attemptId: string) => deleteSimulationAttempt(attemptId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.simulations.all })
-      queryClient.invalidateQueries({ queryKey: ['reports'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all })
     },
   })
 }

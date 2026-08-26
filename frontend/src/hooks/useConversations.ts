@@ -127,7 +127,7 @@ export function useDeleteConversation() {
 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
-      queryClient.invalidateQueries({ queryKey: ['reports'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all })
     },
   })
 }

@@ -15,6 +15,7 @@ galleria mostrerebbe un riquadro vuoto.
 
 import os
 import uuid
+from datetime import datetime
 
 import pytest
 
@@ -304,6 +305,28 @@ def test_un_webp_dichiarato_ma_non_scritto_non_passa():
     controllo passerebbe qualunque contenitore RIFF."""
     assert admin_avatars._image_extension(b"RIFF" + b"\x00" * 4 + b"WEBPVP8 ") == "webp"
     assert admin_avatars._image_extension(b"RIFF" + b"\x00" * 4 + b"WAVEfmt ") is None
+
+
+# ── L'ordine dell'elenco ──────────────────────────────────────────────
+
+
+def test_l_elenco_mette_in_cima_l_avatar_creato_per_ultimo(admin_client, db_session, make_avatar):
+    """Il più recente per primo, come in ogni altro elenco di amministrazione.
+
+    Non è una preferenza di ordinamento: la tabella si sfoglia a dieci righe,
+    e con i più vecchi in cima un avatar appena salvato finisce in fondo
+    all'ultima pagina, dove chi ha appena letto «creato con successo» non lo
+    trova.
+    """
+    primo = make_avatar(name="Primo")
+    secondo = make_avatar(name="Secondo")
+    primo.created_at = datetime(2026, 1, 1, 9, 0)
+    secondo.created_at = datetime(2026, 6, 1, 9, 0)
+    db_session.flush()
+
+    elenco = admin_client.get(AVATARS).json()
+
+    assert [a["name"] for a in elenco] == ["Secondo", "Primo"]
 
 
 # ── Quello che non c'è ────────────────────────────────────────────────

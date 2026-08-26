@@ -107,9 +107,23 @@ registro).
 
 **Cancellazione.** Irreversibile, e porta via tutto: gli utenti, anche da
 Cognito, le loro conversazioni, gli avatar privati del tenant con le loro
-categorie, i ritratti dal disco. Passa dallo stesso modulo di cancellazione di un singolo utente
+categorie, i ritratti dal disco, e quello che l'organizzazione aveva composto,
+cioè i test tecnici e i percorsi formativi con le loro tappe. Passa dallo
+stesso modulo di cancellazione di un singolo utente
 ([erasure.py](../backend/erasure.py)), così una tabella nuova viene coperta da
 entrambe le strade insieme.
+
+Test tecnici e percorsi il router se li cancella riga per riga, e non li lascia
+alla `ON DELETE CASCADE` che pure sta sul modello: lo schema è costruito da
+`create_all` senza uno strumento di migrazione, quindi un `ondelete` dichiarato
+non è la prova che la tabella viva ce l'abbia. È la stessa ragione per cui
+`erasure` non si fida di nessuna cascata. I percorsi vanno via prima delle
+simulazioni, perché una tappa può puntare a una di esse.
+
+La conferma che il super admin legge elenca le stesse cose, con i conteggi di
+utenti e avatar della riga: chi cancella un tenant sta cancellando anche il
+lavoro che quel tenant ha composto, e una conferma che parlasse solo di
+persone e conversazioni lo direbbe a metà.
 
 C'è anche un contatore di attività su una finestra di **trenta giorni**, e non
 un totale storico: un totale non distingue un'organizzazione che ha lavorato

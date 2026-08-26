@@ -102,6 +102,27 @@ def test_the_list_can_be_narrowed_to_one_tenant(
     assert "Solo là" not in names
 
 
+def test_il_conteggio_degli_avatar_si_ferma_al_tenant_chiesto(
+    admin_client, organization, other_organization, make_category, make_avatar
+):
+    """Quanti avatar usano una categoria, contati dentro l'organizzazione che
+    si sta guardando e non su tutte.
+
+    Le categorie di due tenant non si incontrano mai, quindi il numero non
+    cambierebbe comunque; a cambiare è il lavoro, che con l'elenco ristretto
+    a una organizzazione sola non ha ragione di scorrere gli avatar di tutte.
+    """
+    qui = make_category("Contati", organization.id)
+    make_avatar(name="Uno", category="Contati")
+    make_category("Contati", other_organization.id)
+    make_avatar(name="Due", category="Contati", organization_id=other_organization.id)
+
+    risposta = admin_client.get(CATEGORIES, params={"organization_id": str(organization.id)})
+
+    conteggi = {c["id"]: c["avatar_count"] for c in risposta.json()}
+    assert conteggi[str(qui.id)] == 1
+
+
 # ── Un avatar resta nel suo tenant ─────────────────────────────────────
 
 

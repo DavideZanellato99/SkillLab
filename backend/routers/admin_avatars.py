@@ -18,7 +18,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 import audit
 import llm_limits
@@ -221,16 +221,26 @@ def list_avatars_admin(
     Archived avatars are left out unless `include_deleted` is set: the admin
     page asks for them so it can offer the archive, everything else wants
     the catalogue as the students see it.
+
+    Il più recente in cima, come ogni altro elenco di amministrazione: un
+    avatar appena creato deve comparire dove guarda chi l'ha appena salvato,
+    non in fondo all'ultima pagina di una tabella che si sfoglia a dieci righe.
     """
     counts = dict(
         db.query(ChatConversation.avatar_id, func.count(ChatConversation.id))
         .group_by(ChatConversation.avatar_id)
         .all()
     )
-    query = db.query(Avatar)
+    # L'organizzazione viaggia con la stessa query: la risposta ne porta il
+    # nome su ogni riga, e senza questo sarebbe una lettura in più per avatar.
+    # La categoria arriva già così da sé (vedi Avatar.category, lazy="joined").
+    query = db.query(Avatar).options(joinedload(Avatar.organization))
     if not include_deleted:
         query = query.filter(Avatar.deleted_at.is_(None))
-    avatars = query.order_by(Avatar.created_at.asc()).all()
+    # L'id come secondo criterio: due avatar creati nello stesso istante (un
+    # caricamento iniziale, una migrazione) devono comunque avere un ordine
+    # fermo, altrimenti la stessa pagina sfogliata due volte non si somiglia.
+    avatars = query.order_by(Avatar.created_at.desc(), Avatar.id.desc()).all()
     return [_to_response(a, counts.get(a.id, 0)) for a in avatars]
 
 

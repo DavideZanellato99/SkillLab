@@ -73,6 +73,19 @@ describe('AvatarRow', () => {
     expect(onView).toHaveBeenCalledOnce()
   })
 
+  /* La riga si apre anche da tastiera, come quelle delle altre tabelle: il
+   * fuoco ci arriva e Invio fa quello che fa il clic. */
+  it('apre la scheda anche da tastiera', async () => {
+    const { onView } = renderRow()
+
+    const riga = screen.getByRole('row')
+    riga.focus()
+    expect(riga).toHaveFocus()
+
+    await userEvent.keyboard('{Enter}')
+    expect(onView).toHaveBeenCalledOnce()
+  })
+
   it('le azioni non aprono anche la scheda sotto di loro', async () => {
     const { onEdit, onDelete, onView } = renderRow()
 

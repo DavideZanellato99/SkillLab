@@ -5,9 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../src/hooks/useAuth', () => ({ useAuth: () => ({ user: { ruolo: 'super_admin' } }) }))
 
+const rileggiElenco = vi.hoisted(() => vi.fn())
+const rileggiDettaglio = vi.hoisted(() => vi.fn())
 const stato = vi.hoisted(() => ({
-  elenco: { data: [] as unknown[], isPending: false, error: null as unknown },
-  dettaglio: { data: null as unknown, error: null as unknown },
+  elenco: {
+    data: [] as unknown[],
+    isPending: false,
+    error: null as unknown,
+    refetch: rileggiElenco,
+  },
+  dettaglio: { data: null as unknown, error: null as unknown, refetch: rileggiDettaglio },
   apertoInDettaglio: null as string | null,
 }))
 const mutazione = vi.hoisted(() => () => ({
@@ -53,7 +60,7 @@ const organizzazione = (over: Partial<Organization> = {}): Organization =>
   }) as Organization
 
 function renderPage(righe: Organization[] = [organizzazione()]) {
-  stato.elenco = { data: righe, isPending: false, error: null }
+  stato.elenco = { data: righe, isPending: false, error: null, refetch: rileggiElenco }
   render(
     <MemoryRouter>
       <OrganizationsPage />
@@ -74,8 +81,10 @@ function reimposta(m: ReturnType<typeof mutazione>, risposta: unknown) {
 }
 
 beforeEach(() => {
-  stato.dettaglio = { data: null, error: null }
+  stato.dettaglio = { data: null, error: null, refetch: rileggiDettaglio }
   stato.apertoInDettaglio = null
+  rileggiElenco.mockReset()
+  rileggiDettaglio.mockReset()
   reimposta(crea, organizzazione({ name: 'Acme' }))
   reimposta(aggiorna, organizzazione({ name: 'Banca Esempio SpA' }))
   reimposta(cambiaStato, organizzazione({ status: 'suspended' }))
@@ -114,6 +123,21 @@ describe('elenco', () => {
 
     expect(screen.getByText('Acme')).toBeInTheDocument()
     expect(screen.queryByText('Banca Esempio')).not.toBeInTheDocument()
+  })
+
+  /* La ricerca è un filtro come gli altri, benché la casella stia dentro la
+   * tabella: azzerare e continuare a vedere un elenco ristretto sarebbe una
+   * risposta sbagliata al pulsante che si è premuto. */
+  it('azzera anche la ricerca, ed è lei sola a far comparire il pulsante', async () => {
+    renderPage([organizzazione(), organizzazione({ id: 'org-2', name: 'Acme', slug: 'acme' })])
+
+    expect(screen.queryByRole('button', { name: 'Azzera Filtri' })).not.toBeInTheDocument()
+
+    await userEvent.type(screen.getByPlaceholderText(/Cerca per nome/), 'acme')
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
+
+    expect(screen.getByText('Banca Esempio')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Cerca per nome/)).toHaveValue('')
   })
 
   it('azzera il filtro di stato', async () => {
@@ -156,7 +180,7 @@ describe('elenco', () => {
   })
 
   it('mostra il caricamento', () => {
-    stato.elenco = { data: [], isPending: true, error: null }
+    stato.elenco = { data: [], isPending: true, error: null, refetch: rileggiElenco }
     render(
       <MemoryRouter>
         <OrganizationsPage />
@@ -166,8 +190,33 @@ describe('elenco', () => {
     expect(screen.getByText('Caricamento organizzazioni...')).toBeInTheDocument()
   })
 
-  it("avvisa quando l'elenco non arriva", () => {
-    stato.elenco = { data: [], isPending: false, error: new Error('403') }
+  /* Un elenco che non è arrivato non è un elenco vuoto: senza il riquadro
+   * dell'errore la tabella direbbe che non c'è nessuna organizzazione, e
+   * l'invito a crearne una sarebbe un consiglio sbagliato. */
+  it("dice perché l'elenco non è arrivato, e lo fa richiedere", async () => {
+    stato.elenco = {
+      data: [],
+      isPending: false,
+      error: new Error('Sessione scaduta.'),
+      refetch: rileggiElenco,
+    }
+    render(
+      <MemoryRouter>
+        <OrganizationsPage />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Sessione scaduta.')).toBeInTheDocument()
+    expect(screen.queryByText(/Crea la prima con/)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Riprova' }))
+    expect(rileggiElenco).toHaveBeenCalledOnce()
+  })
+
+  /* Un rifiuto che non porta un testo leggibile non lascia il riquadro muto:
+   * "[object Object]" al posto della spiegazione era il caso da coprire. */
+  it("ripiega su un testo suo quando l'errore non ne ha uno", () => {
+    stato.elenco = { data: [], isPending: false, error: { status: 500 }, refetch: rileggiElenco }
     render(
       <MemoryRouter>
         <OrganizationsPage />
@@ -186,6 +235,19 @@ describe('dettaglio', () => {
 
     expect(stato.apertoInDettaglio).toBe('org-1')
     expect(dettaglio()).toBeInTheDocument()
+  })
+
+  /* La riga si apre anche da tastiera, come quelle delle altre tabelle: il
+   * fuoco ci arriva e Invio fa quello che fa il clic. */
+  it('si apre anche da tastiera', async () => {
+    renderPage()
+
+    const riga = screen.getAllByRole('row')[1]
+    riga.focus()
+    expect(riga).toHaveFocus()
+
+    await userEvent.keyboard('{Enter}')
+    expect(stato.apertoInDettaglio).toBe('org-1')
   })
 
   /* Le statistiche costano una scansione delle conversazioni e arrivano
@@ -211,6 +273,7 @@ describe('dettaglio', () => {
         last_login_at: null,
       },
       error: null,
+      refetch: rileggiDettaglio,
     }
     renderPage()
 
@@ -233,6 +296,7 @@ describe('dettaglio', () => {
         last_login_at: null,
       },
       error: null,
+      refetch: rileggiDettaglio,
     }
     renderPage()
 
@@ -247,7 +311,7 @@ describe('dettaglio', () => {
    * dettaglio: il tenant, i suoi conteggi e i salti alle altre pagine
    * restano leggibili. */
   it('regge statistiche non disponibili senza svuotare la modale', async () => {
-    stato.dettaglio = { data: null, error: new Error('timeout') }
+    stato.dettaglio = { data: null, error: new Error('timeout'), refetch: rileggiDettaglio }
     renderPage()
 
     await userEvent.click(screen.getByText('Banca Esempio'))
@@ -255,6 +319,21 @@ describe('dettaglio', () => {
     const modale = dettaglio()
     expect(within(modale).getAllByText('—').length).toBeGreaterThan(0)
     expect(within(modale).getByText('org-1')).toBeInTheDocument()
+  })
+
+  /* Tre trattini in fila non spiegano niente da soli: il motivo sta in fondo
+   * alla modale una volta sola, con il comando per richiederle. */
+  it('spiega i trattini e fa richiedere le statistiche', async () => {
+    stato.dettaglio = { data: null, error: new Error('timeout'), refetch: rileggiDettaglio }
+    renderPage()
+
+    await userEvent.click(screen.getByText('Banca Esempio'))
+
+    const modale = dettaglio()
+    expect(within(modale).getByText('Statistiche di utilizzo non disponibili.')).toBeInTheDocument()
+
+    await userEvent.click(within(modale).getByRole('button', { name: 'Riprova' }))
+    expect(rileggiDettaglio).toHaveBeenCalledOnce()
   })
 
   /* I salti alle altre pagine admin portano già il filtro addosso: senza,
@@ -316,6 +395,21 @@ describe('creazione e modifica', () => {
     expect(screen.getByRole('heading', { name: 'Modifica Banca Esempio' })).toBeInTheDocument()
     expect(screen.getByLabelText('Nome')).toHaveValue('Banca Esempio')
     expect(screen.getByLabelText('Slug (opzionale)')).toHaveValue('banca-esempio')
+  })
+
+  /* Lo slug si ricava dal nome solo quando l'organizzazione nasce: in
+   * modifica il campo lasciato vuoto lo lascia com'è, e promettere il
+   * contrario faceva aspettare un ricalcolo che il server non fa. */
+  it('dice cosa fa lo slug vuoto, e lo dice diverso nei due casi', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByRole('button', { name: /Nuova Organizzazione/ }))
+    expect(screen.getByText(/generato automaticamente dal nome/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Chiudi' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Modifica Banca Esempio' }))
+
+    expect(screen.getByText('Lo slug lasciato vuoto resta quello attuale.')).toBeInTheDocument()
   })
 
   it('salva la modifica sul tenant giusto', async () => {
@@ -424,6 +518,9 @@ describe('eliminazione', () => {
 
     expect(screen.getByText('12 utenti')).toBeInTheDocument()
     expect(screen.getByText('4 avatar privati')).toBeInTheDocument()
+    /* Il tenant si porta via anche quello che ha composto, non solo le
+       persone e le loro conversazioni. */
+    expect(screen.getByText(/test tecnici e i percorsi formativi/)).toBeInTheDocument()
     expect(screen.getByText(/non è reversibile/)).toBeInTheDocument()
   })
 

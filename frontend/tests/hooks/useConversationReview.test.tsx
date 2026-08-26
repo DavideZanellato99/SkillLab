@@ -53,7 +53,7 @@ describe('revisione', () => {
         queryKey: queryKeys.conversations.adminDetail('c-1'),
       }),
     )
-    expect(invalida).toHaveBeenCalledWith({ queryKey: ['reports'] })
+    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.reports.all })
     expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.notifications })
   })
 
@@ -69,7 +69,7 @@ describe('revisione', () => {
         queryKey: queryKeys.conversations.adminDetail('c-1'),
       }),
     )
-    expect(invalida).toHaveBeenCalledWith({ queryKey: ['reports'] })
+    expect(invalida).toHaveBeenCalledWith({ queryKey: queryKeys.reports.all })
   })
 })
 

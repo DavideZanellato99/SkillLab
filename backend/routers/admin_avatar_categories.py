@@ -15,7 +15,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 import audit
 from auth_dependency import get_current_super_admin
@@ -30,11 +30,22 @@ from schemas import (
 router = APIRouter(prefix="/api/admin/avatar-categories", tags=["admin"])
 
 
-def _avatar_counts(db: Session) -> dict[UUID, int]:
-    """Quanti avatar usano ciascuna categoria, archiviati compresi."""
-    return dict(
-        db.query(Avatar.category_id, func.count(Avatar.id)).group_by(Avatar.category_id).all()
-    )
+def _avatar_counts(db: Session, organization_id: UUID | None = None) -> dict[UUID, int]:
+    """Quanti avatar usano ciascuna categoria, archiviati compresi.
+
+    Ristretto all'organizzazione quando lo è l'elenco che li chiede: contare
+    gli avatar di tutti i tenant per mostrarne le categorie di uno solo è
+    lavoro che nessuno legge.
+    """
+    query = db.query(Avatar.category_id, func.count(Avatar.id))
+    if organization_id:
+        query = query.filter(Avatar.organization_id == organization_id)
+    return dict(query.group_by(Avatar.category_id).all())
+
+
+def _avatar_count(db: Session, category_id: UUID) -> int:
+    """Quanti avatar usano una categoria sola, quando la risposta ne riguarda una."""
+    return (db.query(func.count(Avatar.id)).filter(Avatar.category_id == category_id).scalar()) or 0
 
 
 def _to_response(category: AvatarCategory, avatar_count: int = 0) -> AdminAvatarCategoryResponse:
@@ -107,11 +118,13 @@ def list_categories(
     db: Session = Depends(get_db),
 ):
     """Le categorie di tutte le organizzazioni, o di una sola."""
-    query = db.query(AvatarCategory)
+    # L'organizzazione arriva con lo stesso giro: ogni riga della risposta ne
+    # porta il nome, e senza questo sarebbe una lettura in più per categoria.
+    query = db.query(AvatarCategory).options(joinedload(AvatarCategory.organization))
     if organization_id:
         query = query.filter(AvatarCategory.organization_id == organization_id)
     categories = query.order_by(AvatarCategory.name.asc()).all()
-    counts = _avatar_counts(db)
+    counts = _avatar_counts(db, organization_id)
     return [_to_response(c, counts.get(c.id, 0)) for c in categories]
 
 
@@ -160,7 +173,7 @@ def update_category(
     db.commit()
     db.refresh(category)
     audit.describe(http_request, nome=category.name)
-    return _to_response(category, _avatar_counts(db).get(category.id, 0))
+    return _to_response(category, _avatar_count(db, category.id))
 
 
 @router.delete("/{category_id}", response_model=MessageResponse)
@@ -178,9 +191,7 @@ def delete_category(
     category = _get_category_or_404(db, category_id)
     audit.describe(http_request, nome=category.name)
 
-    in_use = (
-        db.query(func.count(Avatar.id)).filter(Avatar.category_id == category.id).scalar()
-    ) or 0
+    in_use = _avatar_count(db, category.id)
     if in_use:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

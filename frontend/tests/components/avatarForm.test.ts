@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AdminAvatar } from '../../src/services/admin'
 import {
   applyDraft,
+  avatarFormChanged,
   avatarFormError,
   avatarFormFrom,
   avatarPayload,
@@ -255,5 +256,56 @@ describe('avatarPayload', () => {
     })
     expect(payload.voice_id).toBe('voce-1')
     expect(payload.description).toBe('Cliente irritato')
+  })
+})
+
+/* Cosa fa comparire la conferma di uscita: la scheda ha una settantina di
+ * campi, e una bozza generata è costata una chiamata a un modello. Chiudere
+ * per sbaglio con qualcosa dentro non deve essere un gesto senza appello. */
+describe('avatarFormChanged', () => {
+  it('non vede differenze fra una scheda e se stessa', () => {
+    const form = avatarFormFrom(avatar())
+
+    expect(avatarFormChanged(form, avatarFormFrom(avatar()))).toBe(false)
+  })
+
+  it('si accorge di un campo base cambiato', () => {
+    const form = avatarFormFrom(avatar())
+
+    expect(avatarFormChanged({ ...form, description: 'Altro brief' }, form)).toBe(true)
+    expect(avatarFormChanged({ ...form, categoryId: 'cat-2' }, form)).toBe(true)
+    expect(avatarFormChanged({ ...form, organizationId: 'org-2' }, form)).toBe(true)
+    expect(avatarFormChanged({ ...form, voiceId: 'voce-2' }, form)).toBe(true)
+    expect(avatarFormChanged({ ...form, imageUrl: '/static/avatars/altro.png' }, form)).toBe(true)
+  })
+
+  it('si accorge di un campo della scheda persona cambiato', () => {
+    const form = avatarFormFrom(avatar())
+    const toccata = { ...form, profile: { ...form.profile, EMOZIONE_INIZIALE: 'Irritazione' } }
+
+    expect(avatarFormChanged(toccata, form)).toBe(true)
+  })
+
+  /* Il confronto non passa da JSON.stringify: l'ordine in cui le chiavi
+   * finiscono nell'oggetto cambia a ogni bozza applicata, e con quello un
+   * form intatto risulterebbe modificato. */
+  it("non si fa ingannare dall'ordine delle chiavi", () => {
+    const form = avatarFormFrom(avatar())
+    const riordinata = {
+      ...form,
+      profile: Object.fromEntries(Object.entries(form.profile).reverse()),
+    }
+
+    expect(avatarFormChanged(riordinata, form)).toBe(false)
+  })
+
+  /* Un campo aggiunto alla scheda dopo un salvataggio vecchio arriva vuoto:
+   * vuoto e assente sono la stessa cosa, e non sono una modifica. */
+  it('tratta un campo assente come un campo vuoto', () => {
+    const form = avatarFormFrom(avatar())
+    const senzaUnaChiave = { ...form, profile: { ...form.profile } }
+    delete senzaUnaChiave.profile.EMOZIONE_INIZIALE
+
+    expect(avatarFormChanged(senzaUnaChiave, form)).toBe(false)
   })
 })

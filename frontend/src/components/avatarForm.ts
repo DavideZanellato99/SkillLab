@@ -82,6 +82,36 @@ export function isExternalImageUrl(imageUrl: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(imageUrl.trim())
 }
 
+/* Se la scheda in mano è diversa da quella con cui il form si è aperto.
+ *
+ * Risponde a una domanda sola: chiudendo adesso, si perde qualcosa? Qui
+ * dentro ci sono una settantina di campi, e una bozza generata è costata una
+ * chiamata a un modello, quindi la risposta non può essere «chiudi e poi si
+ * vede». La conferma di uscita la fa comparire questo confronto.
+ *
+ * Campo per campo e non `JSON.stringify` dei due oggetti: quel confronto
+ * dipende dall'ordine in cui le chiavi sono finite dentro l'oggetto, che qui
+ * cambia a ogni bozza applicata, e direbbe «modificata» per una scheda in cui
+ * non è cambiato niente. */
+export function avatarFormChanged(a: AvatarFormState, b: AvatarFormState): boolean {
+  if (
+    a.categoryId !== b.categoryId ||
+    a.description !== b.description ||
+    a.imageUrl !== b.imageUrl ||
+    a.voiceId !== b.voiceId ||
+    a.organizationId !== b.organizationId
+  ) {
+    return true
+  }
+  // L'unione delle chiavi: una scheda salvata quando i campi erano meno non
+  // deve risultare uguale a una in cui quei campi sono stati compilati.
+  const keys = new Set([...Object.keys(a.profile), ...Object.keys(b.profile)])
+  for (const key of keys) {
+    if ((a.profile[key] ?? '') !== (b.profile[key] ?? '')) return true
+  }
+  return false
+}
+
 export interface DraftMerge {
   profile: Record<string, string>
   /** Le chiavi scritte da questa bozza: sono quelle che la prossima potrà sostituire. */

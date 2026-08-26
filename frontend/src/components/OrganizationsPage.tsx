@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
+import { useFlashMessage } from '../hooks/useFlashMessage'
 import {
   useOrganizations,
   useOrganization,
@@ -9,16 +11,18 @@ import {
   useSetOrganizationStatus,
   useDeleteOrganization,
 } from '../hooks/useOrganizations'
-import type { Organization, OrgStatus } from '../services/organizations'
+import type { Organization, OrganizationDetail, OrgStatus } from '../services/organizations'
 import { isSuperAdmin } from '../services/auth'
+import { errorMessage } from '../services/errors'
 import DataTable, { Td, Tr } from './DataTable'
 import DetailModal, { DetailField } from './DetailModal'
 import AuthorshipFields from './AuthorshipFields'
 import Select from './Select'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
-import { iconActionCls as actionBtnCls } from './IconButton'
+import IconButton from './IconButton'
 import Spinner from './Spinner'
+import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import { PageContainer, PageHeader } from './PageLayout'
 import PrimaryButton from './PrimaryButton'
@@ -26,15 +30,13 @@ import FormError from './FormError'
 import FormSuccess from './FormSuccess'
 import ConfirmModal from './ConfirmModal'
 import ModalShell, { ModalHeader } from './ModalShell'
-import { SuspendIcon, ReactivateIcon, TrashIcon, PlusIcon, PencilIcon } from './icons'
+import { BuildingIcon, SuspendIcon, ReactivateIcon, TrashIcon, PlusIcon, PencilIcon } from './icons'
 import { matchesSearch } from './tableSearch'
 import { formatDate, formatDateTime, formatRelativeDay, NEVER_ACCESSED_LABEL } from './lastAccess'
 import type { DataTableColumn } from './DataTable'
 import Badge from './Badge'
 import type { KebabMenuItem } from './KebabMenu'
 import Field, { fieldCls, labelCls, inputWrapperCls, inputCls, TextInput } from './Field'
-
-/* Shared form styles (same look as the users admin page) */
 
 const STATUS_LABELS: Record<OrgStatus, string> = {
   active: 'Attiva',
@@ -85,22 +87,45 @@ const reactivateIcon = <ReactivateIcon />
  * dell'azione distruttiva. */
 const deleteIcon = <TrashIcon size={24} stroke="#ef4444" />
 
+/* L'edificio che intesta le finestre di questa pagina: è la stessa icona che
+ * la voce «Gestione Organizzazioni» mostra nel menu del profilo, e non un
+ * disegno che le somiglia ricopiato qui dentro. */
+const orgIcon = <BuildingIcon size={24} stroke="#7c3aed" />
+const orgDetailIcon = (
+  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
+    <BuildingIcon size={22} stroke="#7c3aed" />
+  </div>
+)
+
 export default function OrganizationsPage() {
   const { user } = useAuth()
   const {
     data: orgs = [],
     isPending: isLoading,
     error: loadError,
+    refetch: reloadOrgs,
   } = useOrganizations(isSuperAdmin(user))
-  const [successMsg, setSuccessMsg] = useState('')
+  const { message: successMsg, flash: flashSuccess } = useFlashMessage()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
+  /* L'elenco è corto e arriva tutto insieme, quindi filtro e ricerca girano
+     qui: al server si chiederebbe la stessa manciata di righe per ogni tasto
+     premuto. */
   const visibleOrgs = orgs.filter(
     (o) =>
       (!statusFilter || o.status === statusFilter) &&
       matchesSearch(search, o.name, o.slug, STATUS_LABELS[o.status] ?? o.status),
   )
+
+  /* Anche la ricerca è un filtro, benché la casella stia dentro la tabella:
+     «Azzera Filtri» riporta l'elenco completo, quindi comprende pure quella e
+     compare anche quando è l'unica cosa attiva. */
+  const hasFilters = Boolean(search || statusFilter)
+  const resetFilters = () => {
+    setSearch('')
+    setStatusFilter('')
+  }
 
   // Detail view (clic sulla riga): organizzazione in sola lettura. La riga
   // già in tabella si mostra subito, le statistiche di utilizzo arrivano
@@ -109,8 +134,27 @@ export default function OrganizationsPage() {
   /* Il dettaglio è una query sull'organizzazione aperta: una risposta in
    * ritardo su un dettaglio già chiuso, o riaperto su un'altra riga, non
    * arriva sullo schermo perché quella query non è più quella attiva. */
-  const { data: detail, error: detailQueryError } = useOrganization(viewingOrg?.id ?? null)
-  const detailError = detailQueryError ? 'Statistiche non disponibili.' : ''
+  const {
+    data: detail,
+    error: detailError,
+    refetch: reloadDetail,
+  } = useOrganization(viewingOrg?.id ?? null)
+
+  /* I tre campi che arrivano dopo il resto hanno gli stessi tre stati:
+     l'attesa, il valore, e il trattino di quando la lettura è fallita. Il
+     perché di quel trattino lo dice il fondo della modale, una volta sola
+     invece che su ogni riga. */
+  const usageField = (label: string, value: (d: OrganizationDetail) => ReactNode) => (
+    <DetailField label={label}>
+      {detailError ? (
+        <span className="text-slate-500">—</span>
+      ) : detail ? (
+        value(detail)
+      ) : (
+        <Spinner variant="button" />
+      )}
+    </DetailField>
+  )
 
   // Create/edit modal: 'new' = create, Organization = edit, null = closed
   const [editing, setEditing] = useState<Organization | 'new' | null>(null)
@@ -137,17 +181,10 @@ export default function OrganizationsPage() {
    * setState a vuoto. Salvare crea o aggiorna, quindi l'attesa e l'errore
    * del form sono quelli della mutation che sta girando. */
   const isSaving = createMutation.isPending || updateMutation.isPending
-  const saveError = createMutation.error ?? updateMutation.error
-  const formError = saveError
-    ? saveError instanceof Error
-      ? saveError.message
-      : 'Errore durante il salvataggio.'
-    : ''
-
-  const flashSuccess = (msg: string) => {
-    setSuccessMsg(msg)
-    setTimeout(() => setSuccessMsg(''), 6000)
-  }
+  const formError = errorMessage(
+    createMutation.error ?? updateMutation.error,
+    'Errore durante il salvataggio.',
+  )
 
   const openDetail = (org: Organization) => setViewingOrg(org)
   const closeDetail = () => setViewingOrg(null)
@@ -252,11 +289,11 @@ export default function OrganizationsPage() {
             options={STATUS_OPTIONS}
           />
         </div>
-        {statusFilter && (
+        {hasFilters && (
           <button
             type="button"
             className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-            onClick={() => setStatusFilter('')}
+            onClick={resetFilters}
           >
             Azzera Filtri
           </button>
@@ -265,9 +302,16 @@ export default function OrganizationsPage() {
 
       {successMsg && <FormSuccess message={successMsg} variant="page" />}
 
-      {loadError && <FormError message="Impossibile caricare le organizzazioni." />}
-
-      {isLoading ? (
+      {/* Un elenco che non è arrivato non è un elenco vuoto: senza il riquadro
+          qui sotto la tabella direbbe che non c'è nessuna organizzazione, e
+          l'unica via d'uscita sarebbe ricaricare la pagina. */}
+      {loadError ? (
+        <LoadError
+          message={errorMessage(loadError, 'Impossibile caricare le organizzazioni.')}
+          onRetry={reloadOrgs}
+          variant="page"
+        />
+      ) : isLoading ? (
         <LoadingState message="Caricamento organizzazioni..." />
       ) : (
         <DataTable
@@ -275,9 +319,12 @@ export default function OrganizationsPage() {
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Cerca per nome, slug o stato..."
+          /* Filtrare cambia l'elenco, e restare alla terza pagina di quello
+             di prima vuol dire guardare una pagina che non esiste più. */
+          pageResetKey={`${statusFilter}|${search}`}
           isEmpty={visibleOrgs.length === 0}
           emptyMessage={
-            search || statusFilter
+            hasFilters
               ? 'Nessuna organizzazione corrisponde ai filtri.'
               : 'Nessuna organizzazione presente. Crea la prima con "Nuova Organizzazione".'
           }
@@ -294,11 +341,14 @@ export default function OrganizationsPage() {
               },
             ]
             return (
-              <Tr
-                key={o.id}
-                className={`cursor-pointer ${o.status === 'active' ? '' : 'opacity-60'}`}
-                onClick={() => openDetail(o)}
-              >
+              /* `onActivate` e non un `onClick`: la riga si apre anche da
+                 tastiera, col fuoco e con Invio, come nelle altre tabelle.
+
+                 Niente velatura su un tenant sospeso: lo stato è già scritto
+                 nella sua colonna, e attenuare tutta la riga portava il motivo
+                 della sospensione, che è grigio di suo, sotto la soglia in cui
+                 si legge. */
+              <Tr key={o.id} onActivate={() => openDetail(o)}>
                 <Td>
                   <span className="font-semibold text-slate-100">{o.name}</span>
                 </Td>
@@ -338,28 +388,25 @@ export default function OrganizationsPage() {
                 </Td>
                 <Td onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-center gap-2">
-                    <Tooltip content="Modifica organizzazione">
-                      <button
-                        className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
-                        onClick={() => openEdit(o)}
-                        aria-label={`Modifica ${o.name}`}
-                      >
-                        <PencilIcon />
-                      </button>
-                    </Tooltip>
-                    <Tooltip wrap content="Elimina organizzazione con tutti i suoi dati">
-                      <button
-                        className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
-                        onClick={() => {
-                          deleteMutation.reset()
-                          setDeleteConfirmText('')
-                          setDeleting(o)
-                        }}
-                        aria-label={`Elimina ${o.name}`}
-                      >
-                        <TrashIcon />
-                      </button>
-                    </Tooltip>
+                    <IconButton
+                      label={`Modifica ${o.name}`}
+                      tooltip="Modifica Organizzazione"
+                      onClick={() => openEdit(o)}
+                    >
+                      <PencilIcon />
+                    </IconButton>
+                    <IconButton
+                      tone="danger"
+                      label={`Elimina ${o.name}`}
+                      tooltip="Elimina l'organizzazione con tutti i suoi dati"
+                      onClick={() => {
+                        deleteMutation.reset()
+                        setDeleteConfirmText('')
+                        setDeleting(o)
+                      }}
+                    >
+                      <TrashIcon />
+                    </IconButton>
                     <Tooltip wrap content="Altre azioni">
                       <KebabMenu label={`Altre azioni per ${o.name}`} items={menuItems} />
                     </Tooltip>
@@ -377,21 +424,19 @@ export default function OrganizationsPage() {
           onClose={closeDetail}
           title={viewingOrg.name}
           subtitle={<code className="text-violet-400">{viewingOrg.slug}</code>}
-          header={
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#7c3aed"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
-              </svg>
-            </div>
+          header={orgDetailIcon}
+          /* Le statistiche sono l'unica parte del dettaglio che può mancare, e
+             il rimedio sta in fondo alla modale invece che al posto dei
+             valori: il tenant, i suoi conteggi e i salti alle altre pagine
+             restano leggibili mentre si riprova. */
+          footer={
+            detailError ? (
+              <LoadError
+                message="Statistiche di utilizzo non disponibili."
+                onRetry={reloadDetail}
+                className="w-full"
+              />
+            ) : undefined
           }
         >
           <DetailField label="Nome">{viewingOrg.name}</DetailField>
@@ -434,53 +479,35 @@ export default function OrganizationsPage() {
           </DetailField>
           {/* Utilizzo: arriva dopo il resto, quindi finché non c'è la modale
               mostra comunque i dati che la tabella aveva già. */}
-          <DetailField label={`Conversazioni (${ACTIVITY_WINDOW_DAYS} gg)`}>
-            {detailError ? (
-              <span className="text-slate-500">—</span>
-            ) : detail ? (
+          {usageField(`Conversazioni (${ACTIVITY_WINDOW_DAYS} gg)`, (d) => (
+            <>
+              {d.conversations_last_30_days}
+              <span className="text-slate-500"> su {d.conversations_total} totali</span>
+            </>
+          ))}
+          {usageField('Punteggio Medio', (d) =>
+            d.average_score === null ? (
+              <span className="text-slate-500">Nessuna valutazione</span>
+            ) : (
               <>
-                {detail.conversations_last_30_days}
-                <span className="text-slate-500"> su {detail.conversations_total} totali</span>
+                {d.average_score.toFixed(1)}
+                <span className="text-slate-500">
+                  {' '}
+                  su {d.evaluated_count}{' '}
+                  {d.evaluated_count === 1 ? 'conversazione' : 'conversazioni'}
+                </span>
               </>
+            ),
+          )}
+          {usageField('Ultimo Accesso', (d) =>
+            d.last_login_at ? (
+              <Tooltip content={formatDateTime(d.last_login_at)}>
+                <span>{formatRelativeDay(d.last_login_at)}</span>
+              </Tooltip>
             ) : (
-              <Spinner variant="button" />
-            )}
-          </DetailField>
-          <DetailField label="Punteggio Medio">
-            {detailError ? (
-              <span className="text-slate-500">—</span>
-            ) : detail ? (
-              detail.average_score === null ? (
-                <span className="text-slate-500">Nessuna valutazione</span>
-              ) : (
-                <>
-                  {detail.average_score.toFixed(1)}
-                  <span className="text-slate-500">
-                    {' '}
-                    su {detail.evaluated_count}{' '}
-                    {detail.evaluated_count === 1 ? 'conversazione' : 'conversazioni'}
-                  </span>
-                </>
-              )
-            ) : (
-              <Spinner variant="button" />
-            )}
-          </DetailField>
-          <DetailField label="Ultimo Accesso">
-            {detailError ? (
-              <span className="text-slate-500">—</span>
-            ) : detail ? (
-              detail.last_login_at ? (
-                <Tooltip content={formatDateTime(detail.last_login_at)}>
-                  <span>{formatRelativeDay(detail.last_login_at)}</span>
-                </Tooltip>
-              ) : (
-                <span className="text-slate-500">{NEVER_ACCESSED_LABEL}</span>
-              )
-            ) : (
-              <Spinner variant="button" />
-            )}
-          </DetailField>
+              <span className="text-slate-500">{NEVER_ACCESSED_LABEL}</span>
+            ),
+          )}
           <AuthorshipFields row={viewingOrg} />
           <DetailField label="ID Organizzazione" mono>
             {viewingOrg.id}
@@ -493,22 +520,16 @@ export default function OrganizationsPage() {
         <ModalShell onClose={() => setEditing(null)} locked={isSaving}>
           <ModalHeader
             iconWrapperCls="border border-violet-600/20 bg-violet-600/10"
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#7c3aed"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
-              </svg>
-            }
+            icon={orgIcon}
             title={editing === 'new' ? 'Crea Nuova Organizzazione' : `Modifica ${editing.name}`}
-            description={<>Lo slug è generato automaticamente dal nome se lasciato vuoto.</>}
+            /* In creazione lo slug si ricava dal nome, in modifica resta
+               quello che c'è: la stessa frase per entrambi prometteva che
+               svuotare il campo lo facesse ricalcolare, e non è così. */
+            description={
+              editing === 'new'
+                ? 'Lo slug è generato automaticamente dal nome se lasciato vuoto.'
+                : 'Lo slug lasciato vuoto resta quello attuale.'
+            }
             className="mb-8"
           />
 
@@ -579,7 +600,12 @@ export default function OrganizationsPage() {
               </>
             )
           }
-          error={statusMutation.error instanceof Error ? statusMutation.error.message : undefined}
+          error={
+            errorMessage(
+              statusMutation.error,
+              "Errore durante il cambio di stato dell'organizzazione.",
+            ) || undefined
+          }
           confirmLabel={statusAction.target === 'active' ? 'Riattiva' : 'Sospendi'}
           pendingLabel="Attendere..."
           confirmClassName={
@@ -622,17 +648,27 @@ export default function OrganizationsPage() {
           icon={deleteIcon}
           iconWrapperCls="border border-red-500/25 bg-red-500/10"
           title="Elimina Organizzazione"
+          /* L'elenco dice tutto quello che l'endpoint porta via, test
+             tecnici e percorsi compresi: chi conferma sta cancellando anche
+             il lavoro che l'organizzazione ha composto, non solo le persone
+             e le loro conversazioni. */
           description={
             <>
               Stai per eliminare <strong className="text-slate-100">{deleting.name}</strong> con{' '}
               <strong className="text-slate-100">{deleting.user_count} utenti</strong> (rimossi
-              anche da Cognito), tutte le loro conversazioni e i{' '}
+              anche da Cognito), tutte le loro conversazioni, i{' '}
               <strong className="text-slate-100">{deleting.avatar_count} avatar privati</strong>{' '}
-              dell'organizzazione. L'operazione non è reversibile. Scrivi{' '}
+              dell'organizzazione e i test tecnici e i percorsi formativi che le appartengono.
+              L'operazione non è reversibile. Scrivi{' '}
               <strong className="text-slate-100">{deleting.name}</strong> per confermare.
             </>
           }
-          error={deleteMutation.error instanceof Error ? deleteMutation.error.message : undefined}
+          error={
+            errorMessage(
+              deleteMutation.error,
+              "Errore durante l'eliminazione dell'organizzazione.",
+            ) || undefined
+          }
           confirmLabel="Elimina Definitivamente"
           pendingLabel="Eliminazione..."
           confirmClassName="border-none bg-red-500 text-white hover:bg-red-600 hover:shadow-[0_6px_20px_rgba(239,68,68,0.35)]"

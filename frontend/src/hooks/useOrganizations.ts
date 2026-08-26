@@ -102,23 +102,45 @@ export function useSetOrganizationStatus() {
   })
 }
 
+/* Tutto quello che, in cache, può contenere righe del tenant che se ne sta
+ * andando. L'eliminazione è l'unica scrittura dell'app che tocca ogni area
+ * insieme: gli utenti con le loro conversazioni, gli avatar con le loro
+ * categorie, i test tecnici, i percorsi e le prove su cui si calcolano
+ * rendiconti e confronti. Elencarle una per una è più lungo che azzerare
+ * tutta la cache, ed è il punto: quello che non riguarda il tenant (le
+ * notifiche di chi guarda, l'elenco delle voci) resta dov'è invece di essere
+ * riletto dal server per un'organizzazione che non c'è più.
+ *
+ * Il registro attività non è nell'elenco di proposito: le sue righe
+ * sopravvivono al tenant con il nome che avevano (vedi erasure.py), quindi
+ * non diventano sbagliate, e l'eliminazione stessa ne aggiunge una. */
+const ERASED_WITH_TENANT = [
+  queryKeys.organizations.all,
+  queryKeys.users.all,
+  queryKeys.avatars.all,
+  queryKeys.categories.all,
+  queryKeys.conversations.all,
+  queryKeys.simulations.all,
+  queryKeys.training.all,
+  queryKeys.reports.all,
+  queryKeys.comparison.all,
+]
+
 /**
  * Elimina un'organizzazione con tutti i suoi dati.
  *
- * Porta via utenti, avatar privati e conversazioni del tenant, quindi non
- * basta invalidare le organizzazioni: si azzera tutto quello che poteva
- * mostrarne le righe.
+ * Porta via utenti, avatar privati, conversazioni, test tecnici e percorsi
+ * del tenant, quindi non basta invalidare le organizzazioni: si azzera tutto
+ * quello che poteva mostrarne le righe.
  */
 export function useDeleteOrganization() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (organizationId: string) => deleteOrganization(organizationId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.avatars.all })
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
-      queryClient.invalidateQueries({ queryKey: ['reports'] })
+      for (const queryKey of ERASED_WITH_TENANT) {
+        queryClient.invalidateQueries({ queryKey })
+      }
     },
   })
 }

@@ -34,6 +34,7 @@ from models import (
     ConversationEvaluation,
     Organization,
     TechnicalSimulation,
+    TrainingPath,
     User,
 )
 from schemas import (
@@ -402,6 +403,19 @@ def delete_organization(
     # goals (see `erasure`, shared with the single-account deletion so
     # neither path can forget a table).
     erase_users(db, user_ids)
+
+    # I percorsi formativi del tenant, con le loro tappe e le assegnazioni
+    # che ne restassero (erase_users si è già portata via quelle dei suoi
+    # utenti). Prima delle simulazioni, perché una tappa può puntare a una di
+    # esse: così se ne va con il proprio percorso invece di dipendere da cosa
+    # succede alla riga che punta.
+    #
+    # Esplicito e non lasciato alla ON DELETE CASCADE dichiarata sul modello,
+    # per la ragione che vale in tutta l'erasure: lo schema è costruito da
+    # create_all senza uno strumento di migrazione, quindi un `ondelete` nel
+    # modello non è la prova che la tabella viva lo abbia (vedi `erasure`).
+    for path in db.query(TrainingPath).filter(TrainingPath.organization_id == org.id).all():
+        db.delete(path)
 
     # Le simulazioni tecniche del tenant, con i passaggi del documento, le
     # domande e i tentativi che ne restassero: erase_users si è già portata

@@ -286,6 +286,48 @@ export function ResendIcon(props: IconProps) {
   )
 }
 
+/* L'occhio di quello che si guarda senza cambiarlo: l'anteprima del prompt
+ * che una scheda persona produce. */
+export function EyeIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </IconBase>
+  )
+}
+
+/* Il triangolo che avvia un ascolto: l'anteprima di una voce nella scheda di
+ * un avatar, la registrazione di una chiamata. */
+export function PlayIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </IconBase>
+  )
+}
+
+/* Il quadrato che ferma quello che sta suonando: la coppia di `PlayIcon`, e
+ * l'unico modo per interrompere un ascolto senza aspettare che finisca. */
+export function StopIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </IconBase>
+  )
+}
+
+/* La freccia che torna indietro sul proprio giro: riportare in catalogo un
+ * avatar archiviato, che è l'unica azione che un archivio deve offrire. */
+export function RestoreIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <polyline points="3 3 3 8 8 8" />
+    </IconBase>
+  )
+}
+
 /* Due scintille: **l'ha scritto un modello**. È il segno con cui l'app
  * distingue ovunque quello che ha composto la macchina da quello che ha
  * composto una persona, dalla targhetta dell'origine di una simulazione al

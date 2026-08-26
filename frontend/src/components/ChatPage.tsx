@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 
+import { queryKeys } from '../hooks/queryKeys'
 import { useAuth } from '../hooks/useAuth'
 import { useAvatar } from '../hooks/useAvatars'
 import { useCitationNavigation } from '../hooks/useCitationNavigation'
@@ -216,7 +217,7 @@ export default function ChatPage() {
    * potrebbe tornare ancora "aperta", e per questo l'id se lo ricorda la
    * pagina invece di aspettare il server. */
   const handleVoiceSessionEnd = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all })
     if (!currentConversationId) {
       setEndedConversationId(null)
       return

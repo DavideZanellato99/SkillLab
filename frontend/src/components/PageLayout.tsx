@@ -54,9 +54,14 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <header className="mb-10 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100">{title}</h1>
+    <header className="mb-10 flex flex-wrap items-center justify-between gap-4 max-md:mb-6">
+      {/* `min-w-0` perché il blocco del titolo è un figlio flex: senza, non
+          scende sotto la larghezza del proprio testo e spinge l'azione fuori
+          dalla riga invece di lasciarla andare a capo. */}
+      <div className="min-w-0">
+        <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100 max-md:text-2xl">
+          {title}
+        </h1>
         <p className="text-[0.95rem] text-slate-500">{description}</p>
       </div>
       {actions}

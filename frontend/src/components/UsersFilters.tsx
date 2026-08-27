@@ -11,7 +11,7 @@
 
 import type { UserStatus } from '../services/auth'
 import { ROLE_OPTIONS, STATUS_LABELS } from './adminUsersConfig'
-import { fieldCls, labelCls } from './Field'
+import { filterFieldCls, labelCls } from './Field'
 import ResetFiltersButton from './ResetFiltersButton'
 import Select from './Select'
 
@@ -58,7 +58,7 @@ export default function UsersFilters({
 
   return (
     <div className="mb-8 flex flex-wrap items-end gap-4">
-      <div className={fieldCls}>
+      <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="users-org-filter">
           Organizzazione
         </label>
@@ -70,7 +70,7 @@ export default function UsersFilters({
           options={[{ value: '', label: 'Tutte le Organizzazioni' }, ...organizationOptions]}
         />
       </div>
-      <div className={fieldCls}>
+      <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="users-role-filter">
           Ruolo
         </label>
@@ -82,7 +82,7 @@ export default function UsersFilters({
           options={[{ value: '', label: 'Tutti i Ruoli' }, ...ROLE_OPTIONS]}
         />
       </div>
-      <div className={fieldCls}>
+      <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="users-status-filter">
           Stato
         </label>
@@ -94,7 +94,7 @@ export default function UsersFilters({
           options={STATUS_OPTIONS}
         />
       </div>
-      <div className={fieldCls}>
+      <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="users-access-filter">
           Accesso
         </label>

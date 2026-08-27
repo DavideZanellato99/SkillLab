@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import type { SimulationReportRow } from '../services/admin'
 import type { SimulationKind } from '../services/simulations'
 import DataTable, { Td, Tr } from './DataTable'
@@ -77,7 +78,11 @@ export default function DashboardSimulations({
   /** Il tipo scelto in cima alla pagina, o 'all' per entrambi. */
   kindFilter: SimulationKind | 'all'
 }) {
+  /* La casella scrive subito, il filtro aspetta la fine della parola: sotto
+   * ci sono tutti i test consegnati nel periodo, riscorsi da capo a ogni
+   * tasto premuto per ridisegnare una tabella di dieci righe. */
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
   /* Il tentativo aperto dal clic su una riga. Tiene l'id e non la riga
    * perché le risposte non stanno nel report: le carica la modale. */
   const [openAttemptId, setOpenAttemptId] = useState<string | null>(null)
@@ -181,7 +186,7 @@ export default function DashboardSimulations({
     () =>
       detailRows.filter((r) =>
         matchesSearch(
-          search,
+          debouncedSearch,
           r.simulation_title,
           // Il tipo e l'origine si cercano con le stesse parole che i badge mostrano
           kindLabel(r.simulation_kind),
@@ -191,7 +196,7 @@ export default function DashboardSimulations({
           formatDateTime(r.attempted_at),
         ),
       ),
-    [detailRows, search],
+    [detailRows, debouncedSearch],
   )
 
   /* Due modi diversi di non avere niente da disegnare, e vanno detti
@@ -312,23 +317,35 @@ export default function DashboardSimulations({
         /* Le percentuali sommano a 100: al titolo la fetta più larga, perché
            porta anche le targhette del tipo e della provenienza. */
         columns={[
-          { key: 'simulazione', label: 'Simulazione', width: '34%' },
-          { key: 'data', label: 'Data', width: '16%' },
-          { key: 'utente', label: 'Utente', width: '22%' },
-          { key: 'corrette', label: 'Corrette', compact: true, width: '14%' },
-          { key: 'voto', label: 'Voto', width: '14%' },
+          {
+            key: 'simulazione',
+            label: 'Simulazione',
+            width: '34%',
+            sortValue: (r) => r.simulation_title,
+          },
+          { key: 'data', label: 'Data', width: '16%', sortValue: (r) => r.attempted_at },
+          { key: 'utente', label: 'Utente', width: '22%', sortValue: (r) => personName(r) },
+          /* Sulla frazione e non sul solo numero di risposte giuste: otto su
+             dieci vanno prima di otto su venti. */
+          {
+            key: 'corrette',
+            label: 'Corrette',
+            compact: true,
+            width: '14%',
+            sortValue: (r) => (r.question_count === 0 ? 0 : r.correct_count / r.question_count),
+          },
+          { key: 'voto', label: 'Voto', width: '14%', sortValue: (r) => r.score },
         ]}
+        items={searchedRows}
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Cerca per simulazione o utente..."
-        isEmpty={searchedRows.length === 0}
         emptyMessage={
-          search
+          debouncedSearch
             ? 'Nessun test corrisponde alla ricerca.'
             : 'Nessun test per la selezione corrente.'
         }
-      >
-        {searchedRows.map((r) => (
+        renderRow={(r) => (
           <Tooltip key={r.attempt_id} content="Vedi il test svolto" anchor="cursor">
             <Tr onActivate={() => setOpenAttemptId(r.attempt_id)}>
               <Td>
@@ -355,8 +372,8 @@ export default function DashboardSimulations({
               </Td>
             </Tr>
           </Tooltip>
-        ))}
-      </DataTable>
+        )}
+      />
 
       {openAttemptId && (
         <SimulationAttemptModal

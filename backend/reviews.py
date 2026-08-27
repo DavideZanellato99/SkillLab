@@ -27,16 +27,25 @@ from schemas import ConversationReviewResponse, MessageAnnotationResponse
 _SCORE_EPSILON = 0.05
 
 
-def final_score(ai_score: float | None, review: ConversationReview | None) -> float | None:
-    """The grade that counts: the trainer's correction when there is one.
+def grade(ai_score: float | None, override_score: float | None) -> float | None:
+    """The grade that counts, from the two numbers themselves.
+
+    La definizione sta qui, sui due numeri, e non sull'oggetto della
+    correzione: i report leggono a colonne e non caricano la riga della
+    revisione, e senza questa forma dovrebbero riscrivere la regola per conto
+    proprio. Una regola riscritta è una regola che prima o poi diverge, ed è
+    esattamente quella che decide che voto ha preso una persona.
 
     None in, None out: a conversation with no evaluation and no correction
     has no grade, and inventing a 0 for it would be a lie the whole
     dashboard would then average.
     """
-    if review is not None and review.override_score is not None:
-        return review.override_score
-    return ai_score
+    return override_score if override_score is not None else ai_score
+
+
+def final_score(ai_score: float | None, review: ConversationReview | None) -> float | None:
+    """The grade that counts, for chi ha in mano la riga della revisione."""
+    return grade(ai_score, review.override_score if review is not None else None)
 
 
 def is_stale(review: ConversationReview | None, current_ai_score: float | None) -> bool:

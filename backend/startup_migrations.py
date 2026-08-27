@@ -851,9 +851,10 @@ def _index_conversations() -> None:
 
     Su un database nuovo li fa create_all a partire dai modelli; qui le
     tabelle esistono già, e senza queste righe resterebbero con i vecchi
-    indici a una colonna sola. Le forme sono due, e sono le uniche due che
-    l'applicazione usa: le conversazioni di una persona dalla più recente, e
-    i messaggi di una conversazione in ordine di tempo.
+    indici a una colonna sola. Le forme sono tre, e sono le uniche tre che
+    l'applicazione usa: le conversazioni di una persona dalla più recente, i
+    messaggi di una conversazione in ordine di tempo, e le conversazioni di
+    un periodo senza guardare di chi sono, che è la domanda dei report.
 
     I due indici a una colonna se ne vanno subito dopo: sono il prefisso dei
     nuovi, quindi non rispondono a niente che i nuovi non risolvano già, e
@@ -872,6 +873,12 @@ def _index_conversations() -> None:
             text(
                 "CREATE INDEX IF NOT EXISTS ix_chat_messages_conversation_created "
                 "ON chat_messages (conversation_id, created_at)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_chat_conversations_created "
+                "ON chat_conversations (created_at)"
             )
         )
         conn.execute(text("DROP INDEX IF EXISTS ix_chat_conversations_user_id"))

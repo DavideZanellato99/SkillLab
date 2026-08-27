@@ -17,12 +17,20 @@ from sqlalchemy import text
 from database import engine
 from startup_migrations import prepare_schema
 
-# Nome dell'indice per tabella, gli stessi che scrivono i modelli e la
+# Gli indici attesi su ogni tabella, gli stessi che scrivono i modelli e la
 # migrazione: se le due strade smettessero di coincidere, il database nuovo
 # e quello aggiornato si ritroverebbero con indici diversi.
+#
+# Le conversazioni ne hanno due perché hanno due domande: per persona dalla
+# più recente (l'area di chi si allena) e per periodo senza guardare di chi
+# sono (i report dell'amministrazione). Alla seconda il composito non
+# risponde, perché la data è la sua seconda colonna.
 _ATTESI = {
-    "chat_conversations": "ix_chat_conversations_user_created",
-    "chat_messages": "ix_chat_messages_conversation_created",
+    "chat_conversations": [
+        "ix_chat_conversations_user_created",
+        "ix_chat_conversations_created",
+    ],
+    "chat_messages": ["ix_chat_messages_conversation_created"],
 }
 
 # Quelli che i due sopra hanno sostituito, essendone il prefisso.
@@ -45,8 +53,10 @@ def test_conversazioni_e_messaggi_hanno_i_loro_indici():
     """Lo stato in cui l'applicazione si avvia, qualunque strada l'abbia portata lì."""
     prepare_schema()
 
-    for tabella, indice in _ATTESI.items():
-        assert indice in _indici(tabella), f"manca {indice} su {tabella}"
+    for tabella, attesi in _ATTESI.items():
+        indici = _indici(tabella)
+        for indice in attesi:
+            assert indice in indici, f"manca {indice} su {tabella}"
 
 
 def test_un_database_con_i_vecchi_indici_viene_aggiornato():
@@ -57,8 +67,9 @@ def test_un_database_con_i_vecchi_indici_viene_aggiornato():
     rimasto lì a farsi pagare a ogni riga scritta.
     """
     with engine.begin() as conn:
-        for indice in _ATTESI.values():
-            conn.execute(text(f"DROP INDEX IF EXISTS {indice}"))
+        for attesi in _ATTESI.values():
+            for indice in attesi:
+                conn.execute(text(f"DROP INDEX IF EXISTS {indice}"))
         conn.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS ix_chat_conversations_user_id "
@@ -74,7 +85,8 @@ def test_un_database_con_i_vecchi_indici_viene_aggiornato():
 
     prepare_schema()
 
-    for tabella, indice in _ATTESI.items():
+    for tabella, attesi in _ATTESI.items():
         indici = _indici(tabella)
-        assert indice in indici, f"manca {indice} su {tabella}"
+        for indice in attesi:
+            assert indice in indici, f"manca {indice} su {tabella}"
         assert _SOSTITUITI[tabella] not in indici, f"{_SOSTITUITI[tabella]} è rimasto su {tabella}"

@@ -15,7 +15,7 @@
  * limitano a vicenda perché un intervallo rovesciato non è una domanda. */
 
 import type { AuditLogsFiltersValue } from './auditFormat'
-import { fieldCls, formInputCls, labelCls } from './Field'
+import { filterFieldCls, formInputCls, labelCls } from './Field'
 import ResetFiltersButton from './ResetFiltersButton'
 import Select from './Select'
 
@@ -48,7 +48,7 @@ export default function AuditLogsFilters({
 
   return (
     <div className="mb-8 flex flex-wrap items-end gap-4">
-      <div className={fieldCls}>
+      <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="audit-action-filter">
           Azione
         </label>
@@ -60,7 +60,7 @@ export default function AuditLogsFilters({
           options={[{ value: '', label: 'Tutte le Azioni' }, ...actionOptions]}
         />
       </div>
-      <div className={fieldCls}>
+      <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="audit-org-filter">
           Organizzazione
         </label>
@@ -72,7 +72,7 @@ export default function AuditLogsFilters({
           options={[{ value: '', label: 'Tutte le Organizzazioni' }, ...organizationOptions]}
         />
       </div>
-      <div className={fieldCls}>
+      <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="audit-date-from">
           Dal
         </label>
@@ -85,7 +85,7 @@ export default function AuditLogsFilters({
           onChange={(e) => onChange({ dateFrom: e.target.value })}
         />
       </div>
-      <div className={fieldCls}>
+      <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="audit-date-to">
           Al
         </label>

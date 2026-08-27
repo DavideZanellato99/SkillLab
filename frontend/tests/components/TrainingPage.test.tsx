@@ -209,7 +209,7 @@ describe('ricerca fra i percorsi', () => {
 describe('percorsi da sfogliare', () => {
   it('mostra una pagina per volta', async () => {
     stato.paths = {
-      data: Array.from({ length: 12 }, (_, i) =>
+      data: Array.from({ length: 24 }, (_, i) =>
         percorso({ id: `p-${i + 1}`, title: `Percorso ${i + 1}` }),
       ),
       isPending: false,
@@ -217,12 +217,12 @@ describe('percorsi da sfogliare', () => {
     }
     renderPage()
 
-    expect(screen.getByText(/Da 1 a 10 di 12/)).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Percorso 11' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Da 1 a 20 di 24/)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Percorso 21' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Pagina Successiva' }))
 
-    expect(screen.getByRole('heading', { name: 'Percorso 11' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Percorso 21' })).toBeInTheDocument()
   })
 })
 

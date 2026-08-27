@@ -252,6 +252,78 @@ def test_list_rejects_an_unknown_filter_value(admin_client, params):
     assert response.status_code == 400
 
 
+# ── Elenco: ordinamento ───────────────────────────────
+
+
+def test_sort_orders_the_whole_list_and_not_the_window(admin_client, make_user, organization):
+    """L'ordinamento è qui e non nel browser: di là c'è una finestra sola, e
+    ordinare quella metterebbe in cima il primo dei duecento scaricati."""
+    for cognome in ("Verdi", "Bianchi", "Rossi"):
+        make_user(organization=organization, cognome=cognome)
+
+    page = _list_users(admin_client, organization_id=str(organization.id), sort="utente", limit=1)
+
+    assert page["total"] == 3
+    # Il primo dell'elenco intero, non il primo della finestra
+    assert page["items"][0]["cognome"] == "Bianchi"
+
+
+def test_sort_direction_reverses_the_order(admin_client, make_user, organization):
+    for cognome in ("Verdi", "Bianchi", "Rossi"):
+        make_user(organization=organization, cognome=cognome)
+
+    page = _list_users(
+        admin_client,
+        organization_id=str(organization.id),
+        sort="utente",
+        direction="desc",
+        limit=1,
+    )
+
+    assert page["items"][0]["cognome"] == "Verdi"
+
+
+def test_sorted_window_slides_without_skipping_or_repeating(admin_client, make_user, organization):
+    """Il pareggio si scioglie sempre allo stesso modo, anche quando è la
+    colonna scelta a pareggiare: sei omonimi sono sei righe che l'ordinamento
+    lascia libere di scambiarsi di posto fra una lettura e l'altra, e una
+    finestra a offset ne salterebbe una e ne ripeterebbe un'altra."""
+    for _ in range(6):
+        make_user(organization=organization, cognome="Rossi")
+
+    seen: list[str] = []
+    for offset in (0, 2, 4):
+        page = _list_users(
+            admin_client,
+            organization_id=str(organization.id),
+            sort="utente",
+            limit=2,
+            offset=offset,
+        )
+        seen.extend(item["id"] for item in page["items"])
+
+    assert len(set(seen)) == 6
+
+
+def test_sort_rejects_a_column_that_is_not_sortable(admin_client):
+    """Una colonna fuori elenco è un 400 e non un ordine qualsiasi: è anche
+    quello che tiene una stringa arbitraria fuori dall'`order_by`."""
+    response = admin_client.get("/api/admin/users", params={"sort": "password"})
+
+    assert response.status_code == 400
+
+
+def test_without_sort_the_newest_come_first(admin_client, make_user, organization):
+    """Senza ordinamento resta la domanda con cui la pagina si apre: chi è
+    stato registrato per ultimo."""
+    make_user(organization=organization, cognome="Primo")
+    ultimo = make_user(organization=organization, cognome="Ultimo")
+
+    page = _list_users(admin_client, organization_id=str(organization.id))
+
+    assert page["items"][0]["id"] == str(ultimo.id)
+
+
 # ── Creazione ─────────────────────────────────────────
 
 

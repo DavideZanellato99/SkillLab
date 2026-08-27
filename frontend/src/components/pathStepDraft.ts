@@ -25,6 +25,14 @@ import type {
 import { fromLocalInputValue, toLocalInputValue } from './instant'
 
 export interface PathStepDraft {
+  /* L'identità della bozza mentre si compone, e nient'altro: non è l'id
+   * della tappa salvata e non arriva mai al server.
+   *
+   * Serve a React come chiave dell'elenco. Con la posizione al suo posto,
+   * spostare una tappa in su spostava la riga ma non quello che c'era dentro:
+   * il pannello dei criteri aperto e il numero a metà scrittura restavano
+   * alla posizione di prima, cioè addosso alla tappa sbagliata. */
+  id: string
   kind: StepKind
   /** Il bersaglio scelto dentro il tipo, ancora vuoto appena lo si cambia. */
   avatarId: string | null
@@ -74,6 +82,10 @@ export interface PathStepDraft {
 /** L'obiettivo di partenza di una tappa nuova: la sufficienza piena. */
 const DEFAULT_TARGET = 7
 
+/* L'identità di una bozza, che non deve essere niente più che diversa dalle
+ * altre: vive quanto la scheda aperta e non esce da qui. */
+const draftId = () => crypto.randomUUID()
+
 /* La scala dei voti, la stessa del referto e la stessa che il server pretende
  * su ogni tappa (`TrainingPathStepInput`). Sta qui perché il form la deve dire
  * prima, mentre si scrive, invece di farla scoprire da una richiesta rifiutata. */
@@ -82,6 +94,7 @@ export const MAX_TARGET = 10
 
 export function emptyDraft(): PathStepDraft {
   return {
+    id: draftId(),
     kind: 'avatar',
     avatarId: null,
     simulationId: null,
@@ -96,6 +109,7 @@ export function emptyDraft(): PathStepDraft {
 /** La bozza di una tappa che esiste già, per riaprirla in modifica. */
 export function draftFromStep(step: PathStep): PathStepDraft {
   return {
+    id: draftId(),
     kind: step.kind,
     avatarId: step.avatar_id,
     simulationId: step.simulation_id,
@@ -127,6 +141,7 @@ export function draftFromStep(step: PathStep): PathStepDraft {
  */
 export function draftFromProposal(step: PathDraftStep): PathStepDraft {
   return {
+    id: draftId(),
     kind: step.avatar_id ? 'avatar' : 'simulation',
     avatarId: step.avatar_id,
     simulationId: step.simulation_id,

@@ -288,15 +288,15 @@ describe('filtri', () => {
   /* Restare alla terza pagina di una domanda a cui si è appena smesso di
    * rispondere non vuol dire niente. */
   it('riporta alla prima pagina quando cambia un filtro', async () => {
-    renderPage({ logs: righe(25), total: 25 })
+    renderPage({ logs: righe(45), total: 45 })
 
     await userEvent.click(screen.getByRole('button', { name: 'Pagina Successiva' }))
-    expect(screen.getByText('Da 11 a 20 di 25')).toBeInTheDocument()
+    expect(screen.getByText('Da 21 a 40 di 45')).toBeInTheDocument()
 
     await userEvent.click(screen.getByLabelText('Azione'))
     await userEvent.click(screen.getByRole('option', { name: 'Utente creato' }))
 
-    expect(screen.getByText('Da 1 a 10 di 25')).toBeInTheDocument()
+    expect(screen.getByText('Da 1 a 20 di 45')).toBeInTheDocument()
   })
 })
 

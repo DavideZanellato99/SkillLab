@@ -7,6 +7,13 @@ import { useEffect, useState } from 'react'
  * sarebbe una richiesta, e "mario" ne farebbe cinque per una risposta sola
  * che interessa.
  *
+ * E serve anche a quelle che filtrano un elenco già in mano, che sono la
+ * maggioranza: lì non parte nessuna richiesta, ma a ogni tasto si riscorre
+ * tutto l'elenco e si ridisegna la tabella, e su un tenant avviato sono
+ * migliaia di righe riattraversate cinque volte per scrivere "mario". Quello
+ * che si vede nella casella resta immediato in entrambi i casi: ad aspettare
+ * è il filtro, non la scrittura.
+ *
  * Erano le stesse cinque righe con lo stesso ritardo in ogni pagina che
  * cerca, ognuna con la propria coppia di stati da tenere allineati. */
 

@@ -28,7 +28,7 @@ const cardIconCls =
 
 export function LoginButton({ children = 'Accedi' }: { children?: ReactNode }) {
   return (
-    <button className={primaryBtnCls} onClick={openLogin}>
+    <button type="button" className={primaryBtnCls} onClick={openLogin}>
       {children}
       <ArrowRightIcon size={18} />
     </button>

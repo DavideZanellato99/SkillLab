@@ -455,6 +455,7 @@ export default function ConversationDetailModal({
                   <h3 className={`${sectionTitleCls} mb-0`}>Valutazione</h3>
                   {!isOwn && !isEditingReview && (
                     <button
+                      type="button"
                       className="flex cursor-pointer items-center gap-1 rounded-lg border-none bg-transparent px-2 py-0.5 text-[0.72rem] font-semibold text-violet-300 transition hover:bg-violet-500/15"
                       onClick={() => setIsEditingReview(true)}
                     >

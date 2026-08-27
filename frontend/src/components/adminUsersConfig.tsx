@@ -5,6 +5,7 @@
 
 import type { ReactNode } from 'react'
 import type { DataTableColumn } from './DataTable'
+import type { AdminUser } from '../services/admin'
 import type { RoleName, UserStatus } from '../services/auth'
 import { SuspendIcon, ReactivateIcon, DisableIcon, ResendIcon } from './icons'
 
@@ -36,14 +37,20 @@ export const NEVER_ACCESSED_BADGE_CLASSES =
 
 /* Le percentuali sommano a 100. Le tre colonne di targhette (ruolo, stato,
  * ultimo accesso) sono larghe quanto la loro pillola più lunga, perché una
- * targhetta spezzata su due righe si legge peggio di una colonna generosa. */
-export const USER_COLUMNS: DataTableColumn[] = [
-  { key: 'utente', label: 'Utente', width: '20%' },
-  { key: 'organizzazione', label: 'Organizzazione', width: '12%' },
-  { key: 'ruolo', label: 'Ruolo', width: '15%' },
-  { key: 'stato', label: 'Stato', width: '14%' },
-  { key: 'ultimo_accesso', label: 'Ultimo Accesso', width: '14%' },
-  { key: 'creazione', label: 'Data Creazione', width: '11%' },
+ * targhetta spezzata su due righe si legge peggio di una colonna generosa.
+ *
+ * Le sei colonne ordinabili sono quelle che il server sa ordinare (vedi
+ * routers/admin.USER_SORT_COLUMNS), e la chiave è la stessa da una parte e
+ * dall'altra: l'elenco arriva a finestre di duecento righe, quindi l'ordine
+ * non lo può fare la tabella su quello che ha in mano. Le azioni restano
+ * fuori, perché non portano un dato. */
+export const USER_COLUMNS: DataTableColumn<AdminUser>[] = [
+  { key: 'utente', label: 'Utente', width: '20%', sortable: true },
+  { key: 'organizzazione', label: 'Organizzazione', width: '12%', sortable: true },
+  { key: 'ruolo', label: 'Ruolo', width: '15%', sortable: true },
+  { key: 'stato', label: 'Stato', width: '14%', sortable: true },
+  { key: 'ultimo_accesso', label: 'Ultimo Accesso', width: '14%', sortable: true },
+  { key: 'creazione', label: 'Data Creazione', width: '11%', sortable: true },
   { key: 'azioni', label: 'Azioni', width: '14%' },
 ]
 

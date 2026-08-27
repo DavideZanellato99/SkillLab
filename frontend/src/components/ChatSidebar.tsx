@@ -94,6 +94,7 @@ export default function ChatSidebar({
       </div>
 
       <button
+        type="button"
         className="mx-4 mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400"
         onClick={onNewConversation}
         id="new-conversation-btn"
@@ -121,6 +122,7 @@ export default function ChatSidebar({
           </h3>
           <Tooltip content="Espandi le Conversazioni">
             <button
+              type="button"
               className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-slate-500 transition hover:bg-violet-600/12 hover:text-violet-400"
               onClick={onExpand}
               aria-label="Espandi le Conversazioni"
@@ -204,6 +206,7 @@ export default function ChatSidebar({
                   </div>
                   {!isRenaming && (
                     <button
+                      type="button"
                       className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 opacity-0 transition hover:bg-violet-600/12 hover:text-violet-400 focus-visible:opacity-100 group-hover/conv:opacity-100 max-[900px]:opacity-100"
                       onClick={(e) => onStartRename(conv, e)}
                       aria-label="Rinomina Conversazione"
@@ -225,6 +228,7 @@ export default function ChatSidebar({
                   )}
                   {canDelete && !isRenaming && (
                     <button
+                      type="button"
                       className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-500 group-hover/conv:opacity-100"
                       onClick={(e) => onDelete(conv.id, e)}
                       aria-label="Elimina Conversazione"

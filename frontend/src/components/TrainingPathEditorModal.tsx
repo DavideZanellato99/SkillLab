@@ -296,7 +296,7 @@ export default function TrainingPathEditorModal({
                 <ol className="flex flex-col gap-2">
                   {steps.map((step, index) => (
                     <PathStepEditor
-                      key={index}
+                      key={step.id}
                       step={step}
                       index={index}
                       total={steps.length}

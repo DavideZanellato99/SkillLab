@@ -55,6 +55,9 @@ describe('la bozza di una tappa', () => {
 
   it('riapre una tappa esistente com’era', () => {
     expect(draftFromStep(simulationStep)).toEqual({
+      // L'identità della bozza vive quanto la scheda aperta e non esce di lì:
+      // qui basta che ci sia, quale sia non lo decide nessuno
+      id: expect.any(String),
       kind: 'simulation',
       avatarId: null,
       criteriaTargets: {},
@@ -65,6 +68,14 @@ describe('la bozza di una tappa', () => {
       // Le motivazioni erano della proposta: un percorso salvato non ne ha
       reason: null,
     })
+  })
+
+  /* Due tappe non sono mai la stessa tappa, nemmeno quando sono uguali in
+   * tutto: è l'identità che permette a React di riconoscerle quando si
+   * spostano, e senza, spostare una riga lasciava quello che c'era dentro
+   * addosso alla tappa sbagliata. */
+  it('dà a ogni bozza un’identità sua', () => {
+    expect(emptyDraft().id).not.toBe(emptyDraft().id)
   })
 
   /* La motivazione viaggia con la tappa proposta, perché è sotto quella riga
@@ -106,6 +117,7 @@ describe('la bozza di una tappa', () => {
      * porta dietro l'avatar scelto prima: al salvataggio non deve partire,
      * o il server rifiuterebbe una tappa con due bersagli. */
     const indeciso = {
+      id: 'bozza-1',
       kind: 'simulation' as const,
       avatarId: 'a1',
       simulationId: 'x1',

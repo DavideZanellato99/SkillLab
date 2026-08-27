@@ -56,6 +56,7 @@ export default function PdfDownloadButton({ fetchPdf, fileNameParts }: PdfDownlo
   return (
     <div className="flex flex-col items-center gap-1.5">
       <button
+        type="button"
         className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-5 py-2 text-sm font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
         onClick={() => void download()}
         disabled={isDownloading}

@@ -870,7 +870,7 @@ def evaluations_report_xlsx(rows: list[EvaluationReportRow]) -> bytes:
     for row_idx, row in enumerate(
         sorted(rows, key=lambda r: r.conversation_at, reverse=True), start=2
     ):
-        scores = {c.key: c.score for c in row.criteria}
+        scores = row.criteria
         operator = f"{row.user_nome} {row.user_cognome}".strip() or row.user_email
 
         sheet.cell(row=row_idx, column=1, value=row.conversation_at.replace(tzinfo=None))

@@ -82,10 +82,11 @@ export default function ConfirmModal({
       {error && <FormError message={error} />}
 
       <div className="flex gap-3">
-        <button className={cancelBtnCls} onClick={onClose} disabled={isPending}>
+        <button type="button" className={cancelBtnCls} onClick={onClose} disabled={isPending}>
           {cancelLabel}
         </button>
         <button
+          type="button"
           className={`${confirmBaseCls} ${confirmClassName}`}
           onClick={onConfirm}
           disabled={isPending || confirmDisabled}

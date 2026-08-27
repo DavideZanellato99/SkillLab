@@ -132,8 +132,10 @@ describe('elenco', () => {
 
     await userEvent.type(screen.getByPlaceholderText(/Cerca per titolo/), 'gdpr')
 
+    await waitFor(() =>
+      expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument(),
+    )
     expect(screen.getByText('Privacy')).toBeInTheDocument()
-    expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument()
   })
 
   /* Il tipo e l'origine si cercano con le stesse parole che i badge
@@ -147,8 +149,10 @@ describe('elenco', () => {
 
     await userEvent.type(screen.getByPlaceholderText(/Cerca per titolo/), 'manuale')
 
+    await waitFor(() =>
+      expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument(),
+    )
     expect(screen.getByText('Privacy')).toBeInTheDocument()
-    expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument()
   })
 
   it('distingue una tabella vuota da una ricerca senza esiti', async () => {
@@ -157,7 +161,9 @@ describe('elenco', () => {
 
     renderPage([simulazione()])
     await userEvent.type(screen.getAllByPlaceholderText(/Cerca per titolo/)[1], 'nessuna')
-    expect(screen.getByText('Nessuna simulazione corrisponde alla ricerca')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByText('Nessuna simulazione corrisponde alla ricerca')).toBeInTheDocument(),
+    )
   })
 
   /* La domanda che si fa chi apre questa pagina è quali test siano rimasti a

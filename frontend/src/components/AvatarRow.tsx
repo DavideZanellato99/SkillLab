@@ -52,10 +52,14 @@ export default function AvatarRow({
       <Td align="left">
         <div className="flex items-center gap-4">
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-white/6">
+            {/* La tabella degli avatar puo' essere lunga, e i ritratti sotto
+                la piega non servono a chi sta leggendo le prime righe. */}
             <img
               className="h-full w-full object-cover"
               src={getAvatarImageUrl(avatar.image_url)}
               alt={avatar.name}
+              loading="lazy"
+              decoding="async"
             />
           </div>
           <div className="flex min-w-0 flex-col">

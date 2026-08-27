@@ -1012,6 +1012,41 @@ Tre schermate per chi amministra, tutte confinate dallo stesso `resolve_admin_sc
 | `/app/admin/report`    | `GET /api/admin/users-report/{id}`  | Le prove di quella persona, quando la sua riga si apre                       |
 | `/app/admin`           | `GET /api/admin/users`              | La tabella degli utenti, filtrata e paginata                                 |
 
+**Le due letture della dashboard sono le più pesanti dell'applicazione**, e la
+forma della risposta è quello che le tiene in piedi.
+
+I criteri di una valutazione viaggiano come **mappa chiave/punteggio**, e le
+etichette per esteso stanno una volta sola sulla risposta
+(`criteria_labels`) invece che su ogni riga: sono le stesse sei parole per
+ogni conversazione, e ripeterle riga per riga era il grosso di quel payload.
+Restano comunque del server, come sono sempre state: il frontend non ne tiene
+una copia, perché una lista ricopiata a mano col tempo racconta criteri
+diversi da quelli su cui il giudizio è stato dato (vedi il commento in testa a
+[evaluationCriteria](../frontend/src/components/evaluationCriteria.ts)). Sono
+lette dalle valutazioni stesse mentre si costruiscono le righe, non da un
+elenco fisso: una valutazione di un anno fa può avere avuto altri criteri.
+
+Le due query **selezionano colonne e non entità**: di una conversazione
+servono il titolo, il canale e due date, e caricarne l'oggetto ORM intero
+significa costruire in memoria anche tutto quello che nessuno guarda, riga per
+riga, su migliaia di righe. Il voto di un tentativo si ricava dai punti con
+`attempt_score`, perché sul modello è una property e il database non sa
+darlo; quello di una conversazione passa da `reviews.grade`, che è la stessa
+definizione di sempre presa dai due numeri invece che dall'oggetto della
+revisione, così chi legge a colonne non deve riscriversi la regola che decide
+che voto ha preso una persona.
+
+Sopra tutto c'è **`REPORT_ROW_CAP`**, cinquemila righe. Il periodo di
+default è "Sempre" per una ragione che resta valida (un filtro già acceso
+mostrerebbe una pagina mezza vuota a chi non sa che esiste), ma "sempre" su un
+tenant di tre anni è tutto lo storico a ogni apertura, e da un certo punto in
+poi non è più una pagina lenta, è una pagina che non arriva. Quando il tetto
+scatta si tengono le **più recenti**, che sono quelle di cui si sta parlando,
+e la risposta lo dice con `truncated`: la dashboard mostra allora un
+`Notice` che invita a restringere il periodo. Dirlo è la differenza fra una
+pagina che si sa incompleta e delle medie parziali lette come le medie di
+tutto.
+
 **La dashboard e il report rispondono a due domande diverse**, ed è quello che
 li tiene separati invece di farne due viste della stessa cosa. La dashboard
 guarda un gruppo e cerca una media; il report guarda **una persona alla

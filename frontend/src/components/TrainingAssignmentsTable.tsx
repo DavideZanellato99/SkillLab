@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import type { PathAssignment, TrainingPath } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
 import DataTable, { Td, Tr } from './DataTable'
@@ -63,7 +64,11 @@ export default function TrainingAssignmentsTable({
   showOrganization: boolean
   onWithdraw: (assignment: PathAssignment) => void
 }) {
+  /* La casella scrive subito, il filtro aspetta la fine della parola: le
+   * assegnazioni di un tenant sono tutte qui, e riscorrerle a ogni tasto
+   * premuto ridisegnava la tabella una volta per lettera. */
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
   const [openId, setOpenId] = useState<string | null>(null)
 
   /* Il filtro per percorso lavora sulle righe già in mano e non su una
@@ -76,7 +81,7 @@ export default function TrainingAssignmentsTable({
         if (pathFilter && a.path_id !== pathFilter) return false
         const current = a.current_position ? a.steps[a.current_position - 1] : null
         return matchesSearch(
-          search,
+          debouncedSearch,
           a.user_name,
           a.user_email,
           a.path_title,
@@ -85,7 +90,7 @@ export default function TrainingAssignmentsTable({
           STATUS_META[a.status].label,
         )
       }),
-    [assignments, search, pathFilter],
+    [assignments, debouncedSearch, pathFilter],
   )
 
   const filteredPath = paths.find((path) => path.id === pathFilter)
@@ -94,16 +99,37 @@ export default function TrainingAssignmentsTable({
     <DataTable
       /* Le percentuali sommano a 100: le tre colonne di testo si dividono la
          metà buona della riga, le altre stanno alla misura di quello che
-         contengono (una barra, una data, una targhetta, due bottoncini). */
+         contengono (una barra, una data, una targhetta, due bottoncini).
+
+         L'avanzamento si ordina sulla frazione e non sul numero di tappe
+         chiuse: tre tappe su quattro sono più avanti di tre su otto, e chi
+         ordina per avanzamento cerca chi è più vicino alla fine. La tappa
+         corrente sul numero, che è l'ordine del percorso. */
       columns={[
-        { key: 'utente', label: 'Utente', width: '21%' },
-        { key: 'percorso', label: 'Percorso', width: '18%' },
-        { key: 'tappa', label: 'Tappa Corrente', width: '15%' },
-        { key: 'avanzamento', label: 'Avanzamento', width: '14%' },
-        { key: 'assegnato', label: 'Assegnato', width: '11%' },
-        { key: 'stato', label: 'Stato', width: '12%' },
+        { key: 'utente', label: 'Utente', width: '21%', sortValue: (a) => a.user_name },
+        { key: 'percorso', label: 'Percorso', width: '18%', sortValue: (a) => a.path_title },
+        {
+          key: 'tappa',
+          label: 'Tappa Corrente',
+          width: '15%',
+          sortValue: (a) => a.current_position,
+        },
+        {
+          key: 'avanzamento',
+          label: 'Avanzamento',
+          width: '14%',
+          sortValue: (a) => (a.steps.length === 0 ? 0 : a.completed_steps / a.steps.length),
+        },
+        { key: 'assegnato', label: 'Assegnato', width: '11%', sortValue: (a) => a.created_at },
+        {
+          key: 'stato',
+          label: 'Stato',
+          width: '12%',
+          sortValue: (a) => STATUS_META[a.status].label,
+        },
         { key: 'azioni', label: '', width: '9%' },
       ]}
+      items={rows}
       searchValue={search}
       onSearchChange={setSearch}
       searchPlaceholder="Cerca per utente, percorso o stato..."
@@ -127,17 +153,15 @@ export default function TrainingAssignmentsTable({
           />
         ) : undefined
       }
-      pageResetKey={`${pathFilter}|${search}`}
-      isEmpty={rows.length === 0}
+      pageResetKey={`${pathFilter}|${debouncedSearch}`}
       emptyMessage={
-        search
+        debouncedSearch
           ? 'Nessun percorso corrisponde alla ricerca'
           : filteredPath
             ? `Nessuno sta percorrendo «${filteredPath.title}»`
             : 'Nessun percorso ancora assegnato per la selezione corrente'
       }
-    >
-      {rows.map((a) => {
+      renderRow={(a) => {
         const isOpen = openId === a.id
         const current = a.current_position ? a.steps[a.current_position - 1] : null
         return (
@@ -196,6 +220,7 @@ export default function TrainingAssignmentsTable({
                 <span className="flex items-center justify-center gap-1">
                   <Tooltip content={isOpen ? 'Chiudi le tappe' : 'Mostra le tappe'}>
                     <button
+                      type="button"
                       className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-200"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -209,6 +234,7 @@ export default function TrainingAssignmentsTable({
                   </Tooltip>
                   <Tooltip content="Ritira il percorso">
                     <button
+                      type="button"
                       className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-red-500/10 hover:text-red-400"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -233,7 +259,7 @@ export default function TrainingAssignmentsTable({
             )}
           </Fragment>
         )
-      })}
-    </DataTable>
+      }}
+    />
   )
 }

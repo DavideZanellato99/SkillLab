@@ -23,8 +23,8 @@ import KebabMenu from './KebabMenu'
 import IconButton from './IconButton'
 import Spinner from './Spinner'
 import LoadError from './LoadError'
-import LoadingState from './LoadingState'
 import { PageContainer, PageHeader } from './PageLayout'
+import TableSkeleton from './TableSkeleton'
 import PrimaryButton from './PrimaryButton'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
@@ -71,13 +71,20 @@ const STATUS_BADGE_CLASSES: Record<OrgStatus, string> = {
 /* Le percentuali sommano a 100. I due conteggi stanno stretti perché sono
  * numeri dentro una pillola, mentre lo stato ospita anche il motivo di una
  * sospensione sotto la targhetta. */
-const ORG_COLUMNS: DataTableColumn[] = [
-  { key: 'org', label: 'Organizzazione', width: '21%' },
-  { key: 'slug', label: 'Slug', width: '16%' },
-  { key: 'utenti', label: 'Utenti', width: '10%' },
-  { key: 'avatar', label: 'Avatar', width: '10%' },
-  { key: 'stato', label: 'Stato', width: '16%' },
-  { key: 'creazione', label: 'Data Creazione', width: '12%' },
+const ORG_COLUMNS: DataTableColumn<Organization>[] = [
+  { key: 'org', label: 'Organizzazione', width: '21%', sortValue: (o) => o.name },
+  { key: 'slug', label: 'Slug', width: '16%', sortValue: (o) => o.slug },
+  { key: 'utenti', label: 'Utenti', width: '10%', sortValue: (o) => o.user_count },
+  { key: 'avatar', label: 'Avatar', width: '10%', sortValue: (o) => o.avatar_count },
+  /* Sullo stato si ordina per l'etichetta che si legge e non per il codice
+     salvato: chi ordina si aspetta l'ordine delle parole che vede. */
+  {
+    key: 'stato',
+    label: 'Stato',
+    width: '16%',
+    sortValue: (o) => STATUS_LABELS[o.status] ?? o.status,
+  },
+  { key: 'creazione', label: 'Data Creazione', width: '12%', sortValue: (o) => o.created_at },
   { key: 'azioni', label: 'Azioni', width: '15%' },
 ]
 
@@ -312,24 +319,23 @@ export default function OrganizationsPage() {
           variant="page"
         />
       ) : isLoading ? (
-        <LoadingState message="Caricamento organizzazioni..." />
+        <TableSkeleton columns={ORG_COLUMNS} message="Caricamento organizzazioni..." />
       ) : (
         <DataTable
           columns={ORG_COLUMNS}
+          items={visibleOrgs}
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Cerca per nome, slug o stato..."
           /* Filtrare cambia l'elenco, e restare alla terza pagina di quello
              di prima vuol dire guardare una pagina che non esiste più. */
           pageResetKey={`${statusFilter}|${search}`}
-          isEmpty={visibleOrgs.length === 0}
           emptyMessage={
             hasFilters
               ? 'Nessuna organizzazione corrisponde ai filtri.'
               : 'Nessuna organizzazione presente. Crea la prima con "Nuova Organizzazione".'
           }
-        >
-          {visibleOrgs.map((o) => {
+          renderRow={(o) => {
             const menuItems: KebabMenuItem[] = [
               {
                 key: 'toggle',
@@ -384,7 +390,9 @@ export default function OrganizationsPage() {
                   </div>
                 </Td>
                 <Td>
-                  <span className="text-[0.85rem] text-slate-500">{formatDate(o.created_at)}</span>
+                  <span className="whitespace-nowrap text-[0.85rem] tabular-nums text-slate-500">
+                    {formatDate(o.created_at)}
+                  </span>
                 </Td>
                 <Td onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-center gap-2">
@@ -414,8 +422,8 @@ export default function OrganizationsPage() {
                 </Td>
               </Tr>
             )
-          })}
-        </DataTable>
+          }}
+        />
       )}
 
       {/* Dettaglio Organizzazione (clic sulla riga) */}

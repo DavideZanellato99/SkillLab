@@ -52,6 +52,7 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
             src={getAvatarImageUrl(avatar.image_url)}
             alt={avatar.name}
             loading="lazy"
+            decoding="async"
             onError={() => setImageFailed(true)}
           />
         )}

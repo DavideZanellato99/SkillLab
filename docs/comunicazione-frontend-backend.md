@@ -197,6 +197,38 @@ sondaggio a orologeria che nessuno può invalidare da una scrittura, e quello
 che risparmia e quello che **non** risparmia (il lavoro del database, che resta
 tutto) stanno in [training-e-report.md](training-e-report.md).
 
+### Gli elenchi che si leggono a finestre
+
+Due elenchi crescono senza un limite naturale, la gestione utenti e il
+registro attività, e il browser ne legge una finestra per volta (`limit` e
+`offset`, con `total` che conta le righe che soddisfano i filtri e non
+quelle restituite). Da lì discende una regola che vale per tutti e tre i modi
+di interrogarli: **filtro, ricerca e ordinamento stanno sul server**.
+
+Sui primi due era già così, e il motivo è che una ricerca fatta di qua
+guarderebbe solo la finestra già scaricata, cioè risponderebbe "nessun utente"
+su qualcuno che esiste. L'ordinamento è arrivato dopo e ha la stessa ragione:
+ordinare duecento righe su diecimila vorrebbe dire mettere in cima il primo
+dei duecento scaricati e chiamarlo il primo di tutti.
+
+Le colonne su cui si può ordinare sono un elenco chiuso nel router
+(`USER_SORT_COLUMNS` in [admin.py](../backend/routers/admin.py),
+`AUDIT_SORT_COLUMNS` in [audit_logs.py](../backend/routers/audit_logs.py)):
+una chiave fuori da lì è un 400 esplicito, che è anche quello che tiene una
+stringa arbitraria fuori da un `order_by`. Le chiavi sono le stesse delle
+colonne della tabella, così quello che si clicca e quello che il server riceve
+si chiamano allo stesso modo.
+
+Qualunque sia l'ordine scelto, **l'id chiude sempre la fila**
+([table_sort.py](../backend/table_sort.py)): due righe che il criterio lascia
+pari sarebbero libere di scambiarsi di posto fra una lettura e l'altra, e una
+finestra a offset ne salterebbe una e ne ripeterebbe un'altra, cioè "carica
+altri 200" mostrerebbe due volte la stessa riga e mai una che esiste.
+
+L'ordinamento fa parte della chiave di cache come i filtri: cambiarlo è una
+domanda diversa, quindi si riparte dalla prima finestra invece di rimescolare
+le pagine già in mano.
+
 ## Chi tiene lo stato dell'utente
 
 `AuthProvider` ([frontend/src/contexts/AuthProvider.tsx](../frontend/src/contexts/AuthProvider.tsx))

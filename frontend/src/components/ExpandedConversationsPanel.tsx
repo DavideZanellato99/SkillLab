@@ -79,6 +79,7 @@ export default function ExpandedConversationsPanel({
           </p>
         </div>
         <button
+          type="button"
           className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 transition hover:bg-white/8 hover:text-slate-100"
           onClick={onClose}
           aria-label="Chiudi"
@@ -214,6 +215,7 @@ export default function ExpandedConversationsPanel({
                     <div className="flex shrink-0 items-center gap-1">
                       <Tooltip content="Rinomina Conversazione">
                         <button
+                          type="button"
                           className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 opacity-0 transition hover:bg-violet-600/12 hover:text-violet-400 focus-visible:opacity-100 group-hover/conv:opacity-100 max-[900px]:opacity-100"
                           onClick={(e) => onStartRename(conv, e)}
                           aria-label="Rinomina Conversazione"
@@ -236,6 +238,7 @@ export default function ExpandedConversationsPanel({
                       {canDelete && (
                         <Tooltip content="Elimina Conversazione">
                           <button
+                            type="button"
                             className="cursor-pointer rounded-lg border-none bg-transparent p-1.5 text-slate-500 opacity-0 transition hover:bg-red-500/10 hover:text-red-500 focus-visible:opacity-100 group-hover/conv:opacity-100 max-[900px]:opacity-100"
                             onClick={(e) => onDelete(conv.id, e)}
                             aria-label="Elimina Conversazione"
@@ -256,6 +259,7 @@ export default function ExpandedConversationsPanel({
       {/* Panel footer */}
       <div className="border-t border-white/6 px-8 py-4 max-[480px]:px-5">
         <button
+          type="button"
           className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400"
           onClick={onNewConversation}
         >

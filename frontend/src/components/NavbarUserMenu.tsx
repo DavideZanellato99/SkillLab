@@ -53,6 +53,7 @@ export default function NavbarUserMenu({ user, isOpen, onToggle, onClose }: Navb
             480px il nome sparisce per far posto, e il pulsante resterebbe
             due lettere. */}
         <button
+          type="button"
           ref={triggerRef}
           className="flex cursor-pointer items-center gap-2 rounded-full border border-white/6 bg-white/4 py-1 pl-1 pr-2 text-[0.82rem] font-medium text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100 max-[480px]:p-1"
           onClick={onToggle}
@@ -123,6 +124,7 @@ export default function NavbarUserMenu({ user, isOpen, onToggle, onClose }: Navb
 
             <div className={separatorCls} />
             <button
+              type="button"
               className={`${menuItemCls} hover:bg-red-500/10 hover:text-red-300`}
               onClick={() => {
                 logout()

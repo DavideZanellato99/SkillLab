@@ -10,10 +10,11 @@ import AuditLogsFilters from './AuditLogsFilters'
 import { AUDIT_COLUMNS, NO_AUDIT_FILTERS } from './auditFormat'
 import type { AuditLogsFiltersValue } from './auditFormat'
 import DataTable from './DataTable'
+import type { SortState } from './DataTable'
 import FormError from './FormError'
-import LoadingState from './LoadingState'
 import LoadMoreButton from './LoadMoreButton'
 import { PageContainer, PageHeader } from './PageLayout'
+import TableSkeleton from './TableSkeleton'
 
 /* Registro delle attività: ogni azione che modifica qualcosa, di qualunque
  * utente e di qualunque ruolo. Pagina riservata al super admin, il backend
@@ -56,6 +57,11 @@ export default function AuditLogsPage() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  /* Su cosa il registro è ordinato. Vuoto vuol dire l'ordine con cui un
+   * registro si legge, le ultime azioni per prime, ed è il server a
+   * riportarlo: la tabella qui ha in mano una finestra sola. */
+  const [sort, setSort] = useState<SortState | null>(null)
+
   const actionOptions = useMemo(
     () => actions.map((a) => ({ value: a.key, label: a.label })),
     [actions],
@@ -77,7 +83,10 @@ export default function AuditLogsPage() {
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage: isLoadingMore,
-  } = useAuditLogs({ ...filters, search: debouncedSearch }, isSuper)
+  } = useAuditLogs(
+    { ...filters, search: debouncedSearch, sort: sort?.key, direction: sort?.direction },
+    isSuper,
+  )
 
   return (
     <PageContainer width="wide">
@@ -103,7 +112,7 @@ export default function AuditLogsPage() {
       )}
 
       {isLoading ? (
-        <LoadingState message="Caricamento registro..." />
+        <TableSkeleton columns={AUDIT_COLUMNS} message="Caricamento registro..." />
       ) : (
         /* Mentre arriva la risposta a un filtro nuovo restano a video le righe
            di prima, attenuate: sono ancora quelle vecchie, e `aria-busy` lo
@@ -113,6 +122,13 @@ export default function AuditLogsPage() {
         <div aria-busy={isStale} className={`transition-opacity ${isStale ? 'opacity-60' : ''}`}>
           <DataTable
             columns={AUDIT_COLUMNS}
+            items={logs}
+            /* L'ordinamento arriva da fuori e torna a chi legge il registro:
+               la tabella lo disegna e basta, perché ordinare le righe che ha
+               vorrebbe dire ordinare le duecento già scaricate e chiamarle le
+               prime duecento di tutte. */
+            sort={sort}
+            onSortChange={setSort}
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder="Cerca per email, organizzazione, indirizzo o id..."
@@ -121,7 +137,6 @@ export default function AuditLogsPage() {
                resterebbe alla quinta pagina di un registro che nel frattempo è
                diventato un altro. */
             pageResetKey={`${filters.action}|${filters.organizationId}|${filters.dateFrom}|${filters.dateTo}|${debouncedSearch}`}
-            isEmpty={logs.length === 0}
             emptyMessage={
               hasFilters ? 'Nessuna azione corrisponde ai filtri' : 'Nessuna azione registrata'
             }
@@ -143,16 +158,15 @@ export default function AuditLogsPage() {
                 </>
               )
             }
-          >
-            {logs.map((log) => (
+            renderRow={(log) => (
               <AuditLogRow
                 key={log.id}
                 log={log}
                 isExpanded={expandedId === log.id}
                 onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)}
               />
-            ))}
-          </DataTable>
+            )}
+          />
         </div>
       )}
     </PageContainer>

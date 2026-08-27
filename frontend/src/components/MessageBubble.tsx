@@ -51,7 +51,15 @@ export default function MessageBubble({
     >
       {!isUser && (
         <div className="mt-1 h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-white/6">
-          <img className="h-full w-full object-cover" src={avatarImageUrl} alt={avatarName} />
+          {/* In una conversazione lunga la gran parte delle bolle sta sopra
+              la piega: il ritratto si decodifica quando ci si arriva. */}
+          <img
+            className="h-full w-full object-cover"
+            src={avatarImageUrl}
+            alt={avatarName}
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       )}
       <div className="min-w-0">

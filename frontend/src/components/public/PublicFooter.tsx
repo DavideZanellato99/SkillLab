@@ -58,6 +58,7 @@ export default function PublicFooter() {
             Accesso
           </h3>
           <button
+            type="button"
             className={`${linkCls} cursor-pointer border-none bg-transparent p-0`}
             onClick={openLogin}
           >

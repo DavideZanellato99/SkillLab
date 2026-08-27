@@ -44,12 +44,12 @@ export default function AvatarGalleryEmpty({
 
       <div className="mt-6 flex justify-center">
         {reason === 'search' && (
-          <button className={actionCls} onClick={onClearSearch}>
+          <button type="button" className={actionCls} onClick={onClearSearch}>
             Azzera la ricerca
           </button>
         )}
         {reason === 'category' && (
-          <button className={actionCls} onClick={onShowAll}>
+          <button type="button" className={actionCls} onClick={onShowAll}>
             Mostra tutto il catalogo
           </button>
         )}

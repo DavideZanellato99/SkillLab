@@ -96,6 +96,35 @@
 	@dominio not host localhost 127.0.0.1
 	header @dominio Strict-Transport-Security "max-age=31536000"
 
+	# Quanto a lungo il browser può tenersi un ritratto senza richiederlo.
+	# Sono due regole e non una perché i due tipi di file si comportano in
+	# modo opposto:
+	#
+	# - "upload_<uuid>.<ext>" è un ritratto caricato da un amministratore, e
+	#   quel nome nasce con il file e muore con lui: sostituire l'immagine di
+	#   un avatar scrive un uuid nuovo, quindi il contenuto dietro questo
+	#   indirizzo non cambierà mai ed è la definizione di "immutable";
+	#
+	# - "avatar_<id>.svg" è il segnaposto con le iniziali, e il nome dipende
+	#   dall'avatar e non dal contenuto: rinominare l'avatar riscrive lo
+	#   stesso file con lettere diverse (vedi _generate_avatar_image in
+	#   backend/routers/admin_avatars.py). Qui "immutable" bloccherebbe le
+	#   vecchie iniziali nella cache di chi le ha già viste, quindi la
+	#   scadenza è corta e resta la richiesta di conferma.
+	#
+	# Il secondo matcher esclude il primo di proposito: due "header" che
+	# nominano lo stesso campo si applicano entrambi, l'ultimo vince, e senza
+	# la riga "not" la scadenza corta cancellerebbe l'immutable appena
+	# scritto sopra.
+	@ritratti_caricati path /static/avatars/upload_*
+	header @ritratti_caricati Cache-Control "public, max-age=31536000, immutable"
+
+	@ritratti_generati {
+		path /static/avatars/*
+		not path /static/avatars/upload_*
+	}
+	header @ritratti_generati Cache-Control "public, max-age=3600"
+
 	# Le due strade che portano al backend: l'API (chiamata vocale compresa,
 	# che è un WebSocket e Caddy inoltra senza doverglielo dire) e le
 	# immagini degli avatar.

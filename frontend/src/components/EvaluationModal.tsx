@@ -139,6 +139,7 @@ export default function EvaluationModal({
               />
               {onRetryScenario && (
                 <button
+                  type="button"
                   className="flex cursor-pointer items-center gap-2 rounded-xl border border-violet-600/40 bg-violet-600/12 px-5 py-2 text-sm font-semibold text-violet-300 transition hover:-translate-y-px hover:bg-violet-600/25 hover:text-violet-200"
                   onClick={onRetryScenario}
                 >
@@ -202,6 +203,7 @@ export default function EvaluationModal({
               }}
             />
             <button
+              type="button"
               className="flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 px-6 py-2 text-sm font-semibold text-white transition hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               onClick={saveTitle}
               disabled={!canSaveTitle}

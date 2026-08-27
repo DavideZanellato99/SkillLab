@@ -22,6 +22,7 @@ from auth_dependency import get_current_super_admin
 from database import get_db
 from models import AuditLog, User
 from schemas import AuditActionOption, AuditLogPage, AuditLogResponse
+from table_sort import ordered, sort_or_400
 
 router = APIRouter(prefix="/api/admin/audit-logs", tags=["admin"])
 
@@ -39,6 +40,24 @@ def list_actions(current_admin: User = Depends(get_current_super_admin)):
     return sorted(options, key=lambda o: o.label)
 
 
+# Su cosa il registro si può ordinare. Come per gli utenti (vedi
+# admin.USER_SORT_COLUMNS) l'ordine lo fa il database e non il browser: qui
+# c'è una finestra di una tabella che cresce senza fine, e ordinarla di là
+# vorrebbe dire ordinare le duecento righe già scaricate.
+#
+# L'azione si ordina sulla chiave salvata e non sull'etichetta italiana, che
+# è derivata a lettura (vedi audit.ACTION_LABELS) e nel database non esiste.
+# Le due liste si somigliano abbastanza da non sorprendere: le chiavi sono
+# "user.create", "auth.login", quindi le azioni della stessa area restano
+# comunque una accanto all'altra.
+AUDIT_SORT_COLUMNS = {
+    "data": (AuditLog.created_at,),
+    "utente": (AuditLog.user_email,),
+    "organizzazione": (AuditLog.organization_name,),
+    "azione": (AuditLog.action,),
+}
+
+
 @router.get("", response_model=AuditLogPage)
 def list_audit_logs(
     user_id: UUID | None = None,
@@ -47,6 +66,8 @@ def list_audit_logs(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     q: str | None = None,
+    sort: str | None = None,
+    direction: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_admin: User = Depends(get_current_super_admin),
@@ -57,7 +78,11 @@ def list_audit_logs(
     `total` counts the rows matching the filters, not the ones returned:
     the table grows without bound, so the client always reads a window of
     it (`limit`/`offset`) and uses the count to know what is left.
+
+    `sort` accetta le colonne di AUDIT_SORT_COLUMNS; senza, l'ordine resta
+    quello con cui un registro si legge, cioè le ultime azioni per prime.
     """
+    sort_or_400(sort, AUDIT_SORT_COLUMNS)
     query = db.query(AuditLog)
 
     if user_id is not None:
@@ -82,7 +107,15 @@ def list_audit_logs(
         )
 
     total = query.count()
-    rows = query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit).all()
+    # L'id chiude sempre la fila, anche nell'ordine di partenza: due azioni
+    # registrate nello stesso istante potrebbero altrimenti scambiarsi di
+    # posto fra due letture, e la finestra a offset ne salterebbe una.
+    query = (
+        ordered(query, AUDIT_SORT_COLUMNS[sort], direction, AuditLog.id)
+        if sort
+        else query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+    )
+    rows = query.offset(offset).limit(limit).all()
     return AuditLogPage(total=total, items=[_response(row) for row in rows])
 
 

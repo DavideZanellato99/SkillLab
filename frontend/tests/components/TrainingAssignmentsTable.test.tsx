@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -191,8 +191,8 @@ describe('ricerca', () => {
 
     await userEvent.type(ricerca(), 'marco')
 
+    await waitFor(() => expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument())
     expect(screen.getByText('Marco Bianchi')).toBeInTheDocument()
-    expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument()
   })
 
   /* La ricerca guarda anche la parola dello stato e il nome della tappa
@@ -206,8 +206,8 @@ describe('ricerca', () => {
 
     await userEvent.type(ricerca(), 'scadut')
 
+    await waitFor(() => expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument())
     expect(screen.getByText('Marco Bianchi')).toBeInTheDocument()
-    expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument()
   })
 
   it('trova per nome della tappa corrente', async () => {
@@ -223,15 +223,17 @@ describe('ricerca', () => {
 
     await userEvent.type(ricerca(), 'difficile')
 
+    await waitFor(() => expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument())
     expect(screen.getByText('Marco Bianchi')).toBeInTheDocument()
-    expect(screen.queryByText('Anna Rossi')).not.toBeInTheDocument()
   })
 
   it('distingue una ricerca senza esiti da una tabella vuota', async () => {
     renderTable()
 
     await userEvent.type(ricerca(), 'nessuno')
-    expect(screen.getByText('Nessun percorso corrisponde alla ricerca')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByText('Nessun percorso corrisponde alla ricerca')).toBeInTheDocument(),
+    )
   })
 
   it('spiega una tabella vuota', () => {

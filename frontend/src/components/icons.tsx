@@ -180,6 +180,20 @@ export function ChevronDownIcon(props: IconProps) {
   )
 }
 
+/* Le due punte accostate dell'intestazione di una colonna che si può
+ * ordinare ma non è quella attiva: dice che il comando c'è senza affermare
+ * un verso, che è quello che le due punte separate direbbero. Appena la
+ * colonna diventa attiva al suo posto compare la punta sola del verso
+ * scelto, cioè ChevronUpIcon o ChevronDownIcon. */
+export function SortIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <polyline points="8 9 12 5 16 9" />
+      <polyline points="16 15 12 19 8 15" />
+    </IconBase>
+  )
+}
+
 /* Sagoma con il più accanto: crea un utente, non una cosa qualsiasi. */
 export function UserPlusIcon(props: IconProps) {
   return (

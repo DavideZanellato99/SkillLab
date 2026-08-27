@@ -259,6 +259,7 @@ export default function VoiceButton({
       )}
       <Tooltip content={callActive ? 'Riaggancia' : 'Chiama l’avatar'}>
         <button
+          type="button"
           className={`flex h-16 cursor-pointer items-center justify-center rounded-full border-none text-white transition ${
             callActive
               ? `w-16 bg-red-500/90 shadow-[0_8px_24px_rgba(239,68,68,0.4)] hover:scale-[1.08] ${

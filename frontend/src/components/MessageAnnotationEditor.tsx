@@ -89,6 +89,7 @@ export default function MessageAnnotationEditor({
         />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
+            type="button"
             className="cursor-pointer rounded-lg border-none bg-violet-600 px-3 py-1 text-[0.75rem] font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleSave}
             disabled={isSaving}
@@ -96,6 +97,7 @@ export default function MessageAnnotationEditor({
             Salva
           </button>
           <button
+            type="button"
             className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-1 text-[0.75rem] text-slate-400 transition hover:text-slate-200"
             onClick={() => {
               setNote(annotation?.note ?? '')
@@ -110,6 +112,7 @@ export default function MessageAnnotationEditor({
           </button>
           {annotation && (
             <button
+              type="button"
               className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-1 text-[0.75rem] text-slate-400 transition hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleDelete}
               disabled={isSaving}
@@ -127,6 +130,7 @@ export default function MessageAnnotationEditor({
     return (
       <Tooltip content="Modifica la nota">
         <button
+          type="button"
           className="mt-1.5 w-full cursor-pointer rounded-xl border border-violet-500/25 bg-violet-500/8 p-2.5 text-left transition hover:bg-violet-500/15"
           onClick={() => setIsEditing(true)}
         >
@@ -143,6 +147,7 @@ export default function MessageAnnotationEditor({
 
   return (
     <button
+      type="button"
       className="mt-1 flex cursor-pointer items-center gap-1 rounded-lg border-none bg-transparent px-1.5 py-0.5 text-[0.72rem] font-medium text-slate-500 transition hover:text-violet-300"
       onClick={() => setIsEditing(true)}
     >

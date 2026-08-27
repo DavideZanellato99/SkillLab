@@ -10,6 +10,13 @@ import { useEffect, useState } from 'react'
  * a tre cifre ci starebbe stretto fino a essere troncato. */
 export const PAGE_SIZE_OPTIONS = [10, 20, 30, 50]
 
+/* Da quante si parte. Non è più la prima dell'elenco: dieci righe lasciavano
+ * mezza scheda vuota su uno schermo da scrivania, che è dove queste tabelle
+ * si guardano, e obbligavano a sfogliare elenchi che ci stavano quasi tutti.
+ * Dieci resta fra le scelte, perché su una riga che si apre (le prove di una
+ * persona) una pagina corta è quello che serve. */
+const DEFAULT_PAGE_SIZE = 20
+
 /** Quello che serve alla barra per disegnarsi e per farsi sfogliare. */
 export interface PaginationBarProps {
   page: number
@@ -37,7 +44,7 @@ export function usePagination<T>(
   resetKey?: unknown,
 ): { visible: T[]; bar: PaginationBarProps } {
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0])
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   useEffect(() => {
     setPage(1)

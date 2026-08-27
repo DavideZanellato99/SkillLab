@@ -684,7 +684,7 @@ def test_il_report_porta_i_tentativi_con_chi_li_ha_svolti(
     ).json()
 
     act_as(org_admin_user)
-    righe = client.get("/api/admin/simulations-report").json()
+    righe = client.get("/api/admin/simulations-report").json()["rows"]
     assert len(righe) == 1
     riga = righe[0]
     assert riga["attempt_id"] == esito["id"]
@@ -728,7 +728,7 @@ def test_il_report_di_un_admin_si_ferma_al_proprio_tenant(
     )
 
     act_as(org_admin_user)
-    email = [r["user_email"] for r in client.get("/api/admin/simulations-report").json()]
+    email = [r["user_email"] for r in client.get("/api/admin/simulations-report").json()["rows"]]
     assert email == [standard_user.email]
 
 
@@ -753,7 +753,7 @@ def test_il_periodo_taglia_i_tentativi(
     db_session.flush()
 
     act_as(org_admin_user)
-    righe = client.get("/api/admin/simulations-report?days=30").json()
+    righe = client.get("/api/admin/simulations-report?days=30").json()["rows"]
 
     assert [r["attempt_id"] for r in righe] == [recente["id"]]
 
@@ -1032,7 +1032,7 @@ def test_il_tipo_del_test_arriva_a_chi_legge_i_tentativi(
     assert [a["simulation_kind"] for a in confronto] == ["multiple", "open"]
 
     act_as(org_admin_user)
-    report = client.get("/api/admin/simulations-report").json()
+    report = client.get("/api/admin/simulations-report").json()["rows"]
     assert {r["simulation_title"]: r["simulation_kind"] for r in report} == {
         multipla.title: "multiple",
         aperta.title: "open",

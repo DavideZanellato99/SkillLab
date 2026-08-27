@@ -235,6 +235,7 @@ export default function ModalShell({
         <ModalTitleContext.Provider value={titleContext}>
           {!hideClose && (
             <button
+              type="button"
               className={closeBtnCls}
               onClick={onClose}
               disabled={locked}

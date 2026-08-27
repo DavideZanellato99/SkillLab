@@ -93,6 +93,7 @@ export default function ChatDock({
             <CallRecordingPlayer ref={recordingPlayerRef} conversationId={conversationId} />
           )}
           <button
+            type="button"
             className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400"
             onClick={onNewConversation}
           >
@@ -139,6 +140,7 @@ export default function ChatDock({
               />
               <Tooltip content="Invia il Messaggio">
                 <button
+                  type="button"
                   className="mb-1 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-gradient-to-br from-violet-600 to-violet-700 text-white shadow-[0_4px_12px_rgba(124,58,237,0.35)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
                   onClick={chat.send}
                   disabled={!chat.input.trim() || chat.isSending}
@@ -162,6 +164,7 @@ export default function ChatDock({
             </div>
             <Tooltip content="Termina la Chat">
               <button
+                type="button"
                 className="flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-red-500/90 text-white shadow-[0_8px_24px_rgba(239,68,68,0.4)] transition hover:scale-[1.08] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                 onClick={chat.end}
                 disabled={chat.isEnding}
@@ -214,6 +217,7 @@ export default function ChatDock({
             {canStartChat && (
               <Tooltip content="Avvia una conversazione scritta con l’avatar">
                 <button
+                  type="button"
                   className="flex h-16 cursor-pointer items-center justify-center gap-2.5 rounded-full border-none bg-gradient-to-br from-violet-600 to-violet-700 px-8 text-base font-semibold text-white shadow-[0_8px_24px_rgba(124,58,237,0.35)] transition hover:scale-[1.05] hover:shadow-[0_10px_28px_rgba(124,58,237,0.5)]"
                   onClick={chat.start}
                   id="chat-btn"

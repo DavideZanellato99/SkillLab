@@ -41,7 +41,7 @@ export default function PrimaryButton({
   ...props
 }: PrimaryButtonProps) {
   return (
-    <button className={`${baseCls} ${VARIANTS[variant]} ${className}`} {...props}>
+    <button type="button" className={`${baseCls} ${VARIANTS[variant]} ${className}`} {...props}>
       {icon}
       {children}
     </button>

@@ -13,6 +13,7 @@ import { useSearchParams } from 'react-router'
 
 import { useAdminAvatars, useDeleteAvatar, useRestoreAvatar } from '../hooks/useAdminAvatars'
 import { useAuth } from '../hooks/useAuth'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useFlashMessage } from '../hooks/useFlashMessage'
 import { useOrganizations } from '../hooks/useOrganizations'
 import type { AdminAvatar } from '../services/admin'
@@ -28,20 +29,35 @@ import type { DataTableColumn } from './DataTable'
 import { fieldCls, labelCls } from './Field'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
-import LoadingState from './LoadingState'
 import { PageContainer, PageHeader } from './PageLayout'
+import TableSkeleton from './TableSkeleton'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
 import { matchesSearch } from './tableSearch'
 import { PlusIcon, TrashIcon } from './icons'
 
 /* Le percentuali sommano a 100. All'avatar tocca la fetta più larga: è
- * l'unica colonna con due righe di testo, immagine, nome e descrizione. */
-const AVATAR_COLUMNS: DataTableColumn[] = [
-  { key: 'avatar', label: 'Avatar', width: '32%' },
-  { key: 'organizzazione', label: 'Organizzazione', width: '17%' },
-  { key: 'categoria', label: 'Categoria', width: '17%' },
-  { key: 'conversazioni', label: 'Conversazioni', width: '16%' },
+ * l'unica colonna con due righe di testo, immagine, nome e descrizione.
+ *
+ * Si ordina per nome, per organizzazione, per categoria e per quante
+ * conversazioni ha raccolto: l'ultima è quella che risponde a "quali
+ * scenari vengono usati davvero", che a occhio non si legge. Le azioni no,
+ * perché non portano un dato. */
+const AVATAR_COLUMNS: DataTableColumn<AdminAvatar>[] = [
+  { key: 'avatar', label: 'Avatar', width: '32%', sortValue: (a) => a.name },
+  {
+    key: 'organizzazione',
+    label: 'Organizzazione',
+    width: '17%',
+    sortValue: (a) => a.organization_name,
+  },
+  { key: 'categoria', label: 'Categoria', width: '17%', sortValue: (a) => a.category },
+  {
+    key: 'conversazioni',
+    label: 'Conversazioni',
+    width: '16%',
+    sortValue: (a) => a.conversation_count,
+  },
   { key: 'azioni', label: 'Azioni', width: '18%' },
 ]
 
@@ -58,7 +74,11 @@ export default function AvatarAdminPage() {
   const { user } = useAuth()
   const { data: organizations = [] } = useOrganizations(isSuperAdmin(user))
   const { message: successMsg, flash: flashSuccess } = useFlashMessage()
+  /* La casella scrive subito, il filtro aspetta la fine della parola: sotto
+   * c'è il catalogo intero del tenant, e riscorrerlo a ogni tasto premuto
+   * ridisegnava la tabella cinque volte per una ricerca sola. */
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
 
   // Anche gli archiviati: sono una vista di questa stessa tabella.
   const {
@@ -100,7 +120,9 @@ export default function AvatarAdminPage() {
 
   const visibleAvatars = avatars.filter(
     (a) =>
-      matchesOrg(a) && matchesStatus(a) && matchesSearch(search, a.name, a.description, a.category),
+      matchesOrg(a) &&
+      matchesStatus(a) &&
+      matchesSearch(debouncedSearch, a.name, a.description, a.category),
   )
 
   /* Quanti ne tiene l'archivio, contati dentro l'organizzazione che si sta
@@ -223,14 +245,14 @@ export default function AvatarAdminPage() {
       )}
 
       {isLoading ? (
-        <LoadingState message="Caricamento avatar..." />
+        <TableSkeleton columns={AVATAR_COLUMNS} message="Caricamento avatar..." />
       ) : (
         <DataTable
           columns={AVATAR_COLUMNS}
+          items={visibleAvatars}
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Cerca per nome, brief o categoria..."
-          isEmpty={visibleAvatars.length === 0}
           emptyMessage={
             statusFilter === STATUS_ARCHIVED && !search && !orgFilter
               ? 'Nessun avatar archiviato. Gli avatar eliminati vengono raccolti qui, con tutte le loro conversazioni'
@@ -238,8 +260,7 @@ export default function AvatarAdminPage() {
                 ? 'Nessun avatar corrisponde ai filtri'
                 : 'Nessun avatar presente. Crea il primo con "Nuovo Avatar"'
           }
-        >
-          {visibleAvatars.map((a) => (
+          renderRow={(a) => (
             <AvatarRow
               key={a.id}
               avatar={a}
@@ -252,8 +273,8 @@ export default function AvatarAdminPage() {
               }}
               onRestore={handleRestore}
             />
-          ))}
-        </DataTable>
+          )}
+        />
       )}
 
       {/* Dal dettaglio si passa alla modifica senza tornare a cercare la

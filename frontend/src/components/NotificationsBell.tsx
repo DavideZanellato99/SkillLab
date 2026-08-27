@@ -126,6 +126,7 @@ export default function NotificationsBell({ isOpen, onToggle, onClose }: Notific
   return (
     <div className="relative">
       <button
+        type="button"
         ref={triggerRef}
         className="relative flex cursor-pointer items-center justify-center rounded-full border border-white/6 bg-white/4 p-2 text-slate-400 transition hover:border-white/12 hover:bg-white/8 hover:text-slate-100"
         onClick={onToggle}
@@ -175,6 +176,7 @@ export default function NotificationsBell({ isOpen, onToggle, onClose }: Notific
               </span>
               {unread > 0 && (
                 <button
+                  type="button"
                   className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-0.5 text-[0.72rem] font-semibold text-violet-300 transition hover:bg-violet-500/15"
                   onClick={markAll}
                 >
@@ -193,6 +195,7 @@ export default function NotificationsBell({ isOpen, onToggle, onClose }: Notific
                   const icon = ICONS[notification.kind]
                   return (
                     <button
+                      type="button"
                       key={notification.key}
                       className={`flex w-full cursor-pointer items-start gap-2.5 rounded-xl border-none p-2 text-left transition hover:bg-white/8 ${
                         notification.read ? 'bg-transparent' : 'bg-violet-500/8'

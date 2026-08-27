@@ -154,7 +154,9 @@ export default function UserRow({
         )}
       </Td>
       <Td>
-        <span className="text-[0.85rem] text-slate-500">{formatDate(user.created_at)}</span>
+        <span className="whitespace-nowrap text-[0.85rem] tabular-nums text-slate-500">
+          {formatDate(user.created_at)}
+        </span>
       </Td>
       <Td onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-2">

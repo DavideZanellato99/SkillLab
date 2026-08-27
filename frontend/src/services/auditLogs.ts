@@ -50,6 +50,12 @@ export interface AuditLogFilters {
   dateFrom?: string
   dateTo?: string
   search?: string
+  /* La colonna su cui ordinare, con lo stesso nome che ha nella tabella
+   * (`data`, `utente`, `organizzazione`, `azione`). Vuoto vuol dire l'ordine
+   * con cui un registro si legge, le ultime azioni per prime. Ordina il
+   * server: qui c'è una finestra di una tabella che cresce senza fine. */
+  sort?: string
+  direction?: 'asc' | 'desc'
   limit?: number
   offset?: number
 }
@@ -76,6 +82,7 @@ export const fetchAuditLogs = (filters: AuditLogFilters = {}) => {
       ...(dateFrom ? { date_from: dateFrom } : {}),
       ...(dateTo ? { date_to: dateTo } : {}),
       ...(filters.search ? { q: filters.search } : {}),
+      ...(filters.sort ? { sort: filters.sort, direction: filters.direction ?? 'desc' } : {}),
       ...(filters.limit !== undefined ? { limit: String(filters.limit) } : {}),
       ...(filters.offset !== undefined ? { offset: String(filters.offset) } : {}),
     },

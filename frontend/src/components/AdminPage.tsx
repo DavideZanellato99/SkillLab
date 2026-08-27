@@ -26,11 +26,12 @@ import { errorMessage } from '../services/errors'
 import { STATUS_ACTIONS, USER_COLUMNS } from './adminUsersConfig'
 import ConfirmModal from './ConfirmModal'
 import DataTable from './DataTable'
+import type { SortState } from './DataTable'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
-import LoadingState from './LoadingState'
 import LoadMoreButton from './LoadMoreButton'
 import { PageContainer, PageHeader } from './PageLayout'
+import TableSkeleton from './TableSkeleton'
 import PrimaryButton from './PrimaryButton'
 import UserCreateModal from './UserCreateModal'
 import UserDetailModal from './UserDetailModal'
@@ -94,6 +95,12 @@ export default function AdminPage() {
     [organizations],
   )
 
+  /* Su cosa l'elenco è ordinato. Vuoto vuol dire l'ordine di partenza, gli
+   * ultimi registrati per primi. Ordina il server e non la tabella: qui c'è
+   * una finestra di duecento righe per volta, e ordinare quella metterebbe in
+   * cima il primo dei duecento scaricati spacciandolo per il primo di tutti. */
+  const [sort, setSort] = useState<SortState | null>(null)
+
   /* La finestra di utenti: i filtri stanno nella chiave, quindi cambiarne uno
    * riparte da capo, mentre "carica altri" aggiunge una pagina a quelle già
    * lette. Dopo una scrittura le mutation invalidano, e TanStack rilegge
@@ -114,6 +121,8 @@ export default function AdminPage() {
       status: (filters.status || undefined) as UserStatus | undefined,
       neverLoggedIn: filters.access === '' ? undefined : filters.access === 'never',
       search: debouncedSearch,
+      sort: sort?.key,
+      direction: sort?.direction,
     },
     isSuperAdmin(user),
   )
@@ -201,7 +210,7 @@ export default function AdminPage() {
       )}
 
       {isLoading ? (
-        <LoadingState message="Caricamento utenti del sistema..." />
+        <TableSkeleton columns={USER_COLUMNS} message="Caricamento utenti del sistema..." />
       ) : (
         /* Mentre arriva la risposta a un filtro nuovo restano a video le righe
            di prima, attenuate: sono ancora quelle vecchie, e `aria-busy` lo
@@ -211,6 +220,12 @@ export default function AdminPage() {
         <div aria-busy={isStale} className={`transition-opacity ${isStale ? 'opacity-60' : ''}`}>
           <DataTable
             columns={USER_COLUMNS}
+            items={users}
+            /* L'ordinamento arriva da fuori e ci torna: la tabella disegna
+               l'intestazione attiva, l'ordine vero lo fa il server su tutte
+               le righe e non sulla finestra caricata. */
+            sort={sort}
+            onSortChange={setSort}
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder="Cerca per nome, email o organizzazione..."
@@ -219,7 +234,6 @@ export default function AdminPage() {
                resterebbe alla terza pagina di un elenco che nel frattempo è
                diventato un altro. */
             pageResetKey={`${filters.organizationId}|${filters.ruolo}|${filters.status}|${filters.access}|${debouncedSearch}`}
-            isEmpty={users.length === 0}
             emptyMessage={
               hasFilters ? 'Nessun utente corrisponde ai filtri.' : 'Nessun utente trovato.'
             }
@@ -236,8 +250,7 @@ export default function AdminPage() {
                 </>
               )
             }
-          >
-            {users.map((u) => (
+            renderRow={(u) => (
               <UserRow
                 key={u.id}
                 user={u}
@@ -257,8 +270,8 @@ export default function AdminPage() {
                   setStatusAction({ user: target, target: status })
                 }}
               />
-            ))}
-          </DataTable>
+            )}
+          />
         </div>
       )}
 

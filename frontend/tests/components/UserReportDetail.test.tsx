@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -233,7 +233,9 @@ describe('UserReportDetail', () => {
     await userEvent.type(screen.getByPlaceholderText(/Cerca per titolo, avatar/), 'preventivo')
     await userEvent.click(screen.getByRole('radio', { name: 'Simulazioni (1)' }))
 
-    expect(screen.getByRole('radio', { name: 'Conversazioni (0 di 1)' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('radio', { name: 'Conversazioni (0 di 1)' })).toBeInTheDocument(),
+    )
   })
 
   it('la ricerca guarda il titolo, e dice quando è lei a non lasciare niente', async () => {
@@ -246,7 +248,9 @@ describe('UserReportDetail', () => {
 
     await userEvent.clear(box)
     await userEvent.type(box, 'preventivo')
-    expect(screen.getByText('Nessuna conversazione con questi filtri')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByText('Nessuna conversazione con questi filtri')).toBeInTheDocument(),
+    )
   })
 
   it('ogni prova tiene la propria ricerca, senza svuotare l altra', async () => {

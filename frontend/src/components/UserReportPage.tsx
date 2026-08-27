@@ -18,7 +18,11 @@
 
 import { Fragment, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import type { ConversationReport, SimulationAttemptReport } from '../services/admin'
+import type {
+  ConversationReport,
+  SimulationAttemptReport,
+  UserActivityReport,
+} from '../services/admin'
 import { useUsersReport } from '../hooks/useReports'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useOrganizations } from '../hooks/useOrganizations'
@@ -32,10 +36,10 @@ import {
 import DataTable, { Td, Tr } from './DataTable'
 import Select from './Select'
 import FilterTabs from './FilterTabs'
-import LoadingState from './LoadingState'
 import LoadError from './LoadError'
 import { ChevronDownIcon } from './icons'
 import { PageContainer, PageHeader } from './PageLayout'
+import TableSkeleton from './TableSkeleton'
 import ConversationDetailModal from './ConversationDetailModal'
 import type { ConversationDetailTarget } from './ConversationDetailModal'
 import DeleteAttemptDialog from './DeleteAttemptDialog'
@@ -50,41 +54,79 @@ import type { PeriodValue } from './reportFormat'
 
 /** Columns depend on the role: the super admin also sees the organization,
  * an org admin already knows it (its own), so the column is dropped. */
-function reportColumns(showOrg: boolean): DataTableColumn[] {
+function reportColumns(showOrg: boolean): DataTableColumn<UserActivityReport>[] {
   /* Le percentuali sommano a 100 in entrambi gli assetti: le due colonne dei
    * conteggi restano larghe quanto la loro intestazione, e a cedere spazio
-   * all'organizzazione è la colonna dell'utente. */
-  const conteggi = [
+   * all'organizzazione è la colonna dell'utente.
+   *
+   * Le tre colonne di numeri sono quelle per cui questa tabella esiste: chi
+   * si è allenato di più e chi non ha ancora cominciato si trovano ai due
+   * capi dello stesso ordinamento, e prima si leggevano riga per riga.
+   * Sull'utente si ordina per cognome, che è l'ordine di un elenco di
+   * persone: il nome sta scritto prima ma non è quello che si cerca. */
+  const conteggi: DataTableColumn<UserActivityReport>[] = [
     {
       key: 'conversazioni',
       label: 'Conversazioni',
       title: 'Conversazioni sostenute nel periodo selezionato',
+      width: '',
+      sortValue: (u) => u.conversation_count,
     },
     {
       key: 'simulazioni',
       label: 'Simulazioni',
       title: 'Simulazioni consegnate nel periodo selezionato',
+      width: '',
+      sortValue: (u) => u.simulation_count,
     },
   ]
+  const utente: DataTableColumn<UserActivityReport> = {
+    key: 'utente',
+    label: 'Utente',
+    width: showOrg ? '23%' : '33%',
+    sortValue: (u) => u.cognome || u.nome || u.email,
+  }
+  const ruolo: DataTableColumn<UserActivityReport> = {
+    key: 'ruolo',
+    label: 'Ruolo',
+    width: showOrg ? '13%' : '14%',
+    sortValue: (u) => ROLE_LABELS[u.ruolo] ?? u.ruolo,
+  }
+  const durata: DataTableColumn<UserActivityReport> = {
+    key: 'durata',
+    label: 'Durata',
+    width: showOrg ? '13%' : '15%',
+    sortValue: (u) => u.total_duration_seconds,
+  }
+  const dettaglio: DataTableColumn<UserActivityReport> = {
+    key: 'dettaglio',
+    ariaLabel: 'Dettaglio',
+    width: '8%',
+  }
 
   if (showOrg) {
     return [
-      { key: 'utente', label: 'Utente', width: '23%' },
-      { key: 'organizzazione', label: 'Organizzazione', width: '15%' },
-      { key: 'ruolo', label: 'Ruolo', width: '13%' },
+      utente,
+      {
+        key: 'organizzazione',
+        label: 'Organizzazione',
+        width: '15%',
+        sortValue: (u) => u.organization_name,
+      },
+      ruolo,
       { ...conteggi[0], width: '14%' },
       { ...conteggi[1], width: '14%' },
-      { key: 'durata', label: 'Durata', width: '13%' },
-      { key: 'dettaglio', ariaLabel: 'Dettaglio', width: '8%' },
+      durata,
+      dettaglio,
     ]
   }
   return [
-    { key: 'utente', label: 'Utente', width: '33%' },
-    { key: 'ruolo', label: 'Ruolo', width: '14%' },
+    utente,
+    ruolo,
     { ...conteggi[0], width: '15%' },
     { ...conteggi[1], width: '15%' },
-    { key: 'durata', label: 'Durata', width: '15%' },
-    { key: 'dettaglio', ariaLabel: 'Dettaglio', width: '8%' },
+    durata,
+    dettaglio,
   ]
 }
 
@@ -177,7 +219,7 @@ export default function UserReportPage() {
           className="py-8"
         />
       ) : isLoading ? (
-        <LoadingState message="Caricamento report attività..." />
+        <TableSkeleton columns={columns} message="Caricamento report attività..." />
       ) : (
         /* Le righe di prima restano finché non arrivano quelle del periodo
            appena chiesto, attenuate e non cliccabili: dicono ancora di che
@@ -192,6 +234,7 @@ export default function UserReportPage() {
         >
           <DataTable
             columns={columns}
+            items={visibleReport}
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder="Cerca per nome, email, organizzazione o ruolo..."
@@ -220,7 +263,6 @@ export default function UserReportPage() {
                 )}
               </div>
             }
-            isEmpty={visibleReport.length === 0}
             emptyMessage={
               debouncedSearch ? 'Nessun utente corrisponde alla ricerca' : 'Nessun utente trovato'
             }
@@ -229,8 +271,7 @@ export default function UserReportPage() {
              mostrava le righe dalla ventunesima in poi di una domanda che
              nessuno ha fatto. */
             pageResetKey={`${orgFilter}|${period}|${debouncedSearch}`}
-          >
-            {visibleReport.map((u) => {
+            renderRow={(u) => {
               const isExpanded = expandedUserId === u.id
               return (
                 <Fragment key={u.id}>
@@ -342,8 +383,8 @@ export default function UserReportPage() {
                   )}
                 </Fragment>
               )
-            })}
-          </DataTable>
+            }}
+          />
         </div>
       )}
 

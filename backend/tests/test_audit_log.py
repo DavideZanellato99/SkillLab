@@ -167,6 +167,33 @@ def test_registry_returns_newest_first_and_labels_actions(
     assert items[0]["action_label"] == audit.action_label("user.update")
 
 
+def test_registry_sorts_on_a_chosen_column(
+    admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
+):
+    """L'ordine lo fa il database e non il browser: qui c'è una finestra di
+    una tabella che cresce senza fine, e ordinarla di là vorrebbe dire
+    ordinare le duecento righe già scaricate."""
+    conversazione = _conversazione(db_session, standard_user, make_avatar())
+    act_as(standard_user)
+    admin_client.patch(f"/api/chat/conversation/{conversazione.id}", json={"title": "Rinominata"})
+    act_as(super_admin_user)
+    admin_client.put(f"/api/admin/users/{standard_user.id}", json={"nome": "Ultimo"})
+
+    items = admin_client.get(
+        "/api/admin/audit-logs", params={"sort": "azione", "direction": "asc"}
+    ).json()["items"]
+
+    assert [i["action"] for i in items] == ["conversation.rename", "user.update"]
+
+
+def test_registry_rejects_a_column_that_is_not_sortable(admin_client):
+    """Una colonna fuori elenco è un 400: l'oggetto e l'esito si compongono a
+    lettura e nel database non esistono come colonne su cui ordinare."""
+    response = admin_client.get("/api/admin/audit-logs", params={"sort": "oggetto"})
+
+    assert response.status_code == 400
+
+
 def test_registry_window_is_bounded(
     admin_client, act_as, standard_user, super_admin_user, make_avatar, db_session
 ):

@@ -93,6 +93,7 @@ export default function TrainingPathCard({
         <div className="flex shrink-0 items-center gap-1.5">
           <Tooltip content="Assegna a delle persone">
             <button
+              type="button"
               className={actionBtnCls}
               onClick={onAssign}
               aria-label={`Assegna ${path.title}`}
@@ -101,12 +102,18 @@ export default function TrainingPathCard({
             </button>
           </Tooltip>
           <Tooltip content="Modifica il percorso">
-            <button className={actionBtnCls} onClick={onEdit} aria-label={`Modifica ${path.title}`}>
+            <button
+              type="button"
+              className={actionBtnCls}
+              onClick={onEdit}
+              aria-label={`Modifica ${path.title}`}
+            >
               <PencilIcon size={15} />
             </button>
           </Tooltip>
           <Tooltip content="Elimina il percorso">
             <button
+              type="button"
               className={`${actionBtnCls} hover:bg-red-500/10 hover:text-red-400`}
               onClick={onDelete}
               aria-label={`Elimina ${path.title}`}

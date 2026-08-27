@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+import routers.admin as admin_router
 from models import (
     ChatConversation,
     ChatMessage,
@@ -42,7 +43,7 @@ def altro_tenant(db_session):
 def make_conversazione(db_session, make_avatar):
     """Una conversazione di qualcuno, valutata o no."""
 
-    def _factory(user, *, valutata=True, voto=6.0, avatar=None):
+    def _factory(user, *, valutata=True, voto=6.0, avatar=None, criteri=None):
         avatar = avatar or make_avatar()
         conversazione = ChatConversation(
             user_id=user.id, avatar_id=avatar.id, title="Clienti 1", mode="text"
@@ -62,7 +63,7 @@ def make_conversazione(db_session, make_avatar):
                 ConversationEvaluation(
                     conversation_id=conversazione.id,
                     overall_score=voto,
-                    result={"summary": "sintesi", "criteria": []},
+                    result={"summary": "sintesi", "criteria": criteri or []},
                 )
             )
         db_session.flush()
@@ -232,7 +233,7 @@ def test_il_report_di_un_admin_si_ferma_alla_sua_organizzazione(
     make_conversazione(utente_di_un_altro_tenant, voto=4.0)
     act_as(org_admin_user)
 
-    righe = client.get("/api/admin/evaluations-report").json()
+    righe = client.get("/api/admin/evaluations-report").json()["rows"]
 
     assert [r["user_email"] for r in righe] == [standard_user.email]
 
@@ -243,7 +244,9 @@ def test_il_super_admin_vede_il_report_di_tutti(
     make_conversazione(standard_user, voto=7.0)
     make_conversazione(utente_di_un_altro_tenant, voto=4.0)
 
-    email = [r["user_email"] for r in admin_client.get("/api/admin/evaluations-report").json()]
+    email = [
+        r["user_email"] for r in admin_client.get("/api/admin/evaluations-report").json()["rows"]
+    ]
 
     assert standard_user.email in email
     assert utente_di_un_altro_tenant.email in email
@@ -259,7 +262,7 @@ def test_il_periodo_taglia_le_valutazioni(
     make_conversazione(standard_user, voto=8.0)
     db_session.flush()
 
-    righe = admin_client.get("/api/admin/evaluations-report?days=30").json()
+    righe = admin_client.get("/api/admin/evaluations-report?days=30").json()["rows"]
 
     assert [r["overall_score"] for r in righe] == [8.0]
 
@@ -274,9 +277,84 @@ def test_senza_periodo_il_report_resta_quello_di_sempre(
     make_conversazione(standard_user, voto=8.0)
     db_session.flush()
 
-    righe = admin_client.get("/api/admin/evaluations-report").json()
+    righe = admin_client.get("/api/admin/evaluations-report").json()["rows"]
 
     assert len(righe) == 2
+
+
+def test_i_criteri_arrivano_come_mappa_con_le_etichette_a_parte(
+    admin_client, standard_user, make_conversazione
+):
+    """Le etichette sono le stesse sei parole per ogni conversazione: si
+    dicono una volta per risposta invece che sei volte per riga, ed è il
+    grosso di quello che questo payload pesava.
+
+    Restano del server, come sono sempre state: il frontend non ne tiene una
+    copia, perché una lista ricopiata a mano col tempo racconta criteri
+    diversi da quelli su cui il giudizio è stato dato."""
+    make_conversazione(
+        standard_user,
+        voto=7.0,
+        criteri=[
+            {"key": "empatia", "label": "Empatia verso il cliente", "score": 8.0},
+            {"key": "sicurezza_competenza", "label": "Sicurezza e competenza", "score": 6.0},
+        ],
+    )
+
+    report = admin_client.get("/api/admin/evaluations-report").json()
+
+    assert report["rows"][0]["criteria"] == {"empatia": 8.0, "sicurezza_competenza": 6.0}
+    assert report["criteria_labels"] == {
+        "empatia": "Empatia verso il cliente",
+        "sicurezza_competenza": "Sicurezza e competenza",
+    }
+
+
+def test_un_criterio_senza_chiave_non_diventa_una_colonna(
+    admin_client, standard_user, make_conversazione
+):
+    """Una chiave vuota nella mappa sarebbe una colonna senza nome nella
+    tabella della dashboard."""
+    make_conversazione(
+        standard_user,
+        criteri=[
+            {"key": "", "label": "Senza chiave", "score": 5.0},
+            {"key": "empatia", "label": "Empatia", "score": 8.0},
+        ],
+    )
+
+    report = admin_client.get("/api/admin/evaluations-report").json()
+
+    assert report["rows"][0]["criteria"] == {"empatia": 8.0}
+    assert report["criteria_labels"] == {"empatia": "Empatia"}
+
+
+def test_oltre_il_tetto_arrivano_le_piu_recenti_e_la_risposta_lo_dice(
+    admin_client, db_session, standard_user, make_conversazione, monkeypatch
+):
+    """Il tetto esiste perché "sempre" su un tenant di tre anni è tutto lo
+    storico a ogni apertura. Quando scatta si tengono le prove di adesso, e
+    la risposta lo dice: una dashboard tagliata in silenzio mostrerebbe le
+    medie di una parte dello storico spacciandole per le medie di tutto."""
+    monkeypatch.setattr(admin_router, "REPORT_ROW_CAP", 2)
+    for giorni, voto in ((30, 4.0), (20, 5.0), (10, 6.0)):
+        conversazione = make_conversazione(standard_user, voto=voto)
+        conversazione.created_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=giorni)
+    db_session.flush()
+
+    report = admin_client.get("/api/admin/evaluations-report").json()
+
+    assert report["truncated"] is True
+    # Le due più recenti, e nell'ordine in cui i grafici le disegnano
+    assert [r["overall_score"] for r in report["rows"]] == [5.0, 6.0]
+
+
+def test_sotto_il_tetto_la_risposta_non_avverte_di_niente(
+    admin_client, standard_user, make_conversazione
+):
+    make_conversazione(standard_user, voto=7.0)
+
+    assert admin_client.get("/api/admin/evaluations-report").json()["truncated"] is False
 
 
 def test_l_esportazione_segue_il_periodo(

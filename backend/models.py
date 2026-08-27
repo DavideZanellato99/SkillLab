@@ -519,7 +519,17 @@ class ChatConversation(Base):
     # nell'indice, quindi le legge nell'ordine giusto e si ferma dopo quelle
     # che servono. Sostituisce l'indice sulla sola `user_id`, che era il suo
     # prefisso e quindi non aggiungeva niente a spese di ogni scrittura.
-    __table_args__ = (Index("ix_chat_conversations_user_created", "user_id", "created_at"),)
+    #
+    # Il secondo indice guarda la stessa tabella dall'altro capo: i report
+    # dell'area amministrazione chiedono le conversazioni di un periodo
+    # dell'intera organizzazione, senza nominare nessuna persona, e a quella
+    # domanda il primo indice non risponde (la data è la sua seconda colonna,
+    # e senza la prima non si entra). Restavano una scansione dell'intera
+    # tabella per ogni apertura della dashboard.
+    __table_args__ = (
+        Index("ix_chat_conversations_user_created", "user_id", "created_at"),
+        Index("ix_chat_conversations_created", "created_at"),
+    )
 
     # Relationships
     user = relationship("User", back_populates="conversations")

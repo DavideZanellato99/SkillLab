@@ -236,13 +236,18 @@ describe('catalogo', () => {
     expect(screen.getByRole('button', { name: 'Azzera Filtri' })).toBeInTheDocument()
   })
 
-  it('cerca per nome e categoria', async () => {
+  /* Il filtro aspetta la fine della parola: sotto c'è il catalogo intero del
+   * tenant, e riscorrerlo a ogni tasto premuto lo ridisegnava una volta per
+   * lettera. Quello che si vede nella casella resta immediato. */
+  it('cerca per nome e categoria, appena si smette di scrivere', async () => {
     renderPage([avatar(), avatar({ id: 'a-2', name: 'Collega scettico', category: 'Colleghi' })])
 
     await userEvent.type(screen.getByPlaceholderText(/Cerca per nome/), 'colleghi')
 
+    await waitFor(() => {
+      expect(screen.queryByText('Cliente arrabbiato')).not.toBeInTheDocument()
+    })
     expect(screen.getByText('Collega scettico')).toBeInTheDocument()
-    expect(screen.queryByText('Cliente arrabbiato')).not.toBeInTheDocument()
   })
 
   /* Un archivio vuoto spiega cosa ci finirebbe dentro, invece di dire solo

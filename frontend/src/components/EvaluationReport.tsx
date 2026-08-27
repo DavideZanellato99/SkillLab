@@ -158,6 +158,7 @@ export default function EvaluationReport({
                     >
                       <Tooltip content="Vai al messaggio nella trascrizione">
                         <button
+                          type="button"
                           className="cursor-pointer border-none bg-transparent px-2.5 py-0.5 text-inherit transition hover:bg-violet-500/20"
                           onClick={() => onCitationClick(citation)}
                         >
@@ -167,6 +168,7 @@ export default function EvaluationReport({
                       {onCitationPlay && (
                         <Tooltip content="Ascolta questo momento nella registrazione">
                           <button
+                            type="button"
                             className="cursor-pointer border-y-0 border-l border-r-0 border-solid border-violet-500/30 bg-transparent py-0.5 pl-1.5 pr-2 text-inherit transition hover:bg-violet-500/20"
                             onClick={() => onCitationPlay(citation)}
                             aria-label={`Ascolta il messaggio ${citation.index} nella registrazione`}

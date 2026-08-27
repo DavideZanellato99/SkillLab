@@ -27,6 +27,7 @@ import { getAvatarImageUrl } from '../services/api'
 import type { AdminAvatar } from '../services/admin'
 import { fetchVoicePreview } from '../services/admin'
 import { errorMessage } from '../services/errors'
+import { resizeAvatarImage } from '../services/imageResize'
 import type { AvatarFormState } from './avatarForm'
 import {
   applyDraft,
@@ -196,7 +197,11 @@ export default function AvatarFormModal({
     if (!file) return
     resetErrors()
     try {
-      const { image_url } = await uploadMutation.mutateAsync(file)
+      /* Il ritratto si riduce qui e non sul server: quello che parte è già il
+         file ridotto, quindi si risparmia anche la salita, che su una
+         connessione d'ufficio è la metà lenta. Una foto uscita da un telefono
+         pesa qualche megabyte per finire dentro un tondo da cento pixel. */
+      const { image_url } = await uploadMutation.mutateAsync(await resizeAvatarImage(file))
       setForm((prev) => ({ ...prev, imageUrl: image_url }))
     } catch {
       // Il messaggio è nella mutation, il banner del form lo mostra

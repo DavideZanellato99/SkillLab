@@ -39,15 +39,22 @@ export interface UserFilters {
   /** true elenca solo gli inviti mai accettati, false solo chi ha già acceduto. */
   neverLoggedIn?: boolean
   search?: string
+  /* La colonna su cui ordinare, con lo stesso nome che ha nella tabella
+   * (`utente`, `ruolo`, `creazione`...). Vuoto vuol dire l'ordine di
+   * partenza, gli ultimi registrati per primi. Ordina il server, non la
+   * tabella: qui c'è una finestra dell'elenco, e ordinare quella metterebbe
+   * in cima il primo dei duecento scaricati. */
+  sort?: string
+  direction?: 'asc' | 'desc'
   limit?: number
   offset?: number
 }
 
 /**
  * Legge una finestra dell'elenco utenti (solo Super Admin), più recenti
- * prima. Ricerca e filtri girano sul server: applicarli qui filtrerebbe solo
- * le righe già caricate, cioè risponderebbe «nessun utente» su qualcuno che
- * esiste ma sta oltre la finestra.
+ * prima. Ricerca, filtri e ordinamento girano sul server: applicarli qui
+ * varrebbe solo per le righe già caricate, cioè risponderebbe «nessun
+ * utente» su qualcuno che esiste ma sta oltre la finestra.
  */
 export const fetchUsers = (filters: UserFilters = {}) =>
   apiFetch<UserPage>('/api/admin/users', {
@@ -59,6 +66,7 @@ export const fetchUsers = (filters: UserFilters = {}) =>
         ? { never_logged_in: String(filters.neverLoggedIn) }
         : {}),
       ...(filters.search ? { q: filters.search } : {}),
+      ...(filters.sort ? { sort: filters.sort, direction: filters.direction ?? 'asc' } : {}),
       ...(filters.limit !== undefined ? { limit: String(filters.limit) } : {}),
       ...(filters.offset !== undefined ? { offset: String(filters.offset) } : {}),
     },
@@ -478,7 +486,27 @@ export interface EvaluationReportRow {
   has_override: boolean
   /** Un docente è passato di qui (nota, correzione o entrambe). */
   has_review: boolean
-  criteria: EvaluationCriterionScore[]
+  /* Chiave del criterio -> punteggio. Le etichette per esteso stanno una
+   * volta sola sulla risposta (`criteria_labels`) e non su ogni riga: sono le
+   * stesse sei parole per ogni conversazione, e ripeterle riga per riga era
+   * il grosso di questo payload. */
+  criteria: Record<string, number>
+}
+
+/** Le valutazioni del periodo, con il vocabolario dei criteri accanto. */
+export interface EvaluationReportPage {
+  /* Chiave -> etichetta per esteso, nell'ordine in cui il valutatore le dà.
+   * Restano del server, come vuole il commento in testa a evaluationCriteria:
+   * qui non se ne tiene una copia, perché una lista ricopiata a mano col
+   * tempo racconta criteri diversi da quelli su cui il giudizio è stato
+   * dato. */
+  criteria_labels: Record<string, string>
+  rows: EvaluationReportRow[]
+  /* Vero quando le righe superavano il tetto del server e sono arrivate le
+   * più recenti. Non è un errore: è quello che permette alla pagina di dirlo
+   * invece di mostrare le medie di una parte dello storico spacciandole per
+   * le medie di tutto. */
+  truncated: boolean
 }
 
 /* Il gemello scritto della riga qui sopra: un test tecnico consegnato.
@@ -505,6 +533,13 @@ export interface SimulationReportRow {
   question_count: number
   /** In decimi, la stessa scala delle valutazioni. */
   score: number
+}
+
+/** I test consegnati nel periodo, con lo stesso tetto dell'altra metà.
+ *  Niente vocabolario: un tentativo non ha criteri, ha domande. */
+export interface SimulationReportPage {
+  rows: SimulationReportRow[]
+  truncated: boolean
 }
 
 /**
@@ -600,12 +635,12 @@ export const fetchEvaluationsReportXlsx = (organizationId?: string, days?: numbe
   })
 
 export const fetchEvaluationsReport = (organizationId?: string, days?: number) =>
-  apiFetch<EvaluationReportRow[]>('/api/admin/evaluations-report', {
+  apiFetch<EvaluationReportPage>('/api/admin/evaluations-report', {
     params: reportParams(organizationId, days),
   })
 
 /** I tentativi sulle simulazioni tecniche, stesse regole di scope. */
 export const fetchSimulationsReport = (organizationId?: string, days?: number) =>
-  apiFetch<SimulationReportRow[]>('/api/admin/simulations-report', {
+  apiFetch<SimulationReportPage>('/api/admin/simulations-report', {
     params: reportParams(organizationId, days),
   })

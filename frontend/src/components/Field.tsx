@@ -14,6 +14,13 @@ import type { InputHTMLAttributes, ReactNode } from 'react'
 export const fieldCls = 'flex flex-col gap-1.5'
 export const labelCls = 'text-xs font-medium tracking-wide text-slate-400'
 
+/* Un campo dentro una barra di filtri, che è un campo che deve anche sapersi
+ * stringere. Le barre stanno in fila su uno schermo da scrivania e vanno a
+ * capo sotto: da lì in giù i campi si dividono la riga a due per volta
+ * invece di restare alla propria misura, che lasciava mezza riga vuota
+ * accanto all'ultimo di ogni capo. */
+export const filterFieldCls = `${fieldCls} max-md:flex-1 max-md:basis-[45%]`
+
 /** Il riquadro attorno al campo, che si accende quando il campo ha il fuoco. */
 export const inputWrapperCls =
   'flex items-center gap-2 rounded-xl border border-white/6 bg-slate-800/50 px-4 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]'

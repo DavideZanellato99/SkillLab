@@ -180,6 +180,7 @@ export default function Navbar() {
             ) : (
               /* Prima dell'accesso: il pulsante che apre la modale */
               <button
+                type="button"
                 className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/6 bg-white/4 px-4 py-1.5 text-[0.82rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 hover:shadow-[0_4px_12px_rgba(124,58,237,0.15)]"
                 onClick={() => setShowAuthModal(true)}
                 id="auth-trigger-btn"

@@ -167,7 +167,14 @@ cancellazione svuota ogni tabella con una istruzione esplicita, elencata in
 senza fine si leggono sempre nello stesso modo, quindi l'indice porta dentro
 anche la data con cui si ordina: il registro per utente e per azione dal più
 recente, le conversazioni di una persona dalla più recente, i messaggi di una
-conversazione in ordine di tempo. Dove nasce un composito, l'indice sulla sola
+conversazione in ordine di tempo. La stessa tabella può avere due domande, e
+allora ha due indici: le conversazioni si leggono per persona dall'area di
+chi si allena, e per periodo dai report dell'amministrazione, che chiedono un
+intervallo di tempo dell'intera organizzazione senza nominare nessuno. A
+quella seconda domanda il composito `(user_id, created_at)` non risponde,
+perché la data è la sua seconda colonna e senza la prima non ci si entra: fino
+a `ix_chat_conversations_created` restava una scansione dell'intera tabella
+a ogni apertura della dashboard. Dove nasce un composito, l'indice sulla sola
 prima colonna viene tolto: è il suo prefisso, non risponde a niente di nuovo e
 si farebbe pagare a ogni riga scritta. Un indice ha due posti in cui esistere,
 il modello per i database nuovi e

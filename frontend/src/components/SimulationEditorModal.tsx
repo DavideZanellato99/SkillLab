@@ -577,6 +577,7 @@ export default function SimulationEditorModal({
                 </span>
               ) : (
                 <button
+                  type="button"
                   className={secondaryBtnCls}
                   onClick={() => {
                     setSaved(false)
@@ -599,6 +600,7 @@ export default function SimulationEditorModal({
 
               <div className="flex flex-wrap items-center gap-3">
                 <button
+                  type="button"
                   className={secondaryBtnCls}
                   onClick={() => {
                     setSaved(false)
@@ -622,6 +624,7 @@ export default function SimulationEditorModal({
 
                 {isPublished ? (
                   <button
+                    type="button"
                     className={secondaryBtnCls}
                     onClick={() => {
                       setSaved(false)

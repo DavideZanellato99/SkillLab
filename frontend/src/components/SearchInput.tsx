@@ -38,6 +38,7 @@ export default function SearchInput({
       />
       {value && (
         <button
+          type="button"
           onClick={() => onChange('')}
           aria-label="Cancella Ricerca"
           className="shrink-0 cursor-pointer rounded-lg border-none bg-transparent p-1 text-slate-500 transition hover:text-slate-100"

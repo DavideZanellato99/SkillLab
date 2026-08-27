@@ -36,6 +36,7 @@ export default function ChatHeader({ avatar, title, evaluation, onOpenDetail }: 
         {evaluation && (
           <Tooltip content="Rivedi la valutazione della conversazione">
             <button
+              type="button"
               className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400 transition hover:-translate-y-px hover:bg-cyan-500/20"
               onClick={onOpenDetail}
             >

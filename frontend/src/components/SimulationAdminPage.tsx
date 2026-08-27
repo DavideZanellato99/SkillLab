@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useAdminSimulations, useDeleteSimulation } from '../hooks/useSimulations'
 import { useAuth } from '../hooks/useAuth'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useOrganizations } from '../hooks/useOrganizations'
 import { isSuperAdmin } from '../services/auth'
 import type { AdminSimulation } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
+import TableSkeleton from './TableSkeleton'
 import DataTable, { Td, Tr } from './DataTable'
 import type { DataTableColumn } from './DataTable'
-import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
 import Badge from './Badge'
 import ConfirmModal from './ConfirmModal'
@@ -22,7 +23,7 @@ import SimulationEditorModal from './SimulationEditorModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import { formatDate } from './dateFormat'
-import { statusBadgeTone, statusLabel } from './simulationFormat'
+import { kindLabel, statusBadgeTone, statusLabel } from './simulationFormat'
 import { iconActionCls as actionBtnCls } from './IconButton'
 
 /* La gestione delle simulazioni tecniche, per entrambi i ruoli di
@@ -43,26 +44,64 @@ import { iconActionCls as actionBtnCls } from './IconButton'
  * amministra più di una. Le percentuali sommano a 100 in entrambi gli
  * assetti, e quando l'organizzazione entra lo spazio lo cede il titolo: è
  * l'unica colonna che può accorciarsi senza spezzare quello che contiene. */
-function simulationColumns(showOrg: boolean): DataTableColumn[] {
+function simulationColumns(showOrg: boolean): DataTableColumn<AdminSimulation>[] {
+  /* Le stesse chiavi negli stessi ordini nei due assetti, così le colonne
+     comuni si ordinano allo stesso modo per chiunque le guardi. Sul tipo e
+     sullo stato si ordina per l'etichetta letta, non per il codice salvato. */
+  const title: DataTableColumn<AdminSimulation> = {
+    key: 'title',
+    label: 'Simulazione',
+    width: showOrg ? '24%' : '30%',
+    sortValue: (s) => s.title,
+  }
+  const kind: DataTableColumn<AdminSimulation> = {
+    key: 'kind',
+    label: 'Tipo',
+    width: showOrg ? '15%' : '17%',
+    sortValue: (s) => kindLabel(s.kind),
+  }
+  const questions: DataTableColumn<AdminSimulation> = {
+    key: 'questions',
+    label: 'Domande',
+    compact: true,
+    width: showOrg ? '9%' : '10%',
+    sortValue: (s) => s.question_count,
+  }
+  const status: DataTableColumn<AdminSimulation> = {
+    key: 'status',
+    label: 'Stato',
+    width: showOrg ? '13%' : '14%',
+    sortValue: (s) => statusLabel(s.status),
+  }
+  const created: DataTableColumn<AdminSimulation> = {
+    key: 'creazione',
+    label: 'Data Creazione',
+    width: showOrg ? '12%' : '13%',
+    sortValue: (s) => s.created_at,
+  }
+  const actions: DataTableColumn<AdminSimulation> = {
+    key: 'actions',
+    label: 'Azioni',
+    width: showOrg ? '13%' : '16%',
+  }
+
   if (showOrg) {
     return [
-      { key: 'title', label: 'Simulazione', width: '24%' },
-      { key: 'organization', label: 'Organizzazione', width: '14%' },
-      { key: 'kind', label: 'Tipo', width: '15%' },
-      { key: 'questions', label: 'Domande', compact: true, width: '9%' },
-      { key: 'status', label: 'Stato', width: '13%' },
-      { key: 'creazione', label: 'Data Creazione', width: '12%' },
-      { key: 'actions', label: 'Azioni', width: '13%' },
+      title,
+      {
+        key: 'organization',
+        label: 'Organizzazione',
+        width: '14%',
+        sortValue: (s) => s.organization_name,
+      },
+      kind,
+      questions,
+      status,
+      created,
+      actions,
     ]
   }
-  return [
-    { key: 'title', label: 'Simulazione', width: '30%' },
-    { key: 'kind', label: 'Tipo', width: '17%' },
-    { key: 'questions', label: 'Domande', compact: true, width: '10%' },
-    { key: 'status', label: 'Stato', width: '14%' },
-    { key: 'creazione', label: 'Data Creazione', width: '13%' },
-    { key: 'actions', label: 'Azioni', width: '16%' },
-  ]
+  return [title, kind, questions, status, created, actions]
 }
 
 /* Cosa dice la tabella vuota, che non è sempre la stessa cosa: senza righe
@@ -84,7 +123,10 @@ export default function SimulationAdminPage() {
   const { data: organizations = [] } = useOrganizations(showOrg)
   const remove = useDeleteSimulation()
 
+  /* La casella scrive subito, il filtro aspetta: sotto c'è il catalogo di
+   * test del tenant, riscorso da capo a ogni tasto premuto. */
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
   /* Lo stato è la prima domanda che si fa chi apre questa pagina: quali test
    * sono ancora da finire. Si parte da tutte, perché è l'elenco intero, e le
    * bozze sono a un clic. */
@@ -98,7 +140,7 @@ export default function SimulationAdminPage() {
   const [viewing, setViewing] = useState<AdminSimulation | null>(null)
   const [toDelete, setToDelete] = useState<AdminSimulation | null>(null)
 
-  const filtered = filterAdminSimulations(simulations, status, search, showOrg)
+  const filtered = filterAdminSimulations(simulations, status, debouncedSearch, showOrg)
 
   const confirmDelete = () => {
     if (!toDelete) return
@@ -128,12 +170,12 @@ export default function SimulationAdminPage() {
       />
 
       {isLoading ? (
-        <LoadingState message="Caricamento simulazioni..." />
+        <TableSkeleton columns={columns} message="Caricamento simulazioni..." />
       ) : (
         <DataTable
           columns={columns}
-          isEmpty={filtered.length === 0}
-          emptyMessage={emptyMessage(search, status)}
+          items={filtered}
+          emptyMessage={emptyMessage(debouncedSearch, status)}
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder={
@@ -152,9 +194,8 @@ export default function SimulationAdminPage() {
               ariaLabel="Stato delle simulazioni"
             />
           }
-          pageResetKey={`${status}|${search}`}
-        >
-          {filtered.map((simulation) => (
+          pageResetKey={`${status}|${debouncedSearch}`}
+          renderRow={(simulation) => (
             <Tr
               key={simulation.id}
               className="cursor-pointer"
@@ -192,7 +233,7 @@ export default function SimulationAdminPage() {
                 </Badge>
               </Td>
               <Td>
-                <span className="text-[0.85rem] text-slate-500">
+                <span className="whitespace-nowrap text-[0.85rem] tabular-nums text-slate-500">
                   {formatDate(simulation.created_at)}
                 </span>
               </Td>
@@ -203,6 +244,7 @@ export default function SimulationAdminPage() {
                       correggere un titolo in un form. */}
                   <Tooltip content="Modifica simulazione">
                     <button
+                      type="button"
                       className={`${actionBtnCls} hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400`}
                       onClick={() => setOpenId(simulation.id)}
                       aria-label={`Modifica ${simulation.title}`}
@@ -212,6 +254,7 @@ export default function SimulationAdminPage() {
                   </Tooltip>
                   <Tooltip content="Elimina Simulazione">
                     <button
+                      type="button"
                       className={`${actionBtnCls} hover:border-red-500 hover:bg-red-500/10 hover:text-red-500`}
                       onClick={() => setToDelete(simulation)}
                       aria-label={`Elimina ${simulation.title}`}
@@ -222,8 +265,8 @@ export default function SimulationAdminPage() {
                 </div>
               </Td>
             </Tr>
-          ))}
-        </DataTable>
+          )}
+        />
       )}
 
       {creating && (

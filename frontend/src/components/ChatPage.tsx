@@ -23,6 +23,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useAvatar } from '../hooks/useAvatars'
 import { useCitationNavigation } from '../hooks/useCitationNavigation'
 import { useConversationRename } from '../hooks/useConversationRename'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useConversation, useConversations, useDeleteConversation } from '../hooks/useConversations'
 import { useConversationEvaluation, useEvaluateConversation } from '../hooks/useEvaluation'
 import { useRecordingInfo } from '../hooks/useRecording'
@@ -95,7 +96,11 @@ export default function ChatPage() {
   // L'elenco nella colonna è stretto: questo mostra le stesse conversazioni
   // con lo spazio per l'anteprima e lo stato di ognuna.
   const [conversationsExpanded, setConversationsExpanded] = useState(false)
+  /* La casella scrive subito, il filtro aspetta la fine della parola: chi si
+   * allena da mesi su uno scenario ne ha centinaia, e sono due elenchi da
+   * ridisegnare a ogni tasto premuto, la colonna e il pannello. */
   const [conversationSearch, setConversationSearch] = useState('')
+  const debouncedConversationSearch = useDebouncedValue(conversationSearch)
 
   const rename = useConversationRename()
   const deleteConversationMutation = useDeleteConversation()
@@ -238,7 +243,7 @@ export default function ChatPage() {
    * ricerche separate vorrebbero dire espandere e ritrovarsi davanti tutte
    * le conversazioni dopo averne cercata una. */
   const visibleConversations = conversations.filter((conv) =>
-    matchesSearch(conversationSearch, conv.title, conv.last_message_preview),
+    matchesSearch(debouncedConversationSearch, conv.title, conv.last_message_preview),
   )
 
   /* Finita la conversazione la trascrizione è definitiva: il backend rifiuta
@@ -414,6 +419,7 @@ export default function ChatPage() {
 
       {/* Apre e chiude la colonna su schermo stretto */}
       <button
+        type="button"
         className="fixed bottom-8 left-4 z-50 hidden h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-white/6 bg-gray-900/90 text-slate-100 shadow-[0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-lg transition hover:border-violet-600 hover:bg-violet-600/20 max-[900px]:flex"
         onClick={() => setSidebarOpen(!sidebarOpen)}
         aria-label="Apri o chiudi la barra laterale"

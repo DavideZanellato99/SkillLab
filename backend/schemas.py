@@ -1318,7 +1318,30 @@ class EvaluationReportRow(BaseModel):
     has_override: bool = False
     # A trainer has been through this conversation (note, correction or both)
     has_review: bool = False
-    criteria: list[EvaluationCriterionScore]
+    # Chiave del criterio -> punteggio. Le etichette per esteso stanno una
+    # volta sola sulla risposta (`EvaluationReportPage.criteria_labels`) e non
+    # su ogni riga: sono le stesse sei parole per ogni conversazione, e
+    # ripeterle riga per riga era il grosso di questo payload.
+    criteria: dict[str, float]
+
+
+class EvaluationReportPage(BaseModel):
+    """Le valutazioni del periodo, con il vocabolario dei criteri accanto.
+
+    Un oggetto e non un elenco perché due cose vanno dette sull'insieme e non
+    sulla singola riga: come si chiamano per esteso i criteri, e se quello che
+    si sta guardando è tutto quello che c'è.
+
+    `truncated` è vero quando le righe superavano il tetto e sono state prese
+    le più recenti. Non è un errore ed è quello che permette al tetto di
+    esistere: senza dirlo, una dashboard tagliata mostrerebbe medie di una
+    parte dello storico presentandole come le medie di tutto.
+    """
+
+    # Chiave -> etichetta per esteso, nell'ordine in cui il valutatore le dà
+    criteria_labels: dict[str, str]
+    rows: list[EvaluationReportRow]
+    truncated: bool = False
 
 
 class SimulationReportRow(BaseModel):
@@ -1351,6 +1374,17 @@ class SimulationReportRow(BaseModel):
     question_count: int
     # Out of ten, the same scale as the conversation evaluations
     score: float
+
+
+class SimulationReportPage(BaseModel):
+    """I test consegnati nel periodo, con lo stesso tetto dell'altra metà.
+
+    Niente vocabolario qui: un tentativo non ha criteri, ha domande. Resta
+    `truncated`, che è la stessa avvertenza per la stessa ragione.
+    """
+
+    rows: list[SimulationReportRow]
+    truncated: bool = False
 
 
 class AdminConversationDetail(BaseModel):

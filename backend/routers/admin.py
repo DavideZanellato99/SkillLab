@@ -53,10 +53,11 @@ from schemas import (
     ChatMessageResponse,
     ConversationReport,
     CreateUserRequest,
-    EvaluationCriterionScore,
+    EvaluationReportPage,
     EvaluationReportRow,
     MessageResponse,
     SimulationAttemptReport,
+    SimulationReportPage,
     SimulationReportRow,
     UpdateUserRequest,
     UpdateUserStatusRequest,
@@ -64,6 +65,8 @@ from schemas import (
     UserActivityReport,
     UserPage,
 )
+from simulation_scoring import attempt_score
+from table_sort import ordered, sort_or_400
 from user_fields import clean_email_or_400, clean_name_or_400, find_user_by_email
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -161,6 +164,29 @@ def _conversation_in_scope_or_404(
         )
 
 
+# Su cosa la tabella degli utenti si può ordinare, e con quali colonne il
+# database ci arriva.
+#
+# L'ordinamento è qui e non nel browser per la stessa ragione dei filtri: di
+# là c'è una finestra dell'elenco, quindi ordinarla vorrebbe dire mettere in
+# cima il primo dei duecento scaricati e chiamarlo il primo di tutti.
+#
+# Le chiavi sono quelle delle colonne della tabella, così quello che si clicca
+# e quello che il server riceve si chiamano allo stesso modo. Una chiave fuori
+# da questo elenco viene rifiutata, che è anche quello che tiene una stringa
+# qualsiasi fuori da un `order_by`.
+USER_SORT_COLUMNS = {
+    # Per cognome, che è l'ordine di un elenco di persone; il nome viene
+    # subito dopo per chi il cognome non ce l'ha ancora scritto.
+    "utente": (User.cognome, User.nome, User.email),
+    "organizzazione": (Organization.name,),
+    "ruolo": (Role.name,),
+    "stato": (User.status,),
+    "ultimo_accesso": (User.last_login_at,),
+    "creazione": (User.created_at,),
+}
+
+
 @router.get("/users", response_model=UserPage)
 def list_users(
     organization_id: UUID | None = None,
@@ -170,6 +196,8 @@ def list_users(
     account_status: str | None = Query(None, alias="status"),
     never_logged_in: bool | None = None,
     q: str | None = None,
+    sort: str | None = None,
+    direction: str = Query("asc", pattern="^(asc|desc)$"),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_admin: User = Depends(get_current_super_admin),
@@ -185,6 +213,10 @@ def list_users(
     point of the endpoint: a search that ran on the client would only ever
     look at the window already loaded, and would quietly answer "nessun
     utente" about someone who exists.
+
+    `sort` vale lo stesso discorso, e le colonne che accetta sono quelle di
+    USER_SORT_COLUMNS. Senza, l'ordine resta quello di sempre: gli ultimi
+    registrati per primi, che è la domanda con cui questa pagina si apre.
     """
     if ruolo is not None and ruolo not in ALL_ROLES:
         raise HTTPException(
@@ -196,6 +228,7 @@ def list_users(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Lo stato deve essere uno tra: {', '.join(ALL_USER_STATUSES)}.",
         )
+    sort_or_400(sort, USER_SORT_COLUMNS)
 
     # Both joins exist for the filters below, not to load the relationships:
     # role and organization are already eager-loaded by the model. The
@@ -233,7 +266,14 @@ def list_users(
     # The id breaks ties on created_at: two users created in the same
     # instant would otherwise be free to swap places between two requests,
     # and an offset window would skip one of them and repeat the other.
-    users = query.order_by(User.created_at.desc(), User.id.desc()).offset(offset).limit(limit).all()
+    # Vale per ogni ordinamento, non solo per quello di partenza: vedi
+    # `_ordered`.
+    query = (
+        ordered(query, USER_SORT_COLUMNS[sort], direction, User.id)
+        if sort
+        else query.order_by(User.created_at.desc(), User.id.desc())
+    )
+    users = query.offset(offset).limit(limit).all()
     return UserPage(total=total, items=[AdminUserResponse.model_validate(u) for u in users])
 
 
@@ -524,7 +564,23 @@ def _user_attempt_reports(db: Session, user_id: UUID, since) -> list[SimulationA
     ]
 
 
-@router.get("/evaluations-report", response_model=list[EvaluationReportRow])
+# Quante righe al massimo una metà della dashboard si porta dietro.
+#
+# Il periodo di default è "Sempre", e per una ragione scritta in
+# reportFormat.ts: un filtro già acceso mostrerebbe una pagina mezza vuota a
+# chi non sa che esiste. Ma "sempre" su un tenant di tre anni è tutto lo
+# storico a ogni apertura, e da un certo punto in poi non è più una pagina
+# lenta, è una pagina che non arriva.
+#
+# Cinquemila è largo abbastanza da non toccare nessuno oggi e stretto
+# abbastanza da tenere in piedi la pagina domani. Quando scatta si prendono le
+# più recenti, che sono quelle di cui si sta parlando, e la risposta lo dice
+# (`truncated`): una dashboard tagliata in silenzio mostrerebbe le medie di
+# una parte dello storico spacciandole per le medie di tutto.
+REPORT_ROW_CAP = 5000
+
+
+@router.get("/evaluations-report", response_model=EvaluationReportPage)
 def evaluations_report(
     organization_id: UUID | None = None,
     days: int | None = Query(None, ge=1, le=3650),
@@ -540,10 +596,12 @@ def evaluations_report(
     `days` restringe le righe alle conversazioni degli ultimi N giorni, come
     nel report attività: è tutto quello che la dashboard poi aggrega, e senza
     un limite chi si allena da un anno se lo porta dietro intero a ogni
-    apertura della pagina, criteri di ogni valutazione compresi.
+    apertura della pagina. Oltre quel filtro c'è REPORT_ROW_CAP, che è il
+    tetto che vale comunque.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    return _evaluation_report_rows(db, scope_org_id, _since(days))
+    rows, labels, truncated = _evaluation_report_rows(db, scope_org_id, _since(days))
+    return EvaluationReportPage(criteria_labels=labels, rows=rows, truncated=truncated)
 
 
 def _since(days: int | None):
@@ -551,58 +609,140 @@ def _since(days: int | None):
     return datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days) if days else None
 
 
-def _evaluation_report_rows(db: Session, scope_org_id, since=None) -> list[EvaluationReportRow]:
-    """Every evaluated conversation in scope, oldest first (chart order).
+def _evaluation_report_rows(
+    db: Session, scope_org_id, since=None
+) -> tuple[list[EvaluationReportRow], dict[str, str], bool]:
+    """Le valutazioni in scope dalla più vecchia (l'ordine dei grafici), come
+    si chiamano per esteso i loro criteri, e se il tetto ha tagliato qualcosa.
 
-    The trainer's review rides along on an outer join (most conversations
-    have none), so `overall_score` is the grade that counts and the charts
-    plot what the student was actually given.
+    Le etichette escono da qui insieme alle righe e non da una lista scritta a
+    parte: i criteri sono quelli su cui il giudizio è stato dato, e una
+    valutazione di un anno fa può averne avuti altri. Vengono dette una volta
+    per risposta invece che sei volte per riga, ed è tutto quello che cambia:
+    restano del server, come sono sempre state.
+
+    Colonne e non entità: di una conversazione servono il titolo, il canale e
+    due date, e caricarne l'oggetto intero significa costruire in memoria
+    anche tutto quello che non si guarda, riga per riga, su migliaia di righe.
+
+    Si legge dalla più recente per poter tagliare dalla parte giusta, e si
+    rivolta prima di restituire: chi taglia deve tenere le prove di adesso,
+    chi disegna le vuole in ordine di tempo.
+
+    La correzione del docente viaggia su un outer join (la gran parte delle
+    conversazioni non ne ha), quindi `overall_score` è il voto che conta e i
+    grafici disegnano quello che lo studente si è visto dare.
     """
     query = (
-        db.query(ConversationEvaluation, ChatConversation, User, Avatar.name, ConversationReview)
+        db.query(
+            ChatConversation.id,
+            ChatConversation.title,
+            ChatConversation.mode,
+            ChatConversation.created_at,
+            ChatConversation.avatar_id,
+            Avatar.name,
+            User.id,
+            User.email,
+            User.nome,
+            User.cognome,
+            User.organization_id,
+            Organization.name,
+            ConversationEvaluation.created_at,
+            ConversationEvaluation.overall_score,
+            ConversationEvaluation.result,
+            # La chiave della revisione e' la conversazione stessa: qui serve
+            # solo a distinguere "nessuna revisione" da "una revisione che
+            # non ha corretto il voto", che sono due cose diverse
+            ConversationReview.conversation_id,
+            ConversationReview.override_score,
+        )
         .join(ChatConversation, ChatConversation.id == ConversationEvaluation.conversation_id)
         .join(User, User.id == ChatConversation.user_id)
         .join(Avatar, Avatar.id == ChatConversation.avatar_id)
+        .outerjoin(Organization, Organization.id == User.organization_id)
         .outerjoin(ConversationReview, ConversationReview.conversation_id == ChatConversation.id)
     )
     if scope_org_id is not None:
         query = query.filter(User.organization_id == scope_org_id)
     if since is not None:
         query = query.filter(ChatConversation.created_at >= since)
-    rows = query.order_by(ChatConversation.created_at.asc()).all()
-    return [
-        EvaluationReportRow(
-            conversation_id=conv.id,
-            conversation_title=conv.title,
-            mode=conv.mode,
-            user_id=user.id,
-            user_email=user.email,
-            user_nome=user.nome,
-            user_cognome=user.cognome,
-            organization_id=user.organization_id,
-            organization_name=user.organization_name,
-            avatar_id=conv.avatar_id,
-            avatar_name=avatar_name,
-            conversation_at=conv.created_at,
-            evaluated_at=evaluation.created_at,
-            overall_score=reviews.final_score(evaluation.overall_score, review),
-            ai_overall_score=evaluation.overall_score,
-            has_override=review is not None and review.override_score is not None,
-            has_review=review is not None,
-            criteria=[
-                EvaluationCriterionScore(
-                    key=str(c.get("key", "")),
-                    label=str(c.get("label", "")),
-                    score=float(c.get("score", 0) or 0),
-                )
-                for c in ((evaluation.result or {}).get("criteria") or [])
-            ],
+
+    # Una in più del tetto: è così che si sa se ce n'erano altre
+    found = query.order_by(ChatConversation.created_at.desc()).limit(REPORT_ROW_CAP + 1).all()
+    truncated = len(found) > REPORT_ROW_CAP
+
+    labels: dict[str, str] = {}
+    rows = []
+    for (
+        conversation_id,
+        title,
+        mode,
+        conversation_at,
+        avatar_id,
+        avatar_name,
+        user_id,
+        email,
+        nome,
+        cognome,
+        organization_id,
+        organization_name,
+        evaluated_at,
+        ai_score,
+        result,
+        review_id,
+        override_score,
+    ) in found[:REPORT_ROW_CAP]:
+        rows.append(
+            EvaluationReportRow(
+                conversation_id=conversation_id,
+                conversation_title=title,
+                mode=mode,
+                user_id=user_id,
+                user_email=email,
+                user_nome=nome,
+                user_cognome=cognome,
+                organization_id=organization_id,
+                organization_name=organization_name,
+                avatar_id=avatar_id,
+                avatar_name=avatar_name,
+                conversation_at=conversation_at,
+                evaluated_at=evaluated_at,
+                overall_score=reviews.grade(ai_score, override_score),
+                ai_overall_score=ai_score,
+                has_override=override_score is not None,
+                has_review=review_id is not None,
+                criteria=_criteria_scores(result, labels),
+            )
         )
-        for evaluation, conv, user, avatar_name, review in rows
-    ]
+
+    # Le righe si leggono dalla più recente per tagliare dalla parte giusta,
+    # i grafici le vogliono in ordine di tempo
+    rows.reverse()
+    return rows, labels, truncated
 
 
-@router.get("/simulations-report", response_model=list[SimulationReportRow])
+def _criteria_scores(result, labels: dict[str, str]) -> dict[str, float]:
+    """Chiave del criterio -> punteggio, e intanto raccoglie le etichette.
+
+    Le due cose si leggono dallo stesso posto (il risultato salvato), quindi
+    si leggono insieme: scorrere una seconda volta migliaia di valutazioni per
+    prendere sei parole sarebbe la stessa scansione fatta due volte.
+
+    Una chiave vuota si scarta invece di finire nella mappa sotto la stringa
+    vuota, che sarebbe una colonna senza nome nella tabella della dashboard.
+    """
+    scores: dict[str, float] = {}
+    for criterion in (result or {}).get("criteria") or []:
+        key = str(criterion.get("key", ""))
+        if not key:
+            continue
+        scores[key] = float(criterion.get("score", 0) or 0)
+        if key not in labels:
+            labels[key] = str(criterion.get("label", "")) or key
+    return scores
+
+
+@router.get("/simulations-report", response_model=SimulationReportPage)
 def simulations_report(
     organization_id: UUID | None = None,
     days: int | None = Query(None, ge=1, le=3650),
@@ -620,47 +760,87 @@ def simulations_report(
     borrowed from elsewhere would otherwise disappear from their own numbers.
 
     `days` restringe ai tentativi degli ultimi N giorni, come nella metà
-    parlata: i due selettori della dashboard sono lo stesso periodo.
+    parlata: i due selettori della dashboard sono lo stesso periodo. E come
+    di là, oltre quel filtro c'è REPORT_ROW_CAP.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
     since = _since(days)
+    # Colonne e non entità, come nell'altra metà: di un tentativo servono la
+    # data, due conteggi e un voto, e caricarne l'oggetto intero costruirebbe
+    # in memoria anche le risposte date, che qui nessuno guarda.
     query = (
         db.query(
-            SimulationAttempt,
+            SimulationAttempt.id,
+            SimulationAttempt.simulation_id,
+            SimulationAttempt.created_at,
+            SimulationAttempt.correct_count,
+            SimulationAttempt.question_count,
+            # I punti e non il voto: il voto e' una property calcolata sul
+            # modello (vedi SimulationAttempt.score), quindi il database non
+            # sa darlo e si ricava qui con la stessa funzione
+            SimulationAttempt.earned_points,
             TechnicalSimulation.title,
             TechnicalSimulation.kind,
             TechnicalSimulation.source,
-            User,
+            User.id,
+            User.email,
+            User.nome,
+            User.cognome,
+            User.organization_id,
+            Organization.name,
         )
         .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
         .join(User, User.id == SimulationAttempt.user_id)
+        .outerjoin(Organization, Organization.id == User.organization_id)
     )
     if scope_org_id is not None:
         query = query.filter(User.organization_id == scope_org_id)
     if since is not None:
         query = query.filter(SimulationAttempt.created_at >= since)
-    # Oldest first, like the evaluations report: the charts plot in this order.
-    rows = query.order_by(SimulationAttempt.created_at.asc()).all()
-    return [
+
+    # Dalla più recente per tagliare dalla parte giusta, una in più del tetto
+    # per sapere se ce n'erano altre, e poi rivoltate: i grafici disegnano in
+    # ordine di tempo, come nella metà parlata.
+    found = query.order_by(SimulationAttempt.created_at.desc()).limit(REPORT_ROW_CAP + 1).all()
+    truncated = len(found) > REPORT_ROW_CAP
+    rows = [
         SimulationReportRow(
-            attempt_id=attempt.id,
-            simulation_id=attempt.simulation_id,
+            attempt_id=attempt_id,
+            simulation_id=simulation_id,
             simulation_title=title,
             simulation_kind=kind,
             simulation_source=source,
-            user_id=user.id,
-            user_email=user.email,
-            user_nome=user.nome,
-            user_cognome=user.cognome,
-            organization_id=user.organization_id,
-            organization_name=user.organization_name,
-            attempted_at=attempt.created_at,
-            correct_count=attempt.correct_count,
-            question_count=attempt.question_count,
-            score=attempt.score,
+            user_id=user_id,
+            user_email=email,
+            user_nome=nome,
+            user_cognome=cognome,
+            organization_id=organization_id,
+            organization_name=organization_name,
+            attempted_at=attempted_at,
+            correct_count=correct_count,
+            question_count=question_count,
+            score=attempt_score(earned_points or 0.0, question_count),
         )
-        for attempt, title, kind, source, user in rows
+        for (
+            attempt_id,
+            simulation_id,
+            attempted_at,
+            correct_count,
+            question_count,
+            earned_points,
+            title,
+            kind,
+            source,
+            user_id,
+            email,
+            nome,
+            cognome,
+            organization_id,
+            organization_name,
+        ) in found[:REPORT_ROW_CAP]
     ]
+    rows.reverse()
+    return SimulationReportPage(rows=rows, truncated=truncated)
 
 
 @router.get("/evaluations-report/export")
@@ -680,7 +860,8 @@ def export_evaluations_report(
     canale) restano all'autofiltro del foglio.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    content = evaluations_report_xlsx(_evaluation_report_rows(db, scope_org_id, _since(days)))
+    rows, _labels, _truncated = _evaluation_report_rows(db, scope_org_id, _since(days))
+    content = evaluations_report_xlsx(rows)
     filename = f"report-valutazioni-{datetime.now(UTC).strftime('%Y-%m-%d')}.xlsx"
     return Response(
         content=content,

@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { fetchEvaluationsReportXlsx } from '../services/admin'
 import { useEvaluationsReport, useSimulationsReport } from '../hooks/useReports'
-import type { EvaluationReportRow } from '../services/admin'
+import type { EvaluationReportRow, SimulationReportRow } from '../services/admin'
 import { saveBlob } from '../services/api'
 import { useOrganizations } from '../hooks/useOrganizations'
 import { isAdmin, isSuperAdmin } from '../services/auth'
@@ -16,6 +17,7 @@ import type { ModeFilter } from './conversationMode'
 import { KIND_FILTERS } from './simulationFormat'
 import type { KindFilter } from './simulationFormat'
 import DataTable, { Td, Tr } from './DataTable'
+import type { DataTableColumn } from './DataTable'
 import EmptyState from './EmptyState'
 import FilterTabs from './FilterTabs'
 import Notice from './Notice'
@@ -71,6 +73,15 @@ const PERIOD_PARAM = 'periodo'
 /** La radice degli id che legano le due linguette ai loro pannelli. */
 const TAB_BASE = 'dashboard'
 
+/* Il vuoto da mostrare finché una lettura non è arrivata. Sono costanti e
+ * non `?? []` scritto sul posto: quello sarebbe un array nuovo a ogni render,
+ * e siccome da qui scendono tutti i conteggi e tutte le medie della pagina,
+ * ogni `useMemo` sotto si rifarebbe da capo a ogni battuta scritta nella
+ * ricerca. Un riferimento stabile è quello che li tiene fermi. */
+const NO_EVALUATIONS: EvaluationReportRow[] = []
+const NO_SIMULATIONS: SimulationReportRow[] = []
+const NO_LABELS: Record<string, string> = {}
+
 interface CriterionAvg {
   key: string
   label: string
@@ -111,28 +122,59 @@ function evaluationColumns(criteria: CriterionAvg[]) {
     px.conversazione + px.data + px.utente + px.avatar + px.voto + criteria.length * px.criterio
   const width = (columnPx: number) => `${((columnPx / totalPx) * 100).toFixed(2)}%`
 
-  return {
-    minWidth: `${totalPx}px`,
-    columns: [
-      {
-        key: 'conversazione',
-        label: 'Conversazione',
-        compact: true,
-        width: width(px.conversazione),
-      },
-      { key: 'data', label: 'Data', compact: true, width: width(px.data) },
-      { key: 'utente', label: 'Utente', compact: true, width: width(px.utente) },
-      { key: 'avatar', label: 'Avatar', compact: true, width: width(px.avatar) },
-      ...criteria.map((c) => ({
-        key: c.key,
-        label: shortCriterionLabel(c.key, c.label),
-        title: c.label,
-        compact: true,
-        width: width(px.criterio),
-      })),
-      { key: 'voto', label: 'Voto', compact: true, width: width(px.voto) },
-    ],
-  }
+  /* Ogni colonna sa da sé su cosa si ordina, criteri compresi: quella di un
+     criterio legge il proprio punteggio dalla riga, e una conversazione a cui
+     quel criterio non è stato dato finisce in fondo invece di valere zero,
+     che è un voto e non un'assenza. È la colonna che risponde a "su cosa
+     inciampa questo gruppo", e a occhio, su una tabella di sei numeri per
+     riga, non si legge. */
+  const columns: DataTableColumn<EvaluationReportRow>[] = [
+    {
+      key: 'conversazione',
+      label: 'Conversazione',
+      compact: true,
+      width: width(px.conversazione),
+      sortValue: (r) => r.conversation_title,
+    },
+    {
+      key: 'data',
+      label: 'Data',
+      compact: true,
+      width: width(px.data),
+      sortValue: (r) => r.conversation_at,
+    },
+    {
+      key: 'utente',
+      label: 'Utente',
+      compact: true,
+      width: width(px.utente),
+      sortValue: (r) => personName(r),
+    },
+    {
+      key: 'avatar',
+      label: 'Avatar',
+      compact: true,
+      width: width(px.avatar),
+      sortValue: (r) => r.avatar_name,
+    },
+    ...criteria.map((c) => ({
+      key: c.key,
+      label: shortCriterionLabel(c.key, c.label),
+      title: c.label,
+      compact: true,
+      width: width(px.criterio),
+      sortValue: (r: EvaluationReportRow) => r.criteria[c.key] ?? null,
+    })),
+    {
+      key: 'voto',
+      label: 'Voto',
+      compact: true,
+      width: width(px.voto),
+      sortValue: (r) => r.overall_score,
+    },
+  ]
+
+  return { minWidth: `${totalPx}px`, columns }
 }
 
 interface UserAvg {
@@ -206,13 +248,18 @@ export default function DashboardPage() {
   const period = pickOption<PeriodValue>(params.get(PERIOD_PARAM), PERIOD_OPTIONS, 'all')
   const days = period === 'all' ? undefined : Number(period)
 
+  /* La casella scrive subito, il filtro aspetta la fine della parola. È la
+   * ricerca dove conta di più: sotto ci sono tutte le valutazioni del
+   * periodo, e senza attesa ogni tasto premuto le riscorreva tutte per
+   * ridisegnare una tabella di dieci righe. */
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search)
   const [detailRow, setDetailRow] = useState<EvaluationReportRow | null>(null)
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState('')
 
   const {
-    data: rows = [],
+    data: evaluations,
     isPending: isLoadingEvaluations,
     error: loadError,
     refetch,
@@ -223,11 +270,23 @@ export default function DashboardPage() {
    * usa il simulatore non deve pagare la scansione dei tentativi dentro la
    * lettura delle valutazioni. */
   const {
-    data: simulationRows = [],
+    data: simulations,
     isPending: isLoadingSimulations,
     error: simulationsError,
     refetch: refetchSimulations,
   } = useSimulationsReport(orgFilter, days, isAdmin(user))
+
+  const rows = evaluations?.rows ?? NO_EVALUATIONS
+  const simulationRows = simulations?.rows ?? NO_SIMULATIONS
+  /* Le etichette per esteso dei criteri, dette una volta per risposta invece
+   * che sei volte per riga. Restano del server: qui non se ne tiene una
+   * copia, per la ragione scritta in testa a evaluationCriteria. */
+  const criteriaLabels = evaluations?.criteria_labels ?? NO_LABELS
+  /* Il periodo scelto pesava più del tetto del server, quindi quello che si
+   * sta guardando sono le prove più recenti e non tutte. Va detto: medie di
+   * una parte dello storico presentate come le medie di tutto sarebbero un
+   * numero sbagliato dato con sicurezza. */
+  const isTruncated = Boolean(evaluations?.truncated || simulations?.truncated)
 
   /* Le due metà si aspettano solo quando serve: la linguetta che si sta
    * guardando disegna appena i suoi dati sono pronti, senza restare ferma
@@ -331,24 +390,27 @@ export default function DashboardPage() {
 
   /* Media per criterio, nell'ordine in cui i criteri arrivano dal backend */
   const criteriaAvgs = useMemo<CriterionAvg[]>(() => {
-    const acc = new Map<string, { label: string; sum: number; count: number }>()
+    const acc = new Map<string, { sum: number; count: number }>()
     const order: string[] = []
     for (const r of filtered) {
-      for (const c of r.criteria) {
-        if (!acc.has(c.key)) {
-          acc.set(c.key, { label: c.label, sum: 0, count: 0 })
-          order.push(c.key)
+      for (const [key, score] of Object.entries(r.criteria)) {
+        if (!acc.has(key)) {
+          acc.set(key, { sum: 0, count: 0 })
+          order.push(key)
         }
-        const entry = acc.get(c.key)!
-        entry.sum += c.score
+        const entry = acc.get(key)!
+        entry.sum += score
         entry.count += 1
       }
     }
+    /* L'etichetta per esteso arriva dal vocabolario della risposta, e la
+       chiave le fa da ripiego: un criterio che il server manda senza
+       etichetta deve comunque intestare la sua colonna. */
     return order.map((key) => {
       const e = acc.get(key)!
-      return { key, label: e.label, avg: e.sum / e.count }
+      return { key, label: criteriaLabels[key] ?? key, avg: e.sum / e.count }
     })
-  }, [filtered])
+  }, [filtered, criteriaLabels])
 
   const evaluationTable = useMemo(() => evaluationColumns(criteriaAvgs), [criteriaAvgs])
 
@@ -401,7 +463,7 @@ export default function DashboardPage() {
     () =>
       detailRows.filter((r) =>
         matchesSearch(
-          search,
+          debouncedSearch,
           r.conversation_title,
           // The channel is searchable by the same word the badge shows
           conversationModeLabel(r.mode),
@@ -411,7 +473,7 @@ export default function DashboardPage() {
           formatDateTime(r.conversation_at),
         ),
       ),
-    [detailRows, search],
+    [detailRows, debouncedSearch],
   )
 
   /** Il conteggio sulla linguetta, finché la sua metà non è arrivata. */
@@ -463,6 +525,19 @@ export default function DashboardPage() {
         />
       ) : (
         <>
+          {/* Le prove del periodo erano più di quante il server ne manda in
+              una volta, quindi questi sono i grafici delle più recenti. Va
+              detto sopra i grafici e non sotto: sono medie di una parte dello
+              storico, e chi le legge senza saperlo le prende per le medie di
+              tutto. Il rimedio è restringere il periodo, che è il comando che
+              sta qui accanto. */}
+          {isTruncated && (
+            <Notice className="mb-5">
+              Le prove del periodo scelto sono troppe per essere lette in una volta: i grafici e la
+              tabella mostrano le più recenti. Restringi il periodo per avere un intervallo completo
+            </Notice>
+          )}
+
           {/* Le due prove non si guardano insieme: una linguetta per volta,
            * perché "come parlano" e "cosa sanno" sono due domande e mescolarne
            * i grafici in una colonna sola li farebbe leggere come un seguito
@@ -697,6 +772,7 @@ export default function DashboardPage() {
                     searchActions={
                       <Tooltip content="Scarica in Excel le valutazioni del periodo e dell'organizzazione selezionati, senza i filtri per utente e canale">
                         <button
+                          type="button"
                           className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.85rem] font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                           onClick={handleExportXlsx}
                           disabled={isExporting || rows.length === 0}
@@ -706,14 +782,13 @@ export default function DashboardPage() {
                         </button>
                       </Tooltip>
                     }
-                    isEmpty={searchedRows.length === 0}
+                    items={searchedRows}
                     emptyMessage={
-                      search
+                      debouncedSearch
                         ? 'Nessuna valutazione corrisponde alla ricerca.'
                         : 'Nessuna valutazione per la selezione corrente.'
                     }
-                  >
-                    {searchedRows.map((r) => (
+                    renderRow={(r) => (
                       <Tooltip
                         key={r.conversation_id}
                         content="Vedi conversazione e valutazione"
@@ -740,17 +815,17 @@ export default function DashboardPage() {
                             {r.avatar_name}
                           </Td>
                           {criteriaAvgs.map((c) => {
-                            const crit = r.criteria.find((rc) => rc.key === c.key)
+                            const score = r.criteria[c.key]
                             return (
                               <Td key={c.key} compact>
-                                {crit ? (
-                                  <span
-                                    className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(crit.score)}`}
-                                  >
-                                    {formatScore(crit.score)}
-                                  </span>
-                                ) : (
+                                {score === undefined ? (
                                   <span className="text-slate-600">—</span>
+                                ) : (
+                                  <span
+                                    className={`text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(score)}`}
+                                  >
+                                    {formatScore(score)}
+                                  </span>
                                 )}
                               </Td>
                             )
@@ -784,8 +859,8 @@ export default function DashboardPage() {
                           </Td>
                         </Tr>
                       </Tooltip>
-                    ))}
-                  </DataTable>
+                    )}
+                  />
                 </>
               )}
             </TabPanel>

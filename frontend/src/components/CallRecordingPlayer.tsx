@@ -149,6 +149,7 @@ export default forwardRef<CallRecordingPlayerHandle, CallRecordingPlayerProps>(
           </>
         ) : (
           <button
+            type="button"
             className={`flex shrink-0 cursor-pointer items-center whitespace-nowrap rounded-xl border border-white/6 bg-white/4 font-medium text-slate-400 transition hover:-translate-y-px hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${
               isInline ? 'gap-1.5 px-3 py-1 text-[0.72rem]' : 'gap-2 px-4 py-2 text-[0.85rem]'
             }`}

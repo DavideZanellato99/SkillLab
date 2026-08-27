@@ -179,7 +179,43 @@ Per connessioni lunghe (una chiamata vocale dura dieci minuti) la politica
 va scelta: **`least_conn`, non round robin**. Conta chi ne ha meno in corso
 adesso, non di chi sia il turno.
 
-### 2.9 Gli header di provenienza si sovrascrivono, non si accodano
+### 2.9 Quanto a lungo il browser si tiene quello che ha già
+
+Chi serve il file decide anche se il browser dovrà richiederlo. La regola
+segue una cosa sola: se il **nome** cambia insieme al contenuto, il file è
+immutabile e non si richiede mai più; se il nome resta lo stesso mentre il
+contenuto cambia, si richiede sempre, e la risposta è quasi sempre un 304.
+
+In [nginx](../frontend/nginx.conf), che serve la build compilata:
+
+- `/assets/` porta l'impronta del contenuto nel nome (Vite la scrive lì), e
+  prende un anno con `immutable`. Senza, il browser richiedeva per conferma
+  una ventina di file a ogni apertura, e nessuno di quei giri portava un byte
+  utile: tornavano tutti "non è cambiato". La regola è `location ^~` perché
+  altrimenti quella per estensione qui sotto vincerebbe, e i font e le
+  immagini con l'impronta nel nome ricadrebbero nella scadenza breve;
+- `index.html` è l'unico file senza impronta e l'unico che deve cambiare
+  sotto il naso di chi ha la pagina aperta, perché è lui a nominare gli asset
+  di questa build: prende `no-cache`, che non vuol dire non conservarlo ma
+  chiedere conferma prima di riusarlo;
+- le due icone in `public/` prendono un giorno: il nome non cambia col
+  contenuto, quindi la scadenza è corta abbastanza da non lasciarne in giro
+  una vecchia per giorni e lunga abbastanza da non richiederla a ogni pagina.
+
+In [Caddy](../caddy/Caddyfile), per i ritratti degli avatar sotto `/static`,
+la distinzione è fra i due tipi di file che ci finiscono. Un ritratto caricato
+si chiama `upload_<uuid>.<ext>` e quel nome nasce e muore col file
+(sostituire l'immagine di un avatar scrive un uuid nuovo), quindi è
+`immutable` nel senso proprio del termine. Il segnaposto con le iniziali si
+chiama invece `avatar_<id>.svg`, e il nome dipende dall'avatar e non dal
+contenuto: rinominare l'avatar riscrive lo stesso file con lettere diverse, e
+`immutable` bloccherebbe le vecchie iniziali nella cache di chi le ha già
+viste. Lì la scadenza è un'ora. Il secondo matcher esclude il primo con un
+`not` esplicito, perché due `header` che nominano lo stesso campo si
+applicano entrambi e l'ultimo vince. `/api/*` non riceve nessun header di
+cache.
+
+### 2.10 Gli header di provenienza si sovrascrivono, non si accodano
 
 L'applicazione legge il primo valore di `X-Forwarded-For` per sapere chi sta
 chiamando. Se il proxy lo accoda, basta che un client se lo mandi da solo
@@ -189,7 +225,7 @@ basato sull'IP.
 Il proxy che sta davanti a tutto deve **sovrascriverlo** con l'indirizzo che
 vede lui. È una riga, ed è la differenza fra un limite e la sua apparenza.
 
-### 2.10 Un backup non esiste finché non l'hai ripristinato
+### 2.11 Un backup non esiste finché non l'hai ripristinato
 
 Un volume non è un backup: protegge da un container ricreato, non da un
 disco che muore né da una cancellazione sbagliata.
@@ -202,7 +238,7 @@ primo errore.
 E poi la prova, che è l'unica cosa che conta: riversarlo su un database
 vuoto e contare le righe.
 
-### 2.11 Misurare prima di dimensionare
+### 2.12 Misurare prima di dimensionare
 
 Quante richieste regge un processo non si deduce, si misura. Da quel numero
 discende tutto: quanti processi, che macchina, quando serve la seconda.

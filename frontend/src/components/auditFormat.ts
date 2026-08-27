@@ -16,11 +16,19 @@ import type { DataTableColumn } from './DataTable'
  * Le percentuali sommano a 100. La data e ora non va a capo, quindi la sua
  * colonna è tarata sulla riga intera ("31/12/2025, 23:59:59"); l'oggetto si
  * prende quello che avanza perché è l'unica colonna dal contenuto lungo. */
-export const AUDIT_COLUMNS: DataTableColumn[] = [
-  { key: 'quando', label: 'Data e Ora', width: '15%' },
-  { key: 'utente', label: 'Utente', width: '20%' },
-  { key: 'organizzazione', label: 'Organizzazione', width: '14%' },
-  { key: 'azione', label: 'Azione', width: '15%' },
+/* Le quattro colonne ordinabili sono quelle che il server sa ordinare (vedi
+ * routers/audit_logs.AUDIT_SORT_COLUMNS), e la chiave è la stessa da una
+ * parte e dall'altra: qui il registro arriva a finestre, quindi l'ordine non
+ * lo può fare la tabella su quello che ha in mano.
+ *
+ * L'oggetto e l'esito restano fuori: il primo è un riassunto composto a
+ * lettura, il secondo un codice tradotto in tre parole, e nessuno dei due è
+ * una colonna del database su cui si possa ordinare l'intero registro. */
+export const AUDIT_COLUMNS: DataTableColumn<AuditLog>[] = [
+  { key: 'data', label: 'Data e Ora', width: '15%', sortable: true },
+  { key: 'utente', label: 'Utente', width: '20%', sortable: true },
+  { key: 'organizzazione', label: 'Organizzazione', width: '14%', sortable: true },
+  { key: 'azione', label: 'Azione', width: '15%', sortable: true },
   { key: 'oggetto', label: 'Oggetto', width: '22%' },
   { key: 'esito', label: 'Esito', compact: true, width: '8%' },
   { key: 'dettaglio', ariaLabel: 'Dettaglio', width: '6%' },

@@ -374,7 +374,7 @@ def test_the_dashboard_reports_the_corrected_score(
         json={"override_score": 8.5, "override_reason": "Rivalutato con il tutor."},
     )
 
-    row = admin_client.get("/api/admin/evaluations-report").json()[0]
+    row = admin_client.get("/api/admin/evaluations-report").json()["rows"][0]
 
     assert row["overall_score"] == 8.5
     assert row["ai_overall_score"] == 6.0

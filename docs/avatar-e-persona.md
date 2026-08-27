@@ -293,8 +293,24 @@ tutto ciò che un browser potrebbe eseguire, e un SVG può contenere script.
 Passano PNG, JPEG e WebP, con un tetto di 2 MB, e l'estensione salvata è quella
 che la firma dimostra.
 
+**Il file si riduce nel browser prima di partire**
+([imageResize](../frontend/src/services/imageResize.ts)): lato lungo a 512 px
+e conversione in WebP. Chi carica una foto la prende da dove ce l'ha, quattro
+megapixel usciti da un telefono o uno screenshot a schermo intero, e quella
+finiva sul disco così com'era per essere poi disegnata dentro un tondo da
+cento pixel, a ogni riga della tabella e a ogni bolla della chat. Ridurla di
+qua e non di là risparmia anche la salita, che su una connessione d'ufficio è
+la metà lenta; il tetto dei 2 MB resta dov'è, come rete di sicurezza per
+quello che al modulo non passa davanti. Un formato che il browser non sa
+decodificare, o un canvas che non parte, fanno tornare indietro il file
+originale: un'ottimizzazione che impedisce di caricare un ritratto ha fatto
+più danni di quanti ne eviti.
+
 Senza file, il backend genera un SVG con le iniziali e una delle palette
-predefinite.
+predefinite. I due tipi di file si comportano in modo opposto rispetto alla
+cache del browser, e [infrastruttura.md](infrastruttura.md) dice come:
+`upload_<uuid>` non cambia mai, `avatar_<id>.svg` viene riscritto quando
+l'avatar cambia nome.
 
 Accanto al caricamento c'è un campo per il percorso, e accetta **solo un
 percorso di qui**: un ritratto ospitato altrove non si vedrebbe comunque, la

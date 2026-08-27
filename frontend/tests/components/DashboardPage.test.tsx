@@ -55,7 +55,7 @@ function valutazione(over: Partial<EvaluationReportRow> = {}): EvaluationReportR
     ai_overall_score: 7,
     has_override: false,
     has_review: false,
-    criteria: [{ key: 'ascolto', label: 'Ascolto attivo', score: 7 }],
+    criteria: { ascolto: 7 },
     ...over,
   }
 }
@@ -63,23 +63,29 @@ function valutazione(over: Partial<EvaluationReportRow> = {}): EvaluationReportR
 const refetchValutazioni = vi.fn()
 const refetchTentativi = vi.fn()
 
-/** Cosa rispondono le due letture: pronte e vuote, se non si dice altro. */
+/* Cosa rispondono le due letture: pronte e vuote, se non si dice altro.
+ *
+ * Le etichette per esteso dei criteri arrivano una volta per risposta e non
+ * su ogni riga, quindi il vocabolario si costruisce qui accanto alle righe:
+ * è la forma che il server manda. */
 function reports({
   rows = [] as EvaluationReportRow[],
+  criteriaLabels = { ascolto: 'Ascolto attivo' } as Record<string, string>,
   simulations = [] as unknown[],
+  truncated = false,
   evaluationsPending = false,
   simulationsPending = false,
   error = null as unknown,
 } = {}) {
   useEvaluationsReport.mockReturnValue({
-    data: rows,
+    data: { criteria_labels: criteriaLabels, rows, truncated },
     isPending: evaluationsPending,
     isFetching: false,
     error,
     refetch: refetchValutazioni,
   })
   useSimulationsReport.mockReturnValue({
-    data: simulations,
+    data: { rows: simulations, truncated: false },
     isPending: simulationsPending,
     isFetching: false,
     error: null,
@@ -298,5 +304,49 @@ describe('la tabella delle valutazioni', () => {
     await userEvent.click(screen.getByText('Reclamo carta'))
 
     expect(screen.getByText('dettaglio di c-1')).toBeInTheDocument()
+  })
+
+  /* Le etichette per esteso arrivano una volta per risposta e non su ogni
+   * riga: qui non se ne tiene una copia, perché una lista ricopiata a mano
+   * col tempo racconta criteri diversi da quelli su cui il giudizio è stato
+   * dato. La colonna si intesta col nome corto e tiene quello intero nel
+   * tooltip. */
+  it('intesta la colonna di un criterio con l’etichetta della risposta', () => {
+    reports({
+      rows: [valutazione({ criteria: { rispetto_fasi_chiamata: 8 } })],
+      criteriaLabels: { rispetto_fasi_chiamata: 'Rispetto delle fasi della chiamata' },
+    })
+    renderDashboard()
+
+    expect(screen.getByRole('columnheader', { name: /Fasi/ })).toBeInTheDocument()
+  })
+
+  /* Un criterio che il server manda senza etichetta deve comunque intestare
+   * la sua colonna, invece di lasciarla senza nome. */
+  it('ripiega sulla chiave quando l’etichetta non c’è', () => {
+    reports({ rows: [valutazione({ criteria: { cortesia: 6 } })], criteriaLabels: {} })
+    renderDashboard()
+
+    expect(screen.getByRole('columnheader', { name: /cortesia/ })).toBeInTheDocument()
+  })
+})
+
+/* Il tetto del server esiste perché "sempre" su un tenant di tre anni è
+ * tutto lo storico a ogni apertura. Quando scatta, quello che si guarda sono
+ * le prove più recenti: dirlo è la differenza fra una pagina che si sa
+ * incompleta e delle medie parziali lette come le medie di tutto. */
+describe('quando le prove del periodo sono troppe', () => {
+  it('avverte che i grafici mostrano le più recenti', () => {
+    reports({ rows: [valutazione()], truncated: true })
+    renderDashboard()
+
+    expect(screen.getByText(/mostrano le più recenti/)).toBeInTheDocument()
+  })
+
+  it('non dice niente quando ci stanno tutte', () => {
+    reports({ rows: [valutazione()] })
+    renderDashboard()
+
+    expect(screen.queryByText(/mostrano le più recenti/)).not.toBeInTheDocument()
   })
 })

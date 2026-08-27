@@ -27,6 +27,13 @@ export interface AuditLogFilters {
   dateFrom: string
   dateTo: string
   search: string
+  /* L'ordinamento sta con i filtri e non a parte perché fa la stessa cosa:
+   * cambia la domanda che si fa al server, quindi è una chiave di cache
+   * diversa e riparte dalla prima finestra. Ordinare tenendo le pagine già
+   * caricate vorrebbe dire rimescolare duecento righe e chiamarle le prime
+   * duecento dell'ordine nuovo. */
+  sort?: string
+  direction?: 'asc' | 'desc'
 }
 
 export function useAuditLogs(filters: AuditLogFilters, enabled = true) {

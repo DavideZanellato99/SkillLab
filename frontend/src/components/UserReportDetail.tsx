@@ -38,6 +38,7 @@
  * filtri, e questa è la schermata dentro la schermata. */
 
 import { useState } from 'react'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import type {
   ConversationReport,
   SimulationAttemptReport,
@@ -90,39 +91,46 @@ const PAGINATE_OVER = 10
 
 /* Le colonne delle due prove. Sono diverse perché sono diverse le domande:
  * di una conversazione si guarda quanto è durata e con chi, di un test quante
- * risposte erano giuste. */
-/* Le percentuali sommano a 100 in tutte e due. La data non va a capo, quindi
+ * risposte erano giuste.
+ *
+ * Le percentuali sommano a 100 in tutte e due. La data non va a capo, quindi
  * la sua colonna è tarata sulla riga intera con l'ora; il titolo si prende
- * quello che avanza, perché è l'unico testo che può essere lungo davvero. */
-const CONVERSATION_COLUMNS: DataTableColumn[] = [
-  { key: 'canale', label: 'Canale', width: '10%' },
-  { key: 'conversazione', label: 'Conversazione', width: '26%' },
-  { key: 'avatar', label: 'Avatar', width: '18%' },
-  { key: 'data', label: 'Data', width: '14%' },
+ * quello che avanza, perché è l'unico testo che può essere lungo davvero.
+ *
+ * Su una conversazione non valutata il voto è vuoto e finisce in fondo in
+ * tutti e due i versi: non è uno zero, è un giudizio che non c'è ancora. */
+const CONVERSATION_COLUMNS: DataTableColumn<ConversationReport>[] = [
+  { key: 'canale', label: 'Canale', width: '10%', sortValue: (c) => conversationModeLabel(c.mode) },
+  { key: 'conversazione', label: 'Conversazione', width: '26%', sortValue: (c) => c.title },
+  { key: 'avatar', label: 'Avatar', width: '18%', sortValue: (c) => c.avatar_name },
+  { key: 'data', label: 'Data', width: '14%', sortValue: (c) => c.created_at },
   {
     key: 'messaggi',
     label: 'Msg',
     compact: true,
     title: 'Messaggi scambiati nella conversazione',
     width: '7%',
+    sortValue: (c) => c.message_count,
   },
-  { key: 'durata', label: 'Durata', width: '11%' },
-  { key: 'voto', label: 'Voto', compact: true, width: '8%' },
+  { key: 'durata', label: 'Durata', width: '11%', sortValue: (c) => c.duration_seconds },
+  { key: 'voto', label: 'Voto', compact: true, width: '8%', sortValue: (c) => c.score },
   { key: 'elimina', ariaLabel: 'Elimina', compact: true, width: '6%' },
 ]
 
-const SIMULATION_COLUMNS: DataTableColumn[] = [
-  { key: 'tipo', label: 'Tipo', width: '16%' },
-  { key: 'simulazione', label: 'Simulazione', width: '36%' },
-  { key: 'data', label: 'Data', width: '16%' },
+const SIMULATION_COLUMNS: DataTableColumn<SimulationAttemptReport>[] = [
+  { key: 'tipo', label: 'Tipo', width: '16%', sortValue: (a) => kindLabel(a.simulation_kind) },
+  { key: 'simulazione', label: 'Simulazione', width: '36%', sortValue: (a) => a.simulation_title },
+  { key: 'data', label: 'Data', width: '16%', sortValue: (a) => a.created_at },
   {
     key: 'corrette',
     label: 'Corrette',
     compact: true,
     title: 'Risposte giuste sul totale delle domande',
     width: '12%',
+    // Sulla frazione: otto su dieci vanno prima di otto su venti
+    sortValue: (a) => (a.question_count === 0 ? 0 : a.correct_count / a.question_count),
   },
-  { key: 'voto', label: 'Voto', compact: true, width: '12%' },
+  { key: 'voto', label: 'Voto', compact: true, width: '12%', sortValue: (a) => a.score },
   { key: 'elimina', ariaLabel: 'Elimina', compact: true, width: '8%' },
 ]
 
@@ -210,10 +218,15 @@ function ConversationRow({
       <Td>
         {/* La categoria dell'avatar è il pallino colorato e la parola sotto
             il nome: è il contorno di chi ha parlato, non una seconda
-            targhetta che si contende la riga con quella del canale. */}
-        <span className="flex items-center justify-center gap-2">
+            targhetta che si contende la riga con quella del canale.
+
+            Il pallino si allinea alla riga del nome e non al blocco intero:
+            centrato sulle due righe finiva a metà strada fra il nome e la
+            categoria, cioè accanto a nessuno dei due. Il margine in alto è
+            quanto serve a portarlo al centro della riga del nome. */}
+        <span className="flex items-start justify-center gap-2">
           <span
-            className={`h-2 w-2 shrink-0 rounded-full ${categoryDotClass(conversation.avatar_category_color)}`}
+            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${categoryDotClass(conversation.avatar_category_color)}`}
           />
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-[0.85rem] text-slate-300">
@@ -345,10 +358,15 @@ export default function UserReportDetail({
    *
    * Entrambe partono da "tutto": qui si guarda cosa una persona ha fatto, e
    * un filtro già acceso ne nasconderebbe una parte a chi non sa che c'è. */
+  /* Le due caselle scrivono subito, i due filtri aspettano la fine della
+   * parola: sotto ci sono tutte le prove della persona nel periodo, e chi si
+   * allena da mesi ne ha parecchie. */
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
   const [conversationSearch, setConversationSearch] = useState('')
+  const debouncedConversationSearch = useDebouncedValue(conversationSearch)
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [simulationSearch, setSimulationSearch] = useState('')
+  const debouncedSimulationSearch = useDebouncedValue(simulationSearch)
 
   const isConversations = tab === 'conversations'
   const isDebriefing = tab === 'debriefing'
@@ -360,7 +378,7 @@ export default function UserReportDetail({
     (c) =>
       (modeFilter === 'all' || c.mode === modeFilter) &&
       matchesSearch(
-        conversationSearch,
+        debouncedConversationSearch,
         c.title,
         c.avatar_name,
         c.avatar_category,
@@ -371,7 +389,7 @@ export default function UserReportDetail({
     (a) =>
       (kindFilter === 'all' || a.simulation_kind === kindFilter) &&
       matchesSearch(
-        simulationSearch,
+        debouncedSimulationSearch,
         a.simulation_title,
         kindLabel(a.simulation_kind),
         sourceLabel(a.simulation_source),
@@ -387,7 +405,6 @@ export default function UserReportDetail({
   const attemptsShown = detail ? attempts.length : attemptsTotal
 
   const total = isConversations ? conversationsTotal : attemptsTotal
-  const shown = isConversations ? conversationsShown : attemptsShown
 
   /* Niente per il periodo scelto e niente per i filtri sono due notizie
    * diverse: "nessuna conversazione" davanti a una ricerca attiva si legge
@@ -448,67 +465,73 @@ export default function UserReportDetail({
         />
       ) : isPending ? (
         <LoadingState message="Caricamento delle prove svolte..." variant="modal" />
-      ) : (
-        /* Una tabella per linguetta, e non una che cambia colonne sotto le
+      ) : /* Una tabella per linguetta, e non una che cambia colonne sotto le
            mani: passando da una prova all'altra la pagina aperta e la
            ricerca in corso sono quelle dell'altra metà. */
+      /* Due tabelle e non una che si trasforma: le righe delle due prove
+           sono di due tipi diversi, e la sola cosa che avevano in comune era
+           il riquadro attorno. Il resto (colonne, ricerca, filtro, messaggio
+           a vuoto) era già scritto due volte, dentro un ternario per
+           proprietà. */
+      isConversations ? (
         <DataTable
-          key={tab}
-          columns={isConversations ? CONVERSATION_COLUMNS : SIMULATION_COLUMNS}
-          searchValue={isConversations ? conversationSearch : simulationSearch}
-          onSearchChange={isConversations ? setConversationSearch : setSimulationSearch}
-          searchPlaceholder={
-            isConversations ? 'Cerca per titolo, avatar o canale...' : 'Cerca per titolo o tipo...'
-          }
+          columns={CONVERSATION_COLUMNS}
+          items={conversations}
+          searchValue={conversationSearch}
+          onSearchChange={setConversationSearch}
+          searchPlaceholder="Cerca per titolo, avatar o canale..."
           searchActions={
-            isConversations ? (
-              <Select
-                ariaLabel="Canale delle conversazioni"
-                className="w-[180px]"
-                value={modeFilter}
-                onChange={(value) => setModeFilter(value as ModeFilter)}
-                options={MODE_OPTIONS}
-              />
-            ) : (
-              <Select
-                ariaLabel="Tipo delle simulazioni"
-                className="w-[180px]"
-                value={kindFilter}
-                onChange={(value) => setKindFilter(value as KindFilter)}
-                options={KIND_OPTIONS}
-              />
-            )
+            <Select
+              ariaLabel="Canale delle conversazioni"
+              className="w-[180px]"
+              value={modeFilter}
+              onChange={(value) => setModeFilter(value as ModeFilter)}
+              options={MODE_OPTIONS}
+            />
           }
           paginate={total > PAGINATE_OVER}
           /* Cambiare filtro o ricerca riporta alla prima pagina: restare
-             alla terza di un elenco che non è più quello vuol dire guardare
-             righe che non rispondono a niente. */
-          pageResetKey={
-            isConversations
-              ? `${modeFilter}|${conversationSearch}`
-              : `${kindFilter}|${simulationSearch}`
-          }
-          isEmpty={shown === 0}
+               alla terza di un elenco che non è più quello vuol dire guardare
+               righe che non rispondono a niente. */
+          pageResetKey={`${modeFilter}|${debouncedConversationSearch}`}
           emptyMessage={emptyMessage}
-        >
-          {isConversations
-            ? conversations.map((conversation) => (
-                <ConversationRow
-                  key={conversation.id}
-                  conversation={conversation}
-                  onOpen={onOpenConversation}
-                  onDelete={onDeleteConversation}
-                />
-              ))
-            : attempts.map((attempt) => (
-                <SimulationRow
-                  key={attempt.id}
-                  attempt={attempt}
-                  onOpen={onOpenAttempt}
-                  onDelete={onDeleteAttempt}
-                />
-              ))}
-        </DataTable>
+          renderRow={(conversation) => (
+            <ConversationRow
+              key={conversation.id}
+              conversation={conversation}
+              onOpen={onOpenConversation}
+              onDelete={onDeleteConversation}
+            />
+          )}
+        />
+      ) : (
+        <DataTable
+          columns={SIMULATION_COLUMNS}
+          items={attempts}
+          searchValue={simulationSearch}
+          onSearchChange={setSimulationSearch}
+          searchPlaceholder="Cerca per titolo o tipo..."
+          searchActions={
+            <Select
+              ariaLabel="Tipo delle simulazioni"
+              className="w-[180px]"
+              value={kindFilter}
+              onChange={(value) => setKindFilter(value as KindFilter)}
+              options={KIND_OPTIONS}
+            />
+          }
+          paginate={total > PAGINATE_OVER}
+          pageResetKey={`${kindFilter}|${debouncedSimulationSearch}`}
+          emptyMessage={emptyMessage}
+          renderRow={(attempt) => (
+            <SimulationRow
+              key={attempt.id}
+              attempt={attempt}
+              onOpen={onOpenAttempt}
+              onDelete={onDeleteAttempt}
+            />
+          )}
+        />
       )}
     </div>
   )

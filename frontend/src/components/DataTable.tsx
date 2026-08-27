@@ -1,17 +1,34 @@
-import { Children } from 'react'
+import { useMemo, useState } from 'react'
 import type { HTMLAttributes, KeyboardEvent, ReactNode, TdHTMLAttributes } from 'react'
 import Tooltip from './Tooltip'
 import SearchInput from './SearchInput'
 import PaginationBar from './Pagination'
 import { usePagination } from '../hooks/usePagination'
+import { ChevronDownIcon, ChevronUpIcon, SortIcon } from './icons'
 
 /* Tabella condivisa dell'app: contenitore, header, righe e celle hanno un
  * unico stile definito qui — le pagine descrivono solo colonne e contenuto.
  *
+ * Riceve i dati e non le righe già disegnate. La differenza non è di gusto:
+ * finché arrivavano come `children`, la pagina costruiva un albero JSX per
+ * ogni elemento dell'elenco e la tabella ne mostrava dieci, quindi su un
+ * report di tremila valutazioni se ne buttavano via duemilanovecentonovanta
+ * a ogni battuta scritta nella ricerca. Con `items` e `renderRow` il taglio
+ * avviene prima: si disegna soltanto la pagina che si sta guardando.
+ *
  * Sfogliare le righe non è affare suo: quello sta in Pagination, che serve
  * anche agli elenchi che tabella non sono. */
 
-export interface DataTableColumn {
+export type SortDirection = 'asc' | 'desc'
+
+/** Su quale colonna un elenco è ordinato, e in che verso. */
+export interface SortState {
+  /** La `key` della colonna */
+  key: string
+  direction: SortDirection
+}
+
+export interface DataTableColumn<T = unknown> {
   key: string
   label?: ReactNode
   /* Larghezza della colonna, in percentuale della tabella (es. '18%'): le
@@ -25,12 +42,29 @@ export interface DataTableColumn {
   title?: string
   /** Nome accessibile per colonne senza label visibile */
   ariaLabel?: string
+  /* Il valore su cui questa colonna ordina, letto da una riga. Dichiararlo è
+   * quello che rende la colonna ordinabile: le azioni non lo sono, e nemmeno
+   * le colonne che mostrano un disegno al posto di un dato.
+   *
+   * Serve alle tabelle che ordinano da sé. Dove l'ordine lo decide il server
+   * (vedi `onSortChange`) la colonna si dichiara ordinabile con `sortable`,
+   * perché qui in memoria c'è una finestra sola dell'elenco e il valore
+   * delle righe non ancora scaricate non si può leggere. */
+  sortValue?: (item: T) => string | number | null | undefined
+  /** La colonna si ordina, ma è chi fornisce i dati a farlo. */
+  sortable?: boolean
 }
 
-interface DataTableProps {
-  columns: DataTableColumn[]
-  /** Quando true mostra `emptyMessage` al posto delle righe */
-  isEmpty?: boolean
+interface DataTableProps<T> {
+  columns: DataTableColumn<T>[]
+  /** Gli elementi da mostrare, già filtrati dalla pagina. */
+  items: T[]
+  /* Come si disegna una riga. Restituisce un elemento con la propria `key`
+   * (un `<Tr>`, o un Fragment quando sotto la riga se ne apre una seconda):
+   * sono elementi di un elenco, e la chiave è quello con cui React li
+   * riconosce da un ordinamento all'altro. */
+  renderRow: (item: T) => ReactNode
+  /** Cosa si legge al posto delle righe quando `items` è vuoto. */
   emptyMessage?: ReactNode
   /** Valore controllato della barra di ricerca; visibile solo se `onSearchChange` è definito */
   searchValue?: string
@@ -48,22 +82,49 @@ interface DataTableProps {
   footerNote?: ReactNode
   /** Disattiva la paginazione, mostrando tutte le righe senza footer (default: attiva) */
   paginate?: boolean
-  /** Cosa rende queste righe un elenco diverso (i filtri attivi, di solito):
-   *  quando cambia si torna alla prima pagina. */
-  pageResetKey?: unknown
+  /* Cosa rende queste righe un elenco diverso (i filtri attivi, di solito):
+   * quando cambia si torna alla prima pagina. L'ordinamento ci finisce da
+   * sé, quindi la pagina non ha bisogno di nominarlo. */
+  pageResetKey?: string
+  /* L'ordinamento deciso da fuori, per le tabelle che leggono l'elenco a
+   * finestre: passandolo insieme a `onSortChange` la tabella smette di
+   * ordinare e si limita a disegnare l'intestazione attiva. Ordinare qui
+   * quelle righe vorrebbe dire ordinare la sola finestra già scaricata, cioè
+   * dare per primo della classe il primo dei duecento arrivati. */
+  sort?: SortState | null
+  onSortChange?: (sort: SortState) => void
   /* Misura sotto la quale le colonne smettono di stringersi e a scorrere è
    * il contenitore. Le percentuali restano quelle dichiarate, ma di una
    * tabella troppo stretta sono percentuali di niente: su un telefono, o
    * in una tabella con dieci colonne, un po' di scorrimento orizzontale si
    * legge meglio di colonne schiacciate. */
   minWidth?: string
-  /** Righe del corpo: <Tr> con celle <Td>, una per elemento (un <Tr> = una riga di dati) */
-  children?: ReactNode
 }
 
-export default function DataTable({
+/* Un confronto solo per tutta l'app, costruito una volta: `localeCompare`
+ * chiamato riga per riga rimette insieme le regole della lingua a ogni
+ * coppia, e su un elenco lungo è il grosso del tempo dell'ordinamento.
+ * `numeric` mette "Tappa 2" prima di "Tappa 10", che è l'ordine che chi
+ * legge si aspetta da due nomi che finiscono con un numero. */
+const collator = new Intl.Collator('it', { sensitivity: 'base', numeric: true })
+
+/* Una cella senza valore non è né la più piccola né la più grande: è una
+ * cella che a quella domanda non risponde, quindi resta in fondo in tutti e
+ * due i versi invece di prendersi le prime righe a ogni inversione. */
+const isBlank = (value: unknown) => value === null || value === undefined || value === ''
+
+type SortableValue = string | number | null | undefined
+
+function compareValues(a: SortableValue, b: SortableValue) {
+  if (isBlank(a) || isBlank(b)) return isBlank(a) && isBlank(b) ? 0 : isBlank(a) ? 1 : -1
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  return collator.compare(String(a), String(b))
+}
+
+export default function DataTable<T>({
   columns,
-  isEmpty = false,
+  items,
+  renderRow,
   emptyMessage,
   searchValue = '',
   onSearchChange,
@@ -71,19 +132,60 @@ export default function DataTable({
   searchActions,
   footerNote,
   paginate = true,
-  pageResetKey,
+  pageResetKey = '',
+  sort,
+  onSortChange,
   minWidth = '880px',
-  children,
-}: DataTableProps) {
-  const rows = Children.toArray(children)
-  const { visible, bar } = usePagination(rows, pageResetKey)
+}: DataTableProps<T>) {
+  /* Due modi di ordinare, e a distinguerli è la presenza di `onSortChange`:
+   * senza, l'ordine è una faccenda interna alla tabella; con, la tabella non
+   * ordina niente e si limita a riportare la scelta a chi i dati li ha. */
+  const isSortControlled = Boolean(onSortChange)
+  const [ownSort, setOwnSort] = useState<SortState | null>(null)
+  const activeSort = isSortControlled ? (sort ?? null) : ownSort
 
-  const visibleRows = paginate ? visible : rows
-  const showFooter = paginate && !isEmpty && rows.length > 0
+  const sortedItems = useMemo(() => {
+    if (isSortControlled || !activeSort) return items
+    const read = columns.find((col) => col.key === activeSort.key)?.sortValue
+    if (!read) return items
+    const sign = activeSort.direction === 'asc' ? 1 : -1
+    /* Una copia, perché `sort` riordina l'array che riceve: questo arriva da
+     * un `useMemo` della pagina, ed è lo stesso che la pagina rilegge per
+     * contare le righe e per costruire l'Excel. */
+    return [...items].sort((a, b) => {
+      const left = read(a)
+      const right = read(b)
+      // Il verso non tocca le celle vuote, che restano in fondo comunque
+      if (isBlank(left) || isBlank(right)) return compareValues(left, right)
+      return compareValues(left, right) * sign
+    })
+  }, [items, columns, activeSort, isSortControlled])
+
+  const isEmpty = items.length === 0
+  /* Cambiare colonna o verso rimescola l'elenco, quindi la terza pagina di
+   * prima non è la terza pagina di adesso: si riparte dalla prima, come
+   * quando cambia un filtro. */
+  const sortKey = activeSort ? `${activeSort.key}:${activeSort.direction}` : ''
+  const { visible, bar } = usePagination(sortedItems, `${pageResetKey}|${sortKey}`)
+
+  const visibleItems = paginate ? visible : sortedItems
+  const showFooter = paginate && !isEmpty
   // Su una tabella vuota non c'è nessuna finestra da allargare
-  const showNote = Boolean(footerNote) && !isEmpty && rows.length > 0
+  const showNote = Boolean(footerNote) && !isEmpty
 
   const hasToolbar = Boolean(onSearchChange || searchActions)
+
+  const toggleSort = (key: string) => {
+    /* Una colonna nuova parte dal basso verso l'alto, quella già attiva si
+     * rovescia: due clic sulla stessa intestazione sono la domanda opposta,
+     * un clic su un'altra è una domanda nuova. */
+    const next: SortState =
+      activeSort?.key === key
+        ? { key, direction: activeSort.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: 'asc' }
+    if (onSortChange) onSortChange(next)
+    else setOwnSort(next)
+  }
 
   return (
     <div className="rounded-2xl border border-white/6 bg-gray-900/60 backdrop-blur-md">
@@ -98,10 +200,13 @@ export default function DataTable({
               value={searchValue}
               onChange={onSearchChange}
               placeholder={searchPlaceholder}
-              className="max-w-[340px] flex-1"
+              className="max-w-[340px] flex-1 max-md:max-w-none"
             />
           )}
-          {searchActions && <div className="ml-auto shrink-0">{searchActions}</div>}
+          {/* Su schermo stretto i comandi vanno a capo sotto la ricerca e
+              partono da sinistra: spinti a destra resterebbero appesi a un
+              bordo con il vuoto davanti. */}
+          {searchActions && <div className="ml-auto shrink-0 max-md:ml-0">{searchActions}</div>}
         </div>
       )}
       {/* "overflow-x-auto" serve allo scroll orizzontale e ritaglia anche gli
@@ -129,19 +234,13 @@ export default function DataTable({
           <thead>
             <tr>
               {columns.map((col) => (
-                <th
+                <HeaderCell
                   key={col.key}
-                  aria-label={col.ariaLabel}
-                  className={`border-b border-white/6 bg-gray-900/80 ${col.compact ? 'px-3' : 'px-6'} py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400`}
-                >
-                  {col.title ? (
-                    <Tooltip content={col.title}>
-                      <span className="inline-flex">{col.label}</span>
-                    </Tooltip>
-                  ) : (
-                    col.label
-                  )}
-                </th>
+                  column={col}
+                  sortable={isSortControlled ? Boolean(col.sortable) : Boolean(col.sortValue)}
+                  sort={activeSort}
+                  onToggle={toggleSort}
+                />
               ))}
             </tr>
           </thead>
@@ -153,7 +252,7 @@ export default function DataTable({
                 </td>
               </tr>
             ) : (
-              visibleRows
+              visibleItems.map((item) => renderRow(item))
             )}
           </tbody>
         </table>
@@ -170,6 +269,75 @@ export default function DataTable({
         </div>
       )}
     </div>
+  )
+}
+
+const headerCls =
+  'border-b border-white/6 bg-gray-900/80 py-4 text-center text-xs font-semibold uppercase tracking-wide text-slate-400'
+
+/* L'intestazione di una colonna ordinabile è un bottone e non un `th` con un
+ * `onClick` sopra: è un comando, quindi deve arrivare anche col tabulatore e
+ * con Invio, e chi usa uno screen reader deve sentirlo annunciare come tale.
+ * `aria-sort` invece resta sulla cella, che è dove lo standard lo cerca. */
+function HeaderCell<T>({
+  column,
+  sortable,
+  sort,
+  onToggle,
+}: {
+  column: DataTableColumn<T>
+  sortable: boolean
+  sort: SortState | null
+  onToggle: (key: string) => void
+}) {
+  const isActive = sortable && sort?.key === column.key
+  const direction = isActive ? sort!.direction : null
+  const label = column.title ? (
+    <Tooltip content={column.title}>
+      <span className="inline-flex">{column.label}</span>
+    </Tooltip>
+  ) : (
+    column.label
+  )
+
+  return (
+    <th
+      aria-label={column.ariaLabel}
+      aria-sort={
+        sortable
+          ? direction === 'asc'
+            ? 'ascending'
+            : direction === 'desc'
+              ? 'descending'
+              : 'none'
+          : undefined
+      }
+      className={`${headerCls} ${column.compact ? 'px-3' : 'px-6'}`}
+    >
+      {sortable ? (
+        <button
+          type="button"
+          onClick={() => onToggle(column.key)}
+          className="group flex w-full cursor-pointer items-center justify-center gap-1.5 border-none bg-transparent p-0 font-[inherit] text-[inherit] tracking-[inherit] text-slate-400 uppercase transition hover:text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500"
+        >
+          {label}
+          {direction === 'asc' ? (
+            <ChevronUpIcon size={13} className="shrink-0 text-violet-400" />
+          ) : direction === 'desc' ? (
+            <ChevronDownIcon size={13} className="shrink-0 text-violet-400" />
+          ) : (
+            /* Tenue e non nascosta: un comando che compare solo passandoci
+               sopra lo trova chi già sa che c'è. */
+            <SortIcon
+              size={13}
+              className="shrink-0 opacity-40 transition group-hover:opacity-100"
+            />
+          )}
+        </button>
+      ) : (
+        label
+      )}
+    </th>
   )
 }
 

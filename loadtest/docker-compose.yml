@@ -15,7 +15,7 @@ services:
       # Esposte sull'host perché è il backend, che gira in un altro
       # compose, a doverle raggiungere.
       - "8801:8801"  # finto ElevenLabs Scribe
-      - "8802:8802"  # finto Cartesia Sonic
+      - "8802:8802"  # finta sintesi ElevenLabs
       - "8803:8803"  # finto OpenAI
     environment:
       # Ritardi simulati dei fornitori. Non cambiano la capacità misurata,

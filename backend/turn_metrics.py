@@ -60,7 +60,7 @@ _SEGMENTS = [
     ("prep", None, MARK_LLM_REQUEST),
     ("llm_ttft", MARK_LLM_REQUEST, MARK_LLM_FIRST_TOKEN),
     ("tok2tts", MARK_LLM_FIRST_TOKEN, MARK_TTS_FIRST_SEND),
-    ("cartesia", MARK_TTS_FIRST_SEND, MARK_TTS_FIRST_AUDIO),
+    ("tts", MARK_TTS_FIRST_SEND, MARK_TTS_FIRST_AUDIO),
     ("send", MARK_TTS_FIRST_AUDIO, MARK_BROWSER_FIRST_AUDIO),
 ]
 
@@ -72,7 +72,7 @@ class TurnTimer:
 
     def __init__(self, turn_id: str, vad_ms: float | None):
         self.turn_id = turn_id
-        # Set once the turn opens its Cartesia context, so the TTS loop can
+        # Set once the turn opens its TTS context, so the TTS loop can
         # tell this turn's audio from a cancelled one's.
         self.context_id: str | None = None
         self.vad_ms = vad_ms
@@ -98,8 +98,8 @@ class TurnTimer:
     def count_tts_send(self) -> None:
         """Count one transcript chunk pushed while the TTS is still silent.
 
-        More than one means Cartesia was waiting on text rather than
-        synthesising: the 'cartesia' segment is then the LLM's token rate
+        More than one means the TTS was waiting on text rather than
+        synthesising: the 'tts' segment is then the LLM's token rate
         wearing the TTS's clothes, and speeding up the TTS would buy nothing.
         """
         if MARK_TTS_FIRST_AUDIO not in self._marks:
@@ -160,10 +160,10 @@ class TurnTimer:
     def format_line(self) -> str:
         vad = f"vad={self.vad_ms:.0f}" if self.vad_ms is not None else "vad=n/d"
         stages = " ".join(
-            # Flag a starved TTS inline: "cartesia=274(x3)" reads as "it took
+            # Flag a starved TTS inline: "tts=274(x3)" reads as "it took
             # three chunks of text before any audio came back".
             f"{k}={v:.0f}(x{self.tts_sends})"
-            if k == "cartesia" and self.tts_sends > 1
+            if k == "tts" and self.tts_sends > 1
             else f"{k}={v:.0f}"
             for k, v in self.segments().items()
         )
@@ -186,7 +186,7 @@ class CallMetrics:
         self._turns: list[TurnTimer] = []
         self._cancelled = 0
         self._call_start = time.perf_counter()
-        # Quanto a lungo resta aperto il contesto Cartesia di un turno. È il
+        # Quanto a lungo resta aperto il contesto TTS di un turno. È il
         # tempo in cui la chiamata occupa uno slot di concorrenza del piano,
         # che non è la durata dell'audio: il browser riproduce per quindici
         # secondi quello che la sintesi ha prodotto in due.
@@ -195,7 +195,7 @@ class CallMetrics:
         self._slot_interrupted = 0
 
     def open_tts_slot(self, context_id: str) -> None:
-        """Segna l'apertura del contesto Cartesia di un turno.
+        """Segna l'apertura del contesto TTS di un turno.
 
         La chiama ogni pezzo di testo mandato alla sintesi, ma conta solo il
         primo: i successivi entrano in un contesto già aperto, che lo slot lo
@@ -230,7 +230,7 @@ class CallMetrics:
         logger.info(timer.format_line())
 
     def _concurrency_lines(self) -> list[str]:
-        """Quanto di uno slot Cartesia è costata questa chiamata.
+        """Quanto di uno slot TTS è costata questa chiamata.
 
         Il limite del piano si conta in sintesi attive nello stesso istante,
         non in chiamate, e una chiamata tiene lo slot occupato solo a tratti:
@@ -246,7 +246,7 @@ class CallMetrics:
         if quota <= 0:
             return []
         lines = [
-            f"[LATENCY]   slot Cartesia occupato il {quota:.1f}% della chiamata, "
+            f"[LATENCY]   slot TTS occupato il {quota:.1f}% della chiamata, "
             f"cioè circa {100 / quota:.0f} chiamate per slot"
         ]
         if self._slot_interrupted:
@@ -291,7 +291,7 @@ class CallMetrics:
             lines.append(row("risposta", [t.reply_ms for t in self._turns]))
         lines.append(row("PERCEPITA", [t.perceived_ms for t in self._turns]))
         if self._slot_durations:
-            lines.append(row("slot_cartesia", self._slot_durations))
+            lines.append(row("slot_tts", self._slot_durations))
 
         lines.extend(self._concurrency_lines())
 

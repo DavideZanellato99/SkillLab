@@ -1,9 +1,13 @@
-"""Finto Cartesia Sonic.
+"""Finta sintesi ElevenLabs.
 
-Parla il protocollo di cartesia_service.tts_chunk_message: riceve pezzi di
-trascrizione dentro un context_id e restituisce eventi `chunk` con audio
-PCM16 a 24 kHz in base64, poi un `done`. Gestisce anche il messaggio di
-`cancel` che il backend manda quando un turno viene interrotto.
+Parla il protocollo di elevenlabs_tts_service: riceve pezzi di testo dentro
+un context_id e restituisce messaggi con `audio` PCM16 a 24 kHz in base64,
+poi un `isFinal`. Gestisce anche il `close_context`, che il backend manda
+sia a fine turno sia quando un turno viene interrotto.
+
+Il testo vuoto lo ignora senza chiudere niente: è il keep alive con cui il
+backend tiene su la socket mentre parla l'operatore, e sintetizzarlo
+gonfierebbe la banda misurata con audio che non esiste.
 
 Le due cose che rendono valida la simulazione:
 
@@ -31,7 +35,7 @@ CHUNK_MS = 40
 CHUNK_BYTES = BYTES_PER_SEC * CHUNK_MS // 1000
 
 # Quanto ci mette il primo audio ad arrivare dopo il primo pezzo di testo.
-# È il segmento "cartesia" che compare nelle righe [LATENCY] del backend.
+# È il segmento "tts" che compare nelle righe [LATENCY] del backend.
 TTFB_MS = float(os.getenv("MOCK_TTS_TTFB_MS", "180"))
 
 # Velocità del parlato: quanti caratteri di testo diventano un secondo di
@@ -59,8 +63,15 @@ class _Context:
         self.queue: asyncio.Queue = asyncio.Queue()
         self.task = asyncio.create_task(self._run())
 
-    def push(self, transcript: str, more_coming: bool) -> None:
-        self.queue.put_nowait((transcript, more_coming))
+    def push(self, text: str) -> None:
+        # Il testo vuoto è il keep alive: tiene su la connessione e non
+        # sintetizza niente, esattamente come il fornitore vero.
+        if text.strip():
+            self.queue.put_nowait(text)
+
+    def close(self) -> None:
+        """Fine del testo: quel che resta in cassa si sintetizza comunque."""
+        self.queue.put_nowait(None)
 
     def cancel(self) -> None:
         self.task.cancel()
@@ -79,9 +90,11 @@ class _Context:
             if budget < CHUNK_BYTES:
                 if chiuso:
                     break
-                transcript, more_coming = await self.queue.get()
-                budget += len(transcript) / CHARS_PER_SEC * BYTES_PER_SEC
-                chiuso = not more_coming
+                item = await self.queue.get()
+                if item is None:
+                    chiuso = True
+                else:
+                    budget += len(item) / CHARS_PER_SEC * BYTES_PER_SEC
                 continue
 
             if primo:
@@ -91,9 +104,11 @@ class _Context:
 
             # Testo arrivato nel frattempo, preso senza bloccare
             while not self.queue.empty():
-                transcript, more_coming = self.queue.get_nowait()
-                budget += len(transcript) / CHARS_PER_SEC * BYTES_PER_SEC
-                chiuso = chiuso or not more_coming
+                item = self.queue.get_nowait()
+                if item is None:
+                    chiuso = True
+                else:
+                    budget += len(item) / CHARS_PER_SEC * BYTES_PER_SEC
 
             pezzo = _audio(offset, CHUNK_BYTES)
             offset += CHUNK_BYTES
@@ -101,9 +116,8 @@ class _Context:
             await self.ws.send(
                 json.dumps(
                     {
-                        "type": "chunk",
-                        "context_id": self.context_id,
-                        "data": base64.b64encode(pezzo).decode("ascii"),
+                        "audio": base64.b64encode(pezzo).decode("ascii"),
+                        "contextId": self.context_id,
                     }
                 )
             )
@@ -114,7 +128,7 @@ class _Context:
             deadline += CHUNK_MS / 1000
             await asyncio.sleep(max(0.0, deadline - time.monotonic()))
 
-        await self.ws.send(json.dumps({"type": "done", "context_id": self.context_id}))
+        await self.ws.send(json.dumps({"isFinal": True, "contextId": self.context_id}))
 
 
 async def handler(ws) -> None:
@@ -130,17 +144,17 @@ async def handler(ws) -> None:
             if not context_id:
                 continue
 
-            if event.get("cancel"):
+            if event.get("close_context"):
                 ctx = contexts.pop(context_id, None)
                 if ctx:
-                    ctx.cancel()
+                    ctx.close()
                 continue
 
             ctx = contexts.get(context_id)
             if ctx is None or ctx.task.done():
                 ctx = _Context(ws, context_id)
                 contexts[context_id] = ctx
-            ctx.push(event.get("transcript") or "", bool(event.get("continue")))
+            ctx.push(event.get("text") or "")
     finally:
         for ctx in contexts.values():
             ctx.cancel()

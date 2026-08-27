@@ -290,7 +290,7 @@ export interface VoiceOption {
   description: string | null
 }
 
-/** Catalogo voci Cartesia, quelle nella lingua dell'app per prime. */
+/** Catalogo voci ElevenLabs, quelle nella lingua dell'app per prime. */
 export const fetchVoices = () => apiFetch<VoiceOption[]>('/api/admin/voices')
 
 /** Una battuta pronunciata con una voce, per confrontarle prima di salvare. */

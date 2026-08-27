@@ -1100,7 +1100,7 @@ class AvatarPromptPreviewResponse(BaseModel):
 
 
 class VoiceOption(BaseModel):
-    """One selectable Cartesia voice."""
+    """One selectable ElevenLabs voice."""
 
     id: str
     name: str

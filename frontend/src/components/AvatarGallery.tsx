@@ -21,15 +21,11 @@ import AvatarCard from './AvatarCard'
 import AvatarGalleryEmpty, { type EmptyReason } from './AvatarGalleryEmpty'
 import { countByCategory, filterAvatars } from './avatarFilters'
 import FilterTabs from './FilterTabs'
+import { galleryGridCls } from './galleryLayout'
+import GallerySkeleton from './GallerySkeleton'
 import LoadError from './LoadError'
 import SearchInput from './SearchInput'
-import Toast from './Toast'
-
-const gridCls =
-  'grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-8 p-2 max-md:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] max-md:gap-4 max-[480px]:grid-cols-1'
-
-const shimmerCls =
-  'animate-shimmer bg-[linear-gradient(90deg,#111827_0%,rgba(255,255,255,0.05)_50%,#111827_100%)] bg-[length:200%_100%]'
+import StaleDataToast from './StaleDataToast'
 
 /** Il valore della pastiglia "Tutti": il gruppo di scelta parla per stringhe,
  *  il catalogo intero è l'assenza di una categoria. */
@@ -97,21 +93,7 @@ export default function AvatarGallery() {
       </div>
 
       {isLoading ? (
-        <div className={gridCls}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="overflow-hidden rounded-3xl border border-white/6 bg-gray-900/60"
-            >
-              <div className={`aspect-square ${shimmerCls}`} />
-              <div className="p-6">
-                <div className={`mb-2 h-3 w-3/5 rounded-md ${shimmerCls}`} />
-                <div className={`mb-2 h-3 w-4/5 rounded-md ${shimmerCls}`} />
-                <div className={`mb-2 h-3 rounded-md ${shimmerCls}`} />
-              </div>
-            </div>
-          ))}
-        </div>
+        <GallerySkeleton withImage />
       ) : isError && avatars.length === 0 ? (
         /* Niente a schermo e il server non risponde: non è un catalogo
            vuoto, ed è l'unico caso in cui c'è qualcosa da riprovare. */
@@ -129,23 +111,14 @@ export default function AvatarGallery() {
           onShowAll={() => setActiveCategoryId(null)}
         />
       ) : (
-        <div className={gridCls} id="avatar-grid">
+        <div className={galleryGridCls} id="avatar-grid">
           {visibleAvatars.map((avatar, index) => (
             <AvatarCard key={avatar.id} avatar={avatar} index={index} />
           ))}
         </div>
       )}
 
-      {staleWarning && (
-        <div className="fixed right-8 top-20 z-[1000] flex flex-col gap-2 max-md:inset-x-4 max-md:top-[4.5rem]">
-          <Toast
-            title="Aggiornamento non riuscito"
-            message={staleWarning}
-            type="error"
-            onClose={clear}
-          />
-        </div>
-      )}
+      {staleWarning && <StaleDataToast message={staleWarning} onClose={clear} />}
     </>
   )
 }

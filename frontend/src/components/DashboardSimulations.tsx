@@ -323,8 +323,8 @@ export default function DashboardSimulations({
             width: '34%',
             sortValue: (r) => r.simulation_title,
           },
-          { key: 'data', label: 'Data', width: '16%', sortValue: (r) => r.attempted_at },
           { key: 'utente', label: 'Utente', width: '22%', sortValue: (r) => personName(r) },
+          { key: 'data', label: 'Data', width: '16%', sortValue: (r) => r.attempted_at },
           /* Sulla frazione e non sul solo numero di risposte giuste: otto su
              dieci vanno prima di otto su venti. */
           {
@@ -348,8 +348,8 @@ export default function DashboardSimulations({
         renderRow={(r) => (
           <Tooltip key={r.attempt_id} content="Vedi il test svolto" anchor="cursor">
             <Tr onActivate={() => setOpenAttemptId(r.attempt_id)}>
-              <Td>
-                <div className="flex items-center justify-center gap-2">
+              <Td align="left">
+                <div className="flex items-center gap-2">
                   <SimulationKindBadge kind={r.simulation_kind} iconOnly />
                   <SimulationSourceBadge source={r.simulation_source} />
                   <span className="text-[0.85rem] font-medium text-slate-100">
@@ -357,11 +357,10 @@ export default function DashboardSimulations({
                   </span>
                 </div>
               </Td>
-              <Td className="text-[0.82rem] text-slate-400">{formatDateTime(r.attempted_at)}</Td>
               <Td>
                 <span className="text-[0.85rem] font-medium text-slate-100">{personName(r)}</span>
-                <span className="block truncate text-[0.7rem] text-slate-500">{r.user_email}</span>
               </Td>
+              <Td className="text-[0.82rem] text-slate-400">{formatDateTime(r.attempted_at)}</Td>
               <Td compact className="text-[0.82rem] tabular-nums text-slate-400">
                 {r.correct_count}/{r.question_count}
               </Td>

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,8 +33,8 @@ const simulazione = (over: Partial<Simulation> = {}): Simulation => ({
 
 function renderPage(stato: Record<string, unknown>, ruolo = 'user') {
   sessione.current = { ruolo }
-  useSimulations.mockReturnValue({ isLoading: false, error: null, ...stato })
-  render(
+  useSimulations.mockReturnValue({ isLoading: false, error: null, refetch: vi.fn(), ...stato })
+  return render(
     <MemoryRouter>
       <SimulationsPage />
     </MemoryRouter>,
@@ -50,9 +50,12 @@ describe('SimulationsPage', () => {
   it('presenta ogni test con quello che serve a decidere se cominciarlo', () => {
     renderPage({ data: [simulazione()] })
 
+    /* Il tipo si legge dentro la scheda e non solo sulla pastiglia che
+       restringe la griglia, che porta la stessa parola. */
+    const scheda = within(screen.getByRole('link'))
     expect(screen.getByRole('heading', { name: 'Normativa antiriciclaggio' })).toBeInTheDocument()
-    expect(screen.getByText('10 domande')).toBeInTheDocument()
-    expect(screen.getByText('scelta multipla')).toBeInTheDocument()
+    expect(scheda.getByText('10 domande')).toBeInTheDocument()
+    expect(scheda.getByText('Scelta multipla')).toBeInTheDocument()
   })
 
   /* La riga sotto la descrizione dice cosa distingue un test dall'altro, e
@@ -76,44 +79,52 @@ describe('SimulationsPage', () => {
     expect(screen.getByRole('link')).toHaveAttribute('href', '/app/simulatore/s-1')
   })
 
-  /* Un test mai svolto invita a iniziarlo e non mostra nessun voto: uno zero
-   * al posto del voto assente direbbe che è andata malissimo. */
-  it('un test mai svolto invita a iniziare, senza nessun voto', () => {
+  it('un test mai svolto invita a iniziare', () => {
     renderPage({ data: [simulazione()] })
 
     expect(screen.getByText('Mai svolto')).toBeInTheDocument()
     expect(screen.getByText('Inizia')).toBeInTheDocument()
   })
 
-  it("un test già svolto mostra l'ultimo voto e invita a riprovare", () => {
+  /* La tessera dice cos'è il test e cosa ci si è già fatto, non com'era
+   * andata: il voto si legge dentro, dove si guarda una prova sola. */
+  it('un test già svolto invita a riprovare, senza mostrare il voto', () => {
     renderPage({ data: [simulazione({ attempt_count: 3, last_attempt_score: 8 })] })
 
-    expect(screen.getByText('Svolto 3 volte')).toBeInTheDocument()
+    expect(screen.getByText('3 svolgimenti')).toBeInTheDocument()
     expect(screen.getByText('Riprova')).toBeInTheDocument()
-    expect(screen.getByText('8')).toBeInTheDocument()
+    expect(screen.queryByText('8')).not.toBeInTheDocument()
   })
 
   it('usa il singolare per un test svolto una volta sola', () => {
     renderPage({ data: [simulazione({ attempt_count: 1, last_attempt_score: 6 })] })
 
-    expect(screen.getByText('Svolto 1 volta')).toBeInTheDocument()
+    expect(screen.getByText('1 svolgimento')).toBeInTheDocument()
   })
 
-  it('mostra il caricamento', () => {
-    renderPage({ isLoading: true })
+  it('mostra i segnaposto mentre i test arrivano', () => {
+    const { container } = renderPage({ data: [], isLoading: true })
 
-    expect(screen.getByText('Caricamento simulazioni...')).toBeInTheDocument()
+    expect(container.querySelectorAll('.animate-shimmer').length).toBeGreaterThan(0)
   })
 
-  /* L'elenco vuoto spiega perché è vuoto: le simulazioni le pubblica chi
-   * gestisce la piattaforma, quindi non c'è niente da fare per riempirlo. */
+  /* L'elenco vuoto spiega perché è vuoto: i test li pubblica chi amministra,
+   * quindi chi si allena non ha niente da fare per riempirlo, e chi
+   * amministra ha il collegamento alla pagina dove si scrivono. */
   it('spiega un elenco vuoto', () => {
     renderPage({ data: [] })
 
-    expect(screen.getByText('Nessuna simulazione disponibile')).toBeInTheDocument()
-    expect(
-      screen.getByText(/vengono pubblicate da chi gestisce la piattaforma/),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Nessun test tecnico è ancora stato pubblicato')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Vai alla gestione test' })).not.toBeInTheDocument()
+  })
+
+  it('su un elenco vuoto porta chi amministra alla gestione dei test', () => {
+    renderPage({ data: [] }, 'organization_admin')
+
+    expect(screen.getByRole('link', { name: 'Vai alla gestione test' })).toHaveAttribute(
+      'href',
+      '/app/admin/simulations',
+    )
   })
 
   it('riporta il motivo di un caricamento fallito', () => {
@@ -135,34 +146,48 @@ describe('SimulationsPage', () => {
   })
 
   /* Il voto dice com'è andata l'ultima prova, non se quell'ultima è di ieri
-   * o di sei mesi fa: la distanza da adesso sta accanto al conteggio. */
-  it("dice quanto tempo fa è stato svolto l'ultima volta", () => {
+   * o di sei mesi fa: la data dell'ultimo svolgimento sta accanto al
+   * conteggio, per esteso come sulla tessera dell'avatar. */
+  it("dice quando è stato svolto l'ultima volta", () => {
     renderPage({
       data: [
         simulazione({
           attempt_count: 2,
           last_attempt_score: 7,
-          last_attempt_at: new Date().toISOString(),
+          last_attempt_at: '2026-08-13T09:30:00',
         }),
       ],
     })
 
-    expect(screen.getByText(/Svolto 2 volte, l'ultima oggi/)).toBeInTheDocument()
+    expect(screen.getByText('2 svolgimenti, ultimo il 13 ago 2026')).toBeInTheDocument()
   })
 
-  /* Con una decina di test pubblicati, "quali non ho ancora fatto" era una
-   * domanda a cui si rispondeva leggendo la riga in fondo a ogni scheda. */
+  /* Rispondere a dieci domande a crocette e scriverne dieci sono due impegni
+   * che non si scambiano: chi apre la pagina sta decidendo quanto tempo ha
+   * adesso, e le pastiglie sono i tipi di test. */
   describe('ricerca e filtri', () => {
     const mai = simulazione({ id: 'mai', title: 'Mai svolto' })
     const fatto = simulazione({ id: 'fatto', title: 'Già svolto', attempt_count: 1 })
+    const aperta = simulazione({ id: 'aperta', title: 'Reclami scritti', kind: 'open' })
 
-    it('restringe alle sole prove ancora da svolgere', async () => {
-      renderPage({ data: [mai, fatto] })
+    it('restringe al tipo di test scelto', async () => {
+      renderPage({ data: [mai, aperta] })
 
-      await userEvent.click(screen.getByRole('radio', { name: 'Da svolgere' }))
+      await userEvent.click(screen.getByRole('radio', { name: /Risposta aperta/ }))
 
-      expect(screen.getByRole('heading', { name: 'Mai svolto' })).toBeInTheDocument()
-      expect(screen.queryByRole('heading', { name: 'Già svolto' })).not.toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Reclami scritti' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Mai svolto' })).not.toBeInTheDocument()
+    })
+
+    /* Una pastiglia con lo zero accanto è un bottone che porta a una griglia
+       vuota: in un catalogo di soli test a crocette sarebbero tre. */
+    it('non offre i tipi che il catalogo non contiene', () => {
+      renderPage({ data: [mai, aperta] })
+
+      expect(screen.getByRole('radio', { name: /Tutti/ })).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: /Scelta multipla/ })).toBeInTheDocument()
+      expect(screen.queryByRole('radio', { name: /Ordinamento/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('radio', { name: /Abbinamento/ })).not.toBeInTheDocument()
     })
 
     it('cerca fra i test a schermo', async () => {
@@ -181,8 +206,24 @@ describe('SimulationsPage', () => {
 
       await userEvent.type(screen.getByLabelText('Cerca un test tecnico'), 'sportello')
 
-      expect(screen.getByText('Nessun test corrisponde alla ricerca')).toBeInTheDocument()
-      expect(screen.queryByText('Nessuna simulazione disponibile')).not.toBeInTheDocument()
+      expect(screen.getByText('Nessun test corrisponde a questa ricerca')).toBeInTheDocument()
+      expect(
+        screen.queryByText('Nessun test tecnico è ancora stato pubblicato'),
+      ).not.toBeInTheDocument()
+    })
+
+    /* Il vuoto si annulla dove si è, e il tipo scelto resta: il riquadro
+       porge il gesto che toglie la ricerca, non tutto il resto insieme. */
+    it('azzera la ricerca senza perdere il tipo scelto', async () => {
+      renderPage({ data: [mai, aperta] })
+
+      await userEvent.click(screen.getByRole('radio', { name: /Risposta aperta/ }))
+      await userEvent.type(screen.getByLabelText('Cerca un test tecnico'), 'mai')
+      expect(screen.getByText('Nessun test corrisponde a questa ricerca')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Azzera la ricerca' }))
+      expect(screen.getByRole('heading', { name: 'Reclami scritti' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Mai svolto' })).not.toBeInTheDocument()
     })
 
     /* Sopra un elenco vuoto sarebbe una casella che non trova mai niente. */

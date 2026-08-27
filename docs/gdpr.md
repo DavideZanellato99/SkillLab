@@ -26,7 +26,7 @@ endpoint).
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | L'organizzazione cliente          | **Titolare del trattamento**: decide di far allenare i propri dipendenti e di leggerne le valutazioni        |
 | SkillLab                          | **Responsabile del trattamento** ex art. 28: tratta i dati per conto del cliente e secondo le sue istruzioni |
-| OpenAI, ElevenLabs, Cartesia, AWS | **Sub responsabili** (vedi sezione 6)                                                                        |
+| OpenAI, ElevenLabs, AWS | **Sub responsabili** (vedi sezione 6)                                                                        |
 | Il dipendente che si allena       | **Interessato**                                                                                              |
 
 Conseguenza pratica: **l'informativa ai dipendenti la deve dare il datore di
@@ -183,7 +183,7 @@ monitoraggio sistematico, dati trattati su larga scala) la **DPIA ex art. 35
 | **OpenAI**      | Il testo che un amministratore incolla per farsi scrivere la bozza di una scheda persona: un caso raccontato a parole, oppure una conversazione reale **che chi la incolla deve avere già anonimizzato** | Solo quando un amministratore preme "genera la scheda"                                                             |
 | **OpenAI**      | Le trascrizioni delle ultime prove di una persona e i giudizi già scritti su di esse, senza la sua identità, per il quadro d'insieme                                                                     | Solo quando un formatore lo fa scrivere dal report attività                                                        |
 | **OpenAI**      | L'obiettivo formativo scritto da un amministratore e il catalogo dell'organizzazione (nomi, categorie e descrizioni degli avatar, titoli dei test), che non contengono dati di nessuna persona reale     | Solo quando un amministratore chiede una bozza di percorso                                                         |
-| **Cartesia**    | Il testo generato dell'avatar, per sintetizzarlo in voce                                                                                                                                                 | Durante ogni telefonata simulata                                                                                   |
+| **ElevenLabs**  | Il testo generato dell'avatar, per sintetizzarlo in voce                                                                                                                                                 | Durante ogni telefonata simulata                                                                                   |
 | **AWS Cognito** | Solo l'indirizzo email, più la password gestita da Cognito                                                                                                                                               | Alla creazione dell'account e a ogni accesso                                                                       |
 
 Nome e cognome non escono mai dall'infrastruttura di SkillLab: restano nella

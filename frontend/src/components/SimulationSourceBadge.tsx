@@ -22,8 +22,8 @@ import { sourceLabel } from './simulationFormat'
  * **Solo l'icona, mai la parola**, a differenza della targhetta del tipo: sta
  * sempre accanto a quella, e due pastiglie scritte una di fianco all'altra
  * allungano ogni riga per dire una cosa che l'icona dice da sola. Chi vuole
- * sapere cosa significa ci passa sopra il mouse, e il tooltip non scrive la
- * parola sola ma la frase intera, che è quello che serve davvero sapere.
+ * sapere cosa significa ci passa sopra il mouse, e il tooltip scrive
+ * l'origine e basta, la stessa parola che sta nel markup.
  *
  * Il tooltip è quello dell'app e non l'attributo `title` del browser: qui è
  * l'unico modo di leggere la targhetta, quindi non può comparire dopo un
@@ -33,13 +33,7 @@ import { sourceLabel } from './simulationFormat'
 export default function SimulationSourceBadge({ source }: { source: SimulationSource }) {
   const isManual = source === 'manual'
   return (
-    <Tooltip
-      content={
-        isManual
-          ? 'Domande redatte manualmente da chi ha predisposto il test'
-          : 'Domande generate da un modello a partire dal documento aziendale, e verificate da una persona prima della pubblicazione'
-      }
-    >
+    <Tooltip content={sourceLabel(source)}>
       <span className="inline-flex shrink-0 items-center rounded-full border border-white/10 bg-white/4 p-1 text-slate-400">
         {isManual ? (
           /* Una persona: le ha scritte qualcuno */

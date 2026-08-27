@@ -125,11 +125,17 @@ export default function AvatarFormModal({
    * risolve nella voce predefinita del .env. Se l'avatar porta un id che il
    * catalogo non contiene più, quell'id resta in elenco: modificare la
    * categoria di un avatar non deve cancellargli la voce di nascosto.
-   * Il catalogo arriva già filtrato sulla lingua dell'app, quindi il nome
-   * basta: ripetere la lingua su ogni riga sarebbe solo rumore. */
+   * Il catalogo arriva ordinato con le voci della lingua dell'app per prime,
+   * ma non filtrato, perché il modello è multilingue e le legge tutte.
+   * La lingua compare accanto al nome solo se nel catalogo ce n'è più di
+   * una: quando sono tutte uguali ripeterla su ogni riga è solo rumore. */
+  const mostraLingua = new Set(voices.map((v) => v.language).filter(Boolean)).size > 1
   const voiceOptions = [
     { value: '', label: 'Voce Predefinita' },
-    ...voices.map((v) => ({ value: v.id, label: v.name })),
+    ...voices.map((v) => ({
+      value: v.id,
+      label: mostraLingua && v.language ? `${v.name} (${v.language})` : v.name,
+    })),
     ...(form.voiceId && !voices.some((v) => v.id === form.voiceId)
       ? [{ value: form.voiceId, label: `${form.voiceId} (non nel catalogo)` }]
       : []),
@@ -438,7 +444,7 @@ export default function AvatarFormModal({
 
           <div className={fieldCls}>
             <label className={labelCls} htmlFor="av-voice">
-              Voce Cartesia
+              Voce
             </label>
             {voices.length > 0 ? (
               <div className="flex items-center gap-2">

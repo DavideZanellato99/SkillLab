@@ -1,7 +1,7 @@
 """Le rotte HTTP della chiamata vocale: aprirla e riascoltarla.
 
 Il socket vero non passa da qui, ed è escluso dalla copertura per scelta:
-richiede ElevenLabs e Cartesia dal vivo. Quello che passa da qui sono i due
+richiede ElevenLabs dal vivo. Quello che passa da qui sono i due
 gesti attorno alla chiamata, cioè aprire la sessione e conservarne l'audio,
 e sono i due che decidono chi può fare cosa.
 
@@ -39,13 +39,12 @@ WEBM = "audio/webm;codecs=opus"
 
 @pytest.fixture(autouse=True)
 def servizi_vocali_configurati(monkeypatch):
-    """Le due chiavi che l'apertura pretende.
+    """La chiave che l'apertura pretende.
 
-    Nel .env di test sono vuote, ed è giusto che lo siano: senza, la
-    risposta è 503 e non c'è niente da provare oltre a quella.
+    Nel .env di test è vuota, ed è giusto che lo sia: senza, la risposta è
+    503 e non c'è niente da provare oltre a quella.
     """
-    monkeypatch.setattr(voice_router, "ELEVENLABS_API_KEY", "chiave-stt")
-    monkeypatch.setattr(voice_router, "CARTESIA_API_KEY", "chiave-tts")
+    monkeypatch.setattr(voice_router, "ELEVENLABS_API_KEY", "chiave-vocale")
 
 
 @pytest.fixture
@@ -93,12 +92,12 @@ def test_aprire_una_chiamata_nuova_crea_la_conversazione_e_l_identificativo(
     assert conversazione.title
 
 
-def test_senza_le_chiavi_dei_servizi_vocali_la_chiamata_non_si_apre(
+def test_senza_la_chiave_dei_servizi_vocali_la_chiamata_non_si_apre(
     user_client, avatar, monkeypatch
 ):
     """Meglio dirlo qui che far squillare a vuoto: senza sintesi e senza
     trascrizione il socket si aprirebbe per chiudersi subito."""
-    monkeypatch.setattr(voice_router, "CARTESIA_API_KEY", "")
+    monkeypatch.setattr(voice_router, "ELEVENLABS_API_KEY", "")
 
     risposta = user_client.post(SESSIONE, json={"avatar_id": str(avatar.id)})
 

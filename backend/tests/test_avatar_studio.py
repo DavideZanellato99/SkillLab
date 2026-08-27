@@ -2,14 +2,14 @@
 
 Three helpers that belong to the editor rather than to an avatar row: the
 portrait upload, the preview of the roleplay prompt a sheet produces, and
-the Cartesia voice catalogue with its one-shot preview. Cartesia is never
+the ElevenLabs voice catalogue with its one-shot preview. ElevenLabs is never
 reached from here: the catalogue is exercised with no API key (the honest
 503) and the preview is monkeypatched.
 """
 
 import pytest
 
-import cartesia_service
+import elevenlabs_tts_service
 import routers.admin_avatars as admin_avatars
 import routers.admin_voices as admin_voices
 
@@ -123,52 +123,60 @@ def test_image_upload_refuses_an_oversized_file(admin_client):
     assert response.status_code == 413
 
 
-def test_voice_catalogue_says_so_when_cartesia_is_unreachable(admin_client, monkeypatch):
+def test_voice_catalogue_says_so_when_elevenlabs_is_unreachable(admin_client, monkeypatch):
     """A missing key or a network failure is a 503 the page can show, not a 500.
 
     Patched rather than left to the environment: a developer with a real
-    .env would otherwise make the suite call Cartesia for real.
+    .env would otherwise make the suite call ElevenLabs for real.
     """
 
     def _boom():
-        raise RuntimeError("CARTESIA_API_KEY non configurata.")
+        raise RuntimeError("ELEVENLABS_API_KEY non configurata.")
 
-    monkeypatch.setattr(cartesia_service, "list_voices", _boom)
+    monkeypatch.setattr(elevenlabs_tts_service, "list_voices", _boom)
 
     response = admin_client.get("/api/admin/voices")
     assert response.status_code == 503
-    assert "Cartesia" in response.json()["detail"]
+    assert "ElevenLabs" in response.json()["detail"]
 
 
-def test_voice_catalogue_keeps_only_the_app_language(admin_client, monkeypatch):
-    """Le voci di altre lingue non compaiono, e le italiane sono in ordine."""
+def test_voice_catalogue_puts_the_app_language_first(admin_client, monkeypatch):
+    """Le italiane in cima e in ordine, le altre restano in fondo.
+
+    Non filtrate: il modello è multilingue e legge l'italiano con qualunque
+    voce, quindi toglierle vorrebbe dire nascondere voci usabili.
+    """
     monkeypatch.setattr(
-        cartesia_service,
+        elevenlabs_tts_service,
         "list_voices",
         lambda: [
             {"id": "en-1", "name": "Zoe", "language": "en", "description": None},
             {"id": "it-2", "name": "Marco", "language": "it", "description": "Voce maschile"},
+            {"id": "en-2", "name": "Adam", "language": "en", "description": None},
             {"id": "it-1", "name": "Anna", "language": "it-IT", "description": None},
         ],
     )
-    monkeypatch.setattr(cartesia_service, "CARTESIA_LANGUAGE", "it")
+    monkeypatch.setattr(elevenlabs_tts_service, "ELEVENLABS_TTS_LANGUAGE", "it")
 
     response = admin_client.get("/api/admin/voices")
     assert response.status_code == 200
-    assert [v["id"] for v in response.json()] == ["it-1", "it-2"]
+    # Adam viene prima di Anna in ordine alfabetico, ma la lingua conta di più
+    assert [v["id"] for v in response.json()] == ["it-1", "it-2", "en-2", "en-1"]
 
 
-def test_voice_catalogue_falls_back_when_the_language_has_no_voices(admin_client, monkeypatch):
-    """Nessuna voce nella lingua dell'app: meglio l'elenco intero del vuoto."""
+def test_voice_catalogue_keeps_its_order_when_no_voice_declares_the_language(
+    admin_client, monkeypatch
+):
+    """Nessuna voce dichiara l'italiano: restano tutte, in ordine di nome."""
     monkeypatch.setattr(
-        cartesia_service,
+        elevenlabs_tts_service,
         "list_voices",
         lambda: [
             {"id": "en-1", "name": "Zoe", "language": "en", "description": None},
             {"id": "fr-1", "name": "Amelie", "language": "fr", "description": None},
         ],
     )
-    monkeypatch.setattr(cartesia_service, "CARTESIA_LANGUAGE", "it")
+    monkeypatch.setattr(elevenlabs_tts_service, "ELEVENLABS_TTS_LANGUAGE", "it")
 
     response = admin_client.get("/api/admin/voices")
     assert response.status_code == 200
@@ -183,7 +191,7 @@ def test_voice_preview_returns_audio(admin_client, monkeypatch):
         spoken["transcript"] = transcript
         return b"RIFF----WAVEfmt "
 
-    monkeypatch.setattr(cartesia_service, "synthesize_preview", _fake_preview)
+    monkeypatch.setattr(elevenlabs_tts_service, "synthesize_preview", _fake_preview)
 
     response = admin_client.post("/api/admin/voices/preview", json={"voice_id": "it-1"})
     assert response.status_code == 200

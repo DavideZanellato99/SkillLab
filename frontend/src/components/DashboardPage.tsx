@@ -137,18 +137,18 @@ function evaluationColumns(criteria: CriterionAvg[]) {
       sortValue: (r) => r.conversation_title,
     },
     {
-      key: 'data',
-      label: 'Data',
-      compact: true,
-      width: width(px.data),
-      sortValue: (r) => r.conversation_at,
-    },
-    {
       key: 'utente',
       label: 'Utente',
       compact: true,
       width: width(px.utente),
       sortValue: (r) => personName(r),
+    },
+    {
+      key: 'data',
+      label: 'Data',
+      compact: true,
+      width: width(px.data),
+      sortValue: (r) => r.conversation_at,
     },
     {
       key: 'avatar',
@@ -795,21 +795,21 @@ export default function DashboardPage() {
                         anchor="cursor"
                       >
                         <Tr onActivate={() => setDetailRow(r)}>
-                          <Td compact>
-                            <div className="flex items-center justify-center gap-2">
+                          <Td compact align="left">
+                            <div className="flex items-center gap-2">
                               <ConversationModeBadge mode={r.mode} iconOnly />
                               <span className="text-[0.85rem] font-medium text-slate-100">
                                 {r.conversation_title}
                               </span>
                             </div>
                           </Td>
-                          <Td compact className="text-[0.82rem] text-slate-400">
-                            {formatDateTime(r.conversation_at)}
-                          </Td>
                           <Td compact>
                             <span className="text-[0.85rem] font-medium text-slate-100">
                               {personName(r)}
                             </span>
+                          </Td>
+                          <Td compact className="text-[0.82rem] text-slate-400">
+                            {formatDateTime(r.conversation_at)}
                           </Td>
                           <Td compact className="text-[0.82rem] text-slate-400">
                             {r.avatar_name}

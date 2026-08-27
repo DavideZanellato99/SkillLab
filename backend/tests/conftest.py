@@ -5,7 +5,7 @@ module (loaded by pytest before any test) is where they happen:
 
 1. Every REQUIRED environment variable is set to a harmless placeholder, so
    importing `main` doesn't raise. Real values never appear here — the
-   tests never talk to Cognito, OpenAI, Cartesia or ElevenLabs (the clients
+   tests never talk to Cognito, OpenAI or ElevenLabs (the clients
    stay uninitialised with empty keys, and the auth dependency is
    overridden per test).
 2. DATABASE_URL is pointed at a *test* database. `setdefault` means CI can
@@ -29,10 +29,9 @@ os.environ.setdefault("COGNITO_REGION", "eu-west-1")
 os.environ.setdefault("OPENAI_MODEL", "gpt-4o")
 os.environ.setdefault("OPENAI_EVAL_MODEL", "gpt-4o")
 os.environ.setdefault("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-os.environ.setdefault("CARTESIA_MODEL", "sonic-2")
-os.environ.setdefault("CARTESIA_VERSION", "2024-11-13")
-os.environ.setdefault("CARTESIA_LANGUAGE", "it")
-os.environ.setdefault("CARTESIA_TTS_WS_URL", "wss://example.invalid/tts")
+os.environ.setdefault("ELEVENLABS_TTS_MODEL", "eleven_flash_v2_5")
+os.environ.setdefault("ELEVENLABS_TTS_LANGUAGE", "it")
+os.environ.setdefault("ELEVENLABS_TTS_WS_URL", "wss://example.invalid/tts")
 os.environ.setdefault("ELEVENLABS_STT_MODEL", "scribe_v1")
 os.environ.setdefault("ELEVENLABS_STT_LANGUAGE", "it")
 os.environ.setdefault("ELEVENLABS_VAD_SILENCE_SECS", "0.8")

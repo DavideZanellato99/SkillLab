@@ -15,7 +15,7 @@ Le domande sono due e vanno separate, altrimenti il risultato è ambiguo.
 backend. Si misura qui, con fornitori simulati, gratis e senza limiti
 esterni.
 
-**Quante sessioni mi concedono ElevenLabs, OpenAI e Cartesia** è una
+**Quante sessioni mi concedono ElevenLabs e OpenAI** è una
 domanda contrattuale. Non si misura con un test di carico: si legge nel
 piano o si chiede al fornitore, e provare a scoprirlo saturandoli costa
 soldi veri e rischia la sospensione dell'account.
@@ -29,7 +29,7 @@ I tre finti fornitori riproducono quello che conta della controparte vera:
   e misura il picco dei campioni, quindi la VAD è vera e i turni li decide
   l'audio che il generatore manda. Legge `vad_silence_threshold_secs` dalla
   query string, cioè rispetta il valore che sta nel `.env` del backend.
-- **`mocks/tts.py`**, finto Cartesia. Restituisce audio a tempo reale, 48000
+- **`mocks/tts.py`**, finta sintesi ElevenLabs. Restituisce audio a tempo reale, 48000
   byte al secondo, e restituisce **rumore, non silenzio**: gli zeri li
   comprimerebbe la WebSocket e la banda misurata sarebbe dieci volte più
   bassa del vero.
@@ -64,7 +64,7 @@ Poi, nel `.env` del backend, punta i tre endpoint qui e riavvia:
 
 ```
 ELEVENLABS_STT_WS_URL=ws://host.docker.internal:8801
-CARTESIA_TTS_WS_URL=ws://host.docker.internal:8802
+ELEVENLABS_TTS_WS_URL=ws://host.docker.internal:8802
 OPENAI_BASE_URL=http://host.docker.internal:8803/v1
 ```
 

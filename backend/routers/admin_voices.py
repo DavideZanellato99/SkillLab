@@ -1,16 +1,16 @@
-"""Cartesia voice catalogue and one-shot preview (super admin only).
+"""ElevenLabs voice catalogue and one-shot preview (super admin only).
 
 Exists for one screen: the avatar admin form, where the voice of a persona
 used to be an opaque id copied by hand from a CLI script. Here the catalogue
 is listed and a line can be heard before saving.
 
 Nothing in this module touches the database: it is a thin, authenticated
-proxy in front of Cartesia, so the API key never reaches the browser.
+proxy in front of ElevenLabs, so the API key never reaches the browser.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-import cartesia_service
+import elevenlabs_tts_service
 from auth_dependency import get_current_super_admin
 from models import User
 from schemas import VoiceOption, VoicePreviewRequest
@@ -35,10 +35,10 @@ def _base_language(code: str) -> str:
 
 
 def _unavailable(exc: Exception) -> HTTPException:
-    """Cartesia unreachable or misconfigured, told as a 503 the page can show."""
+    """ElevenLabs unreachable or misconfigured, told as a 503 the page can show."""
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail=f"Catalogo voci Cartesia non disponibile: {exc}",
+        detail=f"Catalogo voci ElevenLabs non disponibile: {exc}",
     )
 
 
@@ -46,26 +46,25 @@ def _unavailable(exc: Exception) -> HTTPException:
 def list_voices(
     current_admin: User = Depends(get_current_super_admin),
 ):
-    """Only the Cartesia voices in the configured language, by name.
+    """The whole voice catalogue, the ones in the app's language first.
 
-    The synthesis always speaks CARTESIA_LANGUAGE: a voice built for another
-    language would just read Italian with the wrong accent, so those voices
-    are filtered out instead of merely sorted down. A voice already saved on
-    an avatar survives the filter anyway, the form keeps showing it and flags
-    it as fuori catalogo.
+    Ordinate, non filtrate, ed è una differenza che vale la pena spiegare: il
+    modello di sintesi è multilingue e la lingua gliela impone la connessione,
+    non la voce, quindi qualunque voce del catalogo legge l'italiano. Togliere
+    quelle che dichiarano un'altra lingua nasconderebbe voci perfettamente
+    usabili, e la lingua dichiarata resta comunque il criterio con cui si
+    parte, perché una voce nata italiana l'accento giusto ce l'ha già.
 
-    Fallback: if the account exposes nothing in that language the whole
-    catalogue comes back, because an empty picker is worse than a wide one.
+    Una voce già salvata su un avatar ma non più in catalogo non compare qui:
+    la scheda la tiene in elenco per conto suo e la segnala.
     """
     try:
-        voices = cartesia_service.list_voices()
+        voices = elevenlabs_tts_service.list_voices()
     except Exception as exc:  # network, auth, malformed payload
         raise _unavailable(exc) from exc
 
-    language = _base_language(cartesia_service.CARTESIA_LANGUAGE)
-    in_language = [v for v in voices if _base_language(v["language"]) == language]
-    voices = in_language or voices
-    voices.sort(key=lambda v: v["name"].lower())
+    language = _base_language(elevenlabs_tts_service.ELEVENLABS_TTS_LANGUAGE)
+    voices.sort(key=lambda v: (_base_language(v["language"]) != language, v["name"].lower()))
     return [VoiceOption(**v) for v in voices]
 
 
@@ -83,7 +82,7 @@ def preview_voice(
         )
 
     try:
-        audio = cartesia_service.synthesize_preview(payload.voice_id, text)
+        audio = elevenlabs_tts_service.synthesize_preview(payload.voice_id, text)
     except Exception as exc:
         raise _unavailable(exc) from exc
 

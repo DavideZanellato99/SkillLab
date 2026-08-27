@@ -71,7 +71,7 @@ class VoiceSession:
     # Durante la chiamata la pipeline tiene i turni in memoria, quindi non
     # rilegge mai il database.
     prior_history: list[dict] = field(default_factory=list)
-    # Voce Cartesia dell'avatar (None -> voce di default)
+    # Voce ElevenLabs dell'avatar (None -> voce di default)
     voice_id: str | None = None
 
 

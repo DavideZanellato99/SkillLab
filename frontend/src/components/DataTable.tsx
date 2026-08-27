@@ -388,13 +388,14 @@ export function Tr({ hover = true, onActivate, className = '', ...props }: TrPro
 interface TdProps extends Omit<TdHTMLAttributes<HTMLTableCellElement>, 'align'> {
   /** Padding orizzontale ridotto, da usare in colonne `compact` */
   compact?: boolean
-  /* Le due eccezioni al centro, che restano eccezioni: la colonna che elenca
-   * persone, dove un nome e un'email incolonnati a sinistra si scorrono con
-   * l'occhio, e i pannelli che si aprono sotto una riga, che sono elenchi di
-   * voci e valori e non righe di colonne. L'intestazione resta al centro in
-   * entrambi i casi. Sta qui e non in una classe passata da fuori perché due
-   * classi Tailwind in conflitto non si risolvono nell'ordine in cui uno le
-   * scrive: qui la cella ne riceve una sola. */
+  /* Le eccezioni al centro, che restano eccezioni: la colonna che dà il nome
+   * alla riga (una persona, un avatar, una conversazione), dove testi di
+   * lunghezza diversa incolonnati a sinistra si scorrono con l'occhio, e i
+   * pannelli che si aprono sotto una riga, che sono elenchi di voci e valori
+   * e non righe di colonne. L'intestazione resta al centro in tutti i casi.
+   * Sta qui e non in una classe passata da fuori perché due classi Tailwind
+   * in conflitto non si risolvono nell'ordine in cui uno le scrive: qui la
+   * cella ne riceve una sola. */
   align?: 'center' | 'left'
 }
 

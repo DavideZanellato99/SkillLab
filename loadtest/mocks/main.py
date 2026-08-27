@@ -1,7 +1,7 @@
 """Avvia i tre finti fornitori in un processo solo.
 
   8801  finto ElevenLabs Scribe   (WebSocket)
-  8802  finto Cartesia Sonic      (WebSocket)
+  8802  finta sintesi ElevenLabs  (WebSocket)
   8803  finto OpenAI              (HTTP)
 
 Stanno insieme perché insieme costano pochissimo, e perché la regola vera

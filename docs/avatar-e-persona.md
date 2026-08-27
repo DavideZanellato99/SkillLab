@@ -13,7 +13,7 @@ il roleplay sia il metro con cui la conversazione viene poi giudicata.
 | `category_id`              | La categoria in cui è raggruppato, una riga di `avatar_categories` |
 | `description`, `image_url` | Come si presenta nella galleria                                    |
 | `organization_id`          | Il tenant a cui appartiene: si vede solo lì dentro                 |
-| `voice_id`                 | La voce Cartesia con cui parla al telefono                         |
+| `voice_id`                 | La voce ElevenLabs con cui parla al telefono                       |
 | `deleted_at`               | La data di archiviazione, NULL finché è attivo                     |
 
 Nella risposta dell'API, accanto a questi, viaggiano due numeri che nel
@@ -322,13 +322,21 @@ il segnaposto, e l'avviso compare mentre si scrive invece che alla fine.
 
 ## La voce
 
-Il campo `voice_id` è un id di voce Cartesia. Se manca si usa quella di default
-dalla configurazione.
+Il campo `voice_id` è un id di voce ElevenLabs. Se manca si usa quella di
+default dalla configurazione.
 
-Si assegnano dall'interfaccia (l'elenco delle voci arriva da
-`/api/admin/voices`, con anteprima) oppure dalla riga di comando con
-[assign_voices.py](../backend/assign_voices.py), che elenca le voci
-disponibili e le associa per nome dell'avatar.
+Si assegnano dall'interfaccia: l'elenco delle voci arriva da
+`/api/admin/voices`, con anteprima. Il catalogo arriva ordinato con le voci
+della lingua dell'app per prime ma non filtrato, perché il modello di sintesi
+è multilingue e la lingua gliela impone la connessione, non la voce: qualunque
+voce del catalogo legge l'italiano.
+
+Un `voice_id` che l'account non riconosce **non fa fallire la chiamata**. La
+voce sta nell'indirizzo della connessione di sintesi, quindi un id ignoto
+verrebbe rifiutato all'handshake e la telefonata non partirebbe affatto: il
+backend se ne accorge lì, scrive un avviso nel log e riapre la connessione con
+la voce di default. L'avatar parla con la voce sbagliata, il che si sente al
+primo ascolto e si corregge da qui, invece di non parlare.
 
 L'anteprima resta accesa finché la battuta non è finita, e si può interrompere
 dallo stesso bottone. Non è un dettaglio di stile: `play()` mantiene la
@@ -337,7 +345,7 @@ stato lì dava una rotella che lampeggiava per un istante, il bottone di nuovo
 premibile con la voce ancora in corso, e due anteprime sovrapposte al secondo
 clic.
 
-Un identificativo di trentasei caratteri non dice però con che voce parla il
+Un identificativo opaco non dice però con che voce parla il
 personaggio, e il nome sta soltanto nel catalogo del fornitore: il dettaglio
 in sola lettura di un avatar lo risolve leggendo quel catalogo (una volta per
 sessione, `staleTime: Infinity`) e mostra il nome sopra l'identificativo, che

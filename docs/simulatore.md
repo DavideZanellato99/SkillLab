@@ -47,13 +47,25 @@ stesso modo, e chi legge il voto deve poterlo sapere senza aprire niente.
 
 Le due targhette non si confondono, e nessuna delle due difese è il colore.
 Quella del tipo è una pastiglia colorata con la sua parola scritta; quella
-dell'origine è **solo un'icona**, neutra, con il tooltip che spiega. Due
+dell'origine è **solo un'icona**, neutra, con il tooltip che la nomina. Due
 ragioni. La prima: violetto, ciano, verde e ambra dicono già tipo e stato, e
 una terza coppia di tinte in fila renderebbe la riga illeggibile invece che
 più informativa. La seconda: le due targhette stanno sempre appaiate, e due
 pastiglie scritte una di fianco all'altra allungano ogni riga per dire una
 cosa che l'icona dice da sola. Una scintilla dove ha scritto il modello, una
 persona dove ha scritto qualcuno.
+
+**Il tooltip delle due targhette è il nome e basta**, "Scelta multipla" e
+"Manuale", le stesse parole che stanno nel markup per chi legge con uno screen
+reader. Prima spiegava anche come si risponde, come si prende il voto e da
+quale documento venivano le domande: sono le regole del test, e si leggono
+prima di cominciare o nella scheda della simulazione, non passando il mouse su
+una riga di tabella per sapere cosa dice quel disegnino.
+
+Quella del tipo il tooltip ce l'ha **solo dove è ridotta all'icona**, cioè
+nelle tabelle: dove la pastiglia porta la sua parola scritta, il tooltip
+direbbe la stessa parola un centimetro più in alto. Quella dell'origine invece
+ce l'ha sempre, perché la sua parola non si vede mai.
 
 Il tooltip è quello dell'app ([Tooltip](../frontend/src/components/Tooltip.tsx)),
 come ovunque nell'app e mai l'attributo `title` del browser: qui è l'unico modo
@@ -1055,32 +1067,120 @@ nell'unico punto da cui ogni elenco di questa sezione passa, perché
 `organization_name` sta in ogni risposta e senza sarebbe una query in più
 per ogni tenant presente nell'elenco.
 
-Sopra le schede stanno una ricerca e tre linguette (da svolgere, svolti,
-tutti), come nella galleria degli avatar e con la stessa meccanica: i test
-arrivano tutti in una lettura sola, quindi restringere è un giro su una lista
-già in memoria ([simulationFilters](../frontend/src/components/simulationFilters.ts))
-e la griglia risponde nell'istante in cui si preme. Con una decina di test
-pubblicati "quali non ho ancora fatto" era una domanda a cui si rispondeva
-leggendo la riga in fondo a ogni scheda, una per una. La ricerca guarda anche
+**La pagina è la galleria degli avatar con dentro dei test**
+([SimulationsPage](../frontend/src/components/SimulationsPage.tsx)): stessa
+testata con i due numeri, stessa ricerca e stesse pastiglie in mezzo alla
+pagina, stessa griglia che si riempie da sé, stessi segnaposto mentre si
+aspetta, stesso ingresso a cascata delle tessere. Sono le due schermate da cui si sceglie cosa fare adesso, si
+aprono dalla stessa barra e si scorrono con la stessa domanda in testa, e
+farle diverse voleva dire impararle due volte.
+
+Uguali anche nella struttura, non solo nell'aspetto: la fascia
+([SimulationsHeader](../frontend/src/components/SimulationsHeader.tsx)) sta
+fuori dal `main` come quella della galleria, e il `main` è lo stesso delle due
+schermate (`GalleryContainer`), quindi le distanze fra la fascia, la barra e
+la griglia non sono due valori da tenere allineati a mano. Il numero la fascia
+se lo conta da sé con lo stesso hook della griglia sotto: la query resta una
+sola nella cache, e farselo passare dalla griglia vorrebbe dire due render in
+più a ogni cambio di filtro per un dato che si sa già. Sono due come nella
+galleria, dove sono gli avatar e le categorie in cui stanno: qui i test e le
+tipologie in cui si risponde, e quelle sono le tipologie che il catalogo
+contiene davvero, cioè quante pastiglie si troveranno sotto, non le quattro
+che il simulatore sa fare. Le altre parti comuni sono elencate in
+[frontend.md](frontend.md); qui restano le parole della testata, cosa c'è
+sulle tessere
+([SimulationCard](../frontend/src/components/SimulationCard.tsx)) e le tre
+ragioni per cui la griglia può essere vuota
+([SimulationsEmpty](../frontend/src/components/SimulationsEmpty.tsx)).
+
+**Le pastiglie sono «Tutti» e i tipi di test**, come nella galleria sono
+«Tutti» e le categorie: scelta multipla, risposta aperta, ordinamento,
+abbinamento, ognuno con accanto quanti test contiene. Si restringe per tipo e
+non per «già svolto o no» perché sono due domande di peso diverso: rispondere
+a dieci domande a crocette e scriverne dieci sono due impegni che non si
+scambiano, e chi apre la pagina sta decidendo quanto tempo ha adesso. Che un
+test sia già stato svolto lo dice la sua tessera, riga per riga, insieme a
+com'era andata.
+
+I tipi che il catalogo non contiene non compaiono: una pastiglia con lo zero
+accanto è un bottone che porta a una griglia vuota, e in un catalogo di soli
+test a crocette sarebbero tre. L'ordine è quello con cui i tipi sono arrivati,
+non quello del catalogo, che sposterebbe le pastiglie sotto le dita da
+un'organizzazione all'altra. Il conto è del catalogo intero, non di quello che
+la ricerca ha lasciato a schermo. I test arrivano tutti in una lettura sola,
+quindi restringere è un giro su una lista già in memoria
+([simulationFilters](../frontend/src/components/simulationFilters.ts)) e la
+griglia risponde nell'istante in cui si preme. La ricerca guarda anche
 il tipo, l'origine e l'organizzazione, che sulla scheda si leggono come una
 targhetta o non si leggono affatto: cercare «aperta» trova i test in cui si
 scrive, cercare «manuale» quelli scritti da una persona. La barra compare solo
-se c'è qualcosa da restringere, e quando il vuoto viene dalla ricerca o dal
-filtro il testo lo dice, così una pagina ristretta non sembra guasta.
+se c'è qualcosa da restringere.
 
-Nella stessa riga arrivano `kind` e `source`, cioè le due targhette: la scheda
-del test nell'elenco dice quante domande sono, come si risponde e se le domande
-vengono da un documento o le ha scritte qualcuno. Di quale organizzazione sia
-lo legge il **solo super admin**, che è l'unico ad avere davanti i test di più
-tenant: `organization_name` arriva a tutti nella risposta, perché per chiunque
-altro è la propria, ma su quella riga sarebbe la stessa parola su ogni scheda,
-in un posto che esiste per dire cosa distingue un test dall'altro.
-In fondo alla scheda stanno quante volte il test è stato svolto e quanto
-tempo fa: il voto in alto dice com'è andata l'ultima prova, non se quell'ultima
-è di ieri o di sei mesi fa, che è la differenza fra un test da ripassare e uno
-appena fatto. La distanza da adesso si legge senza calcoli
-([formatRelativeDay](../frontend/src/components/dateFormat.ts)) e la data
-esatta resta nel tooltip, come nella colonna dell'ultimo accesso.
+**Una griglia vuota ha tre motivi diversi e tre frasi diverse**, come nella
+galleria: la ricerca non ha trovato niente, il tipo scelto è rimasto senza
+test, o non è ancora stato pubblicato nessun test. La seconda è rara, perché
+le pastiglie portano solo i tipi che il catalogo contiene, ma non è morta: un
+rinfresco che porta via l'ultimo test di quel tipo lascerebbe altrimenti uno
+spazio bianco senza spiegazione. Le prime due chi guarda le risolve sul
+momento, e il riquadro gli porge il gesto che le annulla; la terza no, e allora
+l'unica cosa utile è portare chi i test li può scrivere dove si scrivono, cioè
+chi amministra alla gestione dei test. **Un guasto di rete si racconta in due
+modi**, sempre come nella galleria: se non c'è niente a schermo lo dice la
+pagina, con il motivo e il pulsante che riprova, se invece l'elenco è già lì da
+una lettura precedente basta l'avviso a scomparsa, perché quello che si vede
+resta buono.
+
+Nella stessa riga arrivano `kind` e `source`, cioè le due targhette, e sulla
+scheda stanno **in cima**, dove la tessera dell'avatar porta la categoria: come
+si risponde e se le domande vengono da un documento o le ha scritte qualcuno si
+leggono prima del titolo, perché è quello che dice se cominciare adesso o dopo.
+Sono le targhette che il tipo e l'origine hanno in tutto il resto dell'app
+([SimulationKindBadge](../frontend/src/components/SimulationKindBadge.tsx) e
+[SimulationSourceBadge](../frontend/src/components/SimulationSourceBadge.tsx)),
+colore compreso, e non più la parola in grigio che era scritta lì: la stessa
+cosa si riconosceva in due modi a seconda della schermata.
+
+**Sulla scheda non c'è nessun voto.** La tessera dice cos'è il test e cosa ci
+si è già fatto, non com'era andata: un numero colorato in un angolo era la cosa
+più forte della scheda e chiedeva di essere letto per primo, mentre chi scorre
+la griglia sta scegliendo cosa provare adesso. Il voto si legge dentro, dove si
+guarda una prova sola, e nei riepiloghi, dove si guardano insieme le prove di
+una persona.
+
+Di quale organizzazione sia il test lo legge il **solo super admin**, che è
+l'unico ad avere davanti i test di più tenant: `organization_name` arriva a
+tutti nella risposta, perché per chiunque altro è la propria, ma sulla scheda
+sarebbe la stessa parola su ogni riquadro, in un posto che esiste per dire cosa
+distingue un test dall'altro. Quando c'è sta **sotto le targhette**, su una
+riga sua: quelle sono due pastiglie corte, e un nome di organizzazione in fila
+con loro si portava via la riga intera.
+
+Quante domande sono sta attaccato alla descrizione, perché è l'ultima cosa che
+descrive il test: le targhette dicono come si risponde, quella riga dice quanto
+dura. Lo storico è un'altra cosa, riguarda chi guarda e non il test, e per
+quello sta in fondo, staccato.
+
+In fondo alla scheda stanno quindi quanti svolgimenti ha il test e quando è
+stato l'ultimo, con le stesse parole della tessera dell'avatar («3 svolgimenti,
+ultimo il 13 ago 2026» accanto a «3 sessioni, ultima il 13 ago 2026»): dalla
+griglia serve sapere se un test è da ripassare o è appena stato fatto, e quella
+è una data, non un numero.
+La data è per esteso ([formatDate](../frontend/src/components/dateFormat.ts)) e
+non una distanza da adesso, perché le due schede portano lo stesso storico e si
+leggono a un clic di distanza. Sopra non c'è nessun tooltip con il momento
+esatto, come non ce n'è sulla tessera dell'avatar: dell'ora lì non se ne fa
+niente, e una riga che reagisce al mouse invita a premerla mentre l'unica cosa
+da premere è la tessera intera. Davanti alla riga sta
+l'icona con cui il simulatore si presenta nella barra, come la tessera
+dell'avatar porta quella della chat: dice di cosa è lo storico senza spendere
+una parola su una riga che ne ha poche.
+
+Anche le distanze dentro la scheda sono quelle della tessera dell'avatar, e
+non un vuoto uniforme fra i blocchi: la targhetta stacca dal titolo, il titolo
+dalla propria descrizione di un quarto di quello, e lo storico in fondo è
+separato dal vuoto e basta. Le due tessere si scorrono nella stessa griglia a
+un clic di distanza, e una riga grigia o un nome staccato il triplo bastano a
+farle sembrare due schermate diverse.
 
 `source` prosegue poi su ogni tentativo consegnato, come `simulation_source`,
 in tutte e cinque le risposte che portano già `simulation_kind`: l'esito, i

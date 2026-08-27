@@ -1,4 +1,4 @@
-"""Voice conversation API endpoints (ElevenLabs STT + OpenAI + Cartesia TTS).
+"""Voice conversation API endpoints (ElevenLabs STT + OpenAI + ElevenLabs TTS).
 
 Flow:
 1. The client calls POST /api/voice/session (authenticated) and receives
@@ -9,7 +9,7 @@ Flow:
    microphone as binary PCM16 @ 16 kHz frames.
 3. VoicePipeline orchestrates the call: ElevenLabs Scribe v2 Realtime
    transcribes and commits turns (VAD), OpenAI (voice model) streams the
-   roleplay reply, Cartesia Sonic streams back PCM16 @ 24 kHz audio that
+   roleplay reply, ElevenLabs Flash streams back PCM16 @ 24 kHz audio that
    the browser plays as it arrives.
 """
 
@@ -23,7 +23,6 @@ from sqlalchemy.orm import Session
 
 import voice_capacity
 from auth_dependency import get_current_user
-from cartesia_service import CARTESIA_API_KEY
 from conversation_titles import next_conversation_title
 from database import get_db
 from elevenlabs_service import ELEVENLABS_API_KEY
@@ -70,8 +69,8 @@ def start_voice_session(
     # Il dettaglio tecnico resta nei log: chi legge il messaggio si sta
     # esercitando, e i nomi delle variabili d'ambiente non gli servono a
     # nulla se non a capire che la piattaforma è configurata male.
-    if not ELEVENLABS_API_KEY or not CARTESIA_API_KEY:
-        logger.error("Sessione vocale rifiutata: ELEVENLABS_API_KEY o CARTESIA_API_KEY mancanti")
+    if not ELEVENLABS_API_KEY:
+        logger.error("Sessione vocale rifiutata: ELEVENLABS_API_KEY mancante")
         raise HTTPException(
             status_code=503,
             detail="Il servizio vocale non è al momento disponibile. Utilizza la modalità chat oppure contatta l'amministratore.",
@@ -352,7 +351,7 @@ async def voice_websocket(websocket: WebSocket):
         try:
             pipeline = VoicePipeline(websocket, session)
         except RuntimeError as e:
-            # Missing voice configuration (e.g. no Cartesia voice id)
+            # Missing voice configuration (e.g. no ElevenLabs voice id)
             await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
             await websocket.close(code=1011)
             return

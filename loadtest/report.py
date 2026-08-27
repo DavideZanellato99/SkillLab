@@ -22,7 +22,7 @@ import sys
 # Va tenuto opzionale: darlo per presente scarterebbe i turni normali, darlo per
 # assente scarterebbe proprio quelli lunghi, cioè i più interessanti.
 RIGA = re.compile(r"commit->audio=(\d+)ms (?:risposta=(\d+)ms )?percepita=(\d+)ms")
-SEGMENTO = re.compile(r"\b(attesa|prep|llm_ttft|tok2tts|cartesia|send)=(\d+)")
+SEGMENTO = re.compile(r"\b(attesa|prep|llm_ttft|tok2tts|tts|send)=(\d+)")
 ANNULLATO = "ANNULLATO prima dell'audio"
 
 
@@ -79,7 +79,7 @@ def main() -> None:
 
     print(f"\nTurni completati: {len(totali)}   annullati: {annullati}\n")
     print("Per stadio della pipeline:")
-    for nome in ("attesa", "prep", "llm_ttft", "tok2tts", "cartesia", "send"):
+    for nome in ("attesa", "prep", "llm_ttft", "tok2tts", "tts", "send"):
         if nome in segmenti:
             print(_riga(nome, segmenti[nome]))
     print("\nQuello che conta:")

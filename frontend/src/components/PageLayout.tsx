@@ -45,6 +45,24 @@ export function PageContainer({ width = 'default', children }: PageContainerProp
   )
 }
 
+/* Il `main` delle due gallerie, quella degli avatar e quella dei test.
+ *
+ * È lo stesso landmark di `PageContainer` con due differenze, che vengono
+ * tutte e due dalla fascia che le sta sopra: sopra non ha imbottitura, perché
+ * la fascia porta già la propria, e prende l'altezza che avanza, perché in
+ * queste due schermate sotto la griglia non c'è nient'altro. Era scritto a
+ * mano nella pagina della galleria, e il simulatore lo avrebbe ricopiato. */
+export function GalleryContainer({ children }: { children: ReactNode }) {
+  return (
+    <main
+      {...mainContentProps}
+      className={`${mainContentCls} mx-auto w-full ${WIDTHS.wide} flex-1 px-6 pb-12 max-md:p-4`}
+    >
+      {children}
+    </main>
+  )
+}
+
 interface PageHeaderProps {
   title: ReactNode
   description: ReactNode

@@ -9,21 +9,28 @@
  * si preme, senza tornare sul server.
  */
 
-import type { AdminSimulation, Simulation, SimulationStatus } from '../services/simulations'
+import type {
+  AdminSimulation,
+  Simulation,
+  SimulationKind,
+  SimulationStatus,
+} from '../services/simulations'
 import { kindLabel, sourceLabel } from './simulationFormat'
 import { matchesSearch } from './tableSearch'
 
-/** Quali test guardare: quelli mai svolti, quelli già svolti, o tutti. */
-export type SimulationFilter = 'todo' | 'done' | 'all'
+/** Quali test guardare: tutti, o quelli di un tipo solo. */
+export type SimulationFilter = SimulationKind | 'all'
 
-/* "Tutti" resta in fondo come nei filtri della dashboard e del confronto: è
- * il punto di partenza, non una terza scelta. Prima quello che serve a chi
- * apre la pagina per allenarsi, cioè quello che non ha ancora fatto. */
-export const SIMULATION_FILTERS: { value: SimulationFilter; label: string }[] = [
-  { value: 'todo', label: 'Da svolgere' },
-  { value: 'done', label: 'Svolti' },
-  { value: 'all', label: 'Tutti' },
-]
+/** Il valore della pastiglia "Tutti": il gruppo di scelta parla per stringhe,
+ *  il catalogo intero è l'assenza di un tipo. */
+export const ALL_KINDS = 'all'
+
+/* L'ordine in cui i tipi si presentano, che è quello con cui sono arrivati e
+ * con cui li racconta la documentazione: prima i due che c'erano, poi i due
+ * che verificano quello che una crocetta non raggiunge. Un ordine dato dal
+ * caso, come sarebbe quello del catalogo, sposterebbe le pastiglie sotto le
+ * dita da un'organizzazione all'altra. */
+const KIND_ORDER: SimulationKind[] = ['multiple', 'open', 'ordering', 'matching']
 
 /**
  * I test che restano dopo il filtro e la ricerca.
@@ -39,9 +46,7 @@ export function filterSimulations(
   search: string,
 ): Simulation[] {
   return simulations.filter((simulation) => {
-    const done = simulation.attempt_count > 0
-    if (filter === 'todo' && done) return false
-    if (filter === 'done' && !done) return false
+    if (filter !== ALL_KINDS && simulation.kind !== filter) return false
     return matchesSearch(
       search,
       simulation.title,
@@ -51,6 +56,39 @@ export function filterSimulations(
       simulation.organization_name,
     )
   })
+}
+
+/**
+ * Le pastiglie sopra la griglia: "Tutti" e i tipi di test che il catalogo
+ * contiene davvero, ognuno con quanti ne contiene.
+ *
+ * Si restringe per tipo e non per «già svolto o no» perché sono due domande
+ * di peso diverso: rispondere a dieci domande a crocette e scriverne dieci
+ * sono due impegni che non si scambiano, e chi apre la pagina sta decidendo
+ * quanto tempo ha adesso. Che un test sia già stato svolto lo dice la sua
+ * tessera, riga per riga, insieme a com'era andata.
+ *
+ * I tipi assenti non compaiono: una pastiglia con lo zero accanto è un
+ * bottone che porta a una griglia vuota, e in un catalogo di soli test a
+ * crocette sarebbero tre. Il conto è del catalogo intero e non di quello che
+ * la ricerca ha lasciato a schermo, come il numero accanto a ogni categoria
+ * nella galleria degli avatar.
+ */
+export function kindFilterOptions(
+  simulations: Simulation[],
+): { value: SimulationFilter; label: string; count: number }[] {
+  const counts = new Map<SimulationKind, number>()
+  for (const simulation of simulations) {
+    counts.set(simulation.kind, (counts.get(simulation.kind) ?? 0) + 1)
+  }
+  return [
+    { value: ALL_KINDS, label: 'Tutti', count: simulations.length },
+    ...KIND_ORDER.filter((kind) => counts.has(kind)).map((kind) => ({
+      value: kind,
+      label: kindLabel(kind),
+      count: counts.get(kind) ?? 0,
+    })),
+  ]
 }
 
 /* ── La gestione, che è l'altra metà ──────────────────────────────────

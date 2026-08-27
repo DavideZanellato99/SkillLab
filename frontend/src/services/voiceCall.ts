@@ -1,4 +1,4 @@
-/* Realtime voice call client (ElevenLabs STT + Cartesia TTS via backend WS).
+/* Realtime voice call client (ElevenLabs STT + ElevenLabs TTS via backend WS).
  *
  * Streams the microphone to the backend as binary PCM16 @ 16 kHz frames and
  * plays back the assistant's PCM16 @ 24 kHz audio chunks as they arrive.
@@ -12,7 +12,7 @@ const VOICE_WS_PROTOCOL = 'skilllab-voice'
 
 /** Sample rate of the mic frames the backend expects (ElevenLabs STT). */
 const CAPTURE_SAMPLE_RATE = 16000
-/** Sample rate of the TTS audio the backend sends (Cartesia). */
+/** Sample rate of the TTS audio the backend sends. */
 const PLAYBACK_SAMPLE_RATE = 24000
 
 /* Head start given to the first scheduled chunk of a turn, in seconds.

@@ -14,19 +14,13 @@ import { getAvatarImageUrl } from '../services/api'
 import Badge from './Badge'
 import { categoryBadgeClasses } from './categoryStyles'
 import { formatDate } from './dateFormat'
+import { staggerDelay } from './galleryLayout'
 import { ChatIcon, MicIcon, UserIcon } from './icons'
 
 interface AvatarCardProps {
   avatar: Avatar
   index: number
 }
-
-/* L'ingresso a cascata era `index * 0.08s`: con venti avatar l'ultimo
- * compariva dopo un secondo e mezzo, e chi cercava proprio quello guardava
- * uno spazio vuoto. Il ritardo si ferma dopo le prime file, che sono quelle
- * che l'occhio segue davvero. */
-const MAX_STAGGERED = 8
-const STAGGER_STEP_S = 0.05
 
 export default function AvatarCard({ avatar, index }: AvatarCardProps) {
   /* Un ritratto che non arriva (file mancante, rete che cade a metà) lasciava
@@ -37,7 +31,7 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
     <Link
       to={`/app/chat/${avatar.id}`}
       className="group relative block animate-slide-in-bottom overflow-hidden rounded-3xl border border-white/6 bg-gray-900/60 no-underline backdrop-blur-xl transition hover:-translate-y-1.5 hover:scale-[1.02] hover:border-white/12 hover:bg-slate-800/70 hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)] active:scale-[0.99]"
-      style={{ animationDelay: `${Math.min(index, MAX_STAGGERED) * STAGGER_STEP_S}s` }}
+      style={{ animationDelay: staggerDelay(index) }}
       id={`avatar-card-${avatar.id}`}
       aria-label={`Parla con ${avatar.name}`}
     >

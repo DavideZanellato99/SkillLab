@@ -14,27 +14,11 @@ import Tooltip from './Tooltip'
  *
  * Il disegno racconta il gesto: il pallino da selezionare, la matita che
  * scrive, le righe da riordinare, le due colonne da accoppiare. */
-const KIND_STYLES: Record<SimulationKind, { tone: string; tooltip: string }> = {
-  multiple: {
-    tone: 'border-violet-600/35 bg-violet-600/10 text-violet-400',
-    tooltip:
-      'Test a scelta multipla: si seleziona una fra le alternative proposte, entro un tempo massimo',
-  },
-  open: {
-    tone: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',
-    tooltip:
-      'Test a risposta aperta: si risponde per iscritto, e il punteggio riflette la completezza della risposta',
-  },
-  ordering: {
-    tone: 'border-violet-600/35 bg-violet-600/10 text-violet-400',
-    tooltip:
-      "Test di ordinamento: si rimettono i passi di una procedura nell'ordine giusto, e il punteggio è la quota di passi al posto giusto",
-  },
-  matching: {
-    tone: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',
-    tooltip:
-      'Test di abbinamento: si accoppiano gli elementi di due colonne, e il punteggio è la quota di coppie indovinate',
-  },
+const KIND_TONES: Record<SimulationKind, string> = {
+  multiple: 'border-violet-600/35 bg-violet-600/10 text-violet-400',
+  open: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',
+  ordering: 'border-violet-600/35 bg-violet-600/10 text-violet-400',
+  matching: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',
 }
 
 function KindIcon({ kind }: { kind: SimulationKind }) {
@@ -97,7 +81,13 @@ function KindIcon({ kind }: { kind: SimulationKind }) {
  *
  * Con `iconOnly` resta il solo disegno, per i posti fitti come la tabella
  * della dashboard. La parola resta nel markup per chi legge con uno screen
- * reader, e il tooltip la scrive per esteso comunque.
+ * reader, e il tooltip la scrive per chi guarda.
+ *
+ * Il tooltip è il nome del tipo e basta, e c'è **solo dove la parola non si
+ * vede**: dove la targhetta è scritta per esteso ripeterebbe quello che si
+ * sta già leggendo. Prima spiegava anche come si risponde e come si prende
+ * il voto, che è la regola del test: la si legge prima di cominciare, non
+ * passando il mouse su una riga di tabella per sapere cosa dice un disegno.
  */
 export default function SimulationKindBadge({
   kind,
@@ -106,13 +96,16 @@ export default function SimulationKindBadge({
   kind: SimulationKind
   iconOnly?: boolean
 }) {
-  const style = KIND_STYLES[kind] ?? KIND_STYLES.multiple
+  const tone = KIND_TONES[kind] ?? KIND_TONES.multiple
   return (
-    <Tooltip content={style.tooltip}>
+    /* Senza contenuto il tooltip non compare, ed è la forma in cui Tooltip
+       chiede di non essere mostrato: la targhetta scritta non ha niente da
+       aggiungere a sé stessa. */
+    <Tooltip content={iconOnly ? kindLabel(kind) : ''}>
       <span
         className={`inline-flex shrink-0 items-center rounded-full border text-[0.62rem] font-semibold uppercase tracking-wider ${
           iconOnly ? 'p-1' : 'gap-1 px-2 py-0.5'
-        } ${style.tone}`}
+        } ${tone}`}
       >
         <KindIcon kind={kind} />
         <span className={iconOnly ? 'sr-only' : undefined}>{kindLabel(kind)}</span>

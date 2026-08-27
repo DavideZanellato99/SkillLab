@@ -1168,10 +1168,10 @@ risposte: una fotografia si legge per quello che dice, non indovinando.
 
 Accanto viaggia `simulation_source`, chi aveva scritto quelle domande, e ha una
 targhetta sua (`SimulationSourceBadge`) che sta sempre a fianco di quella del
-tipo. Quella però non scrive mai la sua parola, in nessuna schermata: è
-un'icona con il tooltip, perché appaiata a una pastiglia scritta allungherebbe
-ogni riga per dire una cosa che l'icona dice da sola, e perché il colore è già
-preso dal tipo e dallo stato. La parola (`sourceLabel`) resta comunque nella
+tipo. Quella però non scrive mai la sua parola sullo schermo, in nessuna
+schermata: è un'icona con il tooltip che la nomina, perché appaiata a una
+pastiglia scritta allungherebbe ogni riga per dire una cosa che l'icona dice
+da sola, e perché il colore è già preso dal tipo e dallo stato. La parola (`sourceLabel`) resta comunque nella
 `matchesSearch` della riga: si cerca "manuale" anche se sullo schermo quella
 parola non compare.
 
@@ -1212,6 +1212,15 @@ guardando il voto. Adesso la somma fa 1130px e ci sta, con il padding stretto
 su tutte le colonne e non solo su quelle dei numeri. A pagare sono i titoli
 lunghi, che vanno a capo su due righe, ed è il verso giusto dello scambio: una
 riga alta il doppio si legge, una tabella che scappa a destra no.
+
+L'ordine delle colonne è lo stesso nelle due tabelle, valutazioni e test: la
+prova, chi l'ha svolta, quando. L'utente sta prima della data perché è la
+domanda che si fa guardando questa pagina, e la data serve dopo, per collocare
+una riga già trovata. Del nome non si scrive l'email sotto: chi legge la
+dashboard cerca una persona e non un indirizzo, e la stessa persona con due
+righe di testo in colonna alzava ogni riga della tabella. I valori della prima
+colonna sono allineati a sinistra, le intestazioni restano al centro come in
+tutte le tabelle dell'app.
 
 Le colonne dei criteri sono larghe novanta pixel, e il nome accorciato ci deve
 stare: per questo `identificazione_cliente` in intestazione è "Cliente" e non

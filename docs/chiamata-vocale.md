@@ -2,7 +2,7 @@
 
 La funzionalità più complessa dell'applicazione: una telefonata simulata in cui
 l'avatar chiama il numero verde della banca e l'operatore in formazione
-risponde. Tre fornitori esterni in fila, un WebSocket, e un vincolo che governa
+risponde. Due fornitori esterni in fila, un WebSocket, e un vincolo che governa
 ogni scelta, cioè che **la latenza è la qualità del prodotto**.
 
 ## Il giro completo
@@ -12,9 +12,9 @@ sequenceDiagram
     participant O as Operatore
     participant B as Browser
     participant P as VoicePipeline
-    participant E as ElevenLabs
+    participant E as ElevenLabs STT
     participant L as OpenAI
-    participant C as Cartesia
+    participant C as ElevenLabs TTS
 
     O->>B: preme "Chiama"
     B->>P: POST /api/voice/session
@@ -160,7 +160,8 @@ cicli concorrenti su un `asyncio.wait` che chiude tutto appena uno finisce:
 | --- | --- |
 | `_browser_loop` | Legge dal browser: i frame binari li inoltra alla STT, il JSON `end` chiude la chiamata |
 | `_stt_loop` | Legge da ElevenLabs: parziali, commit, errori |
-| `_tts_loop` | Legge da Cartesia: blocchi audio verso il browser |
+| `_tts_loop` | Legge dalla sintesi: blocchi audio verso il browser |
+| `_keepalive_loop` | Tiene su la socket della sintesi mentre parla l'operatore |
 
 Durante lo squillo parte anche un **prewarm**: una richiesta da un token sola a
 OpenAI che paga in anticipo l'handshake e il prefill del prompt della persona,
@@ -207,20 +208,21 @@ tempo in cui l'operatore stava ancora parlando finisce nella voce `attesa` e
 non nell'attesa che gli si attribuisce: vedi [Le misure](#le-misure).
 
 Un commit che arriva mentre un turno è già in volo è invece un **barge in**: il
-turno in corso viene annullato, il contesto Cartesia cancellato, e al browser
+turno in corso viene annullato, il contesto della sintesi chiuso, e al browser
 arriva prima la battuta troncata (che resta nella storia, perché è quello che
 l'operatore ha effettivamente sentito) e poi `interrupt`.
 
 ## Dentro un turno
 
-1. si apre un **contesto Cartesia** nuovo, identificato da un id;
+1. si apre un **contesto di sintesi** nuovo, identificato da un id;
 2. i token di OpenAI arrivano in streaming: ognuno va al browser come testo
    (`assistant_delta`) e finisce in un buffer;
 3. il buffer viene mandato alla TTS **sui confini di parola**, così la sintesi
    non deve indovinare la pronuncia di mezzo token;
 4. l'audio torna taggato col contesto: quello di un contesto diverso, cioè di
    un turno annullato, viene buttato;
-5. alla fine un blocco vuoto chiude il contesto e fa uscire l'audio residuo.
+5. alla fine si chiude il contesto, il che manda in sintesi anche il testo
+   rimasto in cassa: non serve chiedere il flush a parte.
 
 Se il modello fallisce e non è ancora uscito niente, l'avatar dice una battuta
 di ripiego ("ho avuto un problema tecnico, puoi ripetere?"), che è meglio di un
@@ -243,9 +245,9 @@ così una risposta lenta si attribuisce invece di indovinarla:
 | `prep` | Ultimo commit fino alla richiesta al modello |
 | `llm_ttft` | Richiesta fino al primo token. È il pezzo dominante |
 | `tok2tts` | Primo token fino al primo invio alla sintesi |
-| `cartesia` | Invio fino al primo audio ricevuto |
+| `tts` | Invio fino al primo audio ricevuto |
 | `send` | Primo audio fino all'uscita verso il browser |
-| `slot_cartesia` | Primo invio fino alla chiusura del contesto, solo nel riepilogo |
+| `slot_tts` | Primo invio fino alla chiusura del contesto, solo nel riepilogo |
 
 Il numero che riassume tutto è `percepita`, cioè `vad` più il tratto dall'ultimo
 commit al primo audio. Non comprende il cuscinetto di riproduzione del browser,
@@ -278,25 +280,27 @@ risposta a una domanda che dal solo tracciato non si può sciogliere: quando le
 trascrizioni arrivano in blocco, coprendo mezzo minuto di parlato tutto insieme,
 dice se l'arretrato si è formato da noi o da loro.
 
-### Quante chiamate stanno dentro uno slot Cartesia
+### Quante chiamate stanno dentro uno slot di sintesi
 
-`slot_cartesia` è l'unico segmento che non misura un'attesa: misura
+`slot_tts` è l'unico segmento che non misura un'attesa: misura
 un'occupazione. Va dal primo pezzo di testo mandato alla sintesi alla
 chiusura del contesto, cioè il tempo in cui il turno tiene occupato uno dei
 pochi slot di concorrenza che il piano concede.
 
 Non è la durata dell'audio. Il browser riproduce per quindici secondi quello
-che la sintesi ha prodotto in due, quindi un piano da cinque sintesi
-simultanee regge molte più di cinque conversazioni. Quante, lo dice la riga
+che la sintesi ha prodotto in due, quindi un piano da venti sintesi
+simultanee regge molte più di venti conversazioni. Quante, lo dice la riga
 finale del riepilogo:
 
 ```
-slot Cartesia occupato il 9.4% della chiamata, cioè circa 11 chiamate per slot
+slot TTS occupato il 9.4% della chiamata, cioè circa 11 chiamate per slot
 ```
 
 È una media sulla singola chiamata e non tiene conto delle collisioni, quindi
-è un tetto teorico: quando due turni cadono insieme oltre il limite, Cartesia
-risponde `429` invece di accodare, e il dimensionamento vero vuole margine.
+è un tetto teorico e il dimensionamento vero vuole margine. Quando due turni
+cadono insieme oltre il limite ElevenLabs però **accoda invece di rifiutare**,
+e la coda costa una cinquantina di millisecondi: uno sforamento si paga in
+latenza impercettibile, non in un turno che non viene pronunciato.
 
 I turni interrotti da un barge in vengono conteggiati nella quota, perché lo
 slot lo hanno occupato davvero, ma sono contati a parte perché una sintesi
@@ -316,9 +320,25 @@ simultanee: la connessione WebSocket occupa uno slot solo mentre il modello
 lavora, e quanto margine resta davvero non si deduce, si misura. Se gli header
 non arrivano, la riga non esce e la chiamata prosegue.
 
-Il vincolo più stretto della pipeline resta comunque Cartesia, che conta sia le
-connessioni aperte, fino a dieci volte il limite del piano, sia le sintesi
-attive nello stesso istante.
+Con la sintesi sullo stesso fornitore i due tetti restano comunque separati:
+il piano conta le trascrizioni in tempo reale e le sintesi Flash su due quote
+distinte, e la seconda è quella con più margine, perché una sintesi occupa lo
+slot per una frazione della chiamata mentre una trascrizione lo occupa quasi
+per tutta.
+
+### La socket della sintesi va tenuta viva
+
+ElevenLabs chiude la connessione di sintesi dopo un tempo di inattività, che
+si può alzare fino a un tetto ma non togliere. È un problema specifico di
+questa pipeline: su quella socket, per tutto il tempo in cui parla
+l'operatore, non passa assolutamente niente, e sono i minuti in cui la
+chiamata sta andando bene.
+
+Per questo `_keepalive_loop` manda un messaggio a vuoto a intervalli regolari,
+dentro un contesto aperto all'inizio della chiamata che non dice mai niente:
+i keep alive vanno indirizzati a un contesto, e fra un turno e l'altro non ce
+n'è nessuno aperto. Un testo vuoto il fornitore lo ignora, quindi non
+sintetizza nulla e non consuma quota: conta solo che sia arrivato qualcosa.
 
 ## La registrazione, dopo
 

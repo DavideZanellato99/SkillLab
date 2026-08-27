@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { filterAdminSimulations, filterSimulations } from '../../src/components/simulationFilters'
+import {
+  filterAdminSimulations,
+  filterSimulations,
+  kindFilterOptions,
+} from '../../src/components/simulationFilters'
 import type { AdminSimulation, Simulation } from '../../src/services/simulations'
 
 /* Restringere l'elenco dei test è un giro su una lista già in memoria, e la
  * regola sta qui invece che dentro la pagina. Le due cose che questo file
- * tiene ferme: cosa vuol dire "da svolgere", e che la ricerca arrivi anche a
- * quello che sulla scheda non è scritto in lettere. */
+ * tiene ferme: che si restringa per tipo di test, e che la ricerca arrivi
+ * anche a quello che sulla scheda non è scritto in lettere. */
 
 const simulazione = (over: Partial<Simulation> = {}): Simulation => ({
   id: 's-1',
@@ -39,11 +43,13 @@ const adminSimulazione = (over: Partial<AdminSimulation> = {}): AdminSimulation 
 const mai = simulazione({ id: 'mai', title: 'Mai svolto' })
 const fatto = simulazione({ id: 'fatto', title: 'Già svolto', attempt_count: 2 })
 
+const aperta = simulazione({ id: 'aperta', title: 'Reclami', kind: 'open' })
+
 describe('filterSimulations', () => {
-  it('separa i test mai svolti da quelli già svolti', () => {
-    expect(filterSimulations([mai, fatto], 'todo', '').map((s) => s.id)).toEqual(['mai'])
-    expect(filterSimulations([mai, fatto], 'done', '').map((s) => s.id)).toEqual(['fatto'])
-    expect(filterSimulations([mai, fatto], 'all', '').map((s) => s.id)).toEqual(['mai', 'fatto'])
+  it('restringe al tipo di test scelto', () => {
+    expect(filterSimulations([mai, aperta], 'open', '').map((s) => s.id)).toEqual(['aperta'])
+    expect(filterSimulations([mai, aperta], 'multiple', '').map((s) => s.id)).toEqual(['mai'])
+    expect(filterSimulations([mai, aperta], 'all', '').map((s) => s.id)).toEqual(['mai', 'aperta'])
   })
 
   it('cerca nel titolo e nella descrizione, senza badare ad accenti e maiuscole', () => {
@@ -57,7 +63,6 @@ describe('filterSimulations', () => {
    * chi cerca "aperta" o "manuale" sta cercando quelle, e senza questo non
    * troverebbe niente. */
   it('trova anche per tipo di test e per chi ha scritto le domande', () => {
-    const aperta = simulazione({ id: 'aperta', title: 'Reclami', kind: 'open' })
     const scrittoAMano = simulazione({ id: 'mano', title: 'Cassa', source: 'manual' })
     const elenco = [mai, aperta, scrittoAMano]
 
@@ -66,10 +71,31 @@ describe('filterSimulations', () => {
   })
 
   it('applica insieme il filtro e la ricerca', () => {
-    const altroFatto = simulazione({ id: 'altro', title: 'Bonifici esteri', attempt_count: 1 })
-    const elenco = [mai, fatto, altroFatto]
+    const altraAperta = simulazione({ id: 'altro', title: 'Bonifici esteri', kind: 'open' })
+    const elenco = [mai, aperta, altraAperta]
 
-    expect(filterSimulations(elenco, 'done', 'bonifici').map((s) => s.id)).toEqual(['altro'])
+    expect(filterSimulations(elenco, 'open', 'bonifici').map((s) => s.id)).toEqual(['altro'])
+  })
+})
+
+/* Le pastiglie sopra la griglia. Quello che questo blocco tiene fermo è che
+ * non ne compaia nessuna che porta a una griglia vuota, e che l'ordine dei
+ * tipi non dipenda da com'è fatto il catalogo. */
+describe('kindFilterOptions', () => {
+  it('porta solo i tipi presenti, in ordine, con quanti ne contengono', () => {
+    const abbinamento = simulazione({ id: 'coppie', kind: 'matching' })
+    const options = kindFilterOptions([aperta, abbinamento, mai, fatto])
+
+    expect(options).toEqual([
+      { value: 'all', label: 'Tutti', count: 4 },
+      { value: 'multiple', label: 'Scelta multipla', count: 2 },
+      { value: 'open', label: 'Risposta aperta', count: 1 },
+      { value: 'matching', label: 'Abbinamento', count: 1 },
+    ])
+  })
+
+  it('su un catalogo vuoto resta la sola pastiglia di tutti', () => {
+    expect(kindFilterOptions([])).toEqual([{ value: 'all', label: 'Tutti', count: 0 }])
   })
 })
 

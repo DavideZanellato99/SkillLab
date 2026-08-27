@@ -2,7 +2,7 @@
 
 A conversation runs on one of two channels, fixed when it is opened:
 
-- "voice": a simulated phone call (ElevenLabs STT + OpenAI + Cartesia TTS,
+- "voice": a simulated phone call (ElevenLabs STT + OpenAI + ElevenLabs TTS,
   see routers/voice.py). These endpoints only expose its transcript.
 - "text": a written chat with the same avatar, driven from here. Only the
   LLM is involved: no speech to text, no text to speech.

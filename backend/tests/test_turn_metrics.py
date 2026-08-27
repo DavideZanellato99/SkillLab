@@ -192,7 +192,7 @@ def test_ogni_stadio_costa_quanto_e_passato_dal_precedente():
     assert stadi["prep"] == 40.0
     assert stadi["llm_ttft"] == 500.0
     assert stadi["tok2tts"] == 10.0
-    assert stadi["cartesia"] == 320.0
+    assert stadi["tts"] == 320.0
     assert stadi["send"] == 30.0
 
 
@@ -230,10 +230,10 @@ def test_la_riga_dice_quando_il_sintetizzatore_aspettava_parole():
     timer = _turno_completo()
     timer.tts_sends = 3
 
-    assert "cartesia=320(x3)" in timer.format_line()
+    assert "tts=320(x3)" in timer.format_line()
     # Un pezzo solo è il caso normale e non merita rumore nella riga
     timer.tts_sends = 1
-    assert "cartesia=320 " in timer.format_line()
+    assert "tts=320 " in timer.format_line()
 
 
 def test_la_riga_di_un_turno_annullato_lo_dice_invece_di_inventare_un_tempo():
@@ -406,7 +406,7 @@ def test_lo_slot_dura_dal_primo_invio_alla_chiusura(diagnostica_accesa, orologio
     with caplog.at_level(logging.INFO, logger="turn_metrics"):
         metriche.report()
 
-    assert "slot_cartesia" in caplog.text
+    assert "slot_tts" in caplog.text
     assert "mediana   2000ms" in caplog.text
 
 
@@ -463,7 +463,7 @@ def test_i_turni_interrotti_si_contano_a_parte(diagnostica_accesa, orologio, cap
 
 
 def test_chiudere_uno_slot_gia_chiuso_non_conta_niente(diagnostica_accesa, orologio, caplog):
-    """Un barge-in cancella il contesto e poco dopo Cartesia risponde
+    """Un barge-in cancella il contesto e poco dopo la sintesi risponde
     comunque con il suo evento: la seconda chiusura non deve raddoppiare
     l'occupazione né inventare un turno interrotto in più."""
     metriche = CallMetrics()
@@ -489,5 +489,5 @@ def test_senza_sintesi_misurate_il_riepilogo_non_parla_di_slot(diagnostica_acces
     with caplog.at_level(logging.INFO, logger="turn_metrics"):
         metriche.report()
 
-    assert "slot_cartesia" not in caplog.text
+    assert "slot_tts" not in caplog.text
     assert "chiamate per slot" not in caplog.text

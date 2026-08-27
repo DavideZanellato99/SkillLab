@@ -16,7 +16,7 @@ flowchart TD
     BE -->|"login, utenti"| CG["AWS Cognito"]
     BE -->|"trascrizione"| EL["ElevenLabs<br/>Scribe v2 Realtime"]
     BE -->|"roleplay, valutazione,<br/>embedding"| OA["OpenAI"]
-    BE -->|"sintesi vocale"| CA["Cartesia Sonic"]
+    BE -->|"sintesi vocale"| CA["ElevenLabs<br/>Flash"]
 ```
 
 Il browser vede **un solo indirizzo**. Non è estetica: i cookie di sessione
@@ -31,10 +31,10 @@ sola origine significa anche nessun CORS da gestire in produzione.
 | Identità | AWS Cognito | [backend/cognito_service.py](../backend/cognito_service.py) |
 | Voce in entrata | ElevenLabs Scribe v2 Realtime | [backend/elevenlabs_service.py](../backend/elevenlabs_service.py) |
 | Cervello | OpenAI (roleplay, valutazione, embedding) | [backend/openai_service.py](../backend/openai_service.py) |
-| Voce in uscita | Cartesia Sonic | [backend/cartesia_service.py](../backend/cartesia_service.py) |
+| Voce in uscita | ElevenLabs Flash | [backend/elevenlabs_tts_service.py](../backend/elevenlabs_tts_service.py) |
 
 Nessuna chiave dei fornitori esterni sta nel browser: tutte le chiamate a
-OpenAI, ElevenLabs e Cartesia partono dal backend, anche quelle in tempo reale
+OpenAI ed ElevenLabs partono dal backend, anche quelle in tempo reale
 della chiamata vocale.
 
 ## Il database è l'unica memoria condivisa

@@ -73,13 +73,23 @@ def stt_ws_url() -> str:
     return f"{_STT_WS_BASE}?{urlencode(params)}"
 
 
-def stt_headers() -> dict:
-    """Auth headers for the server-side STT connection."""
+def api_headers() -> dict:
+    """Auth headers for any ElevenLabs call, transcription or synthesis.
+
+    La chiave è una sola per tutto l'account, quindi la usa anche
+    elevenlabs_tts_service: sta qui perché qui sta la variabile, non perché
+    appartenga alla trascrizione.
+    """
     if not ELEVENLABS_API_KEY:
         raise RuntimeError(
             "ELEVENLABS_API_KEY non configurata. Aggiungila al file .env del backend."
         )
     return {"xi-api-key": ELEVENLABS_API_KEY}
+
+
+def stt_headers() -> dict:
+    """Auth headers for the server-side STT connection."""
+    return api_headers()
 
 
 def log_stt_concurrency(connection: object) -> None:

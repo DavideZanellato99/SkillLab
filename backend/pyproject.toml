@@ -106,7 +106,7 @@ omit = [
     # padding it with unreachable-in-CI code.
     "voice_pipeline.py",
     "voice_sessions.py",
-    "cartesia_service.py",
+    "elevenlabs_tts_service.py",
     "elevenlabs_service.py",
     "tls_setup.py",
 ]

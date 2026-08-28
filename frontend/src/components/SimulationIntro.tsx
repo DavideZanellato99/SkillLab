@@ -3,7 +3,14 @@ import type { Simulation } from '../services/simulations'
 import PrimaryButton from './PrimaryButton'
 import SimulationAttemptsList from './SimulationAttemptsList'
 import Spinner from './Spinner'
-import { isTimed, kindHint, QUESTION_SECONDS, STEP_SECONDS } from './simulationFormat'
+import {
+  GRACE_SECONDS,
+  isTimed,
+  kindHint,
+  QUESTION_SECONDS,
+  spelledClock,
+  STEP_SECONDS,
+} from './simulationFormat'
 
 /* Quello che si legge prima di cominciare: le regole del test e i propri
  * tentativi passati.
@@ -108,15 +115,16 @@ export default function SimulationIntro({
           ) : (
             <>
               <Rule>
-                Ogni domanda ha un tempo massimo di {QUESTION_SECONDS} secondi. Allo scadere viene
-                registrata la risposta selezionata, oppure una risposta in bianco se non è stata
-                effettuata alcuna scelta.
+                Ogni domanda ha un tempo massimo di {spelledClock(QUESTION_SECONDS)}. Allo scadere
+                viene registrata la risposta selezionata, oppure una risposta in bianco se non è
+                stata effettuata alcuna scelta.
               </Rule>
               <Rule>
-                <span className="text-slate-100">Il punteggio tiene conto anche del tempo.</span>{' '}
-                Una risposta corretta vale un punto se immediata, con una riduzione di un decimo
-                ogni {STEP_SECONDS} secondi, fino a un minimo di 0,1. Una risposta errata vale zero
-                in ogni caso.
+                <span className="text-slate-100">Il punteggio tiene conto anche del tempo.</span> I
+                primi {spelledClock(GRACE_SECONDS)} non comportano alcuna riduzione e una risposta
+                corretta vale un punto intero. Da lì in avanti il valore scende di un decimo ogni{' '}
+                {STEP_SECONDS} secondi, fino al minimo di 0,1 che spetta anche alla risposta
+                registrata allo scadere. Una risposta errata vale zero in ogni caso.
               </Rule>
             </>
           )}

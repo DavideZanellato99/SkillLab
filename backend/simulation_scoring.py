@@ -1,28 +1,33 @@
-"""Quanto vale una risposta: se è giusta, e quanto in fretta è arrivata.
+"""Quanto vale una risposta: se è giusta, e quanto ci si è messi a darla.
 
-Sapere la procedura e ricordarsela subito non sono la stessa cosa, e allo
-sportello la differenza si vede: chi deve rileggere il manuale la risposta ce
-l'ha, ma dopo. Il punteggio la misura facendo scendere il valore di una
-risposta corretta man mano che passa il tempo della domanda.
+Sapere la procedura e ricordarsela senza rileggere il manuale non sono la
+stessa cosa, e allo sportello la differenza si vede: chi la deve cercare la
+risposta ce l'ha, ma dopo. Il punteggio la misura in due tempi.
+
+I primi quattro minuti sono di grazia e non costano niente: sono il tempo di
+leggere la domanda, ragionare sulle alternative e decidere, ed è quello che
+il test vuole misurare. Da lì in poi ogni dieci secondi tolgono un decimo,
+fino al minimo di un decimo, che è dove la domanda si chiude: chi arriva in
+fondo alla scala sta cercando la risposta, non ricordandola.
 
 Una risposta sbagliata, o lasciata in bianco, vale zero comunque: il tempo
 scala quello che si è guadagnato, non regala niente a chi non sa.
 
-Le tre costanti qui sotto sono l'unica cosa da toccare per cambiare la scala:
-quanto dura una domanda, in quanti scalini scende e quindi quanto vale ogni
-scalino. La durata è la stessa che scorre nel browser (vedi
+Le costanti qui sotto sono l'unica cosa da toccare per cambiare la scala:
+quanto dura una domanda, quanto tempo è gratis e ogni quanto si perde un
+decimo. La durata è la stessa che scorre nel browser (vedi
 ``SimulationQuestionStep``): sono due valori scritti in due linguaggi, e questo
 è il posto che comanda, perché è quello che assegna i punti.
 
 **Una risposta aperta si conta diversamente**: là non c'è cronometro, perché
-trenta secondi bastano a scegliere una lettera e non a scrivere una
-procedura, e togliere punti a chi si rilegge prima di consegnare
-premierebbe la fretta invece della competenza. Quindi il punto intero non si
-sconta col tempo, si guadagna a pezzi: vale quanto la risposta è completa,
-che è il giudizio del modello (vedi ``simulation_open_answers``). Le due
-scale finiscono nello stesso intervallo, da 0 a 1 per domanda, ed è per
-questo che un test dell'una forma e uno dell'altra si leggono sullo stesso
-voto in decimi.
+il tempo di una domanda a crocette è il tempo di decidere fra quattro righe
+già scritte e non di scriverne una, e togliere punti a chi si rilegge prima
+di consegnare premierebbe la fretta invece della competenza. Quindi il punto
+intero non si sconta col tempo, si guadagna a pezzi: vale quanto la risposta
+è completa, che è il giudizio del modello (vedi ``simulation_open_answers``).
+Le due scale finiscono nello stesso intervallo, da 0 a 1 per domanda, ed è
+per questo che un test dell'una forma e uno dell'altra si leggono sullo
+stesso voto in decimi.
 
 Qui non si tocca il database, non si guarda una domanda vera e non si chiama
 nessun modello: entrano un esito, un tempo o un giudizio, esce un numero.
@@ -30,18 +35,20 @@ nessun modello: entrano un esito, un tempo o un giudizio, esce un numero.
 
 import math
 
-# I secondi che dura una domanda. Oltre non si va: il browser consegna da solo
-# allo scadere, e un tempo più lungo di così è un client che dice bugie o un
-# orologio che è andato avanti.
-QUESTION_SECONDS = 30
+# I secondi che dura una domanda, cinque minuti e mezzo. Oltre non si va: il
+# browser consegna da solo allo scadere, e un tempo più lungo di così è un
+# client che dice bugie o un orologio che è andato avanti.
+QUESTION_SECONDS = 330
 
-# In quanti scalini scende il valore di una risposta corretta. Dieci scalini
-# su trenta secondi vuol dire tre secondi ciascuno: si parte da un punto e si
-# perde un decimo ogni tre secondi.
-SCORE_STEPS = 10
+# Il tempo che non costa niente, quattro minuti. Dentro questa soglia una
+# risposta giusta vale il punto pieno, per quanto tardi arrivi.
+GRACE_SECONDS = 240
 
-STEP_SECONDS = QUESTION_SECONDS / SCORE_STEPS
-STEP_POINTS = 1 / SCORE_STEPS
+# Ogni quanti secondi, finita la grazia, si perde un decimo. Dai quattro
+# minuti al minimo la discesa dura un minuto e mezzo, che è la seconda metà
+# di QUESTION_SECONDS.
+STEP_SECONDS = 10
+STEP_POINTS = 0.1
 
 # Quanto vale una risposta corretta arrivata all'ultimo istante, che è anche
 # quanto vale una arrivata senza dire quando (vedi question_points).
@@ -70,8 +77,15 @@ def question_points(is_correct: bool, elapsed_ms: int | None) -> float:
     consegna arrivata con un numero storto è comunque un test che qualcuno ha
     svolto.
 
+    Dentro i quattro minuti di grazia vale un punto pieno: la scala non
+    misura la prontezza a rispondere ma il rileggersi la procedura, e
+    distinguere fra chi decide in cinque secondi e chi ci pensa un minuto
+    vorrebbe dire dare un voto alla velocità di lettura.
+
     L'ultimo scalino vale un decimo e non zero: rispondere giusto all'ultimo
-    istante è comunque saperlo, e vale più di sbagliare.
+    istante è comunque saperlo, e vale più di sbagliare. È anche quello che
+    prende chi allo scadere aveva una scelta selezionata e giusta: la
+    risposta conta, al valore più basso.
 
     **Un tempo assente vale come l'ultimo scalino**, non come il primo. Il
     tempo è l'unica parte del punteggio che il server non può verificare, e
@@ -86,11 +100,13 @@ def question_points(is_correct: bool, elapsed_ms: int | None) -> float:
     if elapsed_ms is None:
         return MIN_POINTS
     seconds = min(max(elapsed_ms, 0), QUESTION_SECONDS * 1000) / 1000
-    # Lo scalino in cui cade il tempo, contato da 1: i tre secondi esatti
-    # stanno ancora nel primo, il primo istante del quarto secondo è già nel
-    # secondo scalino.
-    step = max(math.ceil(seconds / STEP_SECONDS), 1)
-    return round(1.0 - (step - 1) * STEP_POINTS, 1)
+    # Quanti scalini si sono superati oltre la grazia: i quattro minuti esatti
+    # non ne hanno superato nessuno, il primo istante dopo è già dentro il
+    # primo e costa un decimo.
+    step = math.ceil(max(seconds - GRACE_SECONDS, 0.0) / STEP_SECONDS)
+    # Il minimo tiene anche se le costanti sopra vengono allungate senza
+    # rifare i conti: sotto un decimo una risposta giusta non scende.
+    return max(round(1.0 - step * STEP_POINTS, 1), MIN_POINTS)
 
 
 def open_answer_points(quality: float | None) -> float:

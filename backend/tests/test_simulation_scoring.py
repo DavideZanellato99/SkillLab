@@ -14,6 +14,7 @@ decimi di significare la stessa cosa in tutti i tipi.
 import pytest
 
 from simulation_scoring import (
+    GRACE_SECONDS,
     QUESTION_SECONDS,
     attempt_points,
     attempt_score,
@@ -29,23 +30,25 @@ from simulation_scoring import (
     [
         (0, 1.0),
         (1, 1.0),
-        # Tre secondi esatti sono ancora il primo scalino, il primo istante
-        # dopo è già il secondo
-        (3, 1.0),
-        (3.001, 0.9),
-        (6, 0.9),
-        (15, 0.6),
-        (27, 0.2),
+        # Dentro la grazia non si perde niente, per quanto tardi si risponda
+        (120, 1.0),
+        # I quattro minuti esatti sono ancora punto pieno, il primo istante
+        # dopo costa il primo decimo
+        (GRACE_SECONDS, 1.0),
+        (GRACE_SECONDS + 0.001, 0.9),
+        (GRACE_SECONDS + 10, 0.9),
+        (GRACE_SECONDS + 10.001, 0.8),
+        (300, 0.4),
         (QUESTION_SECONDS, 0.1),
     ],
 )
-def test_una_risposta_giusta_vale_meno_man_mano_che_passa_il_tempo(seconds, expected):
+def test_una_risposta_giusta_vale_meno_solo_dopo_i_minuti_di_grazia(seconds, expected):
     assert question_points(True, int(seconds * 1000)) == expected
 
 
 def test_una_risposta_sbagliata_vale_zero_per_quanto_veloce_sia():
     assert question_points(False, 0) == 0.0
-    assert question_points(False, 30_000) == 0.0
+    assert question_points(False, 300_000) == 0.0
 
 
 def test_il_tempo_non_misurato_vale_il_minimo_e_non_il_massimo():

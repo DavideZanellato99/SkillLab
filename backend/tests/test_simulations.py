@@ -271,24 +271,24 @@ def test_rispondere_giusto_ma_lentamente_non_prende_dieci(user_client, make_simu
     simulation = make_simulation()
     esito = user_client.post(
         f"/api/simulations/{simulation.id}/attempts",
-        # Venti secondi su trenta: settimo scalino, quattro decimi a domanda
-        json={"answers": _answers(simulation, correct=True, elapsed_ms=20_000)},
+        # Cinque minuti: un minuto oltre la grazia, quattro decimi a domanda
+        json={"answers": _answers(simulation, correct=True, elapsed_ms=300_000)},
     ).json()
 
     assert esito["correct_count"] == 3
     assert esito["earned_points"] == 1.2
     assert esito["score"] == 4.0
     assert all(a["points"] == 0.4 for a in esito["answers"])
-    assert all(a["elapsed_ms"] == 20_000 for a in esito["answers"])
+    assert all(a["elapsed_ms"] == 300_000 for a in esito["answers"])
 
 
 def test_i_punti_di_ogni_domanda_dipendono_dal_suo_tempo(user_client, make_simulation):
     """Il tempo si conta per domanda e non sul test intero."""
     simulation = make_simulation(questions=3)
     risposte = _answers(simulation, correct=True)
-    risposte[0]["elapsed_ms"] = 2_000  # primo scalino, punto pieno
-    risposte[1]["elapsed_ms"] = 10_000  # quarto scalino
-    risposte[2]["elapsed_ms"] = 29_000  # ultimo scalino
+    risposte[0]["elapsed_ms"] = 2_000  # dentro la grazia, punto pieno
+    risposte[1]["elapsed_ms"] = 270_000  # trenta secondi oltre, terzo scalino
+    risposte[2]["elapsed_ms"] = 329_000  # a un secondo dallo scadere
     esito = user_client.post(
         f"/api/simulations/{simulation.id}/attempts", json={"answers": risposte}
     ).json()

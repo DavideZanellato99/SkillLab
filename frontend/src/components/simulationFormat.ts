@@ -14,20 +14,47 @@ import type { SimulationKind, SimulationSource, SimulationStatus } from '../serv
  * momento in cui il server non ha ancora niente da dire. Cambiando la scala
  * là va cambiata anche qui, o il numero che si legge durante la domanda non
  * sarà quello che arriva nel riepilogo. */
-export const QUESTION_SECONDS = 30
-const SCORE_STEPS = 10
-export const STEP_SECONDS = QUESTION_SECONDS / SCORE_STEPS
-const STEP_POINTS = 1 / SCORE_STEPS
+export const QUESTION_SECONDS = 330
+export const GRACE_SECONDS = 240
+export const STEP_SECONDS = 10
+const STEP_POINTS = 0.1
+const MIN_POINTS = STEP_POINTS
 
 /** Quanto vale ora una risposta corretta, dopo `elapsedMs` dalla domanda. */
 export function pointsAfter(elapsedMs: number): number {
   const seconds = Math.min(Math.max(elapsedMs, 0), QUESTION_SECONDS * 1000) / 1000
-  const step = Math.max(Math.ceil(seconds / STEP_SECONDS), 1)
-  return Number((1 - (step - 1) * STEP_POINTS).toFixed(1))
+  const step = Math.ceil(Math.max(seconds - GRACE_SECONDS, 0) / STEP_SECONDS)
+  return Math.max(Number((1 - step * STEP_POINTS).toFixed(1)), MIN_POINTS)
 }
 
-/** Il tempo di una risposta come si legge nell'esito: "in 8s". */
+/** Un tempo come si legge su un cronometro: "5:30", "0:09". */
+export function formatClock(ms: number): string {
+  const total = Math.max(Math.ceil(ms / 1000), 0)
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+/* La stessa durata a parole: "5 minuti e 30 secondi", "un minuto", "40
+ * secondi". Serve dove il tempo si legge in una frase, cioè le regole prima
+ * di cominciare, e a chi il cronometro se lo fa leggere: "5:30" a schermo si
+ * capisce, letto ad alta voce no. */
+export function spelledClock(seconds: number): string {
+  const total = Math.max(Math.ceil(seconds), 0)
+  const minutes = Math.floor(total / 60)
+  const rest = total % 60
+  const secondi = rest === 1 ? 'un secondo' : `${rest} secondi`
+  if (!minutes) return secondi
+  const minuti = minutes === 1 ? 'un minuto' : `${minutes} minuti`
+  return rest ? `${minuti} e ${secondi}` : minuti
+}
+
+/* Il tempo di una risposta come si legge nell'esito: "8,4s" sotto il minuto,
+ * "2:05" sopra. Il decimo di secondo si scrive solo dove è la cosa che si
+ * guarda, cioè su una risposta arrivata subito; su una da quattro minuti
+ * sarebbe una cifra in più senza niente da dire, e il minuto si legge meglio
+ * come lo scriveva il cronometro. I secondi interi arrivano già arrotondati,
+ * perché lì `formatClock` conta un tempo che scende e non uno passato. */
 export function formatElapsed(ms: number): string {
+  if (ms >= 60_000) return formatClock(Math.round(ms / 1000) * 1000)
   return `${Math.round(ms / 100) / 10}s`.replace('.', ',')
 }
 
@@ -95,9 +122,10 @@ export function kindHint(kind: SimulationKind): string {
 }
 
 /* Se le domande di questo tipo hanno il cronometro, il gemello di
- * `TechnicalSimulation.is_timed`. Solo la scelta multipla: trenta secondi
- * bastano a scegliere una lettera, non a disporre sei passi, e i punti degli
- * altri tipi si guadagnano a pezzi invece di scendere col tempo. */
+ * `TechnicalSimulation.is_timed`. Solo la scelta multipla: scegliere fra
+ * quattro righe già scritte è una cosa che si fa a tempo, disporre sei passi
+ * no, e i punti degli altri tipi si guadagnano a pezzi invece di scendere
+ * col tempo. */
 export function isTimed(kind: SimulationKind): boolean {
   return kind === 'multiple'
 }
@@ -134,9 +162,9 @@ export type KindFilter = SimulationKind | 'all'
  * Ogni tipo ha la sua voce e non ce n'è una che ne raccoglie più d'uno: i
  * quattro si correggono con quattro scale diverse, quindi tenerne due
  * insieme in un filtro vorrebbe dire mettere sulla stessa media un voto
- * preso a crocette in trenta secondi e uno preso disponendo sei passi senza
- * fretta. "Tutti" resta in fondo perché è il punto di partenza, non una
- * quinta scelta.
+ * preso a crocette col cronometro che scorre e uno preso disponendo sei
+ * passi senza fretta. "Tutti" resta in fondo perché è il punto di partenza,
+ * non una quinta scelta.
  *
  * L'ordine è quello in cui i tipi sono nati, che è anche quello dal più
  * usato al meno: chi cerca un filtro trova per primo quello che gli serve

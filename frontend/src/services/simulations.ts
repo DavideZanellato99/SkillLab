@@ -23,8 +23,8 @@ export type SimulationStatus = 'draft' | 'published'
  * I due tipi in fondo verificano quello che una crocetta non raggiunge: la
  * sequenza di una procedura, che è dove si sbaglia davvero, e le
  * corrispondenze delle tabelle aziendali. Il cronometro ce l'ha solo la
- * scelta multipla: trenta secondi bastano a scegliere una lettera, non a
- * disporre sei passi. */
+ * scelta multipla: scegliere fra quattro righe già scritte è una cosa che
+ * si fa a tempo, disporre sei passi no. */
 export type SimulationKind = 'multiple' | 'open' | 'ordering' | 'matching'
 
 /** Una coppia di una domanda di abbinamento: la voce e il suo abbinato. */

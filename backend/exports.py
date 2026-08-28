@@ -475,7 +475,14 @@ def _fmt_points(points: float) -> str:
 
 
 def _fmt_elapsed(elapsed_ms: int) -> str:
-    """How long an answer took, the way the result page says it: "8,2s"."""
+    """How long an answer took, the way the result page says it: "8,2s", "2:05".
+
+    Past a minute the tenth of a second says nothing and the clock reads
+    better, which is the split the page makes too (see ``formatElapsed``).
+    """
+    if elapsed_ms >= 60_000:
+        seconds = round(elapsed_ms / 1000)
+        return f"{seconds // 60}:{seconds % 60:02d}"
     return f"{round(elapsed_ms / 100) / 10:g}".replace(".", ",") + "s"
 
 

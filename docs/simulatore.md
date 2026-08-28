@@ -83,7 +83,7 @@ nemmeno lui più cambiato:
 | | Scelta multipla | Risposta aperta | Ordinamento | Abbinamento |
 | --- | --- | --- | --- | --- |
 | Come si risponde | Una fra le alternative | Scrivendo qualche riga | Rimettendo dei passi in fila | Accoppiando due colonne |
-| Tempo | 30 secondi a domanda | Nessuno | Nessuno | Nessuno |
+| Tempo | 5 minuti e 30 secondi a domanda | Nessuno | Nessuno | Nessuno |
 | Cosa decide i punti | Se è giusta e quanto in fretta è arrivata | Quanto la risposta è completa | Quanti passi sono al posto giusto | Quante coppie sono indovinate |
 | Chi corregge | Il codice, confrontando due numeri | Un modello, alla consegna | Il codice, confrontando due liste | Il codice, coppia per coppia |
 | Quando si sa il voto | Subito | Dopo qualche secondo di attesa | Subito | Subito |
@@ -103,8 +103,8 @@ in decimi, quindi un test di una forma e uno di un'altra si leggono nello
 stesso riepilogo e nella stessa dashboard. Proprio per questo **ogni posto in
 cui compare un test dice di che tipo è**, con
 [SimulationKindBadge](../frontend/src/components/SimulationKindBadge.tsx): un 7
-preso a crocette in trenta secondi e un 7 preso scrivendo dieci risposte non
-sono la stessa notizia. È il gemello del badge che distingue una chiamata da
+preso a crocette col cronometro che scorre e un 7 preso scrivendo dieci
+risposte non sono la stessa notizia. È il gemello del badge che distingue una chiamata da
 una chat.
 
 I colori sono due e non quattro, e dividono i tipi in due famiglie: violetto
@@ -115,9 +115,10 @@ i tipi dentro la famiglia basta il disegno, che è la cosa che si guarda per
 seconda: il pallino da selezionare, la matita, le righe da riordinare, le due
 colonne unite da un ponte.
 
-**Solo la scelta multipla ha il cronometro.** Trenta secondi bastano a
-scegliere una lettera, non a scrivere una procedura né a disporre sei passi, e
-un tempo tarato male renderebbe un tipo ingiocabile invece che difficile. Negli
+**Solo la scelta multipla ha il cronometro.** Scegliere fra quattro righe già
+scritte è una cosa che si fa a tempo, scrivere una procedura o disporre sei
+passi no, e un tempo tarato male renderebbe un tipo ingiocabile invece che
+difficile. Negli
 altri tre il punto si guadagna a pezzi, e toglierne anche col tempo vorrebbe
 dire due scale che si moltiplicano su una domanda dove nessuno saprebbe più
 dire da dove viene il voto.
@@ -1314,12 +1315,15 @@ volta una cosa diversa.
 
 ### 4.2.1 A scelta multipla
 
-**Una domanda alla volta, trenta secondi ciascuna.** Si risponde, si passa alla
-successiva e non si torna più indietro. Il conto alla rovescia scende a schermo
-e la barra sotto il numero si svuota, di ambra sotto i dieci secondi e di rosso
-sotto i cinque. Accanto ai secondi c'è quanto varrebbe rispondere adesso, che
-scende insieme a loro: una regola che decide un voto va guardata mentre agisce,
-non scoperta nel riepilogo. Quel numero lo calcola il browser con la sua copia
+**Una domanda alla volta, cinque minuti e mezzo ciascuna.** Si risponde, si
+passa alla successiva e non si torna più indietro. Il conto alla rovescia scende
+a schermo in minuti e secondi e la barra sotto si svuota, di ambra nell'ultimo
+minuto e mezzo, che è dove il punteggio comincia a scendere, e di rosso sotto i
+venti secondi; sulla barra resta il segno di dove finisce la grazia, perché il
+tratto che non costa niente e quello che costa a ogni respiro altrimenti si
+assomigliano. Accanto al cronometro c'è quanto varrebbe rispondere adesso, fermo
+a un punto per tutta la grazia e poi in discesa: una regola che decide un voto
+va guardata mentre agisce, non scoperta nel riepilogo. Quel numero lo calcola il browser con la sua copia
 della scala (in `simulationFormat`), ma i punti che contano sono quelli che il
 server rimanda con l'esito.
 
@@ -1347,15 +1351,15 @@ in [training-e-report.md](training-e-report.md).
 Ogni domanda è un
 [SimulationQuestionStep](../frontend/src/components/SimulationQuestionStep.tsx)
 montato con `key={question.id}`, quindi il passo alla domanda dopo rimonta il
-componente e con lui il cronometro: è il rimontaggio a rimettere a trenta i
-secondi, non un effetto che azzera un contatore. Dentro, tre scelte che vale la
+componente e con lui il cronometro: è il rimontaggio a rimettere il tempo al
+pieno, non un effetto che azzera un contatore. Dentro, tre scelte che vale la
 pena conoscere:
 
 | Scelta | Perché |
 | --- | --- |
 | Il tempo residuo si calcola da una scadenza assoluta, non scalando un contatore a ogni battito | Una scheda in secondo piano riceve meno battiti del previsto, e un contatore scalato regalerebbe secondi a chi cambia finestra |
 | La consegna della domanda passa da un `answered` in ref | Il tempo può finire nello stesso istante in cui si preme il pulsante, e consegnare due volte farebbe saltare un avanzamento |
-| Finché non si va avanti la scelta si può cambiare, dopo no | I trenta secondi sono per decidere, non per battere sul pulsante |
+| Finché non si va avanti la scelta si può cambiare, dopo no | Il tempo della domanda è per decidere, non per battere sul pulsante |
 
 Le alternative sono etichette attorno a un radio nascosto, quindi da tastiera
 si entra nel gruppo con il tabulatore e si scorre con le frecce, che è il
@@ -1382,9 +1386,10 @@ qualcuno di barare.
 ### 4.2.2 A risposta aperta
 
 Una domanda alla volta e nessun ritorno indietro come sopra, ma **senza
-cronometro**. Trenta secondi bastano a scegliere una lettera, non a scrivere
-una procedura, e un tempo che scorre mentre si compone una risposta premierebbe
-chi scrive in fretta invece di chi conosce il lavoro. Qui i punti dipendono solo
+cronometro**. Il tempo di una domanda a crocette è il tempo di decidere fra
+quattro righe già scritte e non di scriverne una, e un tempo che scorre mentre
+si compone una risposta premierebbe chi scrive in fretta invece di chi conosce
+il lavoro. Qui i punti dipendono solo
 da quanto la risposta è completa, quindi rileggersi prima di consegnare non
 costa niente ed è anzi la cosa giusta da fare, ed è scritto nelle regole prima
 di cominciare.
@@ -1620,20 +1625,28 @@ l'ha, ma dopo. Il punteggio la misura, e le tre scale vivono tutte in
 perché ordinamento e abbinamento condividono la stessa: contano elementi al
 posto giusto, e cosa sia un elemento lo decide il tipo, non la scala.
 
-**Su un test a scelta multipla**, il tempo:
+**Su un test a scelta multipla**, il tempo, in due tempi: i primi quattro
+minuti non costano niente, il minuto e mezzo che resta costa un decimo ogni
+dieci secondi.
 
 | Quando arriva la risposta | Se è giusta vale |
 | --- | --- |
-| entro 3 secondi | 1 |
-| entro 6 | 0,9 |
-| entro 9 | 0,8 |
-| … un decimo ogni 3 secondi … | … |
-| entro 30, cioè l'ultimo istante | 0,1 |
+| entro 4 minuti | 1 |
+| entro 4:10 | 0,9 |
+| entro 4:20 | 0,8 |
+| … un decimo ogni 10 secondi … | … |
+| entro 5:30, cioè l'ultimo istante | 0,1 |
 | sbagliata o in bianco, a qualsiasi velocità | 0 |
+
+La grazia c'è perché la scala non misura la prontezza ma il rileggersi la
+procedura: fra chi decide in cinque secondi e chi ci pensa un minuto non c'è
+niente da distinguere, e distinguerlo vorrebbe dire dare un voto alla velocità
+di lettura. Chi invece arriva in fondo alla scala la risposta la sta cercando.
 
 Tre scelte dietro la tabella. L'ultimo scalino vale un decimo e non zero,
 perché rispondere giusto all'ultimo istante è comunque saperlo e vale più che
-sbagliare. Un `elapsed_ms` fuori scala viene riportato dentro invece di far
+sbagliare: è anche quello che prende chi allo scadere aveva una scelta
+selezionata e giusta, perché la selezione vale come risposta consegnata. Un `elapsed_ms` fuori scala viene riportato dentro invece di far
 fallire la consegna: un numero storto è comunque un test che qualcuno ha
 svolto.
 

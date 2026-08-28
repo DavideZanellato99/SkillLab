@@ -1136,8 +1136,9 @@ guardando") fatta su due cose diverse.
 **Nel simulatore i tipi hanno una voce ciascuno**, e non ce n'è una che ne
 raccoglie più d'uno: si correggono con scale diverse, quindi tenerne due
 insieme in un filtro vorrebbe dire mettere sulla stessa media un voto preso a
-crocette in trenta secondi e uno preso disponendo sei passi senza fretta.
-"Tutti" resta in fondo perché è il punto di partenza, non una quinta scelta, e
+crocette col cronometro che scorre e uno preso disponendo sei passi senza
+fretta. "Tutti" resta in fondo perché è il punto di partenza, non una quinta
+scelta, e
 l'ordine delle voci è quello in cui i tipi sono nati, che è anche quello dal
 più usato al meno.
 
@@ -1175,10 +1176,10 @@ badge gemelli, stessa forma e stessi colori, violetto dove si sceglie fra cose
 già scritte e ciano dove si compone una risposta. I colori restano due anche
 con quattro tipi, e a distinguerli dentro la famiglia è il disegno: quattro
 tinte in fila su una riga di tabella sarebbero un arcobaleno da decifrare. Il
-motivo del badge è lo stesso nei due casi, cioè che il
-voto da solo non dice quale prova era, e nel simulatore pesa anche di più: un
-7 preso a crocette in trenta secondi e un 7 preso scrivendo dieci risposte non
-sono la stessa notizia. Nella tabella il badge è in forma di sola icona per
+motivo del badge è lo stesso nei due casi, cioè che il voto da solo non dice
+quale prova era, e nel simulatore pesa anche di più: un 7 preso a crocette col
+cronometro che scorre e un 7 preso scrivendo dieci risposte non sono la stessa
+notizia. Nella tabella il badge è in forma di sola icona per
 non rubare spazio al titolo, e in entrambe le metà **la prova si cerca con la
 stessa parola che il badge mostra**, perché quella parola (`kindLabel` di qua,
 `conversationModeLabel` di là) finisce nella `matchesSearch` della riga. La riga "Media per simulazione" lo scrive accanto

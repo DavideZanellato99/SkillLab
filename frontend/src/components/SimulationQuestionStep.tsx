@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SimulationQuestion } from '../services/simulations'
 import PrimaryButton from './PrimaryButton'
-import { QUESTION_SECONDS, formatScore, optionLabel, pointsAfter } from './simulationFormat'
+import {
+  GRACE_SECONDS,
+  QUESTION_SECONDS,
+  formatClock,
+  formatScore,
+  optionLabel,
+  pointsAfter,
+  spelledClock,
+} from './simulationFormat'
 
-/* Una domanda alla volta, con i suoi trenta secondi.
+/* Una domanda alla volta, con i suoi cinque minuti e mezzo.
  *
  * Il componente non sa niente del test: riceve una domanda, raccoglie una
  * risposta e la consegna una volta sola, o perché è stato premuto il pulsante
@@ -20,17 +28,25 @@ import { QUESTION_SECONDS, formatScore, optionLabel, pointsAfter } from './simul
  * Nessun riscontro sulla risposta: giusto o sbagliato si sanno alla fine,
  * tutti insieme, perché sapere di aver sbagliato la seconda mentre si legge
  * la terza cambia come si risponde alle otto che restano. Quanto varrebbe si
- * vede invece subito, e scende insieme al tempo: è la regola del punteggio, e
- * una regola che decide un voto va guardata mentre agisce, non scoperta nel
- * riepilogo. */
+ * vede invece subito: resta fermo a un punto per tutta la grazia e poi scende
+ * di un decimo ogni dieci secondi, ed è la regola del punteggio, che decide
+ * un voto e quindi va guardata mentre agisce, non scoperta nel riepilogo.
+ *
+ * La barra porta il segno di dove finisce la grazia: senza, i primi quattro
+ * minuti e l'ultimo minuto e mezzo si assomigliano, e sono la parte in cui
+ * non si perde niente e quella in cui si perde a ogni respiro. */
 
 /* Ogni quanto si ridisegna il tempo che resta. Quattro volte al secondo: la
  * barra scende senza scatti e il numero non salta mai un secondo. */
 const TICK_MS = 250
 
-/** Sotto questa soglia il tempo si colora, prima di ambra e poi di rosso. */
-const WARN_MS = 10_000
-const URGENT_MS = 5_000
+/* Sotto questa soglia il tempo si colora, prima di ambra e poi di rosso.
+ * L'ambra si accende esattamente dove finisce la grazia, perché è lì che il
+ * tempo comincia a costare: prima non costa niente, e colorarlo metterebbe
+ * fretta senza motivo. Il rosso è l'ultimo tratto, dove ogni dieci secondi
+ * valgono un decimo di quello che resta da prendere. */
+const WARN_MS = (QUESTION_SECONDS - GRACE_SECONDS) * 1000
+const URGENT_MS = 20_000
 
 function timeTone(remaining: number): { text: string; bar: string } {
   if (remaining <= URGENT_MS) return { text: 'text-red-300', bar: 'bg-red-500' }
@@ -107,7 +123,6 @@ export default function SimulationQuestionStep({
     setSelected(index)
   }
 
-  const seconds = Math.ceil(remaining / 1000)
   const tone = timeTone(remaining)
   const worth = pointsAfter(QUESTION_SECONDS * 1000 - remaining)
 
@@ -127,19 +142,26 @@ export default function SimulationQuestionStep({
           <span
             role="timer"
             className={`font-heading text-lg font-bold tabular-nums ${tone.text}`}
-            aria-label={`${seconds} secondi rimasti`}
+            aria-label={`Tempo rimasto: ${spelledClock(remaining / 1000)}`}
           >
-            {seconds}s
+            {formatClock(remaining)}
           </span>
         </span>
       </div>
 
       {/* Il tempo che resta, disegnato: il numero dice quanto, la barra dice
-          quanto in fretta sta finendo, e la seconda si legge senza guardarla. */}
-      <div className="mb-5 h-1 overflow-hidden rounded-full bg-white/8">
+          quanto in fretta sta finendo, e la seconda si legge senza guardarla.
+          Il segno è dove finisce la grazia: quando la barra si ritira sotto
+          di lui, il punteggio comincia a scendere. */}
+      <div className="relative mb-5 h-1 overflow-hidden rounded-full bg-white/8">
         <div
           className={`h-full rounded-full transition-[width] duration-200 ease-linear ${tone.bar}`}
           style={{ width: `${(remaining / (QUESTION_SECONDS * 1000)) * 100}%` }}
+        />
+        <span
+          className="absolute inset-y-0 w-px bg-white/25"
+          style={{ left: `${(WARN_MS / (QUESTION_SECONDS * 1000)) * 100}%` }}
+          aria-hidden
         />
       </div>
 
@@ -192,7 +214,7 @@ export default function SimulationQuestionStep({
         <span className="text-xs text-slate-500">
           {selected === null
             ? 'Allo scadere del tempo la domanda resta in bianco ed equivale a una risposta errata'
-            : 'La selezione è modificabile fino alla conferma, ma il tempo continua a scorrere'}
+            : 'La selezione è modificabile fino alla conferma, e allo scadere del tempo viene registrata al punteggio minimo'}
         </span>
         <PrimaryButton onClick={() => answer(selected)}>
           {isLast ? 'Consegna il Test' : selected === null ? 'Salta la Domanda' : 'Avanti'}

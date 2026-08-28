@@ -32,7 +32,7 @@ import { isTimed, kindHint, QUESTION_SECONDS } from './simulationFormat'
  * nel riepilogo finale.
  *
  * Come si risponde dipende dal tipo del test, e sono quattro passi diversi:
- * le alternative con trenta secondi ciascuna, una casella in cui scrivere,
+ * le alternative con il loro cronometro, una casella in cui scrivere,
  * dei passi da rimettere in fila, due colonne da accoppiare. Solo il primo ha
  * il cronometro. Questa pagina è la sola cosa che i quattro hanno in comune,
  * ed è per questo che sceglie qui invece di lasciare che un componente solo

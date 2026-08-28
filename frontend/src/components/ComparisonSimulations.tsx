@@ -2,22 +2,23 @@ import { useMemo, useState } from 'react'
 import type { SimulationComparisonAttempt } from '../services/comparison'
 import ComparisonEmpty from './ComparisonEmpty'
 import ComparisonAttemptCard from './ComparisonAttemptCard'
-import ComparisonFilterBar, { ComparisonWarnings } from './ComparisonFilterBar'
+import ComparisonFilterBar from './ComparisonFilterBar'
 import ComparisonTimeline from './ComparisonTimeline'
 import ComparisonVerdict from './ComparisonVerdict'
 import SimulationAttemptModal from './SimulationAttemptModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
-import { KIND_FILTERS, kindLabel } from './simulationFormat'
+import { KIND_FILTERS } from './simulationFormat'
 import type { KindFilter } from './simulationFormat'
 import {
   ANY,
   assignRole,
+  chosenFilter,
+  defaultFilter,
   filterOptions,
   matchesFilter,
   NO_PAIR,
   resolvePair,
-  survivingFilter,
 } from './comparisonFilters'
 import type { Pair } from './comparisonFilters'
 import { cardCls } from './scoreFormat'
@@ -28,12 +29,13 @@ import { formatDate } from './dateFormat'
  * Si sceglie fra le prove che i due filtri lasciano passare, il tipo e il
  * test: i quattro tipi si correggono con quattro scale diverse, quindi un
  * dieci preso a crocette e un dieci preso a risposte scritte non sono lo
- * stesso dieci.
+ * stesso dieci. Il test è una scelta obbligatoria, come lo scenario
+ * nell'altra metà: due tentativi su documenti diversi misurano due
+ * preparazioni distinte e non hanno nemmeno le stesse domande.
  *
  * Cambia cosa c'è sotto il verdetto. Là i sei criteri di una valutazione, qui
  * le domande: rifare lo stesso test serve a sapere quali sbagli si sono
- * recuperati, e il voto da solo non lo dice. Il dettaglio compare solo fra due
- * prove sullo stesso test, perché domande diverse non si appaiano.
+ * recuperati, e il voto da solo non lo dice.
  *
  * E dallo stesso test escono domande diverse: ogni tentativo ne estrae dieci a
  * caso dal serbatoio, quindi due prove hanno in comune quello che il caso ha
@@ -125,10 +127,10 @@ export default function ComparisonSimulations({
    *  una persona: le proprie prove sono quasi sempre zero. */
   emptyHint?: string
 }) {
-  /* Come per le conversazioni: prima si restringe, poi si sceglie, e i due
-   * filtri partono aperti. */
+  /* Come per le conversazioni: prima si restringe, poi si sceglie, il tipo
+   * parte aperto e il test ha sempre un valore. */
   const [kindFilter, setKindFilter] = useState<KindFilter>(ANY)
-  const [pickedSimulationId, setPickedSimulationId] = useState(ANY)
+  const [pickedSimulationId, setPickedSimulationId] = useState('')
   const [picked, setPicked] = useState<Pair>(NO_PAIR)
   const [openAttemptId, setOpenAttemptId] = useState<string | null>(null)
 
@@ -145,14 +147,19 @@ export default function ComparisonSimulations({
         byKind,
         (a) => a.simulation_id,
         (a) => a.simulation_title,
-        'Tutti i test',
       ),
     [byKind],
   )
-  const simulationFilter = survivingFilter(simulationOptions, pickedSimulationId)
+  /* Il test su cui la pagina si apre è il più recente consegnato due volte,
+     che è la ragione per cui un test si rifà. */
+  const simulationFilter = chosenFilter(
+    simulationOptions,
+    pickedSimulationId,
+    defaultFilter(byKind, (a) => a.simulation_id),
+  )
 
   const filtered = useMemo(
-    () => byKind.filter((a) => matchesFilter(simulationFilter, a.simulation_id)),
+    () => byKind.filter((a) => a.simulation_id === simulationFilter),
     [byKind, simulationFilter],
   )
 
@@ -173,8 +180,6 @@ export default function ComparisonSimulations({
     badge: <SimulationKindBadge kind={a.simulation_kind} iconOnly />,
   }))
 
-  const sameSimulation = !!left && !!right && left.simulation_id === right.simulation_id
-
   /* Le domande capitate in tutte e due le prove, appaiate per id. Appaiarle
    * sulla posizione le farebbe sembrare la stessa domanda solo perché sono
    * arrivate per terze, e con l'estrazione a caso non lo sono quasi mai. Una
@@ -187,7 +192,7 @@ export default function ComparisonSimulations({
    * finivano sparse fra sette che ripetono un esito già noto. Dentro i due
    * gruppi l'ordine resta quello del primo tentativo. */
   const questionRows = useMemo<QuestionRow[]>(() => {
-    if (!left || !right || !sameSimulation) return []
+    if (!left || !right) return []
     const rightById = new Map(right.answers.map((a) => [a.question_id, a]))
     const rows = left.answers.flatMap((answer) => {
       const twin = rightById.get(answer.question_id)
@@ -203,16 +208,14 @@ export default function ComparisonSimulations({
     })
     const changed = (row: QuestionRow) => row.left !== row.right
     return [...rows.filter(changed), ...rows.filter((row) => !changed(row))]
-  }, [left, right, sameSimulation])
+  }, [left, right])
 
   const recovered = questionRows.filter((r) => !r.left && r.right).length
   const lost = questionRows.filter((r) => r.left && !r.right).length
 
   /* Cosa è cambiato fra le domande, in una riga sotto il voto: è il motivo
-   * per cui uno stesso test si rifà, e il voto da solo non lo dice. Fra due
-   * test diversi non c'è niente da dire qui, e a dirlo c'è già l'avviso. */
+   * per cui uno stesso test si rifà, e il voto da solo non lo dice. */
   const questionSummary = (() => {
-    if (!sameSimulation) return null
     if (questionRows.length === 0) {
       return 'Le due prove non hanno domande in comune: a ogni tentativo le domande sono estratte a caso'
     }
@@ -227,21 +230,6 @@ export default function ComparisonSimulations({
     ].filter(Boolean)
     return `${changes.join(', ')}, su ${questionRows.length} in comune`
   })()
-
-  /* Due test diversi si possono confrontare, ma il voto dice quanto si sa di
-   * quel documento, non quanto si sa in generale; e due tipi diversi sono
-   * due correzioni diverse prima ancora che due documenti. */
-  const warnings =
-    left && right
-      ? [
-          left.simulation_id !== right.simulation_id
-            ? `Il confronto riguarda due test diversi, ${left.simulation_title} e ${right.simulation_title}: i punteggi misurano la preparazione su due documenti distinti, non l'andamento nel tempo.`
-            : '',
-          left.simulation_kind !== right.simulation_kind
-            ? `Il confronto riguarda due tipi di test diversi, ${kindLabel(left.simulation_kind)} e ${kindLabel(right.simulation_kind)}: i due voti nascono da due correzioni diverse e non sono direttamente comparabili.`
-            : '',
-        ].filter(Boolean)
-      : []
 
   if (attempts.length === 0) {
     return <ComparisonEmpty hint={emptyHint}>Nessun test tecnico da confrontare</ComparisonEmpty>
@@ -279,8 +267,6 @@ export default function ComparisonSimulations({
           rightId={rightId}
           onAssign={(role, id) => setPicked(assignRole({ leftId, rightId }, role, id))}
         />
-
-        <ComparisonWarnings messages={warnings} />
       </div>
 
       {/* Come nell'altra metà: i filtri restano sopra anche quando non
@@ -288,8 +274,8 @@ export default function ComparisonSimulations({
       {filtered.length < 2 && (
         <ComparisonEmpty>
           {filtered.length === 0
-            ? 'Nessun test corrisponde ai filtri scelti'
-            : 'I filtri scelti lasciano un solo test: ne serve un secondo per effettuare un confronto'}
+            ? 'Di questo tipo non ci sono test consegnati'
+            : "Di questo test c'è un solo tentativo: scegline un altro, o ne serve un secondo per effettuare un confronto"}
         </ComparisonEmpty>
       )}
 
@@ -308,7 +294,7 @@ export default function ComparisonSimulations({
             {questionSummary}
           </ComparisonVerdict>
 
-          {sameSimulation && questionRows.length > 0 && (
+          {questionRows.length > 0 && (
             <div className={`${cardCls} mb-6`}>
               <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold text-slate-300">Domanda per Domanda</h2>

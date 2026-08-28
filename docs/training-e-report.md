@@ -908,6 +908,19 @@ I due elenchi di linguette sono gli stessi che filtrano la dashboard e lo
 storico di una persona, non due gemelli scritti a parte: le tre schermate
 offrono così le stesse scelte con le stesse parole.
 
+I due filtri non si comportano però allo stesso modo, e la differenza è quanto
+pesa mescolare. **Le linguette hanno la voce "tutti" e la tengono**: guardare le
+chiamate e le chat insieme è una lettura legittima di cosa una persona ha fatto,
+e affiancare due prove di canali diversi si può, con un avviso che dice cosa si
+sta guardando. **La tendina non ce l'ha più**: i sei criteri sono tarati su
+quello che quel cliente chiede, quindi due conversazioni con clienti diversi non
+hanno nessun confronto da mostrare, e due tentativi su test diversi non hanno
+nemmeno le stesse domande. "Tutti gli scenari" non era un filtro aperto, era una
+combinazione che non porta da nessuna parte: la pagina si apriva lì sopra,
+proponeva la prima prova contro l'ultima e poi spiegava con un avviso che quei
+due punteggi non sono comparabili. Un avviso che scusa quello che si sta
+guardando è il segno che quella scelta non doveva esserci.
+
 Le tre regole che il filtro applica stanno in
 [comparisonFilters.ts](../frontend/src/components/comparisonFilters.ts), perché
 le due metà le condividono e scritte due volte prima o poi divergono:
@@ -915,15 +928,23 @@ le due metà le condividono e scritte due volte prima o poi divergono:
 - **le voci del bersaglio si ricavano dalle prove che esistono davvero**, e solo
   da quelle già passate per il primo filtro (`filterOptions`): uno scenario
   affrontato unicamente al telefono, offerto mentre si guardano le chat, porta a
-  una lista vuota e a nient'altro;
-- **un filtro che le prove rimaste non sostengono più torna aperto**
-  (`survivingFilter`), invece di restare selezionato su una combinazione che non
-  ha niente dentro;
-- **la coppia proposta è la prima contro l'ultima fra le rimaste**
-  (`resolvePair`), e la scelta di chi guarda vale finché appartengono entrambe
-  alla lista: quando una non ci appartiene più, perché si è cambiata persona o
-  si è stretto un filtro, si torna alla coppia proposta invece di mostrare mezzo
-  confronto senza dire perché.
+  una lista vuota e a nient'altro, e da quando la scelta è obbligatoria a una
+  pagina che si apre su niente;
+- **il bersaglio di partenza è il più recente su cui un confronto esiste
+  davvero** (`defaultFilter`), cioè lo scenario affrontato almeno due volte
+  sullo stesso canale, o il test consegnato almeno due volte: la pagina si apre
+  così su una risposta invece che su un riquadro che chiede una seconda prova.
+  Lo stesso valore torna quando la scelta di chi guarda non ha più prove dentro
+  (`chosenFilter`), perché aperto non è uno stato che il bersaglio ha:
+  restringere il canale può portare via l'ultima prova su quello scenario, e
+  cambiare persona le porta via tutte;
+- **la coppia proposta è l'ultima prova contro la precedente sullo stesso
+  canale** (`resolvePair`), che è la domanda con cui si arriva qui e una coppia
+  che non ha bisogno di avvisi: lo scenario è già uno solo, il canale no, e la
+  prima contro l'ultima poteva quindi essere mista. La scelta di chi guarda
+  vale finché appartengono entrambe alla lista: quando una non ci appartiene
+  più, perché si è cambiata persona o si è stretto un filtro, si torna alla
+  coppia proposta invece di mostrare mezzo confronto senza dire perché.
 
 ### La coppia si sceglie dalla fila delle prove
 
@@ -954,19 +975,21 @@ prova con se stessa. I comandi restano visibili sempre e non al passaggio del
 mouse, che su un telefono non avviene mai. Con molte prove la fila scorre invece
 di allungare la pagina, perché quello che conta sta sotto.
 
-I filtri **partono aperti**. Chi arriva qui vuole vedere cosa ha fatto, e
+Le linguette **partono aperte**. Chi arriva qui vuole vedere cosa ha fatto, e
 nascondergli metà delle proprie prove per prudenza sarebbe una risposta
-incompleta. Affiancare due prove di specie diversa resta quindi possibile, e in
-quel caso la pagina lo dice con un avviso invece di impedirlo, **uno per
-ragione**: due scenari diversi e due canali diversi sono due cose da sapere, e
-la seconda non deve sparire dietro la prima.
+incompleta. Affiancare due conversazioni di canali diversi resta quindi
+possibile, e in quel caso la pagina lo dice con un avviso invece di impedirlo.
+È l'unico rimasto: due scenari e due test diversi non si affiancano più, e i due
+tentativi di uno stesso test hanno per forza lo stesso tipo. All'apertura non ne
+compare comunque nessuno, perché la coppia proposta è dello stesso canale.
 
 Quando i filtri lasciano meno di due prove la barra resta a schermo e il
-riquadro dice che sono stati i filtri, non che non c'è niente
+riquadro dice cosa è successo, non che non c'è niente
 ([ComparisonEmpty](../frontend/src/components/ComparisonEmpty.tsx) distingue le
-tre ragioni per cui un confronto non si può fare): è l'unica delle tre a cui chi
-guarda può rimediare sul momento, e il filtro da allargare deve restare a
-portata di mano.
+ragioni per cui un confronto non si può fare): niente prove valutate, una prova
+sola in tutto, un canale su cui non si è mai parlato, o uno scenario affrontato
+una volta sola. Le ultime due sono quelle a cui chi guarda può rimediare sul
+momento, cambiando scelta, e i filtri devono restare a portata di mano.
 
 Al riquadro vuoto si aggiunge, **solo per chi può scegliere una persona**, cosa
 fare: un admin atterra sulle proprie prove, che sono quasi sempre zero, e
@@ -975,8 +998,9 @@ gente erano a un gesto di distanza, dall'altra parte della pagina. Il
 suggerimento non compare se non c'è ancora nessuno da scegliere, o manderebbe a
 un elenco vuoto.
 
-Il dettaglio domanda per domanda **compare solo fra due prove sullo stesso
-test**, e le domande si appaiano per id e mai per posizione: una domanda
+Il dettaglio domanda per domanda riguarda **due prove sullo stesso test**, che
+da quando il test è una scelta obbligatoria è l'unica coppia componibile, e le
+domande si appaiano per id e mai per posizione: una domanda
 riscritta dopo il primo tentativo è una domanda diversa, e appaiarla sulla
 posizione direbbe che è stata recuperata quando non è nemmeno la stessa. Da
 quando ogni tentativo estrae dieci domande a caso dal serbatoio di cinquanta
@@ -1004,13 +1028,13 @@ test deve poterci finire, o la metà scritta si aprirebbe su nessuno.
 
 Tre schermate per chi amministra, tutte confinate dallo stesso `resolve_admin_scope`:
 
-| Schermata              | Endpoint                            | Cosa mostra                                                                  |
-| ---------------------- | ----------------------------------- | ---------------------------------------------------------------------------- |
-| `/app/admin/dashboard` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie                            |
-| `/app/admin/dashboard` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte                        |
-| `/app/admin/report`    | `GET /api/admin/users-report`       | Una riga per persona: quanto ha fatto nel periodo, in conteggi               |
-| `/app/admin/report`    | `GET /api/admin/users-report/{id}`  | Le prove di quella persona, quando la sua riga si apre                       |
-| `/app/admin`           | `GET /api/admin/users`              | La tabella degli utenti, filtrata e paginata                                 |
+| Schermata              | Endpoint                            | Cosa mostra                                                    |
+| ---------------------- | ----------------------------------- | -------------------------------------------------------------- |
+| `/app/admin/dashboard` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie              |
+| `/app/admin/dashboard` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte          |
+| `/app/admin/report`    | `GET /api/admin/users-report`       | Una riga per persona: quanto ha fatto nel periodo, in conteggi |
+| `/app/admin/report`    | `GET /api/admin/users-report/{id}`  | Le prove di quella persona, quando la sua riga si apre         |
+| `/app/admin`           | `GET /api/admin/users`              | La tabella degli utenti, filtrata e paginata                   |
 
 **Le due letture della dashboard sono le più pesanti dell'applicazione**, e la
 forma della risposta è quello che le tiene in piedi.

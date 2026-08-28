@@ -79,6 +79,20 @@ const stessoTest: SimulationComparisonAttempt[] = [
   }),
 ]
 
+/* Lo stesso elenco con in coda un tentativo su un altro test, il più recente
+   di tutti: è la situazione in cui il test su cui aprirsi e l'ultima cosa
+   fatta non coincidono. */
+const conAltroTest: SimulationComparisonAttempt[] = [
+  ...stessoTest,
+  attempt({
+    attempt_id: 't3',
+    simulation_id: 's-2',
+    simulation_title: 'Primo soccorso',
+    attempted_at: '2026-02-08T10:00:00Z',
+    answers: [answer({ question_id: 'q1', text: 'Domanda uno' })],
+  }),
+]
+
 function renderConfronto(prove: SimulationComparisonAttempt[] = stessoTest, isOwn = true) {
   render(<ComparisonSimulations attempts={prove} isOwn={isOwn} />)
 }
@@ -100,28 +114,32 @@ describe('ComparisonSimulations', () => {
     expect(domande).toEqual(['Domanda due', 'Domanda tre', 'Domanda uno'])
   })
 
-  it('fra due test diversi avverte e non appaia nessuna domanda', () => {
-    render(
-      <ComparisonSimulations
-        isOwn
-        attempts={[
-          stessoTest[0],
-          attempt({
-            attempt_id: 't3',
-            simulation_id: 's-2',
-            simulation_title: 'Primo soccorso',
-            attempted_at: '2026-02-08T10:00:00Z',
-            answers: [answer({ question_id: 'q1', text: 'Domanda uno' })],
-          }),
-        ]}
-      />,
-    )
+  /* Il test è una scelta obbligatoria: due tentativi su documenti diversi non
+     hanno le stesse domande, e affiancarli non misura un miglioramento. Quale
+     test si guardi all'apertura non è quindi una preferenza, è la sola cosa
+     su cui un confronto esiste. */
+  it('si apre sul test più recente consegnato due volte, non sull ultimo tentativo', () => {
+    renderConfronto(conAltroTest)
 
-    expect(screen.getByText(/due test diversi/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Test')).toHaveTextContent('Sicurezza in cantiere')
+    expect(screen.getByText('▲ +2')).toBeInTheDocument()
+    expect(
+      screen.getByText('1 domanda recuperata, 1 domanda persa, su 3 in comune'),
+    ).toBeInTheDocument()
+  })
+
+  it('di un test con un solo tentativo dice di sceglierne un altro', async () => {
+    const user = userEvent.setup()
+    renderConfronto(conAltroTest)
+
+    await user.click(screen.getByLabelText('Test'))
+    await user.click(screen.getByRole('option', { name: 'Primo soccorso' }))
+
+    expect(screen.getByText(/Di questo test c'è un solo tentativo/)).toBeInTheDocument()
     expect(screen.queryByText('Domanda per Domanda')).not.toBeInTheDocument()
   })
 
-  it('dice che sono i filtri a lasciare un test solo, invece del vuoto', () => {
+  it('dice che è stato consegnato un solo test, invece del vuoto', () => {
     renderConfronto([stessoTest[0]])
 
     expect(screen.getByText(/È stato consegnato un solo test/)).toBeInTheDocument()

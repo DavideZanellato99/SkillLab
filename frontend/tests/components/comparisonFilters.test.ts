@@ -3,46 +3,50 @@ import { describe, expect, it } from 'vitest'
 import {
   ANY,
   assignRole,
+  chosenFilter,
+  defaultFilter,
   filterOptions,
   matchesFilter,
   NO_PAIR,
   resolvePair,
-  survivingFilter,
 } from '../../src/components/comparisonFilters'
 
-/* Le tre regole che decidono cosa si può affiancare a cosa.
+/* Le regole che decidono cosa si può affiancare a cosa.
  *
  * Sono in un file loro perché le due metà del confronto le condividono, e
  * quello che va difeso qui è il comportamento nel momento in cui un filtro si
- * stringe: la coppia proposta e il filtro dipendente devono seguire le prove
- * rimaste, altrimenti la pagina resta ferma su una selezione che non esiste
- * più e mostra un confronto vuoto senza dire perché. */
+ * stringe: la coppia proposta e il bersaglio devono seguire le prove rimaste,
+ * altrimenti la pagina resta ferma su una selezione che non esiste più e
+ * mostra un confronto vuoto senza dire perché.
+ *
+ * I due filtri di una metà non si comportano allo stesso modo: la specie ha
+ * una voce "tutti", il bersaglio no, perché due bersagli diversi non hanno
+ * nessun confronto da mostrare. Il bersaglio ha quindi sempre un valore, e da
+ * dove esce quel valore quando nessuno ha ancora scelto niente è la prima
+ * cosa che questi test tengono ferma. */
 
 interface Prova {
   id: string
   scenario: string
   nome: string
+  canale: string
 }
 
 const prove: Prova[] = [
-  { id: 'p1', scenario: 's-anna', nome: 'Anna Neri' },
-  { id: 'p2', scenario: 's-bruno', nome: 'Bruno Verdi' },
-  { id: 'p3', scenario: 's-anna', nome: 'Anna Neri' },
+  { id: 'p1', scenario: 's-anna', nome: 'Anna Neri', canale: 'voce' },
+  { id: 'p2', scenario: 's-bruno', nome: 'Bruno Verdi', canale: 'voce' },
+  { id: 'p3', scenario: 's-anna', nome: 'Anna Neri', canale: 'chat' },
 ]
 
 const id = (p: Prova) => p.id
+const scenario = (p: Prova) => p.scenario
+const canaleEScenario = (p: Prova) => `${p.canale}|${p.scenario}`
 
 describe('filterOptions', () => {
-  it('offre ogni bersaglio una volta sola, in ordine alfabetico, con "tutti" in testa', () => {
-    const options = filterOptions(
-      prove,
-      (p) => p.scenario,
-      (p) => p.nome,
-      'Tutti gli scenari',
-    )
+  it('offre ogni bersaglio una volta sola, in ordine alfabetico, senza voce "tutti"', () => {
+    const options = filterOptions(prove, scenario, (p) => p.nome)
 
     expect(options).toEqual([
-      { value: ANY, label: 'Tutti gli scenari' },
       { value: 's-anna', label: 'Anna Neri' },
       { value: 's-bruno', label: 'Bruno Verdi' },
     ])
@@ -50,13 +54,12 @@ describe('filterOptions', () => {
 
   it('non offre bersagli che le prove rimaste non hanno', () => {
     const options = filterOptions(
-      prove.filter((p) => p.scenario === 's-anna'),
-      (p) => p.scenario,
+      prove.filter((p) => p.canale === 'chat'),
+      scenario,
       (p) => p.nome,
-      'Tutti gli scenari',
     )
 
-    expect(options.map((o) => o.value)).toEqual([ANY, 's-anna'])
+    expect(options.map((o) => o.value)).toEqual(['s-anna'])
   })
 })
 
@@ -72,26 +75,83 @@ describe('matchesFilter', () => {
   })
 })
 
-describe('survivingFilter', () => {
+describe('defaultFilter', () => {
+  /* Anna al telefono, Bruno al telefono, Bruno in chat, Anna di nuovo al
+     telefono: l'ultima prova è di Anna, ma qual è l'ultimo bersaglio ripetuto
+     dipende da cosa si considera una ripetizione. */
+  const miste: Prova[] = [
+    { id: 'm1', scenario: 's-anna', nome: 'Anna Neri', canale: 'voce' },
+    { id: 'm2', scenario: 's-bruno', nome: 'Bruno Verdi', canale: 'voce' },
+    { id: 'm3', scenario: 's-bruno', nome: 'Bruno Verdi', canale: 'chat' },
+    { id: 'm4', scenario: 's-anna', nome: 'Anna Neri', canale: 'voce' },
+  ]
+
+  it('parte dal bersaglio più recente affrontato due volte', () => {
+    expect(defaultFilter(miste, scenario)).toBe('s-bruno')
+  })
+
+  it('conta come ripetute solo le prove gemelle secondo la chiave', () => {
+    /* Bruno è stato affrontato due volte, ma su due canali diversi, e la
+       coppia che ne uscirebbe si aprirebbe sul proprio avviso. Anna al
+       telefono no. */
+    expect(defaultFilter(miste, scenario, canaleEScenario)).toBe('s-anna')
+  })
+
+  it('parte dal bersaglio dell ultima prova quando nessuna si ripete', () => {
+    expect(defaultFilter([miste[0], miste[1]], scenario)).toBe('s-bruno')
+  })
+
+  it('resta vuoto quando non c è nessuna prova', () => {
+    expect(defaultFilter([], scenario)).toBe('')
+  })
+})
+
+describe('chosenFilter', () => {
   const options = [
-    { value: ANY, label: 'Tutti gli scenari' },
     { value: 's-anna', label: 'Anna Neri' },
+    { value: 's-bruno', label: 'Bruno Verdi' },
   ]
 
   it('tiene la scelta finché le prove rimaste la sostengono', () => {
-    expect(survivingFilter(options, 's-anna')).toBe('s-anna')
+    expect(chosenFilter(options, 's-anna', 's-bruno')).toBe('s-anna')
   })
 
-  it('torna ad "aperto" quando la scelta non è più fra le voci', () => {
+  it('parte dal bersaglio di partenza quando non si è ancora scelto niente', () => {
+    expect(chosenFilter(options, '', 's-bruno')).toBe('s-bruno')
+  })
+
+  it('torna al bersaglio di partenza quando la scelta non è più fra le voci', () => {
     /* Il caso vero: si è scelto uno scenario e poi si è stretto il canale,
        che di quello scenario porta via l'ultima prova. */
-    expect(survivingFilter(options, 's-bruno')).toBe(ANY)
+    expect(chosenFilter(options, 's-carla', 's-anna')).toBe('s-anna')
   })
 })
 
 describe('resolvePair', () => {
   it('propone la prima contro l ultima, la più vecchia a sinistra', () => {
     expect(resolvePair(prove, id, NO_PAIR)).toEqual({ leftId: 'p1', rightId: 'p3' })
+  })
+
+  /* Con un gruppo, la coppia proposta non mescola: è l'ultima prova contro la
+     più recente che la precede sullo stesso canale. */
+  it('propone l ultima contro la precedente dello stesso gruppo', () => {
+    const canali: Prova[] = [
+      { id: 'v1', scenario: 's-anna', nome: 'Anna Neri', canale: 'voce' },
+      { id: 'c1', scenario: 's-anna', nome: 'Anna Neri', canale: 'chat' },
+      { id: 'v2', scenario: 's-anna', nome: 'Anna Neri', canale: 'voce' },
+    ]
+
+    expect(resolvePair(canali, id, NO_PAIR, (p) => p.canale)).toEqual({
+      leftId: 'v1',
+      rightId: 'v2',
+    })
+  })
+
+  it('resta la prima contro l ultima quando l ultima è sola nel suo gruppo', () => {
+    expect(resolvePair(prove, id, NO_PAIR, (p) => p.canale)).toEqual({
+      leftId: 'p1',
+      rightId: 'p3',
+    })
   })
 
   it('tiene le scelte di chi guarda finché appartengono alla lista', () => {

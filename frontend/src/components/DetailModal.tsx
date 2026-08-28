@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import ModalShell, { useModalTitleId } from './ModalShell'
+import ModalShell from './ModalShell'
+import { useModalTitleId } from './modalTitle'
 
 /* Modale di sola lettura per mostrare tutti i dati di una riga della tabella
  * (utente o organizzazione). Header con badge/icona, titolo e sottotitolo, poi

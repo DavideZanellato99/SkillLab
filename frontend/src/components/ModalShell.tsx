@@ -28,19 +28,22 @@
  * vede nemmeno.
  *
  * Quindi `role="dialog"` e `aria-modal` per dire cos'è, il nome preso dal
- * titolo che il pannello disegna già (vedi `useModalTitleId`), il fuoco che
- * entra all'apertura e torna da dov'era venuto alla chiusura, il Tab che
- * gira dentro invece di uscire, ed Esc che chiude come la X.
+ * titolo che il pannello disegna già (vedi `useModalTitleId`, in
+ * `modalTitle.ts`), il fuoco che entra all'apertura e torna da dov'era venuto
+ * alla chiusura, il Tab che gira dentro invece di uscire, ed Esc che chiude
+ * come la X.
  *
  * Esc si ferma qui e non risale: una conferma aperta sopra un'altra modale
  * chiude se stessa e lascia aperta quella sotto. Per la stessa ragione le
  * tendine e i menu che si chiudono con Esc lo fermano a loro volta, sennò
  * chiudere una tendina chiuderebbe anche la modale che la contiene. */
 
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { CloseIcon } from './icons'
+import { ModalTitleContext, useModalTitleId } from './modalTitle'
+import type { ModalTitle } from './modalTitle'
 
 const SIZES = {
   /** Conferme e form brevi */
@@ -94,36 +97,6 @@ const FOCUSABLE_SELECTOR =
 function isVisible(el: HTMLElement): boolean {
   const style = getComputedStyle(el)
   return style.display !== 'none' && style.visibility !== 'hidden'
-}
-
-interface ModalTitle {
-  /** L'id da mettere sul titolo, perché il pannello possa indicarlo come proprio nome. */
-  id: string | undefined
-  /** Da chiamare quando quel titolo c'è davvero, e di nuovo quando sparisce. */
-  declare: (exists: boolean) => void
-}
-
-const ModalTitleContext = createContext<ModalTitle>({ id: undefined, declare: () => {} })
-
-/**
- * L'id da mettere sul titolo della modale che si sta disegnando.
- *
- * Lo usano i due modi in cui una modale si intesta, `ModalHeader` qui sotto e
- * l'intestazione di `DetailModal`: la scatola non può cercarsi il titolo da
- * sola, perché è chi ci sta dentro a sapere quale delle sue scritte lo sia.
- * Chi disegna un'intestazione tutta sua chiama questo hook allo stesso modo,
- * oppure passa `label` alla scatola.
- *
- * Fuori da una modale torna `undefined` e non fa niente: `ModalHeader` è un
- * componente come gli altri e deve poter vivere anche altrove.
- */
-export function useModalTitleId(): string | undefined {
-  const { id, declare } = useContext(ModalTitleContext)
-  useEffect(() => {
-    declare(true)
-    return () => declare(false)
-  }, [declare])
-  return id
 }
 
 interface ModalShellProps {

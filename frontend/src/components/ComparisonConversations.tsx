@@ -12,11 +12,12 @@ import type { ModeFilter } from './conversationMode'
 import {
   ANY,
   assignRole,
+  chosenFilter,
+  defaultFilter,
   filterOptions,
   matchesFilter,
   NO_PAIR,
   resolvePair,
-  survivingFilter,
 } from './comparisonFilters'
 import type { Pair } from './comparisonFilters'
 import { Delta } from './scoreCharts'
@@ -31,7 +32,11 @@ import { formatDate } from './dateFormat'
  *
  * Si sceglie fra le prove che i due filtri lasciano passare, il canale e lo
  * scenario: una telefonata e una chat scritta non si giudicano nello stesso
- * modo, e i sei criteri sono tarati su quello che quel cliente chiede.
+ * modo, e i sei criteri sono tarati su quello che quel cliente chiede. Lo
+ * scenario è però una scelta obbligatoria, il canale no: due conversazioni con
+ * clienti diversi non hanno nessun confronto da mostrare, mentre lo stesso
+ * cliente affrontato al telefono e in chat si può guardare insieme, sapendo
+ * cosa si sta guardando.
  *
  * L'ordine di quello che si legge è l'ordine delle domande che ci si fa: di
  * quanto sono migliorato, su cosa, e infine quali erano le due prove. Il
@@ -169,11 +174,16 @@ export default function ComparisonConversations({
    *  pagina, che sta mostrando il precedente. */
   onReviewSaved?: () => void
 }) {
-  /* Prima si restringe, poi si sceglie. I due filtri partono aperti: chi
-   * arriva qui vuole vedere cosa ha fatto, e nascondergli metà delle proprie
-   * prove per prudenza sarebbe una risposta incompleta. */
+  /* Prima si restringe, poi si sceglie. Il canale parte aperto: chi arriva
+   * qui vuole vedere cosa ha fatto, e nascondergli metà delle proprie prove
+   * per prudenza sarebbe una risposta incompleta.
+   *
+   * Lo scenario invece ha sempre un valore, e quello che chi guarda ha scelto
+   * non basta a saperlo: all'apertura non ha scelto niente, e cambiando
+   * persona ha scelto qualcosa che non c'è più. In entrambi i casi il valore
+   * vero è quello di partenza (`chosenFilter`). */
   const [modeFilter, setModeFilter] = useState<ModeFilter>(ANY)
-  const [pickedAvatarId, setPickedAvatarId] = useState(ANY)
+  const [pickedAvatarId, setPickedAvatarId] = useState('')
   const [picked, setPicked] = useState<Pair>(NO_PAIR)
   const [openAttempt, setOpenAttempt] = useState<Attempt | null>(null)
 
@@ -190,24 +200,37 @@ export default function ComparisonConversations({
         byMode,
         (a) => a.avatar_id,
         (a) => a.avatar_name,
-        'Tutti gli scenari',
       ),
     [byMode],
   )
-  const avatarFilter = survivingFilter(avatarOptions, pickedAvatarId)
+  /* Lo scenario su cui la pagina si apre è il più recente affrontato due volte
+     sullo stesso canale: è la cosa più recente su cui un confronto esiste
+     davvero, e la coppia che ne esce non ha bisogno di avvisi. */
+  const avatarFilter = chosenFilter(
+    avatarOptions,
+    pickedAvatarId,
+    defaultFilter(
+      byMode,
+      (a) => a.avatar_id,
+      (a) => `${a.mode}|${a.avatar_id}`,
+    ),
+  )
 
   const filtered = useMemo(
-    () => byMode.filter((a) => matchesFilter(avatarFilter, a.avatar_id)),
+    () => byMode.filter((a) => a.avatar_id === avatarFilter),
     [byMode, avatarFilter],
   )
 
-  /* Il confronto proposto è la prima contro l'ultima, fra quelle rimaste, e
-   * dalla fila si sposta un posto per volta. Quando i tentativi cambiano (si
-   * è scelta un'altra persona, o si è stretto un filtro) una coppia che non
-   * appartiene più a questa lista torna al default: tenerla mostrerebbe un
-   * confronto vuoto senza dire perché. */
+  /* Il confronto proposto è l'ultima conversazione contro la precedente sullo
+   * stesso canale, fra quelle rimaste, e dalla fila si sposta un posto per
+   * volta. Lo scenario è già uno solo, il canale no, e la prima contro
+   * l'ultima poteva quindi essere una coppia mista, cioè una pagina che si
+   * apre sul proprio avviso. Quando i tentativi cambiano (si è scelta
+   * un'altra persona, o si è stretto un filtro) una coppia che non appartiene
+   * più a questa lista torna al default: tenerla mostrerebbe un confronto
+   * vuoto senza dire perché. */
   const idOf = (a: Attempt) => a.conversation_id
-  const { leftId, rightId } = resolvePair(filtered, idOf, picked)
+  const { leftId, rightId } = resolvePair(filtered, idOf, picked, (a) => a.mode)
 
   const left = useMemo(() => filtered.find((a) => idOf(a) === leftId) ?? null, [filtered, leftId])
   const right = useMemo(
@@ -247,20 +270,16 @@ export default function ComparisonConversations({
     }))
   }, [left, right])
 
-  /* Confrontare due prove di specie diversa si può, ma va detto: i criteri
-   * sono tarati su quello che quel cliente chiede, e al telefono e in chat
-   * non si risponde nello stesso modo. Dirlo è più utile che impedirlo, ed è
-   * quello che resta da fare quando i filtri sono aperti. */
+  /* Confrontare due prove di canali diversi si può, ma va detto: al telefono
+   * e in chat non si risponde nello stesso modo. Dirlo è più utile che
+   * impedirlo, ed è quello che resta da fare finché il canale è un filtro
+   * aperto. Di scenari diversi non c'è invece niente da avvisare: la coppia
+   * non si può più comporre. */
   const warnings =
-    left && right
+    left && right && left.mode !== right.mode
       ? [
-          left.avatar_id !== right.avatar_id
-            ? `Il confronto riguarda due scenari diversi, ${left.avatar_name} e ${right.avatar_name}: i punteggi non sono direttamente comparabili, perché ogni scenario mette alla prova competenze diverse.`
-            : '',
-          left.mode !== right.mode
-            ? `Il confronto riguarda due canali diversi, ${conversationModeLabel(left.mode)} e ${conversationModeLabel(right.mode)}: al telefono e in chat si risponde in modi diversi, e i punteggi non sono direttamente comparabili.`
-            : '',
-        ].filter(Boolean)
+          `Il confronto riguarda due canali diversi, ${conversationModeLabel(left.mode)} e ${conversationModeLabel(right.mode)}: al telefono e in chat si risponde in modi diversi, e i punteggi non sono direttamente comparabili.`,
+        ]
       : []
 
   if (attempts.length === 0) {
@@ -315,8 +334,8 @@ export default function ComparisonConversations({
       {filtered.length < 2 && (
         <ComparisonEmpty>
           {filtered.length === 0
-            ? 'Nessuna conversazione corrisponde ai filtri scelti'
-            : 'I filtri scelti lasciano una sola conversazione: ne serve una seconda per effettuare un confronto'}
+            ? 'Su questo canale non ci sono conversazioni valutate'
+            : "Su questo scenario c'è una sola conversazione valutata: scegline un altro, o ne serve una seconda per effettuare un confronto"}
         </ComparisonEmpty>
       )}
 

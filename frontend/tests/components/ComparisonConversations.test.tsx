@@ -22,9 +22,12 @@ import type { Attempt } from '../../src/services/comparison'
  * coppia viene proposta fra quelle rimaste, e cosa si legge quando i filtri
  * non ne lasciano abbastanza.
  *
- * Due chiamate con Anna e una chat con Bruno: aperto, il confronto proposto è
- * la prima contro l'ultima, che è proprio il paio che non si legge, e lo dice
- * per due ragioni insieme. È il motivo per cui i filtri esistono. */
+ * Due chiamate e una chat con Anna, e una chat con Bruno: lo scenario non ha
+ * una voce "tutti", quindi la pagina si apre su uno solo, e la coppia
+ * proposta è l'ultima conversazione contro la precedente sullo stesso canale.
+ * Con questi tentativi sono le due chiamate con Anna, non l'ultima cosa
+ * fatta, e non c'è niente da avvisare: la chat con Anna resta lì accanto per
+ * chi la vuole affiancare lo stesso. */
 
 function attempt(over: Partial<Attempt> & { conversation_id: string }): Attempt {
   return {
@@ -48,6 +51,13 @@ function attempt(over: Partial<Attempt> & { conversation_id: string }): Attempt 
 
 const attempts: Attempt[] = [
   attempt({ conversation_id: 'c1', title: 'Prima chiamata', final_score: 5 }),
+  attempt({
+    conversation_id: 'c4',
+    title: 'Chat con Anna',
+    mode: 'text',
+    conversation_at: '2026-02-03T10:00:00Z',
+    final_score: 4,
+  }),
   attempt({
     conversation_id: 'c2',
     title: 'Seconda chiamata',
@@ -87,22 +97,22 @@ function scelte(): string[] {
 }
 
 describe('ComparisonConversations', () => {
-  it('avverte quando la coppia proposta mescola scenari e canali', () => {
+  it('propone le ultime due prove dello stesso canale, senza avvisi', () => {
     renderConfronto()
 
-    expect(screen.getByText(/due scenari diversi/)).toBeInTheDocument()
-    expect(screen.getByText(/due canali diversi/)).toBeInTheDocument()
+    expect(scelte()).toEqual(['Prima chiamata: prima', 'Seconda chiamata: dopo'])
+    expect(screen.queryByText(/due canali diversi/)).not.toBeInTheDocument()
   })
 
-  it('restringendo il canale propone una coppia omogenea e non avverte più', async () => {
+  /* Affiancare una chiamata e una chat si può, ed è chi guarda a chiederlo:
+     l'avviso dice cosa sta guardando invece di impedirglielo. */
+  it('avverte quando si affiancano due canali diversi', async () => {
     const user = userEvent.setup()
     renderConfronto()
 
-    await user.click(screen.getByRole('radio', { name: 'Chiamate' }))
+    await user.click(screen.getByRole('button', { name: /Chat con Anna.*come dopo/ }))
 
-    expect(screen.queryByText(/due canali diversi/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/due scenari diversi/)).not.toBeInTheDocument()
-    expect(scelte()).toEqual(['Prima chiamata: prima', 'Seconda chiamata: dopo'])
+    expect(screen.getByText(/due canali diversi/)).toBeInTheDocument()
   })
 
   /* Il posto lo dice chi sceglie, con il comando che tocca sulla prova: non
@@ -111,9 +121,9 @@ describe('ComparisonConversations', () => {
     const user = userEvent.setup()
     renderConfronto()
 
-    await user.click(screen.getByRole('button', { name: /Seconda chiamata.*come prima/ }))
+    await user.click(screen.getByRole('button', { name: /Chat con Anna.*come prima/ }))
 
-    expect(scelte()).toEqual(['Seconda chiamata: prima', 'Chat con Bruno: dopo'])
+    expect(scelte()).toEqual(['Chat con Anna: prima', 'Seconda chiamata: dopo'])
   })
 
   /* Con due prove sole, spostare quella che sta già nell'altro posto non può
@@ -122,16 +132,16 @@ describe('ComparisonConversations', () => {
     const user = userEvent.setup()
     renderConfronto()
 
-    await user.click(screen.getByRole('button', { name: /Chat con Bruno.*come prima/ }))
+    await user.click(screen.getByRole('button', { name: /Seconda chiamata.*come prima/ }))
 
-    expect(scelte()).toEqual(['Prima chiamata: dopo', 'Chat con Bruno: prima'])
+    expect(scelte()).toEqual(['Prima chiamata: dopo', 'Seconda chiamata: prima'])
   })
 
   it('dice in cima di quanto è cambiato il voto', () => {
     renderConfronto()
 
-    /* Dal 5 della prima chiamata al 7 della chat con Bruno. */
-    expect(screen.getByText('▲ +2')).toBeInTheDocument()
+    /* Dal 5 della prima chiamata all 8 della seconda. */
+    expect(screen.getByText('▲ +3')).toBeInTheDocument()
   })
 
   it('offre come scenari solo quelli raggiungibili dal canale scelto', async () => {
@@ -141,8 +151,10 @@ describe('ComparisonConversations', () => {
     await user.click(screen.getByRole('radio', { name: 'Chiamate' }))
     await user.click(screen.getByLabelText('Scenario'))
 
+    /* Bruno è stato affrontato solo in chat, e non c'è nessuna voce "tutti":
+       due scenari diversi non hanno un confronto da mostrare. */
     const voci = screen.getAllByRole('option').map((o) => o.textContent)
-    expect(voci).toEqual(['Tutti gli scenari', 'Anna Neri'])
+    expect(voci).toEqual(['Anna Neri'])
   })
 
   /* Le due trascrizioni non stanno affiancate qui: si aprono nella schermata
@@ -178,13 +190,17 @@ describe('ComparisonConversations', () => {
     expect(aperta.scope).toBe('own')
   })
 
-  it('dice che sono i filtri a lasciare una prova sola, invece del vuoto', async () => {
+  it('dice che è lo scenario a lasciare una prova sola, invece del vuoto', async () => {
     const user = userEvent.setup()
     renderConfronto()
 
+    /* Fra le chat la più recente è quella con Bruno, che di chat ne ha una
+       sola: il confronto non c'è, e il rimedio è scegliere un altro scenario. */
     await user.click(screen.getByRole('radio', { name: 'Chat' }))
 
-    expect(screen.getByText(/I filtri scelti lasciano una sola conversazione/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Su questo scenario c'è una sola conversazione valutata/),
+    ).toBeInTheDocument()
     /* La barra resta a schermo: il filtro da allargare è quello che ha appena
        svuotato la pagina, e deve restare a portata di mano. */
     expect(screen.getByRole('radio', { name: 'Chiamate' })).toBeInTheDocument()

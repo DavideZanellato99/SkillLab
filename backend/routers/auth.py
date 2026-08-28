@@ -27,6 +27,7 @@ from auth_dependency import (
 from cognito_service import (
     authenticate,
     change_own_password,
+    global_sign_out,
     refresh_tokens,
     respond_to_new_password_challenge,
     revoke_refresh_token,
@@ -51,6 +52,7 @@ from token_sessions import (
     bind_access_token,
     client_ip,
     revocation_entries,
+    revoke_user_sessions,
     session_anchor_matches,
 )
 from user_fields import clean_name_or_400, find_user_by_email
@@ -83,13 +85,24 @@ def _set_access_cookie(response: Response, access_token: str) -> None:
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    """Il cookie che vale trenta giorni, e che viaggia il meno possibile.
+
+    ``strict`` e non ``lax`` come l'altro, ed è l'unico dei due che se lo può
+    permettere: la differenza fra i due sta in cosa succede quando si arriva
+    qui da un link scritto altrove (una mail, un messaggio), perché con
+    ``strict`` quella prima navigazione parte senza cookie. Per l'access
+    token conta: si arriverebbe alla pagina da sconosciuti e si finirebbe al
+    login pur avendo una sessione valida. Per questo no, perché nessuna
+    navigazione lo usa: lo spende solo il rinnovo, che parte dalla pagina
+    già aperta ed è una chiamata alla propria stessa origine.
+    """
     response.set_cookie(
         key=REFRESH_TOKEN_COOKIE,
         value=refresh_token,
         max_age=_REFRESH_COOKIE_MAX_AGE,
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="strict",
         path=_REFRESH_COOKIE_PATH,
     )
 
@@ -116,6 +129,31 @@ _email_limiter = SlidingWindowLimiter(
 )
 _ip_limiter = SlidingWindowLimiter(scope="ip", max_events=10, window_seconds=_LOGIN_WINDOW_SECONDS)
 
+# Le altre porte dello stesso corridoio. Il login non è l'unico endpoint che
+# si può bussare a ripetizione, ed erano rimaste senza limite tre cose che
+# vale la pena contare, ognuna per una ragione sua:
+#
+# - il rinnovo del token e la prima password si contano solo quando
+#   FALLISCONO, come il login: un rinnovo riuscito è la cosa più normale che
+#   un browser faccia, uno fallito a ripetizione è qualcuno che sta provando
+#   cookie che non sono suoi;
+# - il cambio password si conta sull'utente e non sull'indirizzo, perché lì
+#   quello che si prova a indovinare è la password attuale di quell'account;
+# - l'export dei dati personali si conta invece **riuscito**, come le
+#   chiamate al modello: nessuno lo sta indovinando, costa (uno ZIP con
+#   dentro l'audio delle proprie chiamate) e il modo di abusarne è chiederlo
+#   in continuazione.
+_refresh_limiter = SlidingWindowLimiter(
+    scope="refresh-ip", max_events=20, window_seconds=_LOGIN_WINDOW_SECONDS
+)
+_new_password_limiter = SlidingWindowLimiter(
+    scope="new-password-ip", max_events=10, window_seconds=_LOGIN_WINDOW_SECONDS
+)
+_change_password_limiter = SlidingWindowLimiter(
+    scope="change-password", max_events=5, window_seconds=_LOGIN_WINDOW_SECONDS
+)
+_export_limiter = SlidingWindowLimiter(scope="export", max_events=5, window_seconds=60 * 60)
+
 # Every login failure gets this same message, whatever the real cause
 # (email inesistente, password sbagliata, account non confermato, utente
 # assente dal DB...): a different message per case would let an attacker
@@ -123,11 +161,32 @@ _ip_limiter = SlidingWindowLimiter(scope="ip", max_events=10, window_seconds=_LO
 _GENERIC_LOGIN_ERROR = "Credenziali non valide"
 
 
-def _retry_message(seconds: int) -> str:
+def _too_many(limiter: SlidingWindowLimiter, key: str, message: str) -> None:
+    """429 con Retry-After se la chiave ha esaurito il suo secchiello.
+
+    Il messaggio lo passa chi chiama perché il tempo di attesa è la sola
+    parte comune: "troppi tentativi di accesso" e "hai già scaricato i tuoi
+    dati poco fa" descrivono due situazioni diverse a due persone diverse.
+    """
+    wait = limiter.retry_after(key)
+    if not wait:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=f"{message} {_attesa(wait)}",
+        headers={"Retry-After": str(wait)},
+    )
+
+
+def _attesa(seconds: int) -> str:
     if seconds >= 60:
         minutes = (seconds + 59) // 60
-        return f"Troppi tentativi di accesso. Riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}"
-    return f"Troppi tentativi di accesso. Riprova tra {seconds} secondi"
+        return f"Riprova tra {minutes} minut{'o' if minutes == 1 else 'i'}"
+    return f"Riprova tra {seconds} secondi"
+
+
+def _retry_message(seconds: int) -> str:
+    return f"Troppi tentativi di accesso. {_attesa(seconds)}"
 
 
 def _bind_fresh_token(db: Session, access_token: str, http_request: Request, user_id) -> None:
@@ -320,6 +379,9 @@ def complete_new_password(
 
     Called when the user logs in for the first time with a temporary password.
     """
+    ip_key = client_ip(http_request)
+    _too_many(_new_password_limiter, ip_key, "Troppi tentativi.")
+
     unmet = validate_password_strength(request.new_password)
     if unmet:
         raise HTTPException(
@@ -334,6 +396,7 @@ def complete_new_password(
             session=request.session,
         )
     except RuntimeError as e:
+        _new_password_limiter.record(ip_key)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
@@ -370,6 +433,9 @@ def refresh_access_token(request: Request, response: Response, db: Session = Dep
     login. A stolen refresh token replayed from another browser/device
     kills the whole session instead of minting fresh tokens.
     """
+    ip_key = client_ip(request)
+    _too_many(_refresh_limiter, ip_key, "Troppi tentativi di rinnovo.")
+
     refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE)
     if not refresh_token:
         raise HTTPException(
@@ -383,6 +449,9 @@ def refresh_access_token(request: Request, response: Response, db: Session = Dep
         # itself: headers on the injected Response are dropped when an
         # HTTPException is raised
         logger.warning(log_message)
+        # Un rinnovo rifiutato entra nel conteggio: uno riuscito no, perché
+        # è quello che ogni browser fa da solo una volta all'ora.
+        _refresh_limiter.record(ip_key)
         error = JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Sessione scaduta. Effettua nuovamente il login."},
@@ -549,7 +618,13 @@ def export_my_data(
     an access request is exactly the kind of thing you want to be able to
     prove you answered.
     """
+    _too_many(
+        _export_limiter,
+        str(current_user.id),
+        "Hai già richiesto una copia dei tuoi dati poco fa.",
+    )
     archive = personal_data.export_zip(db, current_user)
+    _export_limiter.record(str(current_user.id))
     day = datetime.now(UTC).strftime("%Y-%m-%d")
     return Response(
         content=archive,
@@ -588,19 +663,39 @@ def update_my_profile(
 def change_my_password(
     request: ChangePasswordRequest,
     http_request: Request,
+    response: Response,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Change the authenticated user's own password (self-service, every
     role). Cognito verifies request.current_password server-side before
     accepting the new one — a stolen session cookie alone isn't enough to
     take over the account.
+
+    E con la password vecchia cade tutto quello che quella password aveva
+    aperto. Chi cambia la password quasi sempre lo fa perché teme che
+    qualcun altro la conoscesse, e una password nuova che lasciava in piedi
+    le sessioni già aperte non rispondeva a quel timore: il cookie rubato
+    restava buono per un'altra ora, e il refresh token per un altro mese.
+    Ora ne cadono due metà insieme, quella su Cognito (``global_sign_out``,
+    che smette di rinnovare) e quella locale (la denylist, che ferma subito
+    gli access token già emessi).
+
+    Cadono **tutte**, questa compresa: Cognito non sa revocare "tutte tranne
+    una". Chi ha appena dimostrato di conoscere entrambe le password però
+    non deve rifare il login per questo, quindi la sessione da cui arriva la
+    richiesta viene riaperta qui, con la password nuova, e al browser
+    arrivano cookie nuovi al posto di quelli appena invalidati.
     """
     if current_user.cognito_sub == MOCK_ADMIN_SUB:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Non è possibile cambiare la password dell'account di sistema.",
         )
+
+    utente = str(current_user.id)
+    _too_many(_change_password_limiter, utente, "Troppi tentativi di cambio password.")
 
     unmet = validate_password_strength(request.new_password)
     if unmet:
@@ -619,6 +714,34 @@ def change_my_password(
     try:
         change_own_password(access_token, request.current_password, request.new_password)
     except RuntimeError as e:
+        # La password attuale sbagliata si conta: chi ha in mano un cookie
+        # rubato e non la password la proverebbe da qui.
+        _change_password_limiter.record(utente)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    _change_password_limiter.reset(utente)
+
+    chiuse = revoke_user_sessions(db, current_user.id)
+    try:
+        global_sign_out(access_token)
+    except RuntimeError as e:
+        # Best effort come le altre revoche su Cognito: la denylist locale
+        # ha già fermato gli access token, quello che resta in piedi è la
+        # possibilità di rinnovare, e vale una riga nel log.
+        logger.error("Cambio password: chiusura delle sessioni su Cognito fallita: %s", e)
+    audit.describe(http_request, sessioni_chiuse=chiuse)
+
+    try:
+        rientro = authenticate(current_user.email, request.new_password)
+        nuovo_access = rientro["access_token"]
+    except (RuntimeError, KeyError) as e:
+        logger.error("Cambio password: rientro automatico non riuscito: %s", e)
+        _clear_auth_cookies(response)
+        return MessageResponse(
+            message="Password aggiornata. Effettua nuovamente l'accesso.", success=True
+        )
+
+    _bind_fresh_token(db, nuovo_access, http_request, current_user.id)
+    _set_access_cookie(response, nuovo_access)
+    _set_refresh_cookie(response, rientro["refresh_token"])
     return MessageResponse(message="Password aggiornata con successo.", success=True)

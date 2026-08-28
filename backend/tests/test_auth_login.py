@@ -18,12 +18,16 @@ quello, chi attacca lo svuoterebbe entrando in un account suo fra un
 tentativo e l'altro.
 """
 
+import logging
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from auth_dependency import ACCESS_TOKEN_COOKIE, MOCK_ADMIN_SUB, REFRESH_TOKEN_COOKIE
-from models import AuditLog
+from models import AuditLog, TokenSession
 from routers import auth as auth_router
 from routers.auth import _retry_message, validate_password_strength
+from token_denylist import is_jti_revoked
 
 LOGIN = "/api/auth/login"
 NUOVA_PASSWORD = "/api/auth/new-password"
@@ -39,6 +43,34 @@ def cognito_accetta(monkeypatch):
         lambda email, password: {"access_token": "access", "refresh_token": "refresh"},
     )
     monkeypatch.setattr(auth_router, "_bind_fresh_token", lambda *args, **kwargs: None)
+
+
+@pytest.fixture
+def cambio_password_riuscito(monkeypatch):
+    """Cognito accetta la password nuova, chiude le sessioni e riapre questa.
+
+    Sono le tre chiamate che il cambio password fa adesso: senza questa
+    fixture ognuna partirebbe verso AWS per davvero.
+    """
+    chiamate: dict[str, object] = {}
+    monkeypatch.setattr(
+        auth_router,
+        "change_own_password",
+        lambda token, previous, nuova: chiamate.update(cambiata=nuova),
+    )
+    monkeypatch.setattr(
+        auth_router, "global_sign_out", lambda token: chiamate.update(sign_out=token)
+    )
+    monkeypatch.setattr(
+        auth_router,
+        "authenticate",
+        lambda email, password: (
+            chiamate.update(rientro=(email, password))
+            or {"access_token": "access-nuovo", "refresh_token": "refresh-nuovo"}
+        ),
+    )
+    monkeypatch.setattr(auth_router, "_bind_fresh_token", lambda *args, **kwargs: None)
+    return chiamate
 
 
 @pytest.fixture
@@ -77,13 +109,21 @@ def test_il_cookie_del_rinnovo_gira_solo_sulle_rotte_che_lo_usano(
     client, standard_user, cognito_accetta
 ):
     """Serve a /refresh e a /logout e a nient'altro: limitargli il percorso
-    riduce la superficie su cui può essere intercettato."""
+    riduce la superficie su cui può essere intercettato.
+
+    E lo stesso vale per la provenienza. ``SameSite=Strict`` se lo può
+    permettere solo lui: quello di accesso deve restare ``Lax``, o chi arriva
+    da un link scritto in una mail si troverebbe al login pur avendo una
+    sessione valida, mentre il rinnovo parte sempre dalla pagina già aperta.
+    """
     risposta = _accedi(client, standard_user.email)
 
-    rinnovo = next(
-        c for c in risposta.headers.get_list("set-cookie") if c.startswith(REFRESH_TOKEN_COOKIE)
-    )
+    cookie = risposta.headers.get_list("set-cookie")
+    rinnovo = next(c for c in cookie if c.startswith(REFRESH_TOKEN_COOKIE))
+    accesso = next(c for c in cookie if c.startswith(ACCESS_TOKEN_COOKIE))
     assert "Path=/api/auth" in rinnovo
+    assert "SameSite=strict" in rinnovo
+    assert "SameSite=lax" in accesso
 
 
 def test_l_accesso_riuscito_lascia_la_sua_riga_nel_registro(
@@ -370,7 +410,7 @@ def test_i_simboli_ammessi_sono_quelli_che_cognito_conta_come_tali():
 
 
 def test_il_cambio_password_chiede_a_cognito_la_password_attuale(
-    user_client, monkeypatch, standard_user
+    user_client, monkeypatch, standard_user, cambio_password_riuscito
 ):
     """Il cookie rubato da solo non basta a prendersi l'account: la vecchia
     password la verifica Cognito, non questo endpoint."""
@@ -457,3 +497,151 @@ def test_l_account_di_sistema_non_puo_cambiare_la_sua_password(
     assert risposta.status_code == 400
     assert "account di sistema" in risposta.json()["detail"]
     assert admin.cognito_sub == MOCK_ADMIN_SUB
+
+
+# ── Il cambio password chiude quello che la password vecchia aveva aperto ──
+
+
+def _cambia_password(client, nuova="PasswordNuova1!"):
+    client.cookies.set(ACCESS_TOKEN_COOKIE, "token-di-sessione")
+    risposta = client.post(
+        CAMBIO_PASSWORD, json={"current_password": "Vecchia1!", "new_password": nuova}
+    )
+    client.cookies.clear()
+    return risposta
+
+
+def test_il_cambio_password_chiude_tutte_le_sessioni_su_cognito(
+    user_client, cambio_password_riuscito
+):
+    """Chi cambia la password teme quasi sempre che qualcuno la conoscesse:
+    lasciare in piedi le sessioni già aperte non risponde a quel timore, il
+    cookie rubato resterebbe buono per un'altra ora."""
+    assert _cambia_password(user_client).status_code == 200
+
+    assert cambio_password_riuscito["sign_out"] == "token-di-sessione"
+
+
+def test_il_cambio_password_revoca_anche_le_sessioni_registrate_qui(
+    user_client, db_session, standard_user, cambio_password_riuscito
+):
+    """L'altra metà della stessa chiusura: Cognito smette di rinnovare, la
+    denylist ferma subito gli access token già emessi."""
+    db_session.add(
+        TokenSession(
+            jti="jti-di-un-altro-browser",
+            user_id=standard_user.id,
+            client_ip="203.0.113.9",
+            user_agent="Chrome/120.0",
+            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1),
+        )
+    )
+    db_session.flush()
+
+    _cambia_password(user_client)
+
+    assert is_jti_revoked(db_session, "jti-di-un-altro-browser")
+
+
+def test_dopo_il_cambio_password_il_browser_riceve_cookie_nuovi(
+    user_client, cambio_password_riuscito, standard_user
+):
+    """Cognito non sa chiudere "tutte tranne una", quindi cade anche questa:
+    chi ha appena dimostrato di conoscere entrambe le password non deve
+    rifare il login per questo, e la sessione riparte qui."""
+    risposta = _cambia_password(user_client)
+
+    assert cambio_password_riuscito["rientro"] == (standard_user.email, "PasswordNuova1!")
+    cookie = "".join(risposta.headers.get_list("set-cookie"))
+    assert f"{ACCESS_TOKEN_COOKIE}=access-nuovo" in cookie
+    assert f"{REFRESH_TOKEN_COOKIE}=refresh-nuovo" in cookie
+
+
+def test_se_il_rientro_non_riesce_i_cookie_se_ne_vanno(user_client, monkeypatch):
+    """La password è cambiata davvero, quindi la richiesta non è fallita: è
+    la sessione che non c'è più, e il browser deve saperlo invece di
+    portarsi dietro un cookie che nessuno onorerà."""
+    monkeypatch.setattr(auth_router, "change_own_password", lambda *a: None)
+    monkeypatch.setattr(auth_router, "global_sign_out", lambda token: None)
+
+    def _cognito_giu(email, password):
+        raise RuntimeError("Cognito irraggiungibile")
+
+    monkeypatch.setattr(auth_router, "authenticate", _cognito_giu)
+
+    risposta = _cambia_password(user_client)
+
+    assert risposta.status_code == 200
+    assert "Effettua nuovamente l'accesso" in risposta.json()["message"]
+    cookie = "".join(risposta.headers.get_list("set-cookie"))
+    assert f'{ACCESS_TOKEN_COOKIE}=""' in cookie or f"{ACCESS_TOKEN_COOKIE}=;" in cookie
+
+
+def test_una_chiusura_fallita_su_cognito_non_ferma_il_cambio(
+    user_client, monkeypatch, caplog, cambio_password_riuscito
+):
+    """La denylist locale ha già fermato gli access token: quello che resta
+    in piedi è la possibilità di rinnovare, e vale una riga nei log."""
+
+    def _cognito_giu(token):
+        raise RuntimeError("Cognito irraggiungibile")
+
+    monkeypatch.setattr(auth_router, "global_sign_out", _cognito_giu)
+
+    with caplog.at_level(logging.ERROR):
+        risposta = _cambia_password(user_client)
+
+    assert risposta.status_code == 200
+    assert "chiusura delle sessioni su Cognito fallita" in caplog.text
+
+
+def test_troppi_cambi_password_falliti_di_fila_si_fermano(user_client, monkeypatch):
+    """Chi ha in mano un cookie rubato ma non la password la proverebbe da
+    qui, ed è l'unico posto in cui può farlo."""
+
+    def _rifiuta(*args):
+        raise RuntimeError("La password attuale non è corretta.")
+
+    monkeypatch.setattr(auth_router, "change_own_password", _rifiuta)
+
+    for _ in range(5):
+        assert _cambia_password(user_client).status_code == 400
+
+    risposta = _cambia_password(user_client)
+    assert risposta.status_code == 429
+    assert risposta.headers["Retry-After"]
+
+
+def test_l_export_dei_propri_dati_ha_un_tetto(user_client, monkeypatch):
+    """Nessuno lo sta indovinando: costa, e il modo di abusarne è chiederlo
+    in continuazione."""
+    monkeypatch.setattr(auth_router.personal_data, "export_zip", lambda db, user: b"zip")
+
+    for _ in range(5):
+        assert user_client.get("/api/auth/me/export").status_code == 200
+
+    assert user_client.get("/api/auth/me/export").status_code == 429
+
+
+def test_troppe_prime_password_rifiutate_di_fila_si_fermano(client, monkeypatch):
+    """La sfida arriva da Cognito e non si indovina, ma l'endpoint è aperto
+    e ogni tentativo è una chiamata ad AWS: il tetto sta sull'indirizzo, come
+    quello dell'accesso."""
+
+    def _rifiuta(email, new_password, session):
+        raise RuntimeError("Sessione non valida.")
+
+    monkeypatch.setattr(auth_router, "respond_to_new_password_challenge", _rifiuta)
+    corpo = {
+        "email": "tale@esempio.invalid",
+        "new_password": "PasswordNuova1!",
+        "session": "sessione-scaduta",
+    }
+
+    for _ in range(10):
+        assert client.post(NUOVA_PASSWORD, json=corpo).status_code == 400
+
+    risposta = client.post(NUOVA_PASSWORD, json=corpo)
+
+    assert risposta.status_code == 429
+    assert risposta.headers["Retry-After"]

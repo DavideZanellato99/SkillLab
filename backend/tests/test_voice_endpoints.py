@@ -279,6 +279,39 @@ def test_una_registrazione_enorme_viene_rifiutata_prima_di_leggerla(
     assert risposta.status_code == 413
 
 
+def test_una_registrazione_senza_lunghezza_dichiarata_si_ferma_lo_stesso(
+    user_client, make_conversation, monkeypatch
+):
+    """Il caso che il controllo sulla lunghezza dichiarata non copre: con
+    Transfer-Encoding: chunked quella lunghezza non c'è proprio, e prima il
+    corpo cresceva in memoria fino alla fine per poi essere rifiutato. Ora
+    si legge a pezzi e si smette al primo che manda oltre il tetto."""
+    monkeypatch.setattr(voice_router, "MAX_RECORDING_BYTES", 10)
+
+    risposta = user_client.post(
+        f"/api/voice/recording/{make_conversation().id}",
+        content=iter([b"x" * 8, b"x" * 8]),
+        headers={"content-type": WEBM},
+    )
+
+    assert risposta.status_code == 413
+
+
+def test_si_conserva_il_formato_validato_e_non_quello_dichiarato(
+    user_client, make_conversation, db_session
+):
+    """Quella stringa torna indietro come Content-Type al riascolto, quindi
+    quello che si scrive deve essere una delle tre forme accettate, non i
+    parametri che il client ci aveva attaccato dietro."""
+    conversazione = make_conversation()
+
+    _carica(user_client, conversazione, tipo="audio/webm;codecs=opus")
+
+    assert db_session.query(ConversationRecording).one().mime_type == "audio/webm"
+    riascolto = user_client.get(f"/api/voice/recording/{conversazione.id}")
+    assert riascolto.headers["content-type"] == "audio/webm"
+
+
 def test_la_registrazione_di_una_conversazione_altrui_non_si_carica(
     user_client, make_conversation, org_admin_user
 ):

@@ -79,6 +79,11 @@ Completata la sfida, il giro è identico al login, sbarramento compreso: la
 password è appena stata impostata, ma un account bloccato non ottiene comunque
 i cookie.
 
+Anche questa rotta ha il suo tetto, dieci tentativi falliti per indirizzo in
+quindici minuti. La sfida arriva da Cognito e non si indovina, quindi qui non
+si difende un segreto: si difende dal fatto che è una rotta aperta, e ogni
+richiesta che ci passa è una chiamata ad AWS che qualcuno paga.
+
 ## Cosa succede a ogni richiesta
 
 Tutto in `get_current_user`
@@ -87,7 +92,7 @@ ogni rotta protetta. Nell'ordine:
 
 ```mermaid
 flowchart TD
-    A[token dal cookie, o dall'header come ripiego] --> B{firma valida?<br/>JWKS di Cognito}
+    A[token dal cookie, o dall'header come ripiego] --> B{firma valida, e emesso<br/>per questa applicazione?}
     B -->|no| X[401]
     B -->|sì| C{jti o origin_jti<br/>nella denylist?}
     C -->|sì| X
@@ -97,6 +102,16 @@ flowchart TD
     E -->|no| X
     E -->|sì| F[pubblica l'utente sulla richiesta<br/>e timbra l'attività]
 ```
+
+Sulla prima casella c'è una cosa da dire, perché la firma non basta. La
+verifica passa da PyJWT e dal JWKS del pool ([cognito_service.py](../backend/cognito_service.py)),
+e quello che la firma dimostra è che il token **viene dal nostro user pool**,
+non per chi è stato emesso: un pool può avere più app client, e il giorno in
+cui ne nascesse un secondo (un'app mobile, un'integrazione) il suo token
+varrebbe su tutta questa API con i permessi di chi lo porta. Per questo, dopo
+la firma, si confronta il claim `client_id` con l'app client configurato. Un
+access token non porta un `aud` da verificare al posto suo: è quel campo lì a
+dire per chi è stato coniato.
 
 Le tre difese che stanno in mezzo meritano ciascuna la sua riga.
 
@@ -160,6 +175,51 @@ Fallito quello, stesso trattamento.
 Se il rinnovo viene rifiutato, i cookie vengono cancellati **sulla risposta di
 errore stessa**: gli header messi sulla `Response` iniettata da FastAPI si
 perderebbero sollevando un'eccezione.
+
+E i rifiuti si contano, venti per indirizzo in quindici minuti. Solo i
+rifiuti: un rinnovo riuscito è la cosa più normale che un browser faccia da
+solo una volta all'ora, e contarlo vorrebbe dire mettere un tetto all'uso
+invece che all'abuso. Venti di fila no, quelli sono cookie che qualcuno sta
+provando.
+
+## Il cambio password
+
+`POST /api/auth/change-password`, self-service e per ogni ruolo. La password
+attuale la verifica Cognito, non questo endpoint: un cookie rubato da solo non
+basta a prendersi l'account.
+
+La parte che conta però viene dopo. **Con la password vecchia cade tutto
+quello che quella password aveva aperto**, perché chi cambia la password quasi
+sempre lo fa temendo che qualcun altro la conoscesse, e una password nuova che
+lasciasse in piedi le sessioni già aperte non risponderebbe per niente a quel
+timore: il cookie rubato resterebbe buono per un'altra ora e il refresh token
+per un altro mese.
+
+Cadono in due metà, che sono le stesse due metà di sempre:
+
+| Metà | Cosa fa | Dove |
+| --- | --- | --- |
+| `global_sign_out` su Cognito | Smette di rinnovare, su qualunque dispositivo | [cognito_service.py](../backend/cognito_service.py) |
+| La denylist locale | Ferma subito gli access token già emessi, che altrimenti vivrebbero la loro ora | `revoke_user_sessions` in [token_sessions.py](../backend/token_sessions.py) |
+
+La seconda esiste perché la prima da sola arriverebbe tardi, ed è il registro
+delle sessioni a renderla possibile: lì c'è una riga per ogni `jti` emesso a
+una persona, quindi si sa quali token esistono senza doverseli far mostrare da
+chi li ha in mano.
+
+Cadono **tutte**, questa compresa, perché Cognito non sa revocare "tutte tranne
+una". Chi ha appena dimostrato di conoscere entrambe le password non deve però
+rifare il login per questo, quindi la sessione da cui arriva la richiesta viene
+riaperta subito con la password nuova e al browser arrivano cookie nuovi al
+posto di quelli appena invalidati. Se quel rientro non riesce (Cognito
+irraggiungibile nel mezzo), i cookie vengono tolti e la risposta lo dice: la
+password è cambiata davvero, quindi non è una richiesta fallita, è una sessione
+che non c'è più.
+
+Il tetto qui sta sull'utente e non sull'indirizzo, cinque tentativi falliti in
+quindici minuti: quello che si prova a indovinare da questa rotta è la password
+attuale di quell'account, ed è l'unico posto da cui la si può provare avendo in
+mano solo un cookie.
 
 ## Il logout
 

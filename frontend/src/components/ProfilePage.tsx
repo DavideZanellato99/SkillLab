@@ -176,11 +176,16 @@ export default function ProfilePage() {
     }
 
     try {
-      await passwordMutation.mutateAsync({
+      /* L'esito lo scrive il server e non questo modulo: il cambio password
+       * chiude tutte le sessioni aperte e riapre questa, e nel caso in cui
+       * quel rientro non riesca la risposta dice che serve accedere di
+       * nuovo. Un "aggiornata con successo" scritto qui coprirebbe proprio
+       * la frase che spiega perché fra un istante si finisce al login. */
+      const esito = await passwordMutation.mutateAsync({
         current_password: currentPassword,
         new_password: newPassword,
       })
-      setPasswordSuccess('Password aggiornata con successo.')
+      setPasswordSuccess(esito.message)
       setCurrentPassword('')
       setNewPassword('')
       setConfirmNewPassword('')

@@ -250,14 +250,31 @@ services:
     restart: unless-stopped
 
   db-backup:
-    # Stessa immagine del database, così pg_dump è della stessa versione del
-    # server che sta copiando.
-    image: postgres:18-alpine
+    # L'immagine del database più age, che è quello che cifra i dump (vedi
+    # db/Dockerfile). Costruita e non presa così com'è per quella riga sola:
+    # installare age all'avvio vorrebbe dire un container che ha bisogno
+    # della rete ogni volta che riparte.
+    build: ./db
     environment:
       PGHOST: db
       PGUSER: ${POSTGRES_USER:?}
       PGPASSWORD: ${POSTGRES_PASSWORD:?}
       PGDATABASE: ${POSTGRES_DB:?}
+      # La chiave pubblica age con cui escono cifrati i dump. Obbligatoria,
+      # ma il controllo lo fa lo script e non questa riga, ed è l'unico caso
+      # nel file in cui la differenza conta: "${VAR:?}" viene risolto per
+      # ogni servizio del compose, anche per quelli che un profilo tiene
+      # spenti, quindi qui fermerebbe l'avvio in sviluppo per una chiave che
+      # in sviluppo non serve a nessuno (questo servizio è di sola
+      # produzione, vedi docker-compose.override.yml).
+      #
+      # Il valore vuoto non è un ripiego: senza chiave il backup non parte
+      # affatto, e lo dice nei log a ogni riavvio (db/backup.sh). Quello che
+      # non succede mai, in nessuno dei due modi, è un dump scritto in
+      # chiaro perché la variabile mancava. La chiave privata non sta su
+      # questa macchina, e senza di essa i backup non si ripristinano: come
+      # crearla e dove tenerla sta in db/backup.sh.
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
       # Ogni quante ore, e quanti file tenere. I default (ogni 6 ore, gli
       # ultimi 28) coprono una settimana abbondante.
       BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-6}

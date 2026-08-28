@@ -64,7 +64,10 @@ beforeEach(() => {
   profileMutation.isPending = false
   profileMutation.error = null
   passwordMutation.mutateAsync.mockReset()
-  passwordMutation.mutateAsync.mockResolvedValue({ success: true })
+  passwordMutation.mutateAsync.mockResolvedValue({
+    success: true,
+    message: 'Password aggiornata con successo.',
+  })
   passwordMutation.reset.mockReset()
   passwordMutation.isPending = false
   passwordMutation.error = null
@@ -288,6 +291,27 @@ describe('cambio password', () => {
     expect(await screen.findByText('Password aggiornata con successo.')).toBeInTheDocument()
     expect(screen.getByLabelText('Password Attuale')).toHaveValue('')
     expect(screen.getByLabelText('Nuova Password')).toHaveValue('')
+  })
+
+  /* Il cambio password chiude tutte le sessioni aperte e riapre questa. Se
+   * quel rientro non riesce, la risposta lo dice, e quella frase deve
+   * arrivare a chi la legge: è la sola spiegazione del login che sta per
+   * comparire. */
+  it('mostra l esito che ha scritto il server', async () => {
+    passwordMutation.mutateAsync.mockResolvedValue({
+      success: true,
+      message: 'Password aggiornata. Effettua nuovamente l accesso.',
+    })
+    renderPage()
+
+    await userEvent.type(screen.getByLabelText('Password Attuale'), 'Vecchia-1!')
+    await userEvent.type(screen.getByLabelText('Nuova Password'), 'Nuova-Lunga1!')
+    await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'Nuova-Lunga1!')
+    await userEvent.click(aggiorna())
+
+    expect(
+      await screen.findByText('Password aggiornata. Effettua nuovamente l accesso.'),
+    ).toBeInTheDocument()
   })
 
   it('mostra il rifiuto del server', () => {

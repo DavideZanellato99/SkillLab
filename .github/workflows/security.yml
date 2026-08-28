@@ -40,12 +40,11 @@ jobs:
         # --require-hashes: si controlla esattamente ciò che verrà installato,
         # non la versione che il resolver sceglierebbe oggi.
         #
-        # PYSEC-2026-1325 (ecdsa, arriva via python-jose): timing attack senza
-        # release corretta disponibile. Esclusa così il job resta un segnale
-        # utile sulle trovate NUOVE invece di essere rosso fisso; da
-        # ricontrollare quando ecdsa pubblica un fix, o rimuovere migrando
-        # python-jose -> PyJWT.
-        run: pip-audit --require-hashes -r backend/requirements.txt --ignore-vuln PYSEC-2026-1325
+        # Nessuna deroga: c'era, per PYSEC-2026-1325 (un timing attack su
+        # ecdsa, che arrivava dentro python-jose e non aveva una versione
+        # corretta), ed è sparita insieme alla libreria che se la portava
+        # dietro. La verifica dei token adesso passa da PyJWT.
+        run: pip-audit --require-hashes -r backend/requirements.txt
       - name: pip-audit (lock di sviluppo)
         run: pip-audit --require-hashes -r backend/requirements-dev.txt
       - uses: actions/setup-node@v4

@@ -139,10 +139,10 @@ def test_senza_dev_admin_login_il_token_dell_admin_locale_non_vale(jwks, jwt_fin
     """La seconda porta, che conta quanto la prima: se il token finto restasse
     valido, basterebbe scriverlo nel cookie per entrare senza nemmeno fare
     l'accesso."""
-    from jose import JWTError
+    from jwt import PyJWTError
 
     monkeypatch.setattr(cognito_service, "DEV_ADMIN_LOGIN_ENABLED", False)
-    jwt_finto(JWTError("Firma non valida"))
+    jwt_finto(PyJWTError("Firma non valida"))
 
     with pytest.raises(RuntimeError):
         verify_access_token("mock-admin-access-token")
@@ -336,10 +336,27 @@ def test_una_revoca_fallita_lo_dice_a_chi_la_deve_registrare(cognito):
 # ── La verifica del token ─────────────────────────────────────────────
 
 
+@pytest.fixture(scope="module")
+def chiave_pubblica():
+    """Una chiave RSA vera, generata una volta per tutto il modulo.
+
+    Vera e non finta perché da qui passa `PyJWK.from_dict`, che una chiave
+    inventata la rifiuta: quello che si sta provando è la scelta della
+    chiave giusta fra quelle del JWKS, e serve che almeno la forma sia
+    quella che Cognito pubblica davvero.
+    """
+    import jwt as pyjwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    privata = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    jwk = pyjwt.algorithms.RSAAlgorithm.to_jwk(privata.public_key(), as_dict=True)
+    return {**jwk, "kid": "chiave-1", "alg": "RS256"}
+
+
 @pytest.fixture
-def jwks(monkeypatch):
+def jwks(monkeypatch, chiave_pubblica):
     """Le chiavi di firma, senza la chiamata di rete che le scarica."""
-    monkeypatch.setattr(cognito_service, "_get_jwks", lambda: {"keys": [{"kid": "chiave-1"}]})
+    monkeypatch.setattr(cognito_service, "_get_jwks", lambda: {"keys": [chiave_pubblica]})
 
 
 @pytest.fixture
@@ -347,6 +364,13 @@ def jwt_finto(monkeypatch):
     """La libreria dei token, che qui non deve verificare firme vere."""
 
     def _installa(claims, kid="chiave-1"):
+        if isinstance(claims, dict):
+            # L'app client per cui il token è stato emesso è quella
+            # configurata, salvo che sia proprio quello che il test vuole
+            # provare: un token vero lo porta sempre, e senza questa riga
+            # ogni prova qui dentro finirebbe per verificare quel campo
+            # invece della cosa di cui parla.
+            claims = {"client_id": cognito_service.COGNITO_APP_CLIENT_ID, **claims}
         monkeypatch.setattr(
             cognito_service.jwt, "get_unverified_header", lambda token: {"kid": kid}
         )
@@ -388,6 +412,24 @@ def test_un_token_di_identita_non_vale_come_token_di_accesso(jwks, jwt_finto):
         verify_access_token("token")
 
 
+def test_un_token_emesso_per_un_altra_applicazione_si_rifiuta(jwks, jwt_finto, monkeypatch):
+    """La firma dice da quale user pool viene il token, non per chi è stato
+    emesso. Un pool può avere più app client, e senza questo controllo il
+    token di uno qualunque di quelli aprirebbe tutta l'API."""
+    monkeypatch.setattr(cognito_service, "COGNITO_APP_CLIENT_ID", "questa-applicazione")
+    jwt_finto({"sub": "sub-1", "token_use": "access", "client_id": "un-altra-applicazione"})
+
+    with pytest.raises(RuntimeError, match="un'altra applicazione"):
+        verify_access_token("token")
+
+
+def test_un_token_emesso_per_questa_applicazione_vale(jwks, jwt_finto, monkeypatch):
+    monkeypatch.setattr(cognito_service, "COGNITO_APP_CLIENT_ID", "questa-applicazione")
+    jwt_finto({"sub": "sub-1", "token_use": "access", "client_id": "questa-applicazione"})
+
+    assert verify_access_token("token")["sub"] == "sub-1"
+
+
 def test_un_token_firmato_con_una_chiave_sconosciuta_si_rifiuta(jwks, jwt_finto):
     jwt_finto({"sub": "sub-1", "token_use": "access"}, kid="chiave-di-un-altro")
 
@@ -396,9 +438,9 @@ def test_un_token_firmato_con_una_chiave_sconosciuta_si_rifiuta(jwks, jwt_finto)
 
 
 def test_un_token_scaduto_o_manomesso_lo_dice(jwks, jwt_finto):
-    from jose import JWTError
+    from jwt import PyJWTError
 
-    jwt_finto(JWTError("Signature has expired"))
+    jwt_finto(PyJWTError("Signature has expired"))
 
     with pytest.raises(RuntimeError, match="Token non valido o scaduto"):
         verify_access_token("token")

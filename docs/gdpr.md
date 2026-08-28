@@ -410,6 +410,10 @@ scrive niente sul dispositivo.
   solo a dump riuscito, con rotazione a sette giorni (`db/backup.sh`). È la
   capacità di ripristino richiesta dall'art. 32.1.c, e il suo limite attuale
   sta nella sezione 11.
+- Quelle copie escono **cifrate** con age, a chiave pubblica: la chiave per
+  leggerle non sta sulla macchina che le produce. È la cifratura richiesta
+  dall'art. 32.1.a applicata al dato quando lascia il perimetro, che per un
+  backup è la condizione normale e non l'eccezione.
 - Scansioni automatiche settimanali su dipendenze, codice e immagini
   (`.github/workflows/security.yml`: pip-audit, npm audit, Trivy, CodeQL). È
   la verifica periodica delle misure tecniche richiesta dall'art. 32.1.d.
@@ -422,14 +426,18 @@ titolare (dettagli nella sezione Deploy del README):
 - **TLS.** L'applicazione non termina HTTPS, lo deve fare un reverse proxy
   davanti. Non è facoltativo: i cookie sono `Secure`.
 - **Cifratura del disco.** Le registrazioni audio stanno nel volume del
-  database in chiaro, e lo stesso vale per i dump che lo copiano. Il volume, o
-  il disco che ospita entrambi, va cifrato a livello di sistema.
-- **Backup fuori dalla macchina.** I dump esistono e ruotano da soli (sezione
-  7), ma restano in `./backups`, cioè sullo stesso disco del database che
-  copiano: proteggono da una cancellazione sbagliata e da un volume perso, non
-  dalla macchina che si rompe. Portarli altrove è a carico di chi installa, e
-  la copia remota va cifrata e ruotata come quella locale, altrimenti ricrea
-  il problema che la cancellazione automatica risolve.
+  database in chiaro. Il volume, o il disco che lo ospita, va cifrato a
+  livello di sistema. I dump non ricadono più qui, perché escono già cifrati
+  per conto loro (sezione 7), ma resta a carico di chi installa la cosa che
+  li rende leggibili quando serviranno: **custodire la chiave privata fuori
+  da quella macchina**, e non perderla.
+- **Backup fuori dalla macchina.** I dump esistono, ruotano da soli e sono
+  cifrati (sezione 7), ma restano in `./backups`, cioè sullo stesso disco del
+  database che copiano: proteggono da una cancellazione sbagliata e da un
+  volume perso, non dalla macchina che si rompe. Portarli altrove è a carico
+  di chi installa, e la copia remota va ruotata come quella locale,
+  altrimenti ricrea il problema che la cancellazione automatica risolve.
+  Cifrata lo è già di suo, ovunque finisca.
 - **La prova di ripristino.** Un backup mai ripristinato è una promessa, non
   una misura verificata: è la prova periodica che chiede l'art. 32.1.d, la
   stessa lettera sotto cui stanno le scansioni di sicurezza. Il comando sta in

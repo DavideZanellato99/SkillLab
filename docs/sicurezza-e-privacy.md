@@ -88,6 +88,25 @@ Descritte per esteso in [autenticazione.md](autenticazione.md), in sintesi:
 | Denylist dei token | Il logout che altrimenti non varrebbe fino alla scadenza | [token_denylist.py](../backend/token_denylist.py) |
 | Session binding a IP e User-Agent | Un cookie portato via dal browser del proprietario | [token_sessions.py](../backend/token_sessions.py) |
 | Stato di account e organizzazione a ogni richiesta | Sospensioni che varrebbero solo al login successivo | [auth_dependency.py](../backend/auth_dependency.py) |
+| Il `client_id` confrontato dopo la firma | Un token emesso per un altro app client dello stesso pool | [cognito_service.py](../backend/cognito_service.py) |
+| Tutte le sessioni chiuse al cambio password | Una password nuova che lascia in piedi quello che la vecchia aveva aperto | [routers/auth.py](../backend/routers/auth.py) |
+
+Il limite ai tentativi non sta più solo sul login: valgono il loro secchiello
+anche il rinnovo del token e la prima password (contati sui rifiuti, per
+indirizzo), il cambio password (contato sui rifiuti, per utente) e l'export dei
+propri dati, che invece si conta **riuscito**, come le chiamate al modello,
+perché nessuno lo sta indovinando e il modo di abusarne è chiederlo in
+continuazione.
+
+Sul cambio password vale la pena fermarsi, perché è quello che è cambiato di
+più: chi cambia la password quasi sempre lo fa temendo che qualcun altro la
+conoscesse, e finché le sessioni già aperte restavano in piedi quel timore non
+trovava risposta, il cookie rubato valeva un'altra ora e il refresh token un
+altro mese. Adesso cadono tutte, per le due metà di sempre (Cognito smette di
+rinnovare, la denylist ferma subito quello che è già stato emesso), e la
+sessione da cui parte la richiesta viene riaperta sul posto con la password
+nuova: il ragionamento per esteso sta in
+[autenticazione.md](autenticazione.md).
 
 ## Le difese sulla pagina
 
@@ -112,6 +131,17 @@ degli avatar sotto `/static`.
 | `Permissions-Policy` | Che qualcosa di diverso dall'applicazione chieda il microfono |
 | `frame-ancestors 'none'` (dentro la CSP) | Il clickjacking sui gesti distruttivi dell'area di amministrazione |
 | `Strict-Transport-Security` | Il primo collegamento in chiaro, su cui i cookie `Secure` non viaggerebbero |
+
+Nello stesso blocco, e per un motivo diverso, ci sono anche **due tetti su
+quanto può pesare una richiesta**: 55 MB sulla rotta che riceve la
+registrazione di una chiamata, 12 MB su tutto il resto dell'API. Gli endpoint
+che ricevono un file hanno già i loro (2 MB un ritratto, 10 MB un documento),
+ma quei controlli guardano i byte **quando sono già arrivati**: un multipart lo
+legge per intero FastAPI prima di passarlo alla funzione, e finisce in un file
+temporaneo dentro il container, quindi un caricamento da svariati giga veniva
+scritto tutto sul disco e solo dopo rifiutato perché superava i 10 MB. Il
+WebSocket vocale resta fuori da entrambi i tetti: non ha un corpo, ha una
+connessione che dura quanto la telefonata.
 
 **Oggi non stanno tappando un buco, ed è giusto dirlo.** Nel frontend non c'è
 nessun `dangerouslySetInnerHTML`, non c'è un renderer di markdown e non c'è
@@ -201,7 +231,23 @@ Due altre difese stanno lontano dal login e vale la pena nominarle:
 - **la scheda persona non esce mai dal server** verso chi si allena. È l'API di
   amministrazione a esporla, e l'export dei dati personali la esclude
   esplicitamente: contiene l'obiettivo nascosto e la vera causa del problema,
-  cioè la soluzione dell'esercizio.
+  cioè la soluzione dell'esercizio;
+- **i documenti caricati per le simulazioni** hanno un secondo tetto, quello
+  che misura la cosa giusta ([document_text.py](../backend/document_text.py)).
+  Il tetto sui byte del file non basta: un `.docx` è un archivio compresso,
+  quindi dieci MB di file sono centinaia di volte tanto una volta srotolati, e
+  un PDF di poche centinaia di kB può dichiarare decine di migliaia di pagine.
+  In tutti e due i casi il file passa il primo controllo e a cadere è il
+  processo che prova a leggerlo, cioè il backend che in quel momento sta
+  servendo anche tutti gli altri. Quanto pesa un archivio una volta aperto lo
+  dichiara l'archivio stesso nel proprio indice, e si legge di lì prima di
+  aprirlo davvero;
+- **il socket della chiamata guarda l'origine dell'handshake**. La same origin
+  policy non vale per i WebSocket, quindi la pagina di un altro sito può
+  aprirne uno verso qui e il browser glielo lascia fare. Con l'id di sessione
+  fra le mani non le basterebbe comunque, perché quello non è un cookie che il
+  browser attacca da solo, ma è la riga che regge il giorno in cui quella
+  scelta cambiasse.
 
 ## La conservazione
 
@@ -329,11 +375,19 @@ Tre cose stanno fuori dal codice e sono elencate in
 la parte fatta qui non basta:
 
 - **la cifratura del disco**, che protegge le registrazioni audio nel volume
-  del database, e vale anche per i backup;
+  del database. Per i backup non basta, e infatti non è l'unica cosa che li
+  protegge: la cifratura di un disco vale finché i dati stanno su quel disco,
+  e un backup è per definizione il file che va da un'altra parte. I dump
+  escono già cifrati con age, a chiave pubblica, quindi sulla macchina che li
+  produce c'è solo la chiave per cifrare ([db/backup.sh](../db/backup.sh));
 - **HTTPS e l'header di provenienza sovrascritto** dal proxy, senza cui i
   cookie `Secure` non funzionano e la metà IP del binding si può falsificare;
 - **il tenere i backup fuori dalla macchina**, e con le stesse finestre di
-  conservazione, altrimenti ricreano il problema che la pulizia risolve.
+  conservazione, altrimenti ricreano il problema che la pulizia risolve;
+- **il custodire la chiave privata dei backup** da qualche altra parte. È
+  quello che rende vera la cifratura qui sopra: tenuta sullo stesso server
+  che produce i dump non protegge da niente, e persa del tutto rende i
+  backup illeggibili anche a chi ne ha diritto.
 
 C'è infine un interruttore da tenere d'occhio sul server: `VOICE_STT_DEBUG`
 stampa nei log le trascrizioni grezze di quello che gli utenti dicono. In

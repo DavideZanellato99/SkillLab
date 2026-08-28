@@ -57,7 +57,7 @@ flowchart TD
 | `backend` | Costruita da `./backend` | No | N repliche identiche |
 | `frontend` | Costruita da `./frontend` | No | Solo file statici |
 | `db` | `postgres:18-alpine` | No | |
-| `db-backup` | `postgres:18-alpine` | No | Stessa immagine del database, così `pg_dump` è della stessa versione del server che copia |
+| `db-backup` | costruita da [db/Dockerfile](../db/Dockerfile) | No | L'immagine del database, così `pg_dump` è della stessa versione del server che copia, più `age`, che è quello che cifra i dump |
 
 **Nessun segreto sta nel compose.** Le credenziali del database arrivano dal
 file `.env` accanto al compose, e sono dichiarate con la sintassi che fa
@@ -246,15 +246,24 @@ Un servizio a parte che gira un ciclo suo
 ([db/backup.sh](../db/backup.sh)), non un cron dell'host: l'installazione si fa
 una volta e nessuno deve tornare sulla macchina perché i backup ripartano.
 
-Tre proprietà, tutte per lo stesso motivo:
+Quattro proprietà, le prime tre per lo stesso motivo:
 
 - **il primo dump parte subito**, non fra sei ore;
 - **un dump interrotto non prende il posto di uno buono**: si scrive su file
   temporaneo e si rinomina solo a `pg_dump` riuscito, così nella cartella non
-  finisce mai un archivio troncato che sembra valido;
+  finisce mai un archivio troncato che sembra valido. Da quando il dump passa
+  per una pipe di tre serve anche `pipefail`, perché altrimenti il codice di
+  uscita sarebbe quello dell'ultimo comando e un `pg_dump` caduto a metà
+  produrrebbe un file cifrato benissimo e mezzo vuoto;
 - **il ciclo non muore**. Un backup fallito viene scritto nei log e si riprova
   al giro dopo, perché un ciclo che si spegne al primo errore smette di fare
-  backup per sempre e nessuno se ne accorge finché non servono.
+  backup per sempre e nessuno se ne accorge finché non servono;
+- **il dump esce cifrato**, a chiave pubblica (age). Sulla macchina che li
+  produce c'è solo la chiave per cifrare, quindi chi ci entrasse non potrebbe
+  leggerne nessuno, e la protezione resta attaccata al file anche quando viene
+  copiato altrove, che è quello che a un backup succede per definizione.
+  `BACKUP_AGE_RECIPIENT` è obbligatoria e senza di essa il servizio non parte,
+  invece di scrivere dump in chiaro senza dirlo.
 
 La ritenzione tiene i più recenti (di serie 28 file, uno ogni sei ore, cioè una
 settimana abbondante). Il dump è fatto con `--clean --if-exists`, così si può

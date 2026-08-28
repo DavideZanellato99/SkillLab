@@ -18,6 +18,7 @@ import pytest
 from docx import Document
 from fpdf import FPDF
 
+import document_text
 from document_text import extract_text
 
 
@@ -137,3 +138,42 @@ def test_l_estensione_decide_il_formato_a_prescindere_da_come_e_scritta():
     """Il tipo dichiarato dal browser su Windows arriva vuoto o sbagliato più
     spesso di quanto si creda, quindi qui si guarda solo il nome."""
     assert extract_text("PROCEDURA.TXT", b"Contenuto.") == "Contenuto."
+
+
+# ── I file costruiti per far cadere chi li apre ───────────────────────
+
+
+def test_un_docx_che_srotolato_non_ci_starebbe_si_rifiuta(monkeypatch):
+    """Il tetto sui byte del file misura la cosa sbagliata: un .docx è un
+    archivio compresso, quindi dieci MB di file sono centinaia di volte
+    tanto una volta aperti. La misura giusta la dichiara l'archivio stesso
+    nel proprio indice, e si legge di lì prima di srotolare davvero."""
+    import zipfile
+
+    monkeypatch.setattr(document_text, "MAX_UNCOMPRESSED_BYTES", 1024)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archivio:
+        # Comprime benissimo: pochi byte sul disco, molti una volta aperti.
+        archivio.writestr("word/document.xml", b"a" * 100_000)
+
+    with pytest.raises(ValueError, match="troppo grande una volta aperto"):
+        extract_text("bomba.docx", buffer.getvalue())
+
+
+def test_un_docx_danneggiato_lo_dice_invece_di_scoppiare():
+    with pytest.raises(ValueError, match="danneggiato"):
+        extract_text("rotto.docx", b"questo non e uno zip")
+
+
+def test_un_pdf_con_troppe_pagine_si_rifiuta(monkeypatch):
+    """Un PDF di poche centinaia di kB può dichiararne decine di migliaia, e
+    a cadere non è il file, è il processo che prova a leggerlo."""
+    monkeypatch.setattr(document_text, "MAX_PDF_PAGES", 2)
+    pdf = FPDF()
+    for numero in range(3):
+        pdf.add_page()
+        pdf.set_font("helvetica", size=12)
+        pdf.cell(0, 10, f"Pagina {numero}")
+
+    with pytest.raises(ValueError, match="troppe pagine"):
+        extract_text("lungo.pdf", bytes(pdf.output()))

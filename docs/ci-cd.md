@@ -91,10 +91,13 @@ il mondo ha scoperto stanotte, non da cosa hai scritto tu. L'eccezione è
 gitleaks, che infatti sta nella CI: un segreto commesso è tuo, ed è un blocco.
 
 `pip-audit` gira col vincolo degli hash perché si controlli esattamente quello
-che verrà installato, non la versione che il resolver sceglierebbe oggi. C'è
-un'esclusione dichiarata con il suo perché nel file: una vulnerabilità senza
-correzione disponibile, tenuta fuori così il job resta un segnale utile sulle
-cose **nuove** invece di essere rosso fisso.
+che verrà installato, non la versione che il resolver sceglierebbe oggi. Oggi
+non ha esclusioni: ce n'era una, un timing attack su `ecdsa` che arrivava
+dentro `python-jose` e non aveva una versione corretta, ed è sparita insieme
+alla libreria che se la portava dietro quando la verifica dei token è passata a
+PyJWT. Un'esclusione va scritta con il suo perché accanto, e va tolta appena il
+motivo che la reggeva non c'è più: è la differenza fra un job che resta un
+segnale utile sulle cose **nuove** e uno che nessuno guarda.
 
 Qui dentro **non c'è nessuna scansione dinamica dell'applicazione in
 esecuzione**: tutti questi job guardano il codice, le dipendenze e le immagini,

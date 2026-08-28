@@ -16,6 +16,7 @@ import tls_setup  # noqa: F401
 from audit import AuditMiddleware
 from authorship import AuthorshipMiddleware
 from database import log_connection_budget, replica_health
+from origins import ALLOWED_ORIGINS
 from routers.admin import router as admin_router
 from routers.admin_avatar_categories import router as admin_avatar_categories_router
 from routers.admin_avatars import router as admin_avatars_router
@@ -83,11 +84,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration — comma-separated list of allowed frontend origins
-ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
-if not ALLOWED_ORIGINS:
-    raise RuntimeError("ALLOWED_ORIGINS non configurato. Aggiungilo al file .env del backend.")
-
+# CORS configuration — l'elenco vive in `origins`, che lo condivide con
+# l'handshake del WebSocket vocale.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

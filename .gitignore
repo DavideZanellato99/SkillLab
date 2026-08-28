@@ -23,7 +23,15 @@ dist/
 # Docker images behind an intercepting antivirus/proxy) — see Dockerfiles.
 avast-root.crt
 
-# Copie del database prodotte da db/backup.sh: contengono tutti i dati
-# personali che l'applicazione tratta, e non entrano nel repository per
-# nessun motivo.
+# Copie del database prodotte da db/backup.sh: adesso escono cifrate, ma
+# restano fuori dal repository lo stesso. Cifrato o no, un dump del
+# database non è una cosa che si versiona.
 backups/
+
+# La chiave privata con cui si leggono quei backup. Non deve stare sulla
+# macchina che li produce e tantomeno qui dentro: questa riga esiste perché
+# un file lasciato per sbaglio nella cartella del progetto non diventi un
+# commit.
+*.age.key
+chiave-backup*.txt
+age-key*.txt

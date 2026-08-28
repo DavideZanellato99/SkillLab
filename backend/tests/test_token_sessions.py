@@ -28,6 +28,7 @@ from token_sessions import (
     client_ip,
     enforce_session_binding,
     revocation_entries,
+    revoke_user_sessions,
     session_anchor_matches,
 )
 
@@ -272,3 +273,62 @@ def test_la_revoca_porta_via_il_token_e_la_sua_sessione():
 
 def test_un_token_senza_niente_da_revocare_non_produce_voci():
     assert revocation_entries({}) == []
+
+
+# ── Chiudere tutte le sessioni di una persona ─────────────────────────
+
+
+def _sessione(db, jti, user_id, *, scaduta=False):
+    db.add(
+        TokenSession(
+            jti=jti,
+            user_id=user_id,
+            client_ip="203.0.113.7",
+            user_agent="Firefox/120.0",
+            expires_at=_naive_utcnow() + timedelta(minutes=-5 if scaduta else 60),
+        )
+    )
+    db.flush()
+
+
+def test_si_revocano_tutte_le_sessioni_di_un_account(db_session, standard_user):
+    """Il registro sa quali token esistono su un account: è la sola strada
+    per fermarli tutti senza doverseli far mostrare da chi li ha."""
+    _sessione(db_session, "jti-1", standard_user.id)
+    _sessione(db_session, "jti-2", standard_user.id)
+
+    assert revoke_user_sessions(db_session, standard_user.id) == 2
+    assert is_jti_revoked(db_session, "jti-1")
+    assert is_jti_revoked(db_session, "jti-2")
+
+
+def test_le_sessioni_di_un_altro_account_restano_dove_sono(
+    db_session, standard_user, org_admin_user
+):
+    _sessione(db_session, "jti-mia", standard_user.id)
+    _sessione(db_session, "jti-di-un-altro", org_admin_user.id)
+
+    revoke_user_sessions(db_session, standard_user.id)
+
+    assert is_jti_revoked(db_session, "jti-mia")
+    assert not is_jti_revoked(db_session, "jti-di-un-altro")
+
+
+def test_la_sessione_da_tenere_sopravvive(db_session, standard_user):
+    """Chi chiude le altre sessioni sta usando la sua, e non deve ritrovarsi
+    fuori per averlo chiesto."""
+    _sessione(db_session, "jti-questa", standard_user.id)
+    _sessione(db_session, "jti-altrove", standard_user.id)
+
+    assert revoke_user_sessions(db_session, standard_user.id, keep={"jti-questa"}) == 1
+    assert not is_jti_revoked(db_session, "jti-questa")
+    assert is_jti_revoked(db_session, "jti-altrove")
+
+
+def test_una_sessione_gia_scaduta_non_si_revoca(db_session, standard_user):
+    """Non serve a niente e allungherebbe la denylist con voci che nessuno
+    può più spendere."""
+    _sessione(db_session, "jti-vecchio", standard_user.id, scaduta=True)
+
+    assert revoke_user_sessions(db_session, standard_user.id) == 0
+    assert not is_jti_revoked(db_session, "jti-vecchio")

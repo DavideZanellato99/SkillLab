@@ -20,6 +20,7 @@ perché lì il problema è il file e nessun ritentativo lo cambia.
 
 import io
 import re
+import zipfile
 
 # Estensioni accettate, con il tipo di lettura che ognuna richiede. Il
 # formato si decide da qui e non dal content-type dichiarato dal browser,
@@ -34,6 +35,21 @@ SUPPORTED_EXTENSIONS = PDF_EXTENSIONS + DOCX_EXTENSIONS + TEXT_EXTENSIONS
 # sbagliato, e il tetto serve a scoprirlo prima di spendere il tempo di
 # estrarlo.
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+
+# Quanto può diventare grande quel file una volta aperto, e su quante pagine
+# può stendersi. Sono il secondo tetto, e serve perché il primo misura la
+# cosa sbagliata: un .docx è un archivio compresso, quindi dieci MB di file
+# sono centinaia di volte tanto una volta srotolati in memoria, e un PDF di
+# poche centinaia di kB può dichiarare decine di migliaia di pagine. In
+# entrambi i casi il file passa il controllo sui byte e a cadere è il
+# processo che prova a leggerlo, cioè il backend che in quel momento sta
+# servendo anche tutti gli altri.
+#
+# I valori sono larghi di proposito: 200 MB srotolati e 500 pagine stanno
+# molto sopra qualunque procedura vera, quindi quello che fermano non è un
+# documento lungo, è un documento costruito apposta.
+MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
+MAX_PDF_PAGES = 500
 
 
 def _normalize(text: str) -> str:
@@ -53,15 +69,39 @@ def _extract_pdf(data: bytes) -> str:
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(data))
+    if len(reader.pages) > MAX_PDF_PAGES:
+        raise ValueError(f"Il documento ha troppe pagine: il massimo è {MAX_PDF_PAGES}.")
     # Una riga vuota fra una pagina e l'altra: senza, l'ultima frase di una
     # pagina e il titolo della successiva finiscono nello stesso paragrafo,
     # e da lì nello stesso passaggio.
     return "\n\n".join(page.extract_text() or "" for page in reader.pages)
 
 
+def _check_zip_bomb(data: bytes) -> None:
+    """Rifiuta un archivio che aperto non ci starebbe in memoria.
+
+    Un .docx è uno zip, e uno zip dichiara nel proprio indice quanto pesa
+    ogni pezzo una volta srotolato: si legge di lì, prima di srotolare
+    davvero, che è tutto il punto. La somma è la misura giusta perché il
+    lettore di documenti apre l'XML per intero, quindi quello che conta non
+    è il pezzo più grande ma quanto fa il totale.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archivio:
+            srotolato = sum(voce.file_size for voce in archivio.infolist())
+    except zipfile.BadZipFile:
+        raise ValueError("Il documento non è leggibile: il file sembra danneggiato.")
+    if srotolato > MAX_UNCOMPRESSED_BYTES:
+        raise ValueError(
+            "Il documento è troppo grande una volta aperto: "
+            f"il massimo è {MAX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB."
+        )
+
+
 def _extract_docx(data: bytes) -> str:
     from docx import Document
 
+    _check_zip_bomb(data)
     document = Document(io.BytesIO(data))
     parts = [p.text for p in document.paragraphs]
     # Le tabelle non stanno fra i paragrafi e sparirebbero in silenzio, che

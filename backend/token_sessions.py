@@ -113,6 +113,33 @@ def bind_access_token(db: Session, claims: dict, request: Request, user_id=None)
     db.commit()
 
 
+def revoke_user_sessions(db: Session, user_id, keep: set[str] | None = None) -> int:
+    """Mette in denylist ogni sessione registrata su un account.
+
+    Il registro delle sessioni tiene una riga per ogni jti emesso a una
+    persona (e una per ogni ancora di sessione), quindi da qui si sa quali
+    token esistono senza doverseli far mostrare da chi li ha. È la metà
+    locale della chiusura di tutte le sessioni: Cognito smette di rinnovare,
+    questo ferma subito gli access token già emessi, che altrimenti
+    resterebbero buoni fino alla loro scadenza.
+
+    ``keep`` esclude i jti della sessione che deve sopravvivere, cioè quella
+    di chi ha appena chiesto la chiusura delle altre. Restituisce quante
+    voci sono state revocate.
+    """
+    keep = keep or set()
+    now = _utcnow()
+    rows = (
+        db.query(TokenSession.jti, TokenSession.expires_at)
+        .filter(TokenSession.user_id == user_id, TokenSession.expires_at > now)
+        .all()
+    )
+    entries = [(jti, expires_at) for jti, expires_at in rows if jti not in keep]
+    if entries:
+        revoke_jtis(db, entries)
+    return len(entries)
+
+
 def session_anchor_matches(db: Session, claims: dict, request: Request) -> bool:
     """
     True when the caller's context matches the session anchor (origin_jti)

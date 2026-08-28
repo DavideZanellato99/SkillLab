@@ -19,7 +19,7 @@ python-dotenv
 pydantic
 openai
 boto3
-python-jose[cryptography]
+pyjwt[crypto]
 requests
 truststore
 websockets

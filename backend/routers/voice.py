@@ -21,6 +21,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from sqlalchemy.orm import Session
 
+import origins
 import voice_capacity
 from auth_dependency import get_current_user
 from conversation_titles import next_conversation_title
@@ -177,6 +178,28 @@ def _readable_conversation(conversation_id: UUID, user: User, db: Session) -> Ch
     raise HTTPException(status_code=404, detail="Conversazione non trovata.")
 
 
+async def _read_capped(request: Request) -> bytes:
+    """Il corpo della richiesta, e non un byte oltre il tetto.
+
+    ``request.body()`` legge fino alla fine prima di restituire qualcosa,
+    quindi il controllo sulla lunghezza arrivava sempre a buoi scappati: il
+    Content-Length si può dichiarare sbagliato, e con
+    ``Transfer-Encoding: chunked`` non c'è affatto, quindi bastava un client
+    che continua a scrivere per far crescere quel buffer in memoria finché
+    il processo non cade. Qui si legge a pezzi e si smette al primo pezzo
+    che manda oltre il tetto, che è la differenza fra rifiutare una
+    registrazione troppo grande e riceverla comunque per poi dirlo.
+    """
+    pezzi: list[bytes] = []
+    totale = 0
+    async for pezzo in request.stream():
+        totale += len(pezzo)
+        if totale > MAX_RECORDING_BYTES:
+            raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
+        pezzi.append(pezzo)
+    return b"".join(pezzi)
+
+
 @router.post("/recording/{conversation_id}", response_model=VoiceRecordingInfo)
 async def upload_recording(
     conversation_id: UUID,
@@ -217,11 +240,9 @@ async def upload_recording(
     if declared and declared.isdigit() and int(declared) > MAX_RECORDING_BYTES:
         raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
 
-    audio = await request.body()
+    audio = await _read_capped(request)
     if not audio:
         raise HTTPException(status_code=400, detail="Registrazione vuota.")
-    if len(audio) > MAX_RECORDING_BYTES:
-        raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
 
     recording = (
         db.query(ConversationRecording)
@@ -231,7 +252,12 @@ async def upload_recording(
     if recording is None:
         recording = ConversationRecording(conversation_id=conversation_id)
         db.add(recording)
-    recording.mime_type = content_type[:64]
+    # Il container validato, non l'intestazione che ha mandato il browser:
+    # quella stringa torna indietro come Content-Type quando la
+    # registrazione si riascolta, e quello che riparte da qui deve essere
+    # una delle tre forme che sono state accettate, non i parametri che il
+    # client ci aveva attaccato dietro.
+    recording.mime_type = container
     recording.duration_ms = duration_ms
     recording.size_bytes = len(audio)
     recording.audio = audio
@@ -314,6 +340,16 @@ async def voice_websocket(websocket: WebSocket):
     # expired, or an account that in the meantime was suspended. Same answer
     # for all of them, so a caller probing ids learns nothing from the
     # difference.
+    # L'origine, prima di qualunque altra cosa. La same origin policy non
+    # vale per i WebSocket: la pagina di un altro sito può aprirne uno verso
+    # qui, e il browser glielo lascia fare. Oggi non basterebbe comunque,
+    # perché la credenziale è l'id di sessione e non un cookie che il
+    # browser attacca da solo, ma questa è la riga che regge il giorno in
+    # cui quella scelta cambiasse.
+    if not origins.is_allowed(websocket.headers.get("origin")):
+        await websocket.close(code=4403)
+        return
+
     session_id = _session_id_from(websocket)
     if not session_id:
         await websocket.close(code=4401)

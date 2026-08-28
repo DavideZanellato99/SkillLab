@@ -154,9 +154,26 @@ docker stats
 **Ripristinare un backup**, con lo stack fermo tranne il database:
 
 ```bash
-gunzip -c backups/skilllab-AAAAMMGG-HHMMSS.sql.gz \
+age -d -i chiave-backup.txt backups/skilllab-AAAAMMGG-HHMMSS.sql.gz.age \
+  | gunzip -c \
   | docker compose exec -T db psql -U <utente> -d <database>
 ```
+
+I dump escono cifrati con age, quindi il ripristino si fa dalla macchina dove
+sta la chiave privata, che non è questa. La coppia si crea una volta sola, e
+altrove:
+
+```bash
+age-keygen -o chiave-backup.txt
+```
+
+La pubblica che stampa (`age1...`) va nel `.env` accanto al compose come
+`BACKUP_AGE_RECIPIENT`; il file con la privata si custodisce dove si
+custodiscono le password. Senza la variabile il servizio di backup non parte,
+di proposito: un dump in chiaro prodotto perché mancava una riga di
+configurazione è la cosa di cui nessuno si accorge. E vale anche il rovescio,
+che è la ragione per cui quella chiave va custodita sul serio: **persa la
+privata, i backup restano cifrati per sempre**.
 
 Un backup non esiste finché non lo si è ripristinato almeno una volta: la prova
 è riversarlo su un database vuoto e contare le righe.
@@ -164,7 +181,10 @@ Un backup non esiste finché non lo si è ripristinato almeno una volta: la prov
 **Portare i backup fuori dalla macchina.** Restano in `./backups`, che è una
 cartella dell'host apposta perché un `rsync` verso uno spazio remoto possa
 prenderli. Finché stanno solo lì proteggono da una cancellazione sbagliata, non
-dal disco che muore. Vanno tenuti con le stesse finestre di conservazione
+dal disco che muore. È anche il motivo per cui vengono cifrati alla fonte: da
+quando lasciano questa macchina nessuno sa più su quanti dischi passano, e la
+cifratura del disco del server, che protegge quando il server è spento, non li
+segue. Vanno tenuti con le stesse finestre di conservazione
 dell'applicazione, altrimenti ricreano il problema che la pulizia risolve
 ([sicurezza-e-privacy.md](sicurezza-e-privacy.md)).
 

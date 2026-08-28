@@ -230,10 +230,18 @@ vede lui. È una riga, ed è la differenza fra un limite e la sua apparenza.
 Un volume non è un backup: protegge da un container ricreato, non da un
 disco che muore né da una cancellazione sbagliata.
 
-Tre proprietà da pretendere: il primo dump parte subito e non fra sei ore,
-un dump interrotto non prende il posto di uno buono (si scrive su file
-temporaneo e si rinomina solo a fine riuscita), e il ciclo non muore mai al
-primo errore.
+Quattro proprietà da pretendere: il primo dump parte subito e non fra sei
+ore, un dump interrotto non prende il posto di uno buono (file temporaneo,
+rinominato solo a fine riuscita, e `pipefail` perché in una pipe il codice
+di uscita che conta non è quello dell'ultimo comando), il ciclo non muore
+mai al primo errore, e **il dump esce già cifrato**.
+
+L'ultima è quella che si dimentica, ed è quella che conta di più: un backup
+è per definizione il file che viene copiato altrove, quindi la cifratura
+del disco del server non lo protegge dopo il primo `rsync`. A chiave
+pubblica, così sulla macchina che li produce c'è solo la chiave per
+cifrare: chi ci entrasse non potrebbe leggerli. Con l'avvertenza che ne
+consegue, cioè che la chiave privata va custodita davvero.
 
 E poi la prova, che è l'unica cosa che conta: riversarlo su un database
 vuoto e contare le righe.
@@ -271,13 +279,13 @@ Vedi [loadtest.md](loadtest.md), il banco di prova già pronto per farlo.
 
 | Cosa | Dove |
 |---|---|
-| TLS, smistamento, bilanciamento `least_conn`, header blindato | [caddy/Caddyfile](../caddy/Caddyfile) |
+| TLS, smistamento, bilanciamento `least_conn`, header blindato, tetto sul corpo delle richieste | [caddy/Caddyfile](../caddy/Caddyfile) |
 | Repliche, healthcheck, servizi, volumi | [docker-compose.yml](../docker-compose.yml) |
 | Log compressi e con un tetto (2 GB per container, mesi di storia), e limiti di CPU e memoria, con la riserva che tiene Postgres fuori dallo swap | [docker-compose.yml](../docker-compose.yml) |
 | I numeri che cambiano con la macchina (repliche, memoria del backend e del database) | il `.env` accanto al compose |
 | Sviluppo: una replica, niente Caddy né backup | [docker-compose.override.yml](../docker-compose.override.yml) |
 | Solo file statici, niente più proxy | [frontend/nginx.conf](../frontend/nginx.conf) |
-| Dump ogni sei ore, con ritenzione | [db/backup.sh](../db/backup.sh) |
+| Dump ogni sei ore, cifrati a chiave pubblica, con ritenzione | [db/backup.sh](../db/backup.sh), [db/Dockerfile](../db/Dockerfile) |
 | Banco di prova per la capacità | [loadtest/](../loadtest/) |
 
 ### 3.3 Come è stato verificato
@@ -386,9 +394,26 @@ traffico vero, non solo sotto prova.
 **Ripristinare un backup**, con lo stack fermo tranne il database:
 
 ```bash
-gunzip -c backups/skilllab-AAAAMMGG-HHMMSS.sql.gz \
+age -d -i chiave-backup.txt backups/skilllab-AAAAMMGG-HHMMSS.sql.gz.age \
+  | gunzip -c \
   | docker compose exec -T db psql -U <utente> -d <database>
 ```
+
+I dump escono cifrati con age, quindi il ripristino si fa dalla macchina dove
+sta la chiave privata, che non è questa. La coppia si crea una volta sola, e
+altrove:
+
+```bash
+age-keygen -o chiave-backup.txt
+```
+
+La pubblica che stampa (`age1...`) va nel `.env` accanto al compose come
+`BACKUP_AGE_RECIPIENT`; il file con la privata si custodisce dove si
+custodiscono le password. Senza la variabile il servizio di backup non parte,
+di proposito: un dump in chiaro prodotto perché mancava una riga di
+configurazione è la cosa di cui nessuno si accorge. E vale anche il rovescio,
+che è la ragione per cui quella chiave va custodita sul serio: **persa la
+privata, i backup restano cifrati per sempre**.
 
 **Portare i backup fuori dalla macchina.** Restano in `./backups`, che è una
 cartella dell'host apposta perché un `rsync` verso uno spazio di

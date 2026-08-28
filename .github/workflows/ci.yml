@@ -194,6 +194,17 @@ jobs:
               echo "HSTS su localhost: la guardia sul dominio non funziona"; exit 1
             fi
           done
+          # Le risposte dell'API non si conservano da nessuna parte, e la
+          # React invece sì: sono due regole opposte sulle due strade, ed è
+          # esattamente il genere di cosa che si scambia toccando il matcher.
+          api=$(curl -sS -o /dev/null -D - "http://localhost/api/avatars")
+          if ! echo "$api" | grep -qi "^cache-control:.*no-store"; then
+            echo "l'API si può mettere in cache"; exit 1
+          fi
+          pagina=$(curl -sS -o /dev/null -D - "http://localhost/")
+          if echo "$pagina" | grep -qi "^cache-control:.*no-store"; then
+            echo "no-store sulla React: la cache degli asset non funziona più"; exit 1
+          fi
           echo "gli header di sicurezza ci sono su tutte e due le strade"
       - name: Check the API is reachable through Caddy
         # L'altra strada del Caddyfile: se il proxy verso le repliche non

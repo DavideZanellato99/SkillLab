@@ -6,17 +6,34 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# Trust an extra local root CA if present (e.g. an antivirus/corporate TLS
-# inspection root — see the truststore usage in main.py for why this is
-# needed at runtime too). The glob copy is a no-op when the file doesn't
-# exist, so this stays harmless on machines without one.
-COPY avast-root.cr[t] /usr/local/share/ca-certificates/avast-root.crt
+# Una CA di troppo, e solo dove serve.
+#
+# Dietro un antivirus o un proxy che ispeziona il TLS (Avast, Zscaler) la
+# catena dei certificati viene rifirmata con una radice che sta nello store
+# di Windows e non in quello di questa immagine, quindi ogni chiamata HTTPS
+# in uscita muore. Aggiungere quella radice fra le CA di sistema risolve, ma
+# quello che risolve in locale in produzione è un indebolimento: da lì in poi
+# il backend si fida di qualunque certificato firmato da quella radice, e le
+# chiamate che fa sono a Cognito, a OpenAI e a ElevenLabs.
+#
+# Per questo non basta che il file resti fuori dal repository: finché la sua
+# presenza nel contesto di build bastava a installarla, un deploy fatto
+# copiando questa cartella dalla macchina di chi sviluppa se la portava
+# dietro senza che nessuno lo avesse deciso. Adesso la decisione è esplicita
+# e spenta di default, come DEV_ADMIN_LOGIN: il file può esserci, ma senza
+# TRUST_LOCAL_CA=1 non viene installato. A chiederlo è il compose di
+# sviluppo (docker-compose.override.yml), che è il solo posto dove serve.
+ARG TRUST_LOCAL_CA=0
+COPY avast-root.cr[t] /tmp/local-ca/avast-root.crt
 # ca-certificates deliberately unpinned: apt drops old versions from the repo.
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
+    && if [ "$TRUST_LOCAL_CA" = "1" ] && [ -f /tmp/local-ca/avast-root.crt ]; then \
+         cp /tmp/local-ca/avast-root.crt /usr/local/share/ca-certificates/; \
+       fi \
     && update-ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /tmp/local-ca /var/lib/apt/lists/*
 ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 
 # Install Python deps first so this layer is cached unless requirements change

@@ -25,6 +25,7 @@ from models import (
     ChatConversation,
     VoiceSessionRecord,
 )
+from routers.voice import VOICE_WS_PROTOCOL
 from voice_sessions import (
     close_voice_session,
     create_voice_session,
@@ -170,6 +171,44 @@ def test_il_socket_rifiuta_una_sessione_che_non_esiste(voice_socket):
 def test_il_socket_rifiuta_una_richiesta_senza_sessione(voice_socket):
     with pytest.raises(WebSocketDisconnect), voice_socket():
         pass
+
+
+def test_il_socket_rifiuta_la_pagina_di_un_altro_sito(client, db_session, conversation):
+    """4403. La same origin policy non vale per i WebSocket: la pagina di un
+    altro sito può aprirne uno verso qui, e il browser glielo lascia fare.
+    Con l'id di sessione fra le mani non le basterebbe comunque, perche
+    quello non e un cookie che il browser attacca da solo, ma questa è la
+    riga che regge il giorno in cui quella scelta cambiasse."""
+    session_id = _crea(db_session, conversation)
+
+    with (
+        pytest.raises(WebSocketDisconnect) as scoppio,
+        client.websocket_connect(
+            "/api/voice/ws",
+            subprotocols=[VOICE_WS_PROTOCOL, session_id],
+            headers={"origin": "https://sito-di-un-altro.invalid"},
+        ),
+    ):
+        pass
+
+    assert scoppio.value.code == 4403
+
+
+def test_il_socket_accetta_l_origine_dell_applicazione(client, db_session, conversation):
+    """Il controllo nuovo non deve spegnere la chiamata vera: con l'origine
+    giusta l'handshake passa e si arriva al rifiuto di prima, quello dell'id
+    che non esiste."""
+    with (
+        pytest.raises(WebSocketDisconnect) as scoppio,
+        client.websocket_connect(
+            "/api/voice/ws",
+            subprotocols=[VOICE_WS_PROTOCOL, "sessione-che-non-esiste"],
+            headers={"origin": "http://localhost:3000"},
+        ),
+    ):
+        pass
+
+    assert scoppio.value.code == 4401
 
 
 def test_l_id_nella_query_string_non_apre_piu_niente(client, db_session, conversation):

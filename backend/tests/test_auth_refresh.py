@@ -377,3 +377,24 @@ def test_un_token_senza_scadenza_resta_nella_denylist_quanto_puo_vivere(
     _con_cookie(client, access="access-mio").post(LOGOUT)
 
     assert is_jti_revoked(db_session, "jti-senza-exp") is True
+
+
+# ── Il tetto sui rinnovi rifiutati ────────────────────────────────────
+
+
+def test_troppi_rinnovi_rifiutati_di_fila_si_fermano(client, cognito):
+    """Chi prova cookie che non sono suoi lo fa da qui: è l'unico endpoint
+    che consegna un token nuovo a chi presenta soltanto dei cookie. Si
+    contano i rifiuti e non i rinnovi riusciti, perché un rinnovo riuscito è
+    la cosa più normale che un browser faccia."""
+    cognito()
+    client.cookies.set(REFRESH_TOKEN_COOKIE, "refresh-di-un-altro")
+
+    for _ in range(20):
+        assert client.post(REFRESH).status_code == 401
+
+    risposta = client.post(REFRESH)
+    client.cookies.clear()
+
+    assert risposta.status_code == 429
+    assert risposta.headers["Retry-After"]

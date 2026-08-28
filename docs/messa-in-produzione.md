@@ -141,6 +141,16 @@ disco cresce e non diminuisce.
 Comprare margine per paura, qui, costerebbe quaranta euro al mese per
 un'incertezza che hai già gli strumenti per sciogliere.
 
+**La chiave dei backup, prima di accendere.** Il servizio di backup non parte
+senza `BACKUP_AGE_RECIPIENT`, e lo dice nei log a ogni riavvio invece di
+scrivere dump in chiaro: i dump escono cifrati e quella è la
+chiave pubblica con cui vengono cifrati. Si crea con `age-keygen -o
+chiave-backup.txt` **su un'altra macchina**, la pubblica (`age1...`) va nel
+`.env` accanto al compose, il file con la privata si custodisce dove si
+custodiscono le password. Senza quella privata i backup non si ripristinano,
+quindi il posto dove finisce è una decisione da prendere adesso e non il
+giorno in cui servirà.
+
 **Sui backup.** Sono snapshot dell'intero disco, presi in automatico e tenuti
 su uno storage separato dal server. Costano il venti per cento del prezzo della
 macchina, cioè una manciata di euro al mese, e chiudono da soli la voce
@@ -535,7 +545,8 @@ no. È il rischio numero uno, si chiude con una email al fornitore e va chiuso
 prima della prima esercitazione, non durante.
 
 **Il ripristino di un backup.** Il primo dump parte subito all'avvio, quindi ce
-n'è già uno in `./backups`. Un backup non esiste finché non lo si è ripristinato
+n'è già uno in `./backups`, cifrato, e la prova serve anche a verificare che la
+chiave privata che hai messo da parte sia davvero quella giusta. Un backup non esiste finché non lo si è ripristinato
 almeno una volta, e il modo è in [deploy-e-scalabilita.md](deploy-e-scalabilita.md).
 Falla adesso, su un'installazione ancora vuota, dove sbagliare non costa
 niente.

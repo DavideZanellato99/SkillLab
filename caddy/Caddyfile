@@ -90,6 +90,24 @@
 		-Server
 	}
 
+	# Le risposte dell'API non si conservano da nessuna parte. Dentro ci sono
+	# le trascrizioni delle conversazioni, i punteggi e l'anagrafica di chi si
+	# allena, e senza un Cache-Control esplicito quelle risposte finiscono
+	# nell'euristica dei browser: una GET senza istruzioni un browser può
+	# decidere di tenersela, è il genere di copia che resta sul disco di
+	# un computer condiviso dopo che la sessione è finita.
+	#
+	# "?" e non un valore imposto: vuol dire "solo se non c'è già". La
+	# registrazione di una chiamata dichiara "private, max-age=3600" e deve
+	# tenerselo, perché è un file grosso che il lettore va a riprendere a
+	# ogni salto sulla barra di avanzamento (vedi routers/voice.py).
+	#
+	# Vale sull'API e non sui ritratti sotto /static, che sono le due strade
+	# del blocco qui sotto: quelli hanno le loro scadenze lunghe, e sono
+	# l'immagine di un avatar, non il voto di una persona.
+	@api path /api/*
+	header @api ?Cache-Control "no-store"
+
 	# HSTS solo su un dominio vero. Su localhost il browser si ricorderebbe
 	# di forzare HTTPS su tutto quello che gira lì, compresi gli altri
 	# progetti sulla stessa macchina, e quel ricordo dura un anno.
@@ -125,11 +143,37 @@
 	}
 	header @ritratti_generati Cache-Control "public, max-age=3600"
 
+	# Quanto può pesare quello che arriva. È il tetto che manca a monte: gli
+	# endpoint che ricevono un file hanno i loro (2 MB un ritratto, 10 MB un
+	# documento, 50 MB la registrazione di una chiamata), ma quei controlli
+	# guardano i byte quando sono già arrivati. Un multipart lo legge intero
+	# FastAPI prima di passarlo alla funzione, e finisce in un file
+	# temporaneo dentro il container: senza una riga qui, un caricamento da
+	# svariati giga viene scritto per intero sul disco e solo dopo rifiutato
+	# perché supera i 10 MB.
+	#
+	# Due misure e non una perché le registrazioni delle chiamate stanno su
+	# un altro ordine di grandezza, e il WebSocket vocale resta fuori da
+	# entrambe: non ha un corpo, ha una connessione che dura quanto la
+	# telefonata.
+	@registrazione path /api/voice/recording/*
+	@altre_scritture {
+		not path /api/voice/recording/*
+		not path /api/voice/ws
+	}
+
 	# Le due strade che portano al backend: l'API (chiamata vocale compresa,
 	# che è un WebSocket e Caddy inoltra senza doverglielo dire) e le
 	# immagini degli avatar.
 	@backend path /api/* /static/*
 	handle @backend {
+		request_body @registrazione {
+			max_size 55MB
+		}
+		request_body @altre_scritture {
+			max_size 12MB
+		}
+
 		reverse_proxy {
 			# Le repliche non si elencano: si chiedono al DNS di Docker, che
 			# risponde con un indirizzo per ogni container del servizio

@@ -2,17 +2,32 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# Trust an extra local root CA if present (see backend/Dockerfile for why).
-# apk has to fetch the ca-certificates package itself before any cert is
-# trusted, so that one fetch goes over http (apk verifies package
-# signatures independently of TLS); everything after uses https again.
-COPY avast-root.cr[t] /usr/local/share/ca-certificates/avast-root.crt
+# La CA locale, spenta di default (il perché per esteso sta in
+# backend/Dockerfile). Qui la radice resterebbe in questo stage e non
+# nell'immagine finale, che riparte da nginx, ma la regola è la stessa: si
+# installa solo se qualcuno lo chiede, e a chiederlo è il compose di
+# sviluppo.
+#
+# Dentro il ramo c'è anche il giro su http: apk deve scaricare il pacchetto
+# delle CA prima che una CA qualunque sia affidabile, e quel primo scarico
+# non può verificare niente (le firme dei pacchetti apk le verifica per conto
+# suo, a prescindere dal TLS). Serve solo lì: senza una CA locale da
+# installare, quel giro non ha motivo di esistere e i repository restano su
+# https.
+ARG TRUST_LOCAL_CA=0
+COPY avast-root.cr[t] /tmp/local-ca/avast-root.crt
 # ca-certificates deliberately unpinned: apk drops old versions from the repo.
 # hadolint ignore=DL3018
-RUN sed -i 's/https:/http:/' /etc/apk/repositories \
-    && apk add --no-cache ca-certificates \
-    && sed -i 's/http:/https:/' /etc/apk/repositories \
-    && update-ca-certificates
+RUN if [ "$TRUST_LOCAL_CA" = "1" ] && [ -f /tmp/local-ca/avast-root.crt ]; then \
+      sed -i 's/https:/http:/' /etc/apk/repositories \
+      && apk add --no-cache ca-certificates \
+      && sed -i 's/http:/https:/' /etc/apk/repositories \
+      && cp /tmp/local-ca/avast-root.crt /usr/local/share/ca-certificates/ \
+      && update-ca-certificates; \
+    else \
+      apk add --no-cache ca-certificates; \
+    fi \
+    && rm -rf /tmp/local-ca
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
 # Install deps first so this layer is cached unless package*.json changes

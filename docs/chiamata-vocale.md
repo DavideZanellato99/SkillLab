@@ -82,6 +82,21 @@ Il motivo è che l'id è la sola credenziale che apre la chiamata, e un indirizz
 finisce nel log degli accessi del proxy, e da lì ovunque quei log vengano
 raccolti. Nell'handshake viaggia in un header, che nessuno registra.
 
+### E l'handshake guarda da dove arriva
+
+Prima ancora dell'id, il socket guarda l'header `Origin` e lo confronta con
+l'elenco delle origini dell'applicazione ([origins.py](../backend/origins.py)),
+lo stesso che decide il CORS delle chiamate HTTP. Un'origine diversa chiude con
+4403.
+
+La same origin policy **non vale per i WebSocket**: la pagina di un altro sito
+può aprirne uno verso qui, e il browser glielo lascia fare senza chiedere
+niente a nessuno. Con l'id di sessione fra le mani non le basterebbe comunque,
+perché quello non è un cookie che il browser attacca da solo, ma è la riga che
+regge il giorno in cui quella scelta cambiasse. Un'origine assente passa, ed è
+voluto: la manda il browser, e chi non è un browser (uno script, la suite) non
+la manda affatto.
+
 ### Lo stato dell'account si rilegge qui
 
 Il socket è l'unica rotta che non passa da `get_current_user`, quindi è anche
@@ -349,8 +364,18 @@ il primo: un ritentativo dopo una POST andata male non deve lasciare due mezze
 registrazioni.
 
 I controlli: contenitore ammesso (webm, ogg, mp4), lunghezza dichiarata
-rifiutata prima di leggere il corpo, e lunghezza vera controllata di nuovo
-perché `Content-Length` è un'affermazione, non una garanzia.
+rifiutata prima di leggere il corpo, e poi il corpo letto **a pezzi**, con lo
+stop al primo pezzo che manda oltre il tetto. Leggerlo tutto e misurarlo dopo
+era il modo di scoprire troppo tardi: `Content-Length` è un'affermazione e non
+una garanzia, e con `Transfer-Encoding: chunked` non c'è affatto, quindi
+bastava un client che continuasse a scrivere per far crescere quel buffer in
+memoria fino a portarsi giù il processo. Davanti c'è anche il tetto di Caddy,
+55 MB su questa rotta (vedi [sicurezza-e-privacy.md](sicurezza-e-privacy.md)).
+
+Di quel `Content-Type` si conserva solo il contenitore, non la stringa intera
+che ha mandato il browser: quel valore torna indietro come `Content-Type` al
+riascolto, quindi quello che riparte da qui deve essere una delle tre forme che
+sono state accettate e non i parametri che il client ci aveva attaccato dietro.
 
 Per rileggerla ci sono due endpoint separati, e non è pignoleria: `/info` dà i
 metadati senza toccare il blob (la colonna è `deferred`), così l'interfaccia
@@ -388,6 +413,7 @@ sbagliare.
 | --- | --- | --- |
 | La chiamata non parte | Chiavi dei fornitori mancanti | 503 sul POST della sessione |
 | `session_id` mancante, sconosciuto, scaduto, o account sospeso | Sessione mai creata, già consumata, o utente e organizzazione non più attivi | Chiusura 4401, uguale in tutti i casi così chi prova a indovinare non impara niente dalla differenza |
+| La chiamata non parte da una pagina che non è l'applicazione | L'origine dell'handshake non è fra quelle dichiarate in `ALLOWED_ORIGINS` | Chiusura 4403 |
 | La chiamata non parte e l'id sembra giusto | L'id è finito nella query string invece che nel sottoprotocollo | Chiusura 4401: il vecchio indirizzo non è più una strada |
 | "Tutte le linee sono occupate" | Tetto del processo raggiunto | Chiusura 1013 |
 | "Riconoscimento vocale non disponibile" | Errore fatale della STT (quota, autenticazione, limite di sessione) | Evento `error` e chiusura |

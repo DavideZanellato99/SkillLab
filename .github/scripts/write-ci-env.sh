@@ -30,6 +30,11 @@ DB_CPUS=1.0
 DB_MEM=1G
 DB_MEM_RESERVED=256M
 DB_MAX_CONNECTIONS=100
+# La chiave pubblica con cui il servizio di backup cifra i dump. Senza, quel
+# container non parte (ed è voluto, vedi db/backup.sh), quindi la CI ne ha una
+# sua: è una chiave pubblica di prova, la privata corrispondente non esiste da
+# nessuna parte e non serve a nessuno, perché qui nessuno ripristina niente.
+BACKUP_AGE_RECIPIENT=age1kypjlp29xw465nntyz4a0h49jar42ve8j3ydvu3skaukf5uegy7szezx6s
 EOF
 
 # Valori segnaposto: bastano ad avviare il backend, che nella CI non chiama mai

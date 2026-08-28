@@ -278,7 +278,17 @@ Nell'ordine, in `create_simulation`:
    di quanto si creda;
 6. il file non può essere vuoto né superare 10 MB (`MAX_DOCUMENT_BYTES`). Si
    legge un byte in più del limite proprio per accorgersi del superamento
-   senza caricare in memoria un file enorme.
+   senza caricare in memoria un file enorme;
+7. e un secondo tetto, sul file **aperto** e non sul file. Quello sopra misura
+   la cosa sbagliata: un `.docx` è un archivio compresso, quindi dieci MB di
+   file possono diventare centinaia di volte tanto una volta srotolati, e un
+   PDF di poche centinaia di kB può dichiarare decine di migliaia di pagine. In
+   tutti e due i casi il file passa il primo controllo e a cadere è il processo
+   che prova a leggerlo. Il massimo è 200 MB una volta aperti
+   (`MAX_UNCOMPRESSED_BYTES`, che lo zip dichiara nel proprio indice, quindi si
+   legge di lì prima di aprire davvero) e 500 pagine (`MAX_PDF_PAGES`). Sono
+   valori larghi di proposito: quello che fermano non è un documento lungo, è
+   un documento costruito apposta.
 
 I punti 5 e 6 li pone anche il browser, nel momento in cui il file si sceglie
 (`documentRejection` in
@@ -1931,6 +1941,7 @@ pubblicazione.
 | Domanda con meno di tre o più di sei passi, o coppie | 422 |
 | File vuoto o illeggibile, PDF scansionato | 400, con il motivo. Non è un problema di ritentativi, è il file |
 | Documento oltre 10 MB | 413 |
+| Documento che aperto supera i 200 MB, o PDF oltre 500 pagine | 400, con il motivo |
 | Embedding falliti | 502, il caricamento si ripete |
 | Generazione su una simulazione senza passaggi indicizzati | 409 |
 | Il modello non risponde su nessun modello della lista, in **nessuna** delle cinque chiamate | 502. Se anche una sola è riuscita, le sue domande si scrivono |

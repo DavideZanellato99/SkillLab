@@ -19,6 +19,16 @@ services:
       - "5432:5432"
 
   backend:
+    # La CA di chi sviluppa dietro un antivirus che ispeziona il TLS. Vive
+    # qui e non nel Dockerfile perché è l'unico posto in cui una radice in
+    # più è una comodità e non un indebolimento: in produzione quel file può
+    # anche essere finito nel contesto di build, senza questa riga non viene
+    # installato (vedi il commento in backend/Dockerfile). Senza il file
+    # accanto al Dockerfile non succede niente, quindi non c'è nulla da
+    # togliere per chi non ne ha bisogno.
+    build:
+      args:
+        TRUST_LOCAL_CA: "1"
     ports:
       - "8000:8000"
     volumes:
@@ -39,6 +49,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        TRUST_LOCAL_CA: "1"
       # Stop at the Node build stage — skip the nginx runtime stage, we run
       # `vite dev` instead of serving a prebuilt dist/.
       target: build

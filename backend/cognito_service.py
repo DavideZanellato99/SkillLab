@@ -5,10 +5,10 @@ import os
 import time
 
 import boto3
+import jwt
 import requests as http_requests
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
-from jose import JWTError, jwt
 
 import tls_setup  # noqa: F401  (TLS via OS store: must precede the requests/boto3 imports)
 
@@ -65,6 +65,20 @@ def _get_jwks() -> dict:
     _jwks_cache = response.json()
     _jwks_cache_time = time.time()
     return _jwks_cache
+
+
+def _signing_key(kid: str | None) -> jwt.PyJWK:
+    """La chiave pubblica con cui verificare un token, cercata per kid.
+
+    Il JWKS di Cognito ne contiene sempre più di una, e quale sia quella
+    giusta lo dice l'intestazione del token. La firma la verifica poi chi
+    chiama: qui si sceglie soltanto, e una chiave sconosciuta è un rifiuto,
+    non un tentativo con la prima che capita.
+    """
+    for key in _get_jwks().get("keys", []):
+        if key.get("kid") == kid:
+            return jwt.PyJWK.from_dict(key, algorithm="RS256")
+    raise RuntimeError("Chiave di firma non trovata.")
 
 
 def authenticate(email: str, password: str) -> dict:
@@ -253,6 +267,34 @@ def revoke_refresh_token(refresh_token: str) -> None:
         raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")
 
 
+def global_sign_out(access_token: str) -> None:
+    """Chiude TUTTE le sessioni dell'utente a cui appartiene questo token.
+
+    Cognito invalida i refresh token emessi a quella persona su qualunque
+    dispositivo, non solo quello da cui arriva la richiesta. Serve dopo un
+    cambio password: chi cambia la password lo fa quasi sempre perché teme
+    che qualcuno la conoscesse, e una password nuova che lascia in piedi le
+    sessioni già aperte non risolve niente di quel timore.
+
+    Vale sull'utente e non sul token, quindi ferma anche la sessione da cui
+    parte la richiesta: chi chiama deve rimettere in mano al browser una
+    sessione nuova, oppure mandarlo al login.
+
+    Solleva RuntimeError in caso di errore.
+    """
+    if DEV_ADMIN_LOGIN_ENABLED and access_token == "mock-admin-access-token":  # noqa: S105
+        return
+
+    try:
+        _cognito_client.global_sign_out(AccessToken=access_token)
+    except ClientError as e:
+        raise RuntimeError(
+            f"Errore nella chiusura delle sessioni: {e.response['Error']['Message']}"
+        )
+    except Exception as e:
+        raise RuntimeError(f"Errore di comunicazione con AWS Cognito: {e!s}")
+
+
 def verify_access_token(token: str, verify_exp: bool = True) -> dict:
     """
     Verify a Cognito JWT access token.
@@ -273,31 +315,20 @@ def verify_access_token(token: str, verify_exp: bool = True) -> dict:
         }
 
     try:
-        jwks = _get_jwks()
-
         # Get the key ID from the token header
         unverified_header = jwt.get_unverified_header(token)
-        kid = unverified_header.get("kid")
-
-        # Find the matching key
-        rsa_key = None
-        for key in jwks.get("keys", []):
-            if key["kid"] == kid:
-                rsa_key = key
-                break
-
-        if not rsa_key:
-            raise RuntimeError("Chiave di firma non trovata.")
+        signing_key = _signing_key(unverified_header.get("kid"))
 
         # Verify the token
         claims = jwt.decode(
             token,
-            rsa_key,
+            signing_key,
             algorithms=["RS256"],
-            audience=COGNITO_APP_CLIENT_ID,
             issuer=f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}",
             options={
-                "verify_aud": False,  # Access tokens use client_id, not aud
+                # Un access token non porta "aud": l'app client per cui è
+                # stato emesso lo dice il claim client_id, verificato sotto.
+                "verify_aud": False,
                 "verify_exp": verify_exp,
             },
         )
@@ -306,9 +337,17 @@ def verify_access_token(token: str, verify_exp: bool = True) -> dict:
         if claims.get("token_use") != "access":
             raise RuntimeError("Token non valido: non è un access token.")
 
+        # E che sia stato emesso per QUESTA applicazione. La firma dice solo
+        # che il token viene dal nostro user pool, non per chi è stato
+        # emesso: un pool può avere piu app client (domani un'app mobile, o
+        # un'integrazione), e senza questa riga un token emesso per uno di
+        # quelli varrebbe su tutta l'API, con i permessi di chi lo porta.
+        if COGNITO_APP_CLIENT_ID and claims.get("client_id") != COGNITO_APP_CLIENT_ID:
+            raise RuntimeError("Token non valido: emesso per un'altra applicazione.")
+
         return claims
 
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         raise RuntimeError(f"Token non valido o scaduto: {e!s}")
 
 

@@ -314,14 +314,15 @@ def test_il_tempo_e_i_punti_restano_nella_fotografia_del_tentativo(user_client, 
     simulation = make_simulation()
     esito = user_client.post(
         f"/api/simulations/{simulation.id}/attempts",
-        json={"answers": _answers(simulation, correct=True, elapsed_ms=8_000)},
+        # Venti secondi oltre la grazia: otto decimi a domanda
+        json={"answers": _answers(simulation, correct=True, elapsed_ms=260_000)},
     ).json()
 
     riletto = user_client.get(f"/api/simulations/attempts/{esito['id']}").json()
     assert riletto["score"] == esito["score"] == 8.0
     assert riletto["earned_points"] == 2.4
     assert [a["points"] for a in riletto["answers"]] == [0.8, 0.8, 0.8]
-    assert [a["elapsed_ms"] for a in riletto["answers"]] == [8_000] * 3
+    assert [a["elapsed_ms"] for a in riletto["answers"]] == [260_000] * 3
 
 
 def test_una_consegna_senza_tempi_non_prende_dieci(user_client, make_simulation):

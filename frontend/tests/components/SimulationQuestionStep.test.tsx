@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import SimulationQuestionStep from '../../src/components/SimulationQuestionStep'
-import { QUESTION_SECONDS } from '../../src/components/simulationFormat'
+import { GRACE_SECONDS, QUESTION_SECONDS } from '../../src/components/simulationFormat'
 import type { SimulationQuestion } from '../../src/services/simulations'
 
 /* Il passo cronometrato, provato con l'orologio in mano.
@@ -29,7 +29,7 @@ const baseProps = {
   onAnswer: () => {},
 }
 
-/** Il tempo scorre a comando: senza, un test aspetterebbe trenta secondi veri. */
+/** Il tempo scorre a comando: senza, un test aspetterebbe minuti veri. */
 const passano = (seconds: number) => act(() => void vi.advanceTimersByTime(seconds * 1000))
 
 const scegli = (option: string) => fireEvent.click(screen.getByText(option))
@@ -44,13 +44,13 @@ describe('SimulationQuestionStep', () => {
     expect(screen.getByText('Domanda 3 di 10')).toBeInTheDocument()
     expect(screen.getByText('Entro quanto va sbloccata la carta?')).toBeInTheDocument()
     expect(screen.getByText('Entro 24 ore')).toBeInTheDocument()
-    expect(screen.getByRole('timer')).toHaveTextContent(`${QUESTION_SECONDS}s`)
+    expect(screen.getByRole('timer')).toHaveTextContent('5:30')
   })
 
   it('il tempo che resta scende mentre si legge', () => {
     render(<SimulationQuestionStep {...baseProps} />)
     passano(12)
-    expect(screen.getByRole('timer')).toHaveTextContent('18s')
+    expect(screen.getByRole('timer')).toHaveTextContent('5:18')
   })
 
   it('consegna la risposta scelta quando si va avanti', () => {
@@ -145,15 +145,19 @@ describe('SimulationQuestionStep', () => {
     expect(onAnswer.mock.calls[0][1]).toBeGreaterThanOrEqual(QUESTION_SECONDS * 1000)
   })
 
-  it('quanto vale la risposta scende mentre il tempo passa', () => {
+  it('quanto vale la risposta resta pieno per tutta la grazia, poi scende', () => {
     render(<SimulationQuestionStep {...baseProps} />)
+    expect(screen.getByText('1')).toBeInTheDocument()
+
+    // I quattro minuti di grazia non costano niente
+    passano(GRACE_SECONDS)
     expect(screen.getByText('1')).toBeInTheDocument()
 
     passano(4)
     expect(screen.getByText('0,9')).toBeInTheDocument()
 
     passano(11)
-    expect(screen.getByText('0,6')).toBeInTheDocument()
+    expect(screen.getByText('0,8')).toBeInTheDocument()
   })
 
   it("sull'ultima domanda il pulsante consegna il test", () => {

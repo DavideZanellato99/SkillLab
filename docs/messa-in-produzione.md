@@ -474,10 +474,23 @@ adesso e mettili nel gestore di password insieme al resto.
 
 ## 8. Il primo avvio
 
-Prima verifica che il DNS sia arrivato, se non l'hai già fatto. Poi:
+Prima verifica che il DNS sia arrivato, se non l'hai già fatto. Poi la
+cartella dove finiscono i dump:
 
 ```bash
 cd ~/SkillLab
+mkdir -p backups
+sudo chown 70:70 backups
+```
+
+Il servizio dei backup non gira da root, e 70 è l'utente `postgres` dentro la
+sua immagine ([db/Dockerfile](../db/Dockerfile)). Senza questa riga il primo
+`pg_dump` non riesce a scrivere e lo trovi nei log di `db-backup`, quindi si
+fa adesso una volta sola e non ci si torna più.
+
+Poi l'avvio:
+
+```bash
 docker compose -f docker-compose.yml up -d --build
 ```
 

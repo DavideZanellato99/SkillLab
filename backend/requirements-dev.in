@@ -31,3 +31,8 @@ ruff
 mypy
 pip-audit
 pip-tools
+# pip finisce nel lock perché pip-tools e pip-api lo dichiarano come
+# dipendenza, e con --allow-unsafe viene pinnato come tutto il resto. Il
+# vincolo è esplicito perché il risolutore si fermava a 26.1.2, che ha
+# PYSEC-2026-3721 e faceva fallire pip-audit in CI.
+pip>=26.2

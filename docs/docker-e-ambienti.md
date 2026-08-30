@@ -77,7 +77,11 @@ finché `requirements.txt` non cambia. Alla fine il container passa a un utente
 non privilegiato, dichiarato **col numero** (`USER 10001`) e non col nome:
 quel nome esiste solo dentro l'immagine, mentre chi guarda da fuori (l'host sui
 file del volume, uno scanner che verifica che non giri da root) vede solo il
-numero.
+numero. Prima di installare le CA c'è un `apt-get upgrade`, lo stesso motivo
+dell'`apk upgrade` del frontend: i pacchetti di sistema restano fermi allo
+snapshot dell'immagine di base, e senza quella riga una correzione pubblicata
+da Debian su `openssl` o `util-linux` arriverebbe solo quando l'immagine viene
+ricostruita a monte, con il job `Image scan` rosso nel frattempo.
 
 **[frontend/Dockerfile](../frontend/Dockerfile)**, a due stadi: Node compila,
 e l'immagine finale è `nginx-unprivileged`, che gira come utente non root e
@@ -144,7 +148,7 @@ inventarsi un dominio pure per lavorare in locale.
 | `db_data` | Il database | Tutto, e per questo esistono i backup |
 | `backend_static` | I ritratti caricati degli avatar | Le immagini caricate. È condiviso fra le repliche: quella caricata da una deve essere servita da tutte |
 | `caddy_data`, `caddy_config` | I certificati | Vanno richiesti daccapo, e Let's Encrypt smette di emetterli dopo qualche tentativo nella stessa settimana |
-| `./backups` | I dump | Una cartella dell'host, non un volume, apposta perché un `rsync` possa portarli fuori dalla macchina |
+| `./backups` | I dump | Una cartella dell'host, non un volume, apposta perché un `rsync` possa portarli fuori dalla macchina. Il servizio che ci scrive non gira da root, quindi la cartella va di `70:70` ([messa-in-produzione.md](messa-in-produzione.md), passo 8) |
 
 ## Limiti, log e spegnimento
 

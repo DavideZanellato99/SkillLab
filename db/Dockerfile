@@ -17,3 +17,14 @@ FROM postgres:18-alpine
 # dal repository, e un pin qui romperebbe la build il giorno in cui succede.
 # hadolint ignore=DL3018
 RUN apk add --no-cache age
+
+# Come backend e frontend, l'utente si dichiara col numero e non col nome: 70
+# è l'utente postgres di questa immagine, e chi guarda da fuori (l'host sui
+# file in ./backups, uno scanner che verifica che non giri da root) vede solo
+# il numero.
+#
+# Qui conta più che altrove perché questo container scrive in una cartella
+# dell'host: da root i dump uscirebbero di proprietà di root sulla macchina,
+# ed è il motivo per cui ./backups va resa scrivibile da questo utente prima
+# del primo avvio (messa-in-produzione.md, passo 8).
+USER 70

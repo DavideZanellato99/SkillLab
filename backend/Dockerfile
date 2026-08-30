@@ -26,8 +26,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 ARG TRUST_LOCAL_CA=0
 COPY avast-root.cr[t] /tmp/local-ca/avast-root.crt
 # ca-certificates deliberately unpinned: apt drops old versions from the repo.
+#
+# apt-get upgrade per lo stesso motivo per cui il runtime del frontend fa
+# "apk upgrade": i pacchetti di sistema dell'immagine base sono fermi allo
+# snapshot con cui è stata costruita, e quando Debian pubblica la correzione
+# di una CVE su openssl o util-linux l'immagine resta indietro finché non
+# viene ricostruita a monte. Senza questa riga il job "Image scan" di
+# security.yml diventa rosso per vulnerabilità che qui sono già risolte.
 # hadolint ignore=DL3008
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates \
     && if [ "$TRUST_LOCAL_CA" = "1" ] && [ -f /tmp/local-ca/avast-root.crt ]; then \
          cp /tmp/local-ca/avast-root.crt /usr/local/share/ca-certificates/; \

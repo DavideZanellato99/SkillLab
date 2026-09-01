@@ -18,6 +18,7 @@ const stato = vi.hoisted(() => ({
     hasNextPage: false,
     fetchNextPage: vi.fn(),
     isFetchingNextPage: false,
+    refetch: vi.fn(),
   },
   filtriChiesti: {} as Record<string, unknown>,
 }))
@@ -123,6 +124,7 @@ beforeEach(() => {
     hasNextPage: false,
     fetchNextPage: vi.fn(),
     isFetchingNextPage: false,
+    refetch: vi.fn(),
   }
   stato.filtriChiesti = {}
   reimposta(elimina, { message: 'Utente eliminato.', success: true })
@@ -198,20 +200,39 @@ describe('elenco', () => {
     expect(screen.getByText('Caricamento utenti del sistema...')).toBeInTheDocument()
   })
 
-  it('riporta il motivo di un caricamento fallito', () => {
+  /* Una lettura caduta non è un elenco senza utenti: senza il comando per
+     riprovare, sotto la fascia rossa restava una tabella che diceva «Nessun
+     utente trovato», e l'unica via d'uscita era ricaricare la pagina. */
+  it('riporta il motivo di un caricamento fallito, e offre di riprovare', async () => {
+    const refetch = vi.fn()
+    stato.elenco = { ...stato.elenco, error: new Error('Sessione scaduta.'), refetch }
+    renderPage('/app/admin', [])
+
+    expect(screen.getByText('Sessione scaduta.')).toBeInTheDocument()
+    expect(screen.queryByText('Nessun utente trovato')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Riprova' }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  /* Con le righe già a schermo il rinfresco caduto si dice e basta: quelle
+     restano buone, e portarle via sarebbe perdere quello che si guardava. */
+  it('con delle righe a schermo tiene la tabella e lo dice soltanto', () => {
     stato.elenco = { ...stato.elenco, error: new Error('Sessione scaduta.') }
     renderPage()
 
     expect(screen.getByText('Sessione scaduta.')).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Riprova' })).not.toBeInTheDocument()
   })
 
   it('distingue una tabella vuota da una ricerca senza esiti', async () => {
     renderPage('/app/admin', [])
-    expect(screen.getByText('Nessun utente trovato.')).toBeInTheDocument()
+    expect(screen.getByText('Nessun utente trovato')).toBeInTheDocument()
 
     await userEvent.click(screen.getByLabelText('Stato'))
     await userEvent.click(screen.getByRole('option', { name: 'Sospeso' }))
-    expect(screen.getByText('Nessun utente corrisponde ai filtri.')).toBeInTheDocument()
+    expect(screen.getByText('Nessun utente corrisponde ai filtri')).toBeInTheDocument()
   })
 })
 

@@ -192,6 +192,20 @@ describe('i filtri della dashboard', () => {
     expect(indirizzo()).toContain('organizzazione=org-1')
     expect(indirizzo()).not.toContain('persona')
   })
+
+  /* Azzerare riporta la dashboard a tutta la storia e a tutte le
+     organizzazioni, e la persona se ne va con loro: era scelta dentro
+     l'elenco che l'organizzazione portava. */
+  it('azzera periodo, organizzazione e persona', async () => {
+    reports({ rows: [valutazione()] })
+    renderDashboard('/app/admin/dashboard?periodo=30&organizzazione=org-1&persona=u-1')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
+
+    expect(indirizzo()).not.toContain('periodo')
+    expect(indirizzo()).not.toContain('organizzazione')
+    expect(indirizzo()).not.toContain('persona')
+  })
 })
 
 describe('le due metà della dashboard', () => {

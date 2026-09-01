@@ -9,7 +9,6 @@ import { saveBlob } from '../services/api'
 import { useOrganizations } from '../hooks/useOrganizations'
 import { isAdmin, isSuperAdmin } from '../services/auth'
 import SearchSelect from './SearchSelect'
-import Select from './Select'
 import ConversationModeBadge from './ConversationModeBadge'
 import { shortCriterionLabel } from './evaluationCriteria'
 import { conversationModeLabel, MODE_FILTERS } from './conversationMode'
@@ -19,6 +18,7 @@ import type { KindFilter } from './simulationFormat'
 import DataTable, { Td, Tr } from './DataTable'
 import type { DataTableColumn } from './DataTable'
 import EmptyState from './EmptyState'
+import { labelCls } from './Field'
 import FilterTabs from './FilterTabs'
 import Notice from './Notice'
 import Tooltip from './Tooltip'
@@ -30,6 +30,7 @@ import Spinner from './Spinner'
 import LoadingState from './LoadingState'
 import LoadError from './LoadError'
 import { PageContainer, PageHeader } from './PageLayout'
+import PeriodOrgFilters from './PeriodOrgFilters'
 import FormError from './FormError'
 import { PERIOD_OPTIONS } from './reportFormat'
 import type { PeriodValue } from './reportFormat'
@@ -335,10 +336,20 @@ export default function DashboardPage() {
     }
   }
 
-  const orgFilterOptions = [
-    { value: '', label: 'Tutte le organizzazioni' },
-    ...organizations.map((o) => ({ value: o.id, label: o.name })),
-  ]
+  const organizationOptions = organizations.map((o) => ({ value: o.id, label: o.name }))
+
+  /* Azzerare riporta la dashboard a tutta la storia e a tutte le
+     organizzazioni, e con loro se ne va la persona scelta: sta nell'elenco
+     che l'organizzazione porta, come quando la si cambia. Il canale e il tipo
+     di test restano, che sono la prova di cui si stanno leggendo i grafici e
+     non un modo di restringerli. */
+  const resetFilters = () => {
+    const next = new URLSearchParams(params)
+    next.delete(PERIOD_PARAM)
+    next.delete(ORG_PARAM)
+    next.delete(USER_PARAM)
+    setParams(next, { replace: true })
+  }
 
   /* Il selettore di canale sta a monte di tutto il resto: ogni conteggio,
    * media e grafico qui sotto parte da queste righe, non da rows. */
@@ -485,31 +496,26 @@ export default function DashboardPage() {
       <PageHeader
         title="Dashboard"
         description="Riepilogo dei punteggi delle conversazioni valutate e dei test tecnici svolti, globale o per singolo utente."
-        /* Periodo e organizzazione stanno insieme, in cima: sono i due filtri
-           che il server capisce, cioè quelli che decidono quali righe
-           arrivano. Quelli della riga sotto restringono righe già qui. */
-        actions={
-          <div className="flex shrink-0 flex-wrap items-center gap-2 max-sm:w-full">
-            <FilterTabs<PeriodValue>
-              value={period}
-              onChange={(value) => setParam(PERIOD_PARAM, value === 'all' ? '' : value)}
-              options={[...PERIOD_OPTIONS]}
-              ariaLabel="Periodo delle prove"
-            />
-            {showOrgFilter && (
-              <Select
-                id="dashboard-org-filter"
-                ariaLabel="Organizzazione"
-                className="min-w-[220px] max-sm:flex-1"
-                value={orgFilter}
-                /* Cambiando organizzazione la persona scelta non è più fra
-                   quelle in elenco: se ne va con il filtro che l'ha portata. */
-                onChange={(value) => setParam(ORG_PARAM, value, [USER_PARAM, ''])}
-                options={orgFilterOptions}
-              />
-            )}
-          </div>
+      />
+
+      {/* Periodo e organizzazione sotto l'intestazione, come in ogni altro
+          elenco dell'applicazione: sono i due filtri che il server capisce,
+          cioè quelli che decidono quali righe arrivano. Stavano accanto al
+          titolo, che è lo stesso posto dove nelle altre schermate c'è
+          l'azione principale. Quelli della riga sotto le linguette
+          restringono righe già qui, e restano dove sono. */}
+      <PeriodOrgFilters
+        idPrefix="dashboard"
+        period={period}
+        onPeriodChange={(value) => setParam(PERIOD_PARAM, value === 'all' ? '' : value)}
+        organizationOptions={showOrgFilter ? organizationOptions : undefined}
+        organizationId={orgFilter}
+        /* Cambiando organizzazione la persona scelta non è più fra quelle in
+           elenco: se ne va con il filtro che l'ha portata. */
+        onOrganizationChange={
+          showOrgFilter ? (value) => setParam(ORG_PARAM, value, [USER_PARAM, '']) : undefined
         }
+        onReset={resetFilters}
       />
 
       {loadErrorMessage ? (
@@ -563,15 +569,11 @@ export default function DashboardPage() {
             onChange={(value) => setParam(SECTION_PARAM, value === 'conversazioni' ? '' : value)}
             ariaLabel="Tipo di prova da visualizzare"
             panelBase={TAB_BASE}
-            className="mb-5 border-b border-white/6 pb-2"
           />
 
           {/* Riga filtri: scopa tutto ciò che sta sotto */}
           <div className="mb-6 flex items-center gap-3 max-lg:flex-wrap">
-            <label
-              htmlFor="dashboard-user-filter"
-              className="text-xs font-medium tracking-wide text-slate-400"
-            >
+            <label htmlFor="dashboard-user-filter" className={labelCls}>
               Utente
             </label>
             <SearchSelect
@@ -589,9 +591,7 @@ export default function DashboardPage() {
                 cose diverse, quindi non possono essere un selettore solo. */}
             {section === 'conversazioni' ? (
               <>
-                <span className="ml-auto text-xs font-medium tracking-wide text-slate-400 max-lg:ml-0">
-                  Canale
-                </span>
+                <span className={`ml-auto ${labelCls} max-lg:ml-0`}>Canale</span>
                 <FilterTabs
                   value={modeFilter}
                   onChange={(value) => setParam(MODE_PARAM, value === 'voice' ? '' : value)}
@@ -601,9 +601,7 @@ export default function DashboardPage() {
               </>
             ) : (
               <>
-                <span className="ml-auto text-xs font-medium tracking-wide text-slate-400 max-lg:ml-0">
-                  Tipo
-                </span>
+                <span className={`ml-auto ${labelCls} max-lg:ml-0`}>Tipo</span>
                 <FilterTabs
                   value={kindFilter}
                   onChange={(value) => setParam(KIND_PARAM, value === 'all' ? '' : value)}
@@ -785,8 +783,8 @@ export default function DashboardPage() {
                     items={searchedRows}
                     emptyMessage={
                       debouncedSearch
-                        ? 'Nessuna valutazione corrisponde alla ricerca.'
-                        : 'Nessuna valutazione per la selezione corrente.'
+                        ? 'Nessuna valutazione corrisponde alla ricerca'
+                        : 'Nessuna valutazione per la selezione corrente'
                     }
                     renderRow={(r) => (
                       <Tooltip

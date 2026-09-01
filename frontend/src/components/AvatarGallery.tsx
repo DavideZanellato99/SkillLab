@@ -79,7 +79,7 @@ export default function AvatarGallery() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Cerca per nome, scenario o categoria"
+          placeholder="Cerca per nome, scenario o categoria..."
           ariaLabel="Cerca un avatar"
           className="w-full max-w-md"
         />

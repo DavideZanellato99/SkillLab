@@ -73,10 +73,26 @@ interface PageHeaderProps {
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
     <header className="mb-10 flex flex-wrap items-center justify-between gap-4 max-md:mb-6">
-      {/* `min-w-0` perché il blocco del titolo è un figlio flex: senza, non
-          scende sotto la larghezza del proprio testo e spinge l'azione fuori
-          dalla riga invece di lasciarla andare a capo. */}
-      <div className="min-w-0">
+      {/* Il blocco del titolo entra nella riga con una base fissa, non con la
+          larghezza del proprio testo, e questo decide quando l'azione va a
+          capo.
+
+          Il flex sceglie se andare a capo prima di restringere gli elementi,
+          e li misura alla loro larghezza naturale: con `basis: auto` quella
+          del blocco è la descrizione scritta tutta su una riga, quindi era la
+          lunghezza di quel testo a mandare sotto il bottone. Nelle schermate
+          con la descrizione scritta nel codice non si vedeva, perché la
+          stessa frase dà sempre lo stesso esito; nel simulatore la
+          descrizione è quella che ha scritto chi ha preparato il test, e il
+          bottone «Torna all'Elenco» cambiava posto da una simulazione
+          all'altra.
+
+          Con una base di venti rem la riga va a capo quando lo spazio è
+          davvero poco, cioè su uno schermo stretto, e non quando il testo è
+          lungo. `flex-1` perché da lì in su il blocco si prende quello che
+          avanza, e `min-w-0` perché possa anche scendere sotto la base invece
+          di spingere l'azione fuori dalla riga. */}
+      <div className="min-w-0 flex-1 basis-80">
         <h1 className="mb-1 font-heading text-3xl font-bold text-slate-100 max-md:text-2xl">
           {title}
         </h1>

@@ -7,7 +7,12 @@
  * filtrato. Qui è un pulsante solo, e la regola sta in chi lo mostra.
  *
  * Compare solo quando c'è qualcosa da azzerare: la condizione resta a chi lo
- * usa, perché cosa conti come filtro attivo lo sa solo la sua pagina. */
+ * usa, perché cosa conti come filtro attivo lo sa solo la sua pagina.
+ *
+ * L'aspetto è quello di ogni altro bottone di contorno (`SecondaryButton`):
+ * qui resta soltanto cosa dice e cosa fa. */
+
+import SecondaryButton from './SecondaryButton'
 
 interface ResetFiltersButtonProps {
   onClick: () => void
@@ -19,13 +24,5 @@ export default function ResetFiltersButton({
   onClick,
   children = 'Azzera Filtri',
 }: ResetFiltersButtonProps) {
-  return (
-    <button
-      type="button"
-      className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  )
+  return <SecondaryButton onClick={onClick}>{children}</SecondaryButton>
 }

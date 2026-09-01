@@ -29,10 +29,12 @@ import DataTable from './DataTable'
 import type { SortState } from './DataTable'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
+import LoadError from './LoadError'
 import LoadMoreButton from './LoadMoreButton'
 import { PageContainer, PageHeader } from './PageLayout'
 import TableSkeleton from './TableSkeleton'
 import PrimaryButton from './PrimaryButton'
+import StaleContent from './StaleContent'
 import UserCreateModal from './UserCreateModal'
 import UserDetailModal from './UserDetailModal'
 import UserEditModal from './UserEditModal'
@@ -114,6 +116,7 @@ export default function AdminPage() {
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage: isLoadingMore,
+    refetch,
   } = useAdminUsers(
     {
       organizationId: filters.organizationId,
@@ -187,7 +190,7 @@ export default function AdminPage() {
         title="Gestione Utenti"
         description="Crea, modifica ed elimina gli account autorizzati ad accedere all'applicazione."
         actions={
-          <PrimaryButton icon={<UserPlusIcon size={18} />} onClick={() => setIsCreating(true)}>
+          <PrimaryButton icon={<UserPlusIcon />} onClick={() => setIsCreating(true)}>
             Nuovo Utente
           </PrimaryButton>
         }
@@ -202,22 +205,34 @@ export default function AdminPage() {
       />
 
       {successMsg && <FormSuccess message={successMsg} variant="page" />}
-      {loadError && (
+
+      {/* Un rinfresco caduto con l'elenco già a schermo si dice e basta: quelle
+          righe restano buone, e toglierle per un riquadro d'errore vorrebbe
+          dire perdere quello che si stava guardando. Quando invece non c'è
+          niente a video l'errore prende il posto della tabella e porta il
+          comando per riprovare, perché una tabella vuota direbbe che non
+          esiste nessun utente. */}
+      {loadError && users.length > 0 && (
         <FormError
           message={errorMessage(loadError, 'Impossibile caricare gli utenti.')}
           variant="page"
         />
       )}
 
-      {isLoading ? (
+      {loadError && users.length === 0 ? (
+        <LoadError
+          message={errorMessage(loadError, 'Impossibile caricare gli utenti.')}
+          variant="page"
+          onRetry={() => void refetch()}
+          className="py-8"
+        />
+      ) : isLoading ? (
         <TableSkeleton columns={USER_COLUMNS} message="Caricamento utenti del sistema..." />
       ) : (
         /* Mentre arriva la risposta a un filtro nuovo restano a video le righe
-           di prima, attenuate: sono ancora quelle vecchie, e `aria-busy` lo
-           dice a chi la pagina non la guarda. Sostituirle con il riquadro di
-           caricamento faceva sparire la tabella e saltare la pagina a ogni
-           tasto premuto nella ricerca. */
-        <div aria-busy={isStale} className={`transition-opacity ${isStale ? 'opacity-60' : ''}`}>
+           di prima: come si vede che sono ancora quelle vecchie lo dice
+           `StaleContent`, per tutte le tabelle allo stesso modo. */
+        <StaleContent isStale={isStale}>
           <DataTable
             columns={USER_COLUMNS}
             items={users}
@@ -235,7 +250,7 @@ export default function AdminPage() {
                diventato un altro. */
             pageResetKey={`${filters.organizationId}|${filters.ruolo}|${filters.status}|${filters.access}|${debouncedSearch}`}
             emptyMessage={
-              hasFilters ? 'Nessun utente corrisponde ai filtri.' : 'Nessun utente trovato.'
+              hasFilters ? 'Nessun utente corrisponde ai filtri' : 'Nessun utente trovato'
             }
             footerNote={
               hasNextPage && (
@@ -272,7 +287,7 @@ export default function AdminPage() {
               />
             )}
           />
-        </div>
+        </StaleContent>
       )}
 
       {viewingUser && (

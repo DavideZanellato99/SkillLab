@@ -28,10 +28,11 @@ const ripristina = vi.hoisted(() => ({
   isPending: false,
   variables: undefined as string | undefined,
 }))
+const ricarica = vi.hoisted(() => vi.fn())
 vi.mock('../../src/hooks/useAdminAvatars', () => ({
   useAdminAvatars: (includeDeleted: boolean) => {
     stato.chiesto.includeDeleted = includeDeleted
-    return stato.catalogo
+    return { ...stato.catalogo, refetch: ricarica }
   },
   useDeleteAvatar: () => elimina,
   useRestoreAvatar: () => ripristina,
@@ -278,7 +279,11 @@ describe('catalogo', () => {
     expect(screen.getByText('Caricamento avatar...')).toBeInTheDocument()
   })
 
-  it('riporta il motivo di un caricamento fallito', () => {
+  /* Un catalogo che non è arrivato non è un catalogo vuoto: senza il comando
+     per riprovare, la tabella diceva che non c'è nessun avatar e l'unica via
+     d'uscita era ricaricare la pagina. */
+  it('riporta il motivo di un caricamento fallito, e offre di riprovare', async () => {
+    ricarica.mockClear()
     stato.catalogo = { data: [], isPending: false, error: new Error('Sessione scaduta.') }
     render(
       <MemoryRouter>
@@ -287,6 +292,10 @@ describe('catalogo', () => {
     )
 
     expect(screen.getByText('Sessione scaduta.')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Riprova' }))
+    expect(ricarica).toHaveBeenCalledOnce()
   })
 })
 

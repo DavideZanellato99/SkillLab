@@ -10,8 +10,10 @@ import type {
 } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
 import EmptyState from './EmptyState'
+import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
+import { secondaryActionCls } from './SecondaryButton'
 import FormError from './FormError'
 import SimulationResult from './SimulationResult'
 import PathStepNotice from './PathStepNotice'
@@ -57,12 +59,27 @@ import { isTimed, kindHint, QUESTION_SECONDS } from './simulationFormat'
  * ritentare a mano: l'errore resta a schermo con le risposte ancora in mano e
  * il pulsante per riprovare la consegna. */
 
-const linkBtnCls =
-  'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/6 bg-white/4 px-6 py-2 text-sm font-medium text-slate-400 no-underline transition hover:bg-white/8 hover:text-slate-100'
+/* Il comando per uscire dal test, sempre lo stesso e sempre nello stesso
+ * posto: a destra dell'intestazione, dove ogni schermata dell'applicazione
+ * tiene la propria azione.
+ *
+ * Era scritto quattro volte con quattro collocazioni diverse, e siccome le
+ * quattro sono stati della stessa pagina, il bottone si spostava sotto gli
+ * occhi mentre si andava avanti: a destra del titolo mentre si leggevano le
+ * regole, in mezzo alla pagina quando arrivava l'esito. Adesso l'unico stato
+ * in cui non c'è è il test in corso, e non è una dimenticanza: da lì si esce
+ * buttando via le risposte già date, e non deve capitare per sbaglio. */
+function BackToList() {
+  return (
+    <Link to="/app/simulatore" className={secondaryActionCls}>
+      Torna all'Elenco
+    </Link>
+  )
+}
 
 export default function SimulationRunner() {
   const { simulationId } = useParams<{ simulationId: string }>()
-  const { data: simulation, isLoading, error } = useSimulation(simulationId)
+  const { data: simulation, isLoading, error, refetch } = useSimulation(simulationId)
   const start = useStartSimulation(simulationId ?? '')
   const submit = useSubmitSimulation(simulationId ?? '')
 
@@ -89,15 +106,24 @@ export default function SimulationRunner() {
     )
   }
 
+  /* L'unico stato senza intestazione, perché senza la simulazione non c'è un
+   * titolo da scriverci: qui il comando per uscire sta sotto il messaggio,
+   * insieme a quello per riprovare la lettura, che è la coppia di cui una
+   * pagina d'errore è fatta. Il riquadro rosso era scritto a mano, cioè una
+   * copia di `LoadError` senza il suo comando: chi non trovava la simulazione
+   * poteva solo tornare indietro, anche quando a mancare era solo la rete. */
   if (error || !simulation) {
     return (
       <PageContainer>
-        <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-6 text-center text-[0.9rem] text-red-300">
-          {error instanceof Error ? error.message : 'Simulazione non trovata.'}
+        <LoadError
+          message={error instanceof Error ? error.message : 'Simulazione non trovata.'}
+          variant="page"
+          onRetry={() => void refetch()}
+          className="py-8"
+        />
+        <div className="mt-4 flex justify-center">
+          <BackToList />
         </div>
-        <Link to="/app/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
-          Torna all'Elenco
-        </Link>
       </PageContainer>
     )
   }
@@ -200,20 +226,19 @@ export default function SimulationRunner() {
   if (result) {
     return (
       <PageContainer>
-        <PageHeader title={simulation.title} description="Esito del test appena consegnato." />
+        <PageHeader
+          title={simulation.title}
+          description="Esito del test appena consegnato."
+          actions={<BackToList />}
+        />
         {/* Anche a test consegnato: da qui si torna al percorso, che è dove si
             vede se la tappa è stata superata e cosa viene dopo. */}
         <PathStepNotice kind="simulation" targetId={simulationId} className="mb-6" />
         <SimulationResult
           attempt={result}
-          actions={
-            <>
-              <PrimaryButton onClick={restart}>Riprova il Test</PrimaryButton>
-              <Link to="/app/simulatore" className={linkBtnCls}>
-                Torna all'Elenco
-              </Link>
-            </>
-          }
+          /* Solo il comando che riguarda questo riquadro: uscire è dell'intera
+             schermata, e sta nella sua intestazione. */
+          actions={<PrimaryButton onClick={restart}>Riprova il Test</PrimaryButton>}
         />
       </PageContainer>
     )
@@ -222,14 +247,15 @@ export default function SimulationRunner() {
   if (simulation.question_count === 0) {
     return (
       <PageContainer>
-        <PageHeader title={simulation.title} description="Simulazione non ancora disponibile." />
+        <PageHeader
+          title={simulation.title}
+          description="Simulazione non ancora disponibile."
+          actions={<BackToList />}
+        />
         <EmptyState
           title="Questa simulazione non contiene ancora domande"
           hint="Sarà disponibile appena chi la gestisce le avrà predisposte"
         />
-        <Link to="/app/simulatore" className={`${linkBtnCls} mx-auto mt-6 w-fit`}>
-          Torna all'Elenco
-        </Link>
       </PageContainer>
     )
   }
@@ -246,13 +272,9 @@ export default function SimulationRunner() {
             : simulation.description ||
               `${simulation.question_count} domande, una alla volta. ${kindHint(kind)}.`
         }
-        actions={
-          started ? undefined : (
-            <Link to="/app/simulatore" className={linkBtnCls}>
-              Torna all'Elenco
-            </Link>
-          )
-        }
+        /* Durante il test non c'è: uscire di lì butta via le domande estratte
+           e le risposte già date. */
+        actions={started ? undefined : <BackToList />}
       />
 
       {submit.isPending ? (

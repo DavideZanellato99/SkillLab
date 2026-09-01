@@ -2,7 +2,7 @@
  * delle domande e lo stato, nell'ordine delle colonne che restringono, più il
  * pulsante che li azzera.
  *
- * Sopra la tabella e non dentro, come nella gestione utenti: i filtri dicono
+ * Sopra la tabella e non dentro, come in ogni altro elenco: i filtri dicono
  * quale elenco si sta guardando, e questa è una cosa che si decide prima di
  * leggere le righe. Dentro la tabella le pastiglie stavano sulla stessa fascia
  * della ricerca, e con tre comandi invece di uno quella fascia diventava una
@@ -13,7 +13,7 @@
  * compare anche quando è l'unica cosa attiva. È la stessa regola di
  * `UsersFilters`, e il pulsante è lo stesso. */
 
-import { filterFieldCls, labelCls } from './Field'
+import FiltersBar, { FilterField } from './FiltersBar'
 import ResetFiltersButton from './ResetFiltersButton'
 import Select from './Select'
 import {
@@ -45,14 +45,11 @@ export default function SimulationsFilters({
     isSearching
 
   return (
-    <div className="mb-8 flex flex-wrap items-end gap-4">
+    <FiltersBar>
       {/* Nell'ordine delle colonne della tabella: il tipo e l'origine sono
           le due targhette della colonna "Tipo", lo stato è la colonna dopo.
           Chi cerca il comando lo trova dove sta la colonna che restringe. */}
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="simulations-kind-filter">
-          Tipo
-        </label>
+      <FilterField label="Tipo" htmlFor="simulations-kind-filter">
         <Select
           id="simulations-kind-filter"
           className="min-w-[180px]"
@@ -60,11 +57,8 @@ export default function SimulationsFilters({
           onChange={(kind) => onChange({ kind: kind as AdminSimulationFilters['kind'] })}
           options={ADMIN_KIND_OPTIONS}
         />
-      </div>
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="simulations-source-filter">
-          Origine
-        </label>
+      </FilterField>
+      <FilterField label="Origine" htmlFor="simulations-source-filter">
         <Select
           id="simulations-source-filter"
           className="min-w-[180px]"
@@ -72,11 +66,8 @@ export default function SimulationsFilters({
           onChange={(source) => onChange({ source: source as AdminSimulationFilters['source'] })}
           options={ADMIN_SOURCE_OPTIONS}
         />
-      </div>
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="simulations-status-filter">
-          Stato
-        </label>
+      </FilterField>
+      <FilterField label="Stato" htmlFor="simulations-status-filter">
         <Select
           id="simulations-status-filter"
           className="min-w-[180px]"
@@ -84,8 +75,8 @@ export default function SimulationsFilters({
           onChange={(status) => onChange({ status: status as AdminSimulationFilters['status'] })}
           options={ADMIN_STATUS_OPTIONS}
         />
-      </div>
+      </FilterField>
       {hasFilters && <ResetFiltersButton onClick={onReset} />}
-    </div>
+    </FiltersBar>
   )
 }

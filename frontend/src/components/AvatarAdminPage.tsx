@@ -23,16 +23,17 @@ import AvatarCategoriesModal from './AvatarCategoriesModal'
 import AvatarDetailModal from './AvatarDetailModal'
 import AvatarFormModal from './AvatarFormModal'
 import AvatarRow from './AvatarRow'
+import AvatarsFilters, { STATUS_ACTIVE, STATUS_ARCHIVED } from './AvatarsFilters'
 import ConfirmModal from './ConfirmModal'
 import DataTable from './DataTable'
 import type { DataTableColumn } from './DataTable'
-import { fieldCls, labelCls } from './Field'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
+import LoadError from './LoadError'
 import { PageContainer, PageHeader } from './PageLayout'
 import TableSkeleton from './TableSkeleton'
 import PrimaryButton from './PrimaryButton'
-import Select from './Select'
+import SecondaryButton from './SecondaryButton'
 import { matchesSearch } from './tableSearch'
 import { PlusIcon, TrashIcon } from './icons'
 
@@ -61,15 +62,6 @@ const AVATAR_COLUMNS: DataTableColumn<AdminAvatar>[] = [
   { key: 'azioni', label: 'Azioni', width: '18%' },
 ]
 
-const STATUS_ACTIVE = 'active'
-const STATUS_ARCHIVED = 'archived'
-
-const STATUS_OPTIONS = [
-  { value: STATUS_ACTIVE, label: 'In catalogo' },
-  { value: STATUS_ARCHIVED, label: 'Archiviati' },
-  { value: '', label: 'Tutti' },
-]
-
 export default function AvatarAdminPage() {
   const { user } = useAuth()
   const { data: organizations = [] } = useOrganizations(isSuperAdmin(user))
@@ -85,6 +77,7 @@ export default function AvatarAdminPage() {
     data: avatars = [],
     isPending: isLoading,
     error: loadError,
+    refetch: reloadAvatars,
   } = useAdminAvatars(true, isSuperAdmin(user))
 
   /* Filtro organizzazione, tenuto anche nell'URL (?organization_id=...): il
@@ -185,66 +178,53 @@ export default function AvatarAdminPage() {
         description="Crea, modifica ed elimina i clienti simulati e le loro schede persona."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-6 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-              onClick={() => setCategoriesOrgId(orgFilter)}
-            >
+            {/* La variante larga, che è quella dei bottoni in testa a una
+                schermata: sta accanto all'azione principale e deve avere la
+                sua stessa misura. Era una riga di classi scritta qui, cioè la
+                sola copia larga fra sette, e da fuori non si capiva se fosse
+                una scelta o una svista. */}
+            <SecondaryButton variant="action" onClick={() => setCategoriesOrgId(orgFilter)}>
               Categorie
-            </button>
-            <PrimaryButton icon={<PlusIcon size={18} />} onClick={() => setEditing('new')}>
+            </SecondaryButton>
+            <PrimaryButton icon={<PlusIcon />} onClick={() => setEditing('new')}>
               Nuovo Avatar
             </PrimaryButton>
           </div>
         }
       />
 
-      <div className="mb-8 flex flex-wrap items-end gap-4">
-        <div className={fieldCls}>
-          <label className={labelCls} htmlFor="avatars-org-filter">
-            Organizzazione
-          </label>
-          <Select
-            id="avatars-org-filter"
-            className="min-w-[220px]"
-            value={orgFilter}
-            onChange={setOrgFilter}
-            options={[{ value: '', label: 'Tutte le organizzazioni' }, ...organizationOptions]}
-          />
-        </div>
-        <div className={fieldCls}>
-          <label className={labelCls} htmlFor="avatars-status-filter">
-            Stato
-          </label>
-          <Select
-            id="avatars-status-filter"
-            className="min-w-[160px]"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={STATUS_OPTIONS.map((o) =>
-              o.value === STATUS_ARCHIVED && archivedCount
-                ? { ...o, label: `${o.label} (${archivedCount})` }
-                : o,
-            )}
-          />
-        </div>
-        {hasFilters && (
-          <button
-            type="button"
-            className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-            onClick={clearFilters}
-          >
-            Azzera Filtri
-          </button>
-        )}
-      </div>
+      <AvatarsFilters
+        organizationId={orgFilter}
+        status={statusFilter}
+        organizationOptions={organizationOptions}
+        archivedCount={archivedCount}
+        isSearching={Boolean(search)}
+        onOrganizationChange={setOrgFilter}
+        onStatusChange={setStatusFilter}
+        onReset={clearFilters}
+      />
 
       {successMsg && <FormSuccess message={successMsg} variant="page" />}
-      {loadError && (
-        <FormError message={errorMessage(loadError, 'Impossibile caricare gli avatar.')} />
+
+      {/* Un catalogo che non è arrivato non è un catalogo vuoto: senza questo
+          riquadro la tabella diceva che non c'è nessun avatar, e l'unica via
+          d'uscita era ricaricare la pagina. Con delle righe già a schermo
+          basta invece dirlo, che quelle restano buone. */}
+      {loadError && avatars.length > 0 && (
+        <FormError
+          message={errorMessage(loadError, 'Impossibile caricare gli avatar.')}
+          variant="page"
+        />
       )}
 
-      {isLoading ? (
+      {loadError && avatars.length === 0 ? (
+        <LoadError
+          message={errorMessage(loadError, 'Impossibile caricare gli avatar.')}
+          variant="page"
+          onRetry={() => void reloadAvatars()}
+          className="py-8"
+        />
+      ) : isLoading ? (
         <TableSkeleton columns={AVATAR_COLUMNS} message="Caricamento avatar..." />
       ) : (
         <DataTable
@@ -253,6 +233,10 @@ export default function AvatarAdminPage() {
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Cerca per nome, brief o categoria..."
+          /* Cambiare un filtro riporta alla prima pagina: era l'unica tabella
+             dell'applicazione senza, e si restava alla terza pagina di un
+             catalogo che nel frattempo era diventato un altro. */
+          pageResetKey={`${orgFilter}|${statusFilter}|${debouncedSearch}`}
           emptyMessage={
             statusFilter === STATUS_ARCHIVED && !search && !orgFilter
               ? 'Nessun avatar archiviato. Gli avatar eliminati vengono raccolti qui, con tutte le loro conversazioni'

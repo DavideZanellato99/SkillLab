@@ -12,9 +12,7 @@ import type { ReactNode } from 'react'
 import Spinner from './Spinner'
 import FormError from './FormError'
 import ModalShell, { ModalHeader } from './ModalShell'
-
-const cancelBtnCls =
-  'flex flex-1 cursor-pointer items-center justify-center rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60'
+import SecondaryButton from './SecondaryButton'
 const confirmBaseCls =
   'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60'
 
@@ -82,9 +80,9 @@ export default function ConfirmModal({
       {error && <FormError message={error} />}
 
       <div className="flex gap-3">
-        <button type="button" className={cancelBtnCls} onClick={onClose} disabled={isPending}>
+        <SecondaryButton variant="pair" onClick={onClose} disabled={isPending}>
           {cancelLabel}
-        </button>
+        </SecondaryButton>
         <button
           type="button"
           className={`${confirmBaseCls} ${confirmClassName}`}

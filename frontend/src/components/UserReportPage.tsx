@@ -34,9 +34,9 @@ import {
   getInitials,
 } from '../services/auth'
 import DataTable, { Td, Tr } from './DataTable'
-import Select from './Select'
-import FilterTabs from './FilterTabs'
 import LoadError from './LoadError'
+import PeriodOrgFilters from './PeriodOrgFilters'
+import StaleContent from './StaleContent'
 import { ChevronDownIcon } from './icons'
 import { PageContainer, PageHeader } from './PageLayout'
 import TableSkeleton from './TableSkeleton'
@@ -49,7 +49,7 @@ import UserReportDetail from './UserReportDetail'
 import { matchesSearch } from './tableSearch'
 import type { DataTableColumn } from './DataTable'
 import Badge from './Badge'
-import { formatDuration, PERIOD_OPTIONS } from './reportFormat'
+import { formatDuration } from './reportFormat'
 import type { PeriodValue } from './reportFormat'
 
 /** Columns depend on the role: the super admin also sees the organization,
@@ -182,10 +182,17 @@ export default function UserReportPage() {
     ),
   )
 
-  const orgFilterOptions = [
-    { value: '', label: 'Tutte le organizzazioni' },
-    ...organizations.map((o) => ({ value: o.id, label: o.name })),
-  ]
+  const organizationOptions = organizations.map((o) => ({ value: o.id, label: o.name }))
+
+  /* Azzerare riporta il report intero: tutta la storia, tutte le
+     organizzazioni e la ricerca cancellata. Anche quella restringe questo
+     stesso elenco, e lasciarla scritta voleva dire premere «Azzera Filtri» e
+     continuare a vedere un report filtrato. */
+  const resetFilters = () => {
+    setPeriod('all')
+    setOrgFilter('')
+    setSearch('')
+  }
 
   /* L'eliminazione, la sua conferma e cosa va detto prima di premere stanno
    * nei due dialoghi: da qui si dice solo cosa si sta per eliminare. È la
@@ -206,6 +213,22 @@ export default function UserReportPage() {
         description="Attività di ogni persona: le conversazioni con gli avatar e le simulazioni consegnate."
       />
 
+      {/* Periodo e organizzazione sotto l'intestazione, come in ogni altro
+          elenco dell'applicazione: sono i filtri che dicono quale report si
+          sta guardando, e prima stavano dentro la barra della tabella, cioè
+          in un posto che nessun'altra schermata usa. La ricerca resta di là,
+          perché cerca dentro l'elenco che questi due hanno già scelto. */}
+      <PeriodOrgFilters
+        idPrefix="report"
+        period={period}
+        onPeriodChange={setPeriod}
+        organizationOptions={showOrg ? organizationOptions : undefined}
+        organizationId={orgFilter}
+        onOrganizationChange={showOrg ? setOrgFilter : undefined}
+        isSearching={Boolean(search)}
+        onReset={resetFilters}
+      />
+
       {error ? (
         /* Con il comando per richiederlo, come nelle finestre che questa
            pagina apre. Prima sotto la fascia rossa restava la tabella vuota,
@@ -222,47 +245,17 @@ export default function UserReportPage() {
         <TableSkeleton columns={columns} message="Caricamento report attività..." />
       ) : (
         /* Le righe di prima restano finché non arrivano quelle del periodo
-           appena chiesto, attenuate e non cliccabili: dicono ancora di che
-           cosa si sta parlando, e che non sono più loro lo dice il grigio.
+           appena chiesto: dicono ancora di che cosa si sta parlando, e che non
+           sono più loro lo dice `StaleContent`, come in ogni altra tabella.
            Prima al loro posto compariva una rotella, cioè la pagina si
            svuotava di tabella, ricerca e filtri a ogni cambio di periodo. */
-        <div
-          className={
-            isPlaceholderData ? 'pointer-events-none opacity-50 transition-opacity' : undefined
-          }
-          aria-busy={isPlaceholderData || undefined}
-        >
+        <StaleContent isStale={isPlaceholderData}>
           <DataTable
             columns={columns}
             items={visibleReport}
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder="Cerca per nome, email, organizzazione o ruolo..."
-            /* Periodo e organizzazione stanno nella barra della tabella, con la
-             ricerca: sono i tre modi di restringere lo stesso elenco, e messi
-             su due fasce diverse (due sotto il titolo, uno sopra le righe) si
-             leggevano come comandi di due schermate diverse. L'etichetta
-             scritta sopra ciascuno era una seconda riga di parole per dire
-             quello che le voci dicono da sé. */
-            searchActions={
-              <div className="flex flex-wrap items-center gap-2">
-                <FilterTabs<PeriodValue>
-                  value={period}
-                  onChange={setPeriod}
-                  options={[...PERIOD_OPTIONS]}
-                  ariaLabel="Periodo delle prove svolte"
-                />
-                {showOrg && (
-                  <Select
-                    ariaLabel="Organizzazione"
-                    className="w-[220px]"
-                    value={orgFilter}
-                    onChange={setOrgFilter}
-                    options={orgFilterOptions}
-                  />
-                )}
-              </div>
-            }
             emptyMessage={
               debouncedSearch ? 'Nessun utente corrisponde alla ricerca' : 'Nessun utente trovato'
             }
@@ -385,7 +378,7 @@ export default function UserReportPage() {
               )
             }}
           />
-        </div>
+        </StaleContent>
       )}
 
       {openAttemptId && (

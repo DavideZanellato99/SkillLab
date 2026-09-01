@@ -3,7 +3,7 @@ import { useMyAssignments } from '../hooks/useTraining'
 import type { PathAssignment } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
 import EmptyState from './EmptyState'
-import FormError from './FormError'
+import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import PathProgressRing from './PathProgressRing'
 import PathStepDots from './PathStepDots'
@@ -60,8 +60,13 @@ function AssignmentCard({ assignment }: { assignment: PathAssignment }) {
       >
         <PathProgressRing done={assignment.completed_steps} total={assignment.steps.length} />
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="truncate font-heading text-[1.05rem] font-bold text-slate-100">
+          {/* Il titolo si accorcia con i puntini invece di spingere via la
+              targhetta: `truncate` da solo non bastava, perché un figlio flex
+              non scende sotto la larghezza del proprio testo se non glielo si
+              dice, quindi non troncava mai e con un titolo lungo mandava lo
+              stato a capo. */}
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <h3 className="min-w-0 flex-1 truncate font-heading text-[1.05rem] font-bold text-slate-100">
               {assignment.path_title}
             </h3>
             <AssignmentStatusBadge status={assignment.status} />
@@ -134,7 +139,7 @@ function AssignmentGroup({
 }
 
 export default function MyPathsPage() {
-  const { data: assignments = [], isPending, error } = useMyAssignments()
+  const { data: assignments = [], isPending, error, refetch } = useMyAssignments()
   const { open, done } = splitByOpen(assignments)
   const bothHalves = open.length > 0 && done.length > 0
 
@@ -145,14 +150,18 @@ export default function MyPathsPage() {
         description="Le tappe che il tuo formatore ti ha assegnato: si superano in ordine, una alla volta."
       />
 
-      {error && (
-        <FormError
-          message={error instanceof Error ? error.message : 'Impossibile caricare i percorsi.'}
-        />
-      )}
-
       {isPending ? (
         <LoadingState message="Caricamento percorsi..." />
+      ) : error && assignments.length === 0 ? (
+        /* Una lettura caduta non è un percorso mai assegnato: senza il comando
+           per riprovare, a chi non ha ancora ricevuto niente e a chi non è
+           riuscito a leggere si diceva la stessa cosa. */
+        <LoadError
+          message={error instanceof Error ? error.message : 'Impossibile caricare i percorsi.'}
+          variant="page"
+          onRetry={() => void refetch()}
+          className="py-8"
+        />
       ) : assignments.length === 0 ? (
         <EmptyState
           title="Nessun percorso assegnato"

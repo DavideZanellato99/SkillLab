@@ -12,8 +12,10 @@ import type { AuditLogsFiltersValue } from './auditFormat'
 import DataTable from './DataTable'
 import type { SortState } from './DataTable'
 import FormError from './FormError'
+import LoadError from './LoadError'
 import LoadMoreButton from './LoadMoreButton'
 import { PageContainer, PageHeader } from './PageLayout'
+import StaleContent from './StaleContent'
 import TableSkeleton from './TableSkeleton'
 
 /* Registro delle attività: ogni azione che modifica qualcosa, di qualunque
@@ -83,6 +85,7 @@ export default function AuditLogsPage() {
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage: isLoadingMore,
+    refetch,
   } = useAuditLogs(
     { ...filters, search: debouncedSearch, sort: sort?.key, direction: sort?.direction },
     isSuper,
@@ -104,22 +107,32 @@ export default function AuditLogsPage() {
         onReset={resetFilters}
       />
 
-      {error && (
+      {/* Un rinfresco caduto con le righe già a schermo si dice e basta:
+          quelle restano buone. Quando invece non c'è niente a video l'errore
+          prende il posto della tabella e porta il comando per riprovare, che
+          una tabella vuota direbbe che non è stata registrata nessuna
+          azione. */}
+      {error && logs.length > 0 && (
         <FormError
           message={errorMessage(error, 'Impossibile caricare il registro.')}
           variant="page"
         />
       )}
 
-      {isLoading ? (
+      {error && logs.length === 0 ? (
+        <LoadError
+          message={errorMessage(error, 'Impossibile caricare il registro.')}
+          variant="page"
+          onRetry={() => void refetch()}
+          className="py-8"
+        />
+      ) : isLoading ? (
         <TableSkeleton columns={AUDIT_COLUMNS} message="Caricamento registro..." />
       ) : (
         /* Mentre arriva la risposta a un filtro nuovo restano a video le righe
-           di prima, attenuate: sono ancora quelle vecchie, e `aria-busy` lo
-           dice a chi la pagina non la guarda. Sostituirle con il riquadro di
-           caricamento faceva sparire la tabella e saltare la pagina a ogni
-           tasto premuto nella ricerca. */
-        <div aria-busy={isStale} className={`transition-opacity ${isStale ? 'opacity-60' : ''}`}>
+           di prima: come si vede che sono ancora quelle vecchie lo dice
+           `StaleContent`, per tutte le tabelle allo stesso modo. */
+        <StaleContent isStale={isStale}>
           <DataTable
             columns={AUDIT_COLUMNS}
             items={logs}
@@ -167,7 +180,7 @@ export default function AuditLogsPage() {
               />
             )}
           />
-        </div>
+        </StaleContent>
       )}
     </PageContainer>
   )

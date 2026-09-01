@@ -7,6 +7,7 @@ import ComparisonSimulations from './ComparisonSimulations'
 import SearchSelect from './SearchSelect'
 import TabBar, { TabPanel } from './TabBar'
 import LoadingState from './LoadingState'
+import { labelCls } from './Field'
 import FormError from './FormError'
 import { PageContainer, PageHeader } from './PageLayout'
 
@@ -141,7 +142,10 @@ export default function ComparisonPage() {
         actions={
           canPickUser && (
             <div className="relative z-30 w-[380px] max-sm:w-full">
-              <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor="subject">
+              {/* L'etichetta di ogni campo dell'app, non una riga di classi
+                  scritta qui: in questa copia aveva perso la spaziatura delle
+                  altre. */}
+              <label className={`mb-1 block ${labelCls}`} htmlFor="subject">
                 Persona
               </label>
               {/* Lo stesso campo con cui si sceglie una persona nella
@@ -199,7 +203,6 @@ export default function ComparisonPage() {
         onChange={(value) => setParam(SECTION_PARAM, value, true)}
         ariaLabel="Prova da confrontare"
         panelBase="confronto"
-        className="mb-6 border-b border-white/6 pb-2"
       />
 
       {/* Ogni metà aspetta i propri dati e non anche quelli dell'altra: le

@@ -1,4 +1,5 @@
 import FilterTabs from './FilterTabs'
+import FiltersBar, { FilterField } from './FiltersBar'
 import Select from './Select'
 import type { SelectOption } from './Select'
 
@@ -18,7 +19,13 @@ import type { SelectOption } from './Select'
  *
  * Le due metà passano cose diverse dentro la stessa forma: canale e scenario
  * da una parte, tipo di test e test dall'altra. Il componente non le conosce,
- * e questo è il punto: sono la stessa barra, e devono restare uguali. */
+ * e questo è il punto: sono la stessa barra, e devono restare uguali.
+ *
+ * Il riquadro e le due etichette sono quelli di ogni altra fascia di filtri
+ * (`FiltersBar`, nella variante che porta il filetto sotto): erano scritti a
+ * mano qui dentro, e nella copia le etichette avevano perso la spaziatura
+ * delle altre, cioè la stessa parola in due schermate era composta in due
+ * modi. */
 
 interface ComparisonFilterBarProps<F extends string> {
   /** Cosa sceglie il gruppo di linguette: "Modalità", "Tipo di Test". */
@@ -47,31 +54,30 @@ export default function ComparisonFilterBar<F extends string>({
   onTargetChange,
 }: ComparisonFilterBarProps<F>) {
   return (
-    /* Il filetto sotto separa il restringere dallo scegliere: sopra si decide
-       quali prove esistono per questo confronto, sotto quali due si guardano.
-       Sono due gesti diversi e la riga lo dice senza scriverlo. */
-    <div className="mb-5 flex flex-wrap items-end gap-4 border-b border-white/6 pb-5">
-      <div>
-        <span className="mb-1 block text-xs font-medium text-slate-400">{kindLabel}</span>
+    /* Il filetto sotto, che la variante `section` porta con sé, separa il
+       restringere dallo scegliere: sopra si decide quali prove esistono per
+       questo confronto, sotto quali due si guardano. Sono due gesti diversi e
+       la riga lo dice senza scriverlo. */
+    <FiltersBar variant="section">
+      <FilterField label={kindLabel}>
         <FilterTabs
           value={kindValue}
           onChange={onKindChange}
           options={kindOptions}
           ariaLabel={kindLabel}
         />
-      </div>
-      <div className="min-w-[240px] flex-1">
-        <label className="mb-1 block text-xs font-medium text-slate-400" htmlFor={targetId}>
-          {targetLabel}
-        </label>
+      </FilterField>
+      {/* La tendina si prende quello che avanza: le voci sono i nomi di
+          scenari e test, che sono lunghi quanto chi li ha scritti. */}
+      <FilterField label={targetLabel} htmlFor={targetId} className="min-w-[240px] flex-1">
         <Select
           id={targetId}
           value={targetValue}
           onChange={onTargetChange}
           options={targetOptions}
         />
-      </div>
-    </div>
+      </FilterField>
+    </FiltersBar>
   )
 }
 

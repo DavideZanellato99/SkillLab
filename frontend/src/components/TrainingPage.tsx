@@ -10,12 +10,13 @@ import AssignPathModal from './AssignPathModal'
 import ConfirmModal from './ConfirmModal'
 import EmptyState from './EmptyState'
 import FormError from './FormError'
+import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import PaginationBar from './Pagination'
 import PrimaryButton from './PrimaryButton'
 import SearchInput from './SearchInput'
-import Select from './Select'
-import TabBar from './TabBar'
+import TabBar, { TabPanel } from './TabBar'
+import TrainingFilters from './TrainingFilters'
 import TrainingAssignmentsTable from './TrainingAssignmentsTable'
 import TrainingPathCard from './TrainingPathCard'
 import TrainingPathEditorModal from './TrainingPathEditorModal'
@@ -55,6 +56,9 @@ import { PlusIcon, TrashIcon } from './icons'
 
 type Tab = 'paths' | 'assignments'
 
+/** La radice degli id che legano le due linguette ai loro pannelli. */
+const TAB_BASE = 'percorsi'
+
 export default function TrainingPage() {
   const { user } = useAuth()
   const isSuper = isSuperAdmin(user)
@@ -73,11 +77,17 @@ export default function TrainingPage() {
   const [toWithdraw, setToWithdraw] = useState<PathAssignment | null>(null)
 
   const { data: organizations = [] } = useOrganizations(isSuper)
-  const { data: paths = [], isPending: isLoadingPaths, error: pathsError } = usePaths(orgFilter)
+  const {
+    data: paths = [],
+    isPending: isLoadingPaths,
+    error: pathsError,
+    refetch: reloadPaths,
+  } = usePaths(orgFilter)
   const {
     data: assignments = [],
     isPending: isLoadingAssignments,
     error: assignmentsError,
+    refetch: reloadAssignments,
   } = useAssignments(orgFilter)
 
   const deletePathMutation = useDeletePath()
@@ -124,9 +134,21 @@ export default function TrainingPage() {
     `${orgFilter}|${pathSearch}`,
   )
 
-  const loadError =
-    errorMessage(pathsError, 'Impossibile caricare i percorsi.') ||
-    errorMessage(assignmentsError, 'Impossibile caricare le assegnazioni.')
+  /* I due errori restano distinti perché le due letture sono due, e ognuna
+   * si racconta dentro la propria linguetta: con un messaggio solo, un elenco
+   * di assegnazioni caduto lasciava una fascia rossa sopra dei percorsi
+   * arrivati benissimo. La fascia in cima resta per il caso in cui una lettura
+   * cade mentre le sue righe sono già a schermo: quelle restano buone, e va
+   * detto senza portarle via. */
+  const pathsErrorMessage = errorMessage(pathsError, 'Impossibile caricare i percorsi.')
+  const assignmentsErrorMessage = errorMessage(
+    assignmentsError,
+    'Impossibile caricare le assegnazioni.',
+  )
+  const staleError =
+    (paths.length > 0 && pathsErrorMessage) ||
+    (assignments.length > 0 && assignmentsErrorMessage) ||
+    ''
 
   /* Aprire una conferma azzera l'esito di quella di prima.
    *
@@ -170,104 +192,123 @@ export default function TrainingPage() {
         title="Percorsi di Training"
         description="Sequenze di tappe da superare in ordine: la successiva si apre quando la precedente è chiusa."
         actions={
-          <div className="flex flex-wrap items-center gap-3 max-sm:w-full">
-            {isSuper && (
-              <Select
-                id="training-org-filter"
-                /* Il nome della tendina, che accanto non ha nessuna etichetta:
-                   senza, chi la incontra da tastiera sente leggere la sola
-                   scelta corrente, senza sapere di cosa sia la scelta. */
-                ariaLabel="Organizzazione"
-                className="min-w-[220px] shrink-0 max-sm:w-full"
-                value={orgFilter}
-                onChange={changeOrganization}
-                options={[
-                  { value: '', label: 'Tutte le organizzazioni' },
-                  ...organizations.map((o) => ({ value: o.id, label: o.name })),
-                ]}
-              />
-            )}
-            <PrimaryButton
-              icon={<PlusIcon size={16} />}
-              onClick={() => setIsComposing(true)}
-              className="max-sm:w-full"
-            >
-              Nuovo Percorso
-            </PrimaryButton>
-          </div>
+          <PrimaryButton
+            icon={<PlusIcon />}
+            onClick={() => setIsComposing(true)}
+            className="max-sm:w-full"
+          >
+            Nuovo Percorso
+          </PrimaryButton>
         }
       />
 
-      {loadError && <FormError message={loadError} />}
+      {/* L'organizzazione sotto l'intestazione, come in ogni altro elenco
+          dell'applicazione: accanto al titolo stava nello stesso posto
+          dell'azione principale, e su schermo stretto le due finivano una
+          sopra l'altra. Sta sopra le linguette perché vale per entrambe: è di
+          chi si sta parlando, non un modo di guardare una delle due. */}
+      {isSuper && (
+        <TrainingFilters
+          value={orgFilter}
+          organizationOptions={organizations.map((o) => ({ value: o.id, label: o.name }))}
+          onChange={changeOrganization}
+          onReset={() => changeOrganization('')}
+        />
+      )}
+
+      {staleError && <FormError message={staleError} variant="page" />}
 
       <TabBar
         ariaLabel="Cosa guardare dei percorsi"
-        className="mb-6"
         value={tab}
         onChange={setTab}
+        panelBase={TAB_BASE}
         items={[
           { value: 'paths', label: `Percorsi (${paths.length})` },
           { value: 'assignments', label: `Assegnati (${assignments.length})` },
         ]}
       />
 
-      {tab === 'paths' ? (
-        isLoadingPaths ? (
-          <LoadingState message="Caricamento percorsi..." />
-        ) : paths.length === 0 ? (
-          <EmptyState
-            title="Nessun percorso ancora composto"
-            hint="Si compone con «Nuovo Percorso», qui sopra, mettendo in fila le prove da superare"
+      {/* Il contenuto dichiara di essere comandato dalle linguette, come nella
+          dashboard e nel confronto: erano le uniche due linguette dell'app a
+          non dirlo, e chi le scorre con uno screen reader sentiva un gruppo di
+          alternative senza sapere cosa cambiavano. */}
+      <TabPanel base={TAB_BASE} value={tab}>
+        {tab === 'paths' ? (
+          isLoadingPaths ? (
+            <LoadingState message="Caricamento percorsi..." />
+          ) : pathsErrorMessage && paths.length === 0 ? (
+            /* Una lettura caduta non è un elenco senza percorsi: senza questo
+             riquadro si leggeva «Nessun percorso ancora composto», e per
+             riprovare bisognava ricaricare la pagina. */
+            <LoadError
+              message={pathsErrorMessage}
+              variant="page"
+              onRetry={() => void reloadPaths()}
+              className="py-8"
+            />
+          ) : paths.length === 0 ? (
+            <EmptyState
+              title="Nessun percorso ancora composto"
+              hint="Si compone con «Nuovo Percorso», qui sopra, mettendo in fila le prove da superare"
+            />
+          ) : (
+            <>
+              <SearchInput
+                value={pathSearch}
+                onChange={setPathSearch}
+                placeholder={
+                  isSuper
+                    ? 'Cerca per titolo, tappa o organizzazione...'
+                    : 'Cerca per titolo o tappa...'
+                }
+                ariaLabel="Cerca fra i percorsi"
+                className="mb-4 max-w-[340px]"
+              />
+              {filteredPaths.length === 0 ? (
+                <EmptyState title="Nessun percorso corrisponde alla ricerca" />
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
+                    {visiblePaths.map((path) => (
+                      <TrainingPathCard
+                        key={path.id}
+                        path={path}
+                        showOrganization={isSuper}
+                        onShowAssigned={() => showAssignedOf(path)}
+                        onAssign={() => setAssigning(path)}
+                        onEdit={() => setEditing(path)}
+                        onDelete={() => askDeletePath(path)}
+                      />
+                    ))}
+                  </div>
+                  {/* La barra sta sotto la griglia e non dentro una scheda:
+                    qui non c'è un riquadro di cui essere il bordo basso. */}
+                  <PaginationBar {...pathsBar} label="Percorsi" className="mt-1" />
+                </>
+              )}
+            </>
+          )
+        ) : isLoadingAssignments ? (
+          <LoadingState message="Caricamento assegnazioni..." />
+        ) : assignmentsErrorMessage && assignments.length === 0 ? (
+          <LoadError
+            message={assignmentsErrorMessage}
+            variant="page"
+            onRetry={() => void reloadAssignments()}
+            className="py-8"
           />
         ) : (
-          <>
-            <SearchInput
-              value={pathSearch}
-              onChange={setPathSearch}
-              placeholder={
-                isSuper
-                  ? 'Cerca per titolo, tappa o organizzazione...'
-                  : 'Cerca per titolo o tappa...'
-              }
-              ariaLabel="Cerca fra i percorsi"
-              className="mb-4 max-w-[340px]"
-            />
-            {filteredPaths.length === 0 ? (
-              <EmptyState title="Nessun percorso corrisponde alla ricerca" />
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
-                  {visiblePaths.map((path) => (
-                    <TrainingPathCard
-                      key={path.id}
-                      path={path}
-                      showOrganization={isSuper}
-                      onShowAssigned={() => showAssignedOf(path)}
-                      onAssign={() => setAssigning(path)}
-                      onEdit={() => setEditing(path)}
-                      onDelete={() => askDeletePath(path)}
-                    />
-                  ))}
-                </div>
-                {/* La barra sta sotto la griglia e non dentro una scheda:
-                    qui non c'è un riquadro di cui essere il bordo basso. */}
-                <PaginationBar {...pathsBar} label="Percorsi" className="mt-1" />
-              </>
-            )}
-          </>
-        )
-      ) : isLoadingAssignments ? (
-        <LoadingState message="Caricamento assegnazioni..." />
-      ) : (
-        <TrainingAssignmentsTable
-          assignments={assignments}
-          paths={paths}
-          pathFilter={pathFilter}
-          onPathFilterChange={setPathFilter}
-          showOrganization={isSuper}
-          onWithdraw={askWithdraw}
-        />
-      )}
+          <TrainingAssignmentsTable
+            assignments={assignments}
+            paths={paths}
+            pathFilter={pathFilter}
+            onPathFilterChange={setPathFilter}
+            showOrganization={isSuper}
+            onWithdraw={askWithdraw}
+          />
+        )}
+      </TabPanel>
 
       {(isComposing || editing) && (
         <TrainingPathEditorModal

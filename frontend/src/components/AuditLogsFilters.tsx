@@ -16,7 +16,8 @@
  * limitano a vicenda perché un intervallo rovesciato non è una domanda. */
 
 import type { AuditLogsFiltersValue } from './auditFormat'
-import { filterFieldCls, formInputCls, labelCls } from './Field'
+import { formInputCls } from './Field'
+import FiltersBar, { FilterField } from './FiltersBar'
 import ResetFiltersButton from './ResetFiltersButton'
 import Select from './Select'
 
@@ -48,14 +49,11 @@ export default function AuditLogsFilters({
   )
 
   return (
-    <div className="mb-8 flex flex-wrap items-end gap-4">
+    <FiltersBar>
       {/* Nell'ordine delle colonne della tabella: prima l'organizzazione,
           poi l'azione. Le due date restano in fondo, che il periodo si
           sceglie una volta e le due tendine si cambiano di continuo. */}
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="audit-org-filter">
-          Organizzazione
-        </label>
+      <FilterField label="Organizzazione" htmlFor="audit-org-filter">
         <Select
           id="audit-org-filter"
           className="min-w-[220px]"
@@ -63,11 +61,8 @@ export default function AuditLogsFilters({
           onChange={(organizationId) => onChange({ organizationId })}
           options={[{ value: '', label: 'Tutte le organizzazioni' }, ...organizationOptions]}
         />
-      </div>
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="audit-action-filter">
-          Azione
-        </label>
+      </FilterField>
+      <FilterField label="Azione" htmlFor="audit-action-filter">
         <Select
           id="audit-action-filter"
           className="min-w-[240px]"
@@ -75,11 +70,8 @@ export default function AuditLogsFilters({
           onChange={(action) => onChange({ action })}
           options={[{ value: '', label: 'Tutte le azioni' }, ...actionOptions]}
         />
-      </div>
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="audit-date-from">
-          Dal
-        </label>
+      </FilterField>
+      <FilterField label="Dal" htmlFor="audit-date-from">
         <input
           id="audit-date-from"
           type="date"
@@ -88,11 +80,8 @@ export default function AuditLogsFilters({
           max={value.dateTo || undefined}
           onChange={(e) => onChange({ dateFrom: e.target.value })}
         />
-      </div>
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="audit-date-to">
-          Al
-        </label>
+      </FilterField>
+      <FilterField label="Al" htmlFor="audit-date-to">
         <input
           id="audit-date-to"
           type="date"
@@ -101,8 +90,8 @@ export default function AuditLogsFilters({
           min={value.dateFrom || undefined}
           onChange={(e) => onChange({ dateTo: e.target.value })}
         />
-      </div>
+      </FilterField>
       {hasFilters && <ResetFiltersButton onClick={onReset} />}
-    </div>
+    </FiltersBar>
   )
 }

@@ -26,6 +26,7 @@ import type {
 import ModalShell from './ModalShell'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
+import { secondaryButtonCls } from './SecondaryButton'
 import Spinner from './Spinner'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
@@ -60,9 +61,6 @@ import { formatDateTime } from './dateFormat'
  * Le domande si modificano su una copia locale e si salvano in blocco. Chi
  * corregge un refuso in una spiegazione lo fa insieme al resto, e un salvataggio
  * per tasto premuto trasformerebbe una revisione in cinquanta scritture. */
-
-const secondaryBtnCls =
-  'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-50'
 
 function toPayload(questions: SimulationQuestionAdmin[]): SimulationQuestionPayload[] {
   return questions.map((q) => ({
@@ -335,8 +333,14 @@ export default function SimulationEditorModal({
         <LoadingState message="Caricamento simulazione..." variant="modal" />
       ) : (
         <>
+          {/* Il blocco del titolo entra nella riga con una base fissa e non
+              con la larghezza del proprio testo: il flex decide il ritorno a
+              capo prima di restringere, quindi erano il titolo del test e il
+              nome del documento, che scrive chi lo prepara, a mandare le tre
+              targhette sotto. Adesso vanno a capo solo quando la finestra è
+              davvero stretta. È la stessa cosa di `PageHeader`. */}
           <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/6 px-8 py-5">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 basis-64">
               <h2 className="font-heading text-xl font-bold text-slate-100">{simulation.title}</h2>
               {/* Il documento e i suoi passaggi si nominano dove esistono:
                   su un test scritto a mano non c'è niente da indicizzare, e
@@ -379,7 +383,7 @@ export default function SimulationEditorModal({
             value={tab}
             onChange={setTab}
             ariaLabel="Sezioni della simulazione"
-            className="border-b border-white/6 px-8 py-2"
+            variant="modal"
           />
 
           <div className="flex-1 overflow-y-auto px-8 py-5">
@@ -471,7 +475,7 @@ export default function SimulationEditorModal({
                       type="button"
                       onClick={addQuestion}
                       disabled={busy}
-                      className={`${secondaryBtnCls} mt-3 w-full border-dashed`}
+                      className={`${secondaryButtonCls} mt-3 w-full border-dashed`}
                     >
                       <PlusIcon size={16} />
                       Aggiungi Domanda
@@ -497,9 +501,15 @@ export default function SimulationEditorModal({
                         type="button"
                         onClick={() => setOpenAttempt(attempt.id)}
                         aria-label={`Rileggi il test di ${attempt.user_name}`}
-                        className="flex w-full cursor-pointer flex-wrap items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/3 px-4 py-3 text-left transition hover:border-violet-600/40 hover:bg-white/6"
+                        /* Niente ritorno a capo qui: nome ed email hanno già
+                           il troncamento, cioè è già scritto che a mancare lo
+                           spazio devono accorciarsi. Prima non potevano, e con
+                           un indirizzo lungo la data e il punteggio finivano
+                           sotto: in un elenco di righe affiancate, alcune
+                           avevano la coda a destra e altre no. */
+                        className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/3 px-4 py-3 text-left transition hover:border-violet-600/40 hover:bg-white/6"
                       >
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <span className="block truncate text-[0.9rem] text-slate-100">
                             {attempt.user_name}
                           </span>
@@ -507,7 +517,7 @@ export default function SimulationEditorModal({
                             {attempt.user_email}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex shrink-0 items-center gap-3">
                           <span className="text-xs text-slate-500">
                             {formatDateTime(attempt.created_at)}
                           </span>
@@ -578,7 +588,7 @@ export default function SimulationEditorModal({
               ) : (
                 <button
                   type="button"
-                  className={secondaryBtnCls}
+                  className={secondaryButtonCls}
                   onClick={() => {
                     setSaved(false)
                     generate.mutate()
@@ -601,7 +611,7 @@ export default function SimulationEditorModal({
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  className={secondaryBtnCls}
+                  className={secondaryButtonCls}
                   onClick={() => {
                     setSaved(false)
                     save.mutate(written, { onSuccess: () => setSaved(true) })
@@ -625,7 +635,7 @@ export default function SimulationEditorModal({
                 {isPublished ? (
                   <button
                     type="button"
-                    className={secondaryBtnCls}
+                    className={secondaryButtonCls}
                     onClick={() => {
                       setSaved(false)
                       setStatus.mutate('draft')

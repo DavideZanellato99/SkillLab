@@ -16,9 +16,10 @@ interface SelectProps {
   onChange: (value: string) => void
   options: SelectOption[]
   disabled?: boolean
-  /** Cosa si sta scegliendo, quando la tendina non ha una label accanto:
-   *  in una barra di filtri l'etichetta scritta sopra ogni comando è una
-   *  seconda riga di parole, e la scelta corrente si legge già sul pulsante. */
+  /** Cosa si sta scegliendo, quando la tendina non ha una label accanto.
+   *  Nelle barre di filtri l'etichetta c'è, ed è una `label` vera che nomina
+   *  il campo (vedi `FilterField`): questo serve alle tendine che stanno
+   *  altrove, in mezzo a una riga di comandi o dentro una barra di tabella. */
   ariaLabel?: string
   /** Testo mostrato sul pulsante quando nulla è selezionato (non è un'opzione della lista) */
   placeholder?: string

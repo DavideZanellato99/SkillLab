@@ -162,6 +162,52 @@ describe('SimulationRunner', () => {
     vi.restoreAllMocks()
   })
 
+  /* Il comando per uscire non si sposta mentre si va avanti. Era scritto
+     quattro volte in quattro posti diversi, e siccome i quattro sono stati
+     della stessa pagina, nella stessa sessione stava a destra del titolo
+     mentre si leggevano le regole e in mezzo alla pagina quando arrivava
+     l'esito. */
+  it("tiene «Torna all'Elenco» nell'intestazione, dalle regole all'esito", async () => {
+    const user = userEvent.setup()
+    renderRunner()
+
+    const uscita = () => screen.queryByRole('link', { name: "Torna all'Elenco" })
+    const titolo = () => screen.getByRole('heading', { level: 1 })
+
+    expect(await screen.findByRole('link', { name: "Torna all'Elenco" })).toBeInTheDocument()
+    expect(uscita()?.closest('header')).toContainElement(titolo())
+
+    await user.click(screen.getByRole('button', { name: 'Inizia il Test' }))
+    await screen.findByText('Prima domanda?')
+
+    /* L'unico stato in cui non c'è, e non è una dimenticanza: uscire da un
+       test cominciato butta via le domande estratte e le risposte già date. */
+    expect(uscita()).not.toBeInTheDocument()
+
+    await user.click(await screen.findByText('Alfa'))
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+    await user.click(await screen.findByText('Delta'))
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
+
+    expect(await screen.findByRole('link', { name: "Torna all'Elenco" })).toBeInTheDocument()
+    expect(uscita()?.closest('header')).toContainElement(titolo())
+    /* Nel riepilogo resta il solo comando che riguarda quel riquadro. */
+    expect(screen.getByRole('button', { name: 'Riprova il Test' }).closest('header')).toBeNull()
+  })
+
+  /* Anche il test pubblicato ma ancora senza domande: era uno dei tre stati
+     che si scrivevano l'uscita in mezzo alla pagina. */
+  it("tiene l'uscita nell'intestazione anche su un test senza domande", async () => {
+    serve({ ...simulation, question_count: 0 }, [], 'multiple')
+    renderRunner()
+
+    expect(
+      await screen.findByText('Questa simulazione non contiene ancora domande'),
+    ).toBeInTheDocument()
+    const uscita = screen.getByRole('link', { name: "Torna all'Elenco" })
+    expect(uscita.closest('header')).toContainElement(screen.getByRole('heading', { level: 1 }))
+  })
+
   it('consegna ogni risposta con il tempo che è costata', async () => {
     const user = userEvent.setup()
     renderRunner()

@@ -391,8 +391,8 @@ al solo clic, e chi naviga col Tab aveva la sola freccia in fondo alla riga.
 percorso il numero di chi lo sta percorrendo è un collegamento: porta alla
 linguetta accanto già ristretta su quel percorso, che è la domanda che quel
 numero fa venire («chi sono, e a che punto»). Il filtro sta nella fascia della
-tabella, accanto alla ricerca, e non in cima alla pagina insieme a quello per
-organizzazione: quello vale per entrambe le linguette, questo parla delle sole
+tabella, accanto alla ricerca, e non nella fascia sotto l'intestazione insieme
+a quello per organizzazione: quello vale per entrambe le linguette, questo parla delle sole
 righe sotto. Lavora sulle righe già scaricate invece di richiedere al server le
 assegnazioni di un percorso, perché sono un sottoinsieme di quelle che si
 stanno già guardando; la rotta col `path_id` resta quella che serve alla
@@ -912,7 +912,11 @@ Sopra la fila sta quindi una barra di filtri,
 nelle due metà e sempre con le stesse due voci: **la specie della prova** a
 linguette, perché ha poche voci fisse e la scelta corrente va letta senza aprire
 niente, e **il bersaglio** in una tendina, perché è un elenco lungo quanto le
-cose fatte da quella persona.
+cose fatte da quella persona. Il riquadro e le etichette sono quelli di ogni
+fascia di filtri dell'applicazione
+([FiltersBar](../frontend/src/components/FiltersBar.tsx), nella variante che
+porta il filetto sotto): erano scritti a mano, e nella copia le etichette
+avevano perso la spaziatura delle altre.
 
 | Metà          | Linguette                           | Tendina                    |
 | ------------- | ----------------------------------- | -------------------------- |
@@ -1364,23 +1368,23 @@ le prove che si aprono sotto una riga, che si riprovano senza richiuderla.
 nessuna prova: una riga a zero è la risposta a "chi non si sta allenando", e
 sparendo dalla tabella si porterebbe via la domanda.
 
-**I comandi stanno tutti sulla stessa barra**, quella sopra le righe: la
-ricerca a sinistra, il periodo e l'organizzazione a destra. Prima il periodo e
-l'organizzazione stavano sotto il titolo, ciascuno con la sua etichetta
-scritta sopra, e la ricerca una fascia più giù: sono tre modi di restringere
-lo stesso elenco, e su due fasce diverse si leggevano come i comandi di due
-schermate diverse. Le etichette sono cadute con lo spostamento, perché
-"sempre, 7, 30, 90 giorni" e "tutte le organizzazioni" dicono già di cosa
-parlano, e restano solo per chi legge con uno screen reader. La pagina è larga
-come il registro attività, perché la riga di una persona ha sette colonne e
-quello che si apre sotto ne ha altrettante.
+**Il periodo e l'organizzazione stanno sotto l'intestazione**, nella fascia di
+[PeriodOrgFilters](../frontend/src/components/PeriodOrgFilters.tsx), che è la
+stessa della dashboard: sono i due filtri che il server capisce, cioè quelli
+che dicono quale report si sta guardando, e sono la stessa coppia sulla stessa
+materia. Erano dentro la barra della tabella, con la ricerca, cioè in un posto
+che nessun'altra schermata usa: chi passava dalla dashboard li cercava dove li
+aveva lasciati e non li trovava. La ricerca resta di là perché cerca dentro
+l'elenco che questi due hanno già scelto, ed è un filtro anche lei: «Azzera
+Filtri», che questa pagina prima non aveva, riporta il report intero e
+cancella pure quella. La pagina è larga come il registro attività, perché la
+riga di una persona ha sette colonne e quello che si apre sotto ne ha
+altrettante.
 
-Perché la barra potesse ospitare una tendina è uscita dal contenitore che
-ritaglia la tabella
-([DataTable](../frontend/src/components/DataTable.tsx)): là dentro l'elenco
-delle organizzazioni si sarebbe aperto contro il bordo e sarebbe stato
-tagliato. È lo stesso motivo per cui il piede con le righe per pagina stava
-già fuori.
+La barra della tabella sta comunque fuori dal contenitore che ritaglia le
+righe ([DataTable](../frontend/src/components/DataTable.tsx)): là dentro una
+tendina si aprirebbe contro il bordo e verrebbe tagliata. È lo stesso motivo
+per cui il piede con le righe per pagina sta già fuori.
 
 **Sotto la riga, tre linguette**
 ([UserReportDetail](../frontend/src/components/UserReportDetail.tsx)): le
@@ -1399,8 +1403,9 @@ e non elenca niente, quindi o c'è o non è ancora stata scritta. Ha una sezione
 sua più sotto.
 
 **La ricerca e il filtro della prova attiva stanno nella barra della tabella
-dello storico**, cioè dove stanno in ogni altra schermata, e cambiano con la
-linguetta: di una conversazione si chiede il canale (chiamate, chat,
+dello storico**, che qui è la sola fascia di comandi che c'è: un pannello
+aperto sotto una riga non ha un'intestazione propria sotto cui mettere i
+filtri, come l'hanno le schermate. Cambiano con la linguetta: di una conversazione si chiede il canale (chiamate, chat,
 entrambe), di una simulazione il tipo (uno dei quattro, o tutti), e sono due
 domande che all'altra metà non si possono nemmeno fare. Prima stavano accanto
 alle linguette, tutte e tre le cose sulla stessa riga: le linguette, cinque

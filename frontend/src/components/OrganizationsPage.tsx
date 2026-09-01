@@ -17,12 +17,13 @@ import { errorMessage } from '../services/errors'
 import DataTable, { Td, Tr } from './DataTable'
 import DetailModal, { DetailField } from './DetailModal'
 import AuthorshipFields from './AuthorshipFields'
-import Select from './Select'
 import Tooltip from './Tooltip'
 import KebabMenu from './KebabMenu'
 import IconButton from './IconButton'
 import Spinner from './Spinner'
 import LoadError from './LoadError'
+import OrganizationsFilters from './OrganizationsFilters'
+import { STATUS_BADGE_CLASSES, STATUS_LABELS } from './organizationStatus'
 import { PageContainer, PageHeader } from './PageLayout'
 import TableSkeleton from './TableSkeleton'
 import PrimaryButton from './PrimaryButton'
@@ -38,23 +39,10 @@ import Badge from './Badge'
 import type { KebabMenuItem } from './KebabMenu'
 import Field, { fieldCls, labelCls, inputWrapperCls, inputCls, TextInput } from './Field'
 
-const STATUS_LABELS: Record<OrgStatus, string> = {
-  active: 'Attiva',
-  suspended: 'Sospesa',
-}
-
 /* Finestra su cui il backend conta le conversazioni recenti
  * (_ACTIVITY_WINDOW_DAYS in routers/organizations.py): serve solo a
  * etichettare il campo, il conteggio arriva già fatto. */
 const ACTIVITY_WINDOW_DAYS = 30
-
-const STATUS_OPTIONS = [
-  { value: '', label: 'Tutti gli stati' },
-  ...(Object.keys(STATUS_LABELS) as OrgStatus[]).map((s) => ({
-    value: s,
-    label: STATUS_LABELS[s],
-  })),
-]
 
 /* Righe del dettaglio che il modale carica a parte: link alle altre pagine
  * admin già filtrate su questa organizzazione. Le due tabelle accettano
@@ -62,11 +50,6 @@ const STATUS_OPTIONS = [
  * che su un elenco da rifiltrare a mano. */
 const detailLinkCls =
   'inline-flex items-center gap-1.5 rounded-lg border border-violet-600/25 bg-violet-600/10 px-3 py-1 text-[0.78rem] font-medium text-violet-300 transition hover:border-violet-600 hover:bg-violet-600/20 hover:text-violet-200'
-
-const STATUS_BADGE_CLASSES: Record<OrgStatus, string> = {
-  active: 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
-  suspended: 'border border-amber-500/30 bg-amber-500/10 text-amber-400',
-}
 
 /* Le percentuali sommano a 100. I due conteggi stanno stretti perché sono
  * numeri dentro una pillola, mentre lo stato ospita anche il motivo di una
@@ -277,35 +260,18 @@ export default function OrganizationsPage() {
         title="Gestione Organizzazioni"
         description="Crea, sospendi ed elimina le organizzazioni che usano la piattaforma."
         actions={
-          <PrimaryButton icon={<PlusIcon size={18} />} onClick={openCreate}>
+          <PrimaryButton icon={<PlusIcon />} onClick={openCreate}>
             Nuova Organizzazione
           </PrimaryButton>
         }
       />
 
-      <div className="mb-8 flex flex-wrap items-end gap-4">
-        <div className={fieldCls}>
-          <label className={labelCls} htmlFor="orgs-status-filter">
-            Stato
-          </label>
-          <Select
-            id="orgs-status-filter"
-            className="min-w-[180px]"
-            value={statusFilter}
-            onChange={setStatusFilter}
-            options={STATUS_OPTIONS}
-          />
-        </div>
-        {hasFilters && (
-          <button
-            type="button"
-            className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-            onClick={resetFilters}
-          >
-            Azzera Filtri
-          </button>
-        )}
-      </div>
+      <OrganizationsFilters
+        value={statusFilter}
+        isSearching={Boolean(search)}
+        onChange={setStatusFilter}
+        onReset={resetFilters}
+      />
 
       {successMsg && <FormSuccess message={successMsg} variant="page" />}
 
@@ -332,8 +298,8 @@ export default function OrganizationsPage() {
           pageResetKey={`${statusFilter}|${search}`}
           emptyMessage={
             hasFilters
-              ? 'Nessuna organizzazione corrisponde ai filtri.'
-              : 'Nessuna organizzazione presente. Crea la prima con "Nuova Organizzazione".'
+              ? 'Nessuna organizzazione corrisponde ai filtri'
+              : 'Nessuna organizzazione presente. Crea la prima con "Nuova Organizzazione"'
           }
           renderRow={(o) => {
             const menuItems: KebabMenuItem[] = [

@@ -4,12 +4,17 @@
  * versione dell'ombra e del sollevamento all'hover.
  *
  * Il margine non fa parte del bottone e resta a chi lo usa (`className`):
- * è la distanza dal campo che gli sta sopra, non un tratto del bottone. */
+ * è la distanza dal campo che gli sta sopra, non un tratto del bottone.
+ *
+ * La misura dell'icona invece è un tratto del bottone, e la fissa lui: era
+ * scritta a ogni chiamata, e nelle sei copie era finita a 16 o a 18 a seconda
+ * della pagina, cioè la stessa icona nello stesso bottone in due misure. Chi
+ * la passa la vede comunque ignorata, così non può tornare a divergere. */
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 const baseCls =
-  'flex cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60'
+  'flex cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-br from-violet-600 to-cyan-500 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 [&>svg]:h-[18px] [&>svg]:w-[18px]'
 
 const VARIANTS = {
   /** Azione in testa a una pagina ("Nuovo Utente"): si stacca dallo sfondo */

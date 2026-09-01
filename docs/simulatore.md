@@ -1328,6 +1328,20 @@ dalle regole e quello che si era risposto è perso: le risposte vivono nel
 browser finché non si consegna, perché un test a metà non è un tentativo. Non
 c'è nessun limite ai tentativi.
 
+**Il comando per tornare all'elenco sta sempre nell'intestazione**, a destra
+del titolo, dove ogni schermata dell'applicazione tiene la propria azione. Era
+scritto quattro volte con quattro collocazioni diverse, e siccome le quattro
+sono stati della stessa pagina il bottone si spostava sotto gli occhi mentre si
+andava avanti: a destra del titolo sulle regole, in mezzo alla pagina
+sull'esito, sotto lo stato vuoto su un test ancora senza domande. L'unica
+eccezione è la simulazione che non si carica, dove non c'è un titolo a cui
+affiancarlo e il comando sta sotto il messaggio insieme a quello per riprovare
+la lettura.
+
+**Mentre il test è in corso quel comando non c'è**, ed è voluto: uscire di lì
+butta via le domande estratte e le risposte già date, e non deve capitare per
+un clic sbagliato.
+
 Perché sia perso per scelta e non per sbaglio, finché il test è cominciato e
 non consegnato il browser chiede conferma prima di chiudere o ricaricare
 ([useLeaveConfirmation](../frontend/src/hooks/useLeaveConfirmation.ts)). Copre

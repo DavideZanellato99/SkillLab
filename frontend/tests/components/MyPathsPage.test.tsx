@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -54,7 +55,7 @@ const percorso = (over: Partial<PathAssignment> = {}): PathAssignment => ({
 })
 
 function renderPage(stato: Record<string, unknown>) {
-  useMyAssignments.mockReturnValue({ isPending: false, error: null, ...stato })
+  useMyAssignments.mockReturnValue({ isPending: false, error: null, refetch: vi.fn(), ...stato })
   render(
     <MemoryRouter>
       <MyPathsPage />
@@ -247,10 +248,18 @@ describe('MyPathsPage', () => {
     expect(screen.getByText(/Quando il tuo formatore te ne affida uno/)).toBeInTheDocument()
   })
 
-  it('riporta il motivo di un caricamento fallito', () => {
-    renderPage({ data: [], error: new Error('Sessione scaduta.') })
+  /* Una lettura caduta non è un percorso mai assegnato: senza il comando per
+     riprovare, a chi non ha ancora ricevuto niente e a chi non è riuscito a
+     leggere si diceva la stessa cosa. */
+  it('riporta il motivo di un caricamento fallito, e offre di riprovare', async () => {
+    const refetch = vi.fn()
+    renderPage({ data: [], error: new Error('Sessione scaduta.'), refetch })
 
     expect(screen.getByText('Sessione scaduta.')).toBeInTheDocument()
+    expect(screen.queryByText('Nessun percorso assegnato')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Riprova' }))
+    expect(refetch).toHaveBeenCalledOnce()
   })
 
   it("ripiega su un messaggio suo quando l'errore non ne porta uno", () => {

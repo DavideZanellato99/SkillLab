@@ -27,6 +27,7 @@ import Badge from './Badge'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import PrimaryButton from './PrimaryButton'
+import SecondaryButton from './SecondaryButton'
 import CategoryColorPicker from './CategoryColorPicker'
 import ConfirmModal from './ConfirmModal'
 import { categoryBadgeClasses } from './categoryStyles'
@@ -271,14 +272,9 @@ export default function AvatarCategoriesModal({
         </div>
         <div className="flex justify-end gap-2">
           {editing && (
-            <button
-              type="button"
-              className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-              onClick={startCreate}
-              disabled={isBusy}
-            >
+            <SecondaryButton onClick={startCreate} disabled={isBusy}>
               Annulla
-            </button>
+            </SecondaryButton>
           )}
           <PrimaryButton
             type="submit"

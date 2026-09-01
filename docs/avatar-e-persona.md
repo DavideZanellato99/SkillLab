@@ -70,7 +70,9 @@ richiesta è partita.
 
 Il catalogo lo governa il super admin da `/app/admin/avatars`
 ([AvatarAdminPage](../frontend/src/components/AvatarAdminPage.tsx)): una
-tabella con i filtri per organizzazione e stato, e l'archivio a portata di
+tabella con i filtri per organizzazione e stato
+([AvatarsFilters](../frontend/src/components/AvatarsFilters.tsx), nella fascia
+sotto l'intestazione come in ogni altro elenco), e l'archivio a portata di
 filtro.
 
 L'elenco arriva **dal più recente**, come quello degli utenti, delle

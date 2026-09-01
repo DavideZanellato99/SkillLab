@@ -188,7 +188,7 @@ export default function SimulationAdminPage() {
             : 'Crea i test tecnici a partire da un documento o redigendo le domande.'
         }
         actions={
-          <PrimaryButton icon={<PlusIcon size={16} />} onClick={() => setCreating(true)}>
+          <PrimaryButton icon={<PlusIcon />} onClick={() => setCreating(true)}>
             Nuova Simulazione
           </PrimaryButton>
         }

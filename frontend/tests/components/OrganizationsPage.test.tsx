@@ -176,7 +176,7 @@ describe('elenco', () => {
 
     await userEvent.type(screen.getByPlaceholderText(/Cerca per nome/), 'nessuno')
 
-    expect(screen.getByText('Nessuna organizzazione corrisponde ai filtri.')).toBeInTheDocument()
+    expect(screen.getByText('Nessuna organizzazione corrisponde ai filtri')).toBeInTheDocument()
   })
 
   it('mostra il caricamento', () => {

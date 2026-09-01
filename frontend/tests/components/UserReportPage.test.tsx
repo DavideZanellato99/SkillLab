@@ -270,6 +270,28 @@ describe('periodo e organizzazione', () => {
 
     expect(stato.chiesto.organizationId).toBe('org-1')
   })
+
+  /* I due filtri stanno sotto l'intestazione, dove stanno in ogni altro
+     elenco, e non più dentro la barra della tabella: da lì viene il pulsante
+     che li azzera, che prima questa pagina non aveva.
+
+     Azzerare comprende la ricerca: la casella resta nella tabella, ma
+     restringe questo stesso elenco, e lasciarla scritta voleva dire premere
+     il pulsante e vedere ancora un report filtrato. */
+  it('azzera periodo, organizzazione e ricerca', async () => {
+    renderPage()
+
+    await userEvent.click(screen.getByRole('radio', { name: '30 giorni' }))
+    await userEvent.click(screen.getByLabelText('Organizzazione'))
+    await userEvent.click(screen.getByRole('option', { name: 'Banca Esempio' }))
+    const casella = screen.getByPlaceholderText(/Cerca per nome/)
+    await userEvent.type(casella, 'anna')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
+
+    expect(stato.chiesto).toEqual({ organizationId: '', days: undefined })
+    expect(casella).toHaveValue('')
+  })
 })
 
 describe('storico di una persona', () => {

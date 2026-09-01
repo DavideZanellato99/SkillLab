@@ -37,7 +37,7 @@ export default function UserDetailModal({
     <DetailModal
       onClose={onClose}
       footer={
-        <PrimaryButton variant="submit" icon={<PencilIcon size={16} />} onClick={onEdit}>
+        <PrimaryButton variant="submit" icon={<PencilIcon />} onClick={onEdit}>
           Modifica Utente
         </PrimaryButton>
       }

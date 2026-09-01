@@ -7,6 +7,7 @@ const sessione = vi.hoisted(() => ({
 }))
 vi.mock('../../src/hooks/useAuth', () => ({ useAuth: () => ({ user: sessione.current }) }))
 
+const ricaricaPercorsi = vi.hoisted(() => vi.fn())
 const stato = vi.hoisted(() => ({
   paths: { data: [] as unknown[], isPending: false, error: null as unknown },
   assignments: { data: [] as unknown[], isPending: false, error: null as unknown },
@@ -24,8 +25,8 @@ const deleteAssignment = vi.hoisted(() => ({
   error: null as Error | null,
 }))
 vi.mock('../../src/hooks/useTraining', () => ({
-  usePaths: () => stato.paths,
-  useAssignments: () => stato.assignments,
+  usePaths: () => ({ ...stato.paths, refetch: ricaricaPercorsi }),
+  useAssignments: () => ({ ...stato.assignments, refetch: vi.fn() }),
   useDeletePath: () => deletePath,
   useDeleteAssignment: () => deleteAssignment,
 }))
@@ -240,6 +241,21 @@ describe('filtro per organizzazione', () => {
     renderPage('organization_admin')
 
     expect(screen.queryByText('Tutte le organizzazioni')).not.toBeInTheDocument()
+  })
+
+  /* La fascia sta sotto l'intestazione come in ogni altro elenco, e porta il
+     pulsante che l'azzera: compare solo quando c'è qualcosa da azzerare. */
+  it('azzera il filtro e torna a tutte le organizzazioni', async () => {
+    renderPage()
+    expect(screen.queryByRole('button', { name: 'Azzera Filtri' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Organizzazione' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Banca Esempio' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
+
+    expect(screen.getByRole('combobox', { name: 'Organizzazione' })).toHaveTextContent(
+      'Tutte le organizzazioni',
+    )
   })
 })
 
@@ -477,11 +493,31 @@ describe('caricamento ed errori', () => {
     expect(screen.getByText(/Si compone con «Nuovo Percorso»/)).toBeInTheDocument()
   })
 
-  it('riporta il motivo di un caricamento fallito', () => {
+  /* Le linguette dicono cosa comandano, come nella dashboard e nel confronto:
+     erano le uniche due dell'applicazione a non dirlo, e chi le scorre con
+     uno screen reader sentiva un gruppo di alternative senza sapere cosa
+     cambiavano. */
+  it('lega le linguette al contenuto che comandano', () => {
+    renderPage()
+
+    const linguetta = screen.getByRole('tab', { selected: true })
+    const pannello = screen.getByRole('tabpanel')
+    expect(linguetta).toHaveAttribute('aria-controls', pannello.id)
+    expect(pannello).toHaveAttribute('aria-labelledby', linguetta.id)
+  })
+
+  /* Una lettura caduta non è un elenco senza percorsi: senza il comando per
+     riprovare si leggeva «Nessun percorso ancora composto». */
+  it('riporta il motivo di un caricamento fallito, e offre di riprovare', async () => {
+    ricaricaPercorsi.mockClear()
     stato.paths = { data: [], isPending: false, error: new Error('Sessione scaduta.') }
     renderPage()
 
     expect(screen.getByText('Sessione scaduta.')).toBeInTheDocument()
+    expect(screen.queryByText('Nessun percorso ancora composto')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Riprova' }))
+    expect(ricaricaPercorsi).toHaveBeenCalledOnce()
   })
 
   it("ripiega su un messaggio suo quando l'errore non ne porta uno", () => {

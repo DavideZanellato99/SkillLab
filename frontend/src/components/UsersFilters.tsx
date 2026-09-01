@@ -11,7 +11,7 @@
 
 import type { UserStatus } from '../services/auth'
 import { ROLE_OPTIONS, STATUS_LABELS } from './adminUsersConfig'
-import { filterFieldCls, labelCls } from './Field'
+import FiltersBar, { FilterField } from './FiltersBar'
 import ResetFiltersButton from './ResetFiltersButton'
 import Select from './Select'
 
@@ -57,11 +57,8 @@ export default function UsersFilters({
   )
 
   return (
-    <div className="mb-8 flex flex-wrap items-end gap-4">
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="users-org-filter">
-          Organizzazione
-        </label>
+    <FiltersBar>
+      <FilterField label="Organizzazione" htmlFor="users-org-filter">
         <Select
           id="users-org-filter"
           className="min-w-[220px]"
@@ -69,11 +66,8 @@ export default function UsersFilters({
           onChange={(organizationId) => onChange({ organizationId })}
           options={[{ value: '', label: 'Tutte le organizzazioni' }, ...organizationOptions]}
         />
-      </div>
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="users-role-filter">
-          Ruolo
-        </label>
+      </FilterField>
+      <FilterField label="Ruolo" htmlFor="users-role-filter">
         <Select
           id="users-role-filter"
           className="min-w-[180px]"
@@ -81,11 +75,8 @@ export default function UsersFilters({
           onChange={(ruolo) => onChange({ ruolo })}
           options={[{ value: '', label: 'Tutti i ruoli' }, ...ROLE_OPTIONS]}
         />
-      </div>
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="users-status-filter">
-          Stato
-        </label>
+      </FilterField>
+      <FilterField label="Stato" htmlFor="users-status-filter">
         <Select
           id="users-status-filter"
           className="min-w-[160px]"
@@ -93,11 +84,8 @@ export default function UsersFilters({
           onChange={(status) => onChange({ status })}
           options={STATUS_OPTIONS}
         />
-      </div>
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="users-access-filter">
-          Accesso
-        </label>
+      </FilterField>
+      <FilterField label="Accesso" htmlFor="users-access-filter">
         <Select
           id="users-access-filter"
           className="min-w-[180px]"
@@ -105,8 +93,8 @@ export default function UsersFilters({
           onChange={(access) => onChange({ access })}
           options={ACCESS_OPTIONS}
         />
-      </div>
+      </FilterField>
       {hasFilters && <ResetFiltersButton onClick={onReset} />}
-    </div>
+    </FiltersBar>
   )
 }

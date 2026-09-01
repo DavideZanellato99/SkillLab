@@ -84,7 +84,7 @@ export default function SimulationsPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Cerca per titolo, descrizione o tipo"
+              placeholder="Cerca per titolo, descrizione o tipo..."
               ariaLabel="Cerca un test tecnico"
               className="w-full max-w-md"
             />

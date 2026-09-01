@@ -19,10 +19,25 @@ import { tabId, tabPanelId } from './tabIds'
  * `panelBase` lega le linguette al contenuto che comandano. È facoltativo
  * perché il legame regge solo se il contenuto porta il proprio `TabPanel`:
  * un `aria-controls` che punta a un id inesistente dice una cosa falsa, ed è
- * peggio del non dirla. */
+ * peggio del non dirla.
+ *
+ * Il filetto sotto e la distanza dal contenuto sono della barra e non di chi
+ * la usa: erano scritti a ogni chiamata, e nelle tre copie erano finiti a
+ * `mb-6` con filetto, `mb-5` con filetto e `mb-6` senza, cioè tre barre che
+ * si somigliavano senza essere uguali. Due varianti, perché i due posti sono
+ * due: in una schermata la barra si stacca da quello che comanda, in cima a
+ * una finestra è il bordo basso della sua testata e prende l'imbottitura
+ * orizzontale del pannello. */
 
 const tabCls =
   'cursor-pointer rounded-lg border-none bg-transparent px-3 py-1.5 text-[0.82rem] font-medium transition'
+
+const VARIANTS = {
+  /** In una schermata: filetto sotto e distanza dal contenuto che comanda. */
+  page: 'mb-6 border-b border-white/6 pb-2',
+  /** In cima a una finestra, dove è il bordo basso della testata. */
+  modal: 'border-b border-white/6 px-8 py-2',
+} as const
 
 export interface TabItem<T extends string> {
   value: T
@@ -35,6 +50,7 @@ export default function TabBar<T extends string>({
   onChange,
   ariaLabel,
   panelBase,
+  variant = 'page',
   className = '',
 }: {
   items: TabItem<T>[]
@@ -43,6 +59,7 @@ export default function TabBar<T extends string>({
   ariaLabel: string
   /** La radice degli id, quando il contenuto sotto è reso da `TabPanel`. */
   panelBase?: string
+  variant?: keyof typeof VARIANTS
   className?: string
 }) {
   const buttons = useRef(new Map<T, HTMLButtonElement>())
@@ -74,7 +91,7 @@ export default function TabBar<T extends string>({
       role="tablist"
       aria-label={ariaLabel}
       onKeyDown={handleKeyDown}
-      className={`flex items-center gap-1 ${className}`}
+      className={`flex items-center gap-1 ${VARIANTS[variant]} ${className}`}
     >
       {items.map((item) => {
         const isActive = item.value === value

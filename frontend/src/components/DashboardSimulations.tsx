@@ -342,8 +342,8 @@ export default function DashboardSimulations({
         searchPlaceholder="Cerca per simulazione o utente..."
         emptyMessage={
           debouncedSearch
-            ? 'Nessun test corrisponde alla ricerca.'
-            : 'Nessun test per la selezione corrente.'
+            ? 'Nessun test corrisponde alla ricerca'
+            : 'Nessun test per la selezione corrente'
         }
         renderRow={(r) => (
           <Tooltip key={r.attempt_id} content="Vedi il test svolto" anchor="cursor">

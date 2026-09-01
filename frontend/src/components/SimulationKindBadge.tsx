@@ -103,7 +103,7 @@ export default function SimulationKindBadge({
        aggiungere a sé stessa. */
     <Tooltip content={iconOnly ? kindLabel(kind) : ''}>
       <span
-        className={`inline-flex shrink-0 items-center rounded-full border text-[0.62rem] font-semibold uppercase tracking-wider ${
+        className={`inline-flex shrink-0 items-center rounded-full border whitespace-nowrap text-[0.62rem] font-semibold uppercase tracking-wider ${
           iconOnly ? 'p-1' : 'gap-1 px-2 py-0.5'
         } ${tone}`}
       >

@@ -422,6 +422,18 @@ stessa in tutta l'app, deve stare scritta una volta.
   ricerca, benché la casella stia dentro la tabella: è un filtro come gli
   altri, e lasciarla scritta voleva dire premere «Azzera Filtri» e ritrovarsi
   davanti un elenco ancora ristretto.
+- **Le tendine di una barra di filtri stanno nell'ordine delle colonne che
+  restringono.** Nella gestione utenti organizzazione, ruolo, stato e accesso
+  sono le colonne due, tre, quattro e cinque della tabella; nel registro
+  attività l'organizzazione viene prima dell'azione perché prima è la sua
+  colonna; nella gestione simulazioni il tipo e l'origine, che sono le due
+  targhette di una colonna sola, vengono prima dello stato. Chi cerca il
+  comando che restringe una colonna lo trova sopra la colonna che sta
+  guardando, e una barra ordinata a caso lo fa leggere tutto ogni volta. Un
+  filtro senza colonna (lo stato degli avatar, che in tabella non c'è) va in
+  fondo, e le due date del registro restano in fondo anche loro: sono un
+  intervallo che si sceglie una volta, non una tendina che si cambia di
+  continuo.
 - **Un form non salva quello che non è cambiato.** La modifica di un account
   con la scheda intatta ha il salvataggio spento, e sotto il bottone c'è
   scritto perché: la richiesta partirebbe lo stesso, scriverebbe chi ha toccato
@@ -441,8 +453,8 @@ stessa in tutta l'app, deve stare scritta una volta.
   [sicurezza-e-privacy.md](sicurezza-e-privacy.md) e in [gdpr.md](gdpr.md).
 - **Il testo è in italiano** e senza trattini: si usano le virgole. In italiano
   anche i nomi delle schermate, dove esiste la parola: la voce in barra è
-  «Galleria Avatar», non «Avatar Gallery», e i ruoli si leggono «Super Admin» e
-  «Amministratore Organizzazione».
+  «Galleria Avatar», non «Avatar Gallery», e i ruoli si leggono «Super admin» e
+  «Amministratore organizzazione».
 - **Gli stati vuoti non finiscono col punto.** Il punto resta negli errori e
   nelle descrizioni.
 - **Il registro è professionale e impersonale.** Un'attesa si annuncia con
@@ -470,7 +482,7 @@ stessa in tutta l'app, deve stare scritta una volta.
   Tentativo su ...»).
 
   **Etichetta vuol dire comando, titolo, voce di menu, intestazione di colonna,
-  linguetta, campo di un form, badge, opzione di un filtro.** Non lo sono le
+  linguetta, campo di un form, badge, pastiglia di un filtro.** Non lo sono le
   frasi, e restano quindi con la sola iniziale maiuscola: gli stati vuoti
   («Nessun dato disponibile»), i messaggi di errore e conferma, le descrizioni
   sotto i titoli, i testi di trasparenza («Questa chiamata viene registrata») e
@@ -478,6 +490,17 @@ stessa in tutta l'app, deve stare scritta una volta.
   («Esercitazione, verifica e misurazione dei risultati»). Del sito pubblico segue la regola
   delle etichette la sola voce di navigazione, in
   [PublicNav.tsx](../frontend/src/components/public/PublicNav.tsx).
+
+  **Le voci di una tendina di filtro fanno eccezione e portano la sola
+  iniziale maiuscola**: «Tutti gli stati», «Tutte le organizzazioni», «Mai
+  acceduto», «Amministratore organizzazione». Sono un elenco che si scorre
+  tutto insieme, dove ogni voce è una risposta alla domanda scritta sopra la
+  tendina e non un comando a sé, e in colonna le maiuscole in mezzo si
+  leggevano come tanti titoli affiancati. L'etichetta sopra la tendina resta
+  un'etichetta («Stato», «Organizzazione»), e la stessa regola vale per le
+  tendine dei form, che sono le stesse liste offerte altrove: il ruolo si
+  sceglie con le stesse parole nella barra dei filtri e nella scheda di un
+  account. Le pastiglie di `FilterTabs` non sono tendine e restano etichette.
 
 - **I tooltip sono sempre `Tooltip`, mai l'attributo `title` del browser.**
   Quello nativo compare dopo un secondo, si veste come il sistema operativo e

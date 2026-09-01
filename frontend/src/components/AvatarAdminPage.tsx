@@ -65,7 +65,7 @@ const STATUS_ACTIVE = 'active'
 const STATUS_ARCHIVED = 'archived'
 
 const STATUS_OPTIONS = [
-  { value: STATUS_ACTIVE, label: 'In Catalogo' },
+  { value: STATUS_ACTIVE, label: 'In catalogo' },
   { value: STATUS_ARCHIVED, label: 'Archiviati' },
   { value: '', label: 'Tutti' },
 ]
@@ -209,7 +209,7 @@ export default function AvatarAdminPage() {
             className="min-w-[220px]"
             value={orgFilter}
             onChange={setOrgFilter}
-            options={[{ value: '', label: 'Tutte le Organizzazioni' }, ...organizationOptions]}
+            options={[{ value: '', label: 'Tutte le organizzazioni' }, ...organizationOptions]}
           />
         </div>
         <div className={fieldCls}>

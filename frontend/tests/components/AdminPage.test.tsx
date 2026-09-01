@@ -229,7 +229,7 @@ describe('filtri', () => {
     renderPage()
 
     await userEvent.click(screen.getByLabelText('Ruolo'))
-    await userEvent.click(screen.getByRole('option', { name: 'Amministratore Organizzazione' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Amministratore organizzazione' }))
     await userEvent.click(screen.getByLabelText('Stato'))
     await userEvent.click(screen.getByRole('option', { name: 'Sospeso' }))
 
@@ -244,11 +244,11 @@ describe('filtri', () => {
     expect(stato.filtriChiesti.neverLoggedIn).toBeUndefined()
 
     await userEvent.click(screen.getByLabelText('Accesso'))
-    await userEvent.click(screen.getByRole('option', { name: 'Mai Acceduto' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Mai acceduto' }))
     expect(stato.filtriChiesti.neverLoggedIn).toBe(true)
 
     await userEvent.click(screen.getByLabelText('Accesso'))
-    await userEvent.click(screen.getByRole('option', { name: 'Ha Già Acceduto' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Ha già acceduto' }))
     expect(stato.filtriChiesti.neverLoggedIn).toBe(false)
   })
 

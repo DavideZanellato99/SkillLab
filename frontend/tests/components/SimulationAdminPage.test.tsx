@@ -87,6 +87,13 @@ function renderPage(righe: AdminSimulation[] = [simulazione()], ruolo = 'super_a
   render(<SimulationAdminPage />)
 }
 
+/* Le due tendine dei filtri: si apre quella con la sua etichetta e si sceglie
+ * la voce, come nella barra della gestione utenti. */
+async function scegli(filtro: string, voce: string) {
+  await userEvent.click(screen.getByLabelText(filtro))
+  await userEvent.click(screen.getByRole('option', { name: voce }))
+}
+
 beforeEach(() => {
   sessione.current = { ruolo: 'super_admin', organization_id: 'org-1' }
   elimina.mutate.mockReset()
@@ -172,17 +179,56 @@ describe('elenco', () => {
   it('separa le bozze da finire dalle simulazioni pubblicate', async () => {
     renderPage([simulazione(), simulazione({ id: 's-2', title: 'Privacy', status: 'draft' })])
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Bozze' }))
+    await scegli('Stato', 'Bozze')
     expect(screen.getByText('Privacy')).toBeInTheDocument()
     expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Pubblicate' }))
+    await scegli('Stato', 'Pubblicate')
     expect(screen.getByText('Normativa antiriciclaggio')).toBeInTheDocument()
     expect(screen.queryByText('Privacy')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Tutte' }))
+    await scegli('Stato', 'Tutti gli stati')
     expect(screen.getByText('Privacy')).toBeInTheDocument()
     expect(screen.getByText('Normativa antiriciclaggio')).toBeInTheDocument()
+  })
+
+  /* L'altra domanda: scrivere dieci domande a crocette e dieci da correggere
+     a mano sono due lavori diversi. */
+  it('restringe al tipo di test', async () => {
+    renderPage([simulazione(), simulazione({ id: 's-2', title: 'Privacy', kind: 'open' })])
+
+    await scegli('Tipo', 'Risposta aperta')
+
+    expect(screen.getByText('Privacy')).toBeInTheDocument()
+    expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument()
+  })
+
+  /* La terza tendina: le domande di un modello sono quelle da rileggere. */
+  it('restringe a chi ha scritto le domande', async () => {
+    renderPage([simulazione(), simulazione({ id: 's-2', title: 'Privacy', source: 'manual' })])
+
+    await scegli('Origine', 'Manuale')
+
+    expect(screen.getByText('Privacy')).toBeInTheDocument()
+    expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument()
+  })
+
+  /* «Azzera Filtri» riporta l'elenco intero, quindi svuota anche la casella:
+     azzerare e vedere ancora una tabella filtrata sarebbe una bugia. */
+  it('azzera le due tendine e la ricerca', async () => {
+    renderPage([simulazione(), simulazione({ id: 's-2', title: 'Privacy', status: 'draft' })])
+
+    await scegli('Stato', 'Bozze')
+    await userEvent.type(screen.getByPlaceholderText(/Cerca per titolo/), 'privacy')
+    await waitFor(() =>
+      expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument(),
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Azzera Filtri' }))
+
+    await waitFor(() => expect(screen.getByText('Normativa antiriciclaggio')).toBeInTheDocument())
+    expect(screen.getByText('Privacy')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Azzera Filtri' })).not.toBeInTheDocument()
   })
 
   /* «Nessuna simulazione presente» sotto un filtro attivo farebbe credere
@@ -190,9 +236,18 @@ describe('elenco', () => {
   it('dice quale filtro sta svuotando la tabella', async () => {
     renderPage([simulazione()])
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Bozze' }))
-
+    await scegli('Stato', 'Bozze')
     expect(screen.getByText('Nessuna bozza da finire')).toBeInTheDocument()
+
+    await scegli('Tipo', 'Abbinamento')
+    expect(screen.getByText('Nessuna simulazione corrisponde ai filtri')).toBeInTheDocument()
+
+    await scegli('Stato', 'Tutti gli stati')
+    expect(screen.getByText('Nessuna simulazione di tipo abbinamento')).toBeInTheDocument()
+
+    await scegli('Tipo', 'Tutti i tipi')
+    await scegli('Origine', 'Manuale')
+    expect(screen.getByText('Nessuna simulazione con domande scritte a mano')).toBeInTheDocument()
   })
 
   it('mostra il caricamento', () => {

@@ -36,13 +36,13 @@ async function scegli(campo: string, opzione: string) {
 describe('UsersFilters', () => {
   it('cambia un filtro alla volta', async () => {
     const { onChange } = renderFilters()
-    await scegli('Ruolo', 'Amministratore Organizzazione')
+    await scegli('Ruolo', 'Amministratore organizzazione')
     expect(onChange).toHaveBeenCalledWith({ ruolo: 'organization_admin' })
   })
 
   it('distingue "mai acceduto" da "ha già acceduto"', async () => {
     const { onChange } = renderFilters()
-    await scegli('Accesso', 'Mai Acceduto')
+    await scegli('Accesso', 'Mai acceduto')
     expect(onChange).toHaveBeenCalledWith({ access: 'never' })
   })
 

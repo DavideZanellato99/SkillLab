@@ -182,7 +182,7 @@ export default function TrainingPage() {
                 value={orgFilter}
                 onChange={changeOrganization}
                 options={[
-                  { value: '', label: 'Tutte le Organizzazioni' },
+                  { value: '', label: 'Tutte le organizzazioni' },
                   ...organizations.map((o) => ({ value: o.id, label: o.name })),
                 ]}
               />

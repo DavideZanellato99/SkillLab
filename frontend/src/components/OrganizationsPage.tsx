@@ -49,7 +49,7 @@ const STATUS_LABELS: Record<OrgStatus, string> = {
 const ACTIVITY_WINDOW_DAYS = 30
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'Tutti gli Stati' },
+  { value: '', label: 'Tutti gli stati' },
   ...(Object.keys(STATUS_LABELS) as OrgStatus[]).map((s) => ({
     value: s,
     label: STATUS_LABELS[s],

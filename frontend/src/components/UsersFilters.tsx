@@ -16,13 +16,13 @@ import ResetFiltersButton from './ResetFiltersButton'
 import Select from './Select'
 
 const ACCESS_OPTIONS = [
-  { value: '', label: 'Qualsiasi Accesso' },
-  { value: 'never', label: 'Mai Acceduto' },
-  { value: 'done', label: 'Ha Già Acceduto' },
+  { value: '', label: 'Qualsiasi accesso' },
+  { value: 'never', label: 'Mai acceduto' },
+  { value: 'done', label: 'Ha già acceduto' },
 ]
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'Tutti gli Stati' },
+  { value: '', label: 'Tutti gli stati' },
   ...(Object.keys(STATUS_LABELS) as UserStatus[]).map((s) => ({
     value: s,
     label: STATUS_LABELS[s],
@@ -67,7 +67,7 @@ export default function UsersFilters({
           className="min-w-[220px]"
           value={value.organizationId}
           onChange={(organizationId) => onChange({ organizationId })}
-          options={[{ value: '', label: 'Tutte le Organizzazioni' }, ...organizationOptions]}
+          options={[{ value: '', label: 'Tutte le organizzazioni' }, ...organizationOptions]}
         />
       </div>
       <div className={filterFieldCls}>
@@ -79,7 +79,7 @@ export default function UsersFilters({
           className="min-w-[180px]"
           value={value.ruolo}
           onChange={(ruolo) => onChange({ ruolo })}
-          options={[{ value: '', label: 'Tutti i Ruoli' }, ...ROLE_OPTIONS]}
+          options={[{ value: '', label: 'Tutti i ruoli' }, ...ROLE_OPTIONS]}
         />
       </div>
       <div className={filterFieldCls}>

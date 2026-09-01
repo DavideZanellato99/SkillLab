@@ -12,8 +12,8 @@ import { SuspendIcon, ReactivateIcon, DisableIcon, ResendIcon } from './icons'
 /* I ruoli sono elencati dal più ampio al più ristretto, così l'ordine del
  * menu a tendina rispecchia la gerarchia dei permessi. */
 export const ROLE_OPTIONS: { value: RoleName; label: string }[] = [
-  { value: 'super_admin', label: 'Super Admin' },
-  { value: 'organization_admin', label: 'Amministratore Organizzazione' },
+  { value: 'super_admin', label: 'Super admin' },
+  { value: 'organization_admin', label: 'Amministratore organizzazione' },
   { value: 'user', label: 'Utente' },
 ]
 

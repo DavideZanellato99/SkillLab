@@ -162,7 +162,8 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, la chiave del suo tipo, la spiegazione, e le segnalazioni del controllo sopra il testo |
 | [frontend/src/components/SimulationReviewPanel.tsx](../frontend/src/components/SimulationReviewPanel.tsx) | L'esito del controllo in testa alle domande, dalla segnalazione più grave, con il salto alla domanda di cui parla |
 | [frontend/src/components/SimulationSettingsPanel.tsx](../frontend/src/components/SimulationSettingsPanel.tsx) | I dati del test accanto alle domande: titolo, descrizione e la sostituzione del documento |
-| [frontend/src/components/SimulationAdminPage.tsx](../frontend/src/components/SimulationAdminPage.tsx) | La tabella di gestione: ricerca, filtro per stato, e le tre finestre che apre |
+| [frontend/src/components/SimulationAdminPage.tsx](../frontend/src/components/SimulationAdminPage.tsx) | La tabella di gestione: ricerca, filtri, e le tre finestre che apre |
+| [frontend/src/components/SimulationsFilters.tsx](../frontend/src/components/SimulationsFilters.tsx) | Le due tendine sopra la tabella di gestione: stato e tipo di test |
 | [frontend/src/components/SimulationEditorModal.tsx](../frontend/src/components/SimulationEditorModal.tsx) | Il pannello dove una simulazione diventa un test: domande, risultati, dati, pubblicazione |
 | [frontend/src/hooks/useCloseGuard.ts](../frontend/src/hooks/useCloseGuard.ts) | La conferma fra un gesto di chiusura e una finestra piena di lavoro non salvato, condivisa con il resto dell'app |
 | [frontend/src/components/SimulationStepsEditor.tsx](../frontend/src/components/SimulationStepsEditor.tsx) | La chiave di un ordinamento: i passi nella sequenza corretta |
@@ -709,6 +710,17 @@ modifica, il cestino elimina. Per una simulazione "modificare" vuol dire
 scrivere le domande e pubblicarle, non correggere due campi in un form, quindi
 dietro la matita c'è il pannello e non una modale di campi.
 
+I valori della colonna "Simulazione" sono allineati a sinistra, come la prima
+colonna delle altre tabelle dell'app: è la colonna che dà il nome alla riga e
+sotto il titolo ci sta il documento, e al centro le due righe partirebbero da
+due punti diversi. Le intestazioni restano al centro.
+
+Nella colonna "Tipo" le due targhette, come si risponde e chi ha scritto le
+domande, stanno una di fianco all'altra e non vanno mai a capo: è una colonna
+larga con il padding stretto delle colonne compatte, perché "Scelta multipla"
+accanto alla pastiglia dell'origine ci stia in fila. Su due righe si leggevano
+come due informazioni separate, e alzavano ogni riga della tabella.
+
 La paternità arriva solo da `/api/admin/simulations`
 (`AdminSimulationResponse`), non da quella di chi svolge il test: le colonne le
 scrive il listener di [authorship](../backend/authorship.py) come su ogni
@@ -746,12 +758,49 @@ della dashboard e del report attività
 qui `elevated` perché sta sopra il pannello). Senza il cestino, però: buttare
 via un tentativo è un gesto del report, non di chi sta preparando il test.
 
-La tabella da cui il pannello si apre ha, accanto alla ricerca, il filtro per
-**stato** (`STATUS_FILTERS` in
-[simulationFilters](../frontend/src/components/simulationFilters.ts)): bozze,
-pubblicate, tutte. È la domanda che si fa chi apre la pagina, quali test siano
-rimasti a metà, e la ricerca da sola non sa rispondere perché «bozza» non è
-scritto in nessuna riga.
+La tabella da cui il pannello si apre ha **sopra di sé** la sua barra di
+filtri ([SimulationsFilters](../frontend/src/components/SimulationsFilters.tsx)),
+com'è sopra la tabella quella della gestione utenti: tre tendine, il **tipo**
+di test, l'**origine** delle domande (IA, manuale) e lo **stato** (bozze,
+pubblicate, tutte), più «Azzera Filtri» quando c'è qualcosa da azzerare. Sono
+le tre domande che si fa chi apre la pagina, che lavoro siano questi test, chi
+ne ha scritto le domande e quali siano rimasti a metà, e la ricerca da sola non
+sa rispondere: né «bozza» né «scelta multipla» sono scritti in una riga come
+parole da cercare, e «IA» sulla riga è un'icona.
+
+L'ordine è quello delle colonne che restringono, come in ogni barra di filtri
+dell'app: il tipo e l'origine sono le due targhette della colonna «Tipo», lo
+stato è la colonna dopo.
+
+L'origine è la domanda che vale la rilettura: le domande che ha scritto il
+modello sono quelle da controllare prima di pubblicare, quelle scritte da una
+persona ci sono già passate. Le due voci portano le stesse parole del tooltip
+della targhetta, «IA» e «Manuale», perché chi ha visto la scintilla su una riga
+e ci ha letto sopra quella parola la ritrova qui.
+
+Le voci delle tendine e la regola che le applica stanno in
+[simulationFilters](../frontend/src/components/simulationFilters.ts)
+(`ADMIN_STATUS_OPTIONS`, `ADMIN_KIND_OPTIONS`, `ADMIN_SOURCE_OPTIONS`,
+`filterAdminSimulations`), che è lo stesso file delle pastiglie del catalogo:
+sono modi di restringere lo stesso elenco letto da due parti diverse. In
+tendina la voce che non restringe niente sta in cima, «Tutti gli stati»,
+«Tutti i tipi» e «Tutte le origini», perché è il valore di partenza e non
+un'ultima voce da cercare in fondo alla lista; i quattro tipi ci sono sempre,
+anche dove il catalogo non li ha ancora, che qui accanto alla voce non c'è il
+numero che c'è sulle pastiglie.
+
+Prima stavano dentro la tabella, sulla stessa fascia della ricerca. Con un
+filtro solo era una pastiglia accanto a una casella; con tre, quella fascia
+diventava una barra di filtri incastrata fra l'intestazione della pagina e le
+intestazioni delle colonne. La casella di ricerca invece resta dov'era, dentro
+la tabella: è anche lei un filtro, e per questo «Azzera Filtri» la svuota e
+compare anche quando è l'unica cosa scritta.
+
+Quando la tabella resta vuota il messaggio dice **quale** filtro l'ha svuotata,
+che «nessuna simulazione presente» sotto un filtro attivo farebbe credere che
+siano sparite. Da due tendine scelte in su diventa un «nessuna simulazione
+corrisponde ai filtri» solo: quali siano si legge sopra, e riscriverle nella
+frase non direbbe comunque quale allargare.
 
 ### I dati del test
 

@@ -12,7 +12,7 @@ import type { PaginationBarProps } from '../hooks/usePagination'
 
 /* Larghezza del selettore, tarata sui valori per pagina. Vive qui e non nelle
  * pagine così che nessun elenco possa averlo di una misura diversa. */
-const pageSizeSelectCls = 'w-[77px]'
+const pageSizeSelectCls = 'w-[78px]'
 
 const paginationBtnCls =
   'flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-violet-600 hover:bg-violet-600/12 hover:text-violet-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/6 disabled:hover:bg-white/4 disabled:hover:text-slate-400'

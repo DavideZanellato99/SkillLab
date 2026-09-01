@@ -147,7 +147,7 @@ export default function TrainingAssignmentsTable({
             value={pathFilter}
             onChange={onPathFilterChange}
             options={[
-              { value: '', label: 'Tutti i Percorsi' },
+              { value: '', label: 'Tutti i percorsi' },
               ...paths.map((path) => ({ value: path.id, label: path.title })),
             ]}
           />

@@ -183,7 +183,7 @@ export default function UserReportPage() {
   )
 
   const orgFilterOptions = [
-    { value: '', label: 'Tutte le Organizzazioni' },
+    { value: '', label: 'Tutte le organizzazioni' },
     ...organizations.map((o) => ({ value: o.id, label: o.name })),
   ]
 

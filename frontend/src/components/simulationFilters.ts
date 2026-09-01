@@ -13,6 +13,7 @@ import type {
   AdminSimulation,
   Simulation,
   SimulationKind,
+  SimulationSource,
   SimulationStatus,
 } from '../services/simulations'
 import { kindLabel, sourceLabel } from './simulationFormat'
@@ -93,27 +94,67 @@ export function kindFilterOptions(
 
 /* ── La gestione, che è l'altra metà ──────────────────────────────────
  *
- * Chi prepara i test guarda le stesse righe da un'altra parte, e la domanda
- * che si fa aprendo la pagina non è quali abbia già svolto ma **quali siano
- * ancora da finire**: una simulazione vive in bozza finché il serbatoio non è
- * pieno e riletto, e le bozze sono quelle su cui si torna. Sta qui accanto
- * all'altro filtro perché sono due modi di restringere lo stesso elenco, e
+ * Chi prepara i test guarda le stesse righe da un'altra parte, e le domande
+ * che si fa aprendo la pagina sono tre: **quali siano ancora da finire**, che
+ * una simulazione vive in bozza finché il serbatoio non è pieno e riletto,
+ * **come ci si risponde**, che scrivere dieci domande a crocette e dieci da
+ * correggere a mano sono due lavori diversi, e **chi le ha scritte**, perché
+ * le domande di un modello sono quelle da rileggere. Stanno qui accanto
+ * all'altro filtro perché sono modi di restringere lo stesso elenco, e
  * separarli vorrebbe dire due file che parlano di simulazioni filtrate. */
 
 /** Quali simulazioni guardare nella gestione: le bozze, le pubblicate, tutte. */
 export type SimulationStatusFilter = SimulationStatus | 'all'
 
-/* "Tutte" resta in fondo come negli altri filtri dell'app: è il punto di
- * partenza, non una terza scelta. Prima le bozze, che sono il lavoro
- * rimasto indietro. */
-export const STATUS_FILTERS: { value: SimulationStatusFilter; label: string }[] = [
+/** Da dove vengono le domande: dal modello, da una persona, o non importa. */
+export type SimulationSourceFilter = SimulationSource | 'all'
+
+/** Le tre tendine sopra la tabella, in un valore solo: la pagina ne cambia
+ *  una per volta e le passa insieme, come la barra della gestione utenti. */
+export interface AdminSimulationFilters {
+  status: SimulationStatusFilter
+  kind: SimulationFilter
+  source: SimulationSourceFilter
+}
+
+/** L'elenco intero, che è da dove si parte e dove riporta «Azzera Filtri». */
+export const NO_ADMIN_FILTERS: AdminSimulationFilters = {
+  status: 'all',
+  kind: ALL_KINDS,
+  source: 'all',
+}
+
+/* In una tendina la voce che non restringe niente sta in cima e non in fondo,
+ * come "Tutti gli stati" nella gestione utenti: è il valore di partenza, che
+ * si legge sul pulsante finché nessuno sceglie, non una terza opzione da
+ * cercare in fondo alla lista. */
+export const ADMIN_STATUS_OPTIONS: { value: SimulationStatusFilter; label: string }[] = [
+  { value: 'all', label: 'Tutti gli stati' },
   { value: 'draft', label: 'Bozze' },
   { value: 'published', label: 'Pubblicate' },
-  { value: 'all', label: 'Tutte' },
+]
+
+/* I quattro tipi ci sono sempre, anche dove il catalogo non li ha ancora:
+ * qui non c'è il numero accanto alla voce che c'è sulle pastiglie del
+ * catalogo, quindi una tendina che cambia lunghezza da un'organizzazione
+ * all'altra direbbe solo che le voci si spostano sotto il cursore. */
+export const ADMIN_KIND_OPTIONS: { value: SimulationFilter; label: string }[] = [
+  { value: ALL_KINDS, label: 'Tutti i tipi' },
+  ...KIND_ORDER.map((kind) => ({ value: kind, label: kindLabel(kind) })),
+]
+
+/* L'origine con le stesse due parole del tooltip della targhetta, che sulla
+ * riga è solo un'icona: chi ha visto la scintilla e ci ha letto sopra "IA"
+ * ritrova quella parola qui. Prima il modello, che è il caso da rileggere:
+ * le domande scritte da una persona sono già passate da chi le ha scritte. */
+export const ADMIN_SOURCE_OPTIONS: { value: SimulationSourceFilter; label: string }[] = [
+  { value: 'all', label: 'Tutte le origini' },
+  { value: 'ai', label: sourceLabel('ai') },
+  { value: 'manual', label: sourceLabel('manual') },
 ]
 
 /**
- * Le simulazioni che restano dopo lo stato e la ricerca.
+ * Le simulazioni che restano dopo i filtri e la ricerca.
  *
  * La ricerca guarda anche il tipo e l'origine, che nella tabella si leggono
  * come targhette: cercare "aperta" trova i test in cui si scrive, cercare
@@ -123,12 +164,14 @@ export const STATUS_FILTERS: { value: SimulationStatusFilter; label: string }[] 
  */
 export function filterAdminSimulations(
   simulations: AdminSimulation[],
-  status: SimulationStatusFilter,
+  filters: AdminSimulationFilters,
   search: string,
   showOrganization: boolean,
 ): AdminSimulation[] {
   return simulations.filter((simulation) => {
-    if (status !== 'all' && simulation.status !== status) return false
+    if (filters.status !== 'all' && simulation.status !== filters.status) return false
+    if (filters.kind !== ALL_KINDS && simulation.kind !== filters.kind) return false
+    if (filters.source !== 'all' && simulation.source !== filters.source) return false
     return matchesSearch(
       search,
       simulation.title,

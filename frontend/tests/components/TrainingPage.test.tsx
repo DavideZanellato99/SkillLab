@@ -233,13 +233,13 @@ describe('filtro per organizzazione', () => {
   it("c'è per il super admin", () => {
     renderPage()
 
-    expect(screen.getByText('Tutte le Organizzazioni')).toBeInTheDocument()
+    expect(screen.getByText('Tutte le organizzazioni')).toBeInTheDocument()
   })
 
   it("non c'è per un org admin", () => {
     renderPage('organization_admin')
 
-    expect(screen.queryByText('Tutte le Organizzazioni')).not.toBeInTheDocument()
+    expect(screen.queryByText('Tutte le organizzazioni')).not.toBeInTheDocument()
   })
 })
 

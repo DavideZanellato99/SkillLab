@@ -72,7 +72,7 @@ describe('UserCreateModal', () => {
     const { onCreated } = renderModal()
     await compila()
 
-    await scegli('Ruolo del sistema', 'Super Admin')
+    await scegli('Ruolo del sistema', 'Super admin')
     await userEvent.click(screen.getByRole('button', { name: 'Crea Utente' }))
 
     expect(createUser).toHaveBeenCalledWith({
@@ -89,7 +89,7 @@ describe('UserCreateModal', () => {
     renderModal()
     expect(screen.getByRole('combobox', { name: 'Organizzazione' })).toBeInTheDocument()
 
-    await scegli('Ruolo del sistema', 'Super Admin')
+    await scegli('Ruolo del sistema', 'Super admin')
     expect(screen.queryByRole('combobox', { name: 'Organizzazione' })).not.toBeInTheDocument()
   })
 

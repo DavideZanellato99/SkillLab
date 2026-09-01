@@ -13,15 +13,15 @@ import PrimaryButton from './PrimaryButton'
 import Badge from './Badge'
 import ConfirmModal from './ConfirmModal'
 import Tooltip from './Tooltip'
-import FilterTabs from './FilterTabs'
 import { PencilIcon, PlusIcon, TrashIcon } from './icons'
-import { filterAdminSimulations, STATUS_FILTERS } from './simulationFilters'
-import type { SimulationStatusFilter } from './simulationFilters'
+import { ALL_KINDS, filterAdminSimulations, NO_ADMIN_FILTERS } from './simulationFilters'
+import type { AdminSimulationFilters } from './simulationFilters'
 import SimulationCreateModal from './SimulationCreateModal'
 import SimulationDetailModal from './SimulationDetailModal'
 import SimulationEditorModal from './SimulationEditorModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
+import SimulationsFilters from './SimulationsFilters'
 import { formatDate } from './dateFormat'
 import { kindLabel, statusBadgeTone, statusLabel } from './simulationFormat'
 import { iconActionCls as actionBtnCls } from './IconButton'
@@ -51,13 +51,19 @@ function simulationColumns(showOrg: boolean): DataTableColumn<AdminSimulation>[]
   const title: DataTableColumn<AdminSimulation> = {
     key: 'title',
     label: 'Simulazione',
-    width: showOrg ? '24%' : '30%',
+    width: showOrg ? '21%' : '27%',
     sortValue: (s) => s.title,
   }
+  /* Nella colonna del tipo stanno due targhette una di fianco all'altra, e
+     "Scelta multipla" è la più lunga delle quattro etichette: la colonna è
+     larga perché le due ci stiano in fila, con il padding stretto delle
+     colonne compatte. Andando a capo si leggevano come due informazioni su
+     due righe, e alzavano ogni riga della tabella. */
   const kind: DataTableColumn<AdminSimulation> = {
     key: 'kind',
     label: 'Tipo',
-    width: showOrg ? '15%' : '17%',
+    compact: true,
+    width: showOrg ? '18%' : '20%',
     sortValue: (s) => kindLabel(s.kind),
   }
   const questions: DataTableColumn<AdminSimulation> = {
@@ -107,10 +113,18 @@ function simulationColumns(showOrg: boolean): DataTableColumn<AdminSimulation>[]
 /* Cosa dice la tabella vuota, che non è sempre la stessa cosa: senza righe
  * per via di un filtro, il messaggio deve dire quale, altrimenti "nessuna
  * simulazione presente" fa credere che siano sparite. */
-function emptyMessage(search: string, status: SimulationStatusFilter): string {
+function emptyMessage(search: string, { status, kind, source }: AdminSimulationFilters): string {
   if (search) return 'Nessuna simulazione corrisponde alla ricerca'
+  /* Con più di una tendina scelta il messaggio non dice quale ha svuotato la
+     tabella: le vede scritte sopra chi legge, e ripeterle in una frase non
+     aiuterebbe comunque a capire quale allargare. */
+  const chosen = [status !== 'all', kind !== ALL_KINDS, source !== 'all'].filter(Boolean).length
+  if (chosen > 1) return 'Nessuna simulazione corrisponde ai filtri'
   if (status === 'draft') return 'Nessuna bozza da finire'
   if (status === 'published') return 'Nessuna simulazione pubblicata'
+  if (kind !== ALL_KINDS) return `Nessuna simulazione di tipo ${kindLabel(kind).toLowerCase()}`
+  if (source === 'ai') return 'Nessuna simulazione con domande generate dal modello'
+  if (source === 'manual') return 'Nessuna simulazione con domande scritte a mano'
   return 'Nessuna simulazione presente'
 }
 
@@ -127,10 +141,10 @@ export default function SimulationAdminPage() {
    * test del tenant, riscorso da capo a ogni tasto premuto. */
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search)
-  /* Lo stato è la prima domanda che si fa chi apre questa pagina: quali test
-   * sono ancora da finire. Si parte da tutte, perché è l'elenco intero, e le
-   * bozze sono a un clic. */
-  const [status, setStatus] = useState<SimulationStatusFilter>('all')
+  /* Le tre domande di chi apre questa pagina: che lavoro siano questi test,
+   * chi ne ha scritto le domande e quali siano ancora da finire. Si parte
+   * dall'elenco intero, con le tre tendine sul valore che non restringe. */
+  const [filters, setFilters] = useState<AdminSimulationFilters>(NO_ADMIN_FILTERS)
   const [creating, setCreating] = useState(false)
   /* Il pannello di revisione, aperto dalla matita. Tiene l'id e non la riga
    * perché si ricarica dal server: le domande non stanno nell'elenco. */
@@ -140,7 +154,18 @@ export default function SimulationAdminPage() {
   const [viewing, setViewing] = useState<AdminSimulation | null>(null)
   const [toDelete, setToDelete] = useState<AdminSimulation | null>(null)
 
-  const filtered = filterAdminSimulations(simulations, status, debouncedSearch, showOrg)
+  const filtered = filterAdminSimulations(simulations, filters, debouncedSearch, showOrg)
+
+  const changeFilters = (patch: Partial<AdminSimulationFilters>) =>
+    setFilters((prev) => ({ ...prev, ...patch }))
+
+  /* Azzerare i filtri svuota anche la casella di ricerca: chi lo preme
+     vuole rivedere l'elenco intero, e restringerlo ancora per una parola
+     scritta prima sarebbe la stessa tabella filtrata di un attimo fa. */
+  const resetFilters = () => {
+    setSearch('')
+    setFilters(NO_ADMIN_FILTERS)
+  }
 
   const confirmDelete = () => {
     if (!toDelete) return
@@ -169,13 +194,20 @@ export default function SimulationAdminPage() {
         }
       />
 
+      <SimulationsFilters
+        value={filters}
+        isSearching={Boolean(search)}
+        onChange={changeFilters}
+        onReset={resetFilters}
+      />
+
       {isLoading ? (
         <TableSkeleton columns={columns} message="Caricamento simulazioni..." />
       ) : (
         <DataTable
           columns={columns}
           items={filtered}
-          emptyMessage={emptyMessage(debouncedSearch, status)}
+          emptyMessage={emptyMessage(debouncedSearch, filters)}
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder={
@@ -183,25 +215,14 @@ export default function SimulationAdminPage() {
               ? 'Cerca per titolo, organizzazione o documento...'
               : 'Cerca per titolo o documento...'
           }
-          /* Accanto alla ricerca, come nel report attività: sono i due modi
-             di restringere lo stesso elenco, e su due fasce diverse si
-             leggerebbero come comandi di due schermate. */
-          searchActions={
-            <FilterTabs
-              value={status}
-              onChange={setStatus}
-              options={STATUS_FILTERS}
-              ariaLabel="Stato delle simulazioni"
-            />
-          }
-          pageResetKey={`${status}|${debouncedSearch}`}
+          pageResetKey={`${filters.status}|${filters.kind}|${filters.source}|${debouncedSearch}`}
           renderRow={(simulation) => (
             <Tr
               key={simulation.id}
               className="cursor-pointer"
               onClick={() => setViewing(simulation)}
             >
-              <Td>
+              <Td align="left">
                 <span className="block text-[0.9rem] font-medium text-slate-100">
                   {simulation.title}
                 </span>
@@ -218,8 +239,8 @@ export default function SimulationAdminPage() {
               {showOrg && (
                 <Td className="text-[0.85rem] text-slate-400">{simulation.organization_name}</Td>
               )}
-              <Td>
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
+              <Td compact>
+                <div className="flex items-center justify-center gap-1.5">
                   <SimulationKindBadge kind={simulation.kind} />
                   <SimulationSourceBadge source={simulation.source} />
                 </div>

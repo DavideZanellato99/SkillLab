@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  ADMIN_KIND_OPTIONS,
+  ADMIN_SOURCE_OPTIONS,
+  ADMIN_STATUS_OPTIONS,
+  NO_ADMIN_FILTERS,
   filterAdminSimulations,
   filterSimulations,
   kindFilterOptions,
 } from '../../src/components/simulationFilters'
+import type { AdminSimulationFilters } from '../../src/components/simulationFilters'
 import type { AdminSimulation, Simulation } from '../../src/services/simulations'
 
 /* Restringere l'elenco dei test è un giro su una lista già in memoria, e la
@@ -103,8 +108,15 @@ describe('filterAdminSimulations', () => {
   const bozza = adminSimulazione({ id: 'bozza', title: 'Reclami', status: 'draft' })
   const pubblicata = adminSimulazione({ id: 'pubblicata', title: 'Bonifici esteri' })
 
-  it('mostra tutto finché non si sceglie uno stato', () => {
-    expect(filterAdminSimulations([bozza, pubblicata], 'all', '', true)).toHaveLength(2)
+  /* Le due tendine viaggiano insieme, e ogni prova ne cambia una sola: così
+     si legge quale delle due sta restringendo l'elenco. */
+  const filtri = (over: Partial<AdminSimulationFilters> = {}): AdminSimulationFilters => ({
+    ...NO_ADMIN_FILTERS,
+    ...over,
+  })
+
+  it('mostra tutto finché non si sceglie', () => {
+    expect(filterAdminSimulations([bozza, pubblicata], filtri(), '', true)).toHaveLength(2)
   })
 
   /* La domanda che si fa chi apre la gestione: quali test sono rimasti a
@@ -112,10 +124,37 @@ describe('filterAdminSimulations', () => {
   it('separa le bozze da finire dalle simulazioni pubblicate', () => {
     const elenco = [bozza, pubblicata]
 
-    expect(filterAdminSimulations(elenco, 'draft', '', true).map((s) => s.id)).toEqual(['bozza'])
-    expect(filterAdminSimulations(elenco, 'published', '', true).map((s) => s.id)).toEqual([
-      'pubblicata',
-    ])
+    expect(
+      filterAdminSimulations(elenco, filtri({ status: 'draft' }), '', true).map((s) => s.id),
+    ).toEqual(['bozza'])
+    expect(
+      filterAdminSimulations(elenco, filtri({ status: 'published' }), '', true).map((s) => s.id),
+    ).toEqual(['pubblicata'])
+  })
+
+  /* L'altra domanda: scrivere dieci domande a crocette e dieci da correggere
+     a mano sono due lavori diversi. */
+  it('restringe al tipo di test', () => {
+    const aperta = adminSimulazione({ id: 'aperta', title: 'Cassa', kind: 'open' })
+    const elenco = [pubblicata, aperta]
+
+    expect(
+      filterAdminSimulations(elenco, filtri({ kind: 'open' }), '', true).map((s) => s.id),
+    ).toEqual(['aperta'])
+    expect(filterAdminSimulations(elenco, filtri({ kind: 'matching' }), '', true)).toHaveLength(0)
+  })
+
+  /* La terza domanda: le domande di un modello sono quelle da rileggere. */
+  it('restringe a chi ha scritto le domande', () => {
+    const aMano = adminSimulazione({ id: 'mano', title: 'Sportello', source: 'manual' })
+    const elenco = [pubblicata, aMano]
+
+    expect(
+      filterAdminSimulations(elenco, filtri({ source: 'manual' }), '', true).map((s) => s.id),
+    ).toEqual(['mano'])
+    expect(
+      filterAdminSimulations(elenco, filtri({ source: 'ai' }), '', true).map((s) => s.id),
+    ).toEqual(['pubblicata'])
   })
 
   it('cerca nel titolo, nel documento, nel tipo e in chi ha scritto le domande', () => {
@@ -123,14 +162,14 @@ describe('filterAdminSimulations', () => {
     const aMano = adminSimulazione({ id: 'mano', title: 'Sportello', source: 'manual' })
     const elenco = [pubblicata, aperta, aMano]
 
-    expect(filterAdminSimulations(elenco, 'all', 'bonifici', true).map((s) => s.id)).toEqual([
+    expect(filterAdminSimulations(elenco, filtri(), 'bonifici', true).map((s) => s.id)).toEqual([
       'pubblicata',
     ])
-    expect(filterAdminSimulations(elenco, 'all', 'normativa.pdf', true)).toHaveLength(3)
-    expect(filterAdminSimulations(elenco, 'all', 'risposta aperta', true).map((s) => s.id)).toEqual(
-      ['aperta'],
-    )
-    expect(filterAdminSimulations(elenco, 'all', 'manuale', true).map((s) => s.id)).toEqual([
+    expect(filterAdminSimulations(elenco, filtri(), 'normativa.pdf', true)).toHaveLength(3)
+    expect(
+      filterAdminSimulations(elenco, filtri(), 'risposta aperta', true).map((s) => s.id),
+    ).toEqual(['aperta'])
+    expect(filterAdminSimulations(elenco, filtri(), 'manuale', true).map((s) => s.id)).toEqual([
       'mano',
     ])
   })
@@ -140,16 +179,58 @@ describe('filterAdminSimulations', () => {
   it("cerca l'organizzazione solo dove la si legge", () => {
     const elenco = [pubblicata]
 
-    expect(filterAdminSimulations(elenco, 'all', 'Banca Esempio', true)).toHaveLength(1)
-    expect(filterAdminSimulations(elenco, 'all', 'Banca Esempio', false)).toHaveLength(0)
+    expect(filterAdminSimulations(elenco, filtri(), 'Banca Esempio', true)).toHaveLength(1)
+    expect(filterAdminSimulations(elenco, filtri(), 'Banca Esempio', false)).toHaveLength(0)
   })
 
-  it('applica insieme lo stato e la ricerca', () => {
+  it('applica insieme lo stato, il tipo e la ricerca', () => {
     const altraBozza = adminSimulazione({ id: 'altra', title: 'Bonifici interni', status: 'draft' })
-    const elenco = [bozza, pubblicata, altraBozza]
+    const bozzaAperta = adminSimulazione({
+      id: 'aperta',
+      title: 'Bonifici aperti',
+      status: 'draft',
+      kind: 'open',
+    })
+    const elenco = [bozza, pubblicata, altraBozza, bozzaAperta]
 
-    expect(filterAdminSimulations(elenco, 'draft', 'bonifici', true).map((s) => s.id)).toEqual([
-      'altra',
+    expect(
+      filterAdminSimulations(elenco, filtri({ status: 'draft' }), 'bonifici', true).map(
+        (s) => s.id,
+      ),
+    ).toEqual(['altra', 'aperta'])
+    expect(
+      filterAdminSimulations(
+        elenco,
+        filtri({ status: 'draft', kind: 'open' }),
+        'bonifici',
+        true,
+      ).map((s) => s.id),
+    ).toEqual(['aperta'])
+  })
+})
+
+/* Le tendine della barra: la voce che non restringe niente sta in cima, e i
+   quattro tipi ci sono sempre, anche dove il catalogo non li ha. */
+describe('le opzioni della gestione', () => {
+  it('parte dalla voce che non restringe', () => {
+    expect(ADMIN_STATUS_OPTIONS[0]).toEqual({ value: 'all', label: 'Tutti gli stati' })
+    expect(ADMIN_KIND_OPTIONS[0]).toEqual({ value: 'all', label: 'Tutti i tipi' })
+    expect(ADMIN_SOURCE_OPTIONS[0]).toEqual({ value: 'all', label: 'Tutte le origini' })
+  })
+
+  /* Le stesse due parole del tooltip della targhetta, che sulla riga è solo
+     un'icona. */
+  it('elenca le due origini con le parole della targhetta', () => {
+    expect(ADMIN_SOURCE_OPTIONS.map((o) => o.label)).toEqual(['Tutte le origini', 'IA', 'Manuale'])
+  })
+
+  it('elenca i quattro tipi di test', () => {
+    expect(ADMIN_KIND_OPTIONS.map((o) => o.value)).toEqual([
+      'all',
+      'multiple',
+      'open',
+      'ordering',
+      'matching',
     ])
   })
 })

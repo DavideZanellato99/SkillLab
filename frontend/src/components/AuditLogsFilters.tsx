@@ -1,5 +1,6 @@
-/* La barra dei filtri del registro attività: azione, organizzazione e il
- * periodo, più il pulsante che li azzera tutti.
+/* La barra dei filtri del registro attività: organizzazione, azione e il
+ * periodo, più il pulsante che li azzera tutti. Le tendine stanno nell'ordine
+ * delle colonne che restringono, come in ogni barra di filtri dell'app.
  *
  * I filtri girano sul server, quindi coprono tutto il registro e non solo la
  * finestra già scaricata: qui è solo il pannello che li sceglie.
@@ -48,18 +49,9 @@ export default function AuditLogsFilters({
 
   return (
     <div className="mb-8 flex flex-wrap items-end gap-4">
-      <div className={filterFieldCls}>
-        <label className={labelCls} htmlFor="audit-action-filter">
-          Azione
-        </label>
-        <Select
-          id="audit-action-filter"
-          className="min-w-[240px]"
-          value={value.action}
-          onChange={(action) => onChange({ action })}
-          options={[{ value: '', label: 'Tutte le Azioni' }, ...actionOptions]}
-        />
-      </div>
+      {/* Nell'ordine delle colonne della tabella: prima l'organizzazione,
+          poi l'azione. Le due date restano in fondo, che il periodo si
+          sceglie una volta e le due tendine si cambiano di continuo. */}
       <div className={filterFieldCls}>
         <label className={labelCls} htmlFor="audit-org-filter">
           Organizzazione
@@ -69,7 +61,19 @@ export default function AuditLogsFilters({
           className="min-w-[220px]"
           value={value.organizationId}
           onChange={(organizationId) => onChange({ organizationId })}
-          options={[{ value: '', label: 'Tutte le Organizzazioni' }, ...organizationOptions]}
+          options={[{ value: '', label: 'Tutte le organizzazioni' }, ...organizationOptions]}
+        />
+      </div>
+      <div className={filterFieldCls}>
+        <label className={labelCls} htmlFor="audit-action-filter">
+          Azione
+        </label>
+        <Select
+          id="audit-action-filter"
+          className="min-w-[240px]"
+          value={value.action}
+          onChange={(action) => onChange({ action })}
+          options={[{ value: '', label: 'Tutte le azioni' }, ...actionOptions]}
         />
       </div>
       <div className={filterFieldCls}>

@@ -205,6 +205,21 @@ tutti e tre i punti, perché nasconderla in barra non basta: le rotte
 un admin risponde **403 e non una lista vuota** — "non ne hai" e "non è roba
 tua" sono due risposte diverse.
 
+**Con un percorso solo la sezione salta l'elenco** e apre direttamente la sua
+mappa ([MyPathsRoute](../frontend/src/components/MyPathsRoute.tsx), che è
+l'elemento della rotta `/app/percorsi`). Un elenco di una riga non è una
+scelta, è un passaggio in più fra la voce in barra e l'unica cosa che ci sta
+dietro, e la scheda intermedia diceva soltanto il titolo che la mappa ripete in
+testa. Il salto sostituisce il passo nella cronologia invece di aggiungerlo,
+altrimenti "indietro" dalla mappa tornerebbe all'elenco e da lì ripartirebbe
+subito in avanti; e finché la richiesta è in volo non si salta niente, perché
+la lista vuota di quel momento non dice ancora quanti percorsi ci sono. Nella
+mappa, di conseguenza, il ritorno "Tutti i Percorsi" non compare quando quel
+percorso è l'unico: rimanderebbe a una pagina che rimbalza subito qui. Da due
+in su non cambia niente, l'elenco resta la scelta fra i propri percorsi. La
+decisione sta nella rotta e non dentro l'elenco perché sono due mestieri: uno
+disegna i percorsi che ci sono, l'altro dice dove porta la voce in barra.
+
 **Ogni percorso porta la firma di chi l'ha affidato**, nome e cognome e data,
 in coda alla scheda dell'elenco e sotto il titolo nella mappa
 ([assignedByLabel](../frontend/src/components/trainingFormat.ts)). Un percorso

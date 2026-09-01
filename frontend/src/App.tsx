@@ -6,7 +6,7 @@ import Header from './components/Header'
 import AvatarGallery from './components/AvatarGallery'
 import ChatPage from './components/ChatPage'
 import ComparisonPage from './components/ComparisonPage'
-import MyPathsPage from './components/MyPathsPage'
+import MyPathsRoute from './components/MyPathsRoute'
 import PathMapPage from './components/PathMapPage'
 import SimulationsPage from './components/SimulationsPage'
 import SimulationRunner from './components/SimulationRunner'
@@ -131,12 +131,15 @@ function App() {
                     li compone e ne segue l'avanzamento dalla gestione
                     percorsi, e riceverne uno non è previsto, quindi qui
                     non ha niente da aprire. Il server dice lo stesso, con
-                    un 403 su `/assignments/me`. */}
+                    un 403 su `/assignments/me`.
+
+                    Con un percorso solo l'elenco sarebbe una riga sola:
+                    MyPathsRoute lo salta e porta dritto alla mappa. */}
                 <Route
                   path="percorsi"
                   element={
                     <RequireRole access="user">
-                      <MyPathsPage />
+                      <MyPathsRoute />
                     </RequireRole>
                   }
                 />

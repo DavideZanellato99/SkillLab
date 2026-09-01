@@ -208,11 +208,19 @@ describe('PathMapPage', () => {
   })
 
   it("torna all'elenco dei percorsi", async () => {
-    renderPage({ data: [percorso()] })
+    renderPage({ data: [percorso(), percorso({ id: 'as-2', path_title: 'Altro' })] })
 
     await userEvent.click(screen.getByRole('link', { name: /Tutti i Percorsi/ }))
 
     expect(screen.getByText('Elenco dei percorsi')).toBeInTheDocument()
+  })
+
+  /* Con un percorso solo la sezione entra dritta qui: il ritorno all'elenco
+   * rimbalzerebbe subito indietro, senza che si veda succedere niente. */
+  it("con un percorso solo non offre il ritorno all'elenco", () => {
+    renderPage({ data: [percorso()] })
+
+    expect(screen.queryByRole('link', { name: /Tutti i Percorsi/ })).not.toBeInTheDocument()
   })
 
   it('mostra il caricamento', () => {

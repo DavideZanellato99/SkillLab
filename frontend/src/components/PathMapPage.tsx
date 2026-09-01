@@ -71,7 +71,14 @@ export default function PathMapPage() {
 
   const assignment = assignments.find((a) => a.id === assignmentId)
 
-  const backLink = (
+  /* Il ritorno all'elenco sparisce quando l'elenco è questa pagina e basta:
+     con un percorso solo la sezione ci entra dritta, e il collegamento
+     rimbalzerebbe qui senza che si veda succedere niente. Resta invece
+     quando il percorso non si trova, perché lì è l'unica via d'uscita da
+     un indirizzo scaduto. */
+  const soloPercorso = assignments.length === 1 && Boolean(assignment)
+
+  const backLink = soloPercorso ? null : (
     <Link
       to="/app/percorsi"
       className="mb-6 inline-flex items-center gap-2 text-[0.82rem] font-medium text-slate-400 no-underline transition hover:text-slate-100"

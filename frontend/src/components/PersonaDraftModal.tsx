@@ -86,11 +86,11 @@ export default function PersonaDraftModal({ onClose, onDrafted }: Props) {
       size="md"
       padding="md"
       elevated
-      label="Genera la Scheda"
+      label="Genera la scheda"
     >
       <div className="mb-6">
         <h2 className="mb-1 font-heading text-[1.2rem] font-bold text-slate-100">
-          Genera la Scheda
+          Genera la scheda
         </h2>
         <p className="text-[0.8rem] leading-relaxed text-slate-500">
           Il modello propone una scheda completa, da rivedere prima del salvataggio. I campi già

@@ -46,6 +46,7 @@ import { fieldCls, inputCls, inputWrapperCls, labelCls, textareaCls } from './Fi
 import FormError from './FormError'
 import IconButton from './IconButton'
 import ModalShell from './ModalShell'
+import { useModalTitleId } from './modalTitle'
 import PersonaPromptPreview from './PersonaPromptPreview'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
@@ -291,6 +292,7 @@ export default function AvatarFormModal({
     }
   }
 
+  const titleId = useModalTitleId()
   const filledCount = countFilled(form.profile)
   const missing = missingEssentials(form.profile)
   const hasExternalImage = isExternalImageUrl(form.imageUrl)
@@ -300,38 +302,29 @@ export default function AvatarFormModal({
       onClose={requestClose}
       locked={isSaving}
       size="sheet"
-      padding="md"
-      label={isNew ? 'Crea Nuovo Avatar' : `Modifica ${target.name}`}
+      padding="none"
+      layout="column"
     >
-      <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-[52px] w-[52px] items-center justify-center rounded-2xl border border-violet-600/20 bg-violet-600/10">
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#7c3aed"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-          </svg>
+      {/* La fascia in testa, come nel dettaglio di una conversazione: come si
+          chiama la scheda, quanto è piena, e le due cose che si fanno da qui
+          senza uscire. Era un blocco centrato alto duecento pixel, e stava
+          dentro la parte che scorre: al primo campo compilato spariva. */}
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/6 px-8 py-5 pr-16 max-[480px]:px-5 max-[480px]:pr-14">
+        <div className="min-w-0 flex-1 basis-64">
+          <h2 id={titleId} className="font-heading text-xl font-bold text-slate-100">
+            {isNew ? 'Crea Nuovo Avatar' : `Modifica ${target.name}`}
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Scheda compilata al{' '}
+            <strong className="text-slate-300">
+              {Math.round((filledCount / ALL_PROFILE_KEYS.length) * 100)}%
+            </strong>{' '}
+            ({filledCount} campi su {ALL_PROFILE_KEYS.length})
+          </p>
         </div>
-        <h2 className="mb-1 font-heading text-[1.4rem] font-bold text-slate-100 max-[480px]:text-xl">
-          {isNew ? 'Crea Nuovo Avatar' : `Modifica ${target.name}`}
-        </h2>
-        <p className="text-[0.8rem] text-slate-500">
-          Scheda compilata al{' '}
-          <strong className="text-slate-300">
-            {Math.round((filledCount / ALL_PROFILE_KEYS.length) * 100)}%
-          </strong>{' '}
-          ({filledCount} campi su {ALL_PROFILE_KEYS.length})
-        </p>
         {/* Le due cose che si fanno a una scheda senza uscire da qui: farsela
             scrivere, e leggere cosa ne esce. Nell'ordine in cui capitano. */}
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
             className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-violet-600/30 bg-violet-600/10 px-4 py-2 text-[0.8rem] font-medium text-violet-300 transition hover:bg-violet-600/20 hover:text-violet-200"
@@ -339,7 +332,7 @@ export default function AvatarFormModal({
             disabled={isSaving}
           >
             <SparkleIcon />
-            Genera la Scheda
+            Genera la scheda
           </button>
           <button
             type="button"
@@ -351,258 +344,265 @@ export default function AvatarFormModal({
             Anteprima del Prompt
           </button>
         </div>
-      </div>
+      </header>
 
-      {formError && <FormError message={formError} />}
+      <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+        {/* Solo questo scorre: l'intestazione resta in cima e il
+            salvataggio in fondo, sempre a portata di mano. */}
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-8 py-5 max-[480px]:px-5">
+          {/* Non è un successo, è un avviso: la scheda adesso è piena di roba che
+              non ha scritto nessuno, e va riletta prima di salvare. */}
+          {draftNotice && (
+            <div className="rounded-xl border border-violet-500/25 bg-violet-500/10 px-4 py-2 text-[0.8rem] text-violet-200">
+              {draftNotice}
+            </div>
+          )}
 
-      {/* Non è un successo, è un avviso: la scheda adesso è piena di roba che
-          non ha scritto nessuno, e va riletta prima di salvare. */}
-      {draftNotice && (
-        <div className="mb-4 rounded-xl border border-violet-500/25 bg-violet-500/10 px-4 py-2 text-[0.8rem] text-violet-200">
-          {draftNotice}
-        </div>
-      )}
+          {/* I campi senza cui la simulazione non regge. Un avviso, non un
+              blocco: il salvataggio resta possibile perché una scheda si
+              costruisce in più riprese. */}
+          {missing.length > 0 && (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-[0.8rem] text-amber-300">
+              <strong className="font-semibold">Campi chiave ancora vuoti:</strong>{' '}
+              {missing.join(', ')}. Senza questi elementi l'avatar dispone di poche informazioni per
+              sostenere il personaggio.
+            </div>
+          )}
 
-      {/* I campi senza cui la simulazione non regge. Un avviso, non un
-          blocco: il salvataggio resta possibile perché una scheda si
-          costruisce in più riprese. */}
-      {missing.length > 0 && (
-        <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2 text-[0.8rem] text-amber-300">
-          <strong className="font-semibold">Campi chiave ancora vuoti:</strong> {missing.join(', ')}
-          . Senza questi elementi l'avatar dispone di poche informazioni per sostenere il
-          personaggio.
-        </div>
-      )}
-
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <h3 className={sectionTitleCls}>Dati Base</h3>
-        <div className={fieldCls}>
-          <label className={labelCls} htmlFor="av-description">
-            Brief per l'operatore (descrizione visibile allo studente)
-          </label>
-          <textarea
-            id="av-description"
-            className={textareaCls}
-            rows={2}
-            placeholder="Es. Cliente al telefono: la carta è stata rifiutata e chiama in stato di irritazione..."
-            value={form.description}
-            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-            disabled={isSaving}
-          />
-        </div>
-
-        <div className={fieldCls}>
-          <label className={labelCls} htmlFor="av-org">
-            Organizzazione proprietaria
-          </label>
-          <Select
-            id="av-org"
-            value={form.organizationId}
-            onChange={(value) =>
-              /* La categoria si azzera insieme all'organizzazione: quella
-               * scelta prima è di un altro tenant, e tenerla ferma nel campo
-               * darebbe un rifiuto al salvataggio senza far capire da dove
-               * arriva. */
-              setForm((p) => ({ ...p, organizationId: value, categoryId: '' }))
-            }
-            options={organizationOptions}
-            placeholder="Seleziona organizzazione…"
-            disabled={isSaving}
-          />
-          <p className="text-[0.7rem] text-slate-500">
-            L'avatar è privato dell'organizzazione scelta e visibile solo ai suoi utenti.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
+          <h3 className={sectionTitleCls}>Dati Base</h3>
           <div className={fieldCls}>
-            <label className={labelCls} htmlFor="av-category">
-              Categoria
+            <label className={labelCls} htmlFor="av-description">
+              Brief per l'operatore (descrizione visibile allo studente)
             </label>
-            {/* Un elenco chiuso, non più testo libero: le categorie sono
-                un'anagrafica dell'organizzazione, e da qui si arriva a
-                gestirla senza chiudere la scheda a metà. */}
-            <Select
-              id="av-category"
-              value={form.categoryId}
-              onChange={(value) => setForm((p) => ({ ...p, categoryId: value }))}
-              options={categoryOptions}
-              placeholder={
-                form.organizationId ? 'Seleziona categoria…' : 'Scegli prima l’organizzazione'
-              }
-              disabled={isSaving || !form.organizationId}
-            />
-            <button
-              type="button"
-              className="w-fit cursor-pointer border-none bg-transparent p-0 text-[0.7rem] text-violet-400 underline-offset-2 transition hover:underline"
-              onClick={() => onManageCategories(form.organizationId)}
+            <textarea
+              id="av-description"
+              className={textareaCls}
+              rows={2}
+              placeholder="Es. Cliente al telefono: la carta è stata rifiutata e chiama in stato di irritazione..."
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
               disabled={isSaving}
-            >
-              Gestisci Categorie
-            </button>
+            />
           </div>
 
           <div className={fieldCls}>
-            <label className={labelCls} htmlFor="av-voice">
-              Voce
+            <label className={labelCls} htmlFor="av-org">
+              Organizzazione proprietaria
             </label>
-            {voices.length > 0 ? (
-              <div className="flex items-center gap-2">
-                <Select
-                  id="av-voice"
-                  className="flex-1"
-                  value={form.voiceId}
-                  onChange={(value) => setForm((p) => ({ ...p, voiceId: value }))}
-                  options={voiceOptions}
-                  placeholder="Voce Predefinita"
-                  disabled={isSaving}
-                />
-                {/* Lo stesso bottone avvia e ferma: una battuta dura qualche
-                    secondo, e chi l'ha fatta partire per sbaglio deve poterla
-                    zittire senza aspettare che finisca. */}
-                <IconButton
-                  tone="play"
-                  className="shrink-0"
-                  label={
-                    voicePreview === 'playing'
-                      ? 'Interrompi Anteprima della Voce'
-                      : 'Ascolta Anteprima della Voce'
-                  }
-                  tooltip={
-                    voicePreview === 'playing' ? "Interrompi l'ascolto" : 'Ascolta questa voce'
-                  }
-                  onClick={() =>
-                    voicePreview === 'playing' ? stopVoicePreview() : playVoicePreview(form.voiceId)
-                  }
-                  disabled={!form.voiceId || voicePreview === 'loading' || isSaving}
-                >
-                  {voicePreview === 'loading' ? (
-                    <Spinner variant="button" />
-                  ) : voicePreview === 'playing' ? (
-                    <StopIcon />
-                  ) : (
-                    <PlayIcon />
-                  )}
-                </IconButton>
-              </div>
-            ) : (
-              /* Catalogo non disponibile: si torna all'id da incollare,
-                 perché una voce mancante non deve impedire di salvare. */
-              <div className={inputWrapperCls}>
-                <input
-                  type="text"
-                  id="av-voice"
-                  className={inputCls}
-                  placeholder="es. b34ba556-..."
-                  value={form.voiceId}
-                  onChange={(e) => setForm((p) => ({ ...p, voiceId: e.target.value }))}
-                  disabled={isSaving}
-                />
-              </div>
-            )}
-            {voicesError && <p className="text-[0.7rem] text-amber-400">{voicesError}</p>}
+            <Select
+              id="av-org"
+              value={form.organizationId}
+              onChange={(value) =>
+                /* La categoria si azzera insieme all'organizzazione: quella
+                 * scelta prima è di un altro tenant, e tenerla ferma nel campo
+                 * darebbe un rifiuto al salvataggio senza far capire da dove
+                 * arriva. */
+                setForm((p) => ({ ...p, organizationId: value, categoryId: '' }))
+              }
+              options={organizationOptions}
+              placeholder="Seleziona organizzazione…"
+              disabled={isSaving}
+            />
+            <p className="text-[0.7rem] text-slate-500">
+              L'avatar è privato dell'organizzazione scelta e visibile solo ai suoi utenti.
+            </p>
           </div>
-        </div>
 
-        <div className={fieldCls}>
-          {/* Un <span>, non una <label>: il gruppo contiene due controlli
-              (il file e l'URL), nessuno dei due è "il" campo immagine. */}
-          <span className={labelCls}>Immagine</span>
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/6 bg-slate-800/50">
-              {form.imageUrl ? (
-                <img
-                  className="h-full w-full object-cover"
-                  src={getAvatarImageUrl(form.imageUrl)}
-                  alt="Anteprima immagine avatar"
-                />
+          <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
+            <div className={fieldCls}>
+              <label className={labelCls} htmlFor="av-category">
+                Categoria
+              </label>
+              {/* Un elenco chiuso, non più testo libero: le categorie sono
+                    un'anagrafica dell'organizzazione, e da qui si arriva a
+                    gestirla senza chiudere la scheda a metà. */}
+              <Select
+                id="av-category"
+                value={form.categoryId}
+                onChange={(value) => setForm((p) => ({ ...p, categoryId: value }))}
+                options={categoryOptions}
+                placeholder={
+                  form.organizationId ? 'Seleziona categoria…' : 'Scegli prima l’organizzazione'
+                }
+                disabled={isSaving || !form.organizationId}
+              />
+              <button
+                type="button"
+                className="w-fit cursor-pointer border-none bg-transparent p-0 text-[0.7rem] text-violet-400 underline-offset-2 transition hover:underline"
+                onClick={() => onManageCategories(form.organizationId)}
+                disabled={isSaving}
+              >
+                Gestisci Categorie
+              </button>
+            </div>
+
+            <div className={fieldCls}>
+              <label className={labelCls} htmlFor="av-voice">
+                Voce
+              </label>
+              {voices.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <Select
+                    id="av-voice"
+                    className="flex-1"
+                    value={form.voiceId}
+                    onChange={(value) => setForm((p) => ({ ...p, voiceId: value }))}
+                    options={voiceOptions}
+                    placeholder="Voce Predefinita"
+                    disabled={isSaving}
+                  />
+                  {/* Lo stesso bottone avvia e ferma: una battuta dura qualche
+                        secondo, e chi l'ha fatta partire per sbaglio deve poterla
+                        zittire senza aspettare che finisca. */}
+                  <IconButton
+                    tone="play"
+                    className="shrink-0"
+                    label={
+                      voicePreview === 'playing'
+                        ? 'Interrompi Anteprima della Voce'
+                        : 'Ascolta Anteprima della Voce'
+                    }
+                    tooltip={
+                      voicePreview === 'playing' ? "Interrompi l'ascolto" : 'Ascolta questa voce'
+                    }
+                    onClick={() =>
+                      voicePreview === 'playing'
+                        ? stopVoicePreview()
+                        : playVoicePreview(form.voiceId)
+                    }
+                    disabled={!form.voiceId || voicePreview === 'loading' || isSaving}
+                  >
+                    {voicePreview === 'loading' ? (
+                      <Spinner variant="button" />
+                    ) : voicePreview === 'playing' ? (
+                      <StopIcon />
+                    ) : (
+                      <PlayIcon />
+                    )}
+                  </IconButton>
+                </div>
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-[0.65rem] text-slate-600">
-                  auto
+                /* Catalogo non disponibile: si torna all'id da incollare,
+                     perché una voce mancante non deve impedire di salvare. */
+                <div className={inputWrapperCls}>
+                  <input
+                    type="text"
+                    id="av-voice"
+                    className={inputCls}
+                    placeholder="es. b34ba556-..."
+                    value={form.voiceId}
+                    onChange={(e) => setForm((p) => ({ ...p, voiceId: e.target.value }))}
+                    disabled={isSaving}
+                  />
                 </div>
               )}
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <label
-                  className={`cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100 ${
-                    uploadMutation.isPending || isSaving ? 'pointer-events-none opacity-50' : ''
-                  }`}
-                >
-                  {uploadMutation.isPending ? 'Caricamento...' : 'Carica immagine'}
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/png,image/jpeg,image/webp"
-                    disabled={uploadMutation.isPending || isSaving}
-                    onChange={(e) => {
-                      handleImageUpload(e.target.files?.[0])
-                      // Permette di ricaricare lo stesso file dopo un errore
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-                {form.imageUrl && (
-                  <button
-                    type="button"
-                    className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
-                    onClick={() => setForm((p) => ({ ...p, imageUrl: '' }))}
-                    disabled={isSaving}
-                  >
-                    Rimuovi
-                  </button>
-                )}
-              </div>
-              {/* Un percorso di qui, non un indirizzo altrove: il campo
-                  invitava a incollare un URL e poi il salvataggio lo
-                  rifiutava, a scheda già compilata. Adesso lo dice il
-                  segnaposto, e l'avviso arriva mentre si scrive. */}
-              <div className={inputWrapperCls}>
-                <input
-                  type="text"
-                  id="av-image"
-                  className={inputCls}
-                  placeholder="oppure il percorso di un'immagine già caricata"
-                  value={form.imageUrl}
-                  onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
-                  disabled={isSaving}
-                  aria-invalid={hasExternalImage}
-                />
-              </div>
+              {voicesError && <p className="text-[0.7rem] text-amber-400">{voicesError}</p>}
             </div>
           </div>
-          {hasExternalImage ? (
-            <p className="text-[0.7rem] text-amber-400">
-              Il ritratto deve stare sull'applicazione: carica il file invece di incollare
-              l'indirizzo di un altro sito.
-            </p>
-          ) : (
-            <p className="text-[0.7rem] text-slate-500">
-              PNG, JPEG o WebP fino a 2 MB. Lasciando il campo vuoto viene generata un'immagine con
-              le iniziali.
-            </p>
-          )}
+
+          <div className={fieldCls}>
+            {/* Un <span>, non una <label>: il gruppo contiene due controlli
+                  (il file e l'URL), nessuno dei due è "il" campo immagine. */}
+            <span className={labelCls}>Immagine</span>
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/6 bg-slate-800/50">
+                {form.imageUrl ? (
+                  <img
+                    className="h-full w-full object-cover"
+                    src={getAvatarImageUrl(form.imageUrl)}
+                    alt="Anteprima immagine avatar"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[0.65rem] text-slate-600">
+                    auto
+                  </div>
+                )}
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label
+                    className={`cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-300 transition hover:bg-white/8 hover:text-slate-100 ${
+                      uploadMutation.isPending || isSaving ? 'pointer-events-none opacity-50' : ''
+                    }`}
+                  >
+                    {uploadMutation.isPending ? 'Caricamento...' : 'Carica immagine'}
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/png,image/jpeg,image/webp"
+                      disabled={uploadMutation.isPending || isSaving}
+                      onChange={(e) => {
+                        handleImageUpload(e.target.files?.[0])
+                        // Permette di ricaricare lo stesso file dopo un errore
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                  {form.imageUrl && (
+                    <button
+                      type="button"
+                      className="cursor-pointer rounded-xl border border-white/6 bg-white/4 px-4 py-2 text-[0.8rem] font-medium text-slate-400 transition hover:bg-white/8 hover:text-slate-100"
+                      onClick={() => setForm((p) => ({ ...p, imageUrl: '' }))}
+                      disabled={isSaving}
+                    >
+                      Rimuovi
+                    </button>
+                  )}
+                </div>
+                {/* Un percorso di qui, non un indirizzo altrove: il campo
+                      invitava a incollare un URL e poi il salvataggio lo
+                      rifiutava, a scheda già compilata. Adesso lo dice il
+                      segnaposto, e l'avviso arriva mentre si scrive. */}
+                <div className={inputWrapperCls}>
+                  <input
+                    type="text"
+                    id="av-image"
+                    className={inputCls}
+                    placeholder="oppure il percorso di un'immagine già caricata"
+                    value={form.imageUrl}
+                    onChange={(e) => setForm((p) => ({ ...p, imageUrl: e.target.value }))}
+                    disabled={isSaving}
+                    aria-invalid={hasExternalImage}
+                  />
+                </div>
+              </div>
+            </div>
+            {hasExternalImage ? (
+              <p className="text-[0.7rem] text-amber-400">
+                Il ritratto deve stare sull'applicazione: carica il file invece di incollare
+                l'indirizzo di un altro sito.
+              </p>
+            ) : (
+              <p className="text-[0.7rem] text-slate-500">
+                PNG, JPEG o WebP fino a 2 MB. Lasciando il campo vuoto viene generata un'immagine
+                con le iniziali.
+              </p>
+            )}
+          </div>
+
+          <AvatarProfileSections
+            profile={form.profile}
+            onFieldChange={setProfileField}
+            disabled={isSaving}
+            expandSignal={draftCount}
+          />
         </div>
 
-        <AvatarProfileSections
-          profile={form.profile}
-          onFieldChange={setProfileField}
-          disabled={isSaving}
-          expandSignal={draftCount}
-        />
-
-        <PrimaryButton type="submit" variant="submit" className="mt-4" disabled={isSaving}>
-          {isSaving ? (
-            <>
-              <Spinner variant="button" />
-              Salvataggio...
-            </>
-          ) : isNew ? (
-            'Crea Avatar'
-          ) : (
-            'Salva Modifiche'
-          )}
-        </PrimaryButton>
+        <footer className="flex flex-col gap-3 border-t border-white/6 px-8 py-4 max-[480px]:px-5">
+          {formError && <FormError message={formError} />}
+          <PrimaryButton type="submit" variant="submit" disabled={isSaving}>
+            {isSaving ? (
+              <>
+                <Spinner variant="button" />
+                Salvataggio...
+              </>
+            ) : isNew ? (
+              'Crea Avatar'
+            ) : (
+              'Salva Modifiche'
+            )}
+          </PrimaryButton>
+        </footer>
       </form>
 
       {/* Anteprima del prompt: legge la scheda in corso, anche non salvata */}

@@ -127,6 +127,14 @@ Le sezioni stanno a fisarmonica, una alla volta: aperte tutte insieme sono uno
 scroll di parecchi schermi. Si aprono tutte in un gesto, e si aprono da sole
 dopo una bozza, che è il momento in cui quella scelta si rovescia (vedi sotto).
 
+**La finestra è divisa in tre.** Il nome della scheda, la percentuale di
+riempimento e i due comandi che la generano e ne mostrano il prompt stanno in
+una fascia in cima; il bottone che salva in una fascia in fondo; scorre solo
+quello che sta in mezzo (`layout="column"` di `ModalShell`, vedi
+[frontend.md](frontend.md)). Prima scorreva tutto insieme, e su una scheda da
+settanta campi il salvataggio era un pezzo di pagina da andare a cercare in
+fondo ogni volta.
+
 **Chiudere la scheda non è mai un gesto a perdere.** Finché quello che c'è
 dentro è diverso da come si è aperta, la X, Esc e il clic sullo sfondo passano
 da una conferma, e il browser ne chiede una sua per il ricaricamento e la

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -195,9 +195,13 @@ describe('TrainingPathCard', () => {
 
       await userEvent.hover(screen.getByText('+2 tappe'))
 
+      /* Numero e nome stanno in due elementi, uno accanto all'altro: nel
+         tooltip ogni tappa è un blocco, non una riga di testo di seguito. */
       const tooltip = await screen.findByRole('tooltip')
-      expect(tooltip).toHaveTextContent('4. Avatar 4')
-      expect(tooltip).toHaveTextContent('5. Avatar 5')
+      expect(within(tooltip).getByText('4.')).toBeInTheDocument()
+      expect(within(tooltip).getByText('Avatar 4')).toBeInTheDocument()
+      expect(within(tooltip).getByText('5.')).toBeInTheDocument()
+      expect(within(tooltip).getByText('Avatar 5')).toBeInTheDocument()
     })
   })
 })

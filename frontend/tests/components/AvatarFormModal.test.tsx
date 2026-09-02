@@ -283,7 +283,7 @@ describe('dopo una bozza', () => {
 
     expect(screen.queryByLabelText('Segreti (mai rivelati)')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /Genera la Scheda/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Genera la scheda/ }))
     await userEvent.click(screen.getByRole('button', { name: 'consegna la bozza' }))
 
     expect(await screen.findByLabelText('Segreti (mai rivelati)')).toBeInTheDocument()

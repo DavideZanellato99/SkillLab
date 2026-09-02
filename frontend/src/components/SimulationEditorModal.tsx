@@ -609,9 +609,10 @@ export default function SimulationEditorModal({
               )}
 
               <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  className={secondaryButtonCls}
+                {/* Il salvataggio ha il gradiente degli altri salva delle
+                    modali: quello che si fa qui dentro è scrivere le domande,
+                    e il comando che le registra non è un bottone di contorno. */}
+                <PrimaryButton
                   onClick={() => {
                     setSaved(false)
                     save.mutate(written, { onSuccess: () => setSaved(true) })
@@ -630,7 +631,7 @@ export default function SimulationEditorModal({
                   ) : (
                     'Salva domande'
                   )}
-                </button>
+                </PrimaryButton>
 
                 {isPublished ? (
                   <button

@@ -36,6 +36,26 @@ function stepDetail(step: PathStep): string {
   return `${stepKindLabel(step)} · obiettivo ${formatScore(step.target_score)}${condizioni}${deadline}`
 }
 
+/* Una tappa dentro un tooltip: il numero di fianco, il nome sulla riga che si
+ * legge per prima e quello che chiede sotto, in tono più basso.
+ *
+ * È la stessa forma per le tappe in vista, dove il riquadro taglia il testo, e
+ * per quelle contate in coda: sono la stessa cosa detta nello stesso posto, e
+ * due impaginati diversi si leggerebbero come due elenchi diversi. Scritte di
+ * seguito su una riga sola andavano a capo dentro la larghezza del tooltip, e
+ * due tappe finivano per sembrarne una. */
+function StepTip({ step }: { step: PathStep }) {
+  return (
+    <span className="flex gap-1.5">
+      <span className="shrink-0 font-bold tabular-nums text-violet-300">{step.position}.</span>
+      <span className="min-w-0">
+        <span className="block font-medium text-slate-100">{stepTarget(step)}</span>
+        <span className="block text-[0.7rem] text-slate-400">{stepDetail(step)}</span>
+      </span>
+    </span>
+  )
+}
+
 export default function TrainingPathCard({
   path,
   showOrganization,
@@ -137,32 +157,41 @@ export default function TrainingPathCard({
       )}
 
       <ol className="mt-auto flex flex-wrap items-center gap-1.5">
+        {/* Le tappe in vista stanno su tre riquadri che si dividono la
+            larghezza della scheda, quindi il nome e la riga sotto ci finiscono
+            tagliati: il tooltip li dà per intero, e solo quando lo sono
+            davvero, come già fanno il titolo e la descrizione qui sopra.
+            Risponde il riquadro intero e non le due righe di testo una per
+            una: quello che si passa sopra è la tappa, e con il tooltip
+            attaccato alle sole righe il puntino di mezzo fra l'una e l'altra
+            lo spegneva. Il taglio, che sulle righe sta e sul riquadro no, lo
+            cerca `Tooltip` anche dentro. */}
         {visibleSteps.map((step) => (
-          <li
-            key={step.id}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-white/6 bg-white/4 px-2.5 py-1.5"
-          >
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10 text-[0.68rem] font-bold tabular-nums text-violet-300">
-              {step.position}
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[0.82rem] font-medium text-slate-100">
-                {stepTarget(step)}
+          <Tooltip key={step.id} content={<StepTip step={step} />} truncateOnly>
+            <li className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-white/6 bg-white/4 px-2.5 py-1.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10 text-[0.68rem] font-bold tabular-nums text-violet-300">
+                {step.position}
               </span>
-              <span className="block truncate text-[0.68rem] text-slate-500">
-                {stepDetail(step)}
+              <span className="min-w-0">
+                <span className="block truncate text-[0.82rem] font-medium text-slate-100">
+                  {stepTarget(step)}
+                </span>
+                <span className="block truncate text-[0.68rem] text-slate-500">
+                  {stepDetail(step)}
+                </span>
               </span>
-            </span>
-          </li>
+            </li>
+          </Tooltip>
         ))}
         {hiddenSteps.length > 0 && (
           <Tooltip
+            /* Le tappe nascoste stanno una per blocco, staccate l'una
+               dall'altra: sono più d'una nello stesso tooltip, ed è lì che
+               conta vedere dove finisce una e comincia la seguente. */
             content={
-              <span className="block text-left">
+              <span className="flex flex-col gap-2 text-left">
                 {hiddenSteps.map((step) => (
-                  <span key={step.id} className="block">
-                    {step.position}. {stepTarget(step)} · {stepDetail(step)}
-                  </span>
+                  <StepTip key={step.id} step={step} />
                 ))}
               </span>
             }

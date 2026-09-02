@@ -30,9 +30,9 @@ interface TooltipProps {
    * che non emettono eventi mouse */
   wrap?: boolean
   /** Per testo semplice (non bottoni/icone): mostra il tooltip solo se il
-   * figlio è effettivamente troncato, su una riga (`.truncate`) o su più
-   * righe (`line-clamp-*`). Su testo intero il tooltip sarebbe ridondante col
-   * testo già visibile, quindi resta nascosto. */
+   * figlio, o un testo dentro di lui, è effettivamente troncato, su una riga
+   * (`.truncate`) o su più righe (`line-clamp-*`). Su testo intero il tooltip
+   * sarebbe ridondante col testo già visibile, quindi resta nascosto. */
   truncateOnly?: boolean
   children: ReactElement<Record<string, unknown>>
 }
@@ -46,8 +46,17 @@ interface TooltipProps {
  * `truncateOnly`: restava senza tooltip quando era tagliato davvero, oppure,
  * se glielo si metteva comunque, lo mostrava anche sulle descrizioni corte,
  * ripetendo parola per parola quello che si stava già leggendo. */
-const isTruncated = (el: Element) =>
+const isClipped = (el: Element) =>
   el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1
+
+/* Il taglio si cerca anche nei testi dentro l'elemento, non solo su di lui:
+ * quando il tooltip è agganciato al riquadro che contiene il testo, a non
+ * entrare sono le righe dentro, mentre il riquadro sta nella sua misura e da
+ * solo direbbe sempre che non c'è niente di tagliato. Serve dove l'area che
+ * risponde al mouse è più larga del testo, come nelle tappe di un percorso,
+ * che si passano sopra come un riquadro solo. */
+const isTruncated = (el: Element) =>
+  isClipped(el) || Array.from(el.querySelectorAll('*')).some(isClipped)
 
 interface Pos {
   x: number

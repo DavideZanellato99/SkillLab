@@ -22,6 +22,7 @@ import KebabMenu from './KebabMenu'
 import IconButton from './IconButton'
 import Spinner from './Spinner'
 import LoadError from './LoadError'
+import { prefetchOnHover } from './lazyPages'
 import OrganizationsFilters from './OrganizationsFilters'
 import { STATUS_BADGE_CLASSES, STATUS_LABELS } from './organizationStatus'
 import { PageContainer, PageHeader } from './PageLayout'
@@ -432,6 +433,7 @@ export default function OrganizationsPage() {
               <span>{viewingOrg.user_count}</span>
               <Link
                 to={`/app/admin?organization_id=${viewingOrg.id}`}
+                {...prefetchOnHover('/app/admin')}
                 onClick={closeDetail}
                 className={detailLinkCls}
               >
@@ -444,6 +446,7 @@ export default function OrganizationsPage() {
               <span>{viewingOrg.avatar_count}</span>
               <Link
                 to={`/app/admin/avatars?organization_id=${viewingOrg.id}`}
+                {...prefetchOnHover('/app/admin/avatars')}
                 onClick={closeDetail}
                 className={detailLinkCls}
               >

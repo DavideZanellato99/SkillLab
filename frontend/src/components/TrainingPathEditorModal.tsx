@@ -5,13 +5,14 @@ import { errorMessage } from '../services/errors'
 import Field, { formInputCls, textareaCls } from './Field'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
-import ModalShell, { ModalHeader } from './ModalShell'
+import ModalShell from './ModalShell'
+import { useModalTitleId } from './modalTitle'
 import PathDraftModal from './PathDraftModal'
 import PathStepEditor from './PathStepEditor'
 import PrimaryButton from './PrimaryButton'
 import Select from './Select'
 import Spinner from './Spinner'
-import { PencilIcon, PlusIcon, SparkleIcon } from './icons'
+import { PlusIcon, SparkleIcon } from './icons'
 import { moved } from './listOrder'
 import type { PathStepDraft } from './pathStepDraft'
 import {
@@ -59,6 +60,7 @@ export default function TrainingPathEditorModal({
   onClose,
 }: TrainingPathEditorModalProps) {
   const isEditing = Boolean(path)
+  const titleId = useModalTitleId()
   const [title, setTitle] = useState(path?.title ?? '')
   const [description, setDescription] = useState(path?.description ?? '')
   const [organizationId, setOrganizationId] = useState(
@@ -166,47 +168,41 @@ export default function TrainingPathEditorModal({
   }
 
   return (
-    <ModalShell onClose={onClose} locked={isSaving} size="xl" padding="md">
-      <ModalHeader
-        /* L'icona dice la stessa cosa del titolo: un percorso che esiste già
-           si corregge, non si aggiunge. */
-        icon={
-          isEditing ? (
-            <PencilIcon size={24} stroke="#a78bfa" />
-          ) : (
-            <PlusIcon size={24} stroke="#a78bfa" />
-          )
-        }
-        iconWrapperCls="border border-violet-500/30 bg-violet-500/10"
-        title={isEditing ? 'Modifica il percorso' : 'Nuovo Percorso'}
-        description={
-          isEditing && path && path.assigned_count > 0
-            ? `Le modifiche valgono subito per le ${path.assigned_count} persone che lo stanno percorrendo.`
-            : 'Le tappe si superano in ordine: la successiva si apre quando la precedente è chiusa.'
-        }
-        className="mb-4"
-      />
-
-      {/* Solo su un percorso nuovo: su uno che esiste già le tappe le stanno
-          percorrendo delle persone, e rigenerarle non sarebbe una bozza,
-          sarebbe buttare il lavoro di qualcuno insieme al loro progresso.
-          Sta in cima e non fra i campi perché è il punto da cui il form si
-          riempie, e chi compone a mano lo salta con lo sguardo. */}
-      {!isEditing && (
-        <div className="mb-6 flex justify-center">
+    <ModalShell onClose={onClose} locked={isSaving} size="xl" padding="none" layout="column">
+      {/* La fascia in testa, come nel dettaglio di un test: come si chiama il
+          percorso, cosa comporta modificarlo, e la proposta che lo riempie.
+          Prima era un'intestazione centrata dentro la parte che scorre, e a
+          sei tappe se ne andava su insieme al bottone di salvataggio. */}
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/6 px-8 py-5 pr-16 max-[480px]:px-5 max-[480px]:pr-14">
+        <div className="min-w-0 flex-1 basis-64">
+          <h2 id={titleId} className="font-heading text-xl font-bold text-slate-100">
+            {isEditing ? 'Modifica il percorso' : 'Nuovo Percorso'}
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            {isEditing && path && path.assigned_count > 0
+              ? `Le modifiche valgono subito per le ${path.assigned_count} persone che lo stanno percorrendo.`
+              : 'Le tappe si superano in ordine: la successiva si apre quando la precedente è chiusa.'}
+          </p>
+        </div>
+        {/* Solo su un percorso nuovo: su uno che esiste già le tappe le stanno
+            percorrendo delle persone, e rigenerarle non sarebbe una bozza,
+            sarebbe buttare il lavoro di qualcuno insieme al loro progresso. */}
+        {!isEditing && (
           <button
             type="button"
             onClick={() => setShowDraft(true)}
             disabled={isSaving || organizationId === ''}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-violet-600/30 bg-violet-600/10 px-4 py-2 text-[0.8rem] font-medium text-violet-300 transition hover:bg-violet-600/20 hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-violet-600/30 bg-violet-600/10 px-4 py-2 text-[0.8rem] font-medium text-violet-300 transition hover:bg-violet-600/20 hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <SparkleIcon size={14} />
             Proponi un percorso
           </button>
-        </div>
-      )}
+        )}
+      </header>
 
-      <div className="flex flex-col gap-4">
+      {/* Solo questo scorre: l'intestazione resta in cima e il salvataggio in
+          fondo, che è quello che si perdeva aggiungendo tappe. */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-8 py-5 max-[480px]:px-5">
         <Field label="Titolo" htmlFor="path-title">
           <input
             id="path-title"
@@ -326,14 +322,15 @@ export default function TrainingPathEditorModal({
             )}
           </div>
         </div>
+      </div>
 
+      <footer className="flex flex-col gap-3 border-t border-white/6 px-8 py-4 max-[480px]:px-5">
         {error && <FormError message={error} />}
-
         <PrimaryButton variant="submit" onClick={handleSubmit} disabled={isSaving}>
           {isSaving && <Spinner variant="button" />}
           {isEditing ? 'Salva il percorso' : 'Crea il percorso'}
         </PrimaryButton>
-      </div>
+      </footer>
 
       {/* La proposta si apre sopra il form, e il form resta lì dietro: è
           quello che sta per riempirsi. */}

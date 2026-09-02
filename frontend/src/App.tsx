@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
 import { useAuth } from './hooks/useAuth'
 import Navbar from './components/Navbar'
@@ -15,38 +15,29 @@ import RequireRole from './components/RequireRole'
 import TutorialTour from './components/TutorialTour'
 import LoadingState from './components/LoadingState'
 import { GalleryContainer } from './components/PageLayout'
+import {
+  AdminPage,
+  AuditLogsPage,
+  AvatarAdminPage,
+  DashboardPage,
+  OrganizationsPage,
+  PublicHome,
+  PublicLayout,
+  SimulationAdminPage,
+  TrainingPage,
+  UserReportPage,
+} from './components/lazyPages'
 import Spinner from './components/Spinner'
 import './index.css'
 
-/* Le schermate di amministrazione arrivano solo a chi ci entra.
- *
- * Sono otto pagine dense, ognuna con le sue tabelle e le sue modali, e un
- * import normale le avrebbe messe nel primo file che il browser scarica: chi
- * apre l'applicazione per fare una telefonata di prova si portava dietro
- * anche la gestione degli avatar e i log di audit, che non vedrà mai perché
- * il suo ruolo non glielo permette.
+/* Le pagine che arrivano solo a chi ci entra: le otto schermate di
+ * amministrazione, e dal lato opposto il sito pubblico, che chi ha la
+ * sessione aperta non vede più. Quali siano, e come la barra di navigazione
+ * ne fa partire il file prima del click, sta in `lazyPages`.
  *
  * Il confine è quello dei permessi e non una misura di comodo: sotto stanno
  * le rotte con `access="admin"` e `access="super_admin"`, sopra quelle che
- * chiunque sia collegato può aprire. Il ritardo che questo introduce lo paga
- * l'admin, una volta per sessione, entrando in una schermata che si apre già
- * aspettando dei dati. */
-const AdminPage = lazy(() => import('./components/AdminPage'))
-const OrganizationsPage = lazy(() => import('./components/OrganizationsPage'))
-const DashboardPage = lazy(() => import('./components/DashboardPage'))
-const TrainingPage = lazy(() => import('./components/TrainingPage'))
-const UserReportPage = lazy(() => import('./components/UserReportPage'))
-const AvatarAdminPage = lazy(() => import('./components/AvatarAdminPage'))
-const SimulationAdminPage = lazy(() => import('./components/SimulationAdminPage'))
-const AuditLogsPage = lazy(() => import('./components/AuditLogsPage'))
-
-/* Il sito pubblico, per lo stesso motivo e dal lato opposto: è la pagina di
- * presentazione che chi ha la sessione aperta non vedrà mai più, e un import
- * normale l'avrebbe messa addosso a ogni accesso. Il confine è di nuovo
- * quello dei permessi, cioè l'essere o non essere collegati, e l'attesa la
- * paga il visitatore una volta sola. */
-const PublicLayout = lazy(() => import('./components/public/PublicLayout'))
-const PublicHome = lazy(() => import('./components/public/PublicHome'))
+ * chiunque sia collegato può aprire. */
 
 /* La galleria: la testata che presenta il catalogo, e il catalogo stesso.
  * Niente stato da tenere qui in mezzo, i due pezzi leggono gli stessi dati

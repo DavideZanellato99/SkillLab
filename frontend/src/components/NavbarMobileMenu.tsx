@@ -21,6 +21,7 @@ import { useRef } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { CloseIcon, MenuIcon } from './icons'
+import { prefetchOnHover } from './lazyPages'
 import type { NavEntry } from './navEntries'
 
 const rowCls =
@@ -88,6 +89,7 @@ export default function NavbarMobileMenu({
                        la guida introduttiva: delle due copie ne è visibile
                        una sola, ed è quella che la guida illumina. */
                     data-tour={entry.to}
+                    {...prefetchOnHover(entry.to)}
                     onClick={onClose}
                   >
                     <Icon size={18} />

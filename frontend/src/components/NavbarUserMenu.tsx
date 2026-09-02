@@ -14,6 +14,7 @@ import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { getInitials, ROLE_BADGE_CLASSES, ROLE_LABELS, type AuthUser } from '../services/auth'
 import Badge from './Badge'
 import { ChevronDownIcon, LogoutIcon } from './icons'
+import { prefetchOnHover } from './lazyPages'
 import { profileMenuGroups } from './navEntries'
 
 const menuItemCls =
@@ -112,6 +113,11 @@ export default function NavbarUserMenu({ user, isOpen, onToggle, onClose }: Navb
                       to={entry.to}
                       className={`${menuItemCls} ${isActive ? menuItemActiveCls : ''}`}
                       aria-current={isActive ? 'page' : undefined}
+                      /* Qui dentro stanno le pagine più pesanti, e sono
+                         tutte da scaricare: il file parte quando il
+                         puntatore entra nella riga, cioè un attimo prima
+                         del click (vedi `lazyPages`). */
+                      {...prefetchOnHover(entry.to)}
                       /* Le sezioni di amministrazione stanno qui dentro, e
                          la guida introduttiva le illumina a menu aperto. */
                       data-tour={entry.to}

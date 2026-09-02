@@ -94,16 +94,23 @@ describe('la riga', () => {
     expect(screen.getByText('Onboarding')).toBeInTheDocument()
     expect(screen.getByText('2. Avatar 2')).toBeInTheDocument()
     expect(screen.getByText('1/2')).toBeInTheDocument()
-    expect(screen.getByText('In Corso')).toBeInTheDocument()
+    expect(screen.getByText('In corso')).toBeInTheDocument()
   })
 
-  it('scrive la scadenza della tappa aperta', () => {
+  /* La colonna dice quale tappa è e basta: la scadenza sta sotto, nella
+   * riga che si apre, dove ogni data sta accanto alla tappa a cui appartiene
+   * invece di essere una seconda riga di numeri per tutta la colonna. */
+  it('scrive la scadenza della tappa solo aprendo la riga', async () => {
     renderTable([
       assegnazione({
         steps: [step({ id: 's-1', position: 1, due_at: '2026-04-10T18:00:00' })],
         current_position: 1,
       }),
     ])
+
+    expect(screen.queryByText(/entro il 10 apr/)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('Anna Rossi'))
 
     expect(screen.getByText(/entro il 10 apr/)).toBeInTheDocument()
   })

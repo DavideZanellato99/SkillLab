@@ -65,8 +65,10 @@ export interface PathStepDraft {
    * Sta nel dato per la stessa ragione per cui ci sta il tipo: le tappe si
    * riordinano, e uno stato del componente legato alla posizione resterebbe
    * dov'è mentre i valori si spostano, lasciando aperto il pannello della
-   * tappa sbagliata. Nasce aperto su una tappa che le soglie ce le ha già,
-   * cioè quando si riapre in modifica un percorso che le porta. */
+   * tappa sbagliata. Nasce chiuso anche quando si riapre in modifica una
+   * tappa che le soglie ce le ha già: chi torna su un percorso lo fa quasi
+   * sempre per altro, e il bottone porta comunque il numero delle soglie,
+   * quindi una tappa che ne ha si riconosce a pannello chiuso. */
   criteriaOpen: boolean
   /** La scadenza come la scrive il campo: ora locale, o vuota se non scade. */
   dueAt: string | null
@@ -118,7 +120,7 @@ export function draftFromStep(step: PathStep): PathStepDraft {
     // in cui si scrivono: qui l'etichetta non serve, il pannello la prende
     // dal catalogo dei criteri insieme al peso.
     criteriaTargets: Object.fromEntries(step.criteria_targets.map((c) => [c.key, c.target])),
-    criteriaOpen: step.criteria_targets.length > 0,
+    criteriaOpen: false,
     dueAt: step.due_at ? toLocalInputValue(step.due_at) : null,
     // Un percorso salvato non porta motivazioni: erano della proposta.
     reason: null,

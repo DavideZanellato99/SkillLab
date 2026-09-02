@@ -7,6 +7,7 @@
  * altre. Ora la forma è una sola e sta in `navLinkStyles`. */
 
 import { Link } from 'react-router'
+import { prefetchOnHover } from './lazyPages'
 import type { NavEntry } from './navEntries'
 import { navLinkClasses } from './navLinkStyles'
 
@@ -16,6 +17,11 @@ export default function NavbarLink({ entry, isActive }: { entry: NavEntry; isAct
     <Link
       to={entry.to}
       className={navLinkClasses(isActive)}
+      /* Le pagine di amministrazione arrivano su richiesta, e il file parte
+         di qui: fra il puntatore che entra nella voce e il click c'è il
+         tempo che serve, e la pagina si apre senza attesa. Sulle sezioni
+         che sono già nel primo file non fa niente (vedi `lazyPages`). */
+      {...prefetchOnHover(entry.to)}
       /* Come la guida introduttiva ritrova questa voce per illuminarla
          (vedi `tutorialSteps`). Lo dichiara la voce, e non un elenco di
          selettori scritto altrove, così una sezione nuova è indicabile

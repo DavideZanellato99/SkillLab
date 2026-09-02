@@ -450,7 +450,10 @@ cui non si è ancora visto l'inizio. Sulla scheda
 ([TrainingPathCard](../frontend/src/components/TrainingPathCard.tsx)) si
 leggono le prime tre tappe e le altre si contano in coda, con i loro nomi nel
 tooltip: in una griglia sono le schede a doversi somigliare, e una da otto
-tappe sarebbe alta il triplo di quella di fianco.
+tappe sarebbe alta il triplo di quella di fianco. Le tre in vista si dividono
+la larghezza della scheda, quindi il nome della prova e la riga che la
+descrive ci finiscono tagliati, e il tooltip li dà per intero solo quando lo
+sono davvero, come fa il nome della tappa nella fila della tabella.
 
 La fila di tappe della tabella
 ([PathStepsTrail](../frontend/src/components/PathStepsTrail.tsx)) non apre
@@ -462,6 +465,16 @@ metà. A che punto è una tappa lo dice la stessa targhetta
 che vive in un file suo: la pagina di amministrazione si scarica solo
 entrandoci (vedi [frontend.md](frontend.md)), e una targhetta presa da lì se la
 sarebbe riportata dietro tutta sulla home di chiunque.
+
+La finestra che compone un percorso
+([TrainingPathEditorModal](../frontend/src/components/TrainingPathEditorModal.tsx))
+**è divisa in tre**: come si chiama il percorso, cosa comporta modificarne uno
+che qualcuno sta già percorrendo e la proposta scritta dal modello stanno nella
+fascia in cima, il bottone che salva in quella in fondo, e scorrono soltanto i
+campi e le tappe (`layout="column"` di `ModalShell`, vedi
+[frontend.md](frontend.md)). Un percorso cresce di una tappa per volta, e
+finché scorreva tutto insieme era il salvataggio ad andarsene sotto la piega
+proprio mentre lo si stava componendo.
 
 ### La bozza scritta dal modello
 

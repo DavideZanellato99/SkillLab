@@ -85,7 +85,7 @@ describe('PathMapPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.getByText('1/2')).toBeInTheDocument()
-    expect(screen.getByText('In Corso')).toBeInTheDocument()
+    expect(screen.getByText('In corso')).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Mappa del Percorso' })).toBeInTheDocument()
   })
 

@@ -1,6 +1,7 @@
 import type { StepProgress } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
 import StepCriteriaProgress from './StepCriteriaProgress'
+import Tooltip from './Tooltip'
 import { CheckIcon, LockIcon } from './icons'
 import {
   formatScore,
@@ -85,13 +86,19 @@ function StepRow({ step }: { step: StepProgress }) {
       <StepNumber step={step} />
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span
-            className={`truncate text-[0.9rem] font-semibold ${
-              locked ? 'text-slate-500' : 'text-slate-100'
-            }`}
-          >
-            {target}
-          </span>
+          {/* Il nome della prova è quello che distingue una tappa
+              dall'altra, e nella riga aperta di una tabella lo spazio è
+              quello che avanza: quando ci finisce tagliato lo dà il
+              tooltip, come sulla scheda del percorso. */}
+          <Tooltip content={target} truncateOnly>
+            <span
+              className={`truncate text-[0.9rem] font-semibold ${
+                locked ? 'text-slate-500' : 'text-slate-100'
+              }`}
+            >
+              {target}
+            </span>
+          </Tooltip>
           <span className="text-[0.72rem] text-slate-500">{stepKindLabel(step)}</span>
         </span>
         <span className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[0.78rem]">

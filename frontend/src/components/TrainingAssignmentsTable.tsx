@@ -9,7 +9,7 @@ import Tooltip from './Tooltip'
 import { STATUS_META } from './assignmentStatus'
 import { ChevronDownIcon, ChevronUpIcon, TrashIcon } from './icons'
 import { matchesSearch } from './tableSearch'
-import { formatDate, formatDeadline, stepTarget } from './trainingFormat'
+import { formatDate, stepTarget } from './trainingFormat'
 
 /* Chi sta percorrendo cosa, e a che punto è.
  *
@@ -193,18 +193,18 @@ export default function TrainingAssignmentsTable({
                 )}
               </Td>
               <Td className="text-[0.85rem] text-slate-100">{a.path_title}</Td>
+              {/* Solo quale tappa è, senza la sua scadenza: la riga serve a
+                  vedere da lontano a che punto è ciascuno, e una data con
+                  l'ora sotto ogni nome era una seconda riga di numeri da
+                  scartare per tutta la colonna. Chi la vuole apre la riga,
+                  dove sta accanto alla tappa a cui appartiene insieme al
+                  resto (vedi `PathStepsTrail`), e chi è in ritardo lo dice
+                  già la targhetta dello stato. */}
               <Td>
                 {current ? (
-                  <>
-                    <span className="block text-[0.85rem] text-slate-100">
-                      {a.current_position}. {stepTarget(current)}
-                    </span>
-                    {current.due_at && (
-                      <span className="block text-[0.72rem] text-slate-500">
-                        entro il {formatDeadline(current.due_at)}
-                      </span>
-                    )}
-                  </>
+                  <span className="block text-[0.85rem] text-slate-100">
+                    {a.current_position}. {stepTarget(current)}
+                  </span>
                 ) : (
                   <span className="text-[0.85rem] text-emerald-400">tutte superate</span>
                 )}

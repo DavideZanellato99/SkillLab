@@ -154,7 +154,7 @@ describe('la bozza di una tappa', () => {
     expect(senza.criteriaTargets).toEqual({})
   })
 
-  it('riapre una tappa con le sue soglie, e col pannello già aperto', () => {
+  it('riapre una tappa con le sue soglie, ma col pannello chiuso', () => {
     const step: PathStep = {
       ...simulationStep,
       kind: 'avatar',
@@ -169,9 +169,10 @@ describe('la bozza di una tappa', () => {
     const draft = draftFromStep(step)
 
     expect(draft.criteriaTargets).toEqual({ empatia: 8 })
-    // Una tappa che le soglie ce le ha già si riapre mostrandole: nascoste
-    // dietro un bottone sarebbero condizioni che chi rilegge non sa di avere.
-    expect(draft.criteriaOpen).toBe(true)
+    // Il pannello si apre col bottone, anche su una tappa che le soglie ce le
+    // ha già: chi torna su un percorso lo fa quasi sempre per altro, e quante
+    // soglie ci sono lo dice il bottone senza aprirlo.
+    expect(draft.criteriaOpen).toBe(false)
   })
 
   it('non manda al server le soglie di una tappa diventata un test', () => {

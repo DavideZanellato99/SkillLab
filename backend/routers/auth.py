@@ -602,6 +602,28 @@ def get_me(current_user: User = Depends(get_current_user)):
     return UserResponse.model_validate(current_user)
 
 
+@router.post("/me/tutorial", response_model=UserResponse)
+def mark_tutorial_seen(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Segna che la guida introduttiva è stata vista, e non torna più da sola.
+
+    La chiama il frontend quando la guida finisce o viene chiusa, in un modo
+    o nell'altro: chi la salta al primo passo l'ha comunque vista comparire,
+    e rimetterla davanti al prossimo ingresso sarebbe insistere.
+
+    Scrive solo la prima volta. Riaprirla a mano dal proprio profilo non
+    passa nemmeno di qui, perché non c'è niente da segnare: la data dice
+    quando quell'account ha incontrato la guida, non quante volte l'ha letta.
+    """
+    if current_user.tutorial_seen_at is None:
+        current_user.tutorial_seen_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(current_user)
+    return UserResponse.model_validate(current_user)
+
+
 @router.get("/me/export")
 def export_my_data(
     current_user: User = Depends(get_current_user),

@@ -258,6 +258,15 @@ class User(Authored, Base):
     # adesso. NULL quando l'account non è mai stato usato, come la gemella.
     last_activity_at = Column(DateTime, nullable=True)
 
+    # Quando la guida introduttiva è stata chiusa la prima volta. NULL vuol
+    # dire che questo account non l'ha mai vista, ed è la sola condizione che
+    # la fa partire da sola all'ingresso. Sta sull'account e non nel browser
+    # perché è la persona ad aver già imparato dove stanno le cose, non il
+    # computer da cui era entrata quella volta: chi cambia postazione, o
+    # ripulisce i dati del sito, non se la ritrova davanti una seconda volta.
+    # Il super admin non la riceve mai, quindi per lui resta NULL per sempre.
+    tutorial_seen_at = Column(DateTime, nullable=True)
+
     # Relationships
     role = relationship("Role", back_populates="users", lazy="joined")
     organization = relationship(

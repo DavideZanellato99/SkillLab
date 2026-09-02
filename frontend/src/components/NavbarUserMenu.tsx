@@ -112,6 +112,9 @@ export default function NavbarUserMenu({ user, isOpen, onToggle, onClose }: Navb
                       to={entry.to}
                       className={`${menuItemCls} ${isActive ? menuItemActiveCls : ''}`}
                       aria-current={isActive ? 'page' : undefined}
+                      /* Le sezioni di amministrazione stanno qui dentro, e
+                         la guida introduttiva le illumina a menu aperto. */
+                      data-tour={entry.to}
                       onClick={onClose}
                     >
                       <Icon size={16} />

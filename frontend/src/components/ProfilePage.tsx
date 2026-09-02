@@ -1,8 +1,11 @@
-/* La propria scheda: chi si è, la password, e la copia dei propri dati.
+/* La propria scheda: chi si è, la password, la copia dei propri dati, e la
+ * guida introduttiva da rivedere.
  *
- * Tre sezioni e tre gesti distinti, ognuno con il proprio modulo e il proprio
- * banner: un solo messaggio in cima alla pagina non direbbe a quale dei tre
- * si riferisce.
+ * Sezioni e gesti distinti, ognuno con il proprio modulo e il proprio banner:
+ * un solo messaggio in cima alla pagina non direbbe a quale si riferisce.
+ *
+ * La guida è l'unica che non scrive niente: è un pulsante che la riapre, e sta
+ * qui perché dopo il primo accesso questo è il solo posto da cui si ritrova.
  *
  * Quasi tutti i campi qui sono in sola lettura, perché l'anagrafica la tiene
  * l'amministrazione. Un campo spento senza una riga che dica perché è la cosa
@@ -34,7 +37,9 @@ import Field, { TextInput } from './Field'
 import PasswordField from './PasswordField'
 import PasswordRules from './PasswordRules'
 import PrimaryButton from './PrimaryButton'
-import { DownloadIcon, LockIcon, MailIcon, ShieldIcon } from './icons'
+import { DownloadIcon, LockIcon, MailIcon, ShieldIcon, SparkleIcon } from './icons'
+import { openTutorial } from './tutorialEvents'
+import { hasTutorial } from './tutorialSteps'
 
 /* Shared form styles (same look as the other admin/auth forms) */
 const sectionCls = 'mb-8 rounded-3xl border border-white/6 bg-gray-900/60 p-8 max-[480px]:p-6'
@@ -83,6 +88,8 @@ export default function ProfilePage() {
    * allena e chi amministra un'organizzazione legge nome e cognome come
    * legge l'email, e per cambiarli passa da un amministratore. */
   const canEditName = isSuperAdmin(user)
+  /* La guida non è per tutti i ruoli, e la sezione che la riapre nemmeno. */
+  const showTutorialSection = hasTutorial(user)
   const isProfileDirty = nome.trim() !== user.nome || cognome.trim() !== user.cognome
   const passwordsMismatch =
     confirmTouched && confirmNewPassword !== '' && newPassword !== confirmNewPassword
@@ -434,6 +441,32 @@ export default function ProfilePage() {
           </Notice>
         )}
       </section>
+
+      {/* La guida introduttiva, per chi la riceve: compare da sola al primo
+          ingresso e poi si ritrova solo qui, che è la ragione per cui questa
+          sezione esiste. Il super admin non ha passi da leggere, e per lui la
+          sezione non c'è: un pulsante che apre il nulla è peggio di un
+          pulsante che manca. */}
+      {showTutorialSection && (
+        <section className={sectionCls}>
+          <div className="mb-6">
+            <h2 className="font-heading text-lg font-bold text-slate-100">Guida Introduttiva</h2>
+            <p className="text-[0.85rem] text-slate-500">
+              Un giro delle sezioni della piattaforma, con quello che si fa in ognuna.
+            </p>
+          </div>
+
+          <p className="mb-4 text-[0.85rem] leading-relaxed text-slate-400">
+            È la stessa guida che hai visto al primo accesso, e riparte dal principio. Dura pochi
+            passi e la puoi chiudere quando vuoi.
+          </p>
+
+          <PrimaryButton type="button" variant="submit" className="mt-1" onClick={openTutorial}>
+            <SparkleIcon size={16} className="shrink-0" />
+            Rivedi la Guida
+          </PrimaryButton>
+        </section>
+      )}
     </PageContainer>
   )
 }

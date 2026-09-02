@@ -193,6 +193,78 @@ Nessuno dei tre dichiara `aria-haspopup`: dentro ci sono collegamenti in un
 riquadro, non un menu con la sua navigazione a frecce, e annunciarlo come tale
 prometterebbe tasti che non ci sono.
 
+## La guida introduttiva
+
+Al primo ingresso un riquadro attraversa le sezioni una per volta, illuminando
+l'elemento di cui parla: cosa si trova nella galleria, a cosa serve il
+simulatore, dove stanno i propri percorsi. Si sfoglia avanti e indietro, e si
+chiude quando si vuole.
+
+| File                                                                        | Cosa fa                                                                     |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [tutorialSteps.ts](../frontend/src/components/tutorialSteps.ts)             | Cosa racconta, e a chi: i passi come dati, un elenco per ruolo              |
+| [TutorialTour.tsx](../frontend/src/components/TutorialTour.tsx)             | Quale passo si legge, avanti e indietro, la chiusura                       |
+| [TutorialSpotlight.tsx](../frontend/src/components/TutorialSpotlight.tsx)   | Il velo, il ritaglio sull'elemento, il riquadro                            |
+| [tutorialPlacement.ts](../frontend/src/components/tutorialPlacement.ts)     | Dove finisce il riquadro: sotto, sopra, o al centro                        |
+| [useAnchorRect.ts](../frontend/src/hooks/useAnchorRect.ts)                  | Dov'è, sullo schermo, l'elemento illuminato                                |
+| [tutorialEvents.ts](../frontend/src/components/tutorialEvents.ts)           | Riaprirla dal proprio profilo, e chiedere alla barra il menu dell'account  |
+| [useTutorial.ts](../frontend/src/hooks/useTutorial.ts)                      | L'unica scrittura: è stata vista                                           |
+
+**Due guide, una per ruolo.** Chi si allena e chi amministra non fanno le
+stesse cose, e non ricevono lo stesso giro: la prima parla di allenarsi e di
+rivedere i propri risultati, la seconda di comporre i test, affidare i percorsi
+e leggere il rendiconto. Il super admin riceve un elenco vuoto, che è il modo
+in cui la guida non compare: sta sopra i tenant, e non è la persona da prendere
+per mano al primo ingresso. `hasTutorial` è la stessa domanda fatta dal proprio
+profilo, che offre di rivederla solo a chi l'ha ricevuta.
+
+**Vista o no sta sull'account, non nel browser.** La colonna è
+`users.tutorial_seen_at`, arriva con il profilo e si scrive con
+`POST /api/auth/me/tutorial`. In `localStorage` sarebbe stata una proprietà del
+computer invece che della persona: chi cambia postazione se la ritroverebbe
+davanti, e chi ripulisce i dati del sito pure. Chiuderla la segna come vista
+comunque, che si arrivi in fondo o che si chiuda al primo passo, perché chi la
+interrompe l'ha vista comparire. Da lì in poi si riapre solo a mano, dalla
+propria scheda, e quella riapertura non scrive niente: la data dice quando
+l'account ha incontrato la guida, non quante volte l'ha letta.
+
+**Illumina gli elementi veri, non delle copie.** Ogni passo porta il selettore
+di quello di cui parla: le voci di navigazione si dichiarano da sé con
+`data-tour` (in `NavbarLink`, nel pannello compatto e nel menu del profilo,
+quindi una sezione nuova è indicabile senza che nessuno se ne ricordi), le tre
+cose che escono dall'angolo destro hanno già un id. Lo stesso selettore trova
+due copie della stessa voce, una in fila e una nel pannello compatto, e vale
+quella che occupa dello spazio, cioè quella visibile a questa larghezza. Il
+buio è l'ombra del ritaglio, larga quanto basta a coprire lo schermo, e sotto
+al ritaglio non c'è niente: quello che si vede illuminato è il pulsante che poi
+si andrà davvero a premere.
+
+Un'ancora che non si trova non è un errore: sotto i 1024px le sezioni si
+ritirano nel pannello e la voce in fila non esiste. Il passo resta e si legge
+al centro, perché quello che spiega vale comunque, come già succede per il
+benvenuto e per il commiato, che di un punto dello schermo non parlano.
+
+**I passi che parlano di una voce del menu del proprio account lo aprono.** Le
+sezioni di amministrazione stanno lì dentro, e una guida che ne disegnasse una
+copia insegnerebbe un gesto che poi non si ritrova. Quale pannello è aperto lo
+sa solo la barra, quindi la guida glielo chiede con un evento
+(`TUTORIAL_USER_MENU_EVENT`), come le pagine pubbliche chiedono la modale di
+accesso: il menu resta aperto finché si parla di quella voce e si richiude
+appena si passa oltre.
+
+La misura dell'elemento si rifà a ogni frame finché la guida è aperta, e non a
+ogni evento che potrebbe spostarlo: gli eventi da ascoltare sarebbero lo
+scroll, il ridimensionamento, il menu che si apre con la sua animazione e un
+elenco che arriva dal server e allunga la pagina sotto. Un
+`getBoundingClientRect` per frame su un elemento solo non si sente, e lo stato
+cambia unicamente quando la misura cambia davvero.
+
+Un velo trasparente raccoglie i click: la guida si sfoglia con i propri
+pulsanti, con le frecce o con Esc, e non toccando quello che illumina. Un click
+a vuoto porterebbe altrove a metà spiegazione, e uno che la chiudesse per
+sbaglio la farebbe sparire per sempre, perché dopo la chiusura non torna da
+sola.
+
 ## La galleria degli avatar
 
 È la prima schermata di chi entra, e la sola che tutti aprono ogni volta.

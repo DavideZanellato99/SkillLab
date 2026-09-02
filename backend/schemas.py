@@ -789,6 +789,10 @@ class UserResponse(BaseModel):
     # a very different date from the one above. Null under the same
     # condition, an account that has never been used.
     last_activity_at: datetime | None = None
+    # Quando la guida introduttiva è stata chiusa la prima volta. Null vuol
+    # dire che va ancora mostrata: è il frontend a leggerla da qui, appena
+    # entrato.
+    tutorial_seen_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

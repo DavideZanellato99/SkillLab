@@ -12,7 +12,7 @@ valgono su tutte le righe. Tutto in
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `organizations` | I tenant. Nome, slug, stato, motivo della sospensione                                                                                                 |
 | `roles`         | I tre ruoli, creati all'avvio se mancano                                                                                                              |
-| `users`         | L'account, legato all'identità Cognito da `cognito_sub`. Ultimo accesso e ultima attività sono due colonne diverse e rispondono a due domande diverse |
+| `users`         | L'account, legato all'identità Cognito da `cognito_sub`. Ultimo accesso e ultima attività sono due colonne diverse e rispondono a due domande diverse, e una terza dice quando la guida introduttiva è stata vista |
 
 **Le sessioni**
 

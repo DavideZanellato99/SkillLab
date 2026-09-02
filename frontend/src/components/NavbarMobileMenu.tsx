@@ -84,6 +84,10 @@ export default function NavbarMobileMenu({
                     to={entry.to}
                     className={`${rowCls} ${isActive ? rowActiveCls : rowIdleCls}`}
                     aria-current={isActive ? 'page' : undefined}
+                    /* La stessa voce della fila, e lo stesso ancoraggio per
+                       la guida introduttiva: delle due copie ne è visibile
+                       una sola, ed è quella che la guida illumina. */
+                    data-tour={entry.to}
                     onClick={onClose}
                   >
                     <Icon size={18} />

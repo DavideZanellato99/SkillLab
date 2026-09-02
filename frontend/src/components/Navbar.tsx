@@ -19,6 +19,7 @@ import NavbarLink from './NavbarLink'
 import NavbarMobileMenu from './NavbarMobileMenu'
 import NavbarUserMenu from './NavbarUserMenu'
 import { mainNavEntries } from './navEntries'
+import { TUTORIAL_USER_MENU_EVENT } from './tutorialEvents'
 import { MAIN_CONTENT_ID } from './mainContent'
 import NotificationsBell from './NotificationsBell'
 
@@ -57,6 +58,21 @@ export default function Navbar() {
     const openLogin = () => setShowAuthModal(true)
     window.addEventListener(OPEN_LOGIN_EVENT, openLogin)
     return () => window.removeEventListener(OPEN_LOGIN_EVENT, openLogin)
+  }, [])
+
+  /* La guida introduttiva parla anche di voci che stanno nel menu del proprio
+     account, e mentre lo fa il menu deve restare aperto: le illumina dove si
+     trovano davvero, invece di disegnarne una copia. Lo chiede con un evento
+     perché quale pannello è aperto lo sa solo la barra, e resta lei a
+     deciderlo. Alla fine del passo il menu si richiude, ma solo se è ancora
+     quello aperto: nel frattempo può averlo sostituito un altro. */
+  useEffect(() => {
+    const onTutorialMenu = (event: Event) => {
+      const open = (event as CustomEvent<{ open: boolean }>).detail?.open === true
+      setOpenMenu((current) => (open ? 'user' : current === 'user' ? null : current))
+    }
+    window.addEventListener(TUTORIAL_USER_MENU_EVENT, onTutorialMenu)
+    return () => window.removeEventListener(TUTORIAL_USER_MENU_EVENT, onTutorialMenu)
   }, [])
 
   /* Le voci dipendono solo da chi è entrato, e la barra è montata su ogni

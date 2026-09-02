@@ -12,6 +12,7 @@ import SimulationsPage from './components/SimulationsPage'
 import SimulationRunner from './components/SimulationRunner'
 import ProfilePage from './components/ProfilePage'
 import RequireRole from './components/RequireRole'
+import TutorialTour from './components/TutorialTour'
 import LoadingState from './components/LoadingState'
 import { GalleryContainer } from './components/PageLayout'
 import Spinner from './components/Spinner'
@@ -79,6 +80,13 @@ function App() {
   return (
     <div className="flex min-h-screen flex-col pt-16" id="app">
       <Navbar />
+      {/* La guida introduttiva, che al primo ingresso parte da sola. Sta
+          qui e non dentro una pagina perché quello che indica è la barra,
+          che è montata dappertutto: chi entra su un indirizzo salvato la
+          riceve dove si trova, invece di doverla incontrare in home. Chi
+          l'ha già vista, e il super admin che non la riceve mai, non
+          disegnano niente. */}
+      {isAuthenticated && <TutorialTour />}
       {/* Il tempo di scaricare una pagina di amministrazione: la stessa
           attesa che le pagine mostrano mentre chiedono i propri dati, così
           entrarci resta un gesto solo anche quando il file arriva ora. */}

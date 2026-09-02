@@ -134,6 +134,11 @@ def _add_columns() -> None:
         # `activity`). Il valore di partenza lo mette _backfill_last_login,
         # dopo che l'ultimo accesso è stato a sua volta ricostruito.
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP"))
+        # La guida introduttiva, vista o no. Le righe che c'erano prima di
+        # questa colonna restano NULL, che qui vuol dire "non l'ha ancora
+        # vista": chi già usava la piattaforma se la trova davanti una volta,
+        # ed è il comportamento giusto, la guida non c'era quando è entrato.
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_seen_at TIMESTAMP"))
         # Avatars are deleted logically: pre-existing rows are all active, so
         # NULL (the column default) is already the right value for them and no
         # backfill is needed. The partial index serves the only query shape

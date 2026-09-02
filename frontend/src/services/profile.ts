@@ -28,6 +28,12 @@ export const changeMyPassword = (payload: ChangePasswordPayload) =>
     body: payload,
   })
 
+/* La guida introduttiva è stata vista: da qui in poi non compare più da
+   sola. Non prende parametri e non ha un gemello che la rimette in piedi,
+   perché riaprirla dal proprio profilo non cambia niente sul server. */
+export const markTutorialSeen = () =>
+  apiFetch<AuthUser>('/api/auth/me/tutorial', { method: 'POST' })
+
 /* Copia dei propri dati personali (GDPR art. 15 e 20): uno ZIP con il JSON
    strutturato, le registrazioni audio delle proprie chiamate e un LEGGIMI.
    Riguarda sempre e solo chi chiama, l'utente lo prende il server dalla

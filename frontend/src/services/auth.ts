@@ -30,6 +30,9 @@ export interface AuthUser {
    * minuti: con una sessione che si rinnova da sola è una data ben diversa
    * dall'ultimo accesso. Null alla stessa condizione, un account mai usato. */
   last_activity_at: string | null
+  /** Quando la guida introduttiva è stata vista la prima volta; null vuol
+   *  dire che deve ancora comparire, ed è l'unica cosa che la fa partire. */
+  tutorial_seen_at: string | null
   created_at: string
   updated_at: string
 }

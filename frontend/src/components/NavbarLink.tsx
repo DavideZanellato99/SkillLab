@@ -16,6 +16,11 @@ export default function NavbarLink({ entry, isActive }: { entry: NavEntry; isAct
     <Link
       to={entry.to}
       className={navLinkClasses(isActive)}
+      /* Come la guida introduttiva ritrova questa voce per illuminarla
+         (vedi `tutorialSteps`). Lo dichiara la voce, e non un elenco di
+         selettori scritto altrove, così una sezione nuova è indicabile
+         senza che nessuno se ne ricordi. */
+      data-tour={entry.to}
       /* La voce accesa non è solo colorata: per chi legge con uno screen
          reader è questa la pagina in cui si trova. */
       aria-current={isActive ? 'page' : undefined}

@@ -28,18 +28,24 @@ git checkout stage
 
 Non esiste una branch protection che imponga una PR verso `main`: la
 garanzia che `main` resti funzionante è procedurale (si mergia solo a
-`stage` verde). Se in futuro si passa a un flusso con feature branch e PR
-verso `stage`, allora ha senso proteggere `stage` con i check richiesti.
+`stage` verde).
+
+Su `stage` c'è invece un ruleset che richiede il check `CI success`, ma con il
+bypass sul ruolo di amministratore: i commit diretti continuano a passare come
+prima, e la regola vincola le PR di Dependabot, che senza un check da aspettare
+non potrebbero mergiarsi da sole. Il dettaglio è in
+[ci-cd.md](ci-cd.md#le-impostazioni-che-non-stanno-nel-repository).
 
 Oltre ai gate del hook, la CI esegue anche il lint dell'infrastruttura
 (`hadolint` sui Dockerfile, `actionlint` sui workflow, `shellcheck` sugli
 script in `.githooks`) e uno smoke test Docker del compose di produzione.
 Un workflow separato ([security.yml](../.github/workflows/security.yml)) fa
 girare `pip-audit` sui lock del backend, `npm audit --audit-level=high` sul
-frontend, Trivy e CodeQL. Gira sulle PR, sui push a `main` e ogni lunedì, e si
-può lanciare a mano dalla tab Actions. Nessuno dei suoi job compare fra i
-`needs` di `ci-success`, di proposito: un CVE appena pubblicato non deve
-bloccare lavoro che non c'entra.
+frontend, Trivy e CodeQL. Gira sui push a `main` e ogni lunedì, e si può
+lanciare a mano dalla tab Actions. Nessuno dei suoi job compare fra i `needs` di
+`ci-success`, di proposito: un CVE appena pubblicato non deve bloccare lavoro
+che non c'entra. Per la stessa ragione non gira sulle PR, dove produceva un
+rosso costante e scollegato dalla modifica.
 
 Sono tutte analisi statiche, del codice e delle immagini: **niente scansione
 dell'applicazione in esecuzione**.

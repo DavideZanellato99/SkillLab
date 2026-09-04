@@ -23,6 +23,34 @@ Il flusso dei branch è `stage` (integrazione, commit diretti) verso `main`
 (stabile), promosso a mano con un merge fast forward solo a CI verde. Il
 dettaglio è in [contributing.md](contributing.md).
 
+## Cosa succede a ogni passo
+
+**Quando fai `git commit`** parte il hook, che gira in locale gli stessi
+controlli della CI: ruff, mypy, la coerenza dei lock, pytest, prettier, oxlint,
+la build, vitest e gitleaks sui file in stage. Se qualcosa è rosso il commit non
+viene creato. Sono circa dieci minuti, ed è il motivo per cui la CI quasi non
+trova mai niente: quello che trova, lo trova prima.
+
+**Quando pushi su `stage`** il push passa subito. Sul branch c'è un ruleset che
+richiede il check `CI success`, ma il ruolo di amministratore lo scavalca: la
+regola è lì per il bot, non per te (il perché sta più sotto, in
+[Le impostazioni che non stanno nel repository](#le-impostazioni-che-non-stanno-nel-repository)).
+Poi parte il workflow CI, sette job in parallelo, ed è l'unica cosa che parte:
+Security non gira sui push a `stage`. Se un push più recente arriva mentre la
+corsa è in volo, quella vecchia viene annullata.
+
+Un rosso su `stage` non blocca niente, perché il commit è già dentro. Serve a
+dirti che `stage` non è promuovibile finché non lo sistemi, ed è esattamente la
+garanzia procedurale su cui si regge il flusso.
+
+**Quando mergi `stage` in `main`** partono due workflow, CI e Security. Il
+secondo può essere rosso per una CVE pubblicata nella notte, e non blocca il
+merge perché il merge è già avvenuto: è una segnalazione da leggere, non un
+semaforo da aspettare.
+
+**Quando Dependabot apre una PR** il giro è diverso, ed è l'unico automatico:
+lo racconta [Il giro di una PR di Dependabot](#il-giro-di-una-pr-di-dependabot).
+
 ## Il workflow CI
 
 [.github/workflows/ci.yml](../.github/workflows/ci.yml), su ogni push a `stage`
@@ -38,6 +66,14 @@ riferimento annulla la corsa in volo.
 | `docker-smoke` | Costruisce e avvia lo stack di produzione, e lo interroga |
 | `infra-lint` | hadolint sui due Dockerfile, actionlint sui workflow, shellcheck sugli script |
 | `ci-success` | Verde solo se tutti i precedenti lo sono. È il check unico da richiedere nelle impostazioni del branch |
+
+**Gli strumenti di `infra-lint` sono binari presi dalle release su GitHub**, non
+immagini. Giravano in un container ciascuno, e ogni `docker run` era un pull
+anonimo da Docker Hub: i runner condividono gli indirizzi con tutti gli altri
+progetti del mondo, quindi ogni tanto quel pull tornava indietro con
+`unauthorized: authentication required` e il job diventava rosso senza che il
+codice c'entrasse. Adesso il job dura sei secondi invece di quaranta, e la
+versione di ogni strumento è scritta per esteso nel workflow.
 
 **I test del backend girano su Postgres vero** e non su SQLite, perché
 l'applicazione esegue SQL specifico di Postgres già all'avvio: le migrazioni
@@ -145,14 +181,72 @@ Dependabot apre PR settimanali per pip, npm, Docker e GitHub Actions, **verso
 lavoro entra, o ogni aggiornamento va riportato a mano dall'altra parte.
 
 Minor e patch viaggiano raggruppate per ecosistema e **si mergiano da sole**
-quando la CI passa: se ne occupa
-[dependabot-auto-merge.yml](../.github/workflows/dependabot-auto-merge.yml), che
-non scavalca nessun controllo, chiede a GitHub il merge automatico e lascia che
-sia il check richiesto dal ruleset a decidere. I major restano fuori dai gruppi,
-una PR per pacchetto, e si guardano a mano: non sono manutenzione, sono
-migrazioni. Sulle immagini di base i major sono ignorati del tutto, perché
-cambiare versione a Python o a Node significa cambiare la piattaforma sotto
-tutto il resto, a partire dal lock che è compilato dentro `python:3.12-slim`.
+quando la CI passa. I major restano fuori dai gruppi, una PR per pacchetto, e si
+guardano a mano: non sono manutenzione, sono migrazioni. Sulle immagini di base i
+major sono ignorati del tutto, perché cambiare versione a Python o a Node
+significa cambiare la piattaforma sotto tutto il resto, a partire dal lock che è
+compilato dentro `python:3.12-slim`.
+
+### Il giro di una PR di Dependabot
+
+```mermaid
+flowchart TD
+    A["Dependabot apre la PR<br/>su stage"] --> B["workflow CI<br/>sulla PR"]
+    A --> C["dependabot-auto-merge<br/>legge il tipo di aggiornamento"]
+    C -->|major| D["resta aperta<br/>la guardi tu"]
+    C -->|minor o patch| E["chiede a GitHub<br/>il merge automatico"]
+    B -->|CI success verde| F["squash su stage"]
+    B -->|rossa| G["resta aperta,<br/>niente merge"]
+    E --> F
+    E --> G
+```
+
+Il pezzo che conta è che **il merge automatico non scavalca nessun controllo**.
+`gh pr merge --auto` non mergia niente sul momento: dice a GitHub di farlo
+quando i check richiesti dal ruleset saranno verdi. Se la CI fallisce, la PR
+resta aperta come prima, e nessuno l'ha mergiata al posto tuo. È per questo che
+il ruleset con `CI success` richiesto non è un accessorio: senza un check da
+aspettare, "automatico" vorrebbe dire "subito".
+
+Il workflow gira su `pull_request_target` e non su `pull_request`, perché le PR
+di Dependabot ricevono un token in sola lettura, che non basta a mergiare. Per
+la stessa ragione **non fa nessun checkout**, ed è deliberato: con quell'evento
+il codice della PR non va mai eseguito, o su un repository pubblico chiunque
+apra una PR eseguirebbe ciò che vuole con un token in scrittura. Legge dei
+metadati e chiama l'API, nient'altro.
+
+I major non sono esclusi da una lista di nomi ma dal tipo di aggiornamento, che
+`dependabot/fetch-metadata` ricava dalla PR stessa: un pacchetto nuovo non
+sfugge alla regola per il fatto di non essere stato previsto.
+
+## Le impostazioni che non stanno nel repository
+
+Tre pezzi della pipeline vivono nelle impostazioni di GitHub, non in un file
+versionato: clonando il repository non si vedono, e su un repository nuovo
+vanno rifatti a mano.
+
+| Impostazione | Dove | A cosa serve |
+| --- | --- | --- |
+| **Allow auto-merge** | Settings, General, Pull Requests | Senza, `gh pr merge --auto` si rifiuta di partire e le PR di manutenzione restano ferme |
+| **Ruleset su `stage`** | Settings, Rules | Richiede il check `CI success`, vieta force push e cancellazione del branch, e lascia il bypass al ruolo di amministratore |
+| **Dependabot legge la configurazione da `main`** | Nessuna impostazione, è il comportamento del servizio | Un cambio a `dependabot.yml` non ha effetto finché resta su `stage`: va portato sul branch di default |
+
+Il ruleset ha **il bypass sul ruolo di amministratore**, ed è una scelta, non
+una dimenticanza: la regola esiste perché il merge automatico abbia un check da
+aspettare, quindi deve vincolare il bot, non chi lavora. Senza il bypass i push
+diretti su `stage` verrebbero rifiutati, e il flusso a commit diretti che questo
+repository usa diventerebbe un flusso a feature branch. È una decisione da
+prendere quando si vuole, non un effetto collaterale.
+
+La casella **Require branches to be up to date before merging** è
+deliberatamente spenta: con quella attiva, ogni avanzamento di `stage` rende non
+aggiornate tutte le PR aperte, che vanno rilanciate una per una, e il merge
+automatico resta appeso ad aspettare.
+
+L'ultima riga della tabella è quella che si dimentica: la configurazione di
+Dependabot si legge dal branch di default. Finché un cambio a
+[dependabot.yml](../.github/dependabot.yml) sta solo su `stage`, il bot continua
+a comportarsi come prima, e sembra che la modifica non abbia funzionato.
 
 ## Cosa non c'è
 
@@ -162,9 +256,3 @@ la messa in produzione è il comando descritto in
 
 **Non c'è branch protection** che imponga una PR verso `main`: la garanzia è
 procedurale, si mergia solo a `stage` verde.
-
-Su `stage` invece un ruleset richiede il check `CI success`, e serve al merge
-automatico delle PR di Dependabot: senza un check richiesto non ci sarebbe
-niente a trattenere il merge, e "automatico" vorrebbe dire "subito". Il ruolo di
-amministratore lo scavalca, quindi i push diretti su `stage` continuano a
-funzionare come prima: la regola vincola il bot, non chi lavora.

@@ -20,11 +20,16 @@ git push                       # la CI parte su stage
 # 2. Quando la CI su stage è verde, promuovi in main
 git checkout main
 git merge --ff-only stage
-git push                       # una run di sicurezza parte anche su main
+git push                       # CI e Security ripartono su main
 
 # 3. Torna a lavorare su stage
 git checkout stage
 ```
+
+**Il passo 2 è anche il rilascio.** Quando la CI diventa verde su `main`, il
+workflow Deploy aggiorna il server da solo ([ci-cd.md](ci-cd.md)), e siccome
+gli aggiornamenti interrompono le chiamate in corso, quel `git push` non si dà
+mentre qualcuno è in aula.
 
 Non esiste una branch protection che imponga una PR verso `main`: la
 garanzia che `main` resti funzionante è procedurale (si mergia solo a
@@ -38,7 +43,8 @@ non potrebbero mergiarsi da sole. Il dettaglio è in
 
 Oltre ai gate del hook, la CI esegue anche il lint dell'infrastruttura
 (`hadolint` sui Dockerfile, `actionlint` sui workflow, `shellcheck` sugli
-script in `.githooks`) e uno smoke test Docker del compose di produzione.
+script di shell del repository) e uno smoke test Docker del compose di
+produzione.
 Un workflow separato ([security.yml](../.github/workflows/security.yml)) fa
 girare `pip-audit` sui lock del backend, `npm audit --audit-level=high` sul
 frontend, Trivy e CodeQL. Gira sui push a `main` e ogni lunedì, e si può

@@ -272,7 +272,7 @@ jobs:
           /tmp/actionlint -color
       - name: shellcheck (script di shell del repo)
         # Preinstallato sui runner ubuntu, quindi qui non si scarica niente.
-        run: shellcheck .githooks/pre-commit .github/scripts/write-ci-env.sh
+        run: shellcheck .githooks/pre-commit .github/scripts/write-ci-env.sh deploy/deploy.sh
 
   # Single check to require in branch settings: green only if every job above
   # succeeded.

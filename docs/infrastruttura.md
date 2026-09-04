@@ -349,17 +349,25 @@ Compose caricherebbe da solo.
 ### 4.2 Gli aggiornamenti
 
 ```bash
-git pull
+git merge --ff-only origin/main
 docker compose -f docker-compose.yml up -d --build
 ```
 
 Lo schema si aggiorna da solo all'avvio, dietro il lock, quindi non c'è
 nessun passo di migrazione da ricordare.
 
+**Quei due comandi non li dà una persona**, li dà GitHub Actions entrando in
+SSH quando la CI passa su `main` ([deploy/deploy.sh](../deploy/deploy.sh),
+[ci-cd.md](ci-cd.md)). Il principio riusabile è che il rilascio automatico vale
+la pena esattamente quando il rilascio a mano è già di due comandi: se ce ne
+volessero sei, con dei passi da ricordare, automatizzarli nasconderebbe il
+problema invece di risolverlo. La chiave che il runner usa ha un comando
+forzato in `authorized_keys`, quindi può fare quella cosa sola e nient'altro.
+
 **Le chiamate in corso cadono.** Le repliche vengono sostituite tutte
-insieme e chi è al telefono viene interrotto, quindi per ora gli
-aggiornamenti vanno fatti in una finestra tranquilla. Il rimedio, quando
-servirà, è nel punto 6.
+insieme e chi è al telefono viene interrotto, quindi per ora il merge in
+`main`, che è ciò che fa partire il rilascio, va fatto in una finestra
+tranquilla. Il rimedio, quando servirà, è nel punto 6.
 
 Quello che invece non si perde più sono le scritture: il `stop_grace_period`
 del backend dà trenta secondi alle scritture in volo (la trascrizione parte

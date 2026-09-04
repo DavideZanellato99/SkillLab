@@ -11,7 +11,12 @@ perché i controlli sono divisi in questo modo.
 flowchart LR
     A["git commit<br/>hook pre-commit"] --> B["git push<br/>workflow CI"]
     B --> C["merge in main<br/>+ ogni lunedì<br/>workflow Security"]
+    C --> D["CI verde su main<br/>workflow Deploy"]
 ```
+
+L'ultimo riquadro non è un controllo, è la conseguenza: la CI verde su `main` è
+la condizione che fa partire il rilascio in produzione, e lo racconta
+[Il rilascio in produzione](#il-rilascio-in-produzione).
 
 I gate del hook e quelli della CI sono **gli stessi**: un fallimento in locale
 è un fallimento della pipeline, e la pipeline non riserva sorprese a chi ha già
@@ -47,6 +52,12 @@ garanzia procedurale su cui si regge il flusso.
 secondo può essere rosso per una CVE pubblicata nella notte, e non blocca il
 merge perché il merge è già avvenuto: è una segnalazione da leggere, non un
 semaforo da aspettare.
+
+**Quando la CI su `main` diventa verde** parte il rilascio, che aggiorna il
+server da solo. Il merge in `main` è quindi il momento in cui si decide di
+mettere in produzione, e va scelto di conseguenza: gli aggiornamenti
+interrompono le chiamate in corso
+([deploy-e-scalabilita.md](deploy-e-scalabilita.md)).
 
 **Quando Dependabot apre una PR** il giro è diverso, ed è l'unico automatico:
 lo racconta [Il giro di una PR di Dependabot](#il-giro-di-una-pr-di-dependabot).
@@ -152,6 +163,57 @@ sorvegliava le intestazioni e i flag dei cookie e nient'altro. Rifarlo con
 copertura vera vuol dire un user pool Cognito dedicato ai test e una scansione
 autenticata.
 
+## Il rilascio in produzione
+
+[.github/workflows/deploy.yml](../.github/workflows/deploy.yml). Entra nel
+server in SSH e gli fa eseguire [deploy/deploy.sh](../deploy/deploy.sh), che è
+lo stesso `git merge` più `docker compose up -d --build` del rilascio a mano
+([deploy-e-scalabilita.md](deploy-e-scalabilita.md)). La prima installazione,
+compresa la preparazione della chiave, sta in
+[messa-in-produzione.md](messa-in-produzione.md).
+
+**Il trigger è la CI verde su `main`, non il push su `main`.** Fra le due cose
+passano i dieci minuti della corsa, e in quei dieci minuti sta la differenza fra
+rilasciare quello che hai promosso e rilasciare qualcosa che non compila.
+
+**Non c'è un bottone da premere**, e non è una svista. Il merge in `main` è già
+un gesto deliberato, fatto a mano da `stage` e solo a CI verde: quella è la
+decisione di rilasciare, e chiederne conferma dieci minuti dopo vorrebbe dire
+confermare due volte la stessa cosa. Le conferme che si danno sempre smettono
+di essere controlli. La regola che sostituisce il bottone è una sola, ed è
+facile da rispettare: **nei giorni di esercitazione non si mergia in `main`**,
+perché il rilascio interrompe le chiamate in corso. Il job dichiara comunque
+l'ambiente `production`, quindi il giorno in cui quella regola si dimostrasse
+fragile il revisore richiesto si attiva con una spunta nelle impostazioni, senza
+toccare nessun file.
+
+Tre dettagli valgono la riga che occupano:
+
+| Scelta | Perché |
+| --- | --- |
+| L'impronta del server in `DEPLOY_KNOWN_HOSTS` | L'alternativa scritta ovunque è `StrictHostKeyChecking=no`, che fa accettare al runner qualunque macchina risponda a quell'indirizzo: è precisamente la cosa contro cui l'impronta esiste |
+| Il comando forzato in `authorized_keys` | La chiave sta su un server di GitHub, e da lì può fare una cosa sola. È il server a decidere cosa gira, non chi bussa |
+| Il controllo dopo il rilascio | Contro il dominio vero, e chiede `/` più un 401 su `/api/avatars`: senza, un rilascio che rompe l'avvio del backend risulterebbe verde qui e si scoprirebbe dal browser |
+
+**Il rilascio si lancia anche a mano**, dalla tab Actions, quando serve
+rimettere su lo stack senza un commit nuovo, per esempio dopo aver cambiato un
+`.env` sul server.
+
+**Quello che il rilascio non fa è tornare indietro.** Le immagini si
+costruiscono sul server e non sono conservate da nessuna parte, quindi il
+ritorno alla versione precedente si fa a mano e costa una ricostruzione
+([deploy-e-scalabilita.md](deploy-e-scalabilita.md)). Il giorno in cui quei
+minuti fossero troppi, la risposta è costruire le immagini in CI e pubblicarle
+su un registry, con il server che si limita a scaricarle: è un cambio che si fa
+quando serve, non prima.
+
+Finché il server sta su un commit scelto a mano, i rilasci automatici
+**falliscono invece di sovrascriverlo**, perché lo script avanza solo in fast
+forward da `main`. È il comportamento voluto, non un intoppo: un rilascio che
+riportasse su la versione da cui sei appena scappato sarebbe molto peggio di un
+job rosso. Si torna in carreggiata con un `git checkout main` sul server, dopo
+aver corretto in `main` quello che non andava.
+
 ## I test
 
 | Dove | Con cosa | Cosa coprono |
@@ -221,7 +283,7 @@ sfugge alla regola per il fatto di non essere stato previsto.
 
 ## Le impostazioni che non stanno nel repository
 
-Tre pezzi della pipeline vivono nelle impostazioni di GitHub, non in un file
+Alcuni pezzi della pipeline vivono nelle impostazioni di GitHub, non in un file
 versionato: clonando il repository non si vedono, e su un repository nuovo
 vanno rifatti a mano.
 
@@ -230,6 +292,10 @@ vanno rifatti a mano.
 | **Allow auto-merge** | Settings, General, Pull Requests | Senza, `gh pr merge --auto` si rifiuta di partire e le PR di manutenzione restano ferme |
 | **Ruleset su `stage`** | Settings, Rules | Richiede il check `CI success`, vieta force push e cancellazione del branch, e lascia il bypass al ruolo di amministratore |
 | **Dependabot legge la configurazione da `main`** | Nessuna impostazione, è il comportamento del servizio | Un cambio a `dependabot.yml` non ha effetto finché resta su `stage`: va portato sul branch di default |
+| **Ambiente `production`** | Settings, Environments | Ci vivono i quattro segreti del rilascio, ed è il posto dove si aggiunge un revisore richiesto senza toccare il workflow |
+| **`DEPLOY_USER`, `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`** | Settings, Environments, `production` | L'utente, l'indirizzo, la chiave privata del runner e l'impronta del server. Come si ottengono sta in [messa-in-produzione.md](messa-in-produzione.md) |
+| **Variabile `SITE_ADDRESS`** | Settings, Secrets and variables, Actions, Variables | Il dominio su cui il rilascio verifica di aver funzionato. È una variabile e non un segreto perché è pubblico, e mascherato renderebbe illeggibili proprio i log da guardare |
+| **Il workflow Deploy si legge dal ramo di default** | Nessuna impostazione, è il comportamento del servizio | Come per `dependabot.yml`: finché una modifica a `deploy.yml` sta solo su `stage`, il rilascio continua a comportarsi come prima |
 
 Il ruleset ha **il bypass sul ruolo di amministratore**, ed è una scelta, non
 una dimenticanza: la regola esiste perché il merge automatico abbia un check da
@@ -250,9 +316,10 @@ a comportarsi come prima, e sembra che la modifica non abbia funzionato.
 
 ## Cosa non c'è
 
-**Non c'è deploy automatico.** Le immagini si costruiscono solo per verifica, e
-la messa in produzione è il comando descritto in
-[deploy-e-scalabilita.md](deploy-e-scalabilita.md), dato a mano sul server.
+**Non c'è un registry.** Le immagini si costruiscono sul server a ogni
+rilascio, e in CI solo per verifica: nessuna delle due viene pubblicata da
+qualche parte. È il motivo per cui il ritorno alla versione precedente costa
+una ricostruzione, ed è il punto in cui questa scelta andrà rivista.
 
 **Non c'è branch protection** che imponga una PR verso `main`: la garanzia è
 procedurale, si mergia solo a `stage` verde.

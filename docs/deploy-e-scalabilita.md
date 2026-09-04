@@ -35,10 +35,41 @@ solo. Vedi [docker-e-ambienti.md](docker-e-ambienti.md).
 
 ## Gli aggiornamenti
 
+**Si rilascia mergiando `stage` in `main`**, e non entrando nel server: alla CI
+verde su `main` il workflow Deploy entra da solo e fa girare
+[deploy/deploy.sh](../deploy/deploy.sh), che è esattamente questo:
+
 ```bash
-git pull
+git merge --ff-only origin/main
 docker compose -f docker-compose.yml up -d --build
 ```
+
+Come è fatto il rilascio e perché non chiede conferma sta in
+[ci-cd.md](ci-cd.md). Gli stessi due comandi restano validi a mano sul server,
+che è la strada da prendere quando GitHub non è raggiungibile o quando si sta
+tornando indietro a un commit preciso:
+
+```bash
+cd ~/SkillLab
+sh deploy/deploy.sh
+```
+
+**Tornare indietro** è la stessa cosa fatta al contrario, e si fa sul server
+perché è l'unico posto dove le immagini esistono:
+
+```bash
+cd ~/SkillLab
+git checkout <commit-buono>
+docker compose -f docker-compose.yml up -d --build
+```
+
+Costa una ricostruzione, quindi qualche minuto. Da lì i rilasci automatici si
+fermano con un errore invece di riportare su la versione da cui sei scappato,
+ed è voluto: si riparte con `git checkout main` quando in `main` c'è la
+correzione. Attenzione a una cosa sola, che è la stessa di sempre: lo schema del
+database si aggiorna in avanti e non torna indietro, quindi il commit a cui si
+torna dev'essere uno che quello schema lo sa reggere
+([dati-e-schema.md](dati-e-schema.md)).
 
 **Non c'è nessun passo di migrazione da ricordare**: lo schema si aggiorna da
 solo all'avvio, dietro un advisory lock, e ogni passo è idempotente
@@ -55,8 +86,10 @@ codice cambiato, non i 267 kB di React. Vedi
 [frontend.md](frontend.md).
 
 **Le chiamate in corso cadono.** Le repliche vengono sostituite tutte insieme,
-quindi chi è al telefono viene interrotto: per ora gli aggiornamenti vanno
-fatti in una finestra tranquilla. Quello che invece non si perde sono le
+quindi chi è al telefono viene interrotto. Siccome a rilasciare è il merge in
+`main`, è quello il gesto da tenere fuori dai giorni di esercitazione: il
+rilascio automatico non toglie la finestra tranquilla, la sposta dieci minuti
+più indietro. Quello che invece non si perde sono le
 scritture, grazie ai trenta secondi di grazia allo spegnimento che lasciano
 arrivare a destinazione le trascrizioni partite fire and forget.
 

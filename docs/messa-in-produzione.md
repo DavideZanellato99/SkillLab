@@ -2,7 +2,9 @@
 
 Da un dominio che non esiste ancora a SkillLab raggiungibile da internet.
 Questo documento copre solo la **prima volta**: comprare la macchina, metterla
-in sicurezza, installarci Docker e portarci il progetto. Da lì in poi comandano
+in sicurezza, installarci Docker, portarci il progetto e collegare i rilasci a
+GitHub, così che dalla seconda volta in poi non ci si entri più. Da lì in poi
+comandano
 [deploy-e-scalabilita.md](deploy-e-scalabilita.md) per gli aggiornamenti e
 [docker-e-ambienti.md](docker-e-ambienti.md) per come è fatto lo stack.
 
@@ -22,6 +24,7 @@ flowchart LR
     F --> G["7. Codice e<br/>ambiente"]
     G --> H
     H --> I["9. Collaudo"]
+    I --> J["10. Rilascio<br/>automatico"]
 ```
 
 Il dominio viene prima del server perché la propagazione del DNS è l'unica
@@ -569,19 +572,105 @@ invece di stimarlo, e quindi se sei repliche sono il numero giusto. Si lancia
 con fornitori finti, quindi non costa niente e non rischia la sospensione degli
 account ([loadtest.md](loadtest.md)).
 
-**Il primo aggiornamento fatto per finta**, cioè un `git pull` seguito dal
-comando di avvio, per vedere con i tuoi occhi che lo schema si aggiorna da solo
-e che non c'è nessun passo di migrazione da ricordare.
+**Il primo aggiornamento fatto a mano**, cioè `sh deploy/deploy.sh`, per vedere
+con i tuoi occhi che lo schema si aggiorna da solo e che non c'è nessun passo di
+migrazione da ricordare. È anche la prova che il passo 10 automatizzerà: se
+questo comando funziona dato da te, funziona anche dato da GitHub.
+
+---
+
+## 10. Il rilascio automatico
+
+Da qui in poi il server si aggiorna da solo quando `stage` viene mergiato in
+`main` e la CI diventa verde. Il perché di questa forma sta in
+[ci-cd.md](ci-cd.md); qui c'è come si prepara, e sono tre cose.
+
+### 10.1 La chiave che userà GitHub
+
+Va creata **sul tuo computer** e non sul server: la privata deve finire nei
+segreti di GitHub, e una chiave nata sul server dovrebbe uscirne, cosa che le
+chiavi private non fanno.
+
+```powershell
+ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\skilllab-deploy -C "github-actions"
+```
+
+Lascia la passphrase vuota, altrimenti nessuno potrà digitarla al posto del
+runner. Poi porta la pubblica sul server, con davanti il **comando forzato**,
+che è la riga che rende questa chiave innocua:
+
+```bash
+cat >> ~/.ssh/authorized_keys <<'EOF'
+command="flock -n /tmp/skilllab-deploy.lock /home/david/SkillLab/deploy/deploy.sh",no-agent-forwarding,no-port-forwarding,no-user-rc,no-x11-forwarding,no-pty ssh-ed25519 AAAA...la-tua-chiave-pubblica... github-actions
+EOF
+```
+
+Tutto su una riga sola, con la chiave pubblica incollata al posto dei puntini.
+Da quel momento chi entra con quella chiave non ottiene una shell e non sceglie
+cosa eseguire: qualunque cosa chieda, il server esegue il rilascio e chiude.
+Il `flock` aggiunge la seconda garanzia, che è un rilascio per volta anche se
+due partissero insieme.
+
+Una chiave così non è meno potente della tua, ed è bene saperlo invece di
+crederlo: chi può far girare un container su questa macchina è di fatto root,
+perché Docker gira da root. Quello che il comando forzato toglie è la libertà di
+scegliere **cosa** far girare, che è la differenza fra una chiave rubata che
+rilascia il tuo `main` e una chiave rubata che fa qualsiasi cosa.
+
+Provala dal tuo computer prima di darla a GitHub:
+
+```powershell
+ssh -i $env:USERPROFILE\.ssh\skilllab-deploy david@IP-DEL-SERVER
+```
+
+Deve stampare il rilascio e chiudere da sola, senza mai darti un prompt.
+
+### 10.2 L'impronta del server
+
+Serve perché il runner sappia riconoscere la macchina invece di fidarsi del
+primo indirizzo che risponde. Sempre dal tuo computer:
+
+```powershell
+ssh-keyscan -t ed25519 IP-DEL-SERVER
+```
+
+Copia la riga che stampa, per intero.
+
+### 10.3 I segreti su GitHub
+
+In **Settings, Environments**, crea un ambiente chiamato `production` e mettici
+dentro i quattro segreti. È lo stesso posto dove, il giorno in cui il rilascio
+dovesse aspettare un bottone, si aggiunge un revisore richiesto.
+
+| Segreto | Valore |
+| --- | --- |
+| `DEPLOY_USER` | `david`, cioè l'utente del passo 5.1 |
+| `DEPLOY_HOST` | L'indirizzo IP del server |
+| `DEPLOY_SSH_KEY` | Il contenuto del file **senza** `.pub`, per intero, dalla riga `BEGIN` a quella `END` |
+| `DEPLOY_KNOWN_HOSTS` | La riga stampata da `ssh-keyscan` |
+
+Poi una variabile, che non è un segreto: in **Settings, Secrets and variables,
+Actions, Variables**, aggiungi `SITE_ADDRESS` con dentro il tuo dominio, senza
+`https://`. Serve al controllo finale del workflow, che dopo il rilascio chiede
+al sito vero se è tornato su.
+
+**Il workflow si legge dal ramo di default**, quindi finché
+[deploy.yml](../.github/workflows/deploy.yml) sta solo su `stage` non parte
+niente e sembra rotto. Il primo rilascio automatico arriva col primo merge in
+`main` dopo che il file ci è arrivato, e lo si può anche far partire a mano
+dalla tab Actions per vederlo funzionare subito.
 
 ---
 
 ## Da qui in poi
 
-Gli aggiornamenti sono due comandi, e stanno in
-[deploy-e-scalabilita.md](deploy-e-scalabilita.md) insieme alle operazioni di
-tutti i giorni: leggere i log, cambiare il numero di repliche, capire chi non
-sta bene. Con l'uso a picchi di questa piattaforma, un giorno di esercitazioni
-a settimana, la finestra tranquilla per aggiornare c'è sempre, e l'unica
-accortezza che il profilo richiede è un giro di prova prima di ogni sessione:
-sei giorni senza traffico non sono un collaudo, e un guasto che nessuno ha
-visto arrivare si presenta con quaranta studenti già collegati.
+Gli aggiornamenti si fanno da GitHub, mergiando `stage` in `main`, e il server
+si aggiorna da solo. Le operazioni di tutti i giorni stanno in
+[deploy-e-scalabilita.md](deploy-e-scalabilita.md): leggere i log, cambiare il
+numero di repliche, capire chi non sta bene. Con l'uso a picchi di questa
+piattaforma, un giorno di esercitazioni a settimana, la finestra tranquilla per
+aggiornare c'è sempre, e adesso la regola è una sola, cioè non mergiare in
+`main` mentre qualcuno è in aula. L'altra accortezza che il profilo richiede è
+un giro di prova prima di ogni sessione: sei giorni senza traffico non sono un
+collaudo, e un guasto che nessuno ha visto arrivare si presenta con quaranta
+studenti già collegati.

@@ -42,8 +42,8 @@ alle singole funzionalità.
 | Documento | Cosa ci trovi |
 | --- | --- |
 | [docker-e-ambienti.md](docker-e-ambienti.md) | Le immagini, i cinque servizi del compose, la differenza fra sviluppo e produzione, proxy, volumi, limiti, log, backup |
-| [ci-cd.md](ci-cd.md) | Hook pre commit, workflow CI e Security, cosa blocca un merge e cosa no, i test |
-| [messa-in-produzione.md](messa-in-produzione.md) | La prima volta: dominio, server, chiavi SSH, firewall, Docker, i due file di ambiente, il primo certificato, il collaudo |
+| [ci-cd.md](ci-cd.md) | Hook pre commit, workflow CI e Security, il rilascio in produzione, cosa blocca un merge e cosa no, i test |
+| [messa-in-produzione.md](messa-in-produzione.md) | La prima volta: dominio, server, chiavi SSH, firewall, Docker, i due file di ambiente, il primo certificato, il collaudo, i rilasci collegati a GitHub |
 | [deploy-e-scalabilita.md](deploy-e-scalabilita.md) | Prima installazione, aggiornamenti, come si aggiunge capacità, i tetti da tenere allineati, misura, operazioni |
 | [loadtest.md](loadtest.md) | Il banco di prova della pipeline vocale: fornitori finti, la rampa a gradini, come si legge il risultato |
 

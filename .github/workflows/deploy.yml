@@ -1,0 +1,118 @@
+name: Deploy
+
+# Il rilascio in produzione: entra nel server in SSH e gli fa eseguire
+# deploy/deploy.sh, che è lo stesso comando del rilascio a mano.
+#
+# Non parte dal push su main ma dalla CI verde su main, e la differenza sono i
+# dieci minuti che passano fra le due cose: è la differenza fra rilasciare quel
+# che hai promosso e rilasciare qualcosa che non compila. Il merge in main
+# resta un gesto deliberato, fatto a mano da stage, quindi quello è il momento
+# in cui si decide di rilasciare e non serve deciderlo una seconda volta.
+#
+# Il trigger workflow_run ha una regola che si scopre nel modo peggiore, ed è
+# la stessa di dependabot.yml: GitHub legge questo file dal ramo di default.
+# Finché sta solo su stage non succede niente, e sembra che non funzioni.
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  # A mano dalla tab Actions, per rilasciare senza un commit nuovo: dopo aver
+  # cambiato un .env sul server, o per rimettere su lo stack senza entrare.
+  workflow_dispatch:
+
+# Un rilascio per volta, e quello in volo non si annulla: interrotto a metà
+# lascerebbe una parte delle repliche vecchie e una parte nuove.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+# Non tocca il repository: entra in una macchina e basta.
+permissions: {}
+
+jobs:
+  deploy:
+    name: Rilascia in produzione
+    # La CI fallita non rilascia. Il confronto vale solo quando è la CI ad
+    # aver acceso il workflow: partendo a mano non c'è nessun workflow_run, e
+    # la condizione sarebbe falsa per assenza di dati.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    # È qui che si aggiunge un revisore richiesto il giorno in cui il rilascio
+    # dovesse aspettare un bottone invece di partire da solo: una spunta nelle
+    # impostazioni dell'ambiente, senza toccare questo file.
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - name: La chiave e l'impronta del server
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        # I segreti passano dall'ambiente e non interpolati dentro il comando:
+        # un ${{ }} viene sostituito nel testo dello script prima che la shell
+        # lo legga, quindi un valore con dentro un apice cambierebbe il comando
+        # invece di essere un valore.
+        #
+        # known_hosts è il passo che rende verificabile l'accesso, ed è il
+        # motivo per cui qui non compare StrictHostKeyChecking=no: quella
+        # scorciatoia fa accettare al runner qualunque macchina risponda a
+        # quell'indirizzo, che è precisamente la cosa contro cui l'impronta
+        # esiste. Si prende una volta sola, dal proprio computer, con
+        # "ssh-keyscan" (vedi docs/messa-in-produzione.md).
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Rilascia
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        # Il comando è "true" e non il rilascio, e non è un errore: la chiave
+        # ha un comando forzato in authorized_keys, quindi il server esegue
+        # deploy/deploy.sh qualunque cosa gli venga chiesta da qui. Scritto
+        # così si vede che a decidere cosa gira in produzione è la macchina,
+        # non chi bussa.
+        #
+        # BatchMode impedisce che una chiave rifiutata si trasformi in una
+        # richiesta di password e in un job appeso fino al timeout.
+        run: ssh -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" true
+
+      - name: Il sito risponde da fuori
+        env:
+          # Il dominio pubblico del sito, quindi una variabile e non un
+          # segreto: mascherato nei log renderebbe illeggibile proprio l'esito
+          # che si sta guardando, e non nasconderebbe niente che il primo
+          # visitatore non veda.
+          SITE_ADDRESS: ${{ vars.SITE_ADDRESS }}
+        # Lo stesso mestiere dello smoke test della CI, ma contro il dominio
+        # vero: senza questo passo un rilascio che rompe l'avvio del backend
+        # risulta verde qui e si scopre dal browser.
+        #
+        # Le due verifiche sono quelle dello smoke test, e la seconda è quella
+        # che conta: un 200 su /api/avatars vorrebbe dire che a rispondere è
+        # stata la React servita da nginx, cioè che l'instradamento è saltato,
+        # e il controllo sulla pagina non se ne accorgerebbe. L'unica risposta
+        # che prova che dietro c'è davvero l'API è il rifiuto di chi non ha i
+        # cookie.
+        #
+        # L'attesa è larga perché le repliche si mettono in fila sul lock dello
+        # schema, e l'ultima della coda può metterci un minuto senza per questo
+        # essere malata.
+        run: |
+          if [ -z "$SITE_ADDRESS" ]; then
+            echo "manca la variabile SITE_ADDRESS del repository"; exit 1
+          fi
+          for _ in $(seq 1 36); do
+            if curl -fsS -o /dev/null "https://$SITE_ADDRESS/"; then
+              code=$(curl -sS -o /dev/null -w '%{http_code}' "https://$SITE_ADDRESS/api/avatars")
+              if [ "$code" = "401" ]; then
+                echo "il sito risponde, e dietro c'è l'API"; exit 0
+              fi
+              echo "la pagina arriva ma /api/avatars risponde $code invece di 401"
+            fi
+            sleep 5
+          done
+          echo "il sito non è tornato su entro tre minuti"; exit 1

@@ -56,7 +56,7 @@ jobs:
         run: pip-audit --require-hashes -r backend/requirements.txt
       - name: pip-audit (lock di sviluppo)
         run: pip-audit --require-hashes -r backend/requirements-dev.txt
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: npm audit (frontend)

@@ -9,9 +9,18 @@ name: Security
 # Nessun job qui dentro compare fra i needs di ci-success, quindi un rosso in
 # questo workflow si vede ma non blocca un merge: è voluto, sono controlli che
 # dipendono da cosa il mondo ha scoperto stanotte, non da cosa hai scritto tu.
+# Non gira sulle pull request, e la ragione è la stessa per cui questi job non
+# bloccano un merge: quasi tutto quello che segnalano dipende da cosa il mondo
+# ha scoperto stanotte, non dal diff che hai davanti. Sulle PR il risultato
+# era un rosso costante e scollegato dalla modifica, per esempio un pip-audit
+# che accusava il lock di sviluppo su una PR che toccava un Dockerfile. Un
+# rosso che non blocca niente e non riguarda la modifica insegna solo a non
+# guardare più i semafori, e il giorno in cui il rosso è vero passa
+# inosservato.
+#
+# Quindi la copertura resta dove serve: su ogni push a main, e ogni lunedì
+# mattina su main a prescindere dai commit.
 on:
-  pull_request:
-    branches: [stage, main]
   push:
     branches: [main]
   schedule:

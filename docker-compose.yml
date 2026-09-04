@@ -120,8 +120,53 @@ services:
     stop_grace_period: 60s
     restart: unless-stopped
 
+  # Riempie il volume dei file statici una volta sola, prima che le repliche
+  # partano.
+  #
+  # In /app/static l'immagine porta i ritratti di serie, e Docker li copia
+  # dentro il volume soltanto quando lo trova vuoto. La copia parte insieme al
+  # container che monta il volume, quindi con più repliche parte più volte
+  # nello stesso istante: chi arriva secondo trova la cartella già creata e
+  # muore prima di eseguire qualsiasi cosa, con
+  #
+  #   failed to mkdir /var/lib/docker/volumes/skilllab_backend_static/_data/avatars: file exists
+  #
+  # Non è un caso di laboratorio: capita al primo avvio su un volume vuoto,
+  # cioè alla prima installazione e dopo ogni ripristino, ed è già successo
+  # due volte in CI, dove lo smoke test avvia due repliche. Questo servizio
+  # monta il volume da solo, lascia fare la copia a Docker senza nessuno che
+  # gliela contenda, e termina. Le repliche lo aspettano e trovano il volume
+  # già pieno, quindi non copiano niente.
+  #
+  # Stessa immagine del backend, non una più leggera: la copia porta dentro il
+  # volume ciò che sta nell'immagine, e da un'immagine diversa arriverebbe
+  # altro, cioè niente.
+  backend-init:
+    build: ./backend
+    image: skilllab-backend:local
+    # Il volume esiste anche il giorno in cui l'immagine non porta più
+    # ritratti di serie: la cartella dei caricamenti deve esserci comunque, o
+    # il primo caricamento fallisce.
+    command:
+      [
+        "python",
+        "-c",
+        "import os; os.makedirs('/app/static/avatars', exist_ok=True)",
+      ]
+    volumes:
+      - backend_static:/app/static
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    # Deve finire, non ripartire: è la condizione che le repliche aspettano.
+    restart: "no"
+
   backend:
     build: ./backend
+    # Nome esplicito perché backend-init parte dalla stessa immagine: senza,
+    # ognuno dei due si costruirebbe la sua, con lo stesso contenuto e un
+    # nome diverso.
+    image: skilllab-backend:local
     env_file:
       - ./backend/.env
     environment:
@@ -173,6 +218,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # Il volume dei file statici va riempito prima, e da un container solo
+      # (vedi backend-init qui sopra).
+      backend-init:
+        condition: service_completed_successfully
     security_opt:
       - no-new-privileges:true
     logging: *logging

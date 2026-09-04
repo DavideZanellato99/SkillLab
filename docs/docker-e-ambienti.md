@@ -55,6 +55,7 @@ flowchart TD
 | --- | --- | --- | --- |
 | `caddy` | `caddy:2-alpine` | **Sì**, 80 e 443 | Termina TLS, smista, bilancia |
 | `backend` | Costruita da `./backend` | No | N repliche identiche |
+| `backend-init` | La stessa del backend | No | Riempie `backend_static` e termina. Le repliche aspettano che abbia finito |
 | `frontend` | Costruita da `./frontend` | No | Solo file statici |
 | `db` | `postgres:18-alpine` | No | |
 | `db-backup` | costruita da [db/Dockerfile](../db/Dockerfile) | No | L'immagine del database, così `pg_dump` è della stessa versione del server che copia, più `age`, che è quello che cifra i dump |
@@ -149,6 +150,17 @@ inventarsi un dominio pure per lavorare in locale.
 | `backend_static` | I ritratti caricati degli avatar | Le immagini caricate. È condiviso fra le repliche: quella caricata da una deve essere servita da tutte |
 | `caddy_data`, `caddy_config` | I certificati | Vanno richiesti daccapo, e Let's Encrypt smette di emetterli dopo qualche tentativo nella stessa settimana |
 | `./backups` | I dump | Una cartella dell'host, non un volume, apposta perché un `rsync` possa portarli fuori dalla macchina. Il servizio che ci scrive non gira da root, quindi la cartella va di `70:70` ([messa-in-produzione.md](messa-in-produzione.md), passo 8) |
+
+**`backend_static` viene riempito da un servizio a parte**, `backend-init`, che
+parte prima delle repliche, monta il volume da solo e termina. Il motivo è una
+corsa: i ritratti di serie stanno dentro l'immagine, sotto `/app/static`, e
+Docker li copia nel volume solo quando lo trova vuoto, cioè alla prima
+installazione e dopo ogni ripristino. La copia parte insieme al container che
+monta il volume, quindi con quattro repliche parte quattro volte nello stesso
+istante, e le repliche che arrivano dopo la prima muoiono prima di eseguire
+qualsiasi cosa, con `mkdir /var/lib/docker/volumes/...: file exists`. Con un
+solo container a fare la copia la corsa non esiste, e le repliche partono su un
+volume già pieno.
 
 ## Limiti, log e spegnimento
 

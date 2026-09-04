@@ -71,8 +71,8 @@ I file `.env` che lo stack pretende li scrive
 
 ## Il workflow Security
 
-[.github/workflows/security.yml](../.github/workflows/security.yml), sulle PR,
-sui push a `main`, **ogni lunedì alle 6 UTC** e a mano dalla tab Actions.
+[.github/workflows/security.yml](../.github/workflows/security.yml), sui push a
+`main`, **ogni lunedì alle 6 UTC** e a mano dalla tab Actions.
 
 | Job | Cosa scansiona |
 | --- | --- |
@@ -89,6 +89,15 @@ nella tab finirebbe pure tutto il rumore che il filtro voleva togliere.
 rosso qui si vede ma non blocca un merge: sono controlli che dipendono da cosa
 il mondo ha scoperto stanotte, non da cosa hai scritto tu. L'eccezione è
 gitleaks, che infatti sta nella CI: un segreto commesso è tuo, ed è un blocco.
+
+**Per la stessa ragione non gira più sulle pull request.** Ci girava, e il
+risultato era un rosso quasi costante e scollegato dalla modifica: un `pip-audit`
+che accusava il lock di sviluppo su una PR che toccava un Dockerfile, una CVE
+pubblicata nella notte su tre PR aperte insieme. Un semaforo rosso che non
+blocca niente e non riguarda ciò che hai cambiato insegna soltanto a non
+guardare più i semafori, e il giorno in cui il rosso è vero passa inosservato.
+La copertura non cambia, perché queste scansioni non guardano il diff: guardano
+l'albero, ed è lo stesso albero il lunedì mattina.
 
 `pip-audit` gira col vincolo degli hash perché si controlli esattamente quello
 che verrà installato, non la versione che il resolver sceglierebbe oggi. Oggi
@@ -131,7 +140,19 @@ versioni, e il lock pinnato con gli hash si rigenera **dentro l'immagine di
 produzione**, così le versioni scelte sono quelle che gireranno davvero. Un job
 della CI controlla che lock e `.in` non abbiano divergenza.
 
-Dependabot apre PR settimanali per pip, npm, Docker e GitHub Actions.
+Dependabot apre PR settimanali per pip, npm, Docker e GitHub Actions, **verso
+`stage`** e non verso `main`: le PR devono nascere dal lato del flusso in cui il
+lavoro entra, o ogni aggiornamento va riportato a mano dall'altra parte.
+
+Minor e patch viaggiano raggruppate per ecosistema e **si mergiano da sole**
+quando la CI passa: se ne occupa
+[dependabot-auto-merge.yml](../.github/workflows/dependabot-auto-merge.yml), che
+non scavalca nessun controllo, chiede a GitHub il merge automatico e lascia che
+sia il check richiesto dal ruleset a decidere. I major restano fuori dai gruppi,
+una PR per pacchetto, e si guardano a mano: non sono manutenzione, sono
+migrazioni. Sulle immagini di base i major sono ignorati del tutto, perché
+cambiare versione a Python o a Node significa cambiare la piattaforma sotto
+tutto il resto, a partire dal lock che è compilato dentro `python:3.12-slim`.
 
 ## Cosa non c'è
 
@@ -140,5 +161,10 @@ la messa in produzione è il comando descritto in
 [deploy-e-scalabilita.md](deploy-e-scalabilita.md), dato a mano sul server.
 
 **Non c'è branch protection** che imponga una PR verso `main`: la garanzia è
-procedurale, si mergia solo a `stage` verde. Passando a un flusso con feature
-branch avrebbe senso proteggere `stage` con `ci-success` come check richiesto.
+procedurale, si mergia solo a `stage` verde.
+
+Su `stage` invece un ruleset richiede il check `CI success`, e serve al merge
+automatico delle PR di Dependabot: senza un check richiesto non ci sarebbe
+niente a trattenere il merge, e "automatico" vorrebbe dire "subito". Il ruolo di
+amministratore lo scavalca, quindi i push diretti su `stage` continuano a
+funzionare come prima: la regola vincola il bot, non chi lavora.

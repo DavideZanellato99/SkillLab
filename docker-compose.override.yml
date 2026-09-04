@@ -18,6 +18,15 @@ services:
     ports:
       - "5432:5432"
 
+  # Parte dalla stessa immagine del backend, quindi vuole lo stesso argomento
+  # di build: senza, i due servizi costruirebbero lo stesso tag con due
+  # contenuti diversi, e a vincere sarebbe l'ultimo dei due a essere
+  # costruito.
+  backend-init:
+    build:
+      args:
+        TRUST_LOCAL_CA: "1"
+
   backend:
     # La CA di chi sviluppa dietro un antivirus che ispeziona il TLS. Vive
     # qui e non nel Dockerfile perché è l'unico posto in cui una radice in

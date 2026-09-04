@@ -244,16 +244,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: hadolint (backend Dockerfile)
-        run: docker run --rm -i hadolint/hadolint < backend/Dockerfile
-      - name: hadolint (frontend Dockerfile)
-        run: docker run --rm -i hadolint/hadolint < frontend/Dockerfile
-      - name: actionlint (workflow files)
-        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color
-      - name: shellcheck (script di shell del repo)
+      # Binari presi dalle release su GitHub, non immagini da Docker Hub.
+      #
+      # I tre strumenti giravano dentro un container ciascuno, e ogni "docker
+      # run" era un pull anonimo da Docker Hub: i runner condividono gli
+      # indirizzi con tutti gli altri progetti del mondo, quindi ogni tanto
+      # quel pull torna indietro con "unauthorized: authentication required"
+      # e il job diventa rosso senza che il codice c'entri (è già capitato,
+      # run 33556042908). Le release su GitHub non hanno quel limite, e la
+      # versione qui è scritta per esteso, quindi lo strumento non cambia
+      # sotto i piedi da un giorno all'altro.
+      - name: hadolint (Dockerfile)
+        env:
+          HADOLINT_VERSION: 2.15.1
         run: |
-          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable \
-            .githooks/pre-commit .github/scripts/write-ci-env.sh
+          curl -fsSL -o /tmp/hadolint \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
+          chmod +x /tmp/hadolint
+          /tmp/hadolint backend/Dockerfile frontend/Dockerfile
+      - name: actionlint (workflow files)
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          curl -fsSL \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C /tmp actionlint
+          /tmp/actionlint -color
+      - name: shellcheck (script di shell del repo)
+        # Preinstallato sui runner ubuntu, quindi qui non si scarica niente.
+        run: shellcheck .githooks/pre-commit .github/scripts/write-ci-env.sh
 
   # Single check to require in branch settings: green only if every job above
   # succeeded.

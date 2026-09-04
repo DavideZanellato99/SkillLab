@@ -1,0 +1,45 @@
+name: Dependabot auto merge
+
+# Le PR di manutenzione si mergiano da sole quando la CI passa.
+#
+# Nessuna scorciatoia sui controlli: "gh pr merge --auto" non mergia niente
+# subito, dice a GitHub di farlo quando i check richiesti dal ruleset del
+# branch saranno verdi. Se la CI fallisce, la PR resta lì come prima. Serve
+# quindi che su stage esista un ruleset che richiede il check "CI success",
+# altrimenti non c'è niente che trattenga il merge e il comando si rifiuta di
+# partire.
+#
+# Restano fuori i major, che fetch-metadata riconosce dal titolo della PR: un
+# major non è manutenzione, è una migrazione, e va letto.
+
+# pull_request_target e non pull_request: le PR di Dependabot ricevono un
+# token in sola lettura, che non basta a mergiare. Questo evento gira invece
+# nel contesto del branch di destinazione, col token del repository.
+#
+# Per questo qui sotto non c'è nessun checkout, ed è deliberato: con
+# pull_request_target il codice della PR non va mai eseguito, o chiunque apra
+# una PR su un repository pubblico eseguirebbe ciò che vuole con un token in
+# scrittura. Questo workflow legge solo dei metadati e chiama l'API.
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Auto merge
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: Che tipo di aggiornamento è
+        id: metadata
+        uses: dependabot/fetch-metadata@v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Abilita il merge automatico su minor e patch
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

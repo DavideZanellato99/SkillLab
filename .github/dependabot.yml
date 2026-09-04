@@ -1,39 +1,75 @@
 version: 2
+
+# Le PR nascono su stage, non su main.
+#
+# Dependabot punta al branch di default, che qui è main, cioè il branch che
+# riceve soltanto merge da stage. Le PR nascevano quindi dalla parte sbagliata
+# del flusso, e ogni aggiornamento andava riportato a mano sull'altra. Con
+# target-branch arrivano dove il lavoro entra davvero, e da lì passano a main
+# insieme a tutto il resto.
+#
+# I gruppi tengono insieme solo minor e patch, che sono manutenzione e si
+# mergiano da sole quando la CI passa (vedi dependabot-auto-merge.yml). I
+# major restano fuori, una PR per pacchetto: non sono manutenzione, sono
+# migrazioni, e si decidono leggendo cosa cambia nel codice. Tenerli dentro al
+# gruppo bloccava anche il resto, ed è successo per davvero con openai da 2 a
+# 3, che si portava dietro dodici aggiornamenti innocui e li teneva fermi
+# con sé.
 updates:
   # Python backend deps: Dependabot bumps requirements.txt; regenerate the
   # hashed lock from requirements.in when a PR touches a version you keep.
   - package-ecosystem: pip
     directory: /backend
+    target-branch: stage
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
       python-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # Frontend npm deps.
   - package-ecosystem: npm
     directory: /frontend
+    target-branch: stage
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
       npm-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # Base images in the two Dockerfiles.
   - package-ecosystem: docker
     directories:
       - /backend
       - /frontend
+    target-branch: stage
     schedule:
       interval: weekly
+    ignore:
+      # Niente major sulle immagini di base, e qui l'esclusione è totale
+      # invece di una PR da valutare come per le librerie.
+      #
+      # Cambiare major a Python o a Node non è aggiornare una dipendenza, è
+      # cambiare la piattaforma sotto tutto il resto: il lock di backend è
+      # compilato dentro python:3.12-slim e va rigenerato lì dentro, e la
+      # versione di Node deve restare la stessa che usa la CI. Sono
+      # aggiornamenti da fare in un momento scelto, non da trovarsi aperti il
+      # lunedì. Per farne uno si toglie questa riga, si lascia arrivare la PR
+      # e la si rimette.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # The GitHub Actions themselves (setup-python, trivy-action, ...).
   - package-ecosystem: github-actions
     directory: /
+    target-branch: stage
     schedule:
       interval: weekly
     groups:
       github-actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]

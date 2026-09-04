@@ -311,6 +311,12 @@ stessa ragione **le due operazioni che presuppongono un documento rispondono
 
 ### 1.2 Estrazione del testo
 
+Gira **in un thread**, insieme alla divisione in passaggi che la segue: è
+l'unico pezzo dell'applicazione che occupa il processore invece di aspettare
+qualcuno, e dieci megabyte di PDF sono secondi di calcolo che sull'event loop
+sarebbero secondi in cui su quella replica non parla nessuno (vedi
+[architettura.md](architettura.md)).
+
 [document_text.extract_text](../backend/document_text.py#L91-L108) sceglie il
 lettore in base all'estensione:
 
@@ -418,6 +424,15 @@ testi e vettori a
 [generate_questions](../backend/simulation_questions.py). Dentro succedono tre
 cose: gli argomenti, il recupero, e le cinque chiamate che scrivono le
 cinquanta domande.
+
+Essendo l'attesa più lunga dell'applicazione, è anche quella in cui le due
+regole di [architettura.md](architettura.md) contano di più: la lettura dei
+passaggi e la scrittura del serbatoio girano in un thread invece che
+sull'event loop (dove ci sono le telefonate in corso), e fra le due la
+connessione al database torna al pool, perché per quei minuti nessuno la sta
+usando. Al ritorno la simulazione viene **riletta e non riusata**: dopo il
+commit la riga di prima è staccata dalla sessione, e il controllo del tenant
+si rifà da sé.
 
 ### 2.1 Passata uno, gli argomenti
 
@@ -1394,7 +1409,34 @@ Le regole stanno in [SimulationIntro](../frontend/src/components/SimulationIntro
 e si leggono **prima**: quante domande sono, quanto dura ognuna, che non si
 torna indietro, che il tempo scaduto vale come sbagliata, e che **le domande
 cambiano a ogni tentativo** perché sono estratte a caso quando si preme il
-pulsante. Il test comincia quando lo si dice, e la schermata esiste per questo:
+pulsante.
+
+Il riquadro è in tre parti, e il file è tre file. In cima i numeri del test in
+tre riquadri
+([SimulationIntroFacts](../frontend/src/components/SimulationIntroFacts.tsx)):
+quante domande, di che tipo, quanto tempo per domanda, o "senza limite" dove il
+cronometro non c'è. Sono gli stessi riquadri del pannello di una tappa
+([StatTile](../frontend/src/components/StatTile.tsx)), e servono a chi il test
+lo ripete: le regole le ha già lette, e vuole sapere se ha mezz'ora davanti
+senza rileggere un paragrafo. Sotto le regole vere e proprie
+([SimulationIntroRules](../frontend/src/components/SimulationIntroRules.tsx)),
+divise in **svolgimento, punteggio, esito**, ognuna con l'icona di cosa parla:
+l'orologio del tempo, il lucchetto di quello che non si può disfare, le
+scintille delle domande scritte dal modello. Erano sette righe di seguito con
+lo stesso pallino davanti, e sette cose che pesano uguale si leggono di
+traverso: come viene il voto finiva in quinta posizione, fra come si passa alla
+domanda dopo e da dove vengono le domande. In fondo il pulsante, staccato da
+una riga.
+
+**Una riga, una frase.** Le regole erano paragrafi da due o tre periodi, e un
+paragrafo di regole si legge come un testo di legge: la cosa che serviva stava
+in mezzo, dopo un punto, e per trovarla bisognava leggere anche le altre due.
+Dove una regola ha due parti adesso sono due righe, e quello che era un secondo
+periodo è il punto elenco che gli sta sotto: il tempo massimo di una domanda e
+cosa succede allo scadere, il punto pieno entro la grazia e la discesa che
+viene dopo.
+
+Il test comincia quando lo si dice, e la schermata esiste per questo:
 il cronometro della prima domanda non può partire su una pagina appena aperta,
 mentre si sta ancora leggendo il titolo. Premuto il pulsante si aspetta il
 server per un istante, e il pulsante lo dice ("Preparazione del test...")
@@ -1547,6 +1589,14 @@ domanda al terzo posto, non al trentanovesimo.
 una delle quattro strade, e il resto è identico: la conta delle esatte, la
 somma dei punti, la fotografia, il voto congelato nella riga.
 
+**Le domande su cui la correzione lavora sono valori, non righe del
+database** (`_SubmittedQuestion`). La differenza si vede su una sola delle
+quattro strade, quella a risposta aperta: lì in mezzo c'è un modello da
+aspettare, e prima di aspettarlo la connessione torna al pool (§ [5.3](#53-a-risposta-aperta-il-modello)).
+Da quel momento una riga a cui si chiedesse il testo tornerebbe a interrogare
+il database, e la fotografia invece sopravvive. È la stessa scelta del
+catalogo di una bozza di percorso e del serbatoio da revisionare.
+
 **Ordinamento e abbinamento rimandano il testo degli elementi, non la loro
 posizione.** Il server ha mescolato la domanda quando l'ha spedita e non si è
 segnato come, quindi un indice riferito a una mescolata che nessuno ha
@@ -1628,6 +1678,18 @@ sono una crocetta verde, tre su sei no.
 Qui la correzione non può stare nel codice: la risposta è testo scritto da una
 persona, e dire se "prima si identifica il cliente" copre una procedura che il
 documento descrive in cinque righe è un giudizio, non un uguale.
+
+La consegna procede in tre momenti, e ciascuno sta in una funzione sua:
+`_to_judge` prepara le risposte scritte davvero, `_judgements` aspetta il
+modello, `_open_answers` trasforma i giudizi in punti. In mezzo ai primi due
+succedono le due cose che un'attesa lunga impone: **il tetto si conta**
+(perché una chiamata a pagamento sta per partire, e se non c'è niente da
+correggere non parte e non si conta niente) e **la connessione torna al
+pool**, come per la valutazione di una conversazione. Senza, resterebbe
+occupata per i secondi della correzione senza che nessuno la usi, e il caso
+che conta è l'aula: quaranta consegne nello stesso minuto sono quaranta
+connessioni ferme ad aspettare. Che resti libera lo fissa un test, non solo
+questo paragrafo.
 
 [_open_answers](../backend/routers/simulations.py) manda tutte le risposte
 scritte a

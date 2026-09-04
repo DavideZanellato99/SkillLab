@@ -40,6 +40,8 @@ stesso salvataggio in blocco, stessa bozza, stessa estrazione di dieci
 domande a caso quando qualcuno comincia il test.
 """
 
+import asyncio
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -364,16 +366,14 @@ def _require_document_source(simulation: TechnicalSimulation) -> None:
         )
 
 
-async def _index_document(
-    db: Session, simulation: TechnicalSimulation, filename: str, data: bytes, admin_id: UUID
-) -> None:
-    """Legge il documento, lo spezza in passaggi e li indicizza.
+def _document_chunks(filename: str, data: bytes) -> tuple[str, list[str]]:
+    """Il testo del documento e i passaggi in cui è diviso.
 
-    Ricaricare un documento cancella i passaggi di prima e non le domande:
-    le domande sono il test, e un test non si azzera perché è stata caricata
-    una versione aggiornata della procedura. Restano lì, con le loro
-    citazioni che puntano ai passaggi nuovi, ed è chi amministra a decidere
-    se rigenerarle.
+    Gira in un thread (vedi ``_index_document``) perché è l'unico pezzo di
+    questa applicazione che occupa il processore invece di aspettare
+    qualcuno: aprire un PDF di dieci megabyte e ricavarne il testo sono
+    secondi di calcolo, e fatti sull'event loop sono secondi in cui su
+    questa replica non parla nessuno.
     """
     try:
         text = document_text.extract_text(filename, data)
@@ -392,17 +392,22 @@ async def _index_document(
                 "serve una versione con il testo selezionabile."
             ),
         )
+    return text, split_into_chunks(text)
 
-    chunks = split_into_chunks(text)
-    # Dopo la lettura del file e prima della chiamata a pagamento: un
-    # documento illeggibile è un errore di chi carica, e non deve consumare
-    # il tetto di una cosa che non è mai partita.
-    await llm_limits.consume(llm_limits.INDICIZZAZIONE, admin_id)
-    try:
-        embeddings = await embed_texts(chunks)
-    except RuntimeError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
+def _store_chunks(
+    db: Session,
+    simulation: TechnicalSimulation,
+    filename: str,
+    text: str,
+    chunks: list[str],
+    embeddings: list,
+) -> None:
+    """Blocking write of the indexed passages (run via asyncio.to_thread).
+
+    Non committa: chi chiama sta ancora componendo la simulazione, e il
+    documento e la riga che lo possiede si salvano insieme o non si salvano.
+    """
     simulation.document_name = filename
     simulation.document_text = text
     db.query(SimulationChunk).filter(SimulationChunk.simulation_id == simulation.id).delete()
@@ -415,6 +420,74 @@ async def _index_document(
                 embedding=embedding,
             )
         )
+
+
+async def _index_document(
+    db: Session, simulation: TechnicalSimulation, filename: str, data: bytes, admin_id: UUID
+) -> None:
+    """Legge il documento, lo spezza in passaggi e li indicizza.
+
+    Ricaricare un documento cancella i passaggi di prima e non le domande:
+    le domande sono il test, e un test non si azzera perché è stata caricata
+    una versione aggiornata della procedura. Restano lì, con le loro
+    citazioni che puntano ai passaggi nuovi, ed è chi amministra a decidere
+    se rigenerarle.
+
+    Tre momenti, e solo quello di mezzo sta sull'event loop: la lettura del
+    file è calcolo, la scrittura dei passaggi è una chiamata bloccante al
+    database, e tutte e due girano in un thread. In mezzo c'è l'attesa dei
+    vettori, che è la cosa per cui l'event loop esiste.
+    """
+    text, chunks = await asyncio.to_thread(_document_chunks, filename, data)
+    # Dopo la lettura del file e prima della chiamata a pagamento: un
+    # documento illeggibile è un errore di chi carica, e non deve consumare
+    # il tetto di una cosa che non è mai partita.
+    await llm_limits.consume(llm_limits.INDICIZZAZIONE, admin_id)
+    try:
+        embeddings = await embed_texts(chunks)
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+
+    await asyncio.to_thread(_store_chunks, db, simulation, filename, text, chunks, embeddings)
+
+
+def _insert_simulation(
+    db: Session,
+    organization_id: UUID,
+    title: str,
+    description: str | None,
+    kind: str,
+    source: str,
+) -> TechnicalSimulation:
+    """Blocking insert of a simulation still being composed (run via asyncio.to_thread).
+
+    Flush e non commit: quello che manca (il documento, i suoi passaggi)
+    arriva subito dopo, e la riga e il suo documento si salvano insieme.
+    """
+    simulation = TechnicalSimulation(
+        organization_id=organization_id,
+        title=title,
+        description=description,
+        status=SIMULATION_STATUS_DRAFT,
+        kind=kind,
+        source=source,
+    )
+    db.add(simulation)
+    db.flush()
+    return simulation
+
+
+def _commit_detail(db: Session, simulation: TechnicalSimulation, admin: User) -> dict:
+    """Blocking commit, then the full card (run via asyncio.to_thread).
+
+    Le due cose insieme perché sono inseparabili: la scheda si compone di
+    domande, passaggi e statistiche riletti dal database, e comporla fuori
+    di qui vorrebbe dire farlo sull'event loop, per giunta su una riga
+    appena scaduta dal commit.
+    """
+    db.commit()
+    db.refresh(simulation)
+    return _admin_detail(db, simulation, admin)
 
 
 @router.get("", response_model=list[AdminSimulationResponse])
@@ -496,7 +569,7 @@ async def create_simulation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Origine delle domande non valida: {source}",
         )
-    organization = _target_organization(db, current_admin, organization_id)
+    organization = await asyncio.to_thread(_target_organization, db, current_admin, organization_id)
 
     manual = source == SIMULATION_SOURCE_MANUAL
     if manual and file is not None:
@@ -511,25 +584,25 @@ async def create_simulation(
         )
     data = None if file is None else await _read_upload(file)
 
-    simulation = TechnicalSimulation(
-        organization_id=organization.id,
-        title=title,
-        description=description.strip() or None,
-        status=SIMULATION_STATUS_DRAFT,
-        kind=kind,
-        source=source,
+    simulation = await asyncio.to_thread(
+        _insert_simulation,
+        db,
+        organization.id,
+        title,
+        description.strip() or None,
+        kind,
+        source,
     )
-    db.add(simulation)
-    db.flush()
     if file is not None and data is not None:
         await _index_document(db, simulation, file.filename or "documento", data, current_admin.id)
-    db.commit()
-    db.refresh(simulation)
 
-    audit.describe(
-        http_request, titolo=title, documento=simulation.document_name or "scritto a mano"
-    )
-    return _admin_detail(db, simulation, current_admin)
+    # Letto prima del commit, che fa scadere la riga: dopo, chiedere questo
+    # campo sarebbe una query in più fatta dall'event loop.
+    documento = simulation.document_name or "scritto a mano"
+    detail = await asyncio.to_thread(_commit_detail, db, simulation, current_admin)
+
+    audit.describe(http_request, titolo=title, documento=documento)
+    return detail
 
 
 @router.post("/{simulation_id}/document", response_model=SimulationAdminDetailResponse)
@@ -541,14 +614,81 @@ async def replace_document(
     current_admin: User = Depends(get_current_admin),
 ):
     """Sostituisce il documento e reindicizza i passaggi."""
-    simulation = _scoped_or_404(db, current_admin, simulation_id)
+    simulation = await asyncio.to_thread(_scoped_or_404, db, current_admin, simulation_id)
     _require_document_source(simulation)
     data = await _read_upload(file)
     await _index_document(db, simulation, file.filename or "documento", data, current_admin.id)
+
+    # Letti prima del commit, che fa scadere la riga.
+    titolo, documento = simulation.title, simulation.document_name
+    detail = await asyncio.to_thread(_commit_detail, db, simulation, current_admin)
+
+    audit.describe(http_request, titolo=titolo, documento=documento)
+    return detail
+
+
+@dataclass(frozen=True)
+class _GenerationInput:
+    """Il documento indicizzato come lo legge il generatore, in soli valori."""
+
+    contents: list[str]
+    embeddings: list
+    kind: str
+    title: str
+
+
+def _generation_input(db: Session, admin: User, simulation_id: UUID) -> _GenerationInput:
+    """Blocking read of the passages questions are born from (run via asyncio.to_thread).
+
+    Finisce con il commit che restituisce la connessione: quella che segue è
+    l'attesa più lunga dell'applicazione, cinque scritture in parallelo su un
+    modello di ragionamento, e per tutti quei minuti il database non serve.
+    Tenerlo occupato voleva dire una connessione ferma per ogni generazione
+    in corso, su un pool che è condiviso con i login e con tutto il resto.
+    """
+    simulation = _scoped_or_404(db, admin, simulation_id)
+    _require_document_source(simulation)
+    chunks = simulation.chunks
+    if not chunks:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Nessun documento indicizzato per questa simulazione.",
+        )
+
+    material = _GenerationInput(
+        contents=[c.content for c in chunks],
+        embeddings=[c.embedding for c in chunks],
+        kind=simulation.kind,
+        title=simulation.title,
+    )
     db.commit()
-    db.refresh(simulation)
-    audit.describe(http_request, titolo=simulation.title, documento=simulation.document_name)
-    return _admin_detail(db, simulation, current_admin)
+    return material
+
+
+def _store_questions(db: Session, admin: User, simulation_id: UUID, generated: list[dict]) -> dict:
+    """Blocking write of a fresh question pool (run via asyncio.to_thread)."""
+    # Ricaricata e non riusata: dopo il commit di prima l'oggetto è staccato
+    # dalla sessione, e il controllo del tenant si rifà da sé.
+    simulation = _scoped_or_404(db, admin, simulation_id)
+
+    db.query(SimulationQuestion).filter(SimulationQuestion.simulation_id == simulation.id).delete()
+    for position, question in enumerate(generated, start=1):
+        db.add(
+            SimulationQuestion(
+                simulation_id=simulation.id,
+                position=position,
+                text=question["text"],
+                options=question["options"],
+                correct_option=question["correct_option"],
+                expected_answer=question["expected_answer"],
+                ordered_steps=question["ordered_steps"],
+                pairs=question["pairs"],
+                explanation=question["explanation"],
+                source_chunks=question["source_chunks"],
+            )
+        )
+    simulation.status = SIMULATION_STATUS_DRAFT
+    return _commit_detail(db, simulation, admin)
 
 
 @router.post("/{simulation_id}/generate", response_model=SimulationAdminDetailResponse)
@@ -575,46 +715,85 @@ async def generate_simulation_questions(
     """
     await llm_limits.consume(llm_limits.GENERAZIONE_DOMANDE, current_admin.id)
 
-    simulation = _scoped_or_404(db, current_admin, simulation_id)
-    _require_document_source(simulation)
-    chunks = simulation.chunks
-    if not chunks:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Nessun documento indicizzato per questa simulazione.",
-        )
+    material = await asyncio.to_thread(_generation_input, db, current_admin, simulation_id)
 
     try:
-        generated = await generate_questions(
-            [c.content for c in chunks], [c.embedding for c in chunks], simulation.kind
-        )
+        generated = await generate_questions(material.contents, material.embeddings, material.kind)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
-    db.query(SimulationQuestion).filter(SimulationQuestion.simulation_id == simulation.id).delete()
-    for position, question in enumerate(generated, start=1):
-        db.add(
-            SimulationQuestion(
-                simulation_id=simulation.id,
-                position=position,
-                text=question["text"],
-                options=question["options"],
-                correct_option=question["correct_option"],
-                expected_answer=question["expected_answer"],
-                ordered_steps=question["ordered_steps"],
-                pairs=question["pairs"],
-                explanation=question["explanation"],
-                source_chunks=question["source_chunks"],
-            )
-        )
-    simulation.status = SIMULATION_STATUS_DRAFT
-    db.commit()
-    db.refresh(simulation)
+    detail = await asyncio.to_thread(_store_questions, db, current_admin, simulation_id, generated)
 
-    audit.describe(http_request, titolo=simulation.title, domande=len(generated))
-    return _admin_detail(db, simulation, current_admin)
+    audit.describe(http_request, titolo=material.title, domande=len(generated))
+    return detail
+
+
+@dataclass(frozen=True)
+class _ReviewInput:
+    """Il serbatoio da controllare, staccato dalla sessione."""
+
+    questions: list
+    chunks: list
+    fingerprint: str
+    kind: str
+    title: str
+
+
+def _review_input(db: Session, admin: User, simulation_id: UUID) -> _ReviewInput:
+    """Blocking read of the pool to check (run via asyncio.to_thread).
+
+    Il serbatoio si stacca dalla sessione prima dell'attesa, e l'impronta si
+    calcola su questa fotografia: è quella che dirà, più avanti, se l'esito
+    parla ancora del serbatoio che qualcuno sta guardando.
+
+    Come per la valutazione e per le altre chiamate lunghe: per tutti i
+    secondi in cui si aspetta il modello il database non serve, e in aula le
+    connessioni sono contate.
+    """
+    simulation = _scoped_or_404(db, admin, simulation_id)
+    if not simulation.questions:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Non c'è ancora nessuna domanda da controllare.",
+        )
+
+    questions = simulation_review.snapshot(simulation.questions)
+    material = _ReviewInput(
+        questions=questions,
+        chunks=[simulation_review.ReviewChunk(c.ordinal, c.content) for c in simulation.chunks],
+        fingerprint=simulation_review.fingerprint(questions),
+        kind=simulation.kind,
+        title=simulation.title,
+    )
+    db.commit()
+    return material
+
+
+def _local_findings(questions: list, embeddings: list) -> list:
+    """Le segnalazioni che si ricavano senza chiedere niente a nessuno.
+
+    Gira in un thread perché è calcolo e non attesa: i doppioni si trovano
+    confrontando ogni domanda con ogni altra, cioè più di mille prodotti
+    scalari fra vettori da millecinquecento numeri, fatti in Python. Sono
+    decimi di secondo, ed è lo stesso event loop su cui in quel momento
+    stanno passando delle telefonate.
+    """
+    findings = simulation_review.duplicate_findings([q.position for q in questions], embeddings)
+    return findings + simulation_review.option_findings(questions)
+
+
+def _store_review(
+    db: Session, admin: User, simulation_id: UUID, report: dict, fingerprint: str
+) -> dict:
+    """Blocking write of the review outcome (run via asyncio.to_thread)."""
+    # Ricaricata e non riusata: dopo il commit di prima l'oggetto è staccato.
+    simulation = _scoped_or_404(db, admin, simulation_id)
+    simulation.review_report = report
+    simulation.review_at = datetime.now(UTC).replace(tzinfo=None)
+    simulation.review_fingerprint = fingerprint
+    return _commit_detail(db, simulation, admin)
 
 
 @router.post("/{simulation_id}/review", response_model=SimulationAdminDetailResponse)
@@ -641,50 +820,28 @@ async def review_question_pool(
     """
     await llm_limits.consume(llm_limits.REVISIONE_SERBATOIO, current_admin.id)
 
-    simulation = _scoped_or_404(db, current_admin, simulation_id)
-    if not simulation.questions:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Non c'è ancora nessuna domanda da controllare.",
-        )
-
-    # Il serbatoio si stacca dalla sessione prima dell'attesa, e l'impronta si
-    # calcola su questa fotografia: è quella che dirà, più avanti, se l'esito
-    # parla ancora del serbatoio che qualcuno sta guardando.
-    questions = simulation_review.snapshot(simulation.questions)
-    chunks = [simulation_review.ReviewChunk(c.ordinal, c.content) for c in simulation.chunks]
-    impronta = simulation_review.fingerprint(questions)
-    kind = simulation.kind
-    titolo = simulation.title
-
-    # Come per la valutazione e per le altre chiamate lunghe: per tutti i
-    # secondi in cui si aspetta il modello il database non serve, e in aula
-    # le connessioni sono contate.
-    db.commit()
+    material = await asyncio.to_thread(_review_input, db, current_admin, simulation_id)
 
     try:
-        embeddings = await embed_texts([q.text for q in questions])
+        embeddings = await embed_texts([q.text for q in material.questions])
     except RuntimeError as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
-    findings = simulation_review.duplicate_findings([q.position for q in questions], embeddings)
-    findings += simulation_review.option_findings(questions)
+    findings = await asyncio.to_thread(_local_findings, material.questions, embeddings)
     # La passata del modello vale solo dove c'è un documento: su una
     # simulazione scritta a mano non c'è niente da cui una domanda debba
     # essere sostenuta, e la lista esce vuota da sé.
-    findings += await grounding_findings(questions, chunks, kind)
+    findings += await grounding_findings(material.questions, material.chunks, material.kind)
 
-    simulation = _scoped_or_404(db, current_admin, simulation_id)
-    simulation.review_report = simulation_review.build_report(
-        findings, verifiable_count(questions, chunks)
+    report = simulation_review.build_report(
+        findings, verifiable_count(material.questions, material.chunks)
     )
-    simulation.review_at = datetime.now(UTC).replace(tzinfo=None)
-    simulation.review_fingerprint = impronta
-    db.commit()
-    db.refresh(simulation)
+    detail = await asyncio.to_thread(
+        _store_review, db, current_admin, simulation_id, report, material.fingerprint
+    )
 
-    audit.describe(http_request, titolo=titolo, segnalazioni=len(findings))
-    return _admin_detail(db, simulation, current_admin)
+    audit.describe(http_request, titolo=material.title, segnalazioni=len(findings))
+    return detail
 
 
 @router.put("/{simulation_id}", response_model=SimulationAdminDetailResponse)

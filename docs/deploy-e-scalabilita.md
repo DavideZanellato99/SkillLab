@@ -42,7 +42,17 @@ docker compose -f docker-compose.yml up -d --build
 
 **Non c'è nessun passo di migrazione da ricordare**: lo schema si aggiorna da
 solo all'avvio, dietro un advisory lock, e ogni passo è idempotente
-([dati-e-schema.md](dati-e-schema.md)).
+([dati-e-schema.md](dati-e-schema.md)). I riempimenti delle righe vecchie non
+ripartono a ogni rilascio: un database che li ha già ricevuti li salta, e a
+dirlo è l'impronta del file che li contiene, quindi aggiungerne uno li rimette
+in moto da sé.
+
+**Chi sta usando l'applicazione non riscarica tutto.** Le librerie del
+frontend (React, il router, la cache delle query) stanno in un file separato
+dal codice dell'applicazione, e quel file cambia nome solo quando si aggiorna
+una dipendenza: un rilascio che tocca una schermata costa a chi torna il solo
+codice cambiato, non i 267 kB di React. Vedi
+[frontend.md](frontend.md).
 
 **Le chiamate in corso cadono.** Le repliche vengono sostituite tutte insieme,
 quindi chi è al telefono viene interrotto: per ora gli aggiornamenti vanno

@@ -5,6 +5,7 @@ import AssignmentStatusBadge from './AssignmentStatusBadge'
 import EmptyState from './EmptyState'
 import LoadError from './LoadError'
 import LoadingState from './LoadingState'
+import { prefetchOnHover } from './lazyPages'
 import PathProgressRing from './PathProgressRing'
 import PathStepDots from './PathStepDots'
 import StepDeadline from './StepDeadline'
@@ -57,6 +58,10 @@ function AssignmentCard({ assignment }: { assignment: PathAssignment }) {
       <Link
         to={`/app/percorsi/${assignment.id}`}
         className="flex min-w-0 flex-1 items-start gap-4 rounded-xl no-underline outline-none focus-visible:ring-1 focus-visible:ring-violet-500/50"
+        /* La mappa e la prova da cui si riprende arrivano su richiesta: i due
+           file partono al passaggio del puntatore, così da qui si entra senza
+           attesa (vedi `lazyPages`). */
+        {...prefetchOnHover(`/app/percorsi/${assignment.id}`)}
       >
         <PathProgressRing done={assignment.completed_steps} total={assignment.steps.length} />
         <div className="min-w-0 flex-1">
@@ -102,6 +107,7 @@ function AssignmentCard({ assignment }: { assignment: PathAssignment }) {
           to={stepLink(resume)}
           className={`${primaryActionCls} shrink-0 max-md:w-full`}
           aria-label={`Riprendi dalla tappa ${resume.position}, ${stepTarget(resume)}`}
+          {...prefetchOnHover(stepLink(resume))}
         >
           Riprendi
         </Link>

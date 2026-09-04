@@ -171,10 +171,10 @@ describe('menu di chi è entrato', () => {
     renderNavbar('user')
 
     await apriMenu()
-    expect(screen.getByRole('link', { name: /Il Mio Profilo/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Profilo/ })).toBeInTheDocument()
 
     await apriMenu()
-    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
   })
 
   it('mostra chi si è e con che ruolo', async () => {
@@ -239,16 +239,16 @@ describe('menu di chi è entrato', () => {
     await userEvent.click(screen.getByRole('button', { name: /Esci/ }))
 
     expect(logout).toHaveBeenCalledOnce()
-    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
   })
 
   it('si chiude aprendo una delle sue voci', async () => {
     renderNavbar('user')
 
     await apriMenu()
-    await userEvent.click(screen.getByRole('link', { name: /Il Mio Profilo/ }))
+    await userEvent.click(screen.getByRole('link', { name: /Profilo/ }))
 
-    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
   })
 })
 
@@ -328,7 +328,7 @@ describe('il menu del profilo, da tastiera', () => {
 
     await userEvent.keyboard('{Escape}')
 
-    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
   })
 
   it('dice se è aperto a chi non lo vede', async () => {
@@ -372,7 +372,7 @@ describe('i pannelli della barra', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Apri il menu di navigazione' }))
 
     expect(screen.getByRole('navigation', { name: 'Sezioni' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
   })
 
   it('aprendo il profilo si chiudono le sezioni', async () => {
@@ -381,7 +381,7 @@ describe('i pannelli della barra', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Apri il menu di navigazione' }))
     await apriMenu()
 
-    expect(screen.getByRole('link', { name: /Il Mio Profilo/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Profilo/ })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
   })
 
@@ -392,7 +392,7 @@ describe('i pannelli della barra', () => {
     await userEvent.click(screen.getByRole('button', { name: 'campanella' }))
 
     expect(screen.getByText('pannello notifiche')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /Il Mio Profilo/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
   })
 
   it('aprendo il profilo si chiudono le notifiche', async () => {
@@ -401,7 +401,7 @@ describe('i pannelli della barra', () => {
     await userEvent.click(screen.getByRole('button', { name: 'campanella' }))
     await apriMenu()
 
-    expect(screen.getByRole('link', { name: /Il Mio Profilo/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Profilo/ })).toBeInTheDocument()
     expect(screen.queryByText('pannello notifiche')).not.toBeInTheDocument()
   })
 

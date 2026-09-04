@@ -247,6 +247,13 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     ("POST", "/api/training/paths/draft"): AuditAction(
         "training.path_draft", "Bozza di percorso generata", "training_path"
     ),
+    # Il quadro d'insieme di un percorso, come quello di una persona: una
+    # chiamata a un fornitore esterno che costa, e un testo scritto da una
+    # macchina su come sta andando un gruppo. La lettura resta fuori, che è
+    # navigazione come tutte le altre.
+    ("POST", "/api/training/paths/{path_id}/debriefing"): AuditAction(
+        "training.path_debriefing", "Quadro del percorso generato", "training_path", "path_id"
+    ),
     ("PUT", "/api/training/paths/{path_id}"): AuditAction(
         "training.path_update", "Percorso modificato", "training_path", "path_id"
     ),

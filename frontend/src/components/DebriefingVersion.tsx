@@ -19,13 +19,14 @@
  * sottraggono la fotografia di prima da questa. */
 
 import type { UserDebriefing } from '../services/admin'
+import CriteriaAverageList, { debriefingCardCls } from './CriteriaAverageList'
 import Tooltip from './Tooltip'
 import { directionStyle } from './debriefingFormat'
 import { formatDateTime } from './dateFormat'
 import { Delta } from './scoreCharts'
 import { formatScore, scoreBadgeTone } from './simulationFormat'
 
-const cardCls = 'rounded-xl border border-white/6 bg-white/3 p-4'
+const cardCls = debriefingCardCls
 
 /** Una media di allora, con accanto di quanto si è mossa. */
 function Average({ label, value, delta }: { label: string; value: number; delta: number | null }) {
@@ -72,38 +73,6 @@ function Coverage({ debriefing }: { debriefing: UserDebriefing }) {
           delta={debriefing.attempt_average_delta}
         />
       )}
-    </div>
-  )
-}
-
-/* Le medie per criterio, dal più basso: è l'ordine in cui si guardano, perché
- * quello che si cerca è dove la persona perde punti. Le sei etichette
- * arrivano dal server insieme ai numeri e non da una copia scritta qui: sono
- * le stesse della valutazione, e due elenchi si allontanerebbero al primo
- * criterio che cambia nome. */
-function CriteriaAverages({ debriefing }: { debriefing: UserDebriefing }) {
-  if (debriefing.criteria_averages.length === 0) return null
-  const sorted = [...debriefing.criteria_averages].sort((a, b) => a.average - b.average)
-  return (
-    <div className={cardCls}>
-      <h4 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
-        Media per criterio, sulle prove lette
-      </h4>
-      <ul className="flex list-none flex-col gap-1.5">
-        {sorted.map((criterion) => (
-          <li key={criterion.key} className="flex items-center justify-between gap-4">
-            <span className="text-[0.85rem] text-slate-300">{criterion.label}</span>
-            <span className="flex shrink-0 items-center gap-1.5">
-              {criterion.delta !== null && <Delta value={criterion.delta} />}
-              <span
-                className={`rounded-full px-2 py-0.5 text-[0.8rem] font-semibold ${scoreBadgeTone(criterion.average)}`}
-              >
-                {formatScore(criterion.average)}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }
@@ -197,7 +166,10 @@ export default function DebriefingVersion({ debriefing }: { debriefing: UserDebr
         </p>
       </div>
 
-      <CriteriaAverages debriefing={debriefing} />
+      <CriteriaAverageList
+        averages={debriefing.criteria_averages}
+        title="Media per criterio, sulle prove lette"
+      />
     </div>
   )
 }

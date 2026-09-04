@@ -27,6 +27,7 @@ diritto a una copia di quello che la piattaforma tiene su di sé sono due
 domande diverse, e la seconda ha una sola risposta possibile.
 """
 
+import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -147,27 +148,17 @@ def read_user_debriefings(
     return _history_response(db, user_id)
 
 
-@router.post("/{user_id}/debriefings", response_model=UserDebriefingResponse)
-async def generate_user_debriefing(
-    user_id: UUID,
-    http_request: Request,
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db),
-):
-    """Fa scrivere un nuovo quadro d'insieme su questa persona, e lo salva.
+def _debriefing_material(
+    db: Session, admin: User, user_id: UUID
+) -> debriefing_source.DebriefingMaterial:
+    """Blocking read of the material to write about (run via asyncio.to_thread).
 
-    Si aggiunge allo storico invece di sostituire il precedente, e il
-    precedente entra nel materiale che il modello legge: il quadro nuovo
-    dice anche come la persona si è mossa da allora, che è la sola cosa che
-    una fotografia sola non può dire.
-
-    Il tetto viene prima di tutto il resto, perché è l'unico controllo che
-    parla del costo della richiesta invece che di cosa contiene, ed è una
-    chiamata che si può rilanciare all'infinito sulla stessa persona.
+    Ci stanno dentro anche i due rifiuti, perché sono domande che si fanno
+    al database: quante prove ha svolto questa persona, e se ne ha svolta
+    qualcuna dopo l'ultimo quadro. Finisce con il commit che restituisce la
+    connessione, prima dell'attesa lunga.
     """
-    await llm_limits.consume(llm_limits.DEBRIEFING, current_admin.id)
-
-    user = _user_in_scope_or_404(db, current_admin, user_id)
+    user = _user_in_scope_or_404(db, admin, user_id)
     previous = debriefing_source.latest(db, user.id)
     material = debriefing_source.collect(db, user.id)
 
@@ -201,12 +192,6 @@ async def generate_user_debriefing(
             ),
         )
 
-    audit.describe(
-        http_request,
-        conversations=material.conversations,
-        attempts=material.attempts,
-    )
-
     # La connessione torna al pool prima dell'attesa, come per la valutazione
     # di una conversazione: il modello di ragionamento qui legge cinque
     # trascrizioni intere prima di scrivere, quindi l'attesa è la più lunga
@@ -219,29 +204,20 @@ async def generate_user_debriefing(
     # contiene i dati che il test ha appena creato.
     db.commit()
 
-    try:
-        content = await write_debriefing(material)
-    except RuntimeError as e:
-        # Il fornitore non ha risposto, o non ha risposto niente di
-        # utilizzabile: 502, come per la valutazione e per la bozza di scheda.
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+    return material
 
-    # I numeri li ha calcolati il backend e non il modello, e vengono
-    # salvati accanto al testo invece di essere ricalcolati in lettura: sono
-    # quello che il modello aveva davanti, e una media che cambia sotto un
-    # testo che non l'ha mai vista è il modo in cui i due si contraddicono.
-    content["facts"] = {
-        "conversation_average": material.conversation_average,
-        "attempt_average": material.attempt_average,
-        "criteria_averages": [
-            {"key": c.key, "label": c.label, "average": c.average}
-            for c in material.criteria_averages
-        ],
-    }
 
+def _store_debriefing(
+    db: Session,
+    admin: User,
+    user_id: UUID,
+    content: dict,
+    material: debriefing_source.DebriefingMaterial,
+) -> UserDebriefingResponse:
+    """Blocking write of a new debriefing (run via asyncio.to_thread)."""
     # Ricaricato, non riusato: gli oggetti di prima sono staccati dalla
     # sessione dopo il commit.
-    user = _user_in_scope_or_404(db, current_admin, user_id)
+    user = _user_in_scope_or_404(db, admin, user_id)
     debriefing = UserDebriefing(
         user_id=user.id,
         content=content,
@@ -263,3 +239,60 @@ async def generate_user_debriefing(
         storico[1] if len(storico) > 1 else None,
         is_latest=True,
     )
+
+
+@router.post("/{user_id}/debriefings", response_model=UserDebriefingResponse)
+async def generate_user_debriefing(
+    user_id: UUID,
+    http_request: Request,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Fa scrivere un nuovo quadro d'insieme su questa persona, e lo salva.
+
+    Si aggiunge allo storico invece di sostituire il precedente, e il
+    precedente entra nel materiale che il modello legge: il quadro nuovo
+    dice anche come la persona si è mossa da allora, che è la sola cosa che
+    una fotografia sola non può dire.
+
+    Il tetto viene prima di tutto il resto, perché è l'unico controllo che
+    parla del costo della richiesta invece che di cosa contiene, ed è una
+    chiamata che si può rilanciare all'infinito sulla stessa persona.
+
+    Le due parti che toccano il database, la raccolta del materiale e la
+    scrittura del quadro, girano in un thread: sono chiamate bloccanti, e
+    qui la raccolta è pesante (cinque trascrizioni intere e le medie di ogni
+    criterio). Sull'event loop che terrebbe ferma ci sono le telefonate in
+    corso su questa replica.
+    """
+    await llm_limits.consume(llm_limits.DEBRIEFING, current_admin.id)
+
+    material = await asyncio.to_thread(_debriefing_material, db, current_admin, user_id)
+
+    audit.describe(
+        http_request,
+        conversations=material.conversations,
+        attempts=material.attempts,
+    )
+
+    try:
+        content = await write_debriefing(material)
+    except RuntimeError as e:
+        # Il fornitore non ha risposto, o non ha risposto niente di
+        # utilizzabile: 502, come per la valutazione e per la bozza di scheda.
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+
+    # I numeri li ha calcolati il backend e non il modello, e vengono
+    # salvati accanto al testo invece di essere ricalcolati in lettura: sono
+    # quello che il modello aveva davanti, e una media che cambia sotto un
+    # testo che non l'ha mai vista è il modo in cui i due si contraddicono.
+    content["facts"] = {
+        "conversation_average": material.conversation_average,
+        "attempt_average": material.attempt_average,
+        "criteria_averages": [
+            {"key": c.key, "label": c.label, "average": c.average}
+            for c in material.criteria_averages
+        ],
+    }
+
+    return await asyncio.to_thread(_store_debriefing, db, current_admin, user_id, content, material)

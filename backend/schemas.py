@@ -1285,6 +1285,79 @@ class UserDebriefingResponse(BaseModel):
     requested_by: str
 
 
+class PathDebriefingStep(BaseModel):
+    """Una tappa vista dal gruppo, dentro il quadro di un percorso.
+
+    Sono i numeri che il modello aveva davanti, salvati accanto al suo testo
+    e non ricalcolati in lettura: la tabella delle assegnazioni dice come sta
+    il gruppo adesso, questa colonna dice com'era quando qualcuno ha scritto
+    che il percorso si inceppava alla terza tappa.
+    """
+
+    position: int
+    # "avatar" o "simulation"
+    kind: str
+    # Il nome dell'avatar o il titolo del test, com'era allora
+    label: str
+    target_score: float
+    unlocked: int
+    passed: int
+    # Quante persone avevano qui la propria tappa di adesso
+    stuck: int
+    proofs: int
+    best_average: float | None = None
+
+
+class PathDebriefingResponse(BaseModel):
+    """Il quadro d'insieme su un percorso, come si legge.
+
+    Una sola versione, non uno storico: ogni generazione riscrive la riga
+    (vedi ``PathDebriefing``). Tutto è una fotografia salvata tranne
+    `stale_reason`, che guarda com'è il percorso adesso.
+
+    Nessun campo nomina una persona, e non è una dimenticanza: il quadro
+    parla di tappe e del gruppo, e chi è fermo dove lo dice la tabella delle
+    assegnazioni, che lo deriva dalle prove.
+    """
+
+    path_id: UUID
+    summary: str
+    # Perché il gruppo si ferma sulla tappa indicata da `blocker_position`.
+    # Tutti e due assenti quando non è ferma nessuna persona, cioè quando il
+    # percorso è finito per tutti: è un esito, e l'interfaccia lo dice.
+    blocker_position: int | None = None
+    blocker: str | None = None
+    themes: list[DebriefingTheme] = []
+    # Cosa il gruppo fa bene, assente quando nel materiale non si vedeva
+    strength: str | None = None
+    next_step: str
+
+    # Su quanto poggia
+    covered_people: int
+    covered_conversations: int
+    covered_attempts: int
+    covered_until: datetime
+    conversation_average: float | None = None
+    attempt_average: float | None = None
+    criteria_averages: list[DebriefingCriterionAverage] = []
+    # Come stava il gruppo quando è stato scritto
+    started: int = 0
+    completed: int = 0
+    overdue: int = 0
+    steps: list[PathDebriefingStep] = []
+
+    # Perché il quadro non vale più: "prove" se il gruppo ne ha svolte di
+    # nuove, "percorso" se le tappe sono state riscritte dopo, assente se
+    # vale ancora. Due parole e non un booleano perché a schermo dicono due
+    # cose diverse (vedi ``path_debriefing_source.staleness``).
+    stale_reason: str | None = None
+    # Quando questo testo è stato scritto, e da chi è stato chiesto. È
+    # l'ultima scrittura e non la prima: la riga è una sola, e ogni
+    # generazione la riscrive.
+    written_at: datetime
+    requested_by: str
+
+
 class EvaluationCriterionScore(BaseModel):
     """Score of a single criterion inside the evaluations report."""
 

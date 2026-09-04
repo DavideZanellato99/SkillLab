@@ -1520,6 +1520,75 @@ class UserDebriefing(Authored, Base):
         return f"<UserDebriefing(user_id={self.user_id}, covered_until={self.covered_until})>"
 
 
+class PathDebriefing(Authored, Base):
+    """Il quadro d'insieme su un percorso, cioè sul gruppo che lo sta facendo.
+
+    Il gemello di ``UserDebriefing`` con il soggetto cambiato: là dodici
+    prove di una persona, qui le prove che un gruppo intero ha svolto sulle
+    stesse tappe. Le due domande si somigliano meno di quanto sembri. Su una
+    persona si chiede cosa dirle; su un gruppo si chiede **dove il percorso
+    si inceppa**, che è una cosa che nessun quadro individuale può dire,
+    perché la si vede solo quando sei persone si fermano nello stesso punto.
+
+    **Non nomina nessuno, ed è la regola che regge la tabella.** Al modello
+    gli allievi arrivano siglati, e il testo che ne esce parla di tappe, di
+    criteri e del gruppo. Chi è fermo dove sta già nella tabella delle
+    assegnazioni, che lo deriva dalle prove e non costa niente. Da qui
+    discende tutto il resto: questa riga non è un dato personale, quindi non
+    compare nell'esportazione dei propri dati e non se ne va con un account
+    cancellato.
+
+    **Una riga per percorso, e ogni giro sostituisce quella prima**, al
+    contrario dello storico che si accumula su una persona. Là la versione
+    precedente è metà del materiale della prossima, perché dove una persona è
+    arrivata si sa solo rispetto a dove era. Qui il gruppo non è lo stesso
+    gruppo: fra una generazione e l'altra qualcuno è stato aggiunto e
+    qualcuno ritirato, e "come si è mosso da allora" sarebbe una frase su due
+    insiemi di persone diversi. È la scelta del controllo del serbatoio, per
+    la stessa ragione: un esito per oggetto, che invecchia e lo dice.
+
+    A dirlo sono le colonne di copertura, e qui i modi di invecchiare sono
+    **due**: prove nuove svolte dopo l'ultima che il modello ha letto, e il
+    percorso riscritto dopo. Il secondo sul quadro di una persona non esiste,
+    e qui è il più insidioso: una tappa tolta, o rimessa in un altro punto
+    della fila, cambia proprio la cosa di cui questo testo parla (vedi
+    ``path_debriefing_source.staleness``).
+    """
+
+    __tablename__ = "path_debriefings"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    # Uno per percorso: la generazione successiva riscrive questa riga.
+    path_id = Column(
+        Uuid,
+        ForeignKey("training_paths.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    # {"summary": str, "blocker": str | None, "themes": [{"title", "detail",
+    #  "evidence"}], "strength": str | None, "next_step": str, "facts": {...}}.
+    # In ``facts`` stanno i numeri che il modello aveva davanti, calcolati in
+    # Python e mai ricalcolati in lettura, come le medie salvate su un
+    # debriefing: un quadro che dicesse una percentuale diversa da quella
+    # della tabella accanto smetterebbe di essere creduto, e con lui l'altra.
+    content = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+    # La prova più recente che il modello ha letto, non quando ha scritto:
+    # fra le due passa tutto il tempo in cui il gruppo non si è allenato.
+    covered_until = Column(DateTime, nullable=False)
+    # Su quanto poggia: quante persone avevano il percorso quando è stato
+    # scritto, e quante prove sono entrate per forma. Serve a chi legge, che
+    # ha diritto di sapere se quel testo ha guardato sei persone o due.
+    covered_people = Column(Integer, nullable=False, default=0)
+    covered_conversations = Column(Integer, nullable=False, default=0)
+    covered_attempts = Column(Integer, nullable=False, default=0)
+
+    path = relationship("TrainingPath")
+
+    def __repr__(self):
+        return f"<PathDebriefing(path_id={self.path_id}, covered_until={self.covered_until})>"
+
+
 # Everything that hangs off a conversation, keyed by conversation_id. Held
 # here, next to the tables themselves, because two different features have
 # to delete a conversation completely — the retention sweep (``retention``)

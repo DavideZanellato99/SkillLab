@@ -58,6 +58,63 @@ completo su questa distinzione sta in
 Nessun Redis, nessuna coda, nessun broker: le frequenze in gioco sono basse e
 i lock distribuiti li offre già Postgres con gli advisory lock.
 
+## Cosa non gira sull'event loop
+
+Ogni replica è **un processo con un event loop solo**, e su quel loop, oltre
+alle richieste HTTP, ci sono le telefonate in corso: un WebSocket per
+chiamata, aperto per tutta la sua durata. Tutto quello che blocca il loop
+mette in pausa l'audio di chi in quel momento sta parlando.
+
+FastAPI ne prende metà da sé: un endpoint scritto `def` lo esegue in un
+thread del suo pool, quindi le query che fa non fermano niente. Restano gli
+endpoint `async def`, che esistono perché aspettano un fornitore esterno
+(OpenAI, ElevenLabs) e girano sul loop: lì **ogni chiamata bloccante passa da
+un thread**, con `asyncio.to_thread`.
+
+Bloccante vuol dire due cose:
+
+- **il database**, che con psycopg è un viaggio sincrono, dalla query più
+  breve alla INSERT dei cinquanta megabyte di una registrazione;
+- **il calcolo**, che qui è raro ma non assente: leggere il testo di un PDF di
+  dieci megabyte, e confrontare fra loro cinquanta vettori da millecinquecento
+  numeri per trovare le domande doppie.
+
+La forma è sempre la stessa, e si riconosce dai nomi: le parti bloccanti
+stanno in funzioni a sé che dicono "Blocking read/write ... (run via
+`asyncio.to_thread`)", e l'endpoint è la sequenza delle sue fasi, lettura,
+attesa del modello, scrittura. Una fase sola per gruppo di query, non una per
+query: ogni passaggio di thread costa, e le query di una fase sono comunque
+in fila fra loro.
+
+Dove si applica: la battuta di chat e la valutazione di una conversazione
+([chat.py](../backend/routers/chat.py)), il caricamento della registrazione
+([voice.py](../backend/routers/voice.py)), la consegna di un test
+([simulations.py](../backend/routers/simulations.py)), il quadro d'insieme su
+una persona ([admin_debriefings.py](../backend/routers/admin_debriefings.py)),
+il quadro d'insieme su un percorso e la bozza di percorso
+([training.py](../backend/routers/training.py)) e tutto il ciclo di
+vita di una simulazione
+([admin_simulations.py](../backend/routers/admin_simulations.py)). Il
+middleware di audit lo faceva già per la propria riga, con
+`run_in_threadpool`, ed è lo stesso ragionamento.
+
+C'è un secondo motivo, che riguarda le connessioni e non il loop: prima di
+un'attesa lunga la sessione fa `commit`, così la connessione torna al pool
+invece di restare ferma per i secondi (o i minuti) in cui si aspetta un
+modello. Vale per la valutazione di una conversazione, la consegna di un test
+a risposta aperta, il quadro d'insieme, la bozza di percorso, la generazione
+delle domande e la revisione del serbatoio. Il conto delle connessioni per
+replica sta in [database.py](../backend/database.py).
+
+Il commit ha però un effetto da governare: **gli oggetti della sessione
+scadono**, e da lì in poi chiedere un campo a una riga già letta è una query
+in più, fatta proprio dall'event loop e senza che si veda. Per questo quello
+che serve dopo l'attesa viene fotografato prima in dataclass di soli valori
+(`CatalogAvatar` per le bozze di percorso, `ReviewQuestion` per il serbatoio,
+`_SubmittedQuestion` per un test consegnato), e quello che va riscritto viene
+**riletto e non riusato**. Vale anche per l'utente della richiesta: il suo id
+si legge prima del commit, non dopo.
+
 ## L'avvio del backend
 
 Tutto in [backend/main.py](../backend/main.py), nell'ordine in cui accade.

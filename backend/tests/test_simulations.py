@@ -893,6 +893,40 @@ def test_una_risposta_completa_prende_il_punto_pieno(user_client, make_open_simu
     assert all(a["elapsed_ms"] is None for a in esito["answers"])
 
 
+def test_il_database_resta_libero_mentre_il_modello_corregge(
+    user_client, db_session, make_open_simulation, monkeypatch
+):
+    """La consegna che aspetta un modello non tiene ferma una connessione.
+
+    È l'unica consegna dell'applicazione con un'attesa in mezzo, e dura
+    secondi. Il caso che conta è l'aula: quaranta persone che consegnano
+    nello stesso minuto sono quaranta connessioni ferme ad aspettare OpenAI,
+    su un pool che ogni replica ha di DB_POOL_SIZE + DB_MAX_OVERFLOW e che
+    condivide con i login e con tutto il resto.
+
+    Che sia libera lo si guarda dalla sessione della richiesta: se non ha
+    più una transazione aperta, la sua connessione è tornata al pool. Il
+    presupposto è che la correzione lavori sulla fotografia delle domande e
+    non sulle righe (vedi ``_SubmittedQuestion``): senza, la prima domanda
+    letta qui dentro riaprirebbe tutto.
+    """
+    simulation = make_open_simulation()
+    occupata: list[bool] = []
+
+    async def _judge(items):
+        occupata.append(db_session.in_transaction())
+        return {item["position"]: {"quality": 1.0, "feedback": ""} for item in items}
+
+    monkeypatch.setattr("routers.simulations.judge_open_answers", _judge)
+
+    esito = user_client.post(
+        f"/api/simulations/{simulation.id}/attempts", json={"answers": _written(simulation)}
+    )
+
+    assert esito.status_code == 200
+    assert occupata == [False], "la sessione teneva ancora aperta la propria transazione"
+
+
 def test_una_risposta_a_meta_prende_meta_punto(user_client, make_open_simulation, giudice):
     """La differenza dal test a scelta multipla: non è tutto o niente."""
     giudice(quality=0.5)

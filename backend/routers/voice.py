@@ -200,50 +200,38 @@ async def _read_capped(request: Request) -> bytes:
     return b"".join(pezzi)
 
 
-@router.post("/recording/{conversation_id}", response_model=VoiceRecordingInfo)
-async def upload_recording(
-    conversation_id: UUID,
-    request: Request,
-    duration_ms: int | None = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Store the mixed audio of a call, posted by the browser on hang-up.
+def _owned_conversation_or_404(db: Session, conversation_id: UUID, user_id: UUID) -> None:
+    """La conversazione esiste ed è di chi sta caricando, o è come se non ci fosse.
 
-    The body is the raw recording and its Content-Type is whatever the
-    browser's MediaRecorder settled on. Only the owner can upload, and a
-    second upload for the same conversation replaces the first: a retry
-    after a flaky POST must not leave two half recordings behind.
+    Lettura bloccante, chiamata da un thread (vedi ``upload_recording``).
     """
-    conversation = (
+    owned = (
         db.query(ChatConversation)
         .filter(
             ChatConversation.id == conversation_id,
-            ChatConversation.user_id == current_user.id,
+            ChatConversation.user_id == user_id,
         )
         .first()
     )
-    if not conversation:
+    if not owned:
         raise HTTPException(status_code=404, detail="Conversazione non trovata.")
 
-    content_type = (request.headers.get("content-type") or "").strip()
-    container = content_type.split(";")[0].strip().lower()
-    if container not in _ALLOWED_RECORDING_TYPES:
-        raise HTTPException(
-            status_code=415,
-            detail=f"Formato audio non supportato: {container or 'assente'}.",
-        )
 
-    # Reject on the declared length before buffering the body, then check
-    # again on the real thing: Content-Length is a claim, not a guarantee.
-    declared = request.headers.get("content-length")
-    if declared and declared.isdigit() and int(declared) > MAX_RECORDING_BYTES:
-        raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
+def _store_recording(
+    db: Session,
+    conversation_id: UUID,
+    container: str,
+    duration_ms: int | None,
+    audio: bytes,
+) -> VoiceRecordingInfo:
+    """Scrive la registrazione, sostituendo quella che c'era.
 
-    audio = await _read_capped(request)
-    if not audio:
-        raise HTTPException(status_code=400, detail="Registrazione vuota.")
-
+    Scrittura bloccante, chiamata da un thread (vedi ``upload_recording``).
+    La risposta si costruisce qui dentro e non fuori: dopo il commit gli
+    attributi della riga sono scaduti, e leggerli di là vorrebbe dire una
+    SELECT fatta dall'event loop, cioè esattamente ciò che questa funzione
+    esiste per evitare.
+    """
     recording = (
         db.query(ConversationRecording)
         .filter(ConversationRecording.conversation_id == conversation_id)
@@ -265,6 +253,55 @@ async def upload_recording(
     db.refresh(recording)
 
     return VoiceRecordingInfo.model_validate(recording)
+
+
+@router.post("/recording/{conversation_id}", response_model=VoiceRecordingInfo)
+async def upload_recording(
+    conversation_id: UUID,
+    request: Request,
+    duration_ms: int | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Store the mixed audio of a call, posted by the browser on hang-up.
+
+    The body is the raw recording and its Content-Type is whatever the
+    browser's MediaRecorder settled on. Only the owner can upload, and a
+    second upload for the same conversation replaces the first: a retry
+    after a flaky POST must not leave two half recordings behind.
+
+    **Le due parti che toccano il database girano in un thread**, come già
+    fa il socket qui sotto. Sono chiamate bloccanti, e questa non è una
+    scrittura come le altre: l'audio di una chiamata sono decine di
+    megabyte che partono verso Postgres in una INSERT sola, e per tutto quel
+    tempo l'event loop di questa replica non fa girare nient'altro. Su
+    quello stesso loop ci sono le telefonate in corso, che sono la cosa
+    dell'applicazione a cui una pausa si sente di più: chi riaggancia
+    metterebbe in pausa l'audio di chi sta ancora parlando.
+    """
+    await asyncio.to_thread(_owned_conversation_or_404, db, conversation_id, current_user.id)
+
+    content_type = (request.headers.get("content-type") or "").strip()
+    container = content_type.split(";")[0].strip().lower()
+    if container not in _ALLOWED_RECORDING_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Formato audio non supportato: {container or 'assente'}.",
+        )
+
+    # Reject on the declared length before buffering the body, then check
+    # again on the real thing: Content-Length is a claim, not a guarantee.
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_RECORDING_BYTES:
+        raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
+
+    audio = await _read_capped(request)
+    if not audio:
+        raise HTTPException(status_code=400, detail="Registrazione vuota.")
+
+    return await asyncio.to_thread(
+        _store_recording, db, conversation_id, container, duration_ms, audio
+    )
 
 
 @router.get("/recording/{conversation_id}/info", response_model=VoiceRecordingInfo | None)

@@ -16,8 +16,10 @@ Entry point: ``prepare_schema``, which holds an advisory lock for the whole
 job (see there for why).
 """
 
+import hashlib
 import logging
 from contextlib import contextmanager
+from pathlib import Path
 
 from sqlalchemy import or_, text
 
@@ -890,11 +892,77 @@ def _index_conversations() -> None:
         conn.execute(text("DROP INDEX IF EXISTS ix_chat_messages_conversation_id"))
 
 
-def run_startup_migrations() -> None:
-    """Run every idempotent startup migration, in dependency order."""
-    _add_columns()
-    _add_authorship_columns()
-    _seed_roles_and_admin()
+def _backfills_fingerprint() -> str | None:
+    """L'impronta dei riempimenti che questo modulo sa fare, o None se non si legge.
+
+    È l'impronta del **sorgente di questo file**, e non un numero di
+    versione da alzare a mano: quali riempimenti esistono lo dice questo
+    file e nient'altro, quindi finché il file è identico i riempimenti sono
+    gli stessi, e alzare un contatore sarebbe una cosa da ricordarsi il
+    giorno in cui se ne aggiunge uno. Dimenticarsene non darebbe nessun
+    errore: darebbe una migrazione che non gira più, che è il modo peggiore
+    di sbagliare fra i due.
+
+    None quando il file non si riesce a leggere (un pacchetto compilato, un
+    permesso strano): la risposta prudente è "non lo so", e chi la riceve
+    rifà tutto come si è sempre fatto.
+    """
+    try:
+        source = Path(__file__).read_bytes()
+    except OSError:
+        logger.warning("Impronta delle migrazioni non calcolabile: le rifaccio tutte.")
+        return None
+    return hashlib.sha256(source).hexdigest()
+
+
+def _backfills_already_done(fingerprint: str) -> bool:
+    """Se questi riempimenti sono già stati portati a termine su questo database.
+
+    ``schema_backfills`` è una tabella sua e non una riga in una di quelle
+    dell'applicazione: non è un dato del prodotto, è la memoria di cosa è
+    stato fatto allo schema, e la crea questo modulo con il proprio DDL
+    invece di passare dai modelli.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS schema_backfills ("
+                "fingerprint VARCHAR(64) PRIMARY KEY, "
+                f"applied_at TIMESTAMP NOT NULL DEFAULT {UTC_NOW_SQL})"
+            )
+        )
+        return bool(
+            conn.execute(
+                text("SELECT 1 FROM schema_backfills WHERE fingerprint = :f"),
+                {"f": fingerprint},
+            ).scalar()
+        )
+
+
+def _mark_backfills_done(fingerprint: str) -> None:
+    """Scrive che questi riempimenti sono stati fatti, e quando.
+
+    Una riga per impronta e non una riga sola riscritta: restano lì le date
+    in cui ogni versione delle migrazioni è arrivata su questo database, che
+    su un'installazione che nessuno tocca è l'unico posto in cui quella
+    storia è scritta. Sono una manciata di righe in tutto.
+
+    ``ON CONFLICT DO NOTHING`` perché due repliche che partissero insieme
+    passerebbero di qui entrambe: il lock le mette in fila, ma la seconda ha
+    già letto "non fatto" prima di mettersi in coda.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO schema_backfills (fingerprint) VALUES (:f) "
+                "ON CONFLICT (fingerprint) DO NOTHING"
+            ),
+            {"f": fingerprint},
+        )
+
+
+def _run_backfills() -> None:
+    """I riempimenti veri e propri, in ordine di dipendenza."""
     _backfill_user_organizations()
     _backfill_avatar_organizations()
     # Prima dei titoli: il titolo di default porta dentro il nome della
@@ -909,6 +977,43 @@ def run_startup_migrations() -> None:
     _version_debriefings()
     _drop_avatar_difficulty()
     _drop_user_selections()
+
+
+def run_startup_migrations() -> None:
+    """Run every idempotent startup migration, in dependency order.
+
+    Due gruppi, e si comportano in modo diverso di proposito.
+
+    **Le colonne e gli indici si rifanno a ogni avvio.** Costano una domanda
+    al catalogo di Postgres e nessuna riga letta (``ADD COLUMN IF NOT
+    EXISTS``, ``CREATE INDEX IF NOT EXISTS``), quindi non c'è niente da
+    risparmiare, e in cambio un database a cui manca un indice torna a posto
+    da solo riavviando: è la proprietà su cui si regge il fatto che qui non
+    esista un tool di migrazioni.
+
+    **I riempimenti si fanno una volta sola.** Quelli leggono le righe, e su
+    un'installazione avviata sono scansioni di tabelle intere: contare gli
+    avatar senza organizzazione, ritrovare l'autore di ogni utente dentro il
+    registro di audit. Il conto torna sempre zero, perché l'applicazione le
+    righe vecchie non le scrive più, ma quel conto lo si pagava a ogni
+    avvio di ogni replica, cioè a ogni rilascio.
+
+    A dire che sono già stati fatti è l'impronta di questo file (vedi
+    ``_backfills_fingerprint``): cambiarne il contenuto, che è l'unico modo
+    di aggiungere un riempimento, cambia l'impronta e li rifà tutti.
+    """
+    _add_columns()
+    _add_authorship_columns()
+    _seed_roles_and_admin()
+
+    fingerprint = _backfills_fingerprint()
+    if fingerprint is None or not _backfills_already_done(fingerprint):
+        _run_backfills()
+        if fingerprint is not None:
+            _mark_backfills_done(fingerprint)
+    else:
+        logger.info("Riempimenti già applicati su questo database, salto.")
+
     _index_audit_logs()
     _index_conversations()
 

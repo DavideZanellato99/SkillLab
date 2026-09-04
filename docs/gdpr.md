@@ -50,7 +50,7 @@ questo documento e firmare l'accordo art. 28.
 | Percorsi di formazione assegnati                  | `training_path_assignments`                                                                                                                                     | Assegnati da un amministratore. Le tappe di cui sono fatti stanno sul percorso, che è dell'organizzazione e non della persona                                                                                                                                           |
 | Indirizzo IP e User-Agent                         | `token_session`, `audit_logs`                                                                                                                                   | Raccolti a ogni accesso e a ogni azione                                                                                                                                                                                                                                 |
 | Registro delle azioni compiute                    | `audit_logs`                                                                                                                                                    | Scritto dal middleware a ogni richiesta che modifica qualcosa                                                                                                                                                                                                           |
-| Email di chi ha creato o modificato una riga      | `users`, `organizations`, `avatars`, `avatar_categories`, `technical_simulations`, `training_paths`, `user_debriefings`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`)                                                                                                                                                                                         |
+| Email di chi ha creato o modificato una riga      | `users`, `organizations`, `avatars`, `avatar_categories`, `technical_simulations`, `training_paths`, `user_debriefings`, `path_debriefings`: `created_by_email`, `updated_by_email` | Scritta a ogni salvataggio insieme all'id dell'autore (`backend/authorship.py`)                                                                                                                                                                                         |
 
 Due precisazioni che contano.
 
@@ -158,6 +158,34 @@ audit, che a schermo sono del solo super admin.
 Verso OpenAI vale la stessa pseudonimizzazione della valutazione: viaggiano
 le trascrizioni e i giudizi già scritti, mai il nome o l'email della persona.
 
+### Il quadro d'insieme su un percorso, che invece non è un dato personale
+
+Accanto al quadro su una persona esiste quello su un percorso, che legge le
+prove di tutto il gruppo che lo sta seguendo e dice dove il percorso si
+inceppa (`path_debriefings`, vedi
+[training-e-report.md](training-e-report.md)). Va distinto dal precedente,
+perché la differenza non è di grado.
+
+**Non nomina nessuno, e non per convenzione.** Al modello gli allievi arrivano
+siglati (`ALLIEVO 1`, `ALLIEVO 2`) e le sigle valgono solo dentro quella
+chiamata; il testo che ne esce parla di tappe, di criteri e del gruppo, e la
+normalizzazione ricontrolla che nessuna sigla compaia, buttando il campo dove
+è facoltativo e facendo ritentare dove è obbligatorio
+(`backend/path_debriefing.py`). La riga salvata non contiene quindi dati
+personali, e le conseguenze sono tre: non compare nell'esportazione dei propri
+dati, non viene cancellata insieme a un account (resta al percorso, con la
+firma di chi l'aveva chiesta anonimizzata come ovunque), e sulla finestra di
+conservazione segue comunque le prove che ha letto, perché una lettura di
+prove cancellate non deve sopravvivere loro.
+
+**Verso OpenAI esce meno che nel quadro di una persona**: non le trascrizioni,
+ma i giudizi già scritti, i sei criteri e le note dei docenti, tutti siglati.
+
+**Non lo si subisce e non produce numeri**, come il precedente: lo chiede un
+formatore quando gli serve, la richiesta finisce nel registro delle azioni
+(`training.path_debriefing`), e i conteggi accanto al testo li calcola il
+backend.
+
 ## 5. Il monitoraggio dei lavoratori (Italia)
 
 Uno strumento che registra, trascrive e valuta la prestazione di un
@@ -255,6 +283,11 @@ regola vale su ciascuna versione, non sulla persona: lo storico si accorcia
 dal fondo, perché le versioni vecchie sono quelle che avevano letto le prove
 più vecchie.
 
+Il quadro d'insieme di un percorso segue lo stesso orologio e per la stessa
+ragione, anche se di persone non ne nomina: resta una lettura di prove, e
+sopravvivere alle prove che riassume vorrebbe dire tenere un giudizio su un
+gruppo che non si può più andare a verificare da nessuna parte.
+
 **L'orologio parte dall'ultimo utilizzo, non dalla creazione**: il riaggancio
 per una telefonata, l'ultima attività per una chat scritta
 (`backend/retention.py`).
@@ -300,6 +333,12 @@ nell'informativa:
   chi lo ha firmato.
 
 Nessuna delle due conserva voce, trascrizioni o IP della persona cancellata.
+
+A queste si aggiunge il **quadro d'insieme dei percorsi** che l'account aveva
+fatto scrivere: resta al percorso, perché parla di tappe e di un gruppo e non
+nomina nessuno, e cancellarlo vorrebbe dire buttare il lavoro
+dell'organizzazione perché uno dei suoi account è stato chiuso. Quello che se
+ne va è la firma, come sulle altre righe qui sotto.
 
 **Cosa invece non sopravvive.** La firma che l'account ha lasciato sulle
 righe che ha creato o modificato (utenti, organizzazioni, avatar) viene

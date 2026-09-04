@@ -109,7 +109,7 @@ export function profileMenuGroups(user: AuthUser | null): NavEntry[][] {
   const own: NavEntry[] = [
     {
       to: '/app/profile',
-      label: 'Il Mio Profilo',
+      label: 'Profilo',
       Icon: UserIcon,
       isActive: exact('/app/profile'),
     },

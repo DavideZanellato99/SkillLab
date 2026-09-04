@@ -29,6 +29,11 @@ different moments:
   ogni versione dello storico, una per una: le vecchie escono per prime,
   perché sono quelle che hanno letto le prove più vecchie, e uno storico che
   si accorcia dal fondo è esattamente quello che deve succedere.
+- i **quadri dei percorsi** seguono la stessa regola dei debriefing, e per la
+  stessa ragione, anche se di dati personali non ne contengono: nominano
+  tappe e non persone, ma restano una lettura di prove, e sopravvivere alle
+  prove che riassumono vorrebbe dire tenere un giudizio su un gruppo che non
+  si può più andare a verificare da nessuna parte.
 
 Nothing here is a soft delete. A row past its window is gone, which is the
 only thing that makes a retention policy worth writing down.
@@ -57,6 +62,7 @@ from models import (
     CONVERSATION_CHILDREN,
     ChatConversation,
     ConversationRecording,
+    PathDebriefing,
     SimulationAttempt,
     UserDebriefing,
 )
@@ -108,6 +114,7 @@ class PurgeResult(NamedTuple):
     recordings: int
     simulation_attempts: int
     debriefings: int
+    path_debriefings: int
 
 
 def _cutoff(days: int) -> datetime:
@@ -187,12 +194,20 @@ def _purge(conn: Connection) -> PurgeResult:
         delete(UserDebriefing).where(UserDebriefing.covered_until < conv_cutoff)
     ).rowcount
 
-    if conversations or recordings or simulation_attempts or debriefings:
+    # Il quadro di un percorso si misura sullo stesso orologio e per la stessa
+    # ragione: di persone non ne nomina, ma è una lettura delle prove di un
+    # gruppo, e quelle prove qui sopra sono appena state cancellate.
+    path_debriefings = conn.execute(
+        delete(PathDebriefing).where(PathDebriefing.covered_until < conv_cutoff)
+    ).rowcount
+
+    if conversations or recordings or simulation_attempts or debriefings or path_debriefings:
         logger.info(
             "Retention: %d conversazioni eliminate (oltre %d giorni), "
             "%d registrazioni audio eliminate (oltre %d giorni), "
             "%d tentativi di simulazione eliminati (oltre %d giorni), "
-            "%d debriefing eliminati (sulla finestra delle conversazioni)",
+            "%d debriefing eliminati (sulla finestra delle conversazioni), "
+            "%d quadri di percorso eliminati (sulla stessa finestra)",
             conversations,
             CONVERSATION_RETENTION_DAYS,
             recordings,
@@ -200,12 +215,14 @@ def _purge(conn: Connection) -> PurgeResult:
             simulation_attempts,
             SIMULATION_ATTEMPT_RETENTION_DAYS,
             debriefings,
+            path_debriefings,
         )
     return PurgeResult(
         conversations=conversations,
         recordings=recordings,
         simulation_attempts=simulation_attempts,
         debriefings=debriefings,
+        path_debriefings=path_debriefings,
     )
 
 
@@ -213,9 +230,11 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     result = purge_expired()
     logger.info(
-        "Purge completato: %d conversazioni, %d registrazioni, %d tentativi, %d debriefing.",
+        "Purge completato: %d conversazioni, %d registrazioni, %d tentativi, "
+        "%d debriefing, %d quadri di percorso.",
         result.conversations,
         result.recordings,
         result.simulation_attempts,
         result.debriefings,
+        result.path_debriefings,
     )

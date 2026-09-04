@@ -280,6 +280,10 @@ una persona ne ha uno per ogni volta che gliene è stato fatto scrivere uno, e
 la regola si applica a ciascuno per conto suo: lo storico si accorcia dal
 fondo, che è esattamente quello che deve succedere.
 
+Lo stesso vale per il quadro d'insieme di un percorso, che di persone non ne
+nomina ma resta una lettura delle loro prove: cancellate quelle, quel testo
+non ha più niente dietro a cui riferirsi.
+
 ## Il ciclo di pulizia
 
 Le finestre le applica un ciclo che gira **dentro l'applicazione**

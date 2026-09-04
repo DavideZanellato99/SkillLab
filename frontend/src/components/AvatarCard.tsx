@@ -16,6 +16,7 @@ import { categoryBadgeClasses } from './categoryStyles'
 import { formatDate } from './dateFormat'
 import { staggerDelay } from './galleryLayout'
 import { ChatIcon, MicIcon, UserIcon } from './icons'
+import { prefetchOnHover } from './lazyPages'
 
 interface AvatarCardProps {
   avatar: Avatar
@@ -34,6 +35,11 @@ export default function AvatarCard({ avatar, index }: AvatarCardProps) {
       style={{ animationDelay: staggerDelay(index) }}
       id={`avatar-card-${avatar.id}`}
       aria-label={`Parla con ${avatar.name}`}
+      /* La chat è la pagina più pesante dell'applicazione, perché con lei
+         arriva anche la telefonata, e questa tessera è la sola porta da cui
+         ci si entra: il file parte quando il puntatore si posa qui, cioè
+         mentre si legge il nome e lo scenario (vedi `lazyPages`). */
+      {...prefetchOnHover(`/app/chat/${avatar.id}`)}
     >
       <div className="relative aspect-square w-full overflow-hidden bg-gray-900 after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-3/5 after:bg-gradient-to-t after:from-gray-900/60 after:via-gray-900/40 after:to-transparent after:content-['']">
         {imageFailed ? (

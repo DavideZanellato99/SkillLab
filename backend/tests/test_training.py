@@ -10,7 +10,10 @@ come è fatta.
 """
 
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta, timezone
+
+from sqlalchemy import event
 
 from auth_dependency import ensure_roles
 from models import (
@@ -154,6 +157,34 @@ def _create_path(admin_client, organization, steps, title="Onboarding") -> dict:
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _update_path(admin_client, organization, path, steps, title="Onboarding") -> dict:
+    response = admin_client.put(
+        f"/api/training/paths/{path['id']}",
+        json={
+            "title": title,
+            "organization_id": str(organization.id),
+            "steps": steps,
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+@contextmanager
+def _orm_queries(db_session):
+    """Le interrogazioni ORM fatte sulla sessione del test dentro il blocco."""
+    executed: list[str] = []
+
+    def _record(state):
+        executed.append(str(state.statement))
+
+    event.listen(db_session, "do_orm_execute", _record)
+    try:
+        yield executed
+    finally:
+        event.remove(db_session, "do_orm_execute", _record)
 
 
 def _assign(admin_client, path, user) -> dict:
@@ -304,6 +335,51 @@ def test_deleting_a_path_takes_its_assignments(
     assert response.status_code == 200
     assert db_session.query(TrainingPath).count() == 0
     assert db_session.query(TrainingPathAssignment).count() == 0
+
+
+def test_composing_costs_the_same_whatever_the_number_of_steps(
+    admin_client, db_session, organization, make_avatar
+):
+    """Un percorso di dodici tappe non costa sei volte uno di due.
+
+    Erano due query per tappa in scrittura (il bersaglio verificato uno per
+    uno) e due in lettura (il nome dell'avatar o del test dentro la
+    risposta), cioè un percorso lungo che si pagava quattro volte la propria
+    lunghezza dentro una sola richiesta. Adesso i bersagli si leggono in due
+    query sole e la risposta si rilegge con le stesse letture anticipate
+    dell'elenco.
+
+    Il payload si prepara **fuori** dal blocco misurato: le righe delle
+    fixture scadono a ogni commit della richiesta precedente, e leggerne
+    l'id dentro il blocco conterebbe come query dell'endpoint quello che è
+    solo il test che si rinfresca.
+    """
+    avatars = [make_avatar(category="clienti", name=f"Avatar {i}") for i in range(6)]
+    simulations = [_make_simulation(db_session, organization, title=f"Test {i}") for i in range(6)]
+    tutte = []
+    for avatar, simulation in zip(avatars, simulations, strict=True):
+        tutte.append(_avatar_step(avatar))
+        tutte.append(_simulation_step(simulation))
+    due, dodici = tutte[:2], tutte
+
+    # La prima richiesta paga anche il caricamento pigro delle fixture: qui
+    # si misura il costo a regime.
+    _create_path(admin_client, organization, due, title="Scaldata")
+
+    with _orm_queries(db_session) as due_tappe:
+        _create_path(admin_client, organization, due, title="Due tappe")
+    with _orm_queries(db_session) as dodici_tappe:
+        _create_path(admin_client, organization, dodici, title="Dodici tappe")
+
+    assert len(due_tappe) == len(dodici_tappe)
+
+    percorso = _create_path(admin_client, organization, due, title="Da modificare")
+    with _orm_queries(db_session) as modifica_corta:
+        _update_path(admin_client, organization, percorso, due)
+    with _orm_queries(db_session) as modifica_lunga:
+        _update_path(admin_client, organization, percorso, dodici)
+
+    assert len(modifica_corta) == len(modifica_lunga)
 
 
 # ── La fila che si apre una tappa per volta ───────────

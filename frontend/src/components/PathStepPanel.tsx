@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { StepProgress } from '../services/training'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
 import Badge from './Badge'
 import StepCriteriaProgress from './StepCriteriaProgress'
+import StatTile from './StatTile'
 import { categoryBadgeClasses } from './categoryStyles'
 import { primaryActionCls } from './PrimaryButton'
 import { ChatIcon, ChecklistIcon, CloseIcon, LockIcon } from './icons'
@@ -37,15 +37,6 @@ import {
  * Sotto la barra, quando la tappa pone condizioni sui singoli criteri, c'è
  * quali sono e a che punto stanno: senza, una tappa con la barra piena e lo
  * stato ancora aperto sarebbe una tappa che non si capisce. */
-
-function Stat({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="rounded-xl border border-white/6 bg-white/3 px-3 py-2">
-      <span className="block text-[0.68rem] uppercase tracking-wider text-slate-500">{label}</span>
-      <span className="mt-0.5 block text-[0.9rem] font-semibold text-slate-100">{children}</span>
-    </div>
-  )
-}
 
 export default function PathStepPanel({
   step,
@@ -145,18 +136,20 @@ export default function PathStepPanel({
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-2">
-        <Stat label="Tentativi">
+        <StatTile label="Tentativi">
           {locked ? <span className="text-slate-500">—</span> : step.attempts}
-        </Stat>
-        <Stat label="Scadenza">
+        </StatTile>
+        <StatTile label="Scadenza">
           {step.due_at ? (
             formatDeadline(step.due_at)
           ) : (
             <span className="text-slate-500">nessuna</span>
           )}
-        </Stat>
-        {step.unlocked_at && <Stat label="Aperta il">{formatDate(step.unlocked_at)}</Stat>}
-        {step.achieved_at && <Stat label="Superata il">{formatDate(step.achieved_at)}</Stat>}
+        </StatTile>
+        {step.unlocked_at && <StatTile label="Aperta il">{formatDate(step.unlocked_at)}</StatTile>}
+        {step.achieved_at && (
+          <StatTile label="Superata il">{formatDate(step.achieved_at)}</StatTile>
+        )}
       </div>
 
       {locked ? (

@@ -83,6 +83,12 @@ export const queryKeys = {
    *  tutte le versioni scritte su di lei, dalla più recente. */
   debriefings: {
     byUser: (userId: string) => ['debriefings', userId] as const,
+    /** Il quadro di un percorso: uno solo, perché ogni generazione riscrive
+     *  quello di prima. Il prefisso serve a riletterli tutti quando un
+     *  percorso viene modificato, che è il modo in cui invecchiano senza che
+     *  nessuno si alleni. */
+    paths: ['debriefings', 'path'] as const,
+    byPath: (pathId: string) => ['debriefings', 'path', pathId] as const,
   },
   training: {
     all: ['training'] as const,

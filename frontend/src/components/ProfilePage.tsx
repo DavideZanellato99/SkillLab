@@ -205,7 +205,7 @@ export default function ProfilePage() {
   return (
     <PageContainer width="form">
       <PageHeader
-        title="Il Mio Profilo"
+        title="Profilo"
         description={
           canEditName
             ? 'Visualizza i tuoi dati, aggiorna nome e cognome e gestisci la password del tuo account.'

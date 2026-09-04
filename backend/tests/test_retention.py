@@ -18,6 +18,7 @@ from models import (
     ConversationRecording,
     ConversationReview,
     MessageAnnotation,
+    PathDebriefing,
     SimulationAttempt,
     TechnicalSimulation,
     UserDebriefing,
@@ -129,7 +130,7 @@ def test_recent_conversation_is_left_alone(db_session, standard_user, make_avata
 
     result = _purge(db_session)
 
-    assert result == (0, 0, 0, 0)
+    assert result == (0, 0, 0, 0, 0)
     assert (
         db_session.query(ChatConversation).filter(ChatConversation.id == conversation.id).count()
         == 1
@@ -291,6 +292,51 @@ def test_recent_debriefing_is_left_alone(db_session, standard_user):
     assert db_session.query(UserDebriefing).filter_by(user_id=standard_user.id).count() == 1
 
 
+def _seed_path_debriefing(db_session, path_id, *, covered_days_ago: int):
+    """Il quadro d'insieme di un percorso, datato come quello di una persona."""
+    debriefing = PathDebriefing(
+        path_id=path_id,
+        content={"summary": "Il gruppo si ferma alla seconda tappa.", "themes": []},
+        covered_until=_days_ago(covered_days_ago),
+        covered_people=4,
+        covered_conversations=8,
+        covered_attempts=0,
+    )
+    db_session.add(debriefing)
+    db_session.flush()
+    return debriefing
+
+
+def test_expired_path_debriefing_goes_with_the_proofs_it_read(
+    db_session, standard_user, make_avatar, make_assigned_path
+):
+    """Di persone non ne nomina, ma resta una lettura di prove: quando quelle
+    sono state cancellate, non c'è più niente dietro a cui riferirlo."""
+    assignment = make_assigned_path(standard_user, [{"avatar": make_avatar(), "target": 7.0}])
+    _seed_path_debriefing(
+        db_session,
+        assignment.path_id,
+        covered_days_ago=retention.CONVERSATION_RETENTION_DAYS + 1,
+    )
+
+    result = _purge(db_session)
+
+    assert result.path_debriefings == 1
+    assert db_session.query(PathDebriefing).filter_by(path_id=assignment.path_id).count() == 0
+
+
+def test_recent_path_debriefing_is_left_alone(
+    db_session, standard_user, make_avatar, make_assigned_path
+):
+    assignment = make_assigned_path(standard_user, [{"avatar": make_avatar(), "target": 7.0}])
+    _seed_path_debriefing(db_session, assignment.path_id, covered_days_ago=1)
+
+    result = _purge(db_session)
+
+    assert result.path_debriefings == 0
+    assert db_session.query(PathDebriefing).filter_by(path_id=assignment.path_id).count() == 1
+
+
 # ── Il purge è ripetibile ──────────────────────────────────────────────
 
 
@@ -303,4 +349,4 @@ def test_purge_is_idempotent(db_session, standard_user, make_avatar):
     second = _purge(db_session)
 
     assert first.conversations == 1
-    assert second == (0, 0, 0, 0)
+    assert second == (0, 0, 0, 0, 0)

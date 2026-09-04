@@ -202,7 +202,7 @@ def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _naive(value: datetime) -> datetime:
+def naive(value: datetime) -> datetime:
     """Porta un momento nella convenzione dello schema, UTC senza fuso.
 
     Una riga riletta dal database è già senza fuso, ma una ancora in sessione
@@ -280,7 +280,7 @@ def proofs_by_key(
             score = override_score if override_score is not None else ai_score
             criteria = _criteria_scores(rest[0]) if rest else {}
             by_key[(user_id, STEP_KIND_AVATAR, avatar_id)].append(
-                Proof(at=_naive(opened_at), score=score, criteria=criteria)
+                Proof(at=naive(opened_at), score=score, criteria=criteria)
             )
 
     if simulation_ids:
@@ -304,7 +304,7 @@ def proofs_by_key(
             # una tappa che chiedesse dei criteri non potrebbe essere sua
             # (lo rifiuta ``TrainingPathStepInput``).
             by_key[(user_id, STEP_KIND_SIMULATION, simulation_id)].append(
-                Proof(at=_naive(submitted_at), score=score, criteria={})
+                Proof(at=naive(submitted_at), score=score, criteria={})
             )
 
     return by_key
@@ -317,7 +317,7 @@ def _step_progress(
     now: datetime,
 ) -> StepProgress:
     """Una tappa, dato il momento in cui si è aperta e le prove di quel bersaglio."""
-    due_at = _naive(step.due_at) if step.due_at is not None else None
+    due_at = naive(step.due_at) if step.due_at is not None else None
     expired = due_at is not None and now > due_at
 
     if unlocked_at is None:
@@ -385,7 +385,7 @@ def progress_of(
     stessa.
     """
     now = _now()
-    unlocked_at: datetime | None = _naive(assignment.created_at)
+    unlocked_at: datetime | None = naive(assignment.created_at)
     steps: list[StepProgress] = []
 
     for step in assignment.path.steps:

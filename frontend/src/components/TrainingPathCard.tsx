@@ -1,6 +1,6 @@
 import type { PathStep, TrainingPath } from '../services/training'
 import Tooltip from './Tooltip'
-import { PencilIcon, TrashIcon, UserPlusIcon } from './icons'
+import { PencilIcon, SparkleIcon, TrashIcon, UserPlusIcon } from './icons'
 import { formatScore, formatShortDeadline, stepKindLabel, stepTarget } from './trainingFormat'
 
 /* Un percorso nell'elenco di chi lo governa: com'è fatto e quanti lo stanno
@@ -16,9 +16,11 @@ import { formatScore, formatShortDeadline, stepKindLabel, stepTarget } from './t
  * e in una griglia sono le schede a doversi somigliare: le altre si contano in
  * coda e si leggono nel tooltip. Tre perché è quanto entra su una riga sola.
  *
- * Le tre azioni sono in chiaro e non dentro un menu: sono tre, si fanno tutte
- * dalla stessa scheda, e nasconderle dietro un puntino vorrebbe dire un clic
- * in più per il gesto più frequente, che è assegnare. */
+ * Le quattro azioni sono in chiaro e non dentro un menu: si fanno tutte dalla
+ * stessa scheda, e nasconderle dietro un puntino vorrebbe dire un clic in più
+ * per il gesto più frequente, che è assegnare. Il quadro d'insieme sta subito
+ * dopo l'assegnazione perché è la domanda che viene dopo: affidato il
+ * percorso a una classe, quello che si vuole sapere è dove si sta inceppando. */
 
 const MAX_STEPS = 3
 
@@ -61,6 +63,7 @@ export default function TrainingPathCard({
   showOrganization,
   onShowAssigned,
   onAssign,
+  onDebriefing,
   onEdit,
   onDelete,
 }: {
@@ -70,6 +73,8 @@ export default function TrainingPathCard({
   /** Porta all'elenco di chi lo sta percorrendo, già filtrato su questo. */
   onShowAssigned: () => void
   onAssign: () => void
+  /** Apre il quadro d'insieme del gruppo che sta percorrendo il percorso. */
+  onDebriefing: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -119,6 +124,16 @@ export default function TrainingPathCard({
               aria-label={`Assegna ${path.title}`}
             >
               <UserPlusIcon size={15} />
+            </button>
+          </Tooltip>
+          <Tooltip content="Quadro d'insieme del gruppo">
+            <button
+              type="button"
+              className={actionBtnCls}
+              onClick={onDebriefing}
+              aria-label={`Quadro d'insieme di ${path.title}`}
+            >
+              <SparkleIcon size={15} />
             </button>
           </Tooltip>
           <Tooltip content="Modifica il percorso">

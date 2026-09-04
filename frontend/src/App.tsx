@@ -2,56 +2,39 @@ import { Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
 import { useAuth } from './hooks/useAuth'
 import Navbar from './components/Navbar'
-import Header from './components/Header'
-import AvatarGallery from './components/AvatarGallery'
-import ChatPage from './components/ChatPage'
-import ComparisonPage from './components/ComparisonPage'
-import MyPathsRoute from './components/MyPathsRoute'
-import PathMapPage from './components/PathMapPage'
-import SimulationsPage from './components/SimulationsPage'
-import SimulationRunner from './components/SimulationRunner'
-import ProfilePage from './components/ProfilePage'
 import RequireRole from './components/RequireRole'
 import TutorialTour from './components/TutorialTour'
 import LoadingState from './components/LoadingState'
-import { GalleryContainer } from './components/PageLayout'
 import {
   AdminPage,
   AuditLogsPage,
   AvatarAdminPage,
+  ChatPage,
+  ComparisonPage,
   DashboardPage,
+  HomePage,
+  MyPathsRoute,
   OrganizationsPage,
+  PathMapPage,
+  ProfilePage,
   PublicHome,
   PublicLayout,
   SimulationAdminPage,
+  SimulationRunner,
+  SimulationsPage,
   TrainingPage,
   UserReportPage,
 } from './components/lazyPages'
 import Spinner from './components/Spinner'
 import './index.css'
 
-/* Le pagine che arrivano solo a chi ci entra: le otto schermate di
- * amministrazione, e dal lato opposto il sito pubblico, che chi ha la
- * sessione aperta non vede più. Quali siano, e come la barra di navigazione
- * ne fa partire il file prima del click, sta in `lazyPages`.
+/* Nessuna pagina è dentro questo file: ognuna arriva a chi ci entra, e
+ * quali siano, come si scelgono per indirizzo e come la barra di navigazione
+ * ne fa partire il file prima del click sta in `lazyPages`.
  *
- * Il confine è quello dei permessi e non una misura di comodo: sotto stanno
- * le rotte con `access="admin"` e `access="super_admin"`, sopra quelle che
- * chiunque sia collegato può aprire. */
-
-/* La galleria: la testata che presenta il catalogo, e il catalogo stesso.
- * Niente stato da tenere qui in mezzo, i due pezzi leggono gli stessi dati
- * dalla stessa cache. */
-function HomePage() {
-  return (
-    <>
-      <Header />
-      <GalleryContainer>
-        <AvatarGallery />
-      </GalleryContainer>
-    </>
-  )
-}
+ * Qui resta l'impalcatura, cioè quello che vale da entrambe le parti della
+ * condizione qui sotto: la barra, la guida introduttiva, e le rotte con il
+ * ruolo che ciascuna richiede. */
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -78,9 +61,11 @@ function App() {
           l'ha già vista, e il super admin che non la riceve mai, non
           disegnano niente. */}
       {isAuthenticated && <TutorialTour />}
-      {/* Il tempo di scaricare una pagina di amministrazione: la stessa
-          attesa che le pagine mostrano mentre chiedono i propri dati, così
-          entrarci resta un gesto solo anche quando il file arriva ora. */}
+      {/* Il tempo di scaricare la pagina: la stessa attesa che le pagine
+          mostrano mentre chiedono i propri dati, così entrarci resta un
+          gesto solo anche quando il file arriva ora. Di norma non si vede,
+          perché il file è già partito al passaggio del puntatore sulla voce
+          o sulla tessera che porta lì (vedi `lazyPages`). */}
       <Suspense fallback={<LoadingState message="Caricamento della pagina..." />}>
         <Routes>
           {isAuthenticated ? (

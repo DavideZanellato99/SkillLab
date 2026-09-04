@@ -44,7 +44,9 @@ valgono su tutte le righe. Tutto in
 | `notification_reads`                                                                        | L'unica cosa che si salva delle notifiche: cosa è già stato letto                                                                                                                                                                                          |
 | `technical_simulations`, `simulation_chunks`, `simulation_questions`, `simulation_attempts` | Il simulatore tecnico, descritto in [simulatore.md](simulatore.md). Sulla prima stanno anche l'esito dell'ultimo controllo del serbatoio e l'impronta delle domande su cui è girato                                                                        |
 | `user_debriefings`                                                                          | I quadri d'insieme su una persona, una riga per ogni volta che ne è stato chiesto uno, ciascuna con la fotografia delle prove che il modello aveva letto e con come si è mossa rispetto alla precedente. Vedi [training-e-report.md](training-e-report.md) |
+| `path_debriefings`                                                                          | Il quadro d'insieme su un percorso, una riga per percorso e ogni generazione riscrive quella prima. Parla del gruppo e delle tappe e non nomina nessuno, quindi non contiene dati personali. Vedi [training-e-report.md](training-e-report.md)              |
 | `audit_logs`                                                                                | Il registro delle azioni                                                                                                                                                                                                                                   |
+| `schema_backfills`                                                                          | L'unica tabella che non contiene un dato del prodotto: quali riempimenti dello schema questo database ha già ricevuto, e quando. Vedi "Come lo schema si aggiorna", più sotto                                                                              |
 
 ## Due convenzioni che valgono ovunque
 
@@ -60,15 +62,16 @@ può indovinare e che non rivela quante righe esistono.
 
 ## La paternità delle righe
 
-Sette tabelle (`users`, `organizations`, `avatars`, `avatar_categories`,
-`technical_simulations`, `training_paths`, `user_debriefings`) portano sei
-colonne: quando è stata creata la riga, da chi, con quale email, e le tre
-gemelle della modifica.
+Otto tabelle (`users`, `organizations`, `avatars`, `avatar_categories`,
+`technical_simulations`, `training_paths`, `user_debriefings`,
+`path_debriefings`) portano sei colonne: quando è stata creata la riga, da
+chi, con quale email, e le tre gemelle della modifica.
 
-L'ultima è l'unica in cui la paternità e il soggetto sono **due persone
-diverse**: un debriefing parla di chi si allena e lo ha fatto scrivere chi
-insegna, quindi verso `users` partono tre colonne e la relazione deve
-dichiarare quale delle tre sia il soggetto.
+`user_debriefings` è l'unica in cui la paternità e il soggetto sono **due
+persone diverse**: un debriefing parla di chi si allena e lo ha fatto scrivere
+chi insegna, quindi verso `users` partono tre colonne e la relazione deve
+dichiarare quale delle tre sia il soggetto. Sul quadro di un percorso il
+problema non si pone, perché il soggetto è il percorso e non una persona.
 
 A riempirle **non è l'endpoint**, ma un listener sul flush della sessione
 ([backend/authorship.py](../backend/authorship.py)). Qualunque strada porti
@@ -127,6 +130,27 @@ Tre proprietà da rispettare scrivendoci dentro:
 
 Il corollario pratico: **aggiornare l'applicazione non richiede nessun passo di
 migrazione da ricordare**. Si ricostruisce e si riparte.
+
+**I riempimenti si fanno una volta sola, il resto a ogni avvio.** Le due
+metà costano cose diverse. Aggiungere una colonna o un indice che esistono
+già è una domanda al catalogo di Postgres e nessuna riga letta, quindi si
+rifà sempre: in cambio, un database a cui manca un indice torna a posto da
+solo riavviando, che è la proprietà su cui si regge il fatto che qui non ci
+sia uno strumento di migrazioni. Riempire le righe vecchie invece le legge, e
+su un'installazione avviata sono scansioni di tabelle intere (contare gli
+avatar senza organizzazione, ritrovare l'autore di ogni utente dentro il
+registro di audit) che tornano sempre a mani vuote, perché quelle righe
+l'applicazione non le scrive più. Quel conto si pagava a ogni avvio di ogni
+replica, cioè a ogni rilascio.
+
+A dire che sono già stati fatti è la tabella `schema_backfills`, una riga per
+versione dei riempimenti, con la data in cui è arrivata su questo database.
+La versione è **l'impronta del sorgente di
+[startup_migrations.py](../backend/startup_migrations.py)**, non un numero da
+alzare a mano: quali riempimenti esistono lo dice quel file e nient'altro,
+quindi aggiungerne uno cambia l'impronta e li rimette in moto tutti, senza
+che nessuno debba ricordarsi niente. Se l'impronta non si riesce a calcolare
+si rifà tutto, come si è sempre fatto.
 
 **Anche togliere una tabella passa di qui.** `user_selections` registrava quale
 avatar una persona aveva scelto: c'era la tabella, l'endpoint che la scriveva e

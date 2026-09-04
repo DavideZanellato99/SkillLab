@@ -37,6 +37,7 @@ function renderCard(over: Partial<TrainingPath> = {}, showOrganization = false) 
   const azioni = {
     onShowAssigned: vi.fn(),
     onAssign: vi.fn(),
+    onDebriefing: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
   }
@@ -136,6 +137,7 @@ describe('TrainingPathCard', () => {
         showOrganization
         onShowAssigned={vi.fn()}
         onAssign={vi.fn()}
+        onDebriefing={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
       />,

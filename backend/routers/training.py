@@ -26,6 +26,8 @@ derivation lives in ``training_progress``, since the notifications read the
 very same steps.
 """
 
+import asyncio
+from dataclasses import asdict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -34,6 +36,7 @@ from sqlalchemy.orm import Session, selectinload
 
 import audit
 import llm_limits
+import path_debriefing_source
 from auth_dependency import (
     get_current_admin,
     get_current_standard_user,
@@ -46,6 +49,7 @@ from models import (
     USER_STATUS_ACTIVE,
     Avatar,
     Organization,
+    PathDebriefing,
     Role,
     TechnicalSimulation,
     TrainingPath,
@@ -54,6 +58,7 @@ from models import (
     User,
 )
 from openai_service import EVALUATION_CRITERIA
+from path_debriefing import write_path_debriefing
 from path_draft import CatalogAvatar, CatalogSimulation, draft_path
 from routers.avatars import ensure_trainable
 from schemas import (
@@ -63,6 +68,7 @@ from schemas import (
     AssignableCriterion,
     AssignableSimulation,
     MessageResponse,
+    PathDebriefingResponse,
     StepCriterionTarget,
     TrainingPathAssignmentCreate,
     TrainingPathAssignmentResponse,
@@ -258,6 +264,12 @@ def _scoped_path_or_404(db: Session, admin: User, path_id: UUID) -> TrainingPath
     query = (
         db.query(TrainingPath)
         .options(
+            # Le stesse tre letture anticipate dell'elenco, e per la stessa
+            # ragione: la risposta nomina l'organizzazione e, per ogni tappa,
+            # l'avatar o il test che la chiude. Senza, sono due query per
+            # tappa più una, cioè un numero che cresce con la lunghezza del
+            # percorso.
+            selectinload(TrainingPath.organization),
             selectinload(TrainingPath.steps).selectinload(TrainingPathStep.avatar),
             selectinload(TrainingPath.steps).selectinload(TrainingPathStep.simulation),
         )
@@ -305,7 +317,39 @@ def _build_steps(
     Il controllo è per id e non per elenco: chi compone il percorso sceglie
     da ``/assignable-content``, che applica già queste regole, ma una
     richiesta può arrivare comunque con un id che quell'elenco non conteneva.
+
+    I bersagli si leggono in due query, una per gli avatar e una per i test,
+    invece che una per tappa: un percorso di dieci tappe erano dieci viaggi
+    al database dentro la stessa richiesta, tutti uguali tranne l'id. Quello
+    che manca semplicemente non è nella mappa, e il rifiuto lo dice con il
+    numero della tappa esattamente come prima.
     """
+    avatar_ids = {item.avatar_id for item in payload.steps if item.avatar_id is not None}
+    simulation_ids = {item.simulation_id for item in payload.steps if item.avatar_id is None}
+
+    avatars = (
+        {
+            avatar.id: avatar
+            for avatar in db.query(Avatar).filter(
+                Avatar.id.in_(avatar_ids),
+                Avatar.organization_id == organization_id,
+            )
+        }
+        if avatar_ids
+        else {}
+    )
+    simulations = (
+        {
+            simulation.id: simulation
+            for simulation in db.query(TechnicalSimulation).filter(
+                TechnicalSimulation.id.in_(simulation_ids),
+                TechnicalSimulation.organization_id == organization_id,
+            )
+        }
+        if simulation_ids
+        else {}
+    )
+
     steps: list[TrainingPathStep] = []
     for position, item in enumerate(payload.steps, start=1):
         step = TrainingPathStep(
@@ -314,14 +358,7 @@ def _build_steps(
             due_at=item.due_at,
         )
         if item.avatar_id is not None:
-            avatar = (
-                db.query(Avatar)
-                .filter(
-                    Avatar.id == item.avatar_id,
-                    Avatar.organization_id == organization_id,
-                )
-                .first()
-            )
+            avatar = avatars.get(item.avatar_id)
             if not avatar:
                 raise HTTPException(
                     status_code=404,
@@ -338,14 +375,7 @@ def _build_steps(
             # storia delle modifiche invece dello stato della tappa.
             step.criteria_targets = item.criteria_targets or None
         else:
-            simulation = (
-                db.query(TechnicalSimulation)
-                .filter(
-                    TechnicalSimulation.id == item.simulation_id,
-                    TechnicalSimulation.organization_id == organization_id,
-                )
-                .first()
-            )
+            simulation = simulations.get(item.simulation_id)
             if not simulation:
                 raise HTTPException(
                     status_code=404,
@@ -410,17 +440,72 @@ def create_path(
     )
     path.steps = _build_steps(db, organization.id, payload)
     db.add(path)
+    # L'id prima del commit, che è anche quando le righe nascono: dopo,
+    # chiederlo a un oggetto scaduto sarebbe una lettura in più.
+    db.flush()
+    path_id = path.id
     db.commit()
-    db.refresh(path)
+
+    # Riletto e non `refresh`: la risposta nomina l'avatar o il test di ogni
+    # tappa, e un oggetto rinfrescato se li ricarica uno per uno. Rileggerlo
+    # è la stessa lettura anticipata dell'elenco, e costa lo stesso su un
+    # percorso di due tappe come su uno di dodici.
+    path = _scoped_path_or_404(db, current_admin, path_id)
 
     audit.describe(
         http_request,
         target_id=str(path.id),
         percorso=path.title,
-        organizzazione=organization.name,
+        organizzazione=path.organization.name,
         tappe=len(path.steps),
     )
     return _path_response(path)
+
+
+def _draft_catalog(
+    db: Session, admin: User, organization_id: UUID | None
+) -> tuple[str, list[CatalogAvatar], list[CatalogSimulation]]:
+    """Blocking read of what a draft may pick from (run via asyncio.to_thread).
+
+    Il catalogo viene staccato dalla sessione **prima** del commit, e poi la
+    connessione torna al pool come per la valutazione e per il debriefing: la
+    rotta non scrive niente e per tutti i secondi dell'attesa il database non
+    serve. Al commit gli oggetti della sessione scadono, e una riga di avatar
+    a cui si chiedesse il nome dopo tornerebbe a interrogare il database
+    proprio mentre la connessione è stata restituita. Le due dataclass sono
+    fatte di soli valori, quindi sopravvivono.
+    """
+    organization = _target_organization(db, admin, organization_id)
+    avatars, simulations = _assignable_catalog(db, organization.id)
+    if not avatars and not simulations:
+        # 409 e non 400: la richiesta è scritta bene, è l'organizzazione a non
+        # avere ancora niente di cui un percorso possa essere fatto. Stessa
+        # forma della simulazione che non si pubblica a serbatoio vuoto.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Questa organizzazione non ha ancora avatar attivi né test pubblicati: "
+                "non c'è niente di cui comporre un percorso."
+            ),
+        )
+
+    catalog_avatars = [
+        CatalogAvatar(
+            id=a.id,
+            name=a.name,
+            category_name=a.category_name,
+            description=a.description,
+        )
+        for a in avatars
+    ]
+    catalog_simulations = [
+        CatalogSimulation(id=s.id, title=s.title, kind=s.kind, description=s.description)
+        for s in simulations
+    ]
+    nome_organizzazione = organization.name
+    db.commit()
+
+    return nome_organizzazione, catalog_avatars, catalog_simulations
 
 
 @router.post("/paths/draft", response_model=TrainingPathDraftResponse)
@@ -442,51 +527,22 @@ async def draft_training_path(
     ``assignable-content``, chiesto dalla stessa funzione: una bozza che
     proponesse prove che il form non offre sarebbe una proposta che chi la
     riceve non può nemmeno salvare.
+
+    La lettura del catalogo gira in un thread: sono chiamate bloccanti, e
+    l'event loop di questa replica lo condividono le telefonate in corso.
     """
     await llm_limits.consume(llm_limits.BOZZA_PERCORSO, current_admin.id)
 
-    organization = _target_organization(db, current_admin, payload.organization_id)
-    avatars, simulations = _assignable_catalog(db, organization.id)
-    if not avatars and not simulations:
-        # 409 e non 400: la richiesta è scritta bene, è l'organizzazione a non
-        # avere ancora niente di cui un percorso possa essere fatto. Stessa
-        # forma della simulazione che non si pubblica a serbatoio vuoto.
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Questa organizzazione non ha ancora avatar attivi né test pubblicati: "
-                "non c'è niente di cui comporre un percorso."
-            ),
-        )
+    organizzazione, catalog_avatars, catalog_simulations = await asyncio.to_thread(
+        _draft_catalog, db, current_admin, payload.organization_id
+    )
 
     audit.describe(
         http_request,
-        organizzazione=organization.name,
-        avatar=len(avatars),
-        test=len(simulations),
+        organizzazione=organizzazione,
+        avatar=len(catalog_avatars),
+        test=len(catalog_simulations),
     )
-
-    # Il catalogo viene staccato dalla sessione **prima** dell'attesa, e poi
-    # la connessione torna al pool come per la valutazione e per il
-    # debriefing: la rotta non scrive niente e per tutti quei secondi il
-    # database non serve. Al commit gli oggetti della sessione scadono, e una
-    # riga di avatar a cui si chiedesse il nome dopo tornerebbe a interrogare
-    # il database proprio mentre la connessione è stata restituita. Le due
-    # dataclass sono fatte di soli valori, quindi sopravvivono.
-    catalog_avatars = [
-        CatalogAvatar(
-            id=a.id,
-            name=a.name,
-            category_name=a.category_name,
-            description=a.description,
-        )
-        for a in avatars
-    ]
-    catalog_simulations = [
-        CatalogSimulation(id=s.id, title=s.title, kind=s.kind, description=s.description)
-        for s in simulations
-    ]
-    db.commit()
 
     try:
         draft = await draft_path(payload.goal, catalog_avatars, catalog_simulations)
@@ -537,7 +593,10 @@ def update_path(
     db.flush()
     path.steps = _build_steps(db, path.organization_id, payload)
     db.commit()
-    db.refresh(path)
+
+    # Riletto e non `refresh`, come alla creazione: il refresh lascerebbe da
+    # caricare una per una le tappe nuove e i loro bersagli.
+    path = _scoped_path_or_404(db, current_admin, path_id)
 
     audit.describe(http_request, percorso=path.title, tappe=len(path.steps))
     return _path_response(path)
@@ -560,6 +619,224 @@ def delete_path(
     db.delete(path)
     db.commit()
     return MessageResponse(message="Percorso eliminato.", success=True)
+
+
+# ── Il quadro d'insieme del percorso ──────────────────
+#
+# L'unica cosa dell'applicazione che guarda un gruppo invece di una persona.
+# Sta qui, accanto alle tappe di cui parla, e non fra i report: quelli sono
+# letture ricalcolate a ogni richiesta, questo è un testo che esiste solo
+# perché qualcuno ha deciso di farlo scrivere e che costa una chiamata a un
+# modello di ragionamento.
+
+
+def _path_debriefing_response(
+    db: Session, path: TrainingPath, debriefing: PathDebriefing
+) -> PathDebriefingResponse:
+    """Il quadro salvato, più la sola cosa che si ricava in lettura.
+
+    I numeri sono quelli che il modello aveva davanti, salvati accanto al suo
+    testo: ricalcolarli adesso farebbe comparire sopra un testo che parla di
+    sei persone ferme alla terza tappa una tabella che ne mostra due, senza
+    che nessuna delle due stia mentendo.
+
+    L'eccezione è ``stale_reason``, che è l'opposto: guarda com'è il percorso
+    adesso, ed esiste per dire che quei numeri sono di allora.
+    """
+    content = debriefing.content or {}
+    facts = content.get("facts") or {}
+    return PathDebriefingResponse(
+        path_id=debriefing.path_id,
+        summary=content.get("summary", ""),
+        blocker_position=facts.get("blocker_position"),
+        blocker=content.get("blocker"),
+        themes=content.get("themes") or [],
+        strength=content.get("strength"),
+        next_step=content.get("next_step", ""),
+        covered_people=debriefing.covered_people,
+        covered_conversations=debriefing.covered_conversations,
+        covered_attempts=debriefing.covered_attempts,
+        covered_until=debriefing.covered_until,
+        conversation_average=facts.get("conversation_average"),
+        attempt_average=facts.get("attempt_average"),
+        criteria_averages=facts.get("criteria_averages") or [],
+        started=facts.get("started", 0),
+        completed=facts.get("completed", 0),
+        overdue=facts.get("overdue", 0),
+        steps=facts.get("steps") or [],
+        stale_reason=path_debriefing_source.staleness(db, path, debriefing),
+        written_at=debriefing.updated_at,
+        requested_by=debriefing.updated_by_email,
+    )
+
+
+@router.get("/paths/{path_id}/debriefing", response_model=PathDebriefingResponse | None)
+def read_path_debriefing(
+    path_id: UUID,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Il quadro d'insieme di questo percorso, o niente se non è mai stato scritto.
+
+    Vuoto e non 404: il percorso esiste, semplicemente nessuno ha ancora
+    fatto scrivere il suo quadro, e questa è la schermata da cui lo si
+    chiede. Il 404 resta per il percorso che chi guarda non può vedere.
+    """
+    path = _scoped_path_or_404(db, current_admin, path_id)
+    debriefing = path_debriefing_source.latest(db, path.id)
+    return _path_debriefing_response(db, path, debriefing) if debriefing else None
+
+
+def _path_debriefing_material(
+    db: Session, admin: User, path_id: UUID
+) -> path_debriefing_source.PathDebriefingMaterial:
+    """Blocking read of the material to write about (run via asyncio.to_thread).
+
+    Ci stanno dentro anche i tre rifiuti, perché sono domande che si fanno al
+    database: quante persone hanno il percorso, quante prove hanno svolto
+    sulle sue tappe, e se dall'ultimo quadro è cambiato qualcosa. Finisce con
+    il commit che restituisce la connessione, prima dell'attesa lunga.
+    """
+    path = _scoped_path_or_404(db, admin, path_id)
+    precedente = path_debriefing_source.latest(db, path.id)
+    material = path_debriefing_source.collect(db, path)
+
+    if material.people < path_debriefing_source.MIN_PEOPLE:
+        # 409 e non 400: il percorso esiste e la richiesta è scritta bene, è
+        # lo stato delle cose a non permetterla. Stessa forma della
+        # simulazione che non si pubblica a serbatoio vuoto, e come lì il
+        # messaggio dice quante ne servono e quante ce ne sono.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Servono almeno {path_debriefing_source.MIN_PEOPLE} persone in percorso per "
+                f"un quadro d'insieme, e questo ne ha {material.people}. Con meno persone il "
+                "quadro del gruppo sarebbe la somma dei quadri individuali, che dicono di più."
+            ),
+        )
+
+    if material.evidence_count < path_debriefing_source.MIN_EVIDENCE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Servono almeno {path_debriefing_source.MIN_EVIDENCE} prove svolte sulle "
+                f"tappe di questo percorso, e ne sono state svolte {material.evidence_count}. "
+                "Con meno prove non si vede niente che si ripeta fra persone diverse."
+            ),
+        )
+
+    if precedente is not None and path_debriefing_source.staleness(db, path, precedente) is None:
+        # Stesso materiale e stesse tappe: quello che tornerebbe è il quadro
+        # di prima riscritto con altre parole, pagato una seconda volta.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Da quando il quadro è stato scritto nessuno ha svolto prove nuove e il "
+                "percorso non è cambiato. Un quadro nuovo leggerebbe lo stesso materiale."
+            ),
+        )
+
+    # La connessione torna al pool prima dell'attesa, come per il quadro di
+    # una persona: il modello legge i giudizi di tutte le prove del gruppo
+    # prima di scrivere, e per tutto quel tempo il database non serve.
+    # `material` è già fatto di soli valori staccati dalla sessione.
+    db.commit()
+
+    return material
+
+
+def _store_path_debriefing(
+    db: Session,
+    admin: User,
+    path_id: UUID,
+    content: dict,
+    material: path_debriefing_source.PathDebriefingMaterial,
+) -> PathDebriefingResponse:
+    """Blocking write of the path debriefing (run via asyncio.to_thread).
+
+    La riga è una sola per percorso e viene riscritta, non aggiunta: quello
+    che cambia sono il testo, le colonne di copertura e la firma di chi ha
+    chiesto questa versione, che la paternità timbra da sé.
+    """
+    # Ricaricati, non riusati: gli oggetti di prima sono staccati dalla
+    # sessione dopo il commit.
+    path = _scoped_path_or_404(db, admin, path_id)
+    debriefing = path_debriefing_source.latest(db, path.id)
+    if debriefing is None:
+        debriefing = PathDebriefing(path_id=path.id)
+        db.add(debriefing)
+    debriefing.content = content
+    debriefing.covered_until = material.covered_until
+    debriefing.covered_people = material.people
+    debriefing.covered_conversations = material.conversations
+    debriefing.covered_attempts = material.attempts
+    db.commit()
+    db.refresh(debriefing)
+
+    return _path_debriefing_response(db, path, debriefing)
+
+
+@router.post("/paths/{path_id}/debriefing", response_model=PathDebriefingResponse)
+async def generate_path_debriefing(
+    path_id: UUID,
+    http_request: Request,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Fa scrivere il quadro d'insieme di questo percorso, e lo salva.
+
+    Sostituisce quello di prima invece di aggiungersi: su un gruppo il
+    confronto con la versione precedente non si può fare, perché fra le due
+    qualcuno è stato aggiunto e qualcuno ritirato, e "come si è mosso da
+    allora" sarebbe una frase su due insiemi di persone diversi.
+
+    Il tetto viene prima di tutto il resto, perché è l'unico controllo che
+    parla del costo della richiesta invece che di cosa contiene.
+
+    Le due parti che toccano il database girano in un thread: sono chiamate
+    bloccanti, e sull'event loop che terrebbero ferma ci sono le telefonate
+    in corso su questa replica.
+    """
+    await llm_limits.consume(llm_limits.DEBRIEFING_PERCORSO, current_admin.id)
+
+    material = await asyncio.to_thread(_path_debriefing_material, db, current_admin, path_id)
+
+    audit.describe(
+        http_request,
+        percorso=material.title,
+        persone=material.people,
+        conversazioni=material.conversations,
+        test=material.attempts,
+    )
+
+    try:
+        content = await write_path_debriefing(material)
+    except RuntimeError as e:
+        # Il fornitore non ha risposto, o non ha risposto niente di
+        # utilizzabile: 502, come per il quadro di una persona.
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+
+    # I numeri li ha calcolati il backend e non il modello, e vengono salvati
+    # accanto al testo invece di essere ricalcolati in lettura: sono quello
+    # che il modello aveva davanti, e una tabella che cambia sotto un testo
+    # che non l'ha mai vista è il modo in cui i due si contraddicono.
+    content["facts"] = {
+        "blocker_position": material.blocker_position,
+        "conversation_average": material.conversation_average,
+        "attempt_average": material.attempt_average,
+        "criteria_averages": [
+            {"key": c.key, "label": c.label, "average": c.average}
+            for c in material.criteria_averages
+        ],
+        "started": material.started,
+        "completed": material.completed,
+        "overdue": material.overdue,
+        "steps": [asdict(step) for step in material.steps],
+    }
+
+    return await asyncio.to_thread(
+        _store_path_debriefing, db, current_admin, path_id, content, material
+    )
 
 
 # ── Di cosa può essere fatta una tappa ────────────────

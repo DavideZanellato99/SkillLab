@@ -1,9 +1,10 @@
 # Gli agenti
 
-Tre punti dell'applicazione in cui un modello di ragionamento **prepara del
-lavoro per una persona** invece di produrre qualcosa che va direttamente in
-mano a chi si allena. Questo documento dice cosa fanno, cosa hanno in comune,
-e quali regole vale la pena rispettare se un giorno se ne aggiunge un quarto.
+Quattro punti dell'applicazione in cui un modello di ragionamento **prepara
+del lavoro per una persona** invece di produrre qualcosa che va direttamente
+in mano a chi si allena. Questo documento dice cosa fanno, cosa hanno in
+comune, e quali regole vale la pena rispettare se un giorno se ne aggiunge un
+quinto.
 
 Il dettaglio di ciascuno sta nel documento della funzionalità a cui
 appartiene, e non viene ripetuto qui: da questa pagina si capisce **perché**
@@ -11,11 +12,11 @@ esistono e cosa li tiene insieme, di là come sono fatti.
 
 ## Cosa vuol dire "agente", qui
 
-Nessuno dei tre è un agente autonomo con strumenti e cicli. Sono **chiamate
-singole a un modello di ragionamento con un contesto assemblato bene**, e va
-detto perché è una scelta e non una mancanza.
+Nessuno dei quattro è un agente autonomo con strumenti e cicli. Sono
+**chiamate singole a un modello di ragionamento con un contesto assemblato
+bene**, e va detto perché è una scelta e non una mancanza.
 
-Il valore di tutti e tre sta nel raccogliere e nel restringere quello che il
+Il valore di tutti e quattro sta nel raccogliere e nel restringere quello che il
 modello legge, non nel lasciargli decidere cosa fare. Un ciclo autonomo, in
 un'applicazione senza coda e senza broker, sarebbe anche il primo pezzo a non
 reggere le repliche (vedi [architettura.md](architettura.md)).
@@ -25,13 +26,14 @@ Quello che li distingue dagli altri usi del modello è **a chi consegnano**:
 | | Chi legge il risultato | Cosa succede se il modello sbaglia |
 | --- | --- | --- |
 | Roleplay, valutazione, correzione delle risposte aperte | Chi si allena, subito | Un voto o una battuta storta, che chi insegna può correggere dopo |
-| **I tre agenti** | Chi insegna, prima di decidere qualcosa | Niente, finché una persona non lo accetta |
+| **I quattro agenti** | Chi insegna, prima di decidere qualcosa | Niente, finché una persona non lo accetta |
 
-## I tre, in breve
+## I quattro, in breve
 
 | | Cosa fa | Chi lo chiede | Dove è descritto |
 | --- | --- | --- | --- |
 | **Debriefing** | Legge le ultime prove di una persona e il quadro che gli era stato scritto prima, e dice cosa si ripete, come si è mossa da allora e cosa fare adesso | Chi amministra, dal report attività | [training-e-report.md](training-e-report.md#il-quadro-dinsieme-su-una-persona) |
+| **Quadro del percorso** | Legge le prove che un gruppo ha svolto sulle tappe di un percorso e dice dove il percorso si inceppa, cosa si ripete fra persone diverse e cosa fare in aula | Chi amministra, dalla scheda del percorso | [training-e-report.md](training-e-report.md#il-quadro-dinsieme-su-un-percorso) |
 | **Bozza di percorso** | Da un obiettivo raccontato a parole compone una fila di tappe scelte dal catalogo del tenant | Chi amministra, componendo un percorso nuovo | [training-e-report.md](training-e-report.md#la-bozza-scritta-dal-modello) |
 | **Controllo del serbatoio** | Rilegge le cinquanta domande di un test e dice da quale conviene cominciare | Chi amministra, prima di pubblicare | [simulatore.md](simulatore.md#il-controllo-del-serbatoio) |
 
@@ -56,6 +58,39 @@ aggiunge "come si è mossa questa persona da allora".
 | Produce | Sintesi, fino a 4 temi ricorrenti con le prove su cui poggiano, il miglioramento, il passo successivo, e dal secondo in poi la direzione con il racconto di cosa è cambiato |
 | Salva | Sì, una riga per generazione (`user_debriefings`): nessuna sostituisce quella prima, e la più recente invecchia |
 | Tetto | 10 all'ora per persona |
+
+### Il quadro del percorso risponde a "dove si inceppa"
+
+Il debriefing guarda una persona per volta, e su una classe di dodici sono
+dodici letture che nessuno mette in fila. Che sei di quelle dodici si siano
+fermate sulla stessa tappa, e per la stessa ragione, non compare in nessuno
+dei dodici quadri individuali: lì dentro è un episodio, e diventa uno schema
+solo guardando le persone insieme.
+
+È anche l'unico dei quattro che **non nomina nessuno**, e non è una cautela
+generica. Chi è fermo dove sta già nella tabella delle assegnazioni, derivata
+dalle prove e senza costare niente: se questo testo ripetesse quei nomi
+sarebbe una seconda versione di quella tabella, scritta da una macchina e più
+difficile da verificare. Al modello gli allievi arrivano siglati `ALLIEVO 1`,
+`ALLIEVO 2`, e servono solo a riconoscere due prove della stessa persona; la
+normalizzazione ricontrolla che nessuna sigla esca (vedi
+[path_debriefing.py](../backend/path_debriefing.py)). Da qui viene anche il
+fatto che la riga salvata non è un dato personale: non compare
+nell'esportazione dei propri dati e non se ne va con un account cancellato.
+
+| | |
+| --- | --- |
+| Rotta | `POST /api/training/paths/{path_id}/debriefing` |
+| File | [path_debriefing_source.py](../backend/path_debriefing_source.py), [path_debriefing.py](../backend/path_debriefing.py), le rotte stanno in [routers/training.py](../backend/routers/training.py) |
+| Legge | Le prove che il gruppo ha svolto sulle tappe del percorso, e solo quelle che il percorso conta, cioè svolte dopo lo sblocco della loro tappa. Di ognuna entrano il giudizio, i sei criteri e le note del docente, mai la trascrizione |
+| Produce | Sintesi, perché il gruppo si ferma sulla tappa che il conto indica, fino a 4 temi ricorrenti fra persone diverse, cosa il gruppo fa bene, e cosa fare adesso in aula |
+| Salva | Sì, una riga per percorso (`path_debriefings`), e ogni giro sostituisce quella prima |
+| Tetto | 10 all'ora per persona |
+
+**Qual è la tappa che ferma il gruppo lo dice il conto, non il modello**: è la
+tappa su cui più persone hanno adesso la propria tappa da fare, cioè un
+massimo di una colonna di numeri. Al modello si chiede il perché, che è una
+lettura e nella tabella non c'è.
 
 ### La bozza di percorso risponde a "da dove comincio"
 
@@ -92,14 +127,14 @@ codice.
 semantici e le due regole sulle alternative sono conti, non giudizi, e stanno
 in un file separato da quello che chiama il modello.
 
-## Le sette regole che valgono per tutti e tre
+## Le otto regole che valgono per tutti e quattro
 
 Non sono principi astratti: sono le decisioni che hanno preso forma
-scrivendoli, e che chi ne aggiunge un quarto farebbe bene a ripetere.
+scrivendoli, e che chi ne aggiunge un quinto farebbe bene a ripetere.
 
 **1. Il modello propone, una persona rilegge.** È lo stesso patto della bozza
 di scheda persona e del serbatoio di domande, e vale anche dove il risultato
-sembra innocuo: nessuno dei tre produce niente che arrivi a chi si allena
+sembra innocuo: nessuno dei quattro produce niente che arrivi a chi si allena
 senza che qualcuno ci abbia messo gli occhi.
 
 **2. I numeri non li calcola il modello.** Medie, conteggi e voti si contano
@@ -145,9 +180,17 @@ prima**, dentro dataclass fatte di soli valori (`CatalogAvatar`,
 `ReviewQuestion`, `DebriefingMaterial`), perché una riga a cui si chiedesse il
 nome dopo tornerebbe a interrogare un database che nessuno le sta tenendo.
 
+**8. Chi non serve nominare non si nomina.** Il quadro del percorso è quello
+che l'ha reso una regola: parla di un gruppo, e i nomi delle persone non
+aggiungono niente a quello che deve dire, perché chi è fermo dove si legge già
+altrove. Quindi al modello arrivano siglati, e all'uscita si ricontrolla che
+le sigle non compaiano nel testo. Il guadagno non è solo di riservatezza: un
+testo che nomina la metà del gruppo è un testo che ripete una tabella, cioè un
+testo che non serve.
+
 ## Salvato o no, e come si ammette vecchi
 
-Due dei tre salvano, e nessuno dei due si aggiorna da solo. Vale la pena
+Tre dei quattro salvano, e nessuno dei tre si aggiorna da solo. Vale la pena
 capire perché, perché il resto dell'applicazione fa il contrario: il progresso
 di un percorso e le notifiche si derivano in lettura per non tenere copie che
 invecchiano.
@@ -162,19 +205,31 @@ stessa idea di `ai_score_at_review` sulle revisioni di una conversazione:
 | Agente | Cosa conserva | Quando si dichiara vecchio |
 | --- | --- | --- |
 | Debriefing | La data della prova più recente letta | La persona ha svolto altre prove |
+| Quadro del percorso | La data della prova più recente letta, e quando è stato scritto | Il gruppo ha svolto altre prove, **oppure** le tappe sono state riscritte dopo |
 | Controllo del serbatoio | Un'impronta di testo, chiavi e citazioni | Le domande sono state riscritte |
 | Bozza di percorso | Niente, non salva | Non si pone: o la si accetta subito, o non esiste |
 
-Nessuno dei due si rigenera all'arrivo di una prova nuova o al salvataggio di
+Nessuno dei tre si rigenera all'arrivo di una prova nuova o al salvataggio di
 una domanda: sarebbe una chiamata a pagamento fatta da nessuno, e ne
 partirebbe una a ogni virgola corretta.
 
-I due salvano però in modi diversi, e il debriefing è l'unico che **si
-accumula**: il controllo del serbatoio ha un esito per simulazione e ogni giro
-sostituisce quello prima, il debriefing ha una riga per volta che è stato
-chiesto. La ragione sta nella domanda a cui risponde: dove una persona è
-arrivata si sa solo rispetto a dove era, quindi la versione di prima non è un
-archivio, è metà del materiale della prossima.
+Il quadro del percorso è l'unico che invecchia in **due modi**, e il secondo è
+il più insidioso: una tappa tolta, o rimessa in un altro punto della fila,
+cambia proprio la cosa di cui quel testo parla, mentre le prove svolte nel
+frattempo lo lasciano vero e solo incompleto. Le due cose si dicono
+diversamente a schermo, quindi il server non risponde un sì o un no ma quale
+dei due è.
+
+I tre salvano però in modi diversi, e il debriefing è l'unico che **si
+accumula**: il controllo del serbatoio ha un esito per simulazione, il quadro
+del percorso una riga per percorso, e in tutti e due i casi ogni giro
+sostituisce quello prima. Il debriefing invece ha una riga per volta che è
+stato chiesto, e la ragione sta nella domanda a cui risponde: dove una persona
+è arrivata si sa solo rispetto a dove era, quindi la versione di prima non è
+un archivio, è metà del materiale della prossima. Su un gruppo quel confronto
+non si può fare, e non per pigrizia: fra due generazioni qualcuno è stato
+aggiunto e qualcuno ritirato, e "come si è mosso da allora" sarebbe una frase
+su due insiemi di persone diversi.
 
 **Non chiesto e passato senza rilievi sono due stati diversi**, e le due
 schermate li dicono diversamente. Il primo è un `null`, il secondo è un esito
@@ -182,28 +237,31 @@ con la lista vuota, ed è una notizia.
 
 ## Cosa costano, e cosa li trattiene
 
-Tutti e tre passano da `eval_json_completion`
+Tutti e quattro passano da `eval_json_completion`
 ([openai_service.py](../backend/openai_service.py)), quindi si portano dietro
-i modelli di riserva, i due minuti di timeout e il JSON forzato, e tutti e tre
-hanno un tetto per persona in
+i modelli di riserva, i due minuti di timeout e il JSON forzato, e tutti e
+quattro hanno un tetto per persona in
 [llm_limits.py](../backend/llm_limits.py):
 
 | Limitatore | Tetto | Perché quello |
 | --- | --- | --- |
 | `DEBRIEFING` | 10 all'ora | È il tetto della valutazione, e per la stessa ragione: chiamata cara, che su una persona si può chiedere a ogni prova nuova |
+| `DEBRIEFING_PERCORSO` | 10 all'ora | Lo stesso gesto sul gruppo invece che sulla persona, e ogni giro sostituisce quello prima: dieci all'ora sono dieci classi diverse di cui preparare la sessione |
 | `BOZZA_PERCORSO` | 30 all'ora | È il tetto della bozza di scheda persona: non salva niente, e si riscrive l'obiettivo finché la proposta non convince |
 | `REVISIONE_SERBATOIO` | 10 all'ora | È il tetto della generazione: stesso gesto ripetuto sulla stessa simulazione, e ogni giro sostituisce l'esito |
 
-Le tre rotte finiscono nel **registro delle azioni** (`user.debriefing`,
-`training.path_draft`, `simulation.review`), anche quelle che non scrivono
-niente: sono chiamate a un fornitore esterno che costano, e su chi le ha
-chieste e quando il registro esiste apposta.
+Le quattro rotte finiscono nel **registro delle azioni** (`user.debriefing`,
+`training.path_debriefing`, `training.path_draft`, `simulation.review`), anche
+quelle che non scrivono niente: sono chiamate a un fornitore esterno che
+costano, e su chi le ha chieste e quando il registro esiste apposta.
 
 Verso OpenAI valgono le regole di [gdpr.md](gdpr.md), sezione 6. Vale la pena
-ricordare due cose: nel debriefing viaggiano trascrizioni e giudizi **senza
-l'identità** della persona, come nella valutazione, e nella bozza di percorso
-del catalogo esce solo quello che uno studente vede già in galleria, perché
-la scheda persona contiene la soluzione dell'esercizio.
+ricordare tre cose: nel debriefing viaggiano trascrizioni e giudizi **senza
+l'identità** della persona, come nella valutazione; nel quadro del percorso
+non viaggiano nemmeno le trascrizioni, ma i giudizi già scritti di più
+persone, tutte siglate; e nella bozza di percorso del catalogo esce solo
+quello che uno studente vede già in galleria, perché la scheda persona
+contiene la soluzione dell'esercizio.
 
 ## Cosa non è stato fatto, e perché
 
@@ -219,7 +277,10 @@ toglie all'esercizio l'unica cosa che misura.
 debriefing, ma va contro due scelte prese apposta: le notifiche esistono
 derivate per non avere copie che invecchiano, e un digest è testo generato che
 va salvato per forza. Spenderebbe token in automatico per qualcosa che nessuno
-ha chiesto, dentro un'applicazione che dopo il deploy non si tocca più.
+ha chiesto, dentro un'applicazione che dopo il deploy non si tocca più. Il
+quadro del percorso non è quel digest, ed è la stessa differenza per cui il
+debriefing non lo era: **lo chiede una persona quando le serve**, non parte da
+solo e non ha una cadenza.
 
 **Il tutor conversazionale sul proprio referto.** Fattibile, ma lo studente
 che chiacchiera col modello attorno alla propria valutazione sta a un passo
@@ -231,9 +292,9 @@ favore di un controllo che segnala: due domande simili sono un difetto
 piccolo, la somiglianza fra due testi è una soglia e non una verità, e un
 controllo che sbaglia e blocca è peggio di uno che sbaglia e avvisa.
 
-## Se se ne aggiunge un quarto
+## Se se ne aggiunge un quinto
 
-La lista di controllo, ricavata dai tre:
+La lista di controllo, ricavata dai quattro:
 
 1. **Chi lo legge, e cosa può fare quel testo.** Se il destinatario è chi si
    allena, la barra è quella della valutazione e non questa.
@@ -241,21 +302,23 @@ La lista di controllo, ricavata dai tre:
    qualcos'altro, o destinata a diventarlo.
 3. **I numeri calcolati fuori**, e nel prompt l'istruzione di non rifarli.
 4. **Il testo non fidato recintato**, se ne entra.
-5. **Un tetto in `llm_limits`**, scelto guardando quale dei tre esistenti
+5. **Chi si può non nominare, non nominato**, e ricontrollato all'uscita.
+6. **Un tetto in `llm_limits`**, scelto guardando quale dei quattro esistenti
    somiglia di più a quello che si sta aggiungendo.
-6. **La rotta nel registro delle azioni.**
-7. **Se salva: cosa aveva davanti**, e come lo dice quando non vale più.
-8. **La connessione restituita prima dell'attesa**, e i dati staccati dalla
+7. **La rotta nel registro delle azioni.**
+8. **Se salva: cosa aveva davanti**, e come lo dice quando non vale più.
+9. **La connessione restituita prima dell'attesa**, e i dati staccati dalla
    sessione prima del commit.
-9. **Cancellazione, conservazione ed esportazione**, se quello che salva
-   riguarda una persona (vedi [gdpr.md](gdpr.md) e
-   [sicurezza-e-privacy.md](sicurezza-e-privacy.md)).
-10. **Il documento della funzionalità aggiornato**, e una riga in questa
+10. **Cancellazione, conservazione ed esportazione**, se quello che salva
+    riguarda una persona (vedi [gdpr.md](gdpr.md) e
+    [sicurezza-e-privacy.md](sicurezza-e-privacy.md)). Se non la riguarda, va
+    detto perché, che è la stessa cosa detta al contrario.
+11. **Il documento della funzionalità aggiornato**, e una riga in questa
     tabella.
 
 ## Dove leggere il seguito
 
-- Il debriefing e la bozza di percorso, per intero:
+- Il debriefing, il quadro del percorso e la bozza di percorso, per intero:
   [training-e-report.md](training-e-report.md).
 - Il controllo del serbatoio, dentro il ciclo di vita di una simulazione:
   [simulatore.md](simulatore.md).

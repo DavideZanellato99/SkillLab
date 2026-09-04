@@ -17,6 +17,7 @@ import type { Simulation } from '../services/simulations'
 import { formatDate } from './dateFormat'
 import { staggerDelay } from './galleryLayout'
 import { ChecklistIcon, PlayIcon } from './icons'
+import { prefetchOnHover } from './lazyPages'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 
@@ -46,6 +47,10 @@ export default function SimulationCard({
       className="group relative flex animate-slide-in-bottom flex-col overflow-hidden rounded-3xl border border-white/6 bg-gray-900/60 p-6 no-underline backdrop-blur-xl transition hover:-translate-y-1.5 hover:scale-[1.02] hover:border-white/12 hover:bg-slate-800/70 hover:shadow-[0_8px_32px_rgba(0,0,0,0.5)] active:scale-[0.99]"
       style={{ animationDelay: staggerDelay(index) }}
       id={`simulation-card-${simulation.id}`}
+      /* Lo svolgimento del test arriva su richiesta, e questa tessera è la
+         porta: il file parte al passaggio del puntatore, mentre si legge di
+         che test si tratta (vedi `lazyPages`). */
+      {...prefetchOnHover(`/app/simulatore/${simulation.id}`)}
     >
       {/* Il tipo si legge prima di entrare, e sta in cima come la categoria
           sulla tessera dell'avatar: scegliere fra delle alternative in trenta

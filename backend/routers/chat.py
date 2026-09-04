@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -428,37 +429,31 @@ def _persist_exchange(
     )
 
 
-@router.post("/message")
-async def send_chat_message(
-    payload: ChatMessageRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Send one operator message in a text chat and stream the avatar's reply.
+@dataclass(frozen=True)
+class _TurnContext:
+    """Il punto di partenza di una battuta, in soli valori.
 
-    The response is Server-Sent Events, so the first words reach the
-    operator at the model's first token instead of at the end:
-
-    - "delta"  {"text": ...} — one fragment as OpenAI produces it
-    - "done"   the persisted exchange (ChatMessageExchange), stream over
-    - "error"  {"detail": ...} — nothing was persisted, simply resend
-
-    Validation problems (unknown avatar, closed conversation...) are raised
-    before the stream opens and still travel as ordinary HTTP errors.
-    Without a conversation_id a new text conversation is opened, so the
-    operator writes first just as they speak first on a call. Nothing is
-    persisted until the reply has fully streamed: a failed generation
-    leaves no half exchange in the transcript.
+    Niente oggetti della sessione: il generatore che li usa gira dopo che
+    l'handler è finito e dopo che la connessione è tornata al pool, dove una
+    riga a cui si chiedesse un campo tornerebbe a interrogare il database.
     """
-    # Prima di ogni altra cosa, perché è l'unico controllo che parla del
-    # costo della richiesta e non di cosa contiene.
-    await llm_limits.consume(llm_limits.CHAT, current_user.id)
 
-    avatar = (
-        _visible_avatars(db.query(Avatar), current_user)
-        .filter(Avatar.id == payload.avatar_id)
-        .first()
-    )
+    avatar_id: UUID
+    avatar_category: str
+    avatar_profile: dict
+    conversation_id: UUID | None
+    history: list[dict]
+
+
+def _turn_context(db: Session, payload: ChatMessageRequest, user: User) -> _TurnContext:
+    """Blocking read of one turn's starting point (run via asyncio.to_thread).
+
+    Sono tre letture (l'avatar, la conversazione, la trascrizione fin qui) e
+    i controlli che decidono se questa battuta si può scrivere. Finisce con
+    il commit che restituisce la connessione, perché da lì in avanti questa
+    richiesta aspetta solo il modello.
+    """
+    avatar = _visible_avatars(db.query(Avatar), user).filter(Avatar.id == payload.avatar_id).first()
     if not avatar:
         raise HTTPException(status_code=404, detail="Avatar non trovato.")
 
@@ -470,7 +465,7 @@ async def send_chat_message(
             .filter(
                 ChatConversation.id == payload.conversation_id,
                 ChatConversation.avatar_id == payload.avatar_id,
-                ChatConversation.user_id == current_user.id,
+                ChatConversation.user_id == user.id,
             )
             .first()
         )
@@ -503,18 +498,71 @@ async def send_chat_message(
 
     history.append({"role": "user", "content": payload.content})
 
-    # Captured as plain values: the generator runs after this handler
-    # returns, when lazy loads on the ORM objects are no longer welcome.
-    avatar_profile = avatar.profile
-    avatar_id = avatar.id
-    avatar_category = avatar.category_name
-    conversation_id = conversation.id if conversation else None
+    context = _TurnContext(
+        avatar_id=avatar.id,
+        avatar_category=avatar.category_name,
+        avatar_profile=avatar.profile,
+        conversation_id=conversation.id if conversation else None,
+        history=history,
+    )
+
+    # La connessione torna al pool prima dell'attesa lunga. Il generatore
+    # gira dopo che questo handler è finito e dura quanto la risposta del
+    # modello, e fino a lì la sessione terrebbe ferma una connessione senza
+    # usarla. _persist_exchange lavora solo con id e rifà le sue query,
+    # quindi alla fine dello stream la sessione ne riprende una e scrive.
+    #
+    # `commit` e non `close`: chiude la transazione senza annullarla, che è
+    # quello che serve quando la sessione non è solo nostra (vedi il commento
+    # esteso nella valutazione, più sotto).
+    db.commit()
+
+    return context
+
+
+@router.post("/message")
+async def send_chat_message(
+    payload: ChatMessageRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Send one operator message in a text chat and stream the avatar's reply.
+
+    The response is Server-Sent Events, so the first words reach the
+    operator at the model's first token instead of at the end:
+
+    - "delta"  {"text": ...} — one fragment as OpenAI produces it
+    - "done"   the persisted exchange (ChatMessageExchange), stream over
+    - "error"  {"detail": ...} — nothing was persisted, simply resend
+
+    Validation problems (unknown avatar, closed conversation...) are raised
+    before the stream opens and still travel as ordinary HTTP errors.
+    Without a conversation_id a new text conversation is opened, so the
+    operator writes first just as they speak first on a call. Nothing is
+    persisted until the reply has fully streamed: a failed generation
+    leaves no half exchange in the transcript.
+
+    Le due parti che toccano il database, la lettura di qui e la scrittura
+    di fine stream, girano tutte e due in un thread: sono chiamate
+    bloccanti, e su questo event loop ci sono le telefonate in corso, che si
+    fermerebbero per il tempo di ogni interrogazione fatta da qui.
+    """
+    # Prima di ogni altra cosa, perché è l'unico controllo che parla del
+    # costo della richiesta e non di cosa contiene.
+    await llm_limits.consume(llm_limits.CHAT, current_user.id)
+
+    # Letto prima, non dopo: la lettura qui sotto si chiude con un commit, e
+    # da lì in poi chiedere un campo a `current_user` sarebbe una query fatta
+    # dall'event loop, cioè la cosa che tutto questo giro serve a evitare.
     user_id = current_user.id
+    turn = await asyncio.to_thread(_turn_context, db, payload, current_user)
 
     async def event_stream():
         parts: list[str] = []
         try:
-            async for delta in stream_avatar_response(history, avatar_profile, CHANNEL_TEXT):
+            async for delta in stream_avatar_response(
+                turn.history, turn.avatar_profile, CHANNEL_TEXT
+            ):
                 parts.append(delta)
                 yield _sse_event("delta", json.dumps({"text": delta}))
             reply = "".join(parts).strip()
@@ -525,9 +573,9 @@ async def send_chat_message(
                 _persist_exchange,
                 db,
                 user_id,
-                avatar_id,
-                avatar_category,
-                conversation_id,
+                turn.avatar_id,
+                turn.avatar_category,
+                turn.conversation_id,
                 payload.content,
                 reply,
             )
@@ -536,18 +584,6 @@ async def send_chat_message(
             logger.exception("Streaming chat fallito")
             detail = str(e) if isinstance(e, RuntimeError) else "Errore nella risposta dell'avatar."
             yield _sse_event("error", json.dumps({"detail": detail}))
-
-    # Come per la valutazione qui sotto: la connessione torna al pool prima
-    # dell'attesa lunga. Il generatore gira dopo che questo handler è finito
-    # e dura quanto la risposta del modello, e fino a lì la sessione terrebbe
-    # ferma una connessione senza usarla. _persist_exchange lavora solo con
-    # id e rifà le sue query, quindi alla fine dello stream la sessione ne
-    # riprende una e scrive.
-    #
-    # `commit` e non `close`: chiude la transazione senza annullarla, che è
-    # quello che serve quando la sessione non è solo nostra (vedi il commento
-    # esteso nella valutazione, più sotto).
-    db.commit()
 
     return StreamingResponse(
         event_stream(),
@@ -588,25 +624,23 @@ def end_chat_conversation(
     return _conversation_summary(db, conversation)
 
 
-@router.post(
-    "/conversation/{conversation_id}/evaluate",
-    response_model=ConversationEvaluationResponse,
-)
-async def create_conversation_evaluation(
-    conversation_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Judge the whole conversation with the AI trainer (OpenAI reasoning
-    model, see openai_service.evaluate_conversation) and store the result.
-    Re-running the judgement replaces the previous evaluation.
-    """
-    # La chiamata più cara dell'applicazione, e l'unica che si può rifare
-    # sulla stessa conversazione quante volte si vuole.
-    await llm_limits.consume(llm_limits.VALUTAZIONE, current_user.id)
+@dataclass(frozen=True)
+class _EvaluationInput:
+    """Quello che il giudice legge, staccato dalla sessione."""
 
-    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
+    history: list[dict]
+    avatar_profile: dict
+    channel: str
+
+
+def _evaluation_input(db: Session, conversation_id: UUID, user: User) -> _EvaluationInput:
+    """Blocking read of the material to judge (run via asyncio.to_thread).
+
+    Finisce con il commit che restituisce la connessione: da lì in avanti
+    questa richiesta aspetta un modello di ragionamento, e sono decine di
+    secondi in cui il database non serve.
+    """
+    conversation = _owned_conversation_or_404(db, conversation_id, user)
 
     messages = (
         db.query(ChatMessage)
@@ -621,12 +655,14 @@ async def create_conversation_evaluation(
         )
 
     avatar = db.query(Avatar).filter(Avatar.id == conversation.avatar_id).first()
-    # The ids anchor the judge's citations back to the stored messages
-    history = [{"id": str(m.id), "role": m.role, "content": m.content} for m in messages]
-    # Same criteria either way: the channel only tells the trainer whether
-    # it is reading a call or a chat.
-    channel = CHANNEL_TEXT if conversation.mode == CONVERSATION_MODE_TEXT else CHANNEL_VOICE
-    avatar_profile = avatar.profile if avatar else {}
+    material = _EvaluationInput(
+        # The ids anchor the judge's citations back to the stored messages
+        history=[{"id": str(m.id), "role": m.role, "content": m.content} for m in messages],
+        avatar_profile=avatar.profile if avatar else {},
+        # Same criteria either way: the channel only tells the trainer whether
+        # it is reading a call or a chat.
+        channel=CHANNEL_TEXT if conversation.mode == CONVERSATION_MODE_TEXT else CHANNEL_VOICE,
+    )
 
     # Tutto quello che serve al giudizio è già in memoria, quindi la
     # connessione al database torna al pool prima dell'attesa.
@@ -650,18 +686,24 @@ async def create_conversation_evaluation(
     #
     # La sessione resta valida: alla prima query dopo l'attesa ne prende una
     # nuova. Gli oggetti già caricati però scadono, ed è il motivo per cui
-    # sotto la conversazione viene ricaricata invece di riusare quella di
-    # prima.
+    # la conversazione viene ricaricata invece di riusare quella di prima.
     db.commit()
 
-    try:
-        result = await evaluate_conversation(history, avatar_profile, channel)
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    return material
 
+
+def _store_evaluation(
+    db: Session, conversation_id: UUID, user: User, result: dict
+) -> ConversationEvaluationResponse:
+    """Blocking write of a fresh judgement (run via asyncio.to_thread).
+
+    Rigiudicare sostituisce, non aggiunge: di una conversazione vale il
+    giudizio di adesso, e lo storico dei ripensamenti del modello non lo
+    legge nessuno.
+    """
     # Ricaricata, non riusata: l'oggetto di prima è staccato dalla sessione.
     # Il controllo di proprietà si rifà da sé, il che non guasta.
-    conversation = _owned_conversation_or_404(db, conversation_id, current_user)
+    conversation = _owned_conversation_or_404(db, conversation_id, user)
 
     evaluation = (
         db.query(ConversationEvaluation)
@@ -682,6 +724,40 @@ async def create_conversation_evaluation(
     db.refresh(evaluation)
 
     return _evaluation_response(db, conversation, evaluation)
+
+
+@router.post(
+    "/conversation/{conversation_id}/evaluate",
+    response_model=ConversationEvaluationResponse,
+)
+async def create_conversation_evaluation(
+    conversation_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Judge the whole conversation with the AI trainer (OpenAI reasoning
+    model, see openai_service.evaluate_conversation) and store the result.
+    Re-running the judgement replaces the previous evaluation.
+
+    Le due parti che toccano il database girano in un thread, come nella
+    chat qui sopra: sono chiamate bloccanti, e l'event loop di questa
+    replica lo condividono le telefonate in corso.
+    """
+    # La chiamata più cara dell'applicazione, e l'unica che si può rifare
+    # sulla stessa conversazione quante volte si vuole.
+    await llm_limits.consume(llm_limits.VALUTAZIONE, current_user.id)
+
+    material = await asyncio.to_thread(_evaluation_input, db, conversation_id, current_user)
+
+    try:
+        result = await evaluate_conversation(
+            material.history, material.avatar_profile, material.channel
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return await asyncio.to_thread(_store_evaluation, db, conversation_id, current_user, result)
 
 
 @router.get(

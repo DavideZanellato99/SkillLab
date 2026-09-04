@@ -4,7 +4,7 @@ import Badge from './Badge'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import { statusBadgeTone, statusLabel } from './simulationFormat'
-import { QUESTION_COUNT, requiredPool } from '../services/simulations'
+import { requiredPool } from '../services/simulations'
 import type { AdminSimulation } from '../services/simulations'
 
 /* Scheda di sola lettura di una simulazione, aperta dal clic sulla riga della
@@ -54,24 +54,28 @@ export default function SimulationDetailModal({
       {simulation.source !== 'manual' && (
         <DetailField label="Documento">{simulation.document_name}</DetailField>
       )}
+      {/* La descrizione è l'unico campo lungo della scheda: allineata a destra
+          come gli altri si leggerebbe con il bordo sinistro frastagliato, e
+          giustificata torna un blocco di testo. Quando non c'è resta la riga
+          allineata come le altre, perché sono due parole. */}
       <DetailField label="Descrizione">
-        {simulation.description || <span className="text-slate-500">Nessuna descrizione</span>}
+        {simulation.description ? (
+          <div className="text-justify">{simulation.description}</div>
+        ) : (
+          <span className="text-slate-500">Nessuna descrizione</span>
+        )}
       </DetailField>
       {/* Quante ne mancano al serbatoio è la sola cosa che tiene una
           simulazione in bozza, quindi finché ne mancano si legge quante ne
-          servono. Quando ci sono si legge l'altro numero, quante ne vedrà chi
-          svolge il test, senza il quale "50 domande" farebbe pensare a un
-          test lunghissimo. La soglia dipende da chi le ha scritte: cinquanta
-          se le genera il modello, dieci se le scrive una persona. */}
+          servono e quando ci sono non si legge niente: il serbatoio completo
+          è la normalità e non una notizia. La soglia dipende da chi le ha
+          scritte: cinquanta se le genera il modello, dieci se le scrive una
+          persona. */}
       <DetailField label="Domande">
         <div>{simulation.question_count}</div>
-        {simulation.question_count < required ? (
+        {simulation.question_count < required && (
           <div className="text-xs text-slate-500">
             Ne servono {required} per pubblicare, non è pubblicabile finché non ci sono
-          </div>
-        ) : (
-          <div className="text-xs text-slate-500">
-            Ogni tentativo ne estrae {QUESTION_COUNT} a caso
           </div>
         )}
       </DetailField>

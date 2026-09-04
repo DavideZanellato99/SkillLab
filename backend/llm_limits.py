@@ -62,6 +62,14 @@ CORREZIONE = SlidingWindowLimiter(scope="llm-correzione", max_events=20, window_
 # Dieci in un'ora sono dieci persone diverse di cui preparare il colloquio,
 # che è già più di quante se ne facciano in una giornata.
 DEBRIEFING = SlidingWindowLimiter(scope="llm-debriefing", max_events=10, window_seconds=_ORA)
+# Il quadro di un percorso è lo stesso gesto sul gruppo invece che sulla
+# persona, e ha lo stesso tetto: chiamata cara, rilanciabile all'infinito
+# sullo stesso percorso perché ogni giro sostituisce quello prima. Dieci
+# all'ora sono dieci classi diverse di cui preparare la sessione, che è più
+# di quante se ne facciano in una giornata.
+DEBRIEFING_PERCORSO = SlidingWindowLimiter(
+    scope="llm-debriefing-percorso", max_events=10, window_seconds=_ORA
+)
 
 BOZZA_SCHEDA = SlidingWindowLimiter(scope="llm-bozza", max_events=30, window_seconds=_ORA)
 # La bozza di percorso è la gemella della scheda persona, e ha lo stesso

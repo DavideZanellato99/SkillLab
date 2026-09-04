@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select
 
+from authorship import DELETED_ACTOR_EMAIL
 from database import Base
 from models import (
     AuditLog,
@@ -30,6 +31,7 @@ from models import (
     MessageAnnotation,
     NotificationRead,
     Organization,
+    PathDebriefing,
     SimulationAttempt,
     TechnicalSimulation,
     TokenSession,
@@ -59,6 +61,7 @@ _SEEDED_TABLES = {
     "simulation_attempts",
     "technical_simulations",
     "user_debriefings",
+    "path_debriefings",
 }
 
 
@@ -137,7 +140,21 @@ def _seed_everything(db_session, victim: User, other: User, avatar, make_assigne
         )
     )
     db_session.add(NotificationRead(user_id=victim.id, key="assignment.overdue:x"))
-    make_assigned_path(victim, [{"avatar": avatar, "target": 8.0}], assigned_by=victim)
+    assignment = make_assigned_path(victim, [{"avatar": avatar, "target": 8.0}], assigned_by=victim)
+
+    # Il quadro d'insieme del percorso, che questa persona ha fatto scrivere.
+    # Non parla di lei e non parla di nessuno: resta al percorso, e quello che
+    # se ne va è la sua firma sopra.
+    path_debriefing = PathDebriefing(
+        path_id=assignment.path_id,
+        content={"summary": "Il gruppo si ferma alla seconda tappa.", "themes": []},
+        covered_until=datetime.now(UTC).replace(tzinfo=None),
+        covered_people=4,
+        covered_conversations=8,
+        covered_attempts=0,
+    )
+    db_session.add(path_debriefing)
+    db_session.flush()
 
     # Un test tecnico consegnato: la fotografia porta le risposte che la
     # persona ha dato, quindi è materiale suo quanto una trascrizione
@@ -223,6 +240,7 @@ def _seed_everything(db_session, victim: User, other: User, avatar, make_assigne
         (AvatarCategory, avatar.category_id),
         (TechnicalSimulation, simulation.id),
         (User, other.id),
+        (PathDebriefing, path_debriefing.id),
     ):
         db_session.query(model).filter(model.id == row_id).update(
             {
@@ -397,6 +415,32 @@ def test_the_trainers_verdict_on_someone_else_survives_signed(
     assert annotation is not None
     assert annotation.reviewer_id is None
     assert annotation.reviewer_name == "Mario Trainer"
+
+
+def test_the_path_debriefing_survives_the_account_that_asked_for_it(
+    admin_client,
+    cognito,
+    db_session,
+    org_admin_user,
+    standard_user,
+    make_avatar,
+    make_assigned_path,
+):
+    """Resta al percorso, firmato come i quadri di chi non c'è più.
+
+    È la differenza con il quadro d'insieme di una persona, che invece se ne
+    va con lei: quello è fatto di quello che lei ha detto, questo parla di
+    tappe e di un gruppo, e cancellarlo vorrebbe dire buttare il lavoro
+    dell'organizzazione perché uno dei suoi account è stato chiuso.
+    """
+    _seed_everything(db_session, org_admin_user, standard_user, make_avatar(), make_assigned_path)
+
+    _delete_account(admin_client, db_session, org_admin_user.id)
+
+    debriefing = db_session.query(PathDebriefing).first()
+    assert debriefing is not None
+    assert debriefing.created_by is None
+    assert debriefing.created_by_email == DELETED_ACTOR_EMAIL
 
 
 def test_the_other_user_keeps_their_own_data(

@@ -10,6 +10,7 @@
  * quest'ultimo il server impone comunque il proprio tenant, quindi qui non
  * c'è nessun controllo di ruolo da replicare. */
 
+import type { DebriefingCriterionAverage, DebriefingTheme } from './admin'
 import { apiFetch } from './api'
 import type { AuthUser } from './auth'
 
@@ -210,6 +211,77 @@ export const draftPath = (goal: string, organizationId?: string) =>
     method: 'POST',
     body: { goal, ...(organizationId ? { organization_id: organizationId } : {}) },
   })
+
+// ── Il quadro d'insieme del percorso ────────────────
+
+/* L'unica lettura dell'applicazione che guarda un gruppo invece di una
+ * persona: dove il percorso si inceppa, cosa si ripete fra allievi diversi, e
+ * cosa conviene rifare con tutti insieme.
+ *
+ * Non nomina nessuno, ed è voluto: chi è fermo dove sta nella tabella degli
+ * assegnati, che lo deriva dalle prove. Qui c'è quello che quella tabella non
+ * può dire. */
+
+/** Una tappa vista dal gruppo, com'era quando il quadro è stato scritto. */
+export interface PathDebriefingStep {
+  position: number
+  kind: StepKind
+  /** Il nome dell'avatar o il titolo del test, di allora. */
+  label: string
+  target_score: number
+  unlocked: number
+  passed: number
+  /** Quante persone avevano qui la propria tappa di adesso. */
+  stuck: number
+  proofs: number
+  best_average: number | null
+}
+
+/**
+ * Il quadro d'insieme di un percorso.
+ *
+ * Uno solo per percorso, e ogni generazione riscrive quello di prima: su un
+ * gruppo il confronto con la versione precedente non si può fare, perché fra
+ * le due qualcuno è stato aggiunto e qualcuno ritirato.
+ *
+ * I numeri sono la fotografia del momento in cui è stato scritto, come nel
+ * quadro di una persona: a dire che il tempo è passato c'è `stale_reason`.
+ */
+export interface PathDebriefing {
+  path_id: string
+  summary: string
+  /** La tappa dove il gruppo si ferma, null se non è ferma nessuna persona. */
+  blocker_position: number | null
+  /** Perché ci si ferma lì, null insieme alla tappa. */
+  blocker: string | null
+  themes: DebriefingTheme[]
+  /** Cosa il gruppo fa bene, null se nel materiale non si vedeva. */
+  strength: string | null
+  next_step: string
+  covered_people: number
+  covered_conversations: number
+  covered_attempts: number
+  covered_until: string
+  conversation_average: number | null
+  attempt_average: number | null
+  criteria_averages: DebriefingCriterionAverage[]
+  started: number
+  completed: number
+  overdue: number
+  steps: PathDebriefingStep[]
+  /** Perché non vale più: prove nuove, tappe riscritte, o null se vale. */
+  stale_reason: 'prove' | 'percorso' | null
+  written_at: string
+  requested_by: string
+}
+
+/** Il quadro di questo percorso, o null se non è mai stato scritto. */
+export const fetchPathDebriefing = (pathId: string) =>
+  apiFetch<PathDebriefing | null>(`/api/training/paths/${pathId}/debriefing`)
+
+/** Ne fa scrivere uno, che prende il posto di quello di prima. */
+export const generatePathDebriefing = (pathId: string) =>
+  apiFetch<PathDebriefing>(`/api/training/paths/${pathId}/debriefing`, { method: 'POST' })
 
 /** I percorsi componibili nello scope dell'admin. */
 export const fetchPaths = (organizationId?: string) =>

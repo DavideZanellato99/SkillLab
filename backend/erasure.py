@@ -53,6 +53,7 @@ from models import (
     ChatConversation,
     NotificationRead,
     Organization,
+    PathDebriefing,
     SimulationAttempt,
     TechnicalSimulation,
     TokenSession,
@@ -83,7 +84,11 @@ _USER_OWNED = (
 # only the signature on them is anonymised. A training path is one of them:
 # it is a model the organization keeps, not something about the person who
 # composed it.
-_AUTHORED = (User, Organization, Avatar, TechnicalSimulation, TrainingPath)
+# Il quadro d'insieme di un percorso sta fra queste e non fra le righe *su*
+# una persona: parla di tappe e di un gruppo, non nomina nessuno (vedi
+# ``PathDebriefing``), quindi resta al percorso a cui appartiene e di lui si
+# anonimizza solo la firma di chi lo ha fatto scrivere.
+_AUTHORED = (User, Organization, Avatar, TechnicalSimulation, TrainingPath, PathDebriefing)
 
 
 def erase_conversations(db: Session, conversation_ids: Sequence[UUID]) -> int:

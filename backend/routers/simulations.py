@@ -53,8 +53,10 @@ Le domande viaggiano verso il browser senza la risposta esatta (vedi
 consegna, altrimenti il test lo risolverebbe la scheda di rete.
 """
 
+import asyncio
 import random
 import re
+from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -70,6 +72,9 @@ from exports import simulation_attempt_pdf
 from models import (
     ROLE_ORGANIZATION_ADMIN,
     ROLE_SUPER_ADMIN,
+    SIMULATION_KIND_MATCHING,
+    SIMULATION_KIND_OPEN,
+    SIMULATION_KIND_ORDERING,
     SIMULATION_QUESTION_COUNT,
     SIMULATION_STATUS_PUBLISHED,
     SimulationAttempt,
@@ -455,9 +460,39 @@ def _attempt_response(attempt: SimulationAttempt) -> dict:
     }
 
 
+@dataclass(frozen=True)
+class _SubmittedQuestion:
+    """Una domanda consegnata, staccata dalla sessione.
+
+    Sono i soli campi che servono a correggere, copiati per valore. La
+    correzione lavora su questi e non sulle righe del database per un motivo
+    che si vede solo sui test a risposta aperta: lì in mezzo c'è una chiamata
+    a un modello, e prima di aspettarla la connessione torna al pool (vedi
+    ``_submitted``). Da quel momento una riga a cui si chiedesse il testo
+    tornerebbe a interrogare il database, dall'event loop e senza che nessuno
+    se ne accorga; una dataclass invece sopravvive alla scadenza, ed è la
+    stessa scelta del catalogo di una bozza di percorso (``CatalogAvatar``) e
+    del serbatoio da revisionare (``ReviewQuestion``).
+
+    Quello che manca qui è quello che la correzione non guarda: la posizione
+    nel serbatoio, che nell'esito è quella della consegna, e le citazioni al
+    documento, che l'esito rilegge dalla domanda di oggi (vedi
+    ``_answer_results``).
+    """
+
+    id: UUID
+    text: str
+    options: list | None
+    correct_option: int | None
+    ordered_steps: list | None
+    pairs: list | None
+    expected_answer: str | None
+    explanation: str | None
+
+
 def _submitted_questions(
     simulation: TechnicalSimulation, payload: SimulationSubmitRequest
-) -> list[SimulationQuestion]:
+) -> list[_SubmittedQuestion]:
     """Le domande che questo tentativo ha ricevuto, nell'ordine in cui sono
     state consegnate.
 
@@ -474,7 +509,7 @@ def _submitted_questions(
     per le domande saltate.
     """
     by_id = {q.id: q for q in simulation.questions}
-    questions: list[SimulationQuestion] = []
+    questions: list[_SubmittedQuestion] = []
     seen: set[UUID] = set()
     for answer in payload.answers:
         question = by_id.get(answer.question_id)
@@ -484,7 +519,7 @@ def _submitted_questions(
                 detail="Le risposte consegnate non corrispondono alle domande del test.",
             )
         seen.add(answer.question_id)
-        questions.append(question)
+        questions.append(_snapshot(question))
 
     expected = drawn_count(len(simulation.questions))
     if len(questions) != expected:
@@ -498,7 +533,21 @@ def _submitted_questions(
     return questions
 
 
-def _multiple_choice_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
+def _snapshot(question: SimulationQuestion) -> _SubmittedQuestion:
+    """La fotografia di una domanda, presa mentre la riga è ancora leggibile."""
+    return _SubmittedQuestion(
+        id=question.id,
+        text=question.text,
+        options=question.options,
+        correct_option=question.correct_option,
+        ordered_steps=question.ordered_steps,
+        pairs=question.pairs,
+        expected_answer=question.expected_answer,
+        explanation=question.explanation,
+    )
+
+
+def _multiple_choice_answers(questions: list[_SubmittedQuestion], given: dict) -> list[dict]:
     """La correzione di un test a scelta multipla: due numeri e un tempo.
 
     Deterministica e senza modelli di mezzo. Un indice fuori dall'intervallo
@@ -551,7 +600,7 @@ def _same_text(a: str, b: str) -> bool:
     return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
 
 
-def _ordering_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
+def _ordering_answers(questions: list[_SubmittedQuestion], given: dict) -> list[dict]:
     """La correzione di un test di ordinamento: quanti passi al posto giusto.
 
     Deterministica come la scelta multipla, e con una differenza sola: qui
@@ -602,7 +651,7 @@ def _ordering_answers(questions: list[SimulationQuestion], given: dict) -> list[
     return answers
 
 
-def _matching_answers(questions: list[SimulationQuestion], given: dict) -> list[dict]:
+def _matching_answers(questions: list[_SubmittedQuestion], given: dict) -> list[dict]:
     """La correzione di un test di abbinamento: quante coppie indovinate.
 
     La stessa scala dell'ordinamento, su un'altra chiave: si conta quante
@@ -650,24 +699,18 @@ def _matching_answers(questions: list[SimulationQuestion], given: dict) -> list[
     return answers
 
 
-async def _open_answers(
-    questions: list[SimulationQuestion], given: dict, user_id: UUID
-) -> list[dict]:
-    """La correzione di un test a risposta aperta: una chiamata, poi i punti.
+def _to_judge(questions: list[_SubmittedQuestion], given: dict) -> list[dict]:
+    """Le risposte scritte davvero, nella forma in cui il giudice le legge.
 
     Le risposte in bianco non arrivano al modello. Valgono zero comunque, e
     non chiederlo è più veloce, costa meno ed è l'unico modo di essere certi
     che chi non scrive niente non prenda niente.
 
-    **Se anche un solo giudizio manca, la consegna fallisce.** Un tentativo
-    scritto con una domanda non valutata sarebbe un voto più basso del
-    dovuto, per un motivo che chi lo riceve non può né vedere né contestare;
-    ritentare invece costa una rotella in più, e le risposte sono ancora nel
-    browser di chi le ha appena scritte. Il modello a cui chiedere è già più
-    di uno (vedi ``eval_json_completion``), quindi arrivare qui vuol dire
-    che hanno fallito tutti.
+    Sta a parte dalla correzione perché la consegna, prima di aspettare il
+    modello, deve sapere due cose: se c'è qualcosa da far correggere (e
+    quindi se questa richiesta consuma il tetto) e cosa mandare.
     """
-    to_judge = [
+    return [
         {
             "position": position,
             "text": question.text,
@@ -677,11 +720,19 @@ async def _open_answers(
         for position, question in enumerate(questions, start=1)
         if question.id in given and (given[question.id].answer_text or "").strip()
     ]
-    # Solo se c'è davvero qualcosa da far correggere: un test consegnato in
-    # bianco non chiama nessuno e non deve consumare niente.
-    if to_judge:
-        await llm_limits.consume(llm_limits.CORREZIONE, user_id)
 
+
+async def _judgements(to_judge: list[dict]) -> dict[int, dict]:
+    """Il giudizio del modello su quelle risposte, per posizione.
+
+    **Se anche un solo giudizio manca, la consegna fallisce.** Un tentativo
+    scritto con una domanda non valutata sarebbe un voto più basso del
+    dovuto, per un motivo che chi lo riceve non può né vedere né contestare;
+    ritentare invece costa una rotella in più, e le risposte sono ancora nel
+    browser di chi le ha appena scritte. Il modello a cui chiedere è già più
+    di uno (vedi ``eval_json_completion``), quindi arrivare qui vuol dire
+    che hanno fallito tutti.
+    """
     try:
         judgements = await judge_open_answers(to_judge)
     except RuntimeError:
@@ -697,7 +748,18 @@ async def _open_answers(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="La correzione è risultata incompleta. Le risposte non sono andate perse: ripeti la consegna.",
         )
+    return judgements
 
+
+def _open_answers(
+    questions: list[_SubmittedQuestion], given: dict, judgements: dict[int, dict]
+) -> list[dict]:
+    """La correzione di un test a risposta aperta, con i giudizi già in mano.
+
+    Il conto vero e proprio non chiama nessuno: i punti sono il giudizio del
+    modello riportato in decimi, e chi non ha scritto niente non ha un
+    giudizio e prende zero.
+    """
     answers = []
     for position, question in enumerate(questions, start=1):
         answer = given.get(question.id)
@@ -725,6 +787,77 @@ async def _open_answers(
     return answers
 
 
+@dataclass(frozen=True)
+class _SubmittedTest:
+    """Il test consegnato come lo vede la correzione: soli valori."""
+
+    title: str
+    kind: str
+    questions: list[_SubmittedQuestion]
+
+
+def _submitted(
+    db: Session, user: User, simulation_id: UUID, payload: SimulationSubmitRequest
+) -> _SubmittedTest:
+    """Blocking read of the test being handed in (run via asyncio.to_thread).
+
+    La simulazione, se chi consegna può vederla, e le domande che questo
+    tentativo ha ricevuto, fotografate finché le righe sono leggibili: da qui
+    in avanti la correzione non tocca più il database, e su un test a
+    risposta aperta la connessione torna al pool prima di aspettare il
+    modello (vedi ``submit_attempt``).
+    """
+    simulation = get_visible_or_404(db, user, simulation_id)
+    if not simulation.questions:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Questa simulazione non ha ancora domande.",
+        )
+    return _SubmittedTest(
+        title=simulation.title,
+        kind=simulation.kind,
+        questions=_submitted_questions(simulation, payload),
+    )
+
+
+def _store_attempt(
+    db: Session,
+    user: User,
+    simulation_id: UUID,
+    question_count: int,
+    answers: list[dict],
+) -> dict:
+    """Blocking write of a corrected attempt (run via asyncio.to_thread).
+
+    La simulazione viene riletta e non riusata: dopo il commit della lettura
+    l'oggetto di prima è staccato dalla sessione, e il controllo di chi può
+    vederla si rifà da sé, il che non guasta. Se nel frattempo è stata
+    ritirata o cancellata, questa consegna riceve lo stesso 404 che avrebbe
+    ricevuto un istante prima.
+
+    Restituisce già l'esito come si legge, spiegazioni comprese: dopo il
+    commit la simulazione è scaduta di nuovo, e ricomporre la risposta fuori
+    di qui vorrebbe dire rileggerla dall'event loop.
+    """
+    simulation = get_visible_or_404(db, user, simulation_id)
+    attempt = SimulationAttempt(
+        simulation_id=simulation.id,
+        user_id=user.id,
+        correct_count=sum(1 for a in answers if a["is_correct"]),
+        question_count=question_count,
+        earned_points=attempt_points([a["points"] for a in answers]),
+        answers=answers,
+    )
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+
+    return {
+        **_attempt_response(attempt),
+        "answers": _answer_results(simulation, answers),
+    }
+
+
 @router.post("/{simulation_id}/attempts", response_model=SimulationAttemptResponse)
 async def submit_attempt(
     simulation_id: UUID,
@@ -749,49 +882,61 @@ async def submit_attempt(
     riempirsi dopo: uno stato in più significherebbe tentativi rimasti
     appesi da riprendere, e un voto che compare mezz'ora dopo non lo legge
     più nessuno.
+
+    La lettura e la scrittura girano in un thread: sono chiamate bloccanti,
+    e in aula si consegna tutti insieme, su repliche che nello stesso
+    momento tengono aperte delle telefonate. La correzione invece resta qui,
+    perché è un conto fatto in memoria sulle domande già fotografate.
+
+    **Sulla risposta aperta la connessione torna al pool prima di aspettare
+    il modello**, come per la valutazione di una conversazione. Senza,
+    resterebbe occupata per i secondi della correzione senza che nessuno la
+    usi, ed è di nuovo il caso dell'aula: quaranta consegne nello stesso
+    minuto sono quaranta connessioni ferme ad aspettare, su un pool che ogni
+    replica ha di DB_POOL_SIZE + DB_MAX_OVERFLOW e che condivide con i login
+    e con tutto il resto. È il motivo per cui le domande vengono fotografate
+    in valori (``_SubmittedQuestion``): dopo il commit le righe sono scadute,
+    e correggere leggendole tornerebbe a interrogare il database proprio
+    mentre nessuno gliene sta tenendo una.
     """
-    simulation = get_visible_or_404(db, current_user, simulation_id)
-    if not simulation.questions:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Questa simulazione non ha ancora domande.",
-        )
+    # Letto prima di tutto: sul percorso della risposta aperta la sessione
+    # committa a metà richiesta, e da lì chiedere un campo a `current_user`
+    # sarebbe una query fatta dall'event loop.
+    user_id = current_user.id
+    consegna = await asyncio.to_thread(_submitted, db, current_user, simulation_id, payload)
 
-    questions = _submitted_questions(simulation, payload)
     given = {a.question_id: a for a in payload.answers}
-    if simulation.is_open:
-        answers = await _open_answers(questions, given, current_user.id)
-    elif simulation.is_ordering:
-        answers = _ordering_answers(questions, given)
-    elif simulation.is_matching:
-        answers = _matching_answers(questions, given)
+    if consegna.kind == SIMULATION_KIND_OPEN:
+        da_correggere = _to_judge(consegna.questions, given)
+        # Solo se c'è davvero qualcosa da far correggere: un test consegnato
+        # in bianco non chiama nessuno e non deve consumare niente.
+        if da_correggere:
+            await llm_limits.consume(llm_limits.CORREZIONE, user_id)
+        # Il tetto prima, la connessione restituita adesso, e non il
+        # contrario: il tetto si conta su una sessione sua (vedi
+        # `rate_limit`), che sotto test condivide la connessione con questa,
+        # e due transazioni chiuse in ordine incrociato si lasciano dietro un
+        # savepoint che non esiste più.
+        await asyncio.to_thread(db.commit)
+        giudizi = await _judgements(da_correggere)
+        answers = _open_answers(consegna.questions, given, giudizi)
+    elif consegna.kind == SIMULATION_KIND_ORDERING:
+        answers = _ordering_answers(consegna.questions, given)
+    elif consegna.kind == SIMULATION_KIND_MATCHING:
+        answers = _matching_answers(consegna.questions, given)
     else:
-        answers = _multiple_choice_answers(questions, given)
+        answers = _multiple_choice_answers(consegna.questions, given)
 
-    correct_count = sum(1 for a in answers if a["is_correct"])
-    points = [a["points"] for a in answers]
-
-    attempt = SimulationAttempt(
-        simulation_id=simulation.id,
-        user_id=current_user.id,
-        correct_count=correct_count,
-        question_count=len(questions),
-        earned_points=attempt_points(points),
-        answers=answers,
+    esito = await asyncio.to_thread(
+        _store_attempt, db, current_user, simulation_id, len(consegna.questions), answers
     )
-    db.add(attempt)
-    db.commit()
-    db.refresh(attempt)
 
     audit.describe(
         http_request,
-        simulazione=simulation.title,
-        punteggio=attempt.score,
+        simulazione=consegna.title,
+        punteggio=esito["score"],
     )
-    return {
-        **_attempt_response(attempt),
-        "answers": _answer_results(simulation, answers),
-    }
+    return esito
 
 
 @router.get("/{simulation_id}/attempts", response_model=list[SimulationAttemptSummary])

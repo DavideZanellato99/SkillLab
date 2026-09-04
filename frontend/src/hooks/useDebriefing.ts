@@ -14,6 +14,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchUserDebriefings, generateUserDebriefing } from '../services/admin'
 import type { UserDebriefing } from '../services/admin'
+import { fetchPathDebriefing, generatePathDebriefing } from '../services/training'
 import { queryKeys } from './queryKeys'
 
 /** I quadri scritti su una persona, dal più recente. Vuoto se non ce n'è. */
@@ -51,6 +52,35 @@ export function useGenerateDebriefing(userId: string) {
         queryKeys.debriefings.byUser(userId),
         (storico = []) => [debriefing, ...storico.map((v) => ({ ...v, is_stale: false }))],
       )
+    },
+  })
+}
+
+/** Il quadro d'insieme di un percorso, o null se non è mai stato scritto.
+ *
+ * Qui la cache scade come il resto dell'applicazione, e non mai come lo
+ * storico di una persona: quello cambia solo quando qualcuno ne fa scrivere
+ * uno, mentre di questo cambia il motivo per cui è vecchio, che matura da sé
+ * mentre il gruppo si allena. È una riga sola, e rileggerla costa quanto
+ * aprire il pannello. */
+export function usePathDebriefing(pathId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.debriefings.byPath(pathId),
+    queryFn: () => fetchPathDebriefing(pathId),
+    enabled,
+  })
+}
+
+/** Ne fa scrivere uno, che prende il posto di quello di prima.
+ *
+ * Il risultato va in cache invece di essere richiesto di nuovo: l'attesa è
+ * lunga, e chi l'ha lanciata è rimasto davanti a una rotella. */
+export function useGeneratePathDebriefing(pathId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => generatePathDebriefing(pathId),
+    onSuccess: (debriefing) => {
+      queryClient.setQueryData(queryKeys.debriefings.byPath(pathId), debriefing)
     },
   })
 }

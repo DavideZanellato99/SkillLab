@@ -363,6 +363,14 @@ ha scelto. Solo il proprietario carica, e un secondo caricamento **sostituisce**
 il primo: un ritentativo dopo una POST andata male non deve lasciare due mezze
 registrazioni.
 
+**La scrittura passa da un thread**, come le due letture che la circondano.
+Sono decine di megabyte che partono verso Postgres in una INSERT sola, e
+fatta sull'event loop teneva ferma la replica per tutto quel tempo: sullo
+stesso loop ci sono le telefonate ancora in corso, quindi chi riagganciava
+metteva in pausa l'audio di chi stava ancora parlando. Il ragionamento
+generale sta in [architettura.md](architettura.md), sezione "Cosa non gira
+sull'event loop".
+
 I controlli: contenitore ammesso (webm, ogg, mp4), lunghezza dichiarata
 rifiutata prima di leggere il corpo, e poi il corpo letto **a pezzi**, con lo
 stop al primo pezzo che manda oltre il tetto. Leggerlo tutto e misurarlo dopo

@@ -108,6 +108,10 @@ export function useInvalidateTraining() {
   return () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.training.all })
     queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+    /* E i quadri d'insieme dei percorsi: uno che è stato riscritto rende
+     * vecchio il proprio, perché parla di una fila di tappe che non esiste
+     * più. Lo dice il server in lettura, quindi va riletto. */
+    queryClient.invalidateQueries({ queryKey: queryKeys.debriefings.paths })
   }
 }
 

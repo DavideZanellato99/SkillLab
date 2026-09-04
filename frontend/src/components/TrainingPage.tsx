@@ -13,6 +13,7 @@ import FormError from './FormError'
 import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import PaginationBar from './Pagination'
+import PathDebriefingModal from './PathDebriefingModal'
 import PrimaryButton from './PrimaryButton'
 import SearchInput from './SearchInput'
 import TabBar, { TabPanel } from './TabBar'
@@ -73,6 +74,11 @@ export default function TrainingPage() {
   const [editing, setEditing] = useState<TrainingPath | null>(null)
   const [isComposing, setIsComposing] = useState(false)
   const [assigning, setAssigning] = useState<TrainingPath | null>(null)
+  /* Di quale percorso si sta leggendo il quadro d'insieme del gruppo. Il
+   * percorso intero e non il solo id: la finestra ne scrive il titolo e conta
+   * quante persone lo stanno percorrendo, che è quello che decide se il
+   * quadro si può chiedere. */
+  const [debriefing, setDebriefing] = useState<TrainingPath | null>(null)
   const [pathToDelete, setPathToDelete] = useState<TrainingPath | null>(null)
   const [toWithdraw, setToWithdraw] = useState<PathAssignment | null>(null)
 
@@ -277,6 +283,7 @@ export default function TrainingPage() {
                         showOrganization={isSuper}
                         onShowAssigned={() => showAssignedOf(path)}
                         onAssign={() => setAssigning(path)}
+                        onDebriefing={() => setDebriefing(path)}
                         onEdit={() => setEditing(path)}
                         onDelete={() => askDeletePath(path)}
                       />
@@ -328,6 +335,8 @@ export default function TrainingPage() {
       )}
 
       {assigning && <AssignPathModal path={assigning} onClose={() => setAssigning(null)} />}
+
+      {debriefing && <PathDebriefingModal path={debriefing} onClose={() => setDebriefing(null)} />}
 
       {pathToDelete && (
         <ConfirmModal

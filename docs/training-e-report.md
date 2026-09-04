@@ -101,6 +101,14 @@ esistono, e chi compone il percorso li sta guardando nel proprio pannello,
 solo non sono qualcosa che si possa svolgere. E una tappa che nessuno può
 superare non è un dettaglio, perché terrebbe chiuse tutte quelle dopo di lei.
 
+Il controllo si fa comunque per id e non fidandosi di quell'elenco, perché una
+richiesta può arrivare con un id che l'elenco non conteneva, ma sono **due
+query e non una per tappa**: una per gli avatar nominati e una per i test,
+tutte e due confinate al tenant del percorso. Un percorso di dieci tappe erano
+dieci viaggi al database dentro la stessa richiesta, uguali tranne l'id; quello
+che manca semplicemente non è nella risposta, e il rifiuto lo dice con il
+numero della tappa come prima.
+
 **Chi può ricevere un percorso.** Gli account attivi di quel tenant che hanno
 il ruolo `user`, cioè chi si allena. I due ruoli di amministrazione restano
 fuori: il super admin perché non appartiene a nessun tenant, l'organization
@@ -1889,6 +1897,136 @@ Lato server la connessione al database **torna al pool prima dell'attesa**,
 come per la valutazione di una conversazione: per tutti quei secondi il
 database non serve, e il materiale raccolto è già fatto di soli valori
 staccati dalla sessione, quindi sopravvive alla scadenza degli oggetti.
+
+## Il quadro d'insieme su un percorso
+
+Il gemello del precedente con il soggetto cambiato: là dodici prove di una
+persona, qui le prove che un gruppo intero ha svolto sulle stesse tappe. È il
+quarto agente, e sta insieme agli altri in [agenti.md](agenti.md).
+
+**Risponde a una domanda che nessun'altra schermata pone.** Il debriefing dice
+cosa dire a qualcuno; il cruscotto fa medie; la tabella degli assegnati dice a
+che punto è ognuno. Nessuna delle tre dice **dove il percorso si inceppa**, e
+non per una mancanza: quel fatto si vede solo mettendo insieme persone
+diverse, cioè guardando che sei su dodici si sono fermate sulla stessa tappa
+e che nelle loro prove torna lo stesso errore. In dodici quadri individuali
+quell'errore è dodici volte un episodio.
+
+### Non nomina nessuno, ed è la regola che lo tiene in piedi
+
+Al modello gli allievi arrivano siglati (`ALLIEVO 1`, `ALLIEVO 2`), e la sigla
+serve a una cosa sola: riconoscere che due prove sono della stessa persona,
+cioè distinguere un modo di lavorare da sei persone che sbagliano una volta
+ciascuna. Nel testo che ne esce **nessuna sigla può comparire**, e a
+verificarlo non è solo il prompt: la normalizzazione ricontrolla, e dove il
+campo è facoltativo lo butta, dove è obbligatorio fa ritentare
+([path_debriefing.py](../backend/path_debriefing.py)).
+
+Non è cautela generica. Chi è fermo dove, e chi ha preso quanto, sta già nella
+tabella degli assegnati, derivato dalle prove e senza costare niente: un testo
+generato che ripetesse quei nomi sarebbe una seconda versione di quella
+tabella, più difficile da verificare. Da qui discende anche il resto: la riga
+salvata non contiene dati personali, quindi non compare nell'esportazione dei
+propri dati e non se ne va con un account cancellato, mentre sulla finestra di
+conservazione segue le prove che ha letto, come il quadro di una persona.
+
+### Cosa il modello legge
+
+| | |
+| --- | --- |
+| Rotte | `GET` e `POST /api/training/paths/{path_id}/debriefing` |
+| File | [path_debriefing_source.py](../backend/path_debriefing_source.py), [path_debriefing.py](../backend/path_debriefing.py), le rotte in [routers/training.py](../backend/routers/training.py) |
+| Serve | Almeno 3 persone in percorso e almeno 6 prove svolte sulle tappe, altrimenti 409 |
+| Tetto | 10 all'ora per persona (`DEBRIEFING_PERCORSO`) |
+
+**Solo le prove che il percorso conta.** Una conversazione svolta prima che la
+sua tappa si aprisse non supera quella tappa (vedi
+[training_progress](../backend/training_progress.py)) e qui non entra nemmeno
+nel dossier: leggerla vorrebbe dire raccontare un gruppo diverso da quello che
+il percorso sta seguendo.
+
+**Niente trascrizioni.** Qui il valore sta nell'ampiezza e non nella
+profondità: di ogni prova entrano il giudizio del valutatore, i sei criteri
+con il commento dove il voto è sotto la soglia dei suggerimenti, e quello che
+il docente ha scritto o appuntato. Il lavoro di leggere una conversazione riga
+per riga lo ha già fatto una volta chi l'ha giudicata, e trenta trascrizioni
+intere non ci starebbero comunque.
+
+**Il budget si divide fra le tappe, non si spende in ordine.** Speso in
+ordine, la prima tappa, che è quella che tutti hanno svolto, lo esaurirebbe da
+sola, e della tappa dove il gruppo si ferma non arriverebbe una riga. Così la
+spesa di questa chiamata cresce con la lunghezza del percorso e non con il
+numero di persone, che è la cosa che varia di più.
+
+### Cosa conta il backend, e cosa legge il modello
+
+La divisione è più netta che altrove, e vale la pena guardarla.
+
+**Le tappe le conta il progresso.** Quante persone hanno aperto una tappa,
+quante l'hanno superata, quante sono ferme lì: arrivano dalla stessa
+derivazione che disegna la tabella degli assegnati. Due conti diversi
+vorrebbero dire un quadro che dice «sei fermi alla terza» sopra una tabella
+che ne mostra quattro, e a quel punto non si crede più a nessuno dei due.
+
+**Anche la tappa che ferma il gruppo è un conto**, non una lettura: è quella
+su cui più persone hanno adesso la propria tappa da fare. Al modello si dice
+quale e si chiede **perché**, che è la parte che nella tabella non c'è. Se non
+è ferma nessuna persona, la domanda non gli viene posta affatto: un percorso
+finito da tutti non ha una tappa di blocco, e chiederla vorrebbe dire fargliene
+trovare una per obbedienza.
+
+**Le medie invece si calcolano sulle prove lette**, che sono quelle di cui il
+modello ha davanti il testo: è la stessa regola del quadro di una persona,
+cioè che i numeri raccontano quello che è stato letto.
+
+### Cosa il modello scrive
+
+Sintesi, la spiegazione del blocco, fino a 4 temi ricorrenti **fra persone
+diverse** con le tappe su cui poggiano, cosa il gruppo fa bene, e una cosa
+concreta da fare adesso in aula. Un tema senza titolo cade da solo, come nel
+quadro di una persona; senza sintesi o senza il passo successivo la risposta
+vale come un JSON troncato e fa ritentare sul modello di riserva.
+
+### Una riga per percorso, che invecchia in due modi
+
+Il quadro di una persona si accumula, questo si sostituisce: fra due
+generazioni il gruppo non è lo stesso gruppo, perché qualcuno è stato aggiunto
+e qualcuno ritirato, e «come si è mosso da allora» sarebbe una frase su due
+insiemi di persone diversi.
+
+I modi di invecchiare però sono due, e il secondo qui è nuovo:
+
+| Perché non vale più | Cosa vuol dire |
+| ------------------- | --------------- |
+| `prove` | Il gruppo ha svolto altre prove dopo l'ultima che il modello ha letto: il testo è ancora vero, ma non le ha viste |
+| `percorso` | Le tappe sono state riscritte dopo: il testo parla di una fila che non esiste più |
+
+Il server risponde quale dei due, e non un sì o un no, perché a schermo si
+dicono diversamente. Come ovunque, niente si rigenera da solo: si dice a chi
+legge che quello che ha davanti è vecchio.
+
+### La schermata
+
+Si apre dalla scheda del percorso, che è il posto da cui la domanda viene in
+mente: affidato il percorso a una classe, quello che si vuole sapere è dove si
+sta inceppando.
+[PathDebriefingModal](../frontend/src/components/PathDebriefingModal.tsx)
+comanda la generazione e dice quando quello a schermo non vale più;
+[PathDebriefingReport](../frontend/src/components/PathDebriefingReport.tsx)
+disegna il quadro.
+
+La promessa è quella dell'altro: **non mostra un giudizio senza dire su cosa
+poggia**. Quante persone, quante prove, fino a quando, e le medie di allora.
+Poi la sintesi, come sta il gruppo in tre numeri, dove si ferma, la fila delle
+tappe con la tappa di blocco marcata, i temi, cosa il gruppo fa bene, cosa
+fare adesso, e in fondo le medie per criterio **dalla più bassa**, disegnate
+dallo stesso componente del quadro di una persona
+([CriteriaAverageList](../frontend/src/components/CriteriaAverageList.tsx)).
+
+Sotto le tre persone il bottone non c'è, e al suo posto c'è il motivo: un
+bottone spento senza spiegazione manda a cercare cosa si è sbagliato. Quando
+non è cambiato niente il bottone c'è ma è spento, con il motivo nel tooltip,
+perché il server rifiuterebbe comunque la richiesta.
 
 ## Le due date di un account
 

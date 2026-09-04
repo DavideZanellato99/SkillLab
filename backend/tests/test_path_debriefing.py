@@ -167,6 +167,11 @@ def _risposta_del_modello(**campi) -> dict:
         ],
         "strength": "Il tono resta professionale anche quando il cliente insiste.",
         "next_step": "Un giro d'aula sull'apertura, con l'identificazione come unico obiettivo.",
+        # Chiesti solo quando c'era un quadro prima sullo stesso gruppo, e
+        # buttati via quando non sono stati chiesti: la risposta finta li porta
+        # sempre, così è la normalizzazione a decidere, come in produzione.
+        "direction": "up",
+        "change": "La tappa 1 non ferma più nessuno.",
     }
     base.update(campi)
     return base
@@ -175,9 +180,10 @@ def _risposta_del_modello(**campi) -> dict:
 def _finto_modello(monkeypatch, risposta=None, errore=None):
     """Sostituisce la chiamata a OpenAI dentro il router che la fa.
 
-    La finzione normalizza con la stessa condizione della produzione, cioè se
-    una tappa di blocco esiste: altrimenti proverebbe una normalizzazione che
-    non è quella che gira davvero.
+    La finzione normalizza con le stesse due condizioni della produzione, cioè
+    se una tappa di blocco esiste e se c'era un quadro prima sullo stesso
+    gruppo: altrimenti proverebbe una normalizzazione che non è quella che
+    gira davvero.
     """
     visti = []
 
@@ -188,6 +194,7 @@ def _finto_modello(monkeypatch, risposta=None, errore=None):
         return normalize_path_debriefing(
             risposta or _risposta_del_modello(),
             blocking=material.blocker_position is not None,
+            comparing=bool(material.previous),
         )
 
     monkeypatch.setattr("routers.training.write_path_debriefing", _scrivi)
@@ -376,12 +383,11 @@ def test_il_quadro_viene_salvato_con_quello_che_ha_letto(
     assert db_session.query(PathDebriefing).filter_by(path_id=path.id).count() == 1
 
 
-def test_rigenerare_sostituisce_invece_di_aggiungere(
+def test_rigenerare_aggiunge_una_versione_invece_di_sostituire(
     admin_client, db_session, organization, make_avatar, monkeypatch
 ):
-    """Sul gruppo non esiste uno storico da confrontare: fra due generazioni
-    qualcuno è stato aggiunto e qualcuno ritirato, e la versione di prima
-    parlerebbe di un insieme di persone diverso."""
+    """Senza la versione di prima sul disco, "il gruppo sta migliorando" è una
+    cosa che nessuno può né scrivere né verificare."""
     path, avatars, utenti = _gruppo_con_prove(db_session, organization, make_avatar)
     _finto_modello(monkeypatch)
     assert admin_client.post(_url(path)).status_code == 200
@@ -392,7 +398,92 @@ def test_rigenerare_sostituisce_invece_di_aggiungere(
 
     assert response.status_code == 200, response.text
     assert response.json()["summary"] == "Un quadro del tutto nuovo."
-    assert db_session.query(PathDebriefing).filter_by(path_id=path.id).count() == 1
+    assert db_session.query(PathDebriefing).filter_by(path_id=path.id).count() == 2
+    storico = admin_client.get(_url(path)).json()
+    assert storico[0]["summary"] == "Un quadro del tutto nuovo."
+
+
+def test_il_primo_quadro_non_ha_nessuna_direzione(
+    admin_client, db_session, organization, make_avatar, monkeypatch
+):
+    path, _, _ = _gruppo_con_prove(db_session, organization, make_avatar)
+    _finto_modello(monkeypatch)
+
+    body = admin_client.post(_url(path)).json()
+
+    assert body["direction"] is None
+    assert body["change"] is None
+    assert body["group_changed"] is False
+
+
+def test_con_lo_stesso_gruppo_il_quadro_nuovo_dice_come_si_e_mosso(
+    admin_client, db_session, organization, make_avatar, monkeypatch
+):
+    path, avatars, utenti = _gruppo_con_prove(db_session, organization, make_avatar)
+    _finto_modello(monkeypatch)
+    assert admin_client.post(_url(path)).status_code == 200
+
+    _prova(db_session, utenti[0], avatars[0], score=9.0)
+    visti = _finto_modello(monkeypatch)
+    body = admin_client.post(_url(path)).json()
+
+    # Il quadro precedente è finito nel materiale, ed è quello che rende
+    # possibile la domanda.
+    assert "IL QUADRO PRECEDENTE" not in visti[0].previous
+    assert visti[0].previous
+    assert body["direction"] == "up"
+    assert body["change"] == "La tappa 1 non ferma più nessuno."
+    assert body["group_changed"] is False
+
+
+def test_gli_scarti_delle_medie_li_calcola_il_backend(
+    admin_client, db_session, organization, make_avatar, monkeypatch
+):
+    """Al modello si chiede la direzione, che è una lettura, non di quanto la
+    media si è mossa, che è una sottrazione."""
+    path, avatars, utenti = _gruppo_con_prove(db_session, organization, make_avatar)
+    _finto_modello(monkeypatch)
+    prima = admin_client.post(_url(path)).json()
+
+    for user in utenti:
+        _prova(db_session, user, avatars[0], score=9.0)
+    _finto_modello(monkeypatch)
+    dopo = admin_client.post(_url(path)).json()
+
+    assert prima["conversation_average_delta"] is None
+    assert dopo["conversation_average_delta"] == round(
+        dopo["conversation_average"] - prima["conversation_average"], 1
+    )
+
+
+def test_se_il_gruppo_cambia_non_si_confronta_niente(
+    admin_client, db_session, organization, make_avatar, monkeypatch
+):
+    """Il gruppo non è più quello, quindi "è migliorato" sarebbe una frase su
+    due insiemi di persone diversi: la direzione non viene nemmeno chiesta, e
+    gli scarti delle medie restano vuoti."""
+    path, avatars, _ = _gruppo_con_prove(db_session, organization, make_avatar)
+    _finto_modello(monkeypatch)
+    assert admin_client.post(_url(path)).status_code == 200
+
+    # Una persona in più, con le sue prove: il gruppo di adesso non è quello
+    # che il quadro precedente aveva letto.
+    nuovo = _allievi(db_session, organization, 1)[0]
+    assegnazione = TrainingPathAssignment(path_id=path.id, user_id=nuovo.id)
+    assegnazione.created_at = IERI
+    db_session.add(assegnazione)
+    db_session.flush()
+    _prova(db_session, nuovo, avatars[0], score=6.0, at=ORA)
+
+    visti = _finto_modello(monkeypatch)
+    body = admin_client.post(_url(path)).json()
+
+    assert visti[0].previous == ""
+    assert visti[0].group_changed is True
+    assert body["direction"] is None
+    assert body["change"] is None
+    assert body["group_changed"] is True
+    assert body["conversation_average_delta"] is None
 
 
 def test_una_prova_nuova_rende_il_quadro_vecchio(
@@ -404,7 +495,7 @@ def test_una_prova_nuova_rende_il_quadro_vecchio(
 
     _prova(db_session, utenti[0], avatars[0], score=6.5, at=ORA)
 
-    assert admin_client.get(_url(path)).json()["stale_reason"] == "prove"
+    assert admin_client.get(_url(path)).json()[0]["stale_reason"] == "prove"
 
 
 def test_il_percorso_riscritto_rende_il_quadro_vecchio(
@@ -423,7 +514,7 @@ def test_il_percorso_riscritto_rende_il_quadro_vecchio(
     # continuerebbe a rispondere con la data che aveva in mano.
     db_session.expire_all()
 
-    assert admin_client.get(_url(path)).json()["stale_reason"] == "percorso"
+    assert admin_client.get(_url(path)).json()[0]["stale_reason"] == "percorso"
 
 
 def test_senza_niente_di_nuovo_non_si_rigenera(
@@ -439,15 +530,17 @@ def test_senza_niente_di_nuovo_non_si_rigenera(
     assert "nessuno ha svolto prove nuove" in response.json()["detail"]
 
 
-def test_un_percorso_senza_quadro_risponde_vuoto(
+def test_un_percorso_senza_quadro_risponde_una_lista_vuota(
     admin_client, db_session, organization, make_avatar
 ):
+    """Il percorso esiste, semplicemente nessuno ha ancora chiesto il quadro:
+    è la schermata da cui lo si chiede, non un 404."""
     path, _, _ = _gruppo_con_prove(db_session, organization, make_avatar)
 
     response = admin_client.get(_url(path))
 
     assert response.status_code == 200
-    assert response.json() is None
+    assert response.json() == []
 
 
 # ── Quando non si può ancora chiedere ──────────────────────────────────

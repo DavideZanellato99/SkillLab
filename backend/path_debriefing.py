@@ -33,14 +33,25 @@ qualcuno lo legge.
 giudizi delle prove più recenti, non di tutte: i conti valgono sul gruppo
 intero, il testo su quello che è stato letto, e il modello deve sapere quale
 delle due cose ha davanti quando scrive.
+
+**Il confronto con il quadro precedente si chiede solo se il gruppo è lo
+stesso.** Come sul quadro di una persona, dalla seconda volta in poi il
+modello ha davanti quello che era stato scritto prima e dice come il gruppo si
+è mosso da allora. La condizione in più è tutta qui: se nel frattempo qualcuno
+è stato aggiunto o ritirato, la direzione non gli viene chiesta affatto, perché
+sarebbe una frase su due insiemi di persone diversi. A stabilirlo è
+l'impronta del gruppo, non una supposizione (vedi
+``path_debriefing_source.group_fingerprint``).
 """
 
 import re
 from functools import partial
 
+from models import DEBRIEFING_DOWN, DEBRIEFING_STABLE, DEBRIEFING_UP
 from openai_service import eval_json_completion
 from schemas import STEP_KIND_AVATAR
 from untrusted_text import fence, rule
+from user_debriefing import normalize_direction
 
 # Quanti temi ricorrenti il quadro può contenere. Stesso tetto del quadro di
 # una persona, e per la stessa ragione: senza un numero, a un modello a cui
@@ -89,7 +100,40 @@ def _blocco_rules(position: int) -> str:
     )
 
 
-def _system_prompt(*, blocker: int | None) -> tuple[str, str]:
+def _confronto_rules() -> str:
+    """Le istruzioni che valgono quando c'è un quadro prima, sullo stesso gruppo.
+
+    Stanno in una funzione a parte e non in un blocco sempre presente per la
+    stessa ragione del quadro di una persona, più una che qui è propria: il
+    confronto salta anche quando un quadro prima c'era ma il gruppo è cambiato,
+    e in quel caso chiedere una direzione vorrebbe dire chiederla fra due
+    insiemi di persone diversi.
+    """
+    return (
+        "\n## IL CONFRONTO CON IL QUADRO PRECEDENTE\n"
+        "Su questo percorso un quadro è già stato scritto, ce l'hai davanti insieme alle "
+        "prove, e **il gruppo è lo stesso di allora**: nessuno è stato aggiunto e nessuno è "
+        "stato ritirato. La domanda a cui questo quadro deve rispondere, e che il precedente "
+        "non poteva, è **come si è mosso il gruppo da allora**.\n"
+        f'- "direction" è una sola di queste tre parole, scritta esattamente così: '
+        f'"{DEBRIEFING_UP}" se il gruppo è migliorato, "{DEBRIEFING_STABLE}" se è dove era, '
+        f'"{DEBRIEFING_DOWN}" se è peggiorato.\n'
+        '- "change" sono due o tre frasi su cosa è cambiato: se la tappa che fermava il '
+        "gruppo è ancora quella, quali temi di allora non tornano più, quali sono rimasti e "
+        "quali sono nuovi. Nomina le cose, non i voti.\n"
+        "- **La cosa più importante da guardare è dove il gruppo si ferma.** Il blocco che si "
+        "sposta in avanti è un miglioramento vero anche se le medie non si muovono, e il "
+        "blocco che resta dov'era dice che quello che è stato fatto in mezzo non ha "
+        "funzionato.\n"
+        "- **Stabile è una risposta legittima e spesso è quella giusta.** Fra due quadri "
+        "passano poche prove, e in poche prove un gruppo cambia raramente. Scrivi una "
+        "direzione solo se nelle prove si vede.\n"
+        "- Le medie di allora e quelle di adesso ce le hai tutte e due, ma la differenza non "
+        "la devi calcolare né scrivere: quella la mette l'applicazione accanto al tuo testo.\n"
+    )
+
+
+def _system_prompt(*, blocker: int | None, comparing: bool) -> tuple[str, str]:
     """Le istruzioni, e il marcatore con cui recintare il materiale.
 
     Tornano insieme perché sono la stessa decisione presa una volta: il
@@ -152,15 +196,18 @@ def _system_prompt(*, blocker: int | None) -> tuple[str, str]:
         "inutile anche quello vero.\n"
         "- Scrivi tutto in italiano.\n"
         + (_blocco_rules(blocker) if blocker is not None else "")
+        + (_confronto_rules() if comparing else "")
         + "\n"
-        f"{rule(marker, 'il materiale delle prove del gruppo')}\n\n"
+        f"{rule(marker, 'il materiale delle prove del gruppo e il quadro precedente')}\n\n"
         "## FORMATO DELLA RISPOSTA\n"
         "Restituisci esclusivamente un JSON valido, senza testo prima o dopo, con questa "
         "struttura esatta:\n"
         '{"summary": "", '
         + ('"blocker": "", ' if blocker is not None else "")
         + '"themes": [{"title": "", "detail": "", "evidence": ""}], '
-        '"strength": "", "next_step": ""}\n'
+        '"strength": "", "next_step": ""'
+        + (', "direction": "", "change": ""' if comparing else "")
+        + "}\n"
         '- "summary": due o tre frasi che dicono a che punto è questo gruppo su questo '
         "percorso.\n"
         + (
@@ -173,6 +220,12 @@ def _system_prompt(*, blocker: int | None) -> tuple[str, str]:
         '- "evidence": su quali tappe lo hai visto.\n'
         '- "strength": cosa il gruppo fa bene, o stringa vuota.\n'
         '- "next_step": la cosa da fare adesso con il gruppo.'
+        + (
+            '\n- "direction": una sola delle tre parole indicate sopra.\n'
+            '- "change": cosa è cambiato rispetto al quadro precedente.'
+            if comparing
+            else ""
+        )
     ), marker
 
 
@@ -216,7 +269,9 @@ def _facts(material) -> str:
     return "\n".join(righe)
 
 
-def normalize_path_debriefing(raw: dict, *, blocking: bool = False) -> dict:
+def normalize_path_debriefing(
+    raw: dict, *, blocking: bool = False, comparing: bool = False
+) -> dict:
     """La risposta del modello ridotta a quello che viene salvato.
 
     Il controllo sta qui e non nel chiamante, come per il quadro di una
@@ -231,9 +286,11 @@ def normalize_path_debriefing(raw: dict, *, blocking: bool = False) -> dict:
     del pezzo storto cade il pezzo, di quello che manca davvero si ripaga la
     chiamata.
 
-    ``blocking`` è la stessa cosa che sa il prompt, cioè se una tappa di
-    blocco esiste. Senza, la spiegazione resta None anche se il modello l'ha
-    scritta lo stesso: non gli è stata chiesta, quindi non poggia su niente.
+    ``blocking`` e ``comparing`` sono le stesse due cose che sa il prompt: se
+    una tappa di blocco esiste, e se c'era un quadro prima **sullo stesso
+    gruppo**. Senza, la spiegazione del blocco e la direzione restano None
+    anche se il modello le ha scritte lo stesso: non gli sono state chieste,
+    quindi qualunque cosa abbia scritto lì non poggia su niente.
     """
     if not isinstance(raw, dict):
         raise ValueError("La risposta del modello non è un oggetto.")
@@ -266,11 +323,24 @@ def normalize_path_debriefing(raw: dict, *, blocking: bool = False) -> dict:
     if _nomina_qualcuno(summary) or _nomina_qualcuno(next_step) or _nomina_qualcuno(blocker or ""):
         raise ValueError("Il quadro del percorso nomina un singolo allievo.")
 
+    # Il racconto del cambiamento passa dallo stesso controllo dei temi: è la
+    # parte in cui è più facile che una sigla scappi, perché è quella in cui
+    # si parla di chi è migliorato.
+    change = str(raw.get("change") or "").strip() if comparing else ""
+    if _nomina_qualcuno(change):
+        change = ""
+
     strength = str(raw.get("strength") or "").strip()
     return {
         "summary": summary,
         "blocker": blocker,
         "themes": themes,
+        # Presenti sempre, valorizzati solo quando il confronto è stato
+        # chiesto: una chiave che a volte c'è e a volte no costringerebbe ogni
+        # lettore a chiedersi se manca perché era il primo quadro, perché il
+        # gruppo è cambiato, o perché la riga è vecchia.
+        "direction": normalize_direction(raw.get("direction")) if comparing else None,
+        "change": change or None,
         # Vuoto è un valore e vuol dire che non si vede niente di buono da
         # segnalare: diventa None perché sia None ad arrivare all'interfaccia,
         # che quel caso lo sa già disegnare.
@@ -287,7 +357,15 @@ async def write_path_debriefing(material) -> dict:
     modelli di riserva e il tempo lungo li mette ``eval_json_completion``.
     """
     blocker = material.blocker_position
-    system, marker = _system_prompt(blocker=blocker)
+    comparing = bool(material.previous)
+    system, marker = _system_prompt(blocker=blocker, comparing=comparing)
+    # Il quadro precedente sta dentro lo stesso recinto delle prove, e non
+    # fuori come istruzione: lo ha scritto un modello leggendo materiale di
+    # qualcuno, quindi ripassa dal recinto per la stessa ragione per cui ci
+    # passa il materiale.
+    precedente = (
+        f"\n\n# IL QUADRO PRECEDENTE SU QUESTO PERCORSO\n{material.previous}" if comparing else ""
+    )
     return await eval_json_completion(
         [
             {"role": "system", "content": system},
@@ -297,7 +375,7 @@ async def write_path_debriefing(material) -> dict:
                     "# QUELLO CHE È GIÀ CALCOLATO, SU TUTTO IL GRUPPO\n"
                     f"{_facts(material)}\n\n"
                     "# I GIUDIZI DELLE PROVE, TAPPA PER TAPPA\n"
-                    f"{marker}\n{material.dossier}\n{marker}"
+                    f"{marker}\n{material.dossier}{precedente}\n{marker}"
                 ),
             },
         ],
@@ -307,6 +385,8 @@ async def write_path_debriefing(material) -> dict:
         # di scrivere la prima riga. Stretto qui torna indietro come JSON
         # troncato, cioè come un quadro che si interrompe a metà di un tema.
         max_completion_tokens=6144,
-        normalize=partial(normalize_path_debriefing, blocking=blocker is not None),
+        normalize=partial(
+            normalize_path_debriefing, blocking=blocker is not None, comparing=comparing
+        ),
         what="quadro d'insieme del percorso",
     )

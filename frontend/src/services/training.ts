@@ -10,7 +10,7 @@
  * quest'ultimo il server impone comunque il proprio tenant, quindi qui non
  * c'è nessun controllo di ruolo da replicare. */
 
-import type { DebriefingCriterionAverage, DebriefingTheme } from './admin'
+import type { DebriefingCriterionAverage, DebriefingDirection, DebriefingTheme } from './admin'
 import { apiFetch } from './api'
 import type { AuthUser } from './auth'
 
@@ -238,16 +238,18 @@ export interface PathDebriefingStep {
 }
 
 /**
- * Il quadro d'insieme di un percorso.
+ * Una versione del quadro d'insieme di un percorso.
  *
- * Uno solo per percorso, e ogni generazione riscrive quello di prima: su un
- * gruppo il confronto con la versione precedente non si può fare, perché fra
- * le due qualcuno è stato aggiunto e qualcuno ritirato.
+ * Ogni generazione si aggiunge a quelle di prima, come sullo storico di una
+ * persona, e legge la precedente per dire come il gruppo si è mosso. La
+ * condizione in più è che il gruppo sia lo stesso: se qualcuno è stato
+ * aggiunto o ritirato la direzione non c'è, e a dirlo è `group_changed`.
  *
  * I numeri sono la fotografia del momento in cui è stato scritto, come nel
  * quadro di una persona: a dire che il tempo è passato c'è `stale_reason`.
  */
 export interface PathDebriefing {
+  id: string
   path_id: string
   summary: string
   /** La tappa dove il gruppo si ferma, null se non è ferma nessuna persona. */
@@ -258,6 +260,13 @@ export interface PathDebriefing {
   /** Cosa il gruppo fa bene, null se nel materiale non si vedeva. */
   strength: string | null
   next_step: string
+  /** Come si è mosso il gruppo dal quadro precedente. null sul primo, e
+   *  null quando il gruppo è cambiato, dove un confronto non esiste. */
+  direction: DebriefingDirection | null
+  change: string | null
+  /** Un quadro prima c'era, ma il gruppo non era più lo stesso: è il motivo
+   *  per cui la direzione manca, e non è la stessa cosa che non averne uno. */
+  group_changed: boolean
   covered_people: number
   covered_conversations: number
   covered_attempts: number
@@ -265,21 +274,28 @@ export interface PathDebriefing {
   conversation_average: number | null
   attempt_average: number | null
   criteria_averages: DebriefingCriterionAverage[]
+  /** Di quanto si sono mosse le medie dal quadro precedente. La direzione qui
+   *  sopra la legge il modello nelle prove, questi sono una sottrazione, e si
+   *  fermano quando il gruppo è cambiato: là la differenza racconterebbe un
+   *  ritiro come un miglioramento. */
+  conversation_average_delta: number | null
+  attempt_average_delta: number | null
   started: number
   completed: number
   overdue: number
   steps: PathDebriefingStep[]
-  /** Perché non vale più: prove nuove, tappe riscritte, o null se vale. */
+  /** Perché non vale più: prove nuove, tappe riscritte, o null se vale.
+   *  Solo sul più recente: su una versione vecchia è ovvio. */
   stale_reason: 'prove' | 'percorso' | null
-  written_at: string
+  created_at: string
   requested_by: string
 }
 
-/** Il quadro di questo percorso, o null se non è mai stato scritto. */
-export const fetchPathDebriefing = (pathId: string) =>
-  apiFetch<PathDebriefing | null>(`/api/training/paths/${pathId}/debriefing`)
+/** Tutti i quadri scritti su questo percorso, dal più recente. */
+export const fetchPathDebriefings = (pathId: string) =>
+  apiFetch<PathDebriefing[]>(`/api/training/paths/${pathId}/debriefing`)
 
-/** Ne fa scrivere uno, che prende il posto di quello di prima. */
+/** Ne fa scrivere uno, che si aggiunge a quelli di prima. */
 export const generatePathDebriefing = (pathId: string) =>
   apiFetch<PathDebriefing>(`/api/training/paths/${pathId}/debriefing`, { method: 'POST' })
 

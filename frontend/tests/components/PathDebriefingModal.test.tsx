@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const servizio = vi.hoisted(() => ({
-  fetchPathDebriefing: vi.fn(),
+  fetchPathDebriefings: vi.fn(),
   generatePathDebriefing: vi.fn(),
 }))
 vi.mock('../../src/services/training', () => servizio)
@@ -33,6 +33,7 @@ const percorso = (over: Partial<TrainingPath> = {}): TrainingPath =>
   }) as TrainingPath
 
 const quadro = (over: Partial<PathDebriefing> = {}): PathDebriefing => ({
+  id: 'q-2',
   path_id: 'p-1',
   summary: 'Il gruppo regge il tono ma non identifica il cliente.',
   blocker_position: 2,
@@ -46,6 +47,9 @@ const quadro = (over: Partial<PathDebriefing> = {}): PathDebriefing => ({
   ],
   strength: 'Il tono resta professionale anche quando il cliente insiste.',
   next_step: "Un giro d'aula sull'apertura, con l'identificazione come unico obiettivo.",
+  direction: null,
+  change: null,
+  group_changed: false,
   covered_people: 6,
   covered_conversations: 14,
   covered_attempts: 2,
@@ -83,10 +87,27 @@ const quadro = (over: Partial<PathDebriefing> = {}): PathDebriefing => ({
       best_average: 6.1,
     },
   ],
+  conversation_average_delta: null,
+  attempt_average_delta: null,
   stale_reason: null,
-  written_at: '2026-03-11T09:00:00',
+  created_at: '2026-03-11T09:00:00',
   requested_by: 'formatore@example.com',
   ...over,
+})
+
+/* Uno storico vero: il vecchio sotto, il nuovo sopra con la direzione e lo
+ * scarto della media, cioè le due cose che esistono solo dal secondo in poi e
+ * solo se il gruppo è rimasto lo stesso. */
+const precedente = quadro({
+  id: 'q-1',
+  summary: 'Il primo quadro, di gennaio.',
+  created_at: '2026-01-10T09:00:00',
+  conversation_average: 5.2,
+})
+const recente = quadro({
+  direction: 'up',
+  change: 'La tappa 1 non ferma più nessuno.',
+  conversation_average_delta: 1.0,
 })
 
 function renderModal(path: TrainingPath = percorso()) {
@@ -98,13 +119,13 @@ function renderModal(path: TrainingPath = percorso()) {
 }
 
 beforeEach(() => {
-  servizio.fetchPathDebriefing.mockReset().mockResolvedValue(null)
+  servizio.fetchPathDebriefings.mockReset().mockResolvedValue([])
   servizio.generatePathDebriefing.mockReset().mockResolvedValue(quadro())
 })
 
 describe('PathDebriefingModal', () => {
   it('mostra il quadro con su cosa poggia', async () => {
-    servizio.fetchPathDebriefing.mockResolvedValue(quadro())
+    servizio.fetchPathDebriefings.mockResolvedValue([quadro()])
 
     renderModal()
 
@@ -122,7 +143,7 @@ describe('PathDebriefingModal', () => {
   /* Dove il percorso si inceppa è la domanda con cui si apre questa finestra,
    * e la tappa la sceglie il conteggio: il modello ne spiega solo il perché. */
   it('dice dove il gruppo si ferma', async () => {
-    servizio.fetchPathDebriefing.mockResolvedValue(quadro())
+    servizio.fetchPathDebriefings.mockResolvedValue([quadro()])
 
     renderModal()
 
@@ -131,9 +152,9 @@ describe('PathDebriefingModal', () => {
   })
 
   it('non dichiara nessun blocco quando non è ferma nessuna persona', async () => {
-    servizio.fetchPathDebriefing.mockResolvedValue(
+    servizio.fetchPathDebriefings.mockResolvedValue([
       quadro({ blocker_position: null, blocker: null }),
-    )
+    ])
 
     renderModal()
 
@@ -145,7 +166,7 @@ describe('PathDebriefingModal', () => {
    * prove nuove, e tappe riscritte. Il secondo è il più insidioso, perché il
    * testo parla di una fila che non esiste più. */
   it('dice quando le tappe sono cambiate sotto', async () => {
-    servizio.fetchPathDebriefing.mockResolvedValue(quadro({ stale_reason: 'percorso' }))
+    servizio.fetchPathDebriefings.mockResolvedValue([quadro({ stale_reason: 'percorso' })])
 
     renderModal()
 
@@ -153,7 +174,7 @@ describe('PathDebriefingModal', () => {
   })
 
   it('non offre di rigenerarlo quando non è cambiato niente', async () => {
-    servizio.fetchPathDebriefing.mockResolvedValue(quadro())
+    servizio.fetchPathDebriefings.mockResolvedValue([quadro()])
 
     renderModal()
 
@@ -179,8 +200,46 @@ describe('PathDebriefingModal', () => {
     expect(screen.queryByRole('button', { name: /Genera/ })).not.toBeInTheDocument()
   })
 
+  /* La domanda che si fa chi apre questa finestra su un percorso che segue
+   * già non è "com'è messo", è "come si sta muovendo". */
+  it('dice come si è mosso il gruppo dal quadro precedente', async () => {
+    servizio.fetchPathDebriefings.mockResolvedValue([recente, precedente])
+
+    renderModal()
+
+    /* Due volte, ed è voluto: l'etichetta sta sul quadro aperto e sulla riga
+     * dello storico, che è dove si verifica rispetto a cosa. */
+    expect(await screen.findAllByText('In miglioramento')).toHaveLength(2)
+    expect(screen.getByText('La tappa 1 non ferma più nessuno.')).toBeInTheDocument()
+  })
+
+  /* Che il confronto non si possa fare è una notizia: tacere lascerebbe
+   * credere che il modello non abbia voluto sbilanciarsi. */
+  it('quando il gruppo è cambiato dice che non si confronta niente', async () => {
+    servizio.fetchPathDebriefings.mockResolvedValue([quadro({ group_changed: true }), precedente])
+
+    renderModal()
+
+    expect(await screen.findByText('Nessun confronto con il quadro precedente')).toBeInTheDocument()
+    expect(screen.queryByText('In miglioramento')).not.toBeInTheDocument()
+  })
+
+  /* Una versione vecchia riaperta lo dice in chiaro: leggere per attuale un
+   * testo scritto due mesi fa è l'unico modo in cui questa finestra inganna. */
+  it('lo storico si sfoglia, e una versione vecchia lo dichiara', async () => {
+    servizio.fetchPathDebriefings.mockResolvedValue([recente, precedente])
+
+    renderModal()
+
+    await screen.findByText(/Il gruppo regge il tono/)
+    await userEvent.click(screen.getByRole('button', { name: /gen 2026/ }))
+
+    expect(await screen.findByText(/Il primo quadro, di gennaio/)).toBeInTheDocument()
+    expect(screen.getByText(/Stai leggendo un quadro precedente/)).toBeInTheDocument()
+  })
+
   it('non dichiara punti di forza quando non ce ne sono', async () => {
-    servizio.fetchPathDebriefing.mockResolvedValue(quadro({ strength: null }))
+    servizio.fetchPathDebriefings.mockResolvedValue([quadro({ strength: null })])
 
     renderModal()
 

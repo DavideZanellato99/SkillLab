@@ -53,7 +53,8 @@ una persona: quello che entra perde la forma con cui una riga si dichiara, e
 il dossier viaggia dentro un recinto che il prompt nomina.
 """
 
-from dataclasses import dataclass
+import hashlib
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -62,6 +63,9 @@ from sqlalchemy.orm import Session, selectinload
 import untrusted_text
 from debriefing_source import CriterionAverage
 from models import (
+    DEBRIEFING_DOWN,
+    DEBRIEFING_STABLE,
+    DEBRIEFING_UP,
     ChatConversation,
     ConversationEvaluation,
     ConversationReview,
@@ -112,6 +116,15 @@ DOSSIER_BUDGET_CHARS = 30_000
 # permette al modello di riconoscere due prove della stessa persona; il nome
 # non gli serve, e infatti non ce l'ha.
 _SIGLA = "ALLIEVO {n}"
+
+# Come si legge la direzione scritta dal modello quando il quadro precedente
+# viene rimesso davanti al successivo. Le stesse tre parole del quadro di una
+# persona, e le stesse che vede chi legge l'interfaccia.
+_DIREZIONI = {
+    DEBRIEFING_UP: "in miglioramento",
+    DEBRIEFING_STABLE: "stabile",
+    DEBRIEFING_DOWN: "in peggioramento",
+}
 
 
 @dataclass(frozen=True)
@@ -174,6 +187,18 @@ class PathDebriefingMaterial:
     # persone hanno la propria tappa di adesso. La sceglie il backend perché
     # è un massimo, non una lettura.
     blocker_position: int | None
+    # L'impronta di chi sta percorrendo il percorso adesso, che finisce sulla
+    # riga e servirà alla generazione successiva per sapere se il gruppo è
+    # rimasto lo stesso.
+    group: str
+    # Il quadro precedente ridotto a testo, vuoto quando non c'è o quando il
+    # gruppo nel frattempo è cambiato. È quello che decide se al modello viene
+    # chiesta una direzione.
+    previous: str = ""
+    # Vero quando un quadro prima c'era ma il gruppo non è più quello: non è
+    # la stessa cosa che non averne uno, e le due schermate lo dicono
+    # diversamente.
+    group_changed: bool = False
 
     @property
     def evidence_count(self) -> int:
@@ -189,13 +214,138 @@ def _avg(values: list[float]) -> float | None:
     return round(sum(values) / len(values), 1) if values else None
 
 
-def latest(db: Session, path_id: UUID) -> PathDebriefing | None:
-    """Il quadro scritto su questo percorso, o None se non ce n'è.
+@dataclass(frozen=True)
+class PathDebriefingDeltas:
+    """Di quanto si sono mosse le medie fra un quadro e quello di prima.
 
-    Uno solo, non uno storico: ogni generazione riscrive la riga (vedi
-    ``PathDebriefing``).
+    None dove il confronto non si può fare: il primo quadro di un percorso, il
+    gruppo cambiato nel frattempo, o una media che una delle due volte non
+    c'era. Uno zero al posto di un confronto impossibile direbbe "fermo", che
+    è una notizia e non un dato mancante.
     """
-    return db.query(PathDebriefing).filter(PathDebriefing.path_id == path_id).first()
+
+    conversation_average: float | None = None
+    attempt_average: float | None = None
+    # Solo i criteri presenti in tutte e due le fotografie, per chiave.
+    criteria: dict[str, float] = field(default_factory=dict)
+
+
+def group_fingerprint(user_ids: list[UUID]) -> str:
+    """Chi sta percorrendo il percorso, ridotto a un'impronta.
+
+    Ordinata prima di essere ridotta, perché l'ordine in cui le assegnazioni
+    tornano dal database non è una proprietà del gruppo: due letture della
+    stessa classe devono dare la stessa impronta.
+
+    Un'hash e non l'elenco degli id: alla domanda "è ancora lo stesso gruppo?"
+    un confronto fra due stringhe risponde per intero, e in cambio la riga
+    salvata continua a non contenere niente che nomini qualcuno.
+    """
+    return hashlib.sha256(",".join(sorted(str(i) for i in user_ids)).encode()).hexdigest()
+
+
+def latest(db: Session, path_id: UUID) -> PathDebriefing | None:
+    """L'ultimo quadro scritto su questo percorso, o None se non ce n'è."""
+    return (
+        db.query(PathDebriefing)
+        .filter(PathDebriefing.path_id == path_id)
+        .order_by(PathDebriefing.created_at.desc())
+        .first()
+    )
+
+
+def history(db: Session, path_id: UUID) -> list[PathDebriefing]:
+    """Tutti i quadri scritti su questo percorso, dal più recente.
+
+    Tutti insieme e non a pagine, come lo storico di una persona: sono quante
+    volte qualcuno lo ha chiesto su un percorso, cioè una manciata.
+    """
+    return (
+        db.query(PathDebriefing)
+        .filter(PathDebriefing.path_id == path_id)
+        .order_by(PathDebriefing.created_at.desc())
+        .all()
+    )
+
+
+def _previous_block(debriefing: PathDebriefing) -> str:
+    """Il quadro precedente come lo rilegge il modello che scrive il nuovo.
+
+    Entra il testo con i numeri di allora accanto, e non le prove che quel
+    quadro aveva letto: quelle o sono già nel dossier di adesso, o sono
+    vecchie abbastanza da essere uscite, e in tutti e due i casi rimetterle
+    raddoppierebbe il costo per non aggiungere niente.
+
+    Le tappe di allora ci sono con i loro conti, e sono la parte che qui conta
+    di più: su un gruppo il cambiamento si vede prima di tutto nel punto in
+    cui il percorso si inceppa, che può essersi spostato in avanti.
+    """
+    content = debriefing.content or {}
+    facts = content.get("facts") or {}
+    righe = [
+        f"- scritto il {debriefing.created_at:%d/%m/%Y}, su {debriefing.covered_people} persone, "
+        f"{debriefing.covered_conversations} conversazioni e "
+        f"{debriefing.covered_attempts} test, fino al {debriefing.covered_until:%d/%m/%Y}"
+    ]
+    if facts.get("blocker_position") is not None:
+        righe.append(f"- allora il gruppo si fermava sulla tappa {facts['blocker_position']}")
+    for step in facts.get("steps") or []:
+        righe.append(
+            f"  - tappa {step.get('position')}: superata da {step.get('passed')} su "
+            f"{step.get('unlocked')}, ferme lì {step.get('stuck')}"
+        )
+    if facts.get("conversation_average") is not None:
+        righe.append(f"- media di allora delle conversazioni: {facts['conversation_average']}/10")
+    if facts.get("attempt_average") is not None:
+        righe.append(f"- media di allora dei test: {facts['attempt_average']}/10")
+    for criterio in facts.get("criteria_averages") or []:
+        righe.append(f"  - {criterio.get('label')}, allora: {criterio.get('average')}/10")
+    direzione = _DIREZIONI.get(content.get("direction") or "")
+    if direzione:
+        righe.append(f"- quella volta il gruppo risultava {direzione} rispetto al quadro prima")
+    righe.append(f"- sintesi di allora: {content.get('summary') or ''}")
+    if content.get("blocker"):
+        righe.append(f"- perché si fermava lì, si diceva: {content['blocker']}")
+    for tema in content.get("themes") or []:
+        righe.append(f"- tema di allora, {tema.get('title')}: {tema.get('detail') or ''}")
+    if content.get("next_step"):
+        righe.append(f"- l'intervento indicato allora: {content['next_step']}")
+    return "\n".join(righe)
+
+
+def deltas(current: PathDebriefing, previous: PathDebriefing | None) -> PathDebriefingDeltas:
+    """La differenza fra le medie di questo quadro e quelle del precedente.
+
+    La sottrazione la fa il backend e non il modello, per la stessa ragione
+    per cui non fa le medie: un numero verosimile accanto a due numeri veri è
+    il modo più rapido per far smettere di credere a tutti e tre.
+
+    Si ferma quando il gruppo è cambiato, e non è una cautela: la media di
+    dodici persone e quella delle stesse dodici meno due non si sottraggono,
+    perché la differenza direbbe di un miglioramento che è invece un ritiro.
+    """
+    if previous is None or previous.covered_group != current.covered_group:
+        return PathDebriefingDeltas()
+
+    ora = (current.content or {}).get("facts") or {}
+    allora = (previous.content or {}).get("facts") or {}
+
+    def _scarto(chiave: str) -> float | None:
+        prima, dopo = allora.get(chiave), ora.get(chiave)
+        return round(dopo - prima, 1) if prima is not None and dopo is not None else None
+
+    prima_per_criterio = {
+        c["key"]: c["average"] for c in allora.get("criteria_averages") or [] if "key" in c
+    }
+    return PathDebriefingDeltas(
+        conversation_average=_scarto("conversation_average"),
+        attempt_average=_scarto("attempt_average"),
+        criteria={
+            c["key"]: round(c["average"] - prima_per_criterio[c["key"]], 1)
+            for c in ora.get("criteria_averages") or []
+            if c.get("key") in prima_per_criterio
+        },
+    )
 
 
 def _assignments(db: Session, path_id: UUID) -> list[TrainingPathAssignment]:
@@ -394,6 +544,10 @@ def collect(db: Session, path: TrainingPath) -> PathDebriefingMaterial:
 
     **Il dossier**, che è il testo dei giudizi delle prove più recenti di ogni
     tappa, siglato e recintato, e da cui escono anche le medie.
+
+    In cima a tutto sta il quadro precedente, che entra nel materiale solo se
+    il gruppo è rimasto lo stesso: è quello che decide se al modello viene
+    chiesto anche come il gruppo si è mosso da allora.
     """
     assignments = _assignments(db, path.id)
     by_key = proofs_by_key(db, assignments)
@@ -531,6 +685,11 @@ def collect(db: Session, path: TrainingPath) -> PathDebriefingMaterial:
             # miglioramento si legge come un peggioramento.
             blocchi.append(_step_header(step, facts) + "\n" + "\n".join(reversed(righe)))
 
+    # Il gruppo di adesso, e il quadro di prima se parlava dello stesso.
+    impronta = group_fingerprint(user_ids)
+    precedente = latest(db, path.id)
+    stesso_gruppo = precedente is not None and precedente.covered_group == impronta
+
     return PathDebriefingMaterial(
         title=path.title,
         description=(path.description or "").strip(),
@@ -563,6 +722,9 @@ def collect(db: Session, path: TrainingPath) -> PathDebriefingMaterial:
         ],
         steps=steps_facts,
         blocker_position=blocker_position,
+        group=impronta,
+        previous=_previous_block(precedente) if stesso_gruppo else "",
+        group_changed=precedente is not None and not stesso_gruppo,
     )
 
 

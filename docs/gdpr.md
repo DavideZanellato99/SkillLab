@@ -186,6 +186,14 @@ formatore quando gli serve, la richiesta finisce nel registro delle azioni
 (`training.path_debriefing`), e i conteggi accanto al testo li calcola il
 backend.
 
+**Dal secondo in poi dice anche una direzione**, cioè se il gruppo è
+migliorato, è fermo o è peggiorato, ma solo quando è lo **stesso gruppo**: di
+chi lo stava percorrendo si conserva un'impronta (un'hash degli id delle
+assegnazioni, `path_debriefings.covered_group`), e se non corrisponde la
+direzione non viene nemmeno chiesta al modello. L'impronta non nomina nessuno
+e non si legge al contrario, quindi la riga resta priva di dati personali; il
+giudizio, come il resto, è sul gruppo e non su qualcuno in particolare.
+
 ## 5. Il monitoraggio dei lavoratori (Italia)
 
 Uno strumento che registra, trascrive e valuta la prestazione di un

@@ -1309,17 +1309,19 @@ class PathDebriefingStep(BaseModel):
 
 
 class PathDebriefingResponse(BaseModel):
-    """Il quadro d'insieme su un percorso, come si legge.
+    """Una versione del quadro d'insieme su un percorso, come si legge.
 
-    Una sola versione, non uno storico: ogni generazione riscrive la riga
-    (vedi ``PathDebriefing``). Tutto è una fotografia salvata tranne
-    `stale_reason`, che guarda com'è il percorso adesso.
+    Tutto è una fotografia salvata tranne `stale_reason` e i tre scarti: i
+    numeri sono quelli che il modello aveva davanti quando ha scritto, non
+    quelli di adesso, e ricalcolarli farebbe comparire una tabella che il
+    testo accanto non ha mai visto.
 
     Nessun campo nomina una persona, e non è una dimenticanza: il quadro
     parla di tappe e del gruppo, e chi è fermo dove lo dice la tabella delle
     assegnazioni, che lo deriva dalle prove.
     """
 
+    id: UUID
     path_id: UUID
     summary: str
     # Perché il gruppo si ferma sulla tappa indicata da `blocker_position`.
@@ -1332,6 +1334,17 @@ class PathDebriefingResponse(BaseModel):
     strength: str | None = None
     next_step: str
 
+    # Come si è mosso il gruppo rispetto al quadro precedente: "up", "stable"
+    # o "down", con accanto il racconto di cosa è cambiato. Tutti e due null
+    # sul primo quadro di un percorso e quando il gruppo nel frattempo è
+    # cambiato, perché lì una direzione sarebbe una frase su due insiemi di
+    # persone diversi.
+    direction: str | None = None
+    change: str | None = None
+    # Vero quando un quadro prima c'era ma il gruppo non era più quello: dice
+    # perché la direzione manca, che è diverso dal non averne mai avuta una.
+    group_changed: bool = False
+
     # Su quanto poggia
     covered_people: int
     covered_conversations: int
@@ -1340,6 +1353,12 @@ class PathDebriefingResponse(BaseModel):
     conversation_average: float | None = None
     attempt_average: float | None = None
     criteria_averages: list[DebriefingCriterionAverage] = []
+    # Di quanto si sono mosse le medie dal quadro precedente. La direzione
+    # sopra la legge il modello nelle prove, questi sono una sottrazione, e le
+    # due cose possono non coincidere. Assenti quando il gruppo è cambiato:
+    # là la differenza racconterebbe un ritiro come un miglioramento.
+    conversation_average_delta: float | None = None
+    attempt_average_delta: float | None = None
     # Come stava il gruppo quando è stato scritto
     started: int = 0
     completed: int = 0
@@ -1349,12 +1368,13 @@ class PathDebriefingResponse(BaseModel):
     # Perché il quadro non vale più: "prove" se il gruppo ne ha svolte di
     # nuove, "percorso" se le tappe sono state riscritte dopo, assente se
     # vale ancora. Due parole e non un booleano perché a schermo dicono due
-    # cose diverse (vedi ``path_debriefing_source.staleness``).
+    # cose diverse (vedi ``path_debriefing_source.staleness``). Calcolato solo
+    # sul più recente: su una versione vecchia dello storico è ovvio.
     stale_reason: str | None = None
-    # Quando questo testo è stato scritto, e da chi è stato chiesto. È
-    # l'ultima scrittura e non la prima: la riga è una sola, e ogni
-    # generazione la riscrive.
-    written_at: datetime
+    created_at: datetime
+    # Chi lo ha fatto scrivere, dalle colonne di paternità. Una riga non viene
+    # mai riscritta, quindi chi lo ha chiesto e quando sono per sempre quelli
+    # della creazione.
     requested_by: str
 
 

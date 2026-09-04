@@ -188,8 +188,17 @@ export default function UserDebriefingPanel({
 
           <DebriefingVersion debriefing={shown} />
 
+          {/* Lo storico è lo stesso elenco del quadro di un percorso, quindi
+              riceve righe e non debriefing: qui si dice quali dei propri
+              campi sono le cinque cose che una riga mostra. */}
           <DebriefingHistory
-            debriefings={storico}
+            versions={storico.map((d) => ({
+              id: d.id,
+              createdAt: d.created_at,
+              direction: d.direction,
+              average: d.conversation_average,
+              delta: d.conversation_average_delta,
+            }))}
             currentId={shown.id}
             onSelect={(id) => setOpenId(id)}
           />

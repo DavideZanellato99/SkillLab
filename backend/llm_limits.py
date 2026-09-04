@@ -63,10 +63,10 @@ CORREZIONE = SlidingWindowLimiter(scope="llm-correzione", max_events=20, window_
 # che è già più di quante se ne facciano in una giornata.
 DEBRIEFING = SlidingWindowLimiter(scope="llm-debriefing", max_events=10, window_seconds=_ORA)
 # Il quadro di un percorso è lo stesso gesto sul gruppo invece che sulla
-# persona, e ha lo stesso tetto: chiamata cara, rilanciabile all'infinito
-# sullo stesso percorso perché ogni giro sostituisce quello prima. Dieci
-# all'ora sono dieci classi diverse di cui preparare la sessione, che è più
-# di quante se ne facciano in una giornata.
+# persona, e ha lo stesso tetto per la stessa ragione: chiamata cara, che su
+# uno stesso percorso si può chiedere a ogni prova nuova. Dieci all'ora sono
+# dieci classi diverse di cui preparare la sessione, che è più di quante se ne
+# facciano in una giornata.
 DEBRIEFING_PERCORSO = SlidingWindowLimiter(
     scope="llm-debriefing-percorso", max_events=10, window_seconds=_ORA
 )

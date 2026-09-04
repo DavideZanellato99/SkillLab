@@ -191,22 +191,27 @@ def _facts(material) -> str:
     return "\n".join(righe)
 
 
-def _direction(raw: dict) -> str:
+def normalize_direction(valore) -> str:
     """La direzione scritta dal modello, ridotta a una delle tre parole.
 
     Fallisce, e quindi fa ritentare, quando la parola non si riconosce: la
-    direzione è l'unica cosa che il secondo quadro aggiunge al primo, e
-    metterci "stabile" perché il modello ha scritto qualcos'altro vorrebbe
-    dire dire a un docente che una persona è ferma senza averlo letto da
-    nessuna parte.
+    direzione è l'unica cosa che un quadro aggiunge a quello prima, e metterci
+    "stabile" perché il modello ha scritto qualcos'altro vorrebbe dire dire a
+    un docente che qualcuno è fermo senza averlo letto da nessuna parte.
+
+    Sta qui e la usano in due, questo quadro e quello di un percorso
+    (``path_debriefing``): le tre parole sono un vocabolario solo, e due copie
+    vorrebbero dire due elenchi di sinonimi che col tempo si allontanano,
+    cioè la stessa risposta del modello accettata da una parte e buttata
+    dall'altra.
     """
-    scritto = str(raw.get("direction") or "").strip().lower()
+    scritto = str(valore or "").strip().lower()
     if scritto in DEBRIEFING_DIRECTIONS:
         return scritto
     tradotto = _SINONIMI_DIREZIONE.get(scritto)
     if tradotto:
         return tradotto
-    raise ValueError(f"Il debriefing generato non dice una direzione riconoscibile: {scritto!r}.")
+    raise ValueError(f"La direzione scritta dal modello non si riconosce: {scritto!r}.")
 
 
 def normalize_debriefing(raw: dict, *, comparing: bool = False) -> dict:
@@ -266,7 +271,7 @@ def normalize_debriefing(raw: dict, *, comparing: bool = False) -> dict:
         # Presenti sempre, valorizzati solo dal secondo quadro in poi: una
         # chiave che a volte c'è e a volte no costringerebbe ogni lettore a
         # chiedersi se manca perché era il primo o perché è vecchia.
-        "direction": _direction(raw) if comparing else None,
+        "direction": normalize_direction(raw.get("direction")) if comparing else None,
         "change": (str(raw.get("change") or "").strip() or None) if comparing else None,
     }
 

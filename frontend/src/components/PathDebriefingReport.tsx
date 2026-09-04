@@ -27,10 +27,31 @@
 import type { PathDebriefing, PathDebriefingStep } from '../services/training'
 import CriteriaAverageList, { debriefingCardCls as cardCls } from './CriteriaAverageList'
 import Tooltip from './Tooltip'
+import { directionStyle } from './debriefingFormat'
 import { formatDateTime } from './dateFormat'
+import { Delta } from './scoreCharts'
 import { formatScore, scoreBadgeTone } from './simulationFormat'
 
 const persone = (n: number) => `${n} ${n === 1 ? 'persona' : 'persone'}`
+
+/** Una media di allora, con accanto di quanto si è mossa. */
+function Average({ label, value, delta }: { label: string; value: number; delta: number | null }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      {label}
+      <span
+        className={`rounded-full px-2 py-0.5 text-[0.8rem] font-semibold ${scoreBadgeTone(value)}`}
+      >
+        {formatScore(value)}
+      </span>
+      {delta !== null && (
+        <Tooltip content="Rispetto al quadro d'insieme precedente">
+          <Delta value={delta} />
+        </Tooltip>
+      )}
+    </span>
+  )
+}
 
 /** Su cosa poggia il quadro: il gruppo, le prove lette e le medie di allora. */
 function Coverage({ debriefing }: { debriefing: PathDebriefing }) {
@@ -46,24 +67,18 @@ function Coverage({ debriefing }: { debriefing: PathDebriefing }) {
         {formatDateTime(debriefing.covered_until)}
       </span>
       {debriefing.conversation_average !== null && (
-        <span className="flex items-center gap-1.5">
-          Media conversazioni
-          <span
-            className={`rounded-full px-2 py-0.5 text-[0.8rem] font-semibold ${scoreBadgeTone(debriefing.conversation_average)}`}
-          >
-            {formatScore(debriefing.conversation_average)}
-          </span>
-        </span>
+        <Average
+          label="Media conversazioni"
+          value={debriefing.conversation_average}
+          delta={debriefing.conversation_average_delta}
+        />
       )}
       {debriefing.attempt_average !== null && (
-        <span className="flex items-center gap-1.5">
-          Media test
-          <span
-            className={`rounded-full px-2 py-0.5 text-[0.8rem] font-semibold ${scoreBadgeTone(debriefing.attempt_average)}`}
-          >
-            {formatScore(debriefing.attempt_average)}
-          </span>
-        </span>
+        <Average
+          label="Media test"
+          value={debriefing.attempt_average}
+          delta={debriefing.attempt_average_delta}
+        />
       )}
     </div>
   )
@@ -150,6 +165,51 @@ function Step({ step, isBlocker }: { step: PathDebriefingStep; isBlocker: boolea
   )
 }
 
+/* Come il gruppo si è mosso dal quadro precedente, che è la sola cosa che una
+ * fotografia sola non può dire. Sta sopra al blocco e sotto alla sintesi,
+ * cioè dove cade l'occhio subito dopo aver letto a che punto è il gruppo.
+ *
+ * Sul primo quadro non compare, perché lì un prima non c'è. Quando invece un
+ * prima c'era ma il gruppo è cambiato, compare e dice proprio quello: che il
+ * confronto non si può fare è una notizia, e tacere lascerebbe credere che il
+ * modello non abbia voluto sbilanciarsi. */
+function Movement({ debriefing }: { debriefing: PathDebriefing }) {
+  const style = directionStyle(debriefing.direction)
+
+  if (!style) {
+    if (!debriefing.group_changed) return null
+    return (
+      <div className={`${cardCls} border-l-2 border-l-white/20`}>
+        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+          Nessun confronto con il quadro precedente
+        </h4>
+        <p className="mt-1.5 text-[0.85rem] leading-relaxed text-slate-400">
+          Dall'ultimo quadro il gruppo è cambiato, qualcuno è entrato o è stato ritirato. Dire che è
+          migliorato o peggiorato vorrebbe dire confrontare due gruppi diversi
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${cardCls} flex flex-col gap-2`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+          Rispetto al quadro precedente
+        </h4>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider ${style.tone}`}
+        >
+          {style.label}
+        </span>
+      </div>
+      {debriefing.change && (
+        <p className="text-[0.85rem] leading-relaxed text-slate-300">{debriefing.change}</p>
+      )}
+    </div>
+  )
+}
+
 /** Un tema ricorrente: cosa torna fra persone diverse, e su quali tappe. */
 function Theme({ title, detail, evidence }: { title: string; detail: string; evidence: string }) {
   return (
@@ -167,6 +227,8 @@ export default function PathDebriefingReport({ debriefing }: { debriefing: PathD
       <Coverage debriefing={debriefing} />
 
       <p className="text-[0.9rem] leading-relaxed text-slate-200">{debriefing.summary}</p>
+
+      <Movement debriefing={debriefing} />
 
       <GroupState debriefing={debriefing} />
 

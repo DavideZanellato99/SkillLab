@@ -1538,36 +1538,48 @@ class PathDebriefing(Authored, Base):
     compare nell'esportazione dei propri dati e non se ne va con un account
     cancellato.
 
-    **Una riga per percorso, e ogni giro sostituisce quella prima**, al
-    contrario dello storico che si accumula su una persona. Là la versione
-    precedente è metà del materiale della prossima, perché dove una persona è
-    arrivata si sa solo rispetto a dove era. Qui il gruppo non è lo stesso
-    gruppo: fra una generazione e l'altra qualcuno è stato aggiunto e
-    qualcuno ritirato, e "come si è mosso da allora" sarebbe una frase su due
-    insiemi di persone diversi. È la scelta del controllo del serbatoio, per
-    la stessa ragione: un esito per oggetto, che invecchia e lo dice.
+    **Una riga per volta che è stato chiesto**, come lo storico di una
+    persona: la generazione nuova si aggiunge e legge quella prima, così può
+    dire come il gruppo si è mosso da allora, che è la sola cosa che una
+    fotografia sola non può dire.
 
-    A dirlo sono le colonne di copertura, e qui i modi di invecchiare sono
-    **due**: prove nuove svolte dopo l'ultima che il modello ha letto, e il
-    percorso riscritto dopo. Il secondo sul quadro di una persona non esiste,
-    e qui è il più insidioso: una tappa tolta, o rimessa in un altro punto
-    della fila, cambia proprio la cosa di cui questo testo parla (vedi
-    ``path_debriefing_source.staleness``).
+    Su un gruppo però quel confronto ha una condizione che su una persona non
+    esiste: **il gruppo deve essere lo stesso gruppo**. Fra due generazioni
+    qualcuno può essere stato aggiunto o ritirato, e lì "il gruppo è
+    migliorato" sarebbe una frase su due insiemi di persone diversi. A dirlo è
+    ``covered_group``, l'impronta di chi stava percorrendo il percorso quando
+    il quadro è stato scritto: quando non corrisponde, la direzione non viene
+    nemmeno chiesta al modello e la schermata scrive perché.
+
+    A dire che una riga è vecchia sono le colonne di copertura, e qui i modi
+    di invecchiare sono **due**: prove nuove svolte dopo l'ultima che il
+    modello ha letto, e il percorso riscritto dopo. Il secondo sul quadro di
+    una persona non esiste, e qui è il più insidioso: una tappa tolta, o
+    rimessa in un altro punto della fila, cambia proprio la cosa di cui questo
+    testo parla (vedi ``path_debriefing_source.staleness``).
     """
 
     __tablename__ = "path_debriefings"
 
+    # L'indice è composto e nell'ordine in cui la tabella si legge sempre:
+    # tutti i quadri di un percorso, dal più recente.
+    __table_args__ = (Index("ix_path_debriefings_path_created", "path_id", "created_at"),)
+
     id = Column(Uuid, primary_key=True, default=uuid.uuid4)
-    # Uno per percorso: la generazione successiva riscrive questa riga.
+    # Il percorso di cui il quadro parla. Non è una chiave: di righe per
+    # percorso ce ne sono quante volte è stato chiesto.
     path_id = Column(
         Uuid,
         ForeignKey("training_paths.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
-        index=True,
     )
     # {"summary": str, "blocker": str | None, "themes": [{"title", "detail",
-    #  "evidence"}], "strength": str | None, "next_step": str, "facts": {...}}.
+    #  "evidence"}], "strength": str | None, "next_step": str,
+    #  "direction": "up" | "stable" | "down" | None, "change": str | None,
+    #  "facts": {...}}.
+    # Gli ultimi due esistono solo quando c'era un quadro prima **e** il gruppo
+    # era lo stesso: negli altri casi non sono stati chiesti, e una direzione
+    # inventata lì sarebbe la prima cosa a non essere creduta.
     # In ``facts`` stanno i numeri che il modello aveva davanti, calcolati in
     # Python e mai ricalcolati in lettura, come le medie salvate su un
     # debriefing: un quadro che dicesse una percentuale diversa da quella
@@ -1582,6 +1594,13 @@ class PathDebriefing(Authored, Base):
     covered_people = Column(Integer, nullable=False, default=0)
     covered_conversations = Column(Integer, nullable=False, default=0)
     covered_attempts = Column(Integer, nullable=False, default=0)
+    # Chi stava percorrendo il percorso, ridotto a un'impronta: serve solo a
+    # rispondere "è ancora lo stesso gruppo?", e per quella un confronto fra
+    # due stringhe basta. È la stessa idea dell'impronta delle domande sul
+    # controllo del serbatoio, ed è anche il motivo per cui questa riga
+    # continua a non contenere dati personali: un'hash non nomina nessuno e
+    # non si legge al contrario.
+    covered_group = Column(String(64), nullable=False, default="")
 
     path = relationship("TrainingPath")
 

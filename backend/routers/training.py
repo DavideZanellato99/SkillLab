@@ -631,21 +631,32 @@ def delete_path(
 
 
 def _path_debriefing_response(
-    db: Session, path: TrainingPath, debriefing: PathDebriefing
+    db: Session,
+    path: TrainingPath,
+    debriefing: PathDebriefing,
+    previous: PathDebriefing | None,
+    *,
+    is_latest: bool,
 ) -> PathDebriefingResponse:
-    """Il quadro salvato, più la sola cosa che si ricava in lettura.
+    """Un quadro salvato, più le due cose che si ricavano in lettura.
 
-    I numeri sono quelli che il modello aveva davanti, salvati accanto al suo
-    testo: ricalcolarli adesso farebbe comparire sopra un testo che parla di
-    sei persone ferme alla terza tappa una tabella che ne mostra due, senza
-    che nessuna delle due stia mentendo.
+    I numeri salvati sono quelli che il modello aveva davanti: ricalcolarli
+    adesso farebbe comparire sopra un testo che parla di sei persone ferme
+    alla terza tappa una tabella che ne mostra due, senza che nessuna delle
+    due stia mentendo.
 
-    L'eccezione è ``stale_reason``, che è l'opposto: guarda com'è il percorso
-    adesso, ed esiste per dire che quei numeri sono di allora.
+    Le due eccezioni non contraddicono la regola. Gli scarti non ricalcolano
+    niente, sottraggono due fotografie che non cambiano più, e si fermano da
+    soli quando il gruppo è cambiato. Il segnale di vecchio guarda invece com'è
+    il percorso adesso, ed esiste apposta per dire che quei numeri sono di
+    allora; sta solo sul più recente, perché su una versione vecchia dello
+    storico "non ha visto le ultime prove" è ovvio.
     """
     content = debriefing.content or {}
     facts = content.get("facts") or {}
+    scarti = path_debriefing_source.deltas(debriefing, previous)
     return PathDebriefingResponse(
+        id=debriefing.id,
         path_id=debriefing.path_id,
         summary=content.get("summary", ""),
         blocker_position=facts.get("blocker_position"),
@@ -653,38 +664,75 @@ def _path_debriefing_response(
         themes=content.get("themes") or [],
         strength=content.get("strength"),
         next_step=content.get("next_step", ""),
+        direction=content.get("direction"),
+        change=content.get("change"),
+        # Il gruppo era un altro: è il motivo per cui la direzione manca, e va
+        # detto, altrimenti si legge come un quadro che non ha voluto
+        # sbilanciarsi.
+        group_changed=previous is not None and previous.covered_group != debriefing.covered_group,
         covered_people=debriefing.covered_people,
         covered_conversations=debriefing.covered_conversations,
         covered_attempts=debriefing.covered_attempts,
         covered_until=debriefing.covered_until,
         conversation_average=facts.get("conversation_average"),
         attempt_average=facts.get("attempt_average"),
-        criteria_averages=facts.get("criteria_averages") or [],
+        criteria_averages=[
+            {**c, "delta": scarti.criteria.get(c.get("key"))}
+            for c in facts.get("criteria_averages") or []
+        ],
+        conversation_average_delta=scarti.conversation_average,
+        attempt_average_delta=scarti.attempt_average,
         started=facts.get("started", 0),
         completed=facts.get("completed", 0),
         overdue=facts.get("overdue", 0),
         steps=facts.get("steps") or [],
-        stale_reason=path_debriefing_source.staleness(db, path, debriefing),
-        written_at=debriefing.updated_at,
-        requested_by=debriefing.updated_by_email,
+        stale_reason=(
+            path_debriefing_source.staleness(db, path, debriefing) if is_latest else None
+        ),
+        created_at=debriefing.created_at,
+        requested_by=debriefing.created_by_email,
     )
 
 
-@router.get("/paths/{path_id}/debriefing", response_model=PathDebriefingResponse | None)
-def read_path_debriefing(
+def _path_debriefing_history(db: Session, path: TrainingPath) -> list[PathDebriefingResponse]:
+    """Lo storico dal più recente, ciascuno confrontato con quello di prima.
+
+    Il confronto si fa qui e non una riga per volta perché la lista è già in
+    mano: il quadro precedente di ciascuno è quello che lo segue nell'elenco,
+    e chiederlo al database una volta per riga sarebbe una query per ogni
+    versione mai scritta su quel percorso.
+    """
+    rows = path_debriefing_source.history(db, path.id)
+    return [
+        _path_debriefing_response(
+            db,
+            path,
+            debriefing,
+            rows[index + 1] if index + 1 < len(rows) else None,
+            is_latest=index == 0,
+        )
+        for index, debriefing in enumerate(rows)
+    ]
+
+
+@router.get("/paths/{path_id}/debriefing", response_model=list[PathDebriefingResponse])
+def read_path_debriefings(
     path_id: UUID,
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """Il quadro d'insieme di questo percorso, o niente se non è mai stato scritto.
+    """Tutti i quadri scritti su questo percorso, dal più recente.
 
-    Vuoto e non 404: il percorso esiste, semplicemente nessuno ha ancora
-    fatto scrivere il suo quadro, e questa è la schermata da cui lo si
-    chiede. Il 404 resta per il percorso che chi guarda non può vedere.
+    Lista vuota e non 404: il percorso esiste, semplicemente nessuno ha ancora
+    fatto scrivere il suo quadro, e questa è la schermata da cui lo si chiede.
+    Il 404 resta per il percorso che chi guarda non può vedere.
+
+    Tutte le versioni in una richiesta sola: chi apre questa schermata vuole
+    sapere se il gruppo sta andando avanti, e quella risposta è la riga di
+    adesso letta accanto a quelle di prima.
     """
     path = _scoped_path_or_404(db, current_admin, path_id)
-    debriefing = path_debriefing_source.latest(db, path.id)
-    return _path_debriefing_response(db, path, debriefing) if debriefing else None
+    return _path_debriefing_history(db, path)
 
 
 def _path_debriefing_material(
@@ -752,28 +800,43 @@ def _store_path_debriefing(
     content: dict,
     material: path_debriefing_source.PathDebriefingMaterial,
 ) -> PathDebriefingResponse:
-    """Blocking write of the path debriefing (run via asyncio.to_thread).
+    """Blocking write of a new path debriefing (run via asyncio.to_thread).
 
-    La riga è una sola per percorso e viene riscritta, non aggiunta: quello
-    che cambia sono il testo, le colonne di copertura e la firma di chi ha
-    chiesto questa versione, che la paternità timbra da sé.
+    Si aggiunge allo storico invece di sostituire il precedente, come sul
+    quadro di una persona: senza la versione di prima sul disco, "il gruppo sta
+    migliorando" è una cosa che nessuno può né scrivere né verificare.
+
+    Accanto al testo va anche l'impronta del gruppo di adesso, che è quello
+    che permetterà alla generazione successiva di sapere se sta confrontando
+    le stesse persone.
     """
-    # Ricaricati, non riusati: gli oggetti di prima sono staccati dalla
+    # Ricaricato, non riusato: gli oggetti di prima sono staccati dalla
     # sessione dopo il commit.
     path = _scoped_path_or_404(db, admin, path_id)
-    debriefing = path_debriefing_source.latest(db, path.id)
-    if debriefing is None:
-        debriefing = PathDebriefing(path_id=path.id)
-        db.add(debriefing)
-    debriefing.content = content
-    debriefing.covered_until = material.covered_until
-    debriefing.covered_people = material.people
-    debriefing.covered_conversations = material.conversations
-    debriefing.covered_attempts = material.attempts
+    debriefing = PathDebriefing(
+        path_id=path.id,
+        content=content,
+        covered_until=material.covered_until,
+        covered_people=material.people,
+        covered_conversations=material.conversations,
+        covered_attempts=material.attempts,
+        covered_group=material.group,
+    )
+    db.add(debriefing)
     db.commit()
     db.refresh(debriefing)
 
-    return _path_debriefing_response(db, path, debriefing)
+    # Il precedente riletto dopo il commit, per la stessa ragione: quello di
+    # prima dell'attesa è staccato, e gli scarti si calcolano sui suoi numeri.
+    # È il secondo della lista, perché il primo è appena nato.
+    storico = path_debriefing_source.history(db, path.id)
+    return _path_debriefing_response(
+        db,
+        path,
+        debriefing,
+        storico[1] if len(storico) > 1 else None,
+        is_latest=True,
+    )
 
 
 @router.post("/paths/{path_id}/debriefing", response_model=PathDebriefingResponse)
@@ -785,10 +848,12 @@ async def generate_path_debriefing(
 ):
     """Fa scrivere il quadro d'insieme di questo percorso, e lo salva.
 
-    Sostituisce quello di prima invece di aggiungersi: su un gruppo il
-    confronto con la versione precedente non si può fare, perché fra le due
-    qualcuno è stato aggiunto e qualcuno ritirato, e "come si è mosso da
-    allora" sarebbe una frase su due insiemi di persone diversi.
+    Si aggiunge allo storico invece di sostituire il precedente, e il
+    precedente entra nel materiale che il modello legge, **ma solo se il
+    gruppo è rimasto lo stesso**: quando qualcuno è stato aggiunto o ritirato
+    la direzione non viene chiesta affatto, perché sarebbe una frase su due
+    insiemi di persone diversi. A deciderlo è l'impronta del gruppo salvata
+    accanto a ogni quadro, non una supposizione.
 
     Il tetto viene prima di tutto il resto, perché è l'unico controllo che
     parla del costo della richiesta invece che di cosa contiene.

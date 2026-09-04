@@ -33,7 +33,7 @@ Quello che li distingue dagli altri usi del modello è **a chi consegnano**:
 | | Cosa fa | Chi lo chiede | Dove è descritto |
 | --- | --- | --- | --- |
 | **Debriefing** | Legge le ultime prove di una persona e il quadro che gli era stato scritto prima, e dice cosa si ripete, come si è mossa da allora e cosa fare adesso | Chi amministra, dal report attività | [training-e-report.md](training-e-report.md#il-quadro-dinsieme-su-una-persona) |
-| **Quadro del percorso** | Legge le prove che un gruppo ha svolto sulle tappe di un percorso e dice dove il percorso si inceppa, cosa si ripete fra persone diverse e cosa fare in aula | Chi amministra, dalla scheda del percorso | [training-e-report.md](training-e-report.md#il-quadro-dinsieme-su-un-percorso) |
+| **Quadro del percorso** | Legge le prove che un gruppo ha svolto sulle tappe di un percorso e dice dove il percorso si inceppa, cosa si ripete fra persone diverse, come il gruppo si è mosso dal quadro prima e cosa fare in aula | Chi amministra, dalla scheda del percorso | [training-e-report.md](training-e-report.md#il-quadro-dinsieme-su-un-percorso) |
 | **Bozza di percorso** | Da un obiettivo raccontato a parole compone una fila di tappe scelte dal catalogo del tenant | Chi amministra, componendo un percorso nuovo | [training-e-report.md](training-e-report.md#la-bozza-scritta-dal-modello) |
 | **Controllo del serbatoio** | Rilegge le cinquanta domande di un test e dice da quale conviene cominciare | Chi amministra, prima di pubblicare | [simulatore.md](simulatore.md#il-controllo-del-serbatoio) |
 
@@ -83,14 +83,27 @@ nell'esportazione dei propri dati e non se ne va con un account cancellato.
 | Rotta | `POST /api/training/paths/{path_id}/debriefing` |
 | File | [path_debriefing_source.py](../backend/path_debriefing_source.py), [path_debriefing.py](../backend/path_debriefing.py), le rotte stanno in [routers/training.py](../backend/routers/training.py) |
 | Legge | Le prove che il gruppo ha svolto sulle tappe del percorso, e solo quelle che il percorso conta, cioè svolte dopo lo sblocco della loro tappa. Di ognuna entrano il giudizio, i sei criteri e le note del docente, mai la trascrizione |
-| Produce | Sintesi, perché il gruppo si ferma sulla tappa che il conto indica, fino a 4 temi ricorrenti fra persone diverse, cosa il gruppo fa bene, e cosa fare adesso in aula |
-| Salva | Sì, una riga per percorso (`path_debriefings`), e ogni giro sostituisce quella prima |
+| Produce | Sintesi, perché il gruppo si ferma sulla tappa che il conto indica, fino a 4 temi ricorrenti fra persone diverse, cosa il gruppo fa bene, cosa fare adesso in aula, e dal secondo in poi come il gruppo si è mosso |
+| Salva | Sì, una riga per generazione (`path_debriefings`), e dal secondo in poi ciascuna dice come il gruppo si è mosso |
 | Tetto | 10 all'ora per persona |
 
 **Qual è la tappa che ferma il gruppo lo dice il conto, non il modello**: è la
 tappa su cui più persone hanno adesso la propria tappa da fare, cioè un
 massimo di una colonna di numeri. Al modello si chiede il perché, che è una
 lettura e nella tabella non c'è.
+
+**Il confronto con il quadro di prima si fa solo se il gruppo è lo stesso.** È
+la differenza rispetto al quadro di una persona, dove il soggetto non cambia
+mai: qui fra due generazioni qualcuno può essere stato aggiunto o ritirato, e
+lì "il gruppo è migliorato" sarebbe una frase su due insiemi di persone
+diversi. Non è però una cosa da dare per scontata, e infatti non lo si fa:
+accanto a ogni quadro si salva **un'impronta di chi lo stava percorrendo**,
+cioè un'hash degli id delle assegnazioni. Quando corrisponde, il quadro
+precedente entra nel materiale e il modello dice la direzione; quando non
+corrisponde, la direzione non gli viene chiesta affatto e la schermata scrive
+perché. L'impronta non è un dato personale, per la stessa ragione per cui non
+lo è l'impronta delle domande sul controllo del serbatoio: non nomina nessuno
+e non si legge al contrario.
 
 ### La bozza di percorso risponde a "da dove comincio"
 
@@ -205,7 +218,7 @@ stessa idea di `ai_score_at_review` sulle revisioni di una conversazione:
 | Agente | Cosa conserva | Quando si dichiara vecchio |
 | --- | --- | --- |
 | Debriefing | La data della prova più recente letta | La persona ha svolto altre prove |
-| Quadro del percorso | La data della prova più recente letta, e quando è stato scritto | Il gruppo ha svolto altre prove, **oppure** le tappe sono state riscritte dopo |
+| Quadro del percorso | La data della prova più recente letta, e l'impronta del gruppo di allora | Il gruppo ha svolto altre prove, **oppure** le tappe sono state riscritte dopo |
 | Controllo del serbatoio | Un'impronta di testo, chiavi e citazioni | Le domande sono state riscritte |
 | Bozza di percorso | Niente, non salva | Non si pone: o la si accetta subito, o non esiste |
 
@@ -220,16 +233,19 @@ frattempo lo lasciano vero e solo incompleto. Le due cose si dicono
 diversamente a schermo, quindi il server non risponde un sì o un no ma quale
 dei due è.
 
-I tre salvano però in modi diversi, e il debriefing è l'unico che **si
-accumula**: il controllo del serbatoio ha un esito per simulazione, il quadro
-del percorso una riga per percorso, e in tutti e due i casi ogni giro
-sostituisce quello prima. Il debriefing invece ha una riga per volta che è
-stato chiesto, e la ragione sta nella domanda a cui risponde: dove una persona
-è arrivata si sa solo rispetto a dove era, quindi la versione di prima non è
-un archivio, è metà del materiale della prossima. Su un gruppo quel confronto
-non si può fare, e non per pigrizia: fra due generazioni qualcuno è stato
-aggiunto e qualcuno ritirato, e "come si è mosso da allora" sarebbe una frase
-su due insiemi di persone diversi.
+I tre salvano però in modi diversi. Il controllo del serbatoio ha un esito per
+simulazione e ogni giro sostituisce quello prima; i due quadri d'insieme
+invece **si accumulano**, una riga per volta che sono stati chiesti, e la
+ragione sta nella domanda a cui rispondono: dove qualcuno è arrivato si sa
+solo rispetto a dove era, quindi la versione di prima non è un archivio, è
+metà del materiale della prossima.
+
+Su un gruppo però quel confronto ha una condizione che su una persona non
+esiste, ed è **che il gruppo sia lo stesso**. A dirlo è l'impronta salvata
+accanto a ogni quadro di percorso: quando non corrisponde, la direzione non
+viene chiesta al modello e gli scarti delle medie restano vuoti, perché la
+media di dodici persone e quella delle stesse meno due non si sottraggono
+senza raccontare un ritiro come un miglioramento.
 
 **Non chiesto e passato senza rilievi sono due stati diversi**, e le due
 schermate li dicono diversamente. Il primo è un `null`, il secondo è un esito
@@ -246,7 +262,7 @@ quattro hanno un tetto per persona in
 | Limitatore | Tetto | Perché quello |
 | --- | --- | --- |
 | `DEBRIEFING` | 10 all'ora | È il tetto della valutazione, e per la stessa ragione: chiamata cara, che su una persona si può chiedere a ogni prova nuova |
-| `DEBRIEFING_PERCORSO` | 10 all'ora | Lo stesso gesto sul gruppo invece che sulla persona, e ogni giro sostituisce quello prima: dieci all'ora sono dieci classi diverse di cui preparare la sessione |
+| `DEBRIEFING_PERCORSO` | 10 all'ora | Lo stesso gesto sul gruppo invece che sulla persona, e per la stessa ragione: dieci all'ora sono dieci classi diverse di cui preparare la sessione |
 | `BOZZA_PERCORSO` | 30 all'ora | È il tetto della bozza di scheda persona: non salva niente, e si riscrive l'obiettivo finché la proposta non convince |
 | `REVISIONE_SERBATOIO` | 10 all'ora | È il tetto della generazione: stesso gesto ripetuto sulla stessa simulazione, e ogni giro sostituisce l'esito |
 

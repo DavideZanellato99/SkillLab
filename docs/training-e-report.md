@@ -1987,14 +1987,38 @@ concreta da fare adesso in aula. Un tema senza titolo cade da solo, come nel
 quadro di una persona; senza sintesi o senza il passo successivo la risposta
 vale come un JSON troncato e fa ritentare sul modello di riserva.
 
-### Una riga per percorso, che invecchia in due modi
+### Il confronto con il quadro precedente, se il gruppo è lo stesso
 
-Il quadro di una persona si accumula, questo si sostituisce: fra due
-generazioni il gruppo non è lo stesso gruppo, perché qualcuno è stato aggiunto
-e qualcuno ritirato, e «come si è mosso da allora» sarebbe una frase su due
-insiemi di persone diversi.
+Come sul quadro di una persona, ogni generazione si aggiunge a quelle di prima
+e le rilegge: dalla seconda in poi il modello ha davanti il quadro precedente
+e dice se il gruppo è **in miglioramento, stabile o in peggioramento**, con due
+o tre frasi su cosa è cambiato. La cosa che gli si chiede di guardare per
+prima è dove il gruppo si ferma: un blocco che si sposta in avanti è un
+miglioramento vero anche se le medie non si muovono, e un blocco che resta
+dov'era dice che quello che è stato fatto in mezzo non ha funzionato.
 
-I modi di invecchiare però sono due, e il secondo qui è nuovo:
+La condizione in più rispetto a una persona è che **il gruppo sia lo stesso**.
+Fra due generazioni qualcuno può essere stato aggiunto o ritirato, e lì «il
+gruppo è migliorato» sarebbe una frase su due insiemi di persone diversi. Non
+è però una cosa da assumere: accanto a ogni quadro si salva un'impronta di chi
+lo stava percorrendo, un'hash degli id delle assegnazioni, e il confronto
+dipende da quella.
+
+| Quando il quadro nuovo viene scritto | Cosa succede |
+| ------------------------------------ | ------------ |
+| Il gruppo è lo stesso di allora | Il quadro precedente entra nel materiale, e ne escono la direzione e il racconto del cambiamento. Gli scarti delle medie li calcola il backend, mai il modello |
+| Il gruppo è cambiato | La direzione non viene chiesta affatto, gli scarti restano vuoti, e la schermata scrive che il confronto non si può fare perché il gruppo è cambiato |
+
+Che il confronto non si possa fare è una notizia, non un dato mancante:
+tacere lascerebbe credere che il modello non abbia voluto sbilanciarsi.
+
+L'impronta non è un dato personale, per la stessa ragione dell'impronta delle
+domande sul controllo del serbatoio: non nomina nessuno e non si legge al
+contrario.
+
+### I due modi di invecchiare
+
+Il secondo qui è nuovo rispetto al quadro di una persona:
 
 | Perché non vale più | Cosa vuol dire |
 | ------------------- | --------------- |
@@ -2016,12 +2040,25 @@ comanda la generazione e dice quando quello a schermo non vale più;
 disegna il quadro.
 
 La promessa è quella dell'altro: **non mostra un giudizio senza dire su cosa
-poggia**. Quante persone, quante prove, fino a quando, e le medie di allora.
-Poi la sintesi, come sta il gruppo in tre numeri, dove si ferma, la fila delle
-tappe con la tappa di blocco marcata, i temi, cosa il gruppo fa bene, cosa
-fare adesso, e in fondo le medie per criterio **dalla più bassa**, disegnate
-dallo stesso componente del quadro di una persona
-([CriteriaAverageList](../frontend/src/components/CriteriaAverageList.tsx)).
+poggia**. Quante persone, quante prove, fino a quando, e le medie di allora
+con lo scarto da quelle del quadro prima. Poi la sintesi, come il gruppo si è
+mosso, come sta in tre numeri, dove si ferma, la fila delle tappe con la tappa
+di blocco marcata, i temi, cosa il gruppo fa bene, cosa fare adesso, e in
+fondo le medie per criterio **dalla più bassa**.
+
+Due pezzi di disegno sono in comune con il quadro di una persona, e non per
+economia: sono la stessa cosa, e due impaginati la farebbero sembrare due cose
+diverse. Le medie per criterio stanno in
+[CriteriaAverageList](../frontend/src/components/CriteriaAverageList.tsx), e
+l'elenco delle versioni precedenti in
+[DebriefingHistory](../frontend/src/components/DebriefingHistory.tsx), che
+riceve righe già ridotte alle cinque cose che mostra, così i due storici si
+sfogliano allo stesso modo.
+
+**Aperto c'è sempre un quadro solo, e di default è l'ultimo**, come nel report
+di una persona: le versioni precedenti si aprono al posto suo, e quando quella
+aperta non è la più recente lo dice una fascia con dentro il comando per
+tornare all'attuale.
 
 Sotto le tre persone il bottone non c'è, e al suo posto c'è il motivo: un
 bottone spento senza spiegazione manda a cercare cosa si è sbagliato. Quando

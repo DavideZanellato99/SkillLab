@@ -39,7 +39,7 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -73,7 +73,7 @@ jobs:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Trivy filesystem scan
         # Il tag ha la "v" davanti: "aquasecurity/trivy-action@0.28.0" non
         # esiste e il job muore in "Set up job", prima di eseguire qualsiasi
@@ -119,7 +119,7 @@ jobs:
           - name: frontend
             context: ./frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The filesystem scan above covers the source tree; this scans the
       # *built* image, so OS-level CVEs in the base images (python-slim,
       # nginx-alpine) are caught too. docker-smoke in ci.yml already builds
@@ -156,7 +156,7 @@ jobs:
       matrix:
         language: [python, javascript-typescript]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}

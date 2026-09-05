@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -122,6 +122,13 @@ function renderScores(
       </Routes>
     </MemoryRouter>,
   )
+}
+
+/** Lo scope di chi ha scelto una organizzazione: il confronto vive lì dentro. */
+const DENTRO_UNA_ORG: DashboardScope = {
+  organizationId: 'org-1',
+  days: undefined,
+  period: 'all',
 }
 
 beforeEach(() => {
@@ -358,5 +365,126 @@ describe('quando le prove del periodo sono troppe', () => {
     renderScores()
 
     expect(screen.queryByText(/mostrano le più recenti/)).not.toBeInTheDocument()
+  })
+})
+
+describe('il confronto fra utenti', () => {
+  /* Con venticinque persone per organizzazione la colonna delle barre è
+   * lunga: si scelgono quelle da mettere a confronto, e il grafico resta di
+   * loro. Senza nessuna scelta resta di tutti, perché chi voleva solo
+   * guardare come va il gruppo non deve comporre niente. */
+  it('senza scelte disegna tutte le persone', () => {
+    reports({
+      rows: [
+        valutazione({ user_id: 'u-1', user_nome: 'Anna', user_cognome: 'Ferrari' }),
+        valutazione({
+          conversation_id: 'c-2',
+          user_id: 'u-2',
+          user_nome: 'Marco',
+          user_cognome: 'Bianchi',
+        }),
+      ],
+    })
+    renderScores('/app/admin/dashboard/punteggi', DENTRO_UNA_ORG)
+
+    const confronto = screen.getByRole('region', { name: 'Confronto tra Utenti' })
+    expect(within(confronto).getByText('Anna Ferrari')).toBeInTheDocument()
+    expect(within(confronto).getByText('Marco Bianchi')).toBeInTheDocument()
+  })
+
+  it('scritta nell’indirizzo, la scelta compone il grafico', () => {
+    reports({
+      rows: [
+        valutazione({ user_id: 'u-1', user_nome: 'Anna', user_cognome: 'Ferrari' }),
+        valutazione({
+          conversation_id: 'c-2',
+          user_id: 'u-2',
+          user_nome: 'Marco',
+          user_cognome: 'Bianchi',
+        }),
+      ],
+    })
+    renderScores('/app/admin/dashboard/punteggi?confronto=u-1', DENTRO_UNA_ORG)
+
+    const confronto = screen.getByRole('region', { name: 'Confronto tra Utenti' })
+    expect(within(confronto).getByText('Anna Ferrari')).toBeInTheDocument()
+    expect(within(confronto).queryByText('Marco Bianchi')).not.toBeInTheDocument()
+  })
+
+  it('scegliere una persona la scrive nell’indirizzo', async () => {
+    reports({ rows: [valutazione({ user_id: 'u-1', user_nome: 'Anna', user_cognome: 'Ferrari' })] })
+    renderScores('/app/admin/dashboard/punteggi', DENTRO_UNA_ORG)
+
+    await userEvent.click(screen.getByPlaceholderText(/persone da confrontare/))
+    await userEvent.click(screen.getByRole('option', { name: /Anna Ferrari/ }))
+
+    expect(indirizzo()).toContain('confronto=u-1')
+  })
+
+  /* Le barre stanno dalla media più alta, che è la risposta della scheda; la
+   * tendina che le sceglie sta in ordine alfabetico per cognome, come la
+   * tabella di gestione utenti, perché lì un nome si cerca. */
+  it('elenca le persone per cognome nella tendina, e per media nelle barre', async () => {
+    reports({
+      rows: [
+        valutazione({
+          user_id: 'u-1',
+          user_nome: 'Anna',
+          user_cognome: 'Zanetti',
+          overall_score: 9,
+        }),
+        valutazione({
+          conversation_id: 'c-2',
+          user_id: 'u-2',
+          user_nome: 'Zeno',
+          user_cognome: 'Abate',
+          overall_score: 4,
+        }),
+      ],
+    })
+    renderScores('/app/admin/dashboard/punteggi', DENTRO_UNA_ORG)
+
+    const confronto = screen.getByRole('region', { name: 'Confronto tra Utenti' })
+    // Le barre: prima chi ha la media più alta
+    const barre = within(confronto)
+      .getAllByText(/Anna Zanetti|Zeno Abate/)
+      .map((n) => n.textContent)
+    expect(barre).toEqual(['Anna Zanetti', 'Zeno Abate'])
+
+    await userEvent.click(screen.getByPlaceholderText(/persone da confrontare/))
+    const voci = screen.getAllByRole('option').map((o) => o.textContent)
+    expect(voci[0]).toContain('Zeno Abate')
+    expect(voci[1]).toContain('Anna Zanetti')
+  })
+
+  /* Due persone di organizzazioni diverse si allenano su avatar e test
+   * diversi: le loro medie non stanno sulla stessa scala, quindi finché il
+   * super admin guarda tutti i tenant insieme il comando non c'è. */
+  it('non si compone finché il super admin guarda tutte le organizzazioni', () => {
+    reports({ rows: [valutazione()] })
+    renderScores()
+
+    expect(screen.getByText(/Scegli una organizzazione qui sopra/)).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(/persone da confrontare/)).not.toBeInTheDocument()
+  })
+
+  it('con una organizzazione scelta il comando c’è', () => {
+    reports({ rows: [valutazione()] })
+    renderScores('/app/admin/dashboard/punteggi', DENTRO_UNA_ORG)
+
+    expect(screen.getByPlaceholderText(/persone da confrontare/)).toBeInTheDocument()
+    expect(screen.queryByText(/Scegli una organizzazione qui sopra/)).not.toBeInTheDocument()
+  })
+
+  /* A un org admin il server risponde solo con la sua gente, quindi il
+   * confronto è già dentro un tenant solo e il comando c'è da subito. */
+  it('per chi amministra una sola organizzazione il comando c’è sempre', () => {
+    useAuth.mockReturnValue({
+      user: { id: 'admin-2', ruolo: 'organization_admin', organization_id: 'org-1' },
+    })
+    reports({ rows: [valutazione()] })
+    renderScores()
+
+    expect(screen.getByPlaceholderText(/persone da confrontare/)).toBeInTheDocument()
   })
 })

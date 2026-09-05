@@ -1206,6 +1206,53 @@ parla. Quando il filtro non lascia niente la sezione lo dice con parole sue,
 perché "nessun test ancora consegnato" davanti a un filtro attivo si legge
 come un dato sbagliato.
 
+### Il confronto fra utenti si compone
+
+La scheda in fondo alla vista dei punteggi disegna una barra per persona,
+dalla media più alta. Con quattro persone era l'elenco intero; con
+venticinque o trenta, che è la misura di una organizzazione vera, è una
+colonna da scorrere in cui la domanda vera ("come vanno questi quattro")
+si perde.
+
+Quindi le persone **si scelgono**: si cercano per nome o email e si spuntano,
+e il grafico resta di loro. Chi è stato scelto non viene riscritto accanto al
+campo: lo dicono le barre che restano disegnate, e una fila di targhette
+sopra di loro sarebbe la stessa cosa detta due volte.
+
+**Le barre e la tendina hanno due ordini diversi, e non è una svista.** Le
+barre stanno dalla media più alta, che è la risposta della scheda; la tendina
+sta in ordine alfabetico per cognome, perché lì un nome si cerca. È la stessa
+regola della tabella di gestione utenti, che il server scrive una volta
+(`USER_SORT_COLUMNS`, `(cognome, nome, email)`) e il frontend riusa dove
+ordina da sé, cioè in ogni tendina che sceglie una persona
+([personOrder](../frontend/src/components/personOrder.ts)): le stesse persone
+ordinate in due modi in due schermate si leggono come due elenchi diversi
+([MultiSearchSelect](../frontend/src/components/MultiSearchSelect.tsx)). Il
+campo sta in testa alla scheda, a destra del titolo, dove stanno i comandi che
+decidono cosa c'è sotto: sopra le barre e a tutta larghezza si leggeva come
+una seconda riga della descrizione. Su schermo stretto scende sotto il titolo,
+perché a fianco resterebbe una fessura in cui i nomi non si leggono.
+Senza nessuna scelta resta di tutti, perché chi voleva solo guardare come va
+il gruppo non deve comporre niente. La scelta sta nell'indirizzo come ogni
+altra della dashboard (`?confronto=<id>,<id>`), quindi un confronto composto
+si manda a qualcuno: sono id e non nomi, e l'indirizzo si allunga, ma è
+l'unica identità che non cambia quando qualcuno corregge il proprio cognome.
+
+**Il confronto vive dentro una organizzazione sola.** Due persone di tenant
+diversi si allenano su avatar diversi, con test diversi, dentro programmi
+diversi: le loro medie non stanno sulla stessa scala, e affiancarle sarebbe
+una classifica fra cose che non si misurano insieme. Chi amministra una sola
+organizzazione ce l'ha già, perché il server gli risponde solo con la sua; al
+super admin che le sta guardando tutte insieme la scheda non offre il comando
+e dice perché, invece di lasciar comporre un confronto che non vorrebbe dire
+niente. Cambiando organizzazione le persone scelte se ne vanno con il filtro
+che le ha portate, come il filtro utente.
+
+Il filtro utente in cima alla vista resta un'altra cosa: quello **evidenzia**
+una persona fra le barre disegnate, il confronto decide **quali barre
+disegnare**. Sono due gesti diversi, restringere e indicare, e continuano a
+convivere.
+
 Un default diverso nelle due metà, e non è una svista. Il canale parte da
 "Chiamate", perché al telefono e in chat non si è valutati alla pari e
 mescolarli di default darebbe una media ambigua. Il tipo parte da "Tutti",

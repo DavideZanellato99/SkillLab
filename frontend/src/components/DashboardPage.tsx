@@ -39,10 +39,11 @@ import TabBar from './TabBar'
 const ORG_PARAM = 'organizzazione'
 const PERIOD_PARAM = 'periodo'
 
-/* I filtri delle singole viste, che il guscio conosce solo per un motivo:
- * azzerare deve azzerare tutto, e la persona selezionata è dentro l'elenco
- * che l'organizzazione porta con sé. */
-const USER_PARAM = 'persona'
+/* I filtri delle singole viste che il guscio conosce, e per un motivo solo:
+ * scelgono delle persone, e le persone stanno dentro l'organizzazione. Quando
+ * quella cambia, o quando si azzera tutto, se ne vanno con lei: resterebbero
+ * un filtro attivo e un confronto composto su gente che non è più in elenco. */
+const PEOPLE_PARAMS = ['persona', 'confronto']
 
 /** Il valore letto dall'indirizzo, se è uno di quelli che esistono. */
 function pickOption<T extends string>(
@@ -65,15 +66,11 @@ export default function DashboardPage() {
   const views = visibleViews(isSuperAdmin(user))
   const current = views.find((v) => v.value === view) ?? views[0]
 
-  const setParam = (name: string, value: string, extra?: [string, string]) => {
+  const setParam = (name: string, value: string, daTogliere?: string[]) => {
     const next = new URLSearchParams(params)
     if (value) next.set(name, value)
     else next.delete(name)
-    if (extra) {
-      const [otherName, otherValue] = extra
-      if (otherValue) next.set(otherName, otherValue)
-      else next.delete(otherName)
-    }
+    for (const altro of daTogliere ?? []) next.delete(altro)
     /* Sempre sostituendo il passo: qui si cambia filtro di continuo, e ogni
        scelta lasciata in cronologia sarebbe un tasto indietro che non riporta
        alla pagina di prima ma al periodo di prima. */
@@ -93,15 +90,16 @@ export default function DashboardPage() {
   const days = period === 'all' ? undefined : Number(period)
 
   /* Azzerare riporta la sezione a tutta la storia e a tutte le
-     organizzazioni, e con loro se ne va la persona scelta: sta nell'elenco
-     che l'organizzazione porta, come quando la si cambia. I filtri interni a
-     una vista (il canale, il tipo di test) restano, che sono la prova di cui
-     si stanno leggendo i grafici e non un modo di restringerli. */
+     organizzazioni, e con loro se ne vanno le persone scelte: stanno
+     nell'elenco che l'organizzazione porta, come quando la si cambia. I
+     filtri interni a una vista (il canale, il tipo di test) restano, che sono
+     la prova di cui si stanno leggendo i grafici e non un modo di
+     restringerli. */
   const resetFilters = () => {
     const next = new URLSearchParams(params)
     next.delete(PERIOD_PARAM)
     next.delete(ORG_PARAM)
-    next.delete(USER_PARAM)
+    for (const nome of PEOPLE_PARAMS) next.delete(nome)
     setParams(next, { replace: true })
   }
 
@@ -129,10 +127,10 @@ export default function DashboardPage() {
           showOrgFilter ? organizations.map((o) => ({ value: o.id, label: o.name })) : undefined
         }
         organizationId={organizationId}
-        /* Cambiando organizzazione la persona scelta non è più fra quelle in
-           elenco: se ne va con il filtro che l'ha portata. */
+        /* Cambiando organizzazione le persone scelte non sono più fra quelle
+           in elenco: se ne vanno con il filtro che le ha portate. */
         onOrganizationChange={
-          showOrgFilter ? (value) => setParam(ORG_PARAM, value, [USER_PARAM, '']) : undefined
+          showOrgFilter ? (value) => setParam(ORG_PARAM, value, PEOPLE_PARAMS) : undefined
         }
         onReset={resetFilters}
       />

@@ -116,10 +116,11 @@ describe('scelta della persona', () => {
     expect(screen.queryByText(/prove$/)).not.toBeInTheDocument()
   })
 
-  /* In ordine alfabetico sul nome che si legge, come nella dashboard: chi
-     scorre l'elenco a occhio invece di digitare cerca nello stesso posto in
-     entrambe le pagine. Il server li dà per cognome, che è un altro ordine. */
-  it('elenca le persone in ordine alfabetico', async () => {
+  /* Per cognome, come nella tabella di gestione utenti e come nelle tendine
+     della dashboard (vedi `personOrder`): un elenco di persone si scorre
+     cercando il cognome, e le stesse persone ordinate in due modi in due
+     schermate si leggono come due elenchi diversi. */
+  it('elenca le persone in ordine alfabetico per cognome', async () => {
     stato.people = [
       { id: 'u-3', nome: 'Sara', cognome: 'Alberti', email: 'sara@test.it', attempts: 2 },
       { id: 'u-2', nome: 'Marco', cognome: 'Bianchi', email: 'marco@test.it', attempts: 4 },
@@ -131,9 +132,9 @@ describe('scelta della persona', () => {
 
     const nomi = screen.getAllByRole('option').map((o) => o.textContent)
     expect(nomi).toEqual([
-      expect.stringContaining('Anna Conti'),
-      expect.stringContaining('Marco Bianchi'),
       expect.stringContaining('Sara Alberti'),
+      expect.stringContaining('Marco Bianchi'),
+      expect.stringContaining('Anna Conti'),
     ])
   })
 

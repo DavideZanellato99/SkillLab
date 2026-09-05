@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { useEvaluationsReport, useSimulationsReport } from '../hooks/useReports'
 import type { EvaluationReportRow, SimulationReportRow } from '../services/admin'
-import { isAdmin } from '../services/auth'
+import { isAdmin, isSuperAdmin } from '../services/auth'
 import DashboardEvaluationsTable from './DashboardEvaluationsTable'
 import DashboardSimulations from './DashboardSimulations'
 import { useDashboardScope } from './dashboardViews'
@@ -17,8 +17,10 @@ import type { ModeFilter } from './conversationMode'
 import Notice from './Notice'
 import { KIND_FILTERS } from './simulationFormat'
 import type { KindFilter } from './simulationFormat'
+import MultiSearchSelect from './MultiSearchSelect'
 import SearchSelect from './SearchSelect'
 import { KpiCard, MeterRow, TrendChart } from './scoreCharts'
+import { comparePeople } from './personOrder'
 import { cardCls, dailyAverages, formatScore, personName, scoreTextColor } from './scoreFormat'
 import type { CriterionAverage } from './scoreFormat'
 import TabBar, { TabPanel } from './TabBar'
@@ -50,6 +52,10 @@ type ScoresSection = 'conversazioni' | 'simulazioni'
  * corte: è un indirizzo che finisce copiato in una chat. */
 const SECTION_PARAM = 'prova'
 const USER_PARAM = 'persona'
+/* Le persone messe a confronto, separate da virgola. Sono id e non nomi,
+ * quindi l'indirizzo si allunga: è il prezzo dell'unica identità che non
+ * cambia quando qualcuno si sposa o corregge il proprio cognome. */
+const COMPARE_PARAM = 'confronto'
 const MODE_PARAM = 'canale'
 const KIND_PARAM = 'tipo'
 
@@ -68,6 +74,11 @@ const NO_LABELS: Record<string, string> = {}
 interface UserAvg {
   userId: string
   name: string
+  /* Nome e cognome separati oltre al nome da mostrare: le barre si ordinano
+     per media, la tendina che le sceglie per cognome, e quella regola vuole i
+     due campi distinti (vedi `personOrder`). */
+  nome: string
+  cognome: string
   email: string
   avg: number
   count: number
@@ -187,13 +198,21 @@ export default function DashboardScores() {
    * restringesse col canale, l'utente selezionato potrebbe sparire dalle
    * opzioni e la sua chip svanirebbe pur restando il filtro attivo. */
   const usersInData = useMemo(() => {
-    const map = new Map<string, { name: string; email: string }>()
+    const map = new Map<string, { name: string; nome: string; cognome: string; email: string }>()
     for (const r of [...rows, ...simulationRows]) {
-      if (!map.has(r.user_id)) map.set(r.user_id, { name: personName(r), email: r.user_email })
+      if (!map.has(r.user_id)) {
+        map.set(r.user_id, {
+          name: personName(r),
+          nome: r.user_nome,
+          cognome: r.user_cognome,
+          email: r.user_email,
+        })
+      }
     }
-    return Array.from(map, ([id, u]) => ({ id, ...u })).sort((a, b) =>
-      a.name.localeCompare(b.name, 'it'),
-    )
+    /* Per cognome, come nella tabella di gestione utenti (vedi
+       `personOrder`): due elenchi delle stesse persone ordinati in due modi
+       si leggono come due elenchi diversi. */
+    return Array.from(map, ([id, u]) => ({ id, ...u })).sort(comparePeople)
   }, [rows, simulationRows])
 
   /* Il filtro utente scopa KPI, andamento e criteri */
@@ -262,6 +281,8 @@ export default function DashboardScores() {
       const entry = acc.get(r.user_id) ?? {
         userId: r.user_id,
         name: personName(r),
+        nome: r.user_nome,
+        cognome: r.user_cognome,
         email: r.user_email,
         avg: 0,
         count: 0,
@@ -275,12 +296,43 @@ export default function DashboardScores() {
       .map((e) => ({
         userId: e.userId,
         name: e.name,
+        nome: e.nome,
+        cognome: e.cognome,
         email: e.email,
         avg: e.sum / e.count,
         count: e.count,
       }))
       .sort((a, b) => b.avg - a.avg)
   }, [scopedRows])
+
+  /* Le stesse persone in ordine alfabetico, per la tendina che le sceglie.
+     Le barre restano dalla media più alta, che è la risposta della scheda;
+     una tendina ordinata per media invece sarebbe un elenco in cui un nome si
+     cerca scorrendo, e la regola per cercare un nome è quella della gestione
+     utenti: cognome, nome, email. */
+  const usersByName = useMemo(() => [...userAvgs].sort(comparePeople), [userAvgs])
+
+  /* Le persone scelte per il confronto. Un id nell'indirizzo che non
+     corrisponde a nessuna riga non si scarta: potrebbe essere qualcuno che
+     nel periodo scelto non ha svolto prove, e togliergli la chip mentre si
+     restringe il periodo farebbe sparire una scelta che nessuno ha disfatto. */
+  const compareIds = useMemo(() => {
+    const raw = params.get(COMPARE_PARAM) ?? ''
+    return raw ? raw.split(',').filter(Boolean) : []
+  }, [params])
+
+  /* Il grafico è di chi è stato scelto, e senza nessuna scelta è di tutti:
+     una scheda che parte vuota chiederebbe di comporre un confronto anche a
+     chi voleva solo guardare come va il gruppo. */
+  const comparedUsers = useMemo(
+    () => (compareIds.length ? userAvgs.filter((u) => compareIds.includes(u.userId)) : userAvgs),
+    [userAvgs, compareIds],
+  )
+
+  /* Il confronto vive dentro una organizzazione sola. Chi ne amministra una
+     ce l'ha già, perché il server gli risponde solo con la sua; il super
+     admin che le sta guardando tutte insieme deve prima sceglierne una. */
+  const needsOrganization = isSuperAdmin(user) && !organizationId
 
   const detailRows = useMemo(
     () =>
@@ -501,16 +553,63 @@ export default function DashboardScores() {
                 )}
               </div>
 
-              {/* Confronto tra utenti */}
-              <div className={`${cardCls} mb-6`}>
-                <h2 className="text-sm font-semibold text-slate-300">Confronto tra Utenti</h2>
-                <p className="mb-4 text-xs text-slate-500">
-                  Voto medio complessivo per utente, su tutte le valutazioni{' '}
-                  {MODE_SUFFIX[modeFilter]}
-                </p>
-                {userAvgs.length > 0 ? (
+              {/* Confronto tra utenti. È una `section` col proprio nome, come
+                  la mappa di un percorso: chi ascolta la pagina la ritrova
+                  fra le regioni invece di attraversare tutte le barre per
+                  capire dove si trova. */}
+              <section aria-labelledby="confronto-utenti" className={`${cardCls} mb-6`}>
+                {/* Il comando sta in testa alla scheda, a destra del titolo:
+                    è quello che decide cosa c'è sotto, e messo sopra le barre
+                    a tutta larghezza si leggeva come una seconda riga della
+                    descrizione. Su schermo stretto scende sotto il titolo,
+                    perché a fianco resterebbe una fessura in cui i nomi non
+                    si leggono. */}
+                <div className="mb-4 flex items-start justify-between gap-4 max-lg:flex-col">
+                  <div className="min-w-0">
+                    <h2 id="confronto-utenti" className="text-sm font-semibold text-slate-300">
+                      Confronto tra Utenti
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Voto medio complessivo per utente, su tutte le valutazioni{' '}
+                      {MODE_SUFFIX[modeFilter]}
+                      {compareIds.length > 0 ? ', fra le persone scelte' : ''}
+                    </p>
+                  </div>
+                  {!needsOrganization && userAvgs.length > 0 && (
+                    <MultiSearchSelect
+                      id="dashboard-compare"
+                      values={compareIds}
+                      onChange={(next) => setParam(COMPARE_PARAM, next.join(','))}
+                      options={usersByName.map((u) => ({
+                        value: u.userId,
+                        label: u.name,
+                        sub: u.email,
+                      }))}
+                      placeholder="Cerca e scegli le persone da confrontare..."
+                      /* Le chip scelte si allineano a destra sotto il campo,
+                         dove il campo stesso è: crescono verso il basso senza
+                         spostare il titolo. */
+                      align="right"
+                      className="w-[520px] shrink-0 max-lg:w-full"
+                    />
+                  )}
+                </div>
+                {/* Mettere a confronto due persone di organizzazioni diverse
+                    non è una domanda che si fa: si allenano su avatar diversi,
+                    con test diversi, dentro programmi diversi, e le due medie
+                    non stanno sulla stessa scala. Quindi finché il super admin
+                    guarda tutti i tenant insieme la scheda non offre il
+                    comando e lo dice, invece di lasciar comporre un confronto
+                    che non vorrebbe dire niente. */}
+                {needsOrganization ? (
+                  <Notice>
+                    Scegli una organizzazione qui sopra per mettere a confronto le sue persone: due
+                    tenant diversi si allenano su avatar e test diversi, quindi le loro medie non si
+                    leggono sulla stessa scala
+                  </Notice>
+                ) : userAvgs.length > 0 ? (
                   <div className="flex flex-col gap-1.5">
-                    {userAvgs.map((u) => (
+                    {comparedUsers.map((u) => (
                       <MeterRow
                         key={u.userId}
                         label={u.name}
@@ -526,7 +625,7 @@ export default function DashboardScores() {
                     Nessuna valutazione per la selezione corrente.
                   </p>
                 )}
-              </div>
+              </section>
 
               <DashboardEvaluationsTable
                 rows={detailRows}

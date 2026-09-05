@@ -321,10 +321,21 @@ backend/venv/Scripts/python.exe demo/dati_mock.py --rimuovi  # toglie
 ```
 
 Tre organizzazioni che raccontano tre situazioni diverse (una che si allena
-tutti i giorni, una tiepida, una ferma), con le loro persone, gli avatar, i
-test, le conversazioni valutate, i tentativi e i percorsi affidati, questi
-ultimi in tutti gli stati che la dashboard deve saper distinguere, chiusi in
-tempo, chiusi in ritardo, in corso e scaduti.
+tutti i giorni, una tiepida dove meno della metà degli account si allena, una
+ferma), con le loro persone, gli avatar, i test, le conversazioni valutate, i
+tentativi e i percorsi affidati, questi ultimi in tutti gli stati che la
+dashboard deve saper distinguere, chiusi in tempo, chiusi in ritardo, in corso
+e scaduti.
+
+**La scala è quella di un cliente vero**: venticinque o trenta persone per
+organizzazione, ottocento conversazioni e trecento test in due mesi. È il
+punto: a quattro persone per tenant ogni pagina sembra funzionare, mentre a
+questa misura si vede quello che va guardato davvero, il confronto fra utenti
+che diventa una colonna da scorrere, le medie che smettono di oscillare per
+una prova storta, e una tappa su cui si ferma il venti per cento che sono
+cinque persone da richiamare. Resta comunque sotto il tetto che il server
+mette alle sue letture (`REPORT_ROW_CAP`), così le medie che si leggono sono
+quelle di tutto lo storico e non delle prove più recenti.
 
 **Tutto quello che nasce da lì è riconoscibile**: le organizzazioni si
 chiamano `[MOCK] ...` con lo slug che comincia per `mock-`, gli account

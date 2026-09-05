@@ -4,6 +4,7 @@ import { isAdmin } from '../services/auth'
 import { useAttempts, useComparableUsers, useSimulationAttempts } from '../hooks/useComparison'
 import ComparisonConversations from './ComparisonConversations'
 import ComparisonSimulations from './ComparisonSimulations'
+import { comparePeople } from './personOrder'
 import SearchSelect from './SearchSelect'
 import TabBar, { TabPanel } from './TabBar'
 import LoadingState from './LoadingState'
@@ -165,13 +166,16 @@ export default function ComparisonPage() {
                 id="subject"
                 value={subjectId}
                 onChange={(value) => setParam(PERSON_PARAM, value)}
-                options={people
-                  .map((p) => ({
-                    value: p.id,
-                    label: `${p.nome} ${p.cognome}`.trim() || p.email,
-                    sub: p.email,
-                  }))
-                  .sort((a, b) => a.label.localeCompare(b.label, 'it'))}
+                /* Per cognome, come nella tabella di gestione utenti e come
+                   nelle tendine della dashboard (vedi `personOrder`): un
+                   elenco di persone si scorre cercando il cognome, e le
+                   stesse persone ordinate in due modi in due schermate si
+                   leggono come due elenchi diversi. */
+                options={[...people].sort(comparePeople).map((p) => ({
+                  value: p.id,
+                  label: `${p.nome} ${p.cognome}`.trim() || p.email,
+                  sub: p.email,
+                }))}
                 placeholder="Cerca per nome o email..."
                 emptyHint="Le Mie Prove"
               />

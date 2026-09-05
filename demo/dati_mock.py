@@ -120,6 +120,105 @@ def giorni_fa(giorni: float) -> datetime:
 
 # ── Il catalogo di quello che viene scritto ──
 
+# I nomi da cui escono le persone finte. Una organizzazione vera ne ha
+# venticinque o trenta, e a quella misura le dashboard sono un'altra cosa: il
+# confronto fra utenti diventa una colonna da scorrere, la media di gruppo
+# smette di essere la media di quattro persone, e una tappa su cui si ferma il
+# venti per cento sono cinque persone da richiamare. Ottanta nomi scritti a
+# mano sarebbero un elenco da mantenere, quindi si combinano.
+NOMI = [
+    "Anna",
+    "Marco",
+    "Giulia",
+    "Luca",
+    "Sara",
+    "Paolo",
+    "Chiara",
+    "Davide",
+    "Ilaria",
+    "Simone",
+    "Federica",
+    "Nicola",
+    "Elisa",
+    "Andrea",
+    "Martina",
+    "Stefano",
+    "Valentina",
+    "Alessio",
+    "Francesca",
+    "Matteo",
+    "Silvia",
+    "Riccardo",
+    "Laura",
+    "Giorgio",
+    "Beatrice",
+    "Tommaso",
+    "Camilla",
+    "Emanuele",
+    "Roberta",
+    "Fabio",
+]
+COGNOMI = [
+    "Ferrari",
+    "Bianchi",
+    "Conti",
+    "Moretti",
+    "Greco",
+    "Rizzo",
+    "Esposito",
+    "Lombardi",
+    "Marchetti",
+    "Fabbri",
+    "Costa",
+    "Serra",
+    "Barbieri",
+    "Galli",
+    "Rinaldi",
+    "Caruso",
+    "Ferrara",
+    "Gatti",
+    "Testa",
+    "Longo",
+    "Marino",
+    "Sanna",
+    "Vitale",
+    "Palmieri",
+    "Basile",
+    "Sorrentino",
+    "Farina",
+    "Battaglia",
+    "Piras",
+    "Guerra",
+]
+
+
+def _persone_finte(rng: random.Random, quante: int, gia_usate: set[str]) -> list[tuple]:
+    """`quante` persone con nome, cognome e bravura, tutte diverse fra loro.
+
+    La bravura scende lungo la fila invece di essere estratta a caso: su
+    venticinque estrazioni casuali escono venticinque medie che si somigliano,
+    e il confronto fra utenti smetterebbe di dire qualcosa. Così invece c'è
+    chi va bene, chi arranca e una maggioranza in mezzo, che è la forma che
+    quella pagina deve saper mostrare.
+
+    `gia_usate` sono le combinazioni già assegnate negli altri tenant:
+    l'email di un account è unica su tutta la piattaforma, e due "Anna
+    Ferrari" in due organizzazioni diverse la farebbero collidere.
+    """
+    persone = []
+    while len(persone) < quante:
+        nome = rng.choice(NOMI)
+        cognome = rng.choice(COGNOMI)
+        if f"{nome} {cognome}" in gia_usate:
+            continue
+        gia_usate.add(f"{nome} {cognome}")
+        quota = len(persone) / max(1, quante - 1)
+        persone.append(
+            (nome, cognome, round(9.0 - 5.0 * quota + rng.uniform(-0.4, 0.4), 1))
+        )
+    return persone
+
+
 # Le tre organizzazioni raccontano tre situazioni diverse, ed è voluto: la
 # dashboard dell'utilizzo esiste per distinguerle, e con tre tenant tutti
 # attivi non si vedrebbe la differenza fra chi si allena e chi no.
@@ -128,14 +227,7 @@ TENANT = [
         "nome": f"{MARCATORE} Nordvend Formazione",
         "slug": f"{SLUG_PREFISSO}nordvend",
         "descrizione": "il tenant pieno: si allena tutti i giorni",
-        "persone": [
-            ("Anna", "Ferrari", 8.4),
-            ("Marco", "Bianchi", 7.1),
-            ("Giulia", "Conti", 6.2),
-            ("Luca", "Moretti", 5.1),
-            ("Sara", "Greco", 7.8),
-            ("Paolo", "Rizzo", 4.4),
-        ],
+        "persone": 28,
         "avatar": [
             (
                 "Elena",
@@ -169,25 +261,41 @@ TENANT = [
                 -0.6,
                 "Cliente che minaccia di chiudere il conto",
             ),
+            (
+                "Silvia",
+                "Manzoni",
+                "Clienti",
+                "sky",
+                0.3,
+                "Cliente storica che chiede una consulenza",
+            ),
+            (
+                "Antonio",
+                "Guerrini",
+                "Reclami",
+                "rose",
+                -1.9,
+                "Reclamo già escalato una volta",
+            ),
         ],
         "test": [
             ("Procedure di cassa", 0.75),
             ("Bonifici e pagamenti", 0.55),
             ("Carte di debito", 0.85),
+            ("Antiriciclaggio", 0.65),
         ],
-        "conversazioni": 96,
-        "tentativi": 42,
+        # Una ventina di prove a testa in due mesi: è l'ordine di grandezza di
+        # un gruppo che si allena davvero, e resta sotto il tetto che il
+        # server mette alle sue letture (`REPORT_ROW_CAP`), così le medie che
+        # si leggono sono quelle di tutto e non delle prove più recenti.
+        "conversazioni": 620,
+        "tentativi": 240,
     },
     {
         "nome": f"{MARCATORE} Sudbanca Academy",
         "slug": f"{SLUG_PREFISSO}sudbanca",
-        "descrizione": "il tenant tiepido: due persone su quattro si allenano",
-        "persone": [
-            ("Chiara", "Esposito", 7.2),
-            ("Davide", "Lombardi", 5.8),
-            ("Ilaria", "Marchetti", 6.5),
-            ("Simone", "Fabbri", 6.0),
-        ],
+        "descrizione": "il tenant tiepido: undici persone su ventisei si allenano",
+        "persone": 26,
         "avatar": [
             (
                 "Paola",
@@ -205,24 +313,28 @@ TENANT = [
                 -1.0,
                 "Contestazione su una commissione",
             ),
+            (
+                "Debora",
+                "Salvi",
+                "Clienti",
+                "amber",
+                0.8,
+                "Cliente giovane al primo conto",
+            ),
         ],
-        "test": [("Mutui ipotecari", 0.6)],
-        "conversazioni": 14,
-        "tentativi": 6,
-        # Solo le prime due persone dell'elenco si sono mai allenate: è
-        # esattamente il numero che la dashboard dell'utilizzo mette accanto
-        # al totale degli account.
-        "persone_attive": 2,
+        "test": [("Mutui ipotecari", 0.6), ("Carte di credito", 0.7)],
+        "conversazioni": 150,
+        "tentativi": 60,
+        # Undici su ventisei: è il rapporto che la dashboard dell'utilizzo
+        # mette accanto al totale degli account, ed è la differenza fra una
+        # licenza usata e una licenza soltanto pagata.
+        "persone_attive": 11,
     },
     {
         "nome": f"{MARCATORE} Ovest Retail",
         "slug": f"{SLUG_PREFISSO}ovest",
         "descrizione": "il tenant fermo: account aperti e mai usati",
-        "persone": [
-            ("Federica", "Costa", 6.0),
-            ("Nicola", "Serra", 6.0),
-            ("Elisa", "Barbieri", 6.0),
-        ],
+        "persone": 25,
         "avatar": [],
         "test": [],
         "conversazioni": 0,
@@ -336,6 +448,7 @@ PERCORSI = {
     f"{SLUG_PREFISSO}nordvend": [
         {
             "titolo": f"{MARCATORE} Onboarding vendite",
+            "affidato_a": 14,
             "tappe": [
                 # `scadenza` sono i giorni da oggi: negativa è una data
                 # passata, positiva una che deve ancora arrivare, assente
@@ -347,6 +460,7 @@ PERCORSI = {
         },
         {
             "titolo": f"{MARCATORE} Gestione dei reclami",
+            "affidato_a": 10,
             "tappe": [
                 # Le due date sono già passate: è il percorso che porta gli
                 # ultimi due stati che le altre non producono, cioè chi è
@@ -360,6 +474,7 @@ PERCORSI = {
     f"{SLUG_PREFISSO}sudbanca": [
         {
             "titolo": f"{MARCATORE} Avvio in filiale",
+            "affidato_a": 8,
             "tappe": [
                 {"avatar": 0, "obiettivo": 6.5},
                 {"test": 0, "obiettivo": 6.0, "scadenza": 5},
@@ -594,7 +709,9 @@ def _ruoli(db) -> dict[str, Role]:
     return righe
 
 
-def _crea_tenant(db, rng: random.Random, definizione: dict) -> dict:
+def _crea_tenant(
+    db, rng: random.Random, definizione: dict, nomi_usati: set[str]
+) -> dict:
     """Una organizzazione finta con la sua gente, i suoi avatar e i suoi test."""
     ruoli = _ruoli(db)
 
@@ -623,7 +740,8 @@ def _crea_tenant(db, rng: random.Random, definizione: dict) -> dict:
     db.add(admin)
 
     persone = []
-    for indice, (nome, cognome, bravura) in enumerate(definizione["persone"]):
+    elenco = _persone_finte(rng, definizione["persone"], nomi_usati)
+    for indice, (nome, cognome, bravura) in enumerate(elenco):
         attive = definizione.get("persone_attive")
         si_allena = attive is None or indice < attive
         utente = User(
@@ -789,7 +907,12 @@ def _crea_percorsi(
         db.add(percorso)
         db.flush()
 
-        for indice, persona in enumerate(attive):
+        # Un percorso si affida a un gruppo, non a tutta l'organizzazione:
+        # chi compone sceglie i nuovi arrivati o chi va richiamato su un
+        # tema, e affidarlo a tutti e ventotto darebbe una pagina in cui
+        # ogni percorso somiglia a ogni altro.
+        gruppo = attive[: definizione.get("affidato_a", 12)]
+        for indice, persona in enumerate(gruppo):
             esito = ESITI[indice % len(ESITI)]
             affidato = giorni_fa(rng.uniform(20, 45))
             if esito == "appena_affidato":
@@ -897,8 +1020,12 @@ def _prove_del_percorso(
 def crea(db) -> None:
     """Scrive tutto, tenant per tenant."""
     rng = random.Random(SEME)
+    # Le combinazioni di nome e cognome già assegnate: l'email di un account è
+    # unica su tutta la piattaforma, quindi non si ripetono da un tenant
+    # all'altro.
+    nomi_usati: set[str] = set()
     for definizione in TENANT:
-        tenant = _crea_tenant(db, rng, definizione)
+        tenant = _crea_tenant(db, rng, definizione, nomi_usati)
         _prove_libere(db, rng, tenant, definizione)
         _crea_percorsi(db, rng, tenant, PERCORSI.get(definizione["slug"], []))
         db.commit()

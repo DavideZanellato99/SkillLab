@@ -5,6 +5,11 @@ import SearchInput from './SearchInput'
 import PaginationBar from './Pagination'
 import { usePagination } from '../hooks/usePagination'
 import { ChevronDownIcon, ChevronUpIcon, SortIcon } from './icons'
+/* Il confronto fra due testi è uno per tutta l'applicazione e sta in
+ * `personOrder`, insieme alla regola con cui si mettono in fila le persone:
+ * una tabella e la tendina che sceglie fra le sue righe devono ordinare allo
+ * stesso modo, altrimenti sono due elenchi diversi delle stesse cose. */
+import { collator } from './personOrder'
 
 /* Tabella condivisa dell'app: contenitore, header, righe e celle hanno un
  * unico stile definito qui — le pagine descrivono solo colonne e contenuto.
@@ -101,12 +106,6 @@ interface DataTableProps<T> {
   minWidth?: string
 }
 
-/* Un confronto solo per tutta l'app, costruito una volta: `localeCompare`
- * chiamato riga per riga rimette insieme le regole della lingua a ogni
- * coppia, e su un elenco lungo è il grosso del tempo dell'ordinamento.
- * `numeric` mette "Tappa 2" prima di "Tappa 10", che è l'ordine che chi
- * legge si aspetta da due nomi che finiscono con un numero. */
-const collator = new Intl.Collator('it', { sensitivity: 'base', numeric: true })
 
 /* Una cella senza valore non è né la più piccola né la più grande: è una
  * cella che a quella domanda non risponde, quindi resta in fondo in tutti e

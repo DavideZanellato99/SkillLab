@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import Tooltip from './Tooltip'
 import { cardCls, formatDay, formatScore, scoreBarColor, scoreTextColor } from './scoreFormat'
 import type { DayPoint } from './scoreFormat'
@@ -279,6 +280,53 @@ export function MeterRow({
       </div>
       <span className={`text-right text-sm font-bold ${scoreTextColor(score)}`}>
         {formatScore(score)}
+      </span>
+    </div>
+  )
+}
+
+/* ── Riga a barra per una percentuale ── */
+
+/** Una quota su cento, con la barra e il numero accanto.
+ *
+ *  La gemella di `MeterRow` su una scala diversa: là un voto in decimi, qui
+ *  una quota (le tappe superate, le risposte esatte). Sono due misure e non
+ *  la stessa scritta in due modi, quindi hanno due componenti; le fasce di
+ *  colore però sono le stesse divise per dieci, perché dentro una pagina il
+ *  verde deve voler dire la stessa cosa.
+ */
+export function RateRow({
+  label,
+  sub,
+  rate,
+  note,
+}: {
+  label: string
+  /** Su cosa è calcolata: "3 su 12 ci sono arrivati", e simili. */
+  sub?: string
+  rate: number
+  /** Un dato in coda alla riga, dove la quota da sola non basta. */
+  note?: ReactNode
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,240px)_1fr_auto] items-center gap-4 rounded-lg px-2 py-1.5 max-sm:grid-cols-[minmax(0,140px)_1fr_auto]">
+      <div className="min-w-0">
+        <Tooltip content={label} truncateOnly>
+          <p className="truncate text-[0.82rem] font-medium text-slate-300">{label}</p>
+        </Tooltip>
+        {sub && <p className="truncate text-[0.68rem] text-slate-500">{sub}</p>}
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white/6" aria-hidden="true">
+        <div
+          className={`h-full rounded-full transition-all ${scoreBarColor(rate / 10)}`}
+          style={{ width: `${Math.max(0, Math.min(100, rate))}%` }}
+        />
+      </div>
+      <span className="flex shrink-0 items-center gap-2">
+        {note}
+        <span className={`text-right text-sm font-bold tabular-nums ${scoreTextColor(rate / 10)}`}>
+          {Math.round(rate)}%
+        </span>
       </span>
     </div>
   )

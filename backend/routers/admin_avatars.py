@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, joinedload
 import audit
 import llm_limits
 from auth_dependency import get_current_super_admin
+from avatar_images import generate_avatar_image
 from database import get_db
 from models import (
     Avatar,
@@ -64,47 +65,12 @@ _IMAGE_SIGNATURES: list[tuple[bytes, str]] = [
 
 _MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
-_PLACEHOLDER_PALETTES = [
-    ("#7c3aed", "#06b6d4"),
-    ("#dc2626", "#f97316"),
-    ("#059669", "#34d399"),
-    ("#0284c7", "#22d3ee"),
-    ("#be185d", "#f472b6"),
-    ("#b45309", "#fbbf24"),
-]
-
 
 def _persona_name(profile: dict) -> str:
     """Avatar display name derived from the persona sheet."""
     nome = str(profile.get("NOME", "") or "").strip()
     cognome = str(profile.get("COGNOME", "") or "").strip()
     return f"{nome} {cognome}".strip()
-
-
-def _generated_image_url(avatar_id: UUID) -> str:
-    return f"/static/avatars/avatar_{avatar_id}.svg"
-
-
-def _generate_avatar_image(name: str, avatar_id: UUID) -> str:
-    """Write an initials-on-gradient SVG placeholder; returns its public URL."""
-    parts = [p for p in name.split() if p]
-    initials = "".join(p[0] for p in parts[:2]).upper() or "?"
-    c1, c2 = _PLACEHOLDER_PALETTES[avatar_id.int % len(_PLACEHOLDER_PALETTES)]
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">'
-        '<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
-        f'<stop offset="0%" stop-color="{c1}"/><stop offset="100%" stop-color="{c2}"/>'
-        "</linearGradient></defs>"
-        '<rect width="400" height="400" fill="url(#g)"/>'
-        '<text x="200" y="210" font-family="Arial, sans-serif" font-size="140" font-weight="bold" '
-        f'fill="white" fill-opacity="0.92" text-anchor="middle" dominant-baseline="middle">{initials}</text>'
-        "</svg>"
-    )
-    os.makedirs(_AVATARS_DIR, exist_ok=True)
-    filename = f"avatar_{avatar_id}.svg"
-    with open(os.path.join(_AVATARS_DIR, filename), "w", encoding="utf-8") as f:
-        f.write(svg)
-    return _generated_image_url(avatar_id)
 
 
 def _image_extension(data: bytes) -> str | None:
@@ -270,7 +236,7 @@ def create_avatar(
     db.add(avatar)
     db.flush()  # assigns the id needed for the placeholder filename
     if not avatar.image_url:
-        avatar.image_url = _generate_avatar_image(name, avatar.id)
+        avatar.image_url = generate_avatar_image(name, avatar.id)
     db.commit()
     db.refresh(avatar)
     audit.describe(http_request, target_id=str(avatar.id), nome=avatar.name)
@@ -319,7 +285,7 @@ def update_avatar(
     if new_url:
         avatar.image_url = new_url
     elif not avatar.image_url:
-        avatar.image_url = _generate_avatar_image(name, avatar.id)
+        avatar.image_url = generate_avatar_image(name, avatar.id)
 
     db.commit()
     db.refresh(avatar)

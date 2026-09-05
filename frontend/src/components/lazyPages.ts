@@ -32,11 +32,19 @@ const exactImports = {
   '/app': () => import('./HomePage'),
   '/app/profile': () => import('./ProfilePage'),
   '/app/percorsi': () => import('./MyPathsRoute'),
+  '/app/progressi': () => import('./ProgressPage'),
   '/app/confronto': () => import('./ComparisonPage'),
   '/app/simulatore': () => import('./SimulationsPage'),
   '/app/admin': () => import('./AdminPage'),
   '/app/admin/organizations': () => import('./OrganizationsPage'),
   '/app/admin/dashboard': () => import('./DashboardPage'),
+  /* Le quattro viste della dashboard, una per rotta: il guscio arriva
+     entrando nella sezione, la vista quando la si apre. Le linguette fanno
+     partire il file al passaggio del puntatore, come le voci della barra. */
+  '/app/admin/dashboard/punteggi': () => import('./DashboardScores'),
+  '/app/admin/dashboard/percorsi': () => import('./DashboardPaths'),
+  '/app/admin/dashboard/contenuti': () => import('./DashboardContent'),
+  '/app/admin/dashboard/utilizzo': () => import('./DashboardUsage'),
   '/app/admin/training': () => import('./TrainingPage'),
   '/app/admin/report': () => import('./UserReportPage'),
   '/app/admin/avatars': () => import('./AvatarAdminPage'),
@@ -61,11 +69,16 @@ const prefixImports = {
 export const HomePage = lazy(exactImports['/app'])
 export const ProfilePage = lazy(exactImports['/app/profile'])
 export const MyPathsRoute = lazy(exactImports['/app/percorsi'])
+export const ProgressPage = lazy(exactImports['/app/progressi'])
 export const ComparisonPage = lazy(exactImports['/app/confronto'])
 export const SimulationsPage = lazy(exactImports['/app/simulatore'])
 export const AdminPage = lazy(exactImports['/app/admin'])
 export const OrganizationsPage = lazy(exactImports['/app/admin/organizations'])
 export const DashboardPage = lazy(exactImports['/app/admin/dashboard'])
+export const DashboardScores = lazy(exactImports['/app/admin/dashboard/punteggi'])
+export const DashboardPaths = lazy(exactImports['/app/admin/dashboard/percorsi'])
+export const DashboardContent = lazy(exactImports['/app/admin/dashboard/contenuti'])
+export const DashboardUsage = lazy(exactImports['/app/admin/dashboard/utilizzo'])
 export const TrainingPage = lazy(exactImports['/app/admin/training'])
 export const UserReportPage = lazy(exactImports['/app/admin/report'])
 export const AvatarAdminPage = lazy(exactImports['/app/admin/avatars'])

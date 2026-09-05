@@ -1,7 +1,7 @@
 """Pydantic schemas for request/response validation."""
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -2149,6 +2149,274 @@ class SimulationAttemptSummary(BaseModel):
     earned_points: float
     score: float
     created_at: datetime
+
+
+# --- Le dashboard: percorsi, contenuti, utilizzo, i propri progressi ---
+#
+# Quattro domande diverse sulle stesse prove che il resto dell'applicazione
+# registra. I rendiconti qui sopra rispondono a "come va questa persona": la
+# dashboard dei percorsi risponde a "il programma funziona", quella dei
+# contenuti a "cosa è tarato male", quella dell'utilizzo a "chi sta usando la
+# piattaforma", e i progressi a "sto migliorando", che è la stessa domanda
+# fatta su di sé da chi si allena.
+#
+# Nessuna di loro porta uno stato nuovo: sono aggregati calcolati in lettura
+# sulle righe che esistono già, come il progresso di un percorso.
+
+
+class PathStepStats(BaseModel):
+    """Una tappa vista su tutti quelli che la stanno percorrendo.
+
+    `reached` è quanti l'hanno sbloccata, cioè quanti ci sono arrivati, ed è
+    su quello che si misura `passed`: una tappa in fondo a un percorso lungo
+    la sbloccano in pochi, e contarne le riuscite su tutti gli assegnatari
+    direbbe che non funziona quando invece nessuno ci è ancora arrivato.
+    """
+
+    position: int
+    label: str
+    # "avatar" per una conversazione, "simulation" per un test tecnico
+    kind: str
+    target_score: float
+    reached: int
+    passed: int
+    # Superate, ma dopo la data della tappa: sono dentro `passed`
+    late: int
+    overdue: int
+    # Prove svolte in media da chi l'ha sbloccata, e il meglio che ha fatto.
+    # None quando non l'ha sbloccata nessuno: zero sarebbe un numero, e qui
+    # non c'è niente da leggere
+    avg_attempts: float | None = None
+    avg_best_score: float | None = None
+
+
+class PathStats(BaseModel):
+    """Un percorso e come sta andando su tutti quelli a cui è stato affidato."""
+
+    path_id: UUID
+    title: str
+    organization_name: str | None = None
+    assignments: int
+    active: int
+    completed: int
+    completed_late: int
+    overdue: int
+    # Percentuale di percorsi chiusi sul totale di quelli affidati
+    completion_rate: float
+    # Giorni medi dall'affidamento all'ultima tappa superata, sui soli
+    # percorsi chiusi. None finché non ne ha chiuso nessuno
+    avg_days_to_complete: float | None = None
+    steps: list[PathStepStats]
+
+
+class PathDeadline(BaseModel):
+    """Una tappa con una data, di chi la sta percorrendo adesso.
+
+    Sono le uniche righe dell'applicazione che guardano avanti: tutto il
+    resto racconta prove già svolte. Ci finisce la tappa aperta o scaduta di
+    ogni percorso in corso che porti una data, perché è quella su cui si può
+    ancora fare qualcosa.
+    """
+
+    assignment_id: UUID
+    path_id: UUID
+    path_title: str
+    user_id: UUID
+    user_name: str
+    user_email: str
+    step_position: int
+    step_label: str
+    due_at: datetime
+    # "active" se è ancora in tempo, "overdue" se la data è passata
+    status: str
+
+
+class PathsDashboard(BaseModel):
+    """L'avanzamento dei percorsi affidati, nel periodo e nello scope."""
+
+    assignments: int
+    people: int
+    active: int
+    completed: int
+    completed_late: int
+    overdue: int
+    completion_rate: float
+    avg_days_to_complete: float | None = None
+    paths: list[PathStats]
+    deadlines: list[PathDeadline]
+
+
+class AvatarStats(BaseModel):
+    """Un interlocutore visto dal lato di chi lo ha scritto.
+
+    Il criterio più debole è la ragione per cui questa riga esiste: il voto
+    medio dice che con questo avatar si va male, il criterio dice su cosa, ed
+    è la differenza fra sapere che qualcosa non funziona e sapere cosa
+    cambiare.
+    """
+
+    avatar_id: UUID
+    avatar_name: str
+    conversations: int
+    people: int
+    avg_score: float
+    # Conversazioni chiuse sotto la sufficienza, che è dove si vede se un
+    # avatar è duro o soltanto poco frequentato
+    below_pass: int
+    weakest_criterion_key: str | None = None
+    weakest_criterion_avg: float | None = None
+    criteria: dict[str, float] = {}
+    last_at: datetime
+
+
+class SimulationStats(BaseModel):
+    """Un test tecnico visto dal lato di chi lo ha scritto."""
+
+    simulation_id: UUID
+    simulation_title: str
+    simulation_kind: str
+    simulation_source: str
+    attempts: int
+    people: int
+    avg_score: float
+    # Percentuale di risposte esatte su tutte le domande poste, che pesa un
+    # test da dieci domande per quanto chiede
+    correct_rate: float
+    below_pass: int
+    last_at: datetime
+
+
+class ContentDashboard(BaseModel):
+    """Quanto è difficile quello che è stato scritto, avatar per avatar e
+    test per test.
+
+    Le etichette dei criteri viaggiano una volta sola sulla risposta, come
+    nel report delle valutazioni e per la stessa ragione: sono le stesse sei
+    parole per ogni riga.
+    """
+
+    criteria_labels: dict[str, str]
+    avatars: list[AvatarStats]
+    simulations: list[SimulationStats]
+    truncated: bool = False
+
+
+class SimulationItemStats(BaseModel):
+    """Una domanda e come è andata a chi se l'è trovata davanti.
+
+    La domanda porta il proprio testo e non solo il proprio id: le domande si
+    riscrivono e i test si rigenerano, e una riga che dicesse soltanto "la
+    terza" non si potrebbe leggere.
+    """
+
+    question_id: str
+    text: str
+    # Quante volte è stata posta, quante volte è stata data giusta e quante
+    # volte è rimasta in bianco. Una in bianco sta dentro `answers` e fuori
+    # da `correct`: è una domanda a cui non si è saputo rispondere
+    answers: int
+    correct: int
+    unanswered: int
+    correct_rate: float
+    # Secondi medi impiegati, solo dove il cronometro c'è (scelta multipla)
+    avg_seconds: float | None = None
+
+
+class SimulationItemsReport(BaseModel):
+    """Le domande di un test, una per una.
+
+    Si legge aprendo una riga della dashboard dei contenuti e non insieme a
+    lei: le risposte date stanno nella fotografia di ogni tentativo, che è la
+    colonna più pesante di quella tabella, e leggerle per ogni test del
+    tenant per aprirne uno vorrebbe dire scaricarli tutti.
+    """
+
+    simulation_id: UUID
+    simulation_title: str
+    simulation_kind: str
+    attempts: int
+    items: list[SimulationItemStats]
+    truncated: bool = False
+
+
+class OrganizationUsage(BaseModel):
+    """Quanto una organizzazione ha usato la piattaforma nel periodo.
+
+    `active_people` sono quelli che hanno svolto almeno una prova, e stanno
+    accanto a `people` perché è il rapporto fra i due a dire se una licenza
+    sta servendo a qualcuno.
+    """
+
+    organization_id: UUID
+    organization_name: str
+    people: int
+    active_people: int
+    conversations: int
+    voice_conversations: int
+    text_conversations: int
+    attempts: int
+    total_duration_seconds: int
+    last_activity_at: datetime | None = None
+
+
+class UsageDay(BaseModel):
+    """Le prove svolte in una giornata, le due forme separate."""
+
+    day: date
+    conversations: int
+    attempts: int
+
+
+class UsageDashboard(BaseModel):
+    """L'utilizzo della piattaforma, organizzazione per organizzazione."""
+
+    organizations: list[OrganizationUsage]
+    people: int
+    active_people: int
+    conversations: int
+    attempts: int
+    total_duration_seconds: int
+    daily: list[UsageDay]
+
+
+class MyProgressConversation(BaseModel):
+    """Una propria conversazione valutata, come la legge la propria pagina."""
+
+    conversation_id: UUID
+    title: str
+    mode: str
+    avatar_name: str
+    conversation_at: datetime
+    score: float
+    has_override: bool = False
+    criteria: dict[str, float]
+
+
+class MyProgressSimulation(BaseModel):
+    """Un proprio test consegnato."""
+
+    attempt_id: UUID
+    simulation_id: UUID
+    simulation_title: str
+    simulation_kind: str
+    attempted_at: datetime
+    score: float
+    correct_count: int
+    question_count: int
+
+
+class MyProgress(BaseModel):
+    """Le proprie prove, per la pagina dei propri progressi.
+
+    Le stesse righe che la dashboard di chi amministra aggrega su tutti,
+    ristrette a chi guarda e senza niente che riguardi gli altri: qui non c'è
+    nessun confronto fra colleghi, perché la domanda è "sto migliorando" e
+    una classifica è una domanda diversa, con altre conseguenze in aula.
+    """
+
+    criteria_labels: dict[str, str]
+    conversations: list[MyProgressConversation]
+    simulations: list[MyProgressSimulation]
 
 
 # --- Generic Response ---

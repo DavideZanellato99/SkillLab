@@ -83,3 +83,16 @@ export function dailyAverages<T>(
     .map((e) => ({ date: e.date, avg: e.sum / e.count, count: e.count }))
     .sort((a, b) => a.date.getTime() - b.date.getTime())
 }
+
+/** La media di un criterio nei dati che si stanno guardando.
+ *
+ * L'etichetta viaggia accanto alla chiave perché è del server: arriva col
+ * vocabolario della risposta (`criteria_labels`), e qui non se ne tiene una
+ * copia. La usano la vista dei punteggi, che la calcola sulle valutazioni
+ * caricate, e la tabella che ne fa le proprie colonne.
+ */
+export interface CriterionAverage {
+  key: string
+  label: string
+  avg: number
+}

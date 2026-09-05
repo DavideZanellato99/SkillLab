@@ -44,11 +44,21 @@ portasse un link dipendeva da chi lo apriva.
 | `/app`                                                                                       | autenticato | Galleria degli avatar, con sopra i propri obiettivi                                       |
 | `/app/chat/:avatarId`                                                                        | autenticato | Chiamata e chat con un avatar                                                             |
 | `/app/percorsi`, `/app/percorsi/:assignmentId`                                               | user        | I propri percorsi di training, e il singolo come mappa                                    |
+| `/app/progressi`                                                                             | user        | I propri progressi: la curva dei voti, i criteri deboli e le prove svolte                 |
 | `/app/confronto`                                                                             | autenticato | Confronto fra i propri tentativi (per un admin, quelli di una persona del proprio tenant) |
 | `/app/simulatore`, `/app/simulatore/:id`                                                     | autenticato | Elenco dei test tecnici e svolgimento                                                     |
 | `/app/profile`                                                                               | autenticato | Profilo, password, export dei propri dati                                                 |
-| `/app/admin/dashboard`, `/app/admin/training`, `/app/admin/report`, `/app/admin/simulations` | admin       | Cruscotti, percorsi a tappe, report per utente, test tecnici                              |
+| `/app/admin/dashboard/*`, `/app/admin/training`, `/app/admin/report`, `/app/admin/simulations` | admin       | Le quattro viste della dashboard, percorsi a tappe, report per utente, test tecnici       |
 | `/app/admin`, `/app/admin/organizations`, `/app/admin/avatars`, `/app/admin/logs`            | super admin | Utenti, organizzazioni, avatar, registro                                                  |
+| `/app/admin/dashboard/utilizzo`                                                              | super admin | L'utilizzo per organizzazione, dentro il guscio della dashboard                            |
+
+La dashboard è l'unica sezione fatta di **rotte figlie**: il guscio
+([DashboardPage](../frontend/src/components/DashboardPage.tsx)) tiene il
+titolo, i due filtri che valgono per tutte le viste e le linguette, e le
+quattro viste stanno sotto di lui, una per rotta e una per file scaricato
+(vedi [training-e-report.md](training-e-report.md)). Sono quattro domande
+diverse sulle stesse prove, e ognuna legge dati suoi: aprirne una non paga la
+scansione delle altre tre.
 
 Il gate è [RequireRole](../frontend/src/components/RequireRole.tsx), che su un
 ruolo che non corrisponde rimanda a `/app` con `replace`, così l'indirizzo

@@ -1066,15 +1066,21 @@ test deve poterci finire, o la metà scritta si aprirebbe su nessuno.
 
 ## I cruscotti e i report
 
-Tre schermate per chi amministra, tutte confinate dallo stesso `resolve_admin_scope`:
+Le schermate di lettura, tutte confinate dallo stesso `resolve_admin_scope`
+tranne l'ultima, che è di chi si allena e guarda solo sé stesso:
 
-| Schermata              | Endpoint                            | Cosa mostra                                                    |
-| ---------------------- | ----------------------------------- | -------------------------------------------------------------- |
-| `/app/admin/dashboard` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie              |
-| `/app/admin/dashboard` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte          |
-| `/app/admin/report`    | `GET /api/admin/users-report`       | Una riga per persona: quanto ha fatto nel periodo, in conteggi |
-| `/app/admin/report`    | `GET /api/admin/users-report/{id}`  | Le prove di quella persona, quando la sua riga si apre         |
-| `/app/admin`           | `GET /api/admin/users`              | La tabella degli utenti, filtrata e paginata                   |
+| Schermata                        | Endpoint                                          | Cosa mostra                                                    |
+| -------------------------------- | ------------------------------------------------- | -------------------------------------------------------------- |
+| `/app/admin/dashboard/punteggi`  | `GET /api/admin/evaluations-report`               | I punteggi delle valutazioni, per grafici e medie              |
+| `/app/admin/dashboard/punteggi`  | `GET /api/admin/simulations-report`               | I test tecnici consegnati, con voto e risposte esatte          |
+| `/app/admin/dashboard/percorsi`  | `GET /api/dashboards/paths`                       | I percorsi affidati: quanti si chiudono e su quale tappa ci si ferma |
+| `/app/admin/dashboard/contenuti` | `GET /api/dashboards/content`                     | Quanto sono difficili avatar e test, dal lato di chi li scrive |
+| `/app/admin/dashboard/contenuti` | `GET /api/dashboards/content/simulations/{id}`    | Le domande di un test, quando la sua riga si apre              |
+| `/app/admin/dashboard/utilizzo`  | `GET /api/dashboards/usage`                       | L'utilizzo per organizzazione (solo super admin)               |
+| `/app/admin/report`              | `GET /api/admin/users-report`                     | Una riga per persona: quanto ha fatto nel periodo, in conteggi |
+| `/app/admin/report`              | `GET /api/admin/users-report/{id}`                | Le prove di quella persona, quando la sua riga si apre         |
+| `/app/admin`                     | `GET /api/admin/users`                            | La tabella degli utenti, filtrata e paginata                   |
+| `/app/progressi`                 | `GET /api/dashboards/me`                          | Le proprie prove, per chi si allena                            |
 
 **Le due letture della dashboard sono le più pesanti dell'applicazione**, e la
 forma della risposta è quello che le tiene in piedi.
@@ -1146,9 +1152,9 @@ altrove sparirebbe dai suoi numeri.
 
 **Il periodo è l'unico filtro, con l'organizzazione, che il server capisce.**
 Gli altri restringono righe già arrivate; `days` decide quante ne arrivano, ed
-è lo stesso parametro del report attività (`_since` in
-[admin.py](../backend/routers/admin.py) è scritto una volta per tutte e tre le
-letture). Senza, la pagina si portava dietro **ogni valutazione di sempre**, i
+è lo stesso parametro del report attività (`since_from_days` in
+[report_rows.py](../backend/report_rows.py) è scritto una volta per tutte le
+letture, quelle delle dashboard nuove comprese). Senza, la pagina si portava dietro **ogni valutazione di sempre**, i
 criteri di ognuna compresi, a ogni apertura: la sola lettura dell'app che
 cresceva senza limite con l'uso. Parte da "Sempre", come nel report attività,
 perché un filtro già acceso mostrerebbe una pagina mezza vuota a chi non sa che
@@ -1310,6 +1316,170 @@ bottone lo dice invece di lasciarlo scoprire aprendo il file. Se l'esportazione
 cade, il messaggio compare **accanto al bottone che l'ha chiesta** e i grafici
 restano dove sono: un file non prodotto non è una pagina senza dati, e
 mescolare i due errori faceva sembrare rotta una dashboard che funzionava.
+
+## Le quattro viste della dashboard
+
+La dashboard era una schermata sola, i punteggi, e rispondeva a una domanda:
+chi è messo bene. Le prove che l'applicazione registra però ne reggono altre
+tre, e nessuna di quelle si poteva fare guardando delle medie per persona.
+Adesso la sezione è un **guscio con dentro quattro viste**, una per domanda:
+
+| Vista       | Indirizzo                        | Domanda                          | Chi la vede           |
+| ----------- | -------------------------------- | -------------------------------- | --------------------- |
+| Punteggi    | `/app/admin/dashboard/punteggi`  | Chi è messo bene                 | Admin                 |
+| Percorsi    | `/app/admin/dashboard/percorsi`  | Il programma funziona            | Admin                 |
+| Contenuti   | `/app/admin/dashboard/contenuti` | Cosa è tarato male               | Admin                 |
+| Utilizzo    | `/app/admin/dashboard/utilizzo`  | Chi sta usando la piattaforma    | Solo il super admin   |
+
+**Quattro rotte e non quattro pannelli.** Sono quattro domande diverse, ognuna
+con le proprie letture: tenerle in una pagina sola voleva dire far partire
+quattro scansioni per guardarne una, e non avrebbe dato a nessuna un indirizzo
+da mandare a qualcuno. Ogni vista è anche un file che il browser scarica solo
+entrandoci ([lazyPages](../frontend/src/components/lazyPages.ts)), e le
+linguette lo fanno partire al passaggio del puntatore (`onItemHover` su
+[TabBar](../frontend/src/components/TabBar.tsx)), come le voci della barra di
+navigazione.
+
+**Il periodo e l'organizzazione stanno sul guscio**
+([DashboardPage](../frontend/src/components/DashboardPage.tsx)): sono i due
+filtri che il server capisce, cioè quelli che decidono quali righe arrivano, e
+valgono per tutte e quattro. Restano nell'indirizzo, che è la loro unica copia,
+e arrivano alle viste nel contesto dell'`Outlet` (`useDashboardScope` in
+[dashboardViews](../frontend/src/components/dashboardViews.ts)), così le viste
+non ne tengono quattro letture libere di divergere. Cambiando linguetta si
+portano dietro: è quello che rende le quattro schermate una sezione sola.
+Quelli interni a una vista invece restano dov'è la vista, perché sono la prova
+di cui si stanno leggendo i grafici e non un modo di restringerla: il canale e
+il tipo di test nei punteggi, la scelta fra avatar e test nei contenuti.
+
+L'indirizzo della sezione senza vista (`/app/admin/dashboard`) porta ai
+punteggi tenendosi i filtri: un collegamento salvato prima della
+riorganizzazione arriva dove arrivava, con il periodo che portava con sé.
+
+Il server risponde alle tre viste nuove da un prefisso suo,
+[`/api/dashboards`](../backend/routers/dashboards.py), e le letture su cui si
+appoggiano sono le stesse dei rendiconti, spostate in
+[report_rows.py](../backend/report_rows.py) perché adesso a chiederle sono in
+due. I conti stanno in [dashboard_stats.py](../backend/dashboard_stats.py),
+fuori dal router che li mostra, per la stessa ragione per cui ci sta
+`training_progress`: sono regole di lettura, non risposte HTTP.
+
+### I percorsi
+
+Risponde alla domanda di chi il percorso lo ha composto, e prima di questa
+vista ci si rispondeva aprendo le assegnazioni una per una nella gestione
+percorsi.
+
+Il progresso di ogni assegnazione resta quello di
+[training_progress.py](../backend/training_progress.py), che è l'unico posto
+in cui si decide se una tappa è superata: qui si contano soltanto gli esiti
+che ne escono, percorso per percorso e tappa per tappa.
+
+**Una tappa si misura su chi ci è arrivato**, non su tutti gli assegnatari.
+L'ultima tappa di un percorso lungo la sbloccano in pochi, e contarne le
+riuscite su tutti direbbe che non funziona quando invece nessuno ci è ancora
+arrivato: è esattamente il numero su cui si deciderebbe di riscriverla. Per
+questo la riga porta anche su quante persone è calcolata, e dove non è
+arrivato nessuno i valori medi restano vuoti invece di essere zero, che
+sarebbe un voto.
+
+Una tappa che nessuno supera non è un dettaglio: tiene chiuse tutte quelle
+dopo di lei, quindi ferma il percorso di tutti.
+
+**Le scadenze sono l'unica cosa dell'applicazione che guarda avanti.** Tutto
+il resto racconta prove già svolte; qui c'è la tappa aperta di ogni percorso
+in corso che porti una data, dalla più vicina e con le scadute in cima, perché
+sono le uniche su cui si può ancora fare qualcosa. Della tappa ancora chiusa
+la data non compare: vale, ma su qualcosa che il percorso non ha aperto non
+c'è niente da fare.
+
+`days` qui restringe alle assegnazioni **affidate** nel periodo, e non alle
+prove svolte: quello che si guarda è come vanno i percorsi consegnati adesso,
+e tagliare le prove renderebbe non superata una tappa chiusa il mese scorso.
+
+### I contenuti
+
+Le stesse righe della vista dei punteggi, raggruppate per avatar e per test
+invece che per persona. Sono due domande e non due schermate della stessa: chi
+guarda qui ha scritto la scheda persona o le domande, e cerca la riga su cui
+si va peggio. Le due metà arrivano già ordinate dalla media più bassa, quindi
+la prima riga è la risposta.
+
+**Il criterio più debole accanto alla media** è la ragione per cui la tabella
+degli avatar esiste: la media dice che con questo interlocutore si va male, il
+criterio dice su cosa, ed è la differenza fra sapere che qualcosa non funziona
+e sapere cosa cambiare. Si cerca fra i criteri che quell'avatar ha davvero
+prodotto, perché una valutazione vecchia può averne avuti altri.
+
+Sui test la quota di risposte esatte sta accanto al voto medio perché dicono
+due cose diverse: il voto tiene conto anche del tempo impiegato (vedi
+[simulatore.md](simulatore.md)), la quota è quante ne sapevano. Un test con
+voti bassi e risposte quasi tutte esatte è cronometrato male, non difficile.
+
+**Una riga si apre sulle sue domande, una per una**
+(`GET /api/dashboards/content/simulations/{id}`). È il passo che nessuna media
+sa fare: una domanda che sbagliano tutti, dentro una media di dieci domande,
+non si vede, e quella non è un test difficile, è una domanda scritta male. Le
+risposte in bianco si contano a parte da quelle sbagliate, perché dicono
+un'altra cosa: la domanda non è stata capita, o è arrivata quando il tempo era
+finito.
+
+Le domande si raggruppano per id e non per posizione: si estraggono da un
+serbatoio più grande, quindi "la terza" non è la stessa domanda per due
+persone. E si leggono solo aprendo la riga: stanno nella fotografia di ogni
+tentativo, che è la colonna più pesante di quella tabella, e portarle
+nell'elenco vorrebbe dire scaricare le consegne di ogni test del tenant per
+aprirne una.
+
+### L'utilizzo
+
+Del solo super admin, ed è l'unica vista che lo sia: la domanda è quali
+organizzazioni si allenano e quali sono ferme, e ha senso solo per chi ne
+guarda più di una. Un organization admin la stessa cosa sulla propria la legge
+nel report attività, che è per persona.
+
+Il numero che conta è il rapporto fra **le persone che ci sono e quelle che
+hanno svolto almeno una prova**: cento account di cui tre si allenano sono una
+licenza che non sta servendo, e un conteggio delle sole prove non lo direbbe.
+Nel conto delle persone entrano solo gli account che si allenano, perché un
+amministratore comparirebbe come qualcuno che non si allena mai.
+
+**Le organizzazioni ci sono tutte, anche a zero.** Una riga vuota è la
+risposta, e un elenco delle sole attive nasconderebbe esattamente quelle che
+si stanno cercando.
+
+Chi ha parlato e consegnato conta **una volta sola**: le persone attive sono
+un insieme e non la somma dei due conteggi. Le due forme di prova invece
+restano separate come ovunque, perché una chiamata e un test consegnato non
+sono la stessa cosa.
+
+## I propri progressi
+
+La stessa domanda della dashboard, fatta su di sé da chi si allena:
+`/app/progressi`, `GET /api/dashboards/me`, per il solo ruolo `user` come i
+percorsi affidati. A un amministratore è un 403 e non un elenco vuoto, la
+stessa risposta della pagina che non gli si apre.
+
+I grafici sono quelli della dashboard
+([scoreCharts](../frontend/src/components/scoreCharts.tsx)) e le prove sono le
+stesse, ma **qui dentro non c'è niente che riguardi gli altri**: nessuna media
+di gruppo, nessuna posizione, nessun nome di collega. Una classifica in aula è
+una domanda diversa, con altre conseguenze, e non è quella che questa pagina
+pone. Il confronto che c'è è con sé stessi nel tempo.
+
+Lo scarto in cima si legge fra **la prima metà delle prove e l'ultima**, e non
+fra la prima prova e l'ultima: due prove sole sono due giornate, e una
+giornata storta racconterebbe un peggioramento che non c'è stato. Sotto le
+quattro prove non si dice niente, perché lì non c'è ancora un andamento da
+leggere.
+
+Il voto è quello finale, correzione del docente compresa: è quello che la
+persona si è vista dare, e una curva disegnata sul numero della macchina
+contraddirebbe la pagella che ha in mano.
+
+La pagina del confronto risponde a un'altra domanda ancora, due tentativi
+sullo stesso scenario messi uno accanto all'altro: qui c'è l'andamento, là il
+faccia a faccia.
 
 ## Il report attività
 

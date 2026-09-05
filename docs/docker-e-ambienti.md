@@ -307,3 +307,36 @@ Linux installati dentro l'immagine con quelli Windows dell'host, e i limiti più
 larghi sul frontend, perché lì gira Vite che tiene in memoria il grafo dei
 moduli, e col tetto della produzione verrebbe ucciso a metà lavoro sembrando un
 container che si riavvia da solo senza motivo.
+
+### I dati finti
+
+Un database appena avviato ha le dashboard vuote, e su dei grafici vuoti non
+si vede se dicono la cosa giusta.
+[demo/dati_mock.py](../demo/dati_mock.py) lo riempie:
+
+```
+backend/venv/Scripts/python.exe demo/dati_mock.py            # crea
+backend/venv/Scripts/python.exe demo/dati_mock.py --stato    # cosa c'è di finto
+backend/venv/Scripts/python.exe demo/dati_mock.py --rimuovi  # toglie
+```
+
+Tre organizzazioni che raccontano tre situazioni diverse (una che si allena
+tutti i giorni, una tiepida, una ferma), con le loro persone, gli avatar, i
+test, le conversazioni valutate, i tentativi e i percorsi affidati, questi
+ultimi in tutti gli stati che la dashboard deve saper distinguere, chiusi in
+tempo, chiusi in ritardo, in corso e scaduti.
+
+**Tutto quello che nasce da lì è riconoscibile**: le organizzazioni si
+chiamano `[MOCK] ...` con lo slug che comincia per `mock-`, gli account
+stanno su `@mock.invalid` (un dominio che per definizione non esiste, quindi
+nessuna mail può partire davvero) e avatar, test, percorsi e conversazioni
+hanno il titolo che comincia per `[MOCK]`. La rimozione passa dalla stessa
+cancellazione del tenant che usa il pannello di amministrazione
+([erasure.py](../backend/erasure.py)), quindi non dimentica una tabella il
+giorno in cui ne nasce una nuova.
+
+La pagina dei propri progressi fa eccezione, perché si apre solo con il ruolo
+`user` e gli account finti non esistono sull'identity provider: per vederla
+piena le prove si danno a un account vero con `--anche-per <email>`. Sono le
+uniche righe finte che vivono fuori da una organizzazione finta, e la
+rimozione le riconosce dal marcatore nel titolo.

@@ -76,6 +76,16 @@ export function mainNavEntries(user: AuthUser | null): NavEntry[] {
       Icon: TargetIcon,
       isActive: within('/app/percorsi'),
     })
+    /* Come sto andando: la stessa domanda che un admin fa sulla dashboard,
+       fatta su di sé. Sta accanto ai percorsi perché è la coppia di chi si
+       allena, quello che gli è stato affidato e come lo sta portando avanti,
+       e non ne riceve chi amministra: non ha prove proprie da guardare. */
+    entries.push({
+      to: '/app/progressi',
+      label: 'Progressi',
+      Icon: ChartIcon,
+      isActive: exact('/app/progressi'),
+    })
   }
 
   /* Per tutti: lo studente confronta i propri tentativi, un admin quelli
@@ -92,7 +102,9 @@ export function mainNavEntries(user: AuthUser | null): NavEntry[] {
       to: '/app/admin/dashboard',
       label: 'Dashboard',
       Icon: DashboardIcon,
-      isActive: exact('/app/admin/dashboard'),
+      /* Accesa dentro tutte le viste della sezione: punteggi, percorsi,
+         contenuti e utilizzo sono quattro rotte, ma una voce sola. */
+      isActive: within('/app/admin/dashboard'),
     })
   }
 

@@ -1,12 +1,12 @@
 """Admin API endpoints for managing users (super admin only)."""
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
-from sqlalchemy import case, func, or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import audit
@@ -46,6 +46,15 @@ from models import (
     TechnicalSimulation,
     User,
 )
+from report_rows import (
+    conversation_scope,
+    duration_seconds,
+    evaluation_report_rows,
+    message_stats,
+    simulation_report_rows,
+    since_from_days,
+    tenant_user_ids,
+)
 from routers.chat import _evaluation_response, evaluation_pdf_response
 from schemas import (
     AdminConversationDetail,
@@ -54,18 +63,15 @@ from schemas import (
     ConversationReport,
     CreateUserRequest,
     EvaluationReportPage,
-    EvaluationReportRow,
     MessageResponse,
     SimulationAttemptReport,
     SimulationReportPage,
-    SimulationReportRow,
     UpdateUserRequest,
     UpdateUserStatusRequest,
     UserActivityDetail,
     UserActivityReport,
     UserPage,
 )
-from simulation_scoring import attempt_score
 from table_sort import ordered, sort_or_400
 from user_fields import clean_email_or_400, clean_name_or_400, find_user_by_email
 
@@ -304,8 +310,8 @@ def users_activity_report(
     si allena da un anno non dice cosa ha fatto adesso.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    since = _since(days)
-    tenant_users = _tenant_user_ids(db, scope_org_id)
+    since = since_from_days(days)
+    tenant_users = tenant_user_ids(db, scope_org_id)
 
     users_query = db.query(User)
     if scope_org_id is not None:
@@ -316,12 +322,12 @@ def users_activity_report(
     # persona per poi contarle in Python, cioè la stessa somma fatta due
     # volte: una dal server per costruire le liste, una da chi le riceveva
     # per non guardarle.
-    conversation_filters = _conversation_scope(tenant_users, since)
-    stats = _message_stats(db, conversation_filters)
+    conversation_filters = conversation_scope(tenant_users, since)
+    stats = message_stats(db, conversation_filters)
     totals_query = db.query(
         ChatConversation.user_id.label("user_id"),
         func.count(ChatConversation.id).label("conversation_count"),
-        func.coalesce(func.sum(_duration_seconds(stats)), 0).label("total_duration"),
+        func.coalesce(func.sum(duration_seconds(stats)), 0).label("total_duration"),
     ).outerjoin(stats, stats.c.conversation_id == ChatConversation.id)
     for condition in conversation_filters:
         totals_query = totals_query.filter(condition)
@@ -391,74 +397,10 @@ def user_activity_detail(
     if scope_org_id is not None and user.organization_id != scope_org_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utente non trovato.")
 
-    since = _since(days)
+    since = since_from_days(days)
     return UserActivityDetail(
         conversations=_user_conversation_reports(db, user_id, since),
         simulation_attempts=_user_attempt_reports(db, user_id, since),
-    )
-
-
-def _tenant_user_ids(db: Session, scope_org_id: UUID | None):
-    """Le persone di un tenant come sottoquery, o None quando si guarda tutto.
-
-    Il confine viaggia dentro il database e non come lista di id letta prima e
-    legata a ogni interrogazione: quella lista cresce con il tenant, e a
-    qualche migliaio di persone sono altrettanti parametri per query.
-    """
-    if scope_org_id is None:
-        return None
-    return db.query(User.id).filter(User.organization_id == scope_org_id).scalar_subquery()
-
-
-def _conversation_scope(tenant_users, since) -> list:
-    """Le condizioni che dicono quali conversazioni si stanno guardando."""
-    conditions = []
-    if tenant_users is not None:
-        conditions.append(ChatConversation.user_id.in_(tenant_users))
-    if since is not None:
-        conditions.append(ChatConversation.created_at >= since)
-    return conditions
-
-
-def _message_stats(db: Session, conversation_filters: list):
-    """Quanti messaggi e da quando a quando, per ogni conversazione in vista.
-
-    I filtri delle conversazioni stanno dentro l'aggregato e non fuori.
-    Stavano fuori, quindi il raggruppamento girava su tutta la tabella dei
-    messaggi e si scartava dopo, anche quando a guardare era l'admin di una
-    sola organizzazione o il periodo era una settimana. Qui il raggruppamento
-    vede solo le conversazioni in vista, e quando si guarda una persona sola
-    sono le sue.
-    """
-    query = (
-        db.query(
-            ChatMessage.conversation_id.label("conversation_id"),
-            func.count(ChatMessage.id).label("message_count"),
-            func.min(ChatMessage.created_at).label("first_at"),
-            func.max(ChatMessage.created_at).label("last_at"),
-        )
-        .join(ChatConversation, ChatConversation.id == ChatMessage.conversation_id)
-        .group_by(ChatMessage.conversation_id)
-    )
-    for condition in conversation_filters:
-        query = query.filter(condition)
-    return query.subquery()
-
-
-def _duration_seconds(stats):
-    """Dal primo all'ultimo messaggio, ai secondi interi.
-
-    Zero sotto i due messaggi: una conversazione aperta e mai iniziata non è
-    durata un istante. Il troncamento è per conversazione e non sulla somma,
-    perché la durata della riga e quelle delle prove che si aprono sotto
-    devono tornare.
-    """
-    return case(
-        (
-            stats.c.message_count >= 2,
-            func.floor(func.extract("epoch", stats.c.last_at - stats.c.first_at)),
-        ),
-        else_=0,
     )
 
 
@@ -473,7 +415,7 @@ def _user_conversation_reports(db: Session, user_id: UUID, since) -> list[Conver
     if since is not None:
         filters.append(ChatConversation.created_at >= since)
 
-    stats = _message_stats(db, filters)
+    stats = message_stats(db, filters)
     query = (
         db.query(
             ChatConversation,
@@ -483,7 +425,7 @@ def _user_conversation_reports(db: Session, user_id: UUID, since) -> list[Conver
             ConversationEvaluation.overall_score,
             ConversationReview.override_score,
             func.coalesce(stats.c.message_count, 0),
-            _duration_seconds(stats),
+            duration_seconds(stats),
         )
         .join(Avatar, Avatar.id == ChatConversation.avatar_id)
         .join(AvatarCategory, AvatarCategory.id == Avatar.category_id)
@@ -564,22 +506,6 @@ def _user_attempt_reports(db: Session, user_id: UUID, since) -> list[SimulationA
     ]
 
 
-# Quante righe al massimo una metà della dashboard si porta dietro.
-#
-# Il periodo di default è "Sempre", e per una ragione scritta in
-# reportFormat.ts: un filtro già acceso mostrerebbe una pagina mezza vuota a
-# chi non sa che esiste. Ma "sempre" su un tenant di tre anni è tutto lo
-# storico a ogni apertura, e da un certo punto in poi non è più una pagina
-# lenta, è una pagina che non arriva.
-#
-# Cinquemila è largo abbastanza da non toccare nessuno oggi e stretto
-# abbastanza da tenere in piedi la pagina domani. Quando scatta si prendono le
-# più recenti, che sono quelle di cui si sta parlando, e la risposta lo dice
-# (`truncated`): una dashboard tagliata in silenzio mostrerebbe le medie di
-# una parte dello storico spacciandole per le medie di tutto.
-REPORT_ROW_CAP = 5000
-
-
 @router.get("/evaluations-report", response_model=EvaluationReportPage)
 def evaluations_report(
     organization_id: UUID | None = None,
@@ -600,146 +526,8 @@ def evaluations_report(
     tetto che vale comunque.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    rows, labels, truncated = _evaluation_report_rows(db, scope_org_id, _since(days))
+    rows, labels, truncated = evaluation_report_rows(db, scope_org_id, since_from_days(days))
     return EvaluationReportPage(criteria_labels=labels, rows=rows, truncated=truncated)
-
-
-def _since(days: int | None):
-    """L'istante da cui contare, o None per «da sempre»."""
-    return datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days) if days else None
-
-
-def _evaluation_report_rows(
-    db: Session, scope_org_id, since=None
-) -> tuple[list[EvaluationReportRow], dict[str, str], bool]:
-    """Le valutazioni in scope dalla più vecchia (l'ordine dei grafici), come
-    si chiamano per esteso i loro criteri, e se il tetto ha tagliato qualcosa.
-
-    Le etichette escono da qui insieme alle righe e non da una lista scritta a
-    parte: i criteri sono quelli su cui il giudizio è stato dato, e una
-    valutazione di un anno fa può averne avuti altri. Vengono dette una volta
-    per risposta invece che sei volte per riga, ed è tutto quello che cambia:
-    restano del server, come sono sempre state.
-
-    Colonne e non entità: di una conversazione servono il titolo, il canale e
-    due date, e caricarne l'oggetto intero significa costruire in memoria
-    anche tutto quello che non si guarda, riga per riga, su migliaia di righe.
-
-    Si legge dalla più recente per poter tagliare dalla parte giusta, e si
-    rivolta prima di restituire: chi taglia deve tenere le prove di adesso,
-    chi disegna le vuole in ordine di tempo.
-
-    La correzione del docente viaggia su un outer join (la gran parte delle
-    conversazioni non ne ha), quindi `overall_score` è il voto che conta e i
-    grafici disegnano quello che lo studente si è visto dare.
-    """
-    query = (
-        db.query(
-            ChatConversation.id,
-            ChatConversation.title,
-            ChatConversation.mode,
-            ChatConversation.created_at,
-            ChatConversation.avatar_id,
-            Avatar.name,
-            User.id,
-            User.email,
-            User.nome,
-            User.cognome,
-            User.organization_id,
-            Organization.name,
-            ConversationEvaluation.created_at,
-            ConversationEvaluation.overall_score,
-            ConversationEvaluation.result,
-            # La chiave della revisione e' la conversazione stessa: qui serve
-            # solo a distinguere "nessuna revisione" da "una revisione che
-            # non ha corretto il voto", che sono due cose diverse
-            ConversationReview.conversation_id,
-            ConversationReview.override_score,
-        )
-        .join(ChatConversation, ChatConversation.id == ConversationEvaluation.conversation_id)
-        .join(User, User.id == ChatConversation.user_id)
-        .join(Avatar, Avatar.id == ChatConversation.avatar_id)
-        .outerjoin(Organization, Organization.id == User.organization_id)
-        .outerjoin(ConversationReview, ConversationReview.conversation_id == ChatConversation.id)
-    )
-    if scope_org_id is not None:
-        query = query.filter(User.organization_id == scope_org_id)
-    if since is not None:
-        query = query.filter(ChatConversation.created_at >= since)
-
-    # Una in più del tetto: è così che si sa se ce n'erano altre
-    found = query.order_by(ChatConversation.created_at.desc()).limit(REPORT_ROW_CAP + 1).all()
-    truncated = len(found) > REPORT_ROW_CAP
-
-    labels: dict[str, str] = {}
-    rows = []
-    for (
-        conversation_id,
-        title,
-        mode,
-        conversation_at,
-        avatar_id,
-        avatar_name,
-        user_id,
-        email,
-        nome,
-        cognome,
-        organization_id,
-        organization_name,
-        evaluated_at,
-        ai_score,
-        result,
-        review_id,
-        override_score,
-    ) in found[:REPORT_ROW_CAP]:
-        rows.append(
-            EvaluationReportRow(
-                conversation_id=conversation_id,
-                conversation_title=title,
-                mode=mode,
-                user_id=user_id,
-                user_email=email,
-                user_nome=nome,
-                user_cognome=cognome,
-                organization_id=organization_id,
-                organization_name=organization_name,
-                avatar_id=avatar_id,
-                avatar_name=avatar_name,
-                conversation_at=conversation_at,
-                evaluated_at=evaluated_at,
-                overall_score=reviews.grade(ai_score, override_score),
-                ai_overall_score=ai_score,
-                has_override=override_score is not None,
-                has_review=review_id is not None,
-                criteria=_criteria_scores(result, labels),
-            )
-        )
-
-    # Le righe si leggono dalla più recente per tagliare dalla parte giusta,
-    # i grafici le vogliono in ordine di tempo
-    rows.reverse()
-    return rows, labels, truncated
-
-
-def _criteria_scores(result, labels: dict[str, str]) -> dict[str, float]:
-    """Chiave del criterio -> punteggio, e intanto raccoglie le etichette.
-
-    Le due cose si leggono dallo stesso posto (il risultato salvato), quindi
-    si leggono insieme: scorrere una seconda volta migliaia di valutazioni per
-    prendere sei parole sarebbe la stessa scansione fatta due volte.
-
-    Una chiave vuota si scarta invece di finire nella mappa sotto la stringa
-    vuota, che sarebbe una colonna senza nome nella tabella della dashboard.
-    """
-    scores: dict[str, float] = {}
-    for criterion in (result or {}).get("criteria") or []:
-        key = str(criterion.get("key", ""))
-        if not key:
-            continue
-        scores[key] = float(criterion.get("score", 0) or 0)
-        if key not in labels:
-            labels[key] = str(criterion.get("label", "")) or key
-    return scores
 
 
 @router.get("/simulations-report", response_model=SimulationReportPage)
@@ -764,82 +552,7 @@ def simulations_report(
     di là, oltre quel filtro c'è REPORT_ROW_CAP.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    since = _since(days)
-    # Colonne e non entità, come nell'altra metà: di un tentativo servono la
-    # data, due conteggi e un voto, e caricarne l'oggetto intero costruirebbe
-    # in memoria anche le risposte date, che qui nessuno guarda.
-    query = (
-        db.query(
-            SimulationAttempt.id,
-            SimulationAttempt.simulation_id,
-            SimulationAttempt.created_at,
-            SimulationAttempt.correct_count,
-            SimulationAttempt.question_count,
-            # I punti e non il voto: il voto e' una property calcolata sul
-            # modello (vedi SimulationAttempt.score), quindi il database non
-            # sa darlo e si ricava qui con la stessa funzione
-            SimulationAttempt.earned_points,
-            TechnicalSimulation.title,
-            TechnicalSimulation.kind,
-            TechnicalSimulation.source,
-            User.id,
-            User.email,
-            User.nome,
-            User.cognome,
-            User.organization_id,
-            Organization.name,
-        )
-        .join(TechnicalSimulation, TechnicalSimulation.id == SimulationAttempt.simulation_id)
-        .join(User, User.id == SimulationAttempt.user_id)
-        .outerjoin(Organization, Organization.id == User.organization_id)
-    )
-    if scope_org_id is not None:
-        query = query.filter(User.organization_id == scope_org_id)
-    if since is not None:
-        query = query.filter(SimulationAttempt.created_at >= since)
-
-    # Dalla più recente per tagliare dalla parte giusta, una in più del tetto
-    # per sapere se ce n'erano altre, e poi rivoltate: i grafici disegnano in
-    # ordine di tempo, come nella metà parlata.
-    found = query.order_by(SimulationAttempt.created_at.desc()).limit(REPORT_ROW_CAP + 1).all()
-    truncated = len(found) > REPORT_ROW_CAP
-    rows = [
-        SimulationReportRow(
-            attempt_id=attempt_id,
-            simulation_id=simulation_id,
-            simulation_title=title,
-            simulation_kind=kind,
-            simulation_source=source,
-            user_id=user_id,
-            user_email=email,
-            user_nome=nome,
-            user_cognome=cognome,
-            organization_id=organization_id,
-            organization_name=organization_name,
-            attempted_at=attempted_at,
-            correct_count=correct_count,
-            question_count=question_count,
-            score=attempt_score(earned_points or 0.0, question_count),
-        )
-        for (
-            attempt_id,
-            simulation_id,
-            attempted_at,
-            correct_count,
-            question_count,
-            earned_points,
-            title,
-            kind,
-            source,
-            user_id,
-            email,
-            nome,
-            cognome,
-            organization_id,
-            organization_name,
-        ) in found[:REPORT_ROW_CAP]
-    ]
-    rows.reverse()
+    rows, truncated = simulation_report_rows(db, scope_org_id, since_from_days(days))
     return SimulationReportPage(rows=rows, truncated=truncated)
 
 
@@ -860,7 +573,7 @@ def export_evaluations_report(
     canale) restano all'autofiltro del foglio.
     """
     scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    rows, _labels, _truncated = _evaluation_report_rows(db, scope_org_id, _since(days))
+    rows, _labels, _truncated = evaluation_report_rows(db, scope_org_id, since_from_days(days))
     content = evaluations_report_xlsx(rows)
     filename = f"report-valutazioni-{datetime.now(UTC).strftime('%Y-%m-%d')}.xlsx"
     return Response(

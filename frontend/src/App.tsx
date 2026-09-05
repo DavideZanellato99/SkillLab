@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router'
+import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { useAuth } from './hooks/useAuth'
 import Navbar from './components/Navbar'
 import RequireRole from './components/RequireRole'
@@ -11,12 +11,17 @@ import {
   AvatarAdminPage,
   ChatPage,
   ComparisonPage,
+  DashboardContent,
   DashboardPage,
+  DashboardPaths,
+  DashboardScores,
+  DashboardUsage,
   HomePage,
   MyPathsRoute,
   OrganizationsPage,
   PathMapPage,
   ProfilePage,
+  ProgressPage,
   PublicHome,
   PublicLayout,
   SimulationAdminPage,
@@ -25,6 +30,7 @@ import {
   TrainingPage,
   UserReportPage,
 } from './components/lazyPages'
+import { dashboardPath, DEFAULT_VIEW } from './components/dashboardViews'
 import Spinner from './components/Spinner'
 import './index.css'
 
@@ -35,6 +41,16 @@ import './index.css'
  * Qui resta l'impalcatura, cioè quello che vale da entrambe le parti della
  * condizione qui sotto: la barra, la guida introduttiva, e le rotte con il
  * ruolo che ciascuna richiede. */
+
+/* L'indirizzo della sezione dashboard apre la vista di partenza, portandosi
+ * dietro i filtri: `/app/admin/dashboard?periodo=30` è un collegamento che
+ * qualcuno può aver mandato, e deve arrivare sui punteggi di quel periodo e
+ * non su una pagina senza filtri. `replace` perché non è una fermata: il
+ * tasto indietro deve tornare da dove si veniva. */
+function DashboardHome() {
+  const { search } = useLocation()
+  return <Navigate to={`${dashboardPath(DEFAULT_VIEW)}${search}`} replace />
+}
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -135,6 +151,18 @@ function App() {
                     </RequireRole>
                   }
                 />
+                {/* Come sto andando: la stessa domanda della dashboard, fatta
+                    su di sé. Di chi si allena e di nessun altro, come i
+                    percorsi: un amministratore non ha prove proprie da
+                    guardare, e il server gli risponde 403. */}
+                <Route
+                  path="progressi"
+                  element={
+                    <RequireRole access="user">
+                      <ProgressPage />
+                    </RequireRole>
+                  }
+                />
                 {/* Ogni ruolo entra dalla stessa porta: lo studente ci trova i
                     propri tentativi, un admin il selettore delle persone del
                     proprio tenant. È il server a decidere di chi sono. */}
@@ -181,6 +209,16 @@ function App() {
                     </RequireRole>
                   }
                 />
+                {/* La dashboard è un guscio con dentro quattro viste, una
+                    per rotta: sono quattro domande diverse sulle stesse
+                    prove, ognuna con i propri dati e il proprio indirizzo da
+                    mandare a qualcuno. Il periodo e l'organizzazione stanno
+                    sul guscio e valgono per tutte (vedi DashboardPage).
+
+                    Chi apre la sezione senza dire quale vista finisce sui
+                    punteggi, che è quella con cui la dashboard è nata, e i
+                    filtri già scelti lo seguono: l'indirizzo di prima ci
+                    arriva intero. */}
                 <Route
                   path="admin/dashboard"
                   element={
@@ -188,7 +226,23 @@ function App() {
                       <DashboardPage />
                     </RequireRole>
                   }
-                />
+                >
+                  <Route index element={<DashboardHome />} />
+                  <Route path="punteggi" element={<DashboardScores />} />
+                  <Route path="percorsi" element={<DashboardPaths />} />
+                  <Route path="contenuti" element={<DashboardContent />} />
+                  {/* L'utilizzo confronta le organizzazioni fra loro, quindi
+                      è di chi le amministra tutte: il server risponde 403 a
+                      chiunque altro, e la rotta dice la stessa cosa. */}
+                  <Route
+                    path="utilizzo"
+                    element={
+                      <RequireRole access="super_admin">
+                        <DashboardUsage />
+                      </RequireRole>
+                    }
+                  />
+                </Route>
                 <Route
                   path="admin/training"
                   element={

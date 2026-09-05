@@ -19,6 +19,7 @@ from datetime import datetime
 
 import pytest
 
+import avatar_images
 import routers.admin_avatars as admin_avatars
 from models import Organization
 
@@ -28,7 +29,11 @@ AVATARS = "/api/admin/avatars"
 @pytest.fixture(autouse=True)
 def ritratti_in_una_cartella_temporanea(tmp_path, monkeypatch):
     """I segnaposto sono file veri: senza questo la suite riempirebbe
-    static/avatars del repository con un'immagine per esecuzione."""
+    static/avatars del repository con un'immagine per esecuzione.
+
+    Due cartelle da spostare e non una: il segnaposto lo disegna
+    ``avatar_images``, i ritratti caricati li scrive il router."""
+    monkeypatch.setattr(avatar_images, "_AVATARS_DIR", str(tmp_path))
     monkeypatch.setattr(admin_avatars, "_AVATARS_DIR", str(tmp_path))
     return tmp_path
 
@@ -267,10 +272,10 @@ def test_un_avatar_rimasto_senza_ritratto_ne_riceve_uno_alla_modifica(
 
 
 def test_le_iniziali_di_un_nome_solo_sono_una_sola(tmp_path, monkeypatch):
-    monkeypatch.setattr(admin_avatars, "_AVATARS_DIR", str(tmp_path))
+    monkeypatch.setattr(avatar_images, "_AVATARS_DIR", str(tmp_path))
     identificativo = uuid.uuid4()
 
-    admin_avatars._generate_avatar_image("Bianchi", identificativo)
+    avatar_images.generate_avatar_image("Bianchi", identificativo)
 
     contenuto = (tmp_path / f"avatar_{identificativo}.svg").read_text(encoding="utf-8")
     assert ">B<" in contenuto
@@ -280,10 +285,10 @@ def test_un_nome_vuoto_non_lascia_il_ritratto_senza_lettere(tmp_path, monkeypatc
     """Non ci si arriva dal form, perché la scheda senza nome è già stata
     rifiutata: se ci si arrivasse, meglio un punto interrogativo di un
     riquadro con dentro niente."""
-    monkeypatch.setattr(admin_avatars, "_AVATARS_DIR", str(tmp_path))
+    monkeypatch.setattr(avatar_images, "_AVATARS_DIR", str(tmp_path))
     identificativo = uuid.uuid4()
 
-    admin_avatars._generate_avatar_image("   ", identificativo)
+    avatar_images.generate_avatar_image("   ", identificativo)
 
     contenuto = (tmp_path / f"avatar_{identificativo}.svg").read_text(encoding="utf-8")
     assert ">?<" in contenuto

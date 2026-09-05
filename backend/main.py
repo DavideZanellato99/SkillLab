@@ -29,6 +29,7 @@ from routers.avatars import router as avatars_router
 from routers.chat import router as chat_router
 from routers.comparison import router as comparison_router
 from routers.conversation_reviews import router as conversation_reviews_router
+from routers.dashboards import router as dashboards_router
 from routers.notifications import router as notifications_router
 from routers.organizations import router as organizations_router
 from routers.simulations import router as simulations_router
@@ -123,6 +124,7 @@ app.include_router(avatars_router)
 app.include_router(chat_router)
 app.include_router(comparison_router)
 app.include_router(conversation_reviews_router)
+app.include_router(dashboards_router)
 app.include_router(notifications_router)
 app.include_router(simulations_router)
 app.include_router(training_router)

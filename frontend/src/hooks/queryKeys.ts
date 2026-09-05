@@ -79,6 +79,32 @@ export const queryKeys = {
     simulations: (organizationId?: string, days?: number) =>
       ['reports', 'simulations', organizationId ?? '__all__', days ?? '__ever__'] as const,
   },
+  /* Le quattro dashboard che stanno accanto a quella dei punteggi. Sono
+   * letture pesanti come i rendiconti, e come loro portano organizzazione e
+   * periodo dentro la chiave: cambiare filtro è una domanda diversa, non lo
+   * stesso elenco ristretto dopo. */
+  dashboards: {
+    /** Da invalidare quando spariscono le prove su cui i conti si fanno. */
+    all: ['dashboards'] as const,
+    paths: (organizationId?: string, days?: number) =>
+      ['dashboards', 'paths', organizationId ?? '__all__', days ?? '__ever__'] as const,
+    content: (organizationId?: string, days?: number) =>
+      ['dashboards', 'content', organizationId ?? '__all__', days ?? '__ever__'] as const,
+    /** Le domande di un test, che si leggono aprendo la sua riga. */
+    simulationItems: (simulationId: string, organizationId?: string, days?: number) =>
+      [
+        'dashboards',
+        'simulation-items',
+        simulationId,
+        organizationId ?? '__all__',
+        days ?? '__ever__',
+      ] as const,
+    /** L'utilizzo per organizzazione: niente filtro tenant, lo guarda il
+     *  super admin e le guarda tutte. */
+    usage: (days?: number) => ['dashboards', 'usage', days ?? '__ever__'] as const,
+    /** Le proprie prove: l'utente è quello della sessione, non sta in chiave. */
+    me: (days?: number) => ['dashboards', 'me', days ?? '__ever__'] as const,
+  },
   /** I quadri d'insieme su una persona: una voce per persona, e dentro
    *  tutte le versioni scritte su di lei, dalla più recente. */
   debriefings: {

@@ -48,6 +48,7 @@ export default function TabBar<T extends string>({
   items,
   value,
   onChange,
+  onItemHover,
   ariaLabel,
   panelBase,
   variant = 'page',
@@ -56,6 +57,12 @@ export default function TabBar<T extends string>({
   items: TabItem<T>[]
   value: T
   onChange: (value: T) => void
+  /* Il puntatore è passato su una linguetta senza (ancora) sceglierla. Serve
+     a chi ci tiene dietro una pagina da scaricare: fra il passaggio e il
+     click c'è quanto basta perché il file arrivi, e chi non lo passa mai non
+     scarica niente. Facoltativo, perché una barra che comanda contenuto già
+     in memoria non ha niente da anticipare. */
+  onItemHover?: (value: T) => void
   ariaLabel: string
   /** La radice degli id, quando il contenuto sotto è reso da `TabPanel`. */
   panelBase?: string
@@ -117,6 +124,7 @@ export default function TabBar<T extends string>({
                 : 'text-slate-400 hover:bg-white/8 hover:text-slate-100'
             }`}
             onClick={() => onChange(item.value)}
+            onPointerEnter={onItemHover ? () => onItemHover(item.value) : undefined}
           >
             {item.label}
           </button>

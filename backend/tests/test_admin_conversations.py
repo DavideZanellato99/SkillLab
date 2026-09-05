@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-import routers.admin as admin_router
+import report_rows
 from models import (
     ChatConversation,
     ChatMessage,
@@ -336,7 +336,7 @@ def test_oltre_il_tetto_arrivano_le_piu_recenti_e_la_risposta_lo_dice(
     storico a ogni apertura. Quando scatta si tengono le prove di adesso, e
     la risposta lo dice: una dashboard tagliata in silenzio mostrerebbe le
     medie di una parte dello storico spacciandole per le medie di tutto."""
-    monkeypatch.setattr(admin_router, "REPORT_ROW_CAP", 2)
+    monkeypatch.setattr(report_rows, "REPORT_ROW_CAP", 2)
     for giorni, voto in ((30, 4.0), (20, 5.0), (10, 6.0)):
         conversazione = make_conversazione(standard_user, voto=voto)
         conversazione.created_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=giorni)

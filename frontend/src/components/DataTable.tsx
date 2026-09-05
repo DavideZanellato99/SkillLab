@@ -106,7 +106,6 @@ interface DataTableProps<T> {
   minWidth?: string
 }
 
-
 /* Una cella senza valore non è né la più piccola né la più grande: è una
  * cella che a quella domanda non risponde, quindi resta in fondo in tutti e
  * due i versi invece di prendersi le prime righe a ogni inversione. */

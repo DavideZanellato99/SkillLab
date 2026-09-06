@@ -80,6 +80,14 @@ const ICONS: Record<NotificationKind, { path: React.ReactNode; cls: string }> = 
   },
 }
 
+/* Costruito una volta sola e non a ogni avviso: il perché sta su
+ * `formatInstant` in [instant.ts](./instant.ts). */
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+})
+
 /** "3 giorni fa", perché in un elenco di avvisi la distanza dice più della
  *  data: sotto il minuto si arrotonda ad "adesso". */
 function relativeTime(iso: string): string {
@@ -93,7 +101,7 @@ function relativeTime(iso: string): string {
   if (hours < 24) return `${hours} ${hours === 1 ? 'ora' : 'ore'} fa`
   const days = Math.round(hours / 24)
   if (days < 30) return `${days} ${days === 1 ? 'giorno' : 'giorni'} fa`
-  return at.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
+  return DAY_MONTH_YEAR.format(at)
 }
 
 interface NotificationsBellProps {

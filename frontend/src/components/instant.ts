@@ -15,6 +15,25 @@ export function parseInstant(value: string): Date {
   return new Date(hasZone ? value : `${value}Z`)
 }
 
+/**
+ * Un momento del server scritto con un formattatore già costruito.
+ *
+ * I formattatori stanno come costanti nei moduli che li usano, e non dentro
+ * le funzioni: `toLocaleDateString` e i suoi fratelli, chiamati con delle
+ * opzioni, costruiscono un `Intl.DateTimeFormat` nuovo a ogni chiamata, ed è
+ * quella costruzione a costare. Da qui passa ogni data di ogni riga di ogni
+ * tabella, quindi la stessa costruzione si ripeteva una volta per cella.
+ *
+ * Il trattino per un momento illeggibile è la stessa risposta che dà già
+ * `formatRelativeDay`, ed è anche una rete: `Intl` su una data non valida
+ * solleva un errore, che dentro un render vuol dire pagina bianca al posto
+ * di una cella storta.
+ */
+export function formatInstant(formatter: Intl.DateTimeFormat, value: string): string {
+  const when = parseInstant(value)
+  return Number.isNaN(when.getTime()) ? '—' : formatter.format(when)
+}
+
 const pad = (value: number): string => String(value).padStart(2, '0')
 
 /** Il valore di un campo `datetime-local`: ora locale, al minuto. */

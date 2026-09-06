@@ -62,7 +62,7 @@ const ACCOUNT = '#user-menu-trigger'
 const closing: TutorialStep = {
   id: 'fine',
   title: 'Puoi rileggerla quando vuoi',
-  body: 'La guida resta a disposizione nel tuo profilo, in fondo alla pagina. Da lì riparte dal primo passo tutte le volte che ti serve.',
+  body: 'La guida resta a disposizione nel tuo profilo, ti basta scendere in fondo alla pagina. Buona fortuna per il tuo percorso di formazione!',
   Icon: SparkleIcon,
 }
 
@@ -77,42 +77,49 @@ function userSteps(): TutorialStep[] {
     {
       id: 'galleria',
       title: 'Galleria Avatar',
-      body: 'Ogni avatar è un interlocutore con la sua storia e il suo carattere. Lo apri, scegli se scrivergli o telefonargli, e a conversazione chiusa ricevi una valutazione sui criteri su cui ti stai allenando.',
+      body: 'Ogni avatar è un interlocutore con la sua storia e il suo carattere. Lo selezioni, scegli se gestire il contatto tramite chat o chiamata e a conversazione terminata ricevi una valutazione sui criteri su cui ti stai allenando.',
       Icon: GridIcon,
       anchor: navAnchor('/app'),
     },
     {
       id: 'simulatore',
       title: 'Simulatore Tecnico',
-      body: 'I test sulle procedure della tua organizzazione. Ogni tentativo estrae le sue domande, e alla consegna trovi subito il punteggio e la correzione risposta per risposta.',
+      body: 'I test per metterti alla prova. Una volta terminato visualizzerai il punteggio e la correzione risposta per risposta.',
       Icon: ChecklistIcon,
       anchor: navAnchor('/app/simulatore'),
     },
     {
       id: 'percorsi',
       title: 'I tuoi percorsi',
-      body: 'Le tappe che il tuo formatore ti ha assegnato, da superare in ordine: la successiva si apre quando hai chiuso la precedente, e la mappa mostra a che punto sei arrivato.',
+      body: 'Le tappe che il tuo formatore ti ha assegnato, da superare in ordine, la successiva si sblocca quando hai completato la precedente. La mappa mostra a che punto sei arrivato.',
       Icon: TargetIcon,
       anchor: navAnchor('/app/percorsi'),
     },
     {
+      id: 'progressi',
+      title: 'Progressi',
+      body: "Come stai andando, la curva dei tuoi voti nel tempo, i criteri su cui perdi più punti e l'elenco delle prove che hai già svolto.",
+      Icon: ChartIcon,
+      anchor: navAnchor('/app/progressi'),
+    },
+    {
       id: 'confronto',
       title: 'Confronto',
-      body: "Due tuoi tentativi affiancati, per vedere cosa è cambiato fra la prima volta e l'ultima: i punteggi criterio per criterio, e le conversazioni una accanto all'altra.",
+      body: 'Da qua puoi mettere a confronto due tentativi da te effettuati. Il miglioramente parte dalla consapevolezza, riuscire a confrontare tutti i tuoi tentativi ti darà una marcia in più per affrontare le sfide del percorso.',
       Icon: CompareIcon,
       anchor: navAnchor('/app/confronto'),
     },
     {
       id: 'notifiche',
       title: 'Notifiche',
-      body: 'Qui arrivano le tappe che ti vengono assegnate, quelle che si sbloccano, le scadenze vicine e le revisioni che il tuo formatore pubblica sulle tue conversazioni.',
+      body: "Tieni sempre d'occhio le notifiche! Il tuo formatore potrebbe volerti comunicare qualcosa o semplicemente una tappa del percorso è stata aggiornata.",
       Icon: InfoIcon,
       anchor: BELL,
     },
     {
       id: 'account',
       title: 'Il tuo account',
-      body: 'Da qui apri il tuo profilo, cambi la password e scarichi una copia dei dati che la piattaforma conserva sul tuo conto.',
+      body: 'Da qui gestisci il tuo profilo, imposta una password sicura e se temi che qualcuno ne sia venuto a conoscenza cambiala!',
       Icon: UserIcon,
       anchor: ACCOUNT,
     },
@@ -141,6 +148,13 @@ function adminSteps(): TutorialStep[] {
       body: 'Gli interlocutori a disposizione della tua organizzazione. Puoi provarli in prima persona, esattamente come li incontra chi stai formando.',
       Icon: GridIcon,
       anchor: navAnchor('/app'),
+    },
+    {
+      id: 'simulatore',
+      title: 'Simulatore Tecnico',
+      body: 'I test già pubblicati, nella forma in cui li trova chi si allena. Puoi svolgerli in prima persona, che è il modo più rapido per accorgersi se una domanda si presta a fraintendimenti.',
+      Icon: ChecklistIcon,
+      anchor: navAnchor('/app/simulatore'),
     },
     {
       id: 'simulazioni',
@@ -172,6 +186,13 @@ function adminSteps(): TutorialStep[] {
       body: "Due tentativi della stessa persona affiancati, per vedere cosa è cambiato fra l'uno e l'altro. Scegli tu chi guardare, fra le persone della tua organizzazione.",
       Icon: CompareIcon,
       anchor: navAnchor('/app/confronto'),
+    },
+    {
+      id: 'account',
+      title: 'Il tuo account',
+      body: 'Il pulsante in alto a destra apre le sezioni di gestione che hai appena visto e la tua scheda, dove aggiorni i tuoi dati e imposti una password sicura.',
+      Icon: UserIcon,
+      anchor: ACCOUNT,
     },
     closing,
   ]

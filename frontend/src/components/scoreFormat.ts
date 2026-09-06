@@ -8,6 +8,16 @@
 /** Il voto in decimi come si scrive in italiano: 7,5 e non 7.5. */
 export { formatScore } from './simulationFormat'
 
+/* I due formattatori della dashboard, costruiti una volta sola invece che a
+ * ogni cella: il perché sta su `formatInstant` in [instant.ts](./instant.ts). */
+const DAY_MONTH_TIME = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+const DAY_MONTH_NUMERIC = new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: '2-digit' })
+
 export const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
 
 /* Stessa convenzione colori dell'EvaluationModal: ≥7 verde, ≥5 arancio, <5 rosso.
@@ -29,12 +39,8 @@ export function scoreBarColor(score: number): string {
 /** Data e ora brevi, senza anno: nelle tabelle della dashboard le righe
  *  sono recenti e l'anno ripetuto su ogni riga non dice niente. */
 export function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const when = new Date(dateStr)
+  return Number.isNaN(when.getTime()) ? '—' : DAY_MONTH_TIME.format(when)
 }
 
 /** Chi ha svolto la prova: nome e cognome se ci sono, altrimenti l'email. */
@@ -48,7 +54,7 @@ export function personName(row: {
 
 /** Etichetta dell'asse X del grafico a linee: "05/03". */
 export function formatDay(date: Date): string {
-  return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' })
+  return DAY_MONTH_NUMERIC.format(date)
 }
 
 /** Un punto dell'andamento: la media di una giornata e su quanti valori. */

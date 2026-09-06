@@ -7,10 +7,12 @@ helpers below parse the event blocks out of the buffered response body.
 """
 
 import json
+from datetime import UTC, datetime
 
 import pytest
 
 import routers.chat as chat_router
+from conversation_titles import date_label
 from openai_service import EVALUATION_CRITERIA
 
 
@@ -100,8 +102,8 @@ def test_first_message_opens_a_titled_conversation(user_client, make_avatar, fak
         "dell'avatar.",
     ]
     body = _done_payload(response)
-    # A brand-new conversation is born with the "<Category> <n>" default.
-    assert body["title"] == "Clienti 1"
+    # A brand-new conversation is born named after the avatar and the day.
+    assert body["title"] == f"Mario Rossi, {date_label(datetime.now(UTC))}"
     assert body["user_message"]["content"] == "Buongiorno"
     assert body["assistant_message"]["content"] == "Risposta simulata dell'avatar."
     assert body["conversation_id"]
@@ -144,7 +146,7 @@ def test_second_attempt_is_compared_with_the_first(user_client, make_avatar, fak
     second_id, second_eval = attempt("Buongiorno di nuovo")
     previous = second_eval["previous"]
     assert previous["conversation_id"] == first_id
-    assert previous["title"] == "Clienti 1"
+    assert previous["title"] == f"Mario Rossi, {date_label(datetime.now(UTC))}"
     assert previous["overall_score"] == 5.0
     # One score per criterion: the UI derives the per-criterion deltas
     assert set(previous["criteria_scores"]) == {key for key, _, _ in EVALUATION_CRITERIA}
@@ -172,7 +174,8 @@ def test_evaluation_pdf_download(user_client, make_avatar, fake_llm, fake_judge)
     response = user_client.get(f"/api/chat/conversation/{conv_id}/evaluation/pdf")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
-    assert "valutazione-clienti-1.pdf" in response.headers["content-disposition"]
+    # Il nome del file segue il titolo, che ora dice avatar e giorno
+    assert "valutazione-mario-rossi-" in response.headers["content-disposition"]
     assert response.content.startswith(b"%PDF")
 
 

@@ -48,6 +48,11 @@ _jwks_cache: dict | None = None
 _jwks_cache_time: float = 0
 _JWKS_CACHE_TTL = 3600  # 1 hour
 
+# Lo scarto ammesso fra il nostro orologio e quello di Cognito. Senza, un
+# token appena emesso da una macchina indietro di pochi secondi viene
+# rifiutato come "non ancora valido" (iat), e nessun accesso regge.
+_CLOCK_SKEW_LEEWAY = 30
+
 
 def _get_jwks() -> dict:
     """Fetch and cache the JSON Web Key Set from Cognito."""
@@ -325,6 +330,7 @@ def verify_access_token(token: str, verify_exp: bool = True) -> dict:
             signing_key,
             algorithms=["RS256"],
             issuer=f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}",
+            leeway=_CLOCK_SKEW_LEEWAY,
             options={
                 # Un access token non porta "aud": l'app client per cui è
                 # stato emesso lo dice il claim client_id, verificato sotto.

@@ -81,13 +81,16 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
   /* La conferma si giudica quando si è finito di scriverla: confrontarla a
    * ogni tasto vorrebbe dire un "non coincidono" acceso per tutta la
    * digitazione, cioè un rimprovero a chi sta facendo la cosa giusta. */
-  const [confirmTouched, setConfirmTouched] = useState(false)
   const [cognitoSession, setCognitoSession] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
-  const passwordsMismatch =
-    confirmTouched && confirmNewPassword !== '' && newPassword !== confirmNewPassword
+  /* Il bottone si accende quando l'elenco dei requisiti è tutto verde,
+   * coincidenza fra i due campi compresa: sono le stesse righe che si vedono
+   * sotto i campi, quindi cosa manca è già scritto lì e non serve un secondo
+   * posto che lo ripeta. */
+  const newPasswordReady =
+    getUnmetPasswordRules(newPassword).length === 0 && newPassword === confirmNewPassword
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -116,20 +119,9 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     setErrorMessage('')
 
-    /* Le due password diverse le dice il campo, non il banner in cima: chi
-     * ha premuto sta guardando i campi, ed è lì che c'è da rimettere mano. */
-    if (newPassword !== confirmNewPassword) {
-      setConfirmTouched(true)
-      return
-    }
-
-    const unmetRules = getUnmetPasswordRules(newPassword)
-    if (unmetRules.length > 0) {
-      setErrorMessage(
-        `La password non soddisfa i requisiti: ${unmetRules.join(', ').toLowerCase()}.`,
-      )
-      return
-    }
+    /* Rete di sicurezza: il bottone è spento finché i requisiti non sono
+     * soddisfatti, ma l'invio può arrivare anche dal tasto Invio. */
+    if (!newPasswordReady) return
 
     setIsSubmitting(true)
 
@@ -220,32 +212,30 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
             disabled={isSubmitting}
           />
 
-          {/* I requisiti stanno sotto il campo che descrivono, non in fondo
-              al modulo: si leggono mentre si sceglie la password, che è
-              l'unico momento in cui servono. */}
-          <PasswordRules password={newPassword} />
-
           <PasswordField
             id="auth-confirm-new-password"
             label="Conferma Nuova Password"
             value={confirmNewPassword}
             onChange={setConfirmNewPassword}
-            onBlur={() => setConfirmTouched(true)}
             Icon={ShieldIcon}
             placeholder="Conferma la nuova password"
             autoComplete="new-password"
             minLength={PASSWORD_MIN_LENGTH}
             required
             disabled={isSubmitting}
-            error={passwordsMismatch ? 'Le password non coincidono.' : undefined}
           />
+
+          {/* I requisiti stanno sotto i campi che descrivono, coincidenza fra
+              i due compresa: si leggono mentre si sceglie la password, che è
+              l'unico momento in cui servono. */}
+          <PasswordRules password={newPassword} confirmation={confirmNewPassword} />
 
           <PrimaryButton
             type="submit"
             variant="submit"
             className="mt-1"
             id="auth-new-password-submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !newPasswordReady}
           >
             {isSubmitting ? (
               <>

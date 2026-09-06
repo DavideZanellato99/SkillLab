@@ -14,9 +14,34 @@
  * fuso scritto (vedi [instant.ts](./instant.ts)). Nell'altro verso, cioè un
  * momento che torna dentro un campo data, sta ancora lì. */
 
-import { parseInstant } from './instant'
+import { formatInstant, parseInstant } from './instant'
 
 const MS_PER_DAY = 86_400_000
+
+/* I formattatori dell'app, costruiti una volta sola all'avvio invece che a
+ * ogni data scritta: il perché sta su `formatInstant`, che è anche l'unica
+ * via da cui si usano. */
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+})
+const DAY_MONTH_YEAR_TIME = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+const TIME = new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' })
+const FULL_TIMESTAMP = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+})
 
 /** Mezzanotte locale, per contare i giorni di calendario e non le 24 ore:
  * un accesso di ieri sera resta "ieri" anche se è passata un'ora sola. */
@@ -66,32 +91,19 @@ export function formatRelativeDay(dateStr: string, now: Date = new Date()): stri
  * interessa il giorno in cui è nata, e l'ora è una precisione che nessuno
  * legge e che allunga la colonna. */
 export function formatDate(dateStr: string): string {
-  return parseInstant(dateStr).toLocaleDateString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
+  return formatInstant(DAY_MONTH_YEAR, dateStr)
 }
 
 /** Data e ora complete "GG mese AAAA, HH:MM", per i tooltip e i dettagli. */
 export function formatDateTime(dateStr: string): string {
-  return parseInstant(dateStr).toLocaleString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatInstant(DAY_MONTH_YEAR_TIME, dateStr)
 }
 
 /** Il solo orario "HH:MM", per il timestamp di un messaggio: dentro una
  *  trascrizione la data è già scritta in testa, e ripeterla su ogni riga
  *  coprirebbe l'unica cosa che lì cambia, cioè l'ora. */
 export function formatTime(dateStr: string): string {
-  return parseInstant(dateStr).toLocaleTimeString('it-IT', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatInstant(TIME, dateStr)
 }
 
 /* Data e ora al secondo, tutto in cifre: "31/12/2025, 23:59:59". La usa il
@@ -100,12 +112,5 @@ export function formatTime(dateStr: string): string {
  * quello che si sta guardando. In cifre e non col mese scritto perché la
  * colonna deve stare su una riga sola. */
 export function formatTimestamp(dateStr: string): string {
-  return parseInstant(dateStr).toLocaleString('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
+  return formatInstant(FULL_TIMESTAMP, dateStr)
 }

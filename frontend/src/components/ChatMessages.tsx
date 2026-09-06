@@ -38,9 +38,25 @@ export default function ChatMessages({
   const endRef = useRef<HTMLDivElement>(null)
   const avatarImageUrl = getAvatarImageUrl(avatar.image_url)
 
+  /* Lo scorrimento segue due cose diverse, e con due andature diverse.
+   *
+   * Un messaggio nuovo, o i puntini che annunciano la risposta, è un salto:
+   * scorre morbido, perché compare un pezzo di conversazione che prima non
+   * c'era. La risposta che arriva a frammenti è invece la stessa riga che si
+   * allunga, e va seguita di scatto: un'animazione morbida ripartiva da capo
+   * a ogni frammento, cioè centinaia di volte per risposta, e ognuna costava
+   * un ricalcolo del layout senza mai arrivare in fondo. */
+  const messageCount = messages.length
+  const lastContent = messages[messages.length - 1]?.content
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isReplying])
+  }, [messageCount, isReplying])
+
+  useEffect(() => {
+    if (streamingReplyId === null) return
+    endRef.current?.scrollIntoView({ behavior: 'auto' })
+  }, [lastContent, streamingReplyId])
 
   return (
     <div

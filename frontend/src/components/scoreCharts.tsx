@@ -4,6 +4,11 @@ import Tooltip from './Tooltip'
 import { cardCls, formatDay, formatScore, scoreBarColor, scoreTextColor } from './scoreFormat'
 import type { DayPoint } from './scoreFormat'
 
+/* Costruito una volta sola: il riquadro si ridisegna a ogni movimento del
+ * puntatore sopra il grafico (il perché sta su `formatInstant` in
+ * [instant.ts](./instant.ts)). */
+const HOVER_DAY = new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short' })
+
 /* I disegni con cui si mostra un voto: l'andamento nel tempo, la riga a
  * barra, la card di un numero solo e la variazione fra due prove.
  *
@@ -196,8 +201,7 @@ export function TrendChart({
             <span className="text-sm font-bold text-slate-100">{formatScore(hover.avg)}/10</span>
           </div>
           <div className="mt-0.5 text-[0.7rem] text-slate-400">
-            {hover.count} {hover.count === 1 ? unit[0] : unit[1]} ·{' '}
-            {hover.date.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+            {hover.count} {hover.count === 1 ? unit[0] : unit[1]} · {HOVER_DAY.format(hover.date)}
           </div>
         </div>
       )}

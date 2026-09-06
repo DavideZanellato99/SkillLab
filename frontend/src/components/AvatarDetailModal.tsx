@@ -34,7 +34,7 @@ export default function AvatarDetailModal({ avatar, onClose, onEdit }: AvatarDet
   /* Il catalogo voci solo se questo avatar ne ha una: un identificativo di
    * trentasei caratteri non dice con che voce parla il personaggio, e il
    * nome sta soltanto nel catalogo del fornitore. Si legge una volta per
-   * sessione (vedi useVoices) ed è lo stesso elenco che apre il form. */
+   * sessione (vedi useVoices). */
   const { data: voices, isSuccess: voicesLoaded } = useVoices(Boolean(avatar.voice_id))
   const voiceName = voices?.find((v) => v.id === avatar.voice_id)?.name
   const voiceLabel = voiceName ?? (voicesLoaded ? 'Non più nel catalogo delle voci' : '')

@@ -13,7 +13,31 @@ import type {
   StepKind,
   StepProgress,
 } from '../services/training'
-import { parseInstant } from './instant'
+import { formatInstant, parseInstant } from './instant'
+import { formatDecimal } from './numberFormat'
+
+/* I formattatori del percorso, costruiti una volta sola: il perché sta su
+ * `formatInstant`. */
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+})
+const DAY_MONTH = new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short' })
+const DAY_MONTH_YEAR_TIME = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+const DAY_MONTH_TIME = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+const TIME = new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' })
 
 /** Il nome del bersaglio di una tappa: l'avatar o il titolo del test. */
 export function stepTarget(step: PathStep): string {
@@ -33,20 +57,16 @@ export function stepKindLabel(step: PathStep): string {
 }
 
 export function formatScore(score: number): string {
-  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 })
+  return formatDecimal(score)
 }
 
 export function formatDate(dateStr: string): string {
-  return parseInstant(dateStr).toLocaleDateString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
+  return formatInstant(DAY_MONTH_YEAR, dateStr)
 }
 
 /** Data breve, per le righe strette dove l'anno si capisce dal contesto. */
 export function formatShortDate(dateStr: string): string {
-  return parseInstant(dateStr).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
+  return formatInstant(DAY_MONTH, dateStr)
 }
 
 /**
@@ -57,23 +77,12 @@ export function formatShortDate(dateStr: string): string {
  * quando è già tardi.
  */
 export function formatDeadline(dateStr: string): string {
-  return parseInstant(dateStr).toLocaleString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatInstant(DAY_MONTH_YEAR_TIME, dateStr)
 }
 
 /** La stessa scadenza dove lo spazio è poco: giorno, mese e ora. */
 export function formatShortDeadline(dateStr: string): string {
-  return parseInstant(dateStr).toLocaleString('it-IT', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatInstant(DAY_MONTH_TIME, dateStr)
 }
 
 /**
@@ -287,7 +296,7 @@ export function deadlineNote(
     return { text: `Scaduta il ${formatShortDeadline(step.due_at)}`, tone: 'overdue' }
   }
   const days = daysApart(now, due)
-  const at = due.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+  const at = TIME.format(due)
   if (days === 0) return { text: `Scade oggi alle ${at}`, tone: 'soon' }
   if (days === 1) return { text: `Scade domani alle ${at}`, tone: 'soon' }
   if (days <= DUE_SOON_DAYS) return { text: `Scade fra ${days} giorni`, tone: 'soon' }

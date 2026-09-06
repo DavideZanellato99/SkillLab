@@ -5,6 +5,7 @@
  * una schermata e giallo in quella accanto è un voto che non si legge. */
 
 import type { SimulationKind, SimulationSource, SimulationStatus } from '../services/simulations'
+import { formatDecimal } from './numberFormat'
 
 /* La scala del punteggio a tempo, gemella di `backend/simulation_scoring.py`.
  *
@@ -65,7 +66,7 @@ export function optionLabel(index: number): string {
 
 /** Il voto in decimi come si scrive in italiano: 7,5 e non 7.5. */
 export function formatScore(score: number): string {
-  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 })
+  return formatDecimal(score)
 }
 
 /* Le tre soglie sono quelle della scuola, ed è voluto: sotto il sei non si

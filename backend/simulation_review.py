@@ -32,7 +32,7 @@ import json
 from collections import Counter
 from dataclasses import asdict, dataclass
 
-from simulation_rag import cosine_similarity
+from simulation_rag import cosine_with_norms, vector_norm
 
 # Le specie di segnalazione, e quanto pesano. La gravità non è decorazione:
 # è quello con cui il pannello ordina le domande, cioè la ragione per cui
@@ -184,18 +184,25 @@ def duplicate_findings(positions: list[int], embeddings: list[list[float]]) -> l
     """Le coppie di domande che chiedono la stessa cosa.
 
     Il conto è lo stesso prodotto scalare del recupero dei passaggi
-    (``simulation_rag.cosine_similarity``): cinquanta domande sono
-    milleduecento confronti, cioè lavoro da millisecondi, e non serve
-    nient'altro di quello che il progetto ha già.
+    (``simulation_rag``): cinquanta domande sono milleduecento confronti,
+    cioè lavoro da millisecondi, e non serve nient'altro di quello che il
+    progetto ha già.
+
+    Le lunghezze dei vettori si calcolano prima del doppio ciclo e non
+    dentro: sono le stesse cinquanta per tutte le coppie, e lasciate dentro
+    ognuna si rifaceva cinquanta volte, cioè due terzi del lavoro speso a
+    ricalcolare quello che non cambia.
 
     Una domanda può comparire in più coppie, e le coppie non si raggruppano:
     chi rivede deve vedere quali due si somigliano, perché è guardandole
     accanto che decide quale delle due tenere.
     """
+    norms = [vector_norm(embedding) for embedding in embeddings]
+
     findings = []
     for i in range(len(positions)):
         for j in range(i + 1, len(positions)):
-            score = cosine_similarity(embeddings[i], embeddings[j])
+            score = cosine_with_norms(embeddings[i], norms[i], embeddings[j], norms[j])
             if score < DUPLICATE_THRESHOLD:
                 continue
             findings.append(

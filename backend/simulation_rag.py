@@ -83,16 +83,29 @@ def split_into_chunks(text: str) -> list[str]:
     return kept or ([text.strip()] if text.strip() else [])
 
 
+def vector_norm(vector: list[float]) -> float:
+    """La lunghezza di un vettore.
+
+    Sta per conto suo perché è la metà cara del coseno, e l'unica che si può
+    riusare: il prodotto scalare cambia a ogni coppia, la lunghezza di un
+    vettore no. Chi confronta lo stesso vettore contro molti altri la calcola
+    una volta e la passa a ``cosine_with_norms``.
+    """
+    return math.sqrt(sum(x * x for x in vector))
+
+
+def cosine_with_norms(a: list[float], norm_a: float, b: list[float], norm_b: float) -> float:
+    """Il coseno fra due vettori di cui si conosce già la lunghezza."""
+    if not norm_a or not norm_b or len(a) != len(b):
+        return 0.0
+    return sum(x * y for x, y in zip(a, b, strict=True)) / (norm_a * norm_b)
+
+
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Quanto due vettori puntano dalla stessa parte, fra -1 e 1."""
     if not a or not b or len(a) != len(b):
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b, strict=True))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-    if not norm_a or not norm_b:
-        return 0.0
-    return dot / (norm_a * norm_b)
+    return cosine_with_norms(a, vector_norm(a), b, vector_norm(b))
 
 
 def most_similar(
@@ -105,12 +118,37 @@ def most_similar(
     `candidates` sono coppie (ordinale, vettore), cioè le righe già lette dal
     database: questa funzione non conosce SQLAlchemy e si prova senza.
     """
-    scored = [
-        (cosine_similarity(query_embedding, embedding), ordinal)
-        for ordinal, embedding in candidates
-    ]
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-    return [ordinal for _, ordinal in scored[:limit]]
+    return most_similar_each([query_embedding], candidates, limit)[0]
+
+
+def most_similar_each(
+    query_embeddings: list[list[float]],
+    candidates: list[tuple[int, list[float]]],
+    limit: int,
+) -> list[list[int]]:
+    """Lo stesso recupero per più domande insieme, una lista di ordinali per
+    domanda e nello stesso ordine.
+
+    Esiste per il ciclo della generazione, che cerca i passaggi di
+    venticinque argomenti dentro lo stesso documento. Chiamando
+    ``most_similar`` una volta per argomento, la lunghezza di ogni vettore
+    dei passaggi veniva ricalcolata venticinque volte identica, ed è il conto
+    più caro dei tre che compongono il coseno: qui si calcola una volta sola
+    e vale per tutti gli argomenti. Su un manuale di ottanta pagine sono
+    circa centosettanta passaggi, quindi due passate risparmiate su tre.
+    """
+    prepared = [(ordinal, embedding, vector_norm(embedding)) for ordinal, embedding in candidates]
+
+    results: list[list[int]] = []
+    for query in query_embeddings:
+        query_norm = vector_norm(query)
+        scored = [
+            (cosine_with_norms(query, query_norm, embedding, norm), ordinal)
+            for ordinal, embedding, norm in prepared
+        ]
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        results.append([ordinal for _, ordinal in scored[:limit]])
+    return results
 
 
 def sample_evenly(items: list[str], budget_chars: int) -> list[str]:

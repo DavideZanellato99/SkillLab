@@ -504,8 +504,9 @@ class ChatConversation(Base):
     id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
     user_id = Column(Uuid, ForeignKey("users.id"), nullable=False)
     avatar_id = Column(Uuid, ForeignKey("avatars.id"), nullable=False, index=True)
-    # Always set: a new conversation is born with a "<Category> <n>" default
-    # (see conversation_titles) that the owner can rename, never blank
+    # Always set: a new conversation is born named after the avatar and the
+    # day ("Mario Rossi, 6 mar 2026", see conversation_titles), a default the
+    # owner can rename, never blank
     title = Column(String(120), nullable=False)
     # Channel the conversation was opened on, fixed for its whole life: a
     # phone call (voice) or the written chat (text). The two are never

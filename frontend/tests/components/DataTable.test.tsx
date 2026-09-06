@@ -181,6 +181,27 @@ describe('ordinamento in memoria', () => {
     expect(nomiInTabella(container)).toEqual(['Carla Verdi', 'Bruno Bianchi', 'Anna Rossi'])
   })
 
+  /* L'ordine di arrivo è una risposta anche lui: è quello in cui l'elenco è
+   * stato messo in fila da chi lo ha prodotto, e senza il terzo clic lo si
+   * recupererebbe solo ricaricando la pagina. Le righe arrivano qui in un
+   * ordine che non è né quello crescente né quello decrescente, altrimenti
+   * il ritorno non si distinguerebbe da un verso. */
+  it('toglie l ordinamento al terzo clic e torna all ordine di arrivo', async () => {
+    const arrivo = [RIGHE[1], RIGHE[2], RIGHE[0]]
+    const { container } = renderTable({ items: arrivo })
+    expect(nomiInTabella(container)).toEqual(['Bruno Bianchi', 'Carla Verdi', 'Anna Rossi'])
+
+    await userEvent.click(screen.getByRole('button', { name: /Utente/ }))
+    expect(nomiInTabella(container)).toEqual(['Anna Rossi', 'Bruno Bianchi', 'Carla Verdi'])
+
+    await userEvent.click(screen.getByRole('button', { name: /Utente/ }))
+    expect(nomiInTabella(container)).toEqual(['Carla Verdi', 'Bruno Bianchi', 'Anna Rossi'])
+
+    await userEvent.click(screen.getByRole('button', { name: /Utente/ }))
+    expect(nomiInTabella(container)).toEqual(['Bruno Bianchi', 'Carla Verdi', 'Anna Rossi'])
+    expect(screen.getAllByRole('columnheader')[0]).toHaveAttribute('aria-sort', 'none')
+  })
+
   /* Una cella senza valore non è né la più piccola né la più grande: è una
    * cella che a quella domanda non risponde, quindi resta in fondo in tutti e
    * due i versi invece di prendersi le prime righe a ogni inversione. */
@@ -259,7 +280,7 @@ describe('ordinamento riportato a chi ha i dati', () => {
 
   function renderControllata(
     sort: SortState | null,
-    onSortChange: (s: SortState) => void = () => {},
+    onSortChange: (s: SortState | null) => void = () => {},
   ) {
     return render(
       <DataTable
@@ -279,10 +300,10 @@ describe('ordinamento riportato a chi ha i dati', () => {
   }
 
   it('lascia le righe nell ordine ricevuto e riporta la scelta', async () => {
-    const scelte: SortState[] = []
+    const scelte: (SortState | null)[] = []
     const { container } = renderControllata(
       { key: 'utente', direction: 'desc' },
-      (s: SortState) => {
+      (s: SortState | null) => {
         scelte.push(s)
       },
     )
@@ -291,9 +312,21 @@ describe('ordinamento riportato a chi ha i dati', () => {
     expect(nomiInTabella(container)).toEqual(['Anna Rossi', 'Bruno Bianchi', 'Carla Verdi'])
     expect(screen.getAllByRole('columnheader')[0]).toHaveAttribute('aria-sort', 'descending')
 
+    /* Terzo stato del giro: la colonna era già decrescente, quindi il clic
+       toglie l'ordinamento e chi ha i dati torna al suo default. */
+    await userEvent.click(screen.getByRole('button', { name: /Utente/ }))
+    expect(scelte).toEqual([null])
+    expect(nomiInTabella(container)).toEqual(['Anna Rossi', 'Bruno Bianchi', 'Carla Verdi'])
+  })
+
+  it('riparte dal verso crescente su una colonna non ordinata', async () => {
+    const scelte: (SortState | null)[] = []
+    renderControllata(null, (s: SortState | null) => {
+      scelte.push(s)
+    })
+
     await userEvent.click(screen.getByRole('button', { name: /Utente/ }))
     expect(scelte).toEqual([{ key: 'utente', direction: 'asc' }])
-    expect(nomiInTabella(container)).toEqual(['Anna Rossi', 'Bruno Bianchi', 'Carla Verdi'])
   })
 
   /* Qui `sortValue` non c'entra: senza le righe che il server non ha ancora

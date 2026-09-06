@@ -395,6 +395,14 @@ confrontano in millisecondi, e la lettura dei vettori di UNA simulazione è una
 query indicizzata su `simulation_id`. Il ragionamento per esteso è in
 [simulation_rag.py:9-17](../backend/simulation_rag.py#L9-L17).
 
+Il coseno è fatto di tre passate sui vettori, il prodotto scalare e le due
+lunghezze, e le lunghezze sono l'unica parte che si può riusare: quella di un
+passaggio è la stessa per tutti gli argomenti che gli si confrontano contro.
+Si calcolano quindi una volta sola, fuori dai cicli che confrontano
+([vector_norm](../backend/simulation_rag.py#L86-L94) e
+[cosine_with_norms](../backend/simulation_rag.py#L97-L103)), ed è due passate
+risparmiate su tre sia qui sia nel controllo dei duplicati.
+
 ### 1.5 Ricaricare il documento
 
 `POST /api/admin/simulations/{id}/document` rifà esattamente questi passi. I
@@ -472,8 +480,10 @@ La risposta è JSON: `{"topics": ["", ""]}`.
 
 1. gli argomenti vengono trasformati in vettori con la stessa
    `embed_texts`, quindi vivono nello stesso spazio dei passaggi;
-2. per ogni argomento, [most_similar](../backend/simulation_rag.py#L98-L113)
-   calcola la similarità del coseno contro tutti i passaggi e tiene i
+2. [most_similar_each](../backend/simulation_rag.py#L126-L155) calcola la
+   similarità del coseno di ogni argomento contro tutti i passaggi, tutti gli
+   argomenti in una chiamata sola perché le lunghezze dei vettori dei passaggi
+   valgono per tutti, e di ognuno tiene i
    `CHUNKS_PER_TOPIC` migliori, che sono **4**: tre o quattro coprono una
    procedura per intero, comprese le eccezioni, che sono spesso il paragrafo
    dopo quello che risponde alla domanda;
@@ -889,7 +899,7 @@ serbatoio, e stanno in due file secondo quello che costano:
 
 | Cosa guarda | Dove | Come |
 | --- | --- | --- |
-| Due domande che chiedono la stessa cosa | [simulation_review.py](../backend/simulation_review.py) | Le cinquanta domande diventano vettori con `embed_texts` e si confrontano a coppie, con lo stesso prodotto scalare del recupero dei passaggi |
+| Due domande che chiedono la stessa cosa | [simulation_review.py](../backend/simulation_review.py) | Le cinquanta domande diventano vettori con `embed_texts` e si confrontano a coppie, con lo stesso prodotto scalare del recupero dei passaggi e le lunghezze calcolate prima del doppio ciclo |
 | La corretta molto più lunga delle altre, e la corretta quasi sempre nella stessa posizione | [simulation_review.py](../backend/simulation_review.py) | Si contano. Non sono giudizi, sono misure, e non servono un modello |
 | La risposta che il documento non sostiene, e le alternative implausibili | [simulation_grounding.py](../backend/simulation_grounding.py) | Una passata del modello di ragionamento, sei domande per chiamata, con i passaggi citati davanti |
 

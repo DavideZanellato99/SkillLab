@@ -1,7 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
+import { useAuth } from '../hooks/useAuth'
 import { useMyProgress } from '../hooks/useDashboards'
 import type { MyProgressConversation, MyProgressSimulation } from '../services/dashboards'
+import ConversationDetailModal from './ConversationDetailModal'
+import type { ConversationDetailTarget } from './ConversationDetailModal'
 import ConversationModeBadge from './ConversationModeBadge'
 import DataTable, { Td, Tr } from './DataTable'
 import { formatDateTime } from './dateFormat'
@@ -16,6 +19,7 @@ import type { PeriodValue } from './reportFormat'
 import { Delta, KpiCard, MeterRow, TrendChart } from './scoreCharts'
 import { cardCls, dailyAverages, formatScore, scoreTextColor } from './scoreFormat'
 import type { CriterionAverage } from './scoreFormat'
+import SimulationAttemptModal from './SimulationAttemptModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import StaleContent from './StaleContent'
 import TabBar, { TabPanel } from './TabBar'
@@ -37,7 +41,14 @@ import Tooltip from './Tooltip'
  *
  * La pagina del Confronto risponde a un'altra domanda ancora, due tentativi
  * sullo stesso scenario messi uno accanto all'altro: qui c'è l'andamento,
- * là il faccia a faccia. */
+ * là il faccia a faccia.
+ *
+ * Le righe in fondo si aprono, ed è il seguito della domanda che la pagina
+ * pone: visto il criterio su cui si perde di più, la prova in cui è successo
+ * è la riga lì sotto. Si aprono nelle stesse due schermate in cui una prova
+ * si rilegge dappertutto, il dettaglio della conversazione e il tentativo
+ * riletto per intero, così chi guarda i propri progressi legge esattamente
+ * quello che legge il docente che lo corregge. */
 
 type ProgressSection = 'conversazioni' | 'simulazioni'
 
@@ -118,7 +129,12 @@ function improvement(scores: number[]): number | null {
 }
 
 export default function ProgressPage() {
+  const { user } = useAuth()
   const [params, setParams] = useSearchParams()
+  /* La prova aperta, una per tipo: le due tabelle stanno su schede diverse
+     e non sono mai a vista insieme. */
+  const [openConversation, setOpenConversation] = useState<ConversationDetailTarget | null>(null)
+  const [openAttemptId, setOpenAttemptId] = useState<string | null>(null)
   const setParam = (name: string, value: string) => {
     const next = new URLSearchParams(params)
     if (value) next.set(name, value)
@@ -326,34 +342,55 @@ export default function ProgressPage() {
                   pageResetKey={period}
                   emptyMessage="Nessuna conversazione valutata"
                   renderRow={(c) => (
-                    <Tr key={c.conversation_id}>
-                      <Td align="left">
-                        <span className="flex items-center gap-2">
-                          <ConversationModeBadge mode={c.mode} iconOnly />
-                          <span className="text-[0.85rem] font-medium text-slate-100">
-                            {c.title}
-                          </span>
-                        </span>
-                      </Td>
-                      <Td className="text-[0.85rem] text-slate-300">{c.avatar_name}</Td>
-                      <Td className="text-[0.82rem] text-slate-400">
-                        {formatDateTime(c.conversation_at)}
-                      </Td>
-                      <Td>
-                        <span
-                          className={`text-sm font-bold tabular-nums ${scoreTextColor(c.score)}`}
-                        >
-                          {formatScore(c.score)}/10
-                        </span>
-                        {c.has_override && (
-                          <Tooltip content="Punteggio corretto dal docente">
-                            <span className="block text-[0.7rem] font-semibold text-violet-300">
-                              corretto
+                    <Tooltip
+                      key={c.conversation_id}
+                      content="Rileggi la conversazione con la sua valutazione"
+                      anchor="cursor"
+                    >
+                      <Tr
+                        onActivate={() =>
+                          setOpenConversation({
+                            conversation_id: c.conversation_id,
+                            mode: c.mode,
+                            /* L'intestazione dice chi ha parlato con chi, e qui
+                               è sempre chi sta guardando: le prove di questa
+                               pagina sono le sue. */
+                            user_nome: user?.nome ?? '',
+                            user_cognome: user?.cognome ?? '',
+                            user_email: user?.email ?? '',
+                            avatar_name: c.avatar_name,
+                            conversation_at: c.conversation_at,
+                          })
+                        }
+                      >
+                        <Td align="left">
+                          <span className="flex items-center gap-2">
+                            <ConversationModeBadge mode={c.mode} iconOnly />
+                            <span className="text-[0.85rem] font-medium text-slate-100">
+                              {c.title}
                             </span>
-                          </Tooltip>
-                        )}
-                      </Td>
-                    </Tr>
+                          </span>
+                        </Td>
+                        <Td className="text-[0.85rem] text-slate-300">{c.avatar_name}</Td>
+                        <Td className="text-[0.82rem] text-slate-400">
+                          {formatDateTime(c.conversation_at)}
+                        </Td>
+                        <Td>
+                          <span
+                            className={`text-sm font-bold tabular-nums ${scoreTextColor(c.score)}`}
+                          >
+                            {formatScore(c.score)}/10
+                          </span>
+                          {c.has_override && (
+                            <Tooltip content="Punteggio corretto dal docente">
+                              <span className="block text-[0.7rem] font-semibold text-violet-300">
+                                corretto
+                              </span>
+                            </Tooltip>
+                          )}
+                        </Td>
+                      </Tr>
+                    </Tooltip>
                   )}
                 />
               ) : (
@@ -363,35 +400,60 @@ export default function ProgressPage() {
                   pageResetKey={period}
                   emptyMessage="Nessun test consegnato"
                   renderRow={(s) => (
-                    <Tr key={s.attempt_id}>
-                      <Td align="left">
-                        <span className="flex items-center gap-2">
-                          <SimulationKindBadge kind={s.simulation_kind} />
-                          <span className="text-[0.85rem] font-medium text-slate-100">
-                            {s.simulation_title}
+                    <Tooltip
+                      key={s.attempt_id}
+                      content="Rileggi il test consegnato con le risposte date"
+                      anchor="cursor"
+                    >
+                      <Tr onActivate={() => setOpenAttemptId(s.attempt_id)}>
+                        <Td align="left">
+                          <span className="flex items-center gap-2">
+                            <SimulationKindBadge kind={s.simulation_kind} />
+                            <span className="text-[0.85rem] font-medium text-slate-100">
+                              {s.simulation_title}
+                            </span>
                           </span>
-                        </span>
-                      </Td>
-                      <Td className="text-[0.85rem] text-slate-300 tabular-nums">
-                        {s.correct_count} / {s.question_count}
-                      </Td>
-                      <Td className="text-[0.82rem] text-slate-400">
-                        {formatDateTime(s.attempted_at)}
-                      </Td>
-                      <Td>
-                        <span
-                          className={`text-sm font-bold tabular-nums ${scoreTextColor(s.score)}`}
-                        >
-                          {formatScore(s.score)}/10
-                        </span>
-                      </Td>
-                    </Tr>
+                        </Td>
+                        <Td className="text-[0.85rem] text-slate-300 tabular-nums">
+                          {s.correct_count} / {s.question_count}
+                        </Td>
+                        <Td className="text-[0.82rem] text-slate-400">
+                          {formatDateTime(s.attempted_at)}
+                        </Td>
+                        <Td>
+                          <span
+                            className={`text-sm font-bold tabular-nums ${scoreTextColor(s.score)}`}
+                          >
+                            {formatScore(s.score)}/10
+                          </span>
+                        </Td>
+                      </Tr>
+                    </Tooltip>
                   )}
                 />
               )}
             </TabPanel>
           )}
         </StaleContent>
+      )}
+
+      {/* Le due prove riaperte, in sola lettura: questa non è una schermata
+          di amministrazione, quindi niente cestino e niente revisione da
+          scrivere, che non sono di chi la prova l'ha svolta. */}
+      {openConversation && (
+        <ConversationDetailModal
+          scope="own"
+          row={openConversation}
+          onClose={() => setOpenConversation(null)}
+        />
+      )}
+
+      {openAttemptId && (
+        <SimulationAttemptModal
+          attemptId={openAttemptId}
+          own
+          onClose={() => setOpenAttemptId(null)}
+        />
       )}
     </PageContainer>
   )

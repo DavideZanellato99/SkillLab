@@ -114,10 +114,10 @@ beforeEach(() => {
 describe('cosa è tarato male', () => {
   /* La riga su cui si va peggio è la risposta della pagina: sta in cima e
    * anche nella card, perché cercarla nella tabella sarebbe il contrario. */
-  it('mette in evidenza l’avatar e il test più duri', () => {
+  it('mette in evidenza l’avatar e il test con la media più bassa', () => {
     renderContent()
 
-    expect(screen.getByText('Avatar Più Duro')).toBeInTheDocument()
+    expect(screen.getByText('Avatar con Media Più Bassa')).toBeInTheDocument()
     expect(screen.getAllByText('Cliente ostile').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Procedure di cassa').length).toBeGreaterThan(0)
   })

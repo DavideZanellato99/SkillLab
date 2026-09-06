@@ -420,20 +420,23 @@ def _backfill_conversation_titles() -> None:
     """Give pre-existing untitled conversations the default title, then lock it.
 
     The title is mandatory: conversations created before it became so are
-    backfilled with the same "<Category> <n>" default used for new ones, then
+    backfilled with the same "<Avatar>, <day>" default used for new ones, then
     the column is set NOT NULL (both steps idempotent).
+
+    Ognuna è datata con il proprio `created_at` e non con adesso: una prova di
+    marzo ritrovata a settembre porta il giorno in cui è stata tenuta, che è
+    l'unico che dice qualcosa a chi la rilegge.
     """
     with SessionLocal() as db:
         untitled = (
-            db.query(ChatConversation, AvatarCategory.name)
+            db.query(ChatConversation, Avatar.name)
             .join(Avatar, Avatar.id == ChatConversation.avatar_id)
-            .join(AvatarCategory, AvatarCategory.id == Avatar.category_id)
             .filter(or_(ChatConversation.title.is_(None), ChatConversation.title == ""))
             .order_by(ChatConversation.created_at.asc())
             .all()
         )
-        for conv, category in untitled:
-            conv.title = next_conversation_title(db, conv.user_id, category)
+        for conv, avatar_name in untitled:
+            conv.title = next_conversation_title(db, conv.user_id, avatar_name, conv.created_at)
             db.flush()
         db.commit()
 

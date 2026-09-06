@@ -87,6 +87,18 @@ viene sostituita dallo scambio salvato, che porta gli id veri dei messaggi:
 sono quelli a cui le citazioni della valutazione e le note del docente si
 attaccheranno.
 
+**Ogni frammento riscrive la trascrizione**, perché la lista dei messaggi è
+una sola e cambia a ogni pezzo di testo che arriva. La bolla
+([MessageBubble](../frontend/src/components/MessageBubble.tsx)) è quindi
+memoizzata, ed è l'unico componente dell'app a esserlo: senza, una chat di
+sessanta messaggi ne ridisegnava sessanta per ognuno dei trecento frammenti
+di una risposta, rileggendo ogni volta il tag emotivo e riscrivendo ogni
+orario. Per la stessa ragione lo scorrimento in fondo ha due andature
+([ChatMessages](../frontend/src/components/ChatMessages.tsx)): morbido quando
+compare un messaggio nuovo, di scatto mentre la risposta cresce, perché
+un'animazione morbida ripartiva da capo a ogni frammento senza mai arrivare
+in fondo.
+
 ## Chiudere una conversazione
 
 `POST /api/chat/conversation/{id}/end` chiude una chat, ed è definitivo come
@@ -116,8 +128,19 @@ ordina l'elenco e data ogni contatto, e senza questa accortezza
 l'aggiornamento automatico della colonna porterebbe in cima una conversazione
 solo perché le è stato cambiato il nome.
 
-Il titolo di partenza è progressivo per categoria ("Reclamo 3"), generato da
-[conversation_titles.py](../backend/conversation_titles.py).
+Il titolo di partenza dice **con chi si è parlato e quando**, "Mario Rossi,
+6 mar 2026", generato da
+[conversation_titles.py](../backend/conversation_titles.py). Era progressivo
+per categoria ("Reclamo 3"), cioè il dato meno utile per ritrovare una prova
+fra venti righe: non diceva né l'avatar né il giorno, e due categorie sole
+bastavano a riempire l'elenco di titoli che si distinguevano per una cifra. Il
+progressivo resta dove serve davvero, fra due prove con lo stesso avatar nello
+stesso giorno, e diventa una coda fra parentesi: "Mario Rossi, 6 mar 2026 (2)".
+
+La data è quella del server, in UTC come ogni colonna dello schema: il titolo è
+testo e non un momento, quindi non si sposta più con il fuso di chi legge, e una
+prova tenuta a cavallo della mezzanotte porta il giorno prima rispetto alla data
+che la riga accanto mostra. Resta rinominabile, come ogni titolo automatico.
 
 ### La ricerca, in due posti che sono uno solo
 

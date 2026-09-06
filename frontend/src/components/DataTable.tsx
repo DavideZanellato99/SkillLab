@@ -97,7 +97,7 @@ interface DataTableProps<T> {
    * quelle righe vorrebbe dire ordinare la sola finestra già scaricata, cioè
    * dare per primo della classe il primo dei duecento arrivati. */
   sort?: SortState | null
-  onSortChange?: (sort: SortState) => void
+  onSortChange?: (sort: SortState | null) => void
   /* Misura sotto la quale le colonne smettono di stringersi e a scorrere è
    * il contenitore. Le percentuali restano quelle dichiarate, ma di una
    * tabella troppo stretta sono percentuali di niente: su un telefono, o
@@ -175,11 +175,19 @@ export default function DataTable<T>({
 
   const toggleSort = (key: string) => {
     /* Una colonna nuova parte dal basso verso l'alto, quella già attiva si
-     * rovescia: due clic sulla stessa intestazione sono la domanda opposta,
-     * un clic su un'altra è una domanda nuova. */
-    const next: SortState =
+     * rovescia, e al terzo clic l'ordinamento si toglie: due clic sulla
+     * stessa intestazione sono la domanda opposta, un clic su un'altra è una
+     * domanda nuova, e il terzo è la richiesta di tornare indietro.
+     *
+     * Il giro si chiude perché anche l'ordine di arrivo è una risposta: è
+     * quello in cui l'elenco è stato messo in fila da chi lo ha prodotto (la
+     * media più bassa in cima, la riga più recente per prima), e senza terzo
+     * stato lo si recupererebbe solo ricaricando la pagina. */
+    const next: SortState | null =
       activeSort?.key === key
-        ? { key, direction: activeSort.direction === 'asc' ? 'desc' : 'asc' }
+        ? activeSort.direction === 'asc'
+          ? { key, direction: 'desc' }
+          : null
         : { key, direction: 'asc' }
     if (onSortChange) onSortChange(next)
     else setOwnSort(next)

@@ -8,6 +8,7 @@ import { errorMessage } from '../services/errors'
 import { hasReviewContent } from './trainerReview'
 import { CloseIcon } from './icons'
 import NumberInput from './NumberInput'
+import { formatScore } from './scoreFormat'
 
 /* Il modulo con cui il docente scrive la propria revisione.
  *
@@ -160,9 +161,7 @@ export default function TrainerReviewPanel({
         <span className="text-xs text-slate-500">/ 10</span>
         <span className="min-w-[160px] flex-1 text-[0.72rem] text-slate-500">
           {aiScore !== null
-            ? `Lascia vuoto per confermare il ${aiScore.toLocaleString('it-IT', {
-                maximumFractionDigits: 1,
-              })} automatico.`
+            ? `Lascia vuoto per confermare il ${formatScore(aiScore)} automatico.`
             : 'Non è presente una valutazione automatica: questo sarà il solo voto.'}
         </span>
       </div>

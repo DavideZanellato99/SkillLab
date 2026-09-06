@@ -15,12 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import {
-  useCreateAvatar,
-  useUpdateAvatar,
-  useUploadAvatarImage,
-  useVoices,
-} from '../hooks/useAdminAvatars'
+import { useCreateAvatar, useUpdateAvatar, useUploadAvatarImage } from '../hooks/useAdminAvatars'
 import { useAvatarCategories } from '../hooks/useAvatarCategories'
 import { useLeaveConfirmation } from '../hooks/useLeaveConfirmation'
 import { getAvatarImageUrl } from '../services/api'
@@ -105,13 +100,6 @@ export default function AvatarFormModal({
   const updateMutation = useUpdateAvatar()
   const uploadMutation = useUploadAvatarImage()
 
-  /* Il catalogo voci si carica all'apertura della scheda, così chi non tocca
-   * mai gli avatar non paga una chiamata al fornitore. Se non risponde, il
-   * campo torna a essere un id da incollare a mano invece di bloccare il
-   * salvataggio. */
-  const { data: voices = [], error: voicesQueryError } = useVoices(true)
-  const voicesError = voicesQueryError ? 'Catalogo voci non disponibile.' : ''
-
   /* Le categorie fra cui scegliere sono quelle dell'organizzazione scelta per
    * l'avatar, e nessun'altra: una categoria di un altro tenant sposterebbe
    * l'avatar di organizzazione, e il server la rifiuta. Finché
@@ -121,26 +109,6 @@ export default function AvatarFormModal({
     Boolean(form.organizationId),
   )
   const categoryOptions = categories.map((c) => ({ value: c.id, label: c.name }))
-
-  /* Voci selezionabili. La prima opzione è "nessuna voce", che il backend
-   * risolve nella voce predefinita del .env. Se l'avatar porta un id che il
-   * catalogo non contiene più, quell'id resta in elenco: modificare la
-   * categoria di un avatar non deve cancellargli la voce di nascosto.
-   * Il catalogo arriva ordinato con le voci della lingua dell'app per prime,
-   * ma non filtrato, perché il modello è multilingue e le legge tutte.
-   * La lingua compare accanto al nome solo se nel catalogo ce n'è più di
-   * una: quando sono tutte uguali ripeterla su ogni riga è solo rumore. */
-  const mostraLingua = new Set(voices.map((v) => v.language).filter(Boolean)).size > 1
-  const voiceOptions = [
-    { value: '', label: 'Voce Predefinita' },
-    ...voices.map((v) => ({
-      value: v.id,
-      label: mostraLingua && v.language ? `${v.name} (${v.language})` : v.name,
-    })),
-    ...(form.voiceId && !voices.some((v) => v.id === form.voiceId)
-      ? [{ value: form.voiceId, label: `${form.voiceId} (non nel catalogo)` }]
-      : []),
-  ]
 
   const isSaving = createMutation.isPending || updateMutation.isPending
 
@@ -440,51 +408,8 @@ export default function AvatarFormModal({
               <label className={labelCls} htmlFor="av-voice">
                 Voce
               </label>
-              {voices.length > 0 ? (
-                <div className="flex items-center gap-2">
-                  <Select
-                    id="av-voice"
-                    className="flex-1"
-                    value={form.voiceId}
-                    onChange={(value) => setForm((p) => ({ ...p, voiceId: value }))}
-                    options={voiceOptions}
-                    placeholder="Voce Predefinita"
-                    disabled={isSaving}
-                  />
-                  {/* Lo stesso bottone avvia e ferma: una battuta dura qualche
-                        secondo, e chi l'ha fatta partire per sbaglio deve poterla
-                        zittire senza aspettare che finisca. */}
-                  <IconButton
-                    tone="play"
-                    className="shrink-0"
-                    label={
-                      voicePreview === 'playing'
-                        ? 'Interrompi Anteprima della Voce'
-                        : 'Ascolta Anteprima della Voce'
-                    }
-                    tooltip={
-                      voicePreview === 'playing' ? "Interrompi l'ascolto" : 'Ascolta questa voce'
-                    }
-                    onClick={() =>
-                      voicePreview === 'playing'
-                        ? stopVoicePreview()
-                        : playVoicePreview(form.voiceId)
-                    }
-                    disabled={!form.voiceId || voicePreview === 'loading' || isSaving}
-                  >
-                    {voicePreview === 'loading' ? (
-                      <Spinner variant="button" />
-                    ) : voicePreview === 'playing' ? (
-                      <StopIcon />
-                    ) : (
-                      <PlayIcon />
-                    )}
-                  </IconButton>
-                </div>
-              ) : (
-                /* Catalogo non disponibile: si torna all'id da incollare,
-                     perché una voce mancante non deve impedire di salvare. */
-                <div className={inputWrapperCls}>
+              <div className="flex items-center gap-2">
+                <div className={`${inputWrapperCls} flex-1`}>
                   <input
                     type="text"
                     id="av-voice"
@@ -495,8 +420,34 @@ export default function AvatarFormModal({
                     disabled={isSaving}
                   />
                 </div>
-              )}
-              {voicesError && <p className="text-[0.7rem] text-amber-400">{voicesError}</p>}
+                {/* Lo stesso bottone avvia e ferma: una battuta dura qualche
+                    secondo, e chi l'ha fatta partire per sbaglio deve poterla
+                    zittire senza aspettare che finisca. */}
+                <IconButton
+                  tone="play"
+                  className="shrink-0"
+                  label={
+                    voicePreview === 'playing'
+                      ? 'Interrompi Anteprima della Voce'
+                      : 'Ascolta Anteprima della Voce'
+                  }
+                  tooltip={
+                    voicePreview === 'playing' ? "Interrompi l'ascolto" : 'Ascolta questa voce'
+                  }
+                  onClick={() =>
+                    voicePreview === 'playing' ? stopVoicePreview() : playVoicePreview(form.voiceId)
+                  }
+                  disabled={!form.voiceId || voicePreview === 'loading' || isSaving}
+                >
+                  {voicePreview === 'loading' ? (
+                    <Spinner variant="button" />
+                  ) : voicePreview === 'playing' ? (
+                    <StopIcon />
+                  ) : (
+                    <PlayIcon />
+                  )}
+                </IconButton>
+              </div>
             </div>
           </div>
 

@@ -4,7 +4,7 @@ One instance per call. The browser streams mic audio (PCM16 @ 16 kHz,
 binary frames) over our WebSocket; we proxy it to ElevenLabs Scribe v2
 Realtime, whose VAD commits the end of each user turn. Each committed
 transcript triggers an LLM stream (voice model) whose tokens are piped
-word-by-word into an ElevenLabs TTS context; the resulting PCM16 @ 24 kHz
+in phrase-sized pieces into an ElevenLabs TTS context; the resulting PCM16 @ 24 kHz
 audio chunks are forwarded to the browser as binary frames.
 
 Browser-bound JSON events:
@@ -125,6 +125,51 @@ def _join_transcript(previous: str, addition: str) -> str:
         if last_word.islower() and tail.lower() not in _VOCALI and last_word not in _TRONCHE:
             return previous + addition
     return f"{previous} {addition}"
+
+
+# Quanto testo deve essersi accumulato prima di partire per la sintesi.
+#
+# Con ``auto_mode`` acceso ElevenLabs sintetizza ogni messaggio appena lo
+# riceve, e un messaggio di poche lettere lo tratta come una frase intera:
+# gli mette davanti e dietro il respiro che una frase si porta, e il risultato
+# è un avatar che scandisce una parola alla volta. Misurato su tre battute
+# italiane, mandate al ritmo con cui il modello emette i token, coi secondi di
+# audio prodotti per la stessa frase:
+#
+# | come viene mandata | battuta A | battuta B | battuta C |
+# | ------------------ | --------- | --------- | --------- |
+# | parola per parola  |   15.1s   |     -     |     -     |
+# | >= 20 caratteri    |    9.4s   |    8.8s   |   11.3s   |
+# | >= 30 caratteri    |    9.0s   |    8.9s   |    9.9s   |
+# | >= 40 caratteri    |    9.0s   |    8.9s   |    8.8s   |
+# | >= 50 caratteri    |    9.3s   |     -     |   10.1s   |
+# | battuta intera     |    8.7s   |     -     |    8.8s   |
+#
+# Quaranta è dove tutte e tre stanno sul parlato naturale, e oltre non si
+# guadagna più niente. Venti bastavano in inglese ma non qui: la battuta C
+# dice una data per esteso, e un taglio che cade in mezzo a un numero scritto
+# a parole si sente più di uno che cade fra due parole qualsiasi.
+#
+# Il primo suono del turno arriva sui 340 millesimi invece che sui 260, ed è
+# il prezzo giusto: di là c'erano sei secondi di scansione su una battuta che
+# ne dura nove.
+_TTS_MIN_CHUNK_CHARS = 40
+
+
+def _tts_chunk(buffer: str) -> tuple[str, str]:
+    """Quanto del buffer è pronto per la sintesi, e quel che resta in cassa.
+
+    Il taglio cade sempre su un confine di parola, così la sintesi non deve
+    indovinare la pronuncia di mezzo token, ma solo quando davanti c'è
+    abbastanza testo da suonare come una frase invece che come un elenco.
+    """
+    cut = max(buffer.rfind(" "), buffer.rfind("\n"))
+    # La misura è sul testo che parte davvero, non su tutto il buffer: la
+    # parola ancora in corso resta in cassa, e contarla vorrebbe dire mandare
+    # pezzi più corti della soglia proprio quando le parole sono lunghe.
+    if cut + 1 < _TTS_MIN_CHUNK_CHARS:
+        return "", buffer
+    return buffer[: cut + 1], buffer[cut + 1 :]
 
 
 # PCM16 mono: two bytes per sample. Turns bytes forwarded into seconds of
@@ -734,13 +779,12 @@ class VoicePipeline:
                     full_text += delta
                     self._turn_text = full_text
                     await self._send_json({"type": "assistant_delta", "text": delta})
-                    # Feed the TTS on word boundaries so it never has to
-                    # guess the pronunciation of a half-token
+                    # In sintesi a pezzi interi, mai un token alla volta:
+                    # vedi _tts_chunk
                     word_buffer += delta
-                    cut = max(word_buffer.rfind(" "), word_buffer.rfind("\n"))
-                    if cut > 0:
-                        await self._speak(context_id, word_buffer[: cut + 1])
-                        word_buffer = word_buffer[cut + 1 :]
+                    pronto, word_buffer = _tts_chunk(word_buffer)
+                    if pronto:
+                        await self._speak(context_id, pronto)
             except RuntimeError as e:
                 # La causa vera l'ha già scritta openai_service con il suo
                 # stacktrace: qui interessa che questo turno ha risposto con

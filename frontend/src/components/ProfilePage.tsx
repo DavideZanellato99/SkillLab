@@ -58,11 +58,6 @@ export default function ProfilePage() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
-  /* La conferma si giudica quando si è finito di scriverla: confrontarla a
-   * ogni tasto vorrebbe dire un "non coincidono" acceso per tutta la
-   * digitazione, cioè un rimprovero a chi sta facendo la cosa giusta. */
-  const [confirmTouched, setConfirmTouched] = useState(false)
-  const [passwordValidationError, setPasswordValidationError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
 
   /* L'esportazione dei propri dati resta fuori dalle mutation: produce uno
@@ -78,9 +73,7 @@ export default function ProfilePage() {
   const profileError =
     profileValidationError ||
     errorMessage(profileMutation.error, "Errore durante l'aggiornamento dei dati.")
-  const passwordError =
-    passwordValidationError ||
-    errorMessage(passwordMutation.error, 'Errore durante il cambio password.')
+  const passwordError = errorMessage(passwordMutation.error, 'Errore durante il cambio password.')
 
   if (!user) return null
 
@@ -91,8 +84,13 @@ export default function ProfilePage() {
   /* La guida non è per tutti i ruoli, e la sezione che la riapre nemmeno. */
   const showTutorialSection = hasTutorial(user)
   const isProfileDirty = nome.trim() !== user.nome || cognome.trim() !== user.cognome
-  const passwordsMismatch =
-    confirmTouched && confirmNewPassword !== '' && newPassword !== confirmNewPassword
+
+  /* Il bottone si accende quando l'elenco dei requisiti è tutto verde,
+   * coincidenza fra i due campi compresa: sono le stesse righe che si vedono
+   * sotto i campi, quindi cosa manca è già scritto lì e non serve un secondo
+   * posto che lo ripeta. */
+  const newPasswordReady =
+    getUnmetPasswordRules(newPassword).length === 0 && newPassword === confirmNewPassword
 
   /* Un esito parla del modulo com'era quando è comparso: appena si torna a
    * scriverci dentro non descrive più quello che c'è a schermo, quindi se ne
@@ -106,7 +104,6 @@ export default function ProfilePage() {
 
   const clearPasswordFeedback = () => {
     setPasswordSuccess('')
-    setPasswordValidationError('')
     if (passwordMutation.error) passwordMutation.reset()
   }
 
@@ -167,21 +164,6 @@ export default function ProfilePage() {
     e.preventDefault()
     clearPasswordFeedback()
 
-    /* Le due password diverse le dice il campo, non il banner in cima: chi
-     * ha premuto sta guardando i campi, ed è lì che c'è da rimettere mano. */
-    if (newPassword !== confirmNewPassword) {
-      setConfirmTouched(true)
-      return
-    }
-
-    const unmetRules = getUnmetPasswordRules(newPassword)
-    if (unmetRules.length > 0) {
-      setPasswordValidationError(
-        `La nuova password non soddisfa i requisiti: ${unmetRules.join(', ').toLowerCase()}.`,
-      )
-      return
-    }
-
     try {
       /* L'esito lo scrive il server e non questo modulo: il cambio password
        * chiude tutte le sessioni aperte e riapre questa, e nel caso in cui
@@ -196,7 +178,6 @@ export default function ProfilePage() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmNewPassword('')
-      setConfirmTouched(false)
     } catch {
       // Il messaggio è nella mutation, il banner lo mostra
     }
@@ -353,31 +334,29 @@ export default function ProfilePage() {
                 disabled={passwordMutation.isPending}
               />
 
-              {/* I requisiti stanno sotto il campo che descrivono, non in
-                  fondo al modulo: si leggono mentre si sceglie la password,
-                  che è l'unico momento in cui servono. */}
-              <PasswordRules password={newPassword} />
-
               <PasswordField
                 id="profile-confirm-new-password"
                 label="Conferma Nuova Password"
                 value={confirmNewPassword}
                 onChange={editPasswordField(setConfirmNewPassword)}
-                onBlur={() => setConfirmTouched(true)}
                 Icon={ShieldIcon}
                 placeholder="Conferma la nuova password"
                 autoComplete="new-password"
                 minLength={PASSWORD_MIN_LENGTH}
                 required
                 disabled={passwordMutation.isPending}
-                error={passwordsMismatch ? 'Le nuove password non coincidono.' : undefined}
               />
+
+              {/* I requisiti stanno sotto i campi che descrivono, coincidenza
+                  fra i due compresa: si leggono mentre si sceglie la password,
+                  che è l'unico momento in cui servono. */}
+              <PasswordRules password={newPassword} confirmation={confirmNewPassword} />
 
               <PrimaryButton
                 type="submit"
                 variant="submit"
                 className="mt-1"
-                disabled={passwordMutation.isPending}
+                disabled={passwordMutation.isPending || !newPasswordReady}
               >
                 {passwordMutation.isPending ? (
                   <>
@@ -427,7 +406,7 @@ export default function ProfilePage() {
           ) : (
             <>
               <DownloadIcon size={16} className="shrink-0" />
-              Scarica i Miei Dati
+              Scarica i miei Dati
             </>
           )}
         </PrimaryButton>

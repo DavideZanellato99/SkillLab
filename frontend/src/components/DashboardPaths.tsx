@@ -12,6 +12,7 @@ import EmptyState from './EmptyState'
 import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import Notice from './Notice'
+import { formatDecimal } from './numberFormat'
 import { KpiCard, RateRow } from './scoreCharts'
 import { cardCls, formatScore } from './scoreFormat'
 import StaleContent from './StaleContent'
@@ -41,7 +42,7 @@ import Tooltip from './Tooltip'
 function formatDays(days: number | null): string {
   if (days === null) return '—'
   const rounded = Math.round(days * 10) / 10
-  const written = rounded.toLocaleString('it-IT', { maximumFractionDigits: 1 })
+  const written = formatDecimal(rounded)
   return `${written} ${rounded === 1 ? 'giorno' : 'giorni'}`
 }
 

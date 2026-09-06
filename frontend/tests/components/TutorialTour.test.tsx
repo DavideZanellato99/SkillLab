@@ -51,7 +51,7 @@ describe('a chi compare', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(screen.getByText('Benvenuto in SkillLab')).toBeInTheDocument()
-    expect(screen.getByText('Passo 1 di 8')).toBeInTheDocument()
+    expect(screen.getByText('Passo 1 di 9')).toBeInTheDocument()
   })
 
   it('non torna a chi l’ha già vista', () => {
@@ -82,7 +82,7 @@ describe('sfogliare i passi', () => {
 
     await userEvent.click(avanti())
     expect(screen.getByText('Galleria Avatar')).toBeInTheDocument()
-    expect(screen.getByText('Passo 2 di 8')).toBeInTheDocument()
+    expect(screen.getByText('Passo 2 di 9')).toBeInTheDocument()
 
     await userEvent.click(indietro())
     expect(screen.getByText('Benvenuto in SkillLab')).toBeInTheDocument()
@@ -111,7 +111,8 @@ describe('sfogliare i passi', () => {
     window.addEventListener(TUTORIAL_USER_MENU_EVENT, spia)
 
     renderGuida({ ruolo: 'organization_admin' })
-    // Benvenuto, dashboard, galleria: nessuno dei tre sta nel menu
+    // Benvenuto, dashboard, galleria, simulatore: nessuno dei quattro sta nel menu
+    await userEvent.click(avanti())
     await userEvent.click(avanti())
     await userEvent.click(avanti())
     expect(aperture.at(-1)).toBe(false)
@@ -127,7 +128,7 @@ describe('sfogliare i passi', () => {
 
 describe('chiudere', () => {
   const ultimoPasso = async () => {
-    for (let i = 0; i < 7; i++) await userEvent.click(avanti())
+    for (let i = 0; i < 8; i++) await userEvent.click(avanti())
   }
 
   it('arrivata in fondo si chiude e resta segnata come vista', async () => {

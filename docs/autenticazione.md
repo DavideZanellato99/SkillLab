@@ -75,6 +75,14 @@ rispecchiare la policy del pool Cognito, che è la sola a decidere davvero:
 dodici caratteri, maiuscola, minuscola, numero e un simbolo fra quelli che
 Cognito riconosce come tali.
 
+La lista sta sotto entrambi i campi, nuova password e conferma, e chiude con
+la coincidenza fra i due: quella è una regola del solo frontend, Cognito
+riceve una password sola e non sa che ce n'era una da ripetere, ma per chi
+compila è un requisito come gli altri. Finché una riga è spenta il bottone
+resta disabilitato, e non c'è nessun altro avviso: quello che manca è già
+scritto nell'elenco, e ripeterlo sotto il campo o in un banner sarebbe la
+stessa frase in tre posti.
+
 Completata la sfida, il giro è identico al login, sbarramento compreso: la
 password è appena stata impostata, ma un account bloccato non ottiene comunque
 i cookie.
@@ -112,6 +120,13 @@ varrebbe su tutta questa API con i permessi di chi lo porta. Per questo, dopo
 la firma, si confronta il claim `client_id` con l'app client configurato. Un
 access token non porta un `aud` da verificare al posto suo: è quel campo lì a
 dire per chi è stato coniato.
+
+Alla stessa casella appartiene lo scarto fra gli orologi. Cognito timbra il
+token con il suo, e una macchina indietro anche di pochi secondi vedrebbe ogni
+token appena emesso come non ancora valido (`iat`), rifiutando tutto quello che
+segue il login. La verifica ammette quindi trenta secondi di scarto, in
+entrambe le direzioni: copre anche l'orologio avanti, che farebbe scadere i
+token in anticipo.
 
 Le tre difese che stanno in mezzo meritano ciascuna la sua riga.
 
@@ -187,6 +202,12 @@ provando.
 `POST /api/auth/change-password`, self-service e per ogni ruolo. La password
 attuale la verifica Cognito, non questo endpoint: un cookie rubato da solo non
 basta a prendersi l'account.
+
+Il modulo nella [pagina del profilo](../frontend/src/components/ProfilePage.tsx)
+è quello della prima password: stesso elenco di requisiti sotto la conferma,
+riga sulla coincidenza fra i due campi compresa, e stesso bottone spento finché
+non è tutto verde. Sono i due soli posti in cui si sceglie una password, e chi
+li incontra a distanza di mesi trova la stessa cosa.
 
 La parte che conta però viene dopo. **Con la password vecchia cade tutto
 quello che quella password aveva aperto**, perché chi cambia la password quasi

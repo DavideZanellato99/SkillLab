@@ -335,10 +335,12 @@ il segnaposto, e l'avviso compare mentre si scrive invece che alla fine.
 Il campo `voice_id` è un id di voce ElevenLabs. Se manca si usa quella di
 default dalla configurazione.
 
-Si assegnano dall'interfaccia: l'elenco delle voci arriva da
-`/api/admin/voices`, con anteprima. Il catalogo arriva ordinato con le voci
-della lingua dell'app per prime ma non filtrato, perché il modello di sintesi
-è multilingue e la lingua gliela impone la connessione, non la voce: qualunque
+Nella scheda l'id si scrive a mano, con accanto il bottone dell'anteprima: le
+voci in uso sono poche e scelte una volta, mentre il catalogo del fornitore ne
+elenca centinaia fra cui la voce giusta non si trova scorrendo. Il catalogo
+resta comunque letto da `/api/admin/voices`, ma solo dalla scheda di dettaglio,
+per mostrare il nome della voce al posto dell'id. Il modello di sintesi è
+multilingue e la lingua gliela impone la connessione, non la voce: qualunque
 voce del catalogo legge l'italiano.
 
 Un `voice_id` che l'account non riconosce **non fa fallire la chiamata**. La

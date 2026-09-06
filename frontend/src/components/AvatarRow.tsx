@@ -14,8 +14,15 @@ import IconButton from './IconButton'
 import Spinner from './Spinner'
 import { PencilIcon, RestoreIcon, TrashIcon } from './icons'
 
-const archivedDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+/* Costruito una volta sola e non a ogni riga: il perché sta su
+ * `formatInstant` in [instant.ts](./instant.ts). */
+const ARCHIVED_DATE = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+})
+
+const archivedDate = (iso: string) => ARCHIVED_DATE.format(new Date(iso))
 
 interface AvatarRowProps {
   avatar: AdminAvatar

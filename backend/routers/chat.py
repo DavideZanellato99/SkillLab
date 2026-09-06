@@ -371,7 +371,7 @@ def _persist_exchange(
     db: Session,
     user_id: UUID,
     avatar_id: UUID,
-    avatar_category: str,
+    avatar_name: str,
     conversation_id: UUID | None,
     content: str,
     reply: str,
@@ -391,7 +391,7 @@ def _persist_exchange(
         conversation = ChatConversation(
             avatar_id=avatar_id,
             user_id=user_id,
-            title=next_conversation_title(db, user_id, avatar_category),
+            title=next_conversation_title(db, user_id, avatar_name),
             mode=CONVERSATION_MODE_TEXT,
         )
         db.add(conversation)
@@ -439,7 +439,7 @@ class _TurnContext:
     """
 
     avatar_id: UUID
-    avatar_category: str
+    avatar_name: str
     avatar_profile: dict
     conversation_id: UUID | None
     history: list[dict]
@@ -500,7 +500,7 @@ def _turn_context(db: Session, payload: ChatMessageRequest, user: User) -> _Turn
 
     context = _TurnContext(
         avatar_id=avatar.id,
-        avatar_category=avatar.category_name,
+        avatar_name=avatar.name,
         avatar_profile=avatar.profile,
         conversation_id=conversation.id if conversation else None,
         history=history,
@@ -574,7 +574,7 @@ async def send_chat_message(
                 db,
                 user_id,
                 turn.avatar_id,
-                turn.avatar_category,
+                turn.avatar_name,
                 turn.conversation_id,
                 payload.content,
                 reply,

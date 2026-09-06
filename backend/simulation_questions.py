@@ -71,7 +71,7 @@ from models import (
     SIMULATION_POOL_COUNT,
 )
 from openai_service import embed_texts, eval_json_completion
-from simulation_rag import most_similar, sample_evenly
+from simulation_rag import most_similar_each, sample_evenly
 
 # Quanto documento entra nella prima passata, quella che cerca gli argomenti.
 # Il campionamento a passaggi regolari (vedi sample_evenly) fa sì che questo
@@ -692,8 +692,7 @@ async def generate_questions(
     candidates = list(enumerate(chunk_embeddings, start=1))
     passages: list[str] = []
     cited: set[int] = set()
-    for embedding in topic_embeddings:
-        ordinals = most_similar(embedding, candidates, CHUNKS_PER_TOPIC)
+    for ordinals in most_similar_each(topic_embeddings, candidates, CHUNKS_PER_TOPIC):
         cited.update(ordinals)
         passages.append("\n".join(f"[{o}] {chunks[o - 1]}" for o in sorted(ordinals)))
 

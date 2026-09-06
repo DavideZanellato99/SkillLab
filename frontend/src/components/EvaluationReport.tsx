@@ -2,6 +2,7 @@ import type { ConversationEvaluation, EvaluationCitation } from '../services/api
 import TrainerReviewNote from './TrainerReviewNote'
 import Tooltip from './Tooltip'
 import { formatDate, formatDateTime } from './dateFormat'
+import { formatScore } from './scoreFormat'
 
 /* Corpo della valutazione: punteggio complessivo, punteggi per criterio e
  * spunti di miglioramento. Usato sia dalla EvaluationModal post-chiamata sia
@@ -26,10 +27,6 @@ function scoreBarColor(score: number): string {
   if (score >= 7) return 'bg-emerald-500'
   if (score >= 5) return 'bg-orange-500'
   return 'bg-red-500'
-}
-
-function formatScore(score: number): string {
-  return score.toLocaleString('it-IT', { maximumFractionDigits: 1 })
 }
 
 /* Variazione rispetto al tentativo precedente sullo stesso scenario: verde

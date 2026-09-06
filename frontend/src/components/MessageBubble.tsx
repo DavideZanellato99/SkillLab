@@ -6,7 +6,17 @@
  * scorrere fino al messaggio citato da una valutazione ed evidenziarlo.
  *
  * Sotto la bolla può comparire la nota che il docente ha appuntato su quel
- * messaggio: è lì che va letta, accanto alla riga di cui parla. */
+ * messaggio: è lì che va letta, accanto alla riga di cui parla.
+ *
+ * È memoizzata, ed è l'unico componente dell'app che ne ha bisogno: mentre
+ * la risposta dell'avatar arriva a frammenti, la trascrizione si riscrive a
+ * ogni frammento (vedi `useTextChat`). Senza `memo`, una chat di sessanta
+ * messaggi ridisegnava sessanta bolle per ognuno dei trecento pezzi di una
+ * risposta, ogni volta rileggendo il tag emotivo e riscrivendo l'orario, e
+ * staccando e riattaccando ogni nodo dal DOM. Le props che arrivano da
+ * `ChatPage` sono già stabili, quindi si ridisegna solo la bolla che cresce. */
+
+import { memo, useCallback } from 'react'
 
 import type { ChatMessage, MessageAnnotation } from '../services/api'
 import MessageAnnotationNote from './MessageAnnotationNote'
@@ -27,7 +37,7 @@ interface MessageBubbleProps {
   annotation?: MessageAnnotation | null
 }
 
-export default function MessageBubble({
+function MessageBubble({
   message,
   index,
   avatarImageUrl,
@@ -36,6 +46,13 @@ export default function MessageBubble({
   registerNode,
   annotation = null,
 }: MessageBubbleProps) {
+  /* Stabile finché il messaggio è lo stesso: un'arrow scritta sul posto è un
+     ref nuovo a ogni render, e React lo stacca e lo riattacca ogni volta. */
+  const setNode = useCallback(
+    (node: HTMLDivElement | null) => registerNode(message.id, node),
+    [message.id, registerNode],
+  )
+
   const isUser = message.role === 'user'
   const { text, emotions } = isUser
     ? splitEmotionTag(message.content)
@@ -43,7 +60,7 @@ export default function MessageBubble({
 
   return (
     <div
-      ref={(node) => registerNode(message.id, node)}
+      ref={setNode}
       className={`flex max-w-[75%] animate-message-in gap-2 max-[900px]:max-w-[90%] ${
         isUser ? 'flex-row-reverse self-end' : 'self-start'
       }`}
@@ -87,3 +104,5 @@ export default function MessageBubble({
     </div>
   )
 }
+
+export default memo(MessageBubble)

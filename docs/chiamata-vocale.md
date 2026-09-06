@@ -51,8 +51,8 @@ che il POST fa, in [routers/voice.py](../backend/routers/voice.py):
 
 1. verifica che le chiavi dei fornitori ci siano, altrimenti 503;
 2. controlla che l'avatar sia visibile a chi chiama;
-3. riusa la conversazione indicata o ne apre una nuova, con un titolo
-   progressivo per categoria;
+3. riusa la conversazione indicata o ne apre una nuova, intitolata con
+   l'avatar e il giorno ("Mario Rossi, 6 mar 2026");
 4. rifiuta di continuare una conversazione **di canale sbagliato** (una chat
    scritta non si prosegue al telefono) o **già chiusa** (una chiamata
    riagganciata è definitiva);
@@ -232,8 +232,8 @@ l'operatore ha effettivamente sentito) e poi `interrupt`.
 1. si apre un **contesto di sintesi** nuovo, identificato da un id;
 2. i token di OpenAI arrivano in streaming: ognuno va al browser come testo
    (`assistant_delta`) e finisce in un buffer;
-3. il buffer viene mandato alla TTS **sui confini di parola**, così la sintesi
-   non deve indovinare la pronuncia di mezzo token;
+3. il buffer viene mandato alla TTS **a pezzi interi**, mai un token alla
+   volta: vedi [Perché il testo non parte parola per parola](#perché-il-testo-non-parte-parola-per-parola);
 4. l'audio torna taggato col contesto: quello di un contesto diverso, cioè di
    un turno annullato, viene buttato;
 5. alla fine si chiude il contesto, il che manda in sintesi anche il testo
@@ -247,6 +247,39 @@ Le scritture a database sono **fire and forget** su un thread: la trascrizione
 non deve mai fermare l'audio. I task vengono tenuti in un insieme finché non
 finiscono, perché l'event loop li tiene solo con riferimenti deboli e un task
 non referenziato può essere raccolto a metà, perdendo la scrittura in silenzio.
+
+### Perché il testo non parte parola per parola
+
+Il taglio cade su un confine di parola, così la sintesi non deve indovinare la
+pronuncia di mezzo token, ma solo quando davanti c'è almeno una manciata di
+parole (`_TTS_MIN_CHUNK_CHARS`). La regola sta in `_tts_chunk`.
+
+Il motivo è come `auto_mode` tratta quello che riceve: sintetizza ogni
+messaggio appena arriva, e un messaggio di poche lettere lo prende per una
+frase intera, con il respiro prima e il respiro dopo. Mandando una parola per
+volta l'avatar non parlava, scandiva. Misurato su tre battute italiane,
+mandate al ritmo con cui il modello emette i token, coi secondi di audio
+prodotti per la stessa frase:
+
+| come viene mandata | battuta A | battuta B | battuta C |
+| --- | --- | --- | --- |
+| parola per parola | 15.1s | | |
+| >= 20 caratteri | 9.4s | 8.8s | 11.3s |
+| >= 30 caratteri | 9.0s | 8.9s | 9.9s |
+| **>= 40 caratteri** | **9.0s** | **8.9s** | **8.8s** |
+| >= 50 caratteri | 9.3s | | 10.1s |
+| battuta intera in un invio | 8.7s | | 8.8s |
+
+Quaranta è dove tutte e tre stanno sul parlato naturale, e oltre non si
+guadagna più niente. Il numero non si sceglie su una frase sola: la battuta C
+dice una data per esteso, e lì venti caratteri costavano due secondi e mezzo
+in più, perché un taglio che cade in mezzo a un numero scritto a parole si
+sente più di uno che cade fra due parole qualsiasi.
+
+Il primo suono del turno arriva sugli 340 millesimi invece che sui 260, ed è
+l'unico posto di questa pagina in cui si paga latenza di proposito: di là
+c'erano sei secondi di scansione su una battuta che ne dura nove, e non è un
+difetto che si sopporta per ottanta millesimi.
 
 ## Le misure
 
@@ -426,3 +459,4 @@ sbagliare.
 | "Tutte le linee sono occupate" | Tetto del processo raggiunto | Chiusura 1013 |
 | "Riconoscimento vocale non disponibile" | Errore fatale della STT (quota, autenticazione, limite di sessione) | Evento `error` e chiusura |
 | Il modello non risponde | Guasto su OpenAI | Battuta di ripiego, la chiamata continua |
+| L'avatar scrive ma non parla, e nei log non c'è nessun errore | La voce è di libreria e l'account sta su un piano che via API non la concede | Niente: il contesto di sintesi si apre, si chiude e non produce audio. Sul REST lo stesso account risponde 402 `paid_plan_required`, ed è da lì che si riconosce |

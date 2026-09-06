@@ -181,7 +181,7 @@ export default function DashboardContent() {
   return (
     <StaleContent isStale={isPlaceholderData}>
       <div className="mb-6 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
-        <KpiCard label="Avatar Più Duro">
+        <KpiCard label="Avatar con Media Più Bassa">
           {hardestAvatar ? (
             <>
               <Tooltip content={hardestAvatar.avatar_name} truncateOnly>
@@ -198,7 +198,7 @@ export default function DashboardContent() {
             <p className="text-2xl text-slate-500">—</p>
           )}
         </KpiCard>
-        <KpiCard label="Test Più Duro">
+        <KpiCard label="Test con Media Più Bassa">
           {hardestTest ? (
             <>
               <Tooltip content={hardestTest.simulation_title} truncateOnly>
@@ -261,32 +261,23 @@ export default function DashboardContent() {
             }
             renderRow={(a) => (
               <Tr key={a.avatar_id}>
-                <Td align="left">
+                <Td>
                   <span className="text-[0.85rem] font-medium text-slate-100">{a.avatar_name}</span>
                 </Td>
                 <Td className="text-[0.85rem] text-slate-300">{a.conversations}</Td>
                 <Td className="text-[0.85rem] text-slate-300">{a.people}</Td>
                 <Td>
                   <span className={`text-sm font-bold tabular-nums ${scoreTextColor(a.avg_score)}`}>
-                    {formatScore(a.avg_score)}/10
+                    {formatScore(a.avg_score)}
                   </span>
                 </Td>
                 <Td>
                   {a.weakest_criterion_key ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Tooltip content={criterionLabel(a.weakest_criterion_key)} truncateOnly>
-                        <span className="truncate text-[0.82rem] text-slate-300">
-                          {criterionLabel(a.weakest_criterion_key)}
-                        </span>
-                      </Tooltip>
-                      <span
-                        className={`shrink-0 text-[0.82rem] font-semibold tabular-nums ${scoreTextColor(
-                          a.weakest_criterion_avg ?? 0,
-                        )}`}
-                      >
-                        {formatScore(a.weakest_criterion_avg ?? 0)}
+                    <Tooltip content={criterionLabel(a.weakest_criterion_key)} truncateOnly>
+                      <span className="block truncate text-[0.82rem] text-slate-300">
+                        {criterionLabel(a.weakest_criterion_key)}
                       </span>
-                    </span>
+                    </Tooltip>
                   ) : (
                     <span className="text-slate-600">—</span>
                   )}
@@ -339,7 +330,7 @@ export default function DashboardContent() {
                     <span
                       className={`text-sm font-bold tabular-nums ${scoreTextColor(s.avg_score)}`}
                     >
-                      {formatScore(s.avg_score)}/10
+                      {formatScore(s.avg_score)}
                     </span>
                   </Td>
                   <Td>

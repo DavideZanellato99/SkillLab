@@ -10,6 +10,15 @@ vi.mock('../../src/hooks/useAuth', () => ({
 
 import AuthModal from '../../src/components/AuthModal'
 
+/* Le righe dell'elenco dei requisiti si distinguono dal pallino: pieno quando
+ * il requisito è soddisfatto, vuoto quando manca ancora. */
+const ACCESO = '●'
+const SPENTO = '○'
+
+function requisito(label: string) {
+  return screen.getAllByRole('listitem').find((riga) => riga.textContent?.includes(label))
+}
+
 async function compilaEAccedi(email: string, password: string) {
   await userEvent.type(screen.getByLabelText('Email'), email)
   await userEvent.type(screen.getByLabelText('Password'), password)
@@ -77,9 +86,16 @@ describe('AuthModal', () => {
 
     await userEvent.type(screen.getByLabelText('Nuova Password'), 'Password-Lunga1!')
     await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'Password-Lunga2!')
-    await userEvent.click(screen.getByRole('button', { name: 'Imposta Password' }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Le password non coincidono.')
+    /* La coincidenza fra i due campi è una riga dell'elenco come le altre, e
+     * finché quella riga è spenta il bottone resta chiuso: premerlo non
+     * manda niente al backend. */
+    expect(requisito('Le due password coincidono')).toHaveTextContent(SPENTO)
+    const invia = screen.getByRole('button', { name: 'Imposta Password' })
+    expect(invia).toBeDisabled()
+
+    await userEvent.click(invia)
+
     expect(completeNewPassword).not.toHaveBeenCalled()
   })
 
@@ -91,9 +107,17 @@ describe('AuthModal', () => {
 
     await userEvent.type(screen.getByLabelText('Nuova Password'), 'tuttaminuscola')
     await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'tuttaminuscola')
-    await userEvent.click(screen.getByRole('button', { name: 'Imposta Password' }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent('una lettera maiuscola')
+    /* Cosa manca lo dice l'elenco, riga per riga, mentre resta acceso quello
+     * che la password già rispetta. */
+    expect(requisito('Una lettera maiuscola')).toHaveTextContent(SPENTO)
+    expect(requisito('Un numero')).toHaveTextContent(SPENTO)
+    expect(requisito('Una lettera minuscola')).toHaveTextContent(ACCESO)
+    const invia = screen.getByRole('button', { name: 'Imposta Password' })
+    expect(invia).toBeDisabled()
+
+    await userEvent.click(invia)
+
     expect(completeNewPassword).not.toHaveBeenCalled()
   })
 })

@@ -13,6 +13,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const useMyProgress = vi.hoisted(() => vi.fn())
 vi.mock('../../src/hooks/useDashboards', () => ({ useMyProgress }))
 
+/* Chi guarda è sempre chi ha svolto le prove: il nome finisce
+   nell'intestazione della schermata che si apre da una riga. */
+vi.mock('../../src/hooks/useAuth', () => ({
+  useAuth: () => ({ user: { nome: 'Dana', cognome: 'Rossi', email: 'dana@esempio.it' } }),
+}))
+
+/* Le due schermate di dettaglio si provano dove vivono: qui interessa solo
+   che la riga apra quella giusta, sulla prova giusta e da lettori. */
+vi.mock('../../src/components/ConversationDetailModal', () => ({
+  default: ({ row, scope }: { row: { conversation_id: string }; scope?: string }) => (
+    <p data-testid="dettaglio-conversazione">{`${row.conversation_id} ${scope}`}</p>
+  ),
+}))
+vi.mock('../../src/components/SimulationAttemptModal', () => ({
+  default: ({ attemptId, own }: { attemptId: string; own?: boolean }) => (
+    <p data-testid="dettaglio-tentativo">{`${attemptId} ${own}`}</p>
+  ),
+}))
+
 import ProgressPage from '../../src/components/ProgressPage'
 import type { MyProgress } from '../../src/services/dashboards'
 
@@ -117,6 +136,27 @@ describe('le proprie prove', () => {
     renderProgress()
 
     expect(screen.queryByText(/Confronto tra Utenti/)).not.toBeInTheDocument()
+  })
+})
+
+/* Visto il criterio su cui si perdono punti, la prova in cui è successo è la
+ * riga lì sotto: da qui si rileggeva solo il voto. */
+describe('rileggere una prova', () => {
+  it('apre la conversazione dalla sua riga, da chi l’ha tenuta', async () => {
+    renderProgress()
+
+    await userEvent.click(screen.getByText('Reclamo carta'))
+
+    expect(screen.getByTestId('dettaglio-conversazione')).toHaveTextContent('c-1 own')
+  })
+
+  it('apre il test consegnato dalla sua riga, da chi l’ha svolto', async () => {
+    renderProgress()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Test tecnici/ }))
+    await userEvent.click(screen.getByText('Procedure di cassa'))
+
+    expect(screen.getByTestId('dettaglio-tentativo')).toHaveTextContent('t-1 true')
   })
 })
 

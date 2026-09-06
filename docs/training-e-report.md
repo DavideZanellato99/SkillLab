@@ -1524,6 +1524,23 @@ Il voto è quello finale, correzione del docente compresa: è quello che la
 persona si è vista dare, e una curva disegnata sul numero della macchina
 contraddirebbe la pagella che ha in mano.
 
+**Le righe delle due tabelle si aprono**, ed è il seguito della domanda che la
+pagina pone: visto il criterio su cui si perdono più punti, la prova in cui è
+successo è la riga lì sotto, e prima da qui si leggeva solo il voto. Si aprono
+nelle stesse due schermate in cui una prova si rilegge dappertutto,
+[ConversationDetailModal](../frontend/src/components/ConversationDetailModal.tsx)
+con `scope="own"` e
+[SimulationAttemptModal](../frontend/src/components/SimulationAttemptModal.tsx)
+con `own`: la trascrizione con la valutazione, le note del docente e la
+registrazione per una conversazione, le domande con le risposte date per un
+test. Lo dichiarano con `onActivate`, quindi si aprono col mouse e col fuoco da
+tastiera come ogni altra riga che apre qualcosa.
+
+Sono **in sola lettura**: questa non è una schermata di amministrazione, quindi
+nessuna delle due riceve `onDeleted`, e la revisione del docente si legge senza
+il pannello con cui la si scrive. È lo stesso assetto della propria chat e del
+proprio elenco di tentativi, e cambia soltanto da dove si è arrivati.
+
 La pagina del confronto risponde a un'altra domanda ancora, due tentativi
 sullo stesso scenario messi uno accanto all'altro: qui c'è l'andamento, là il
 faccia a faccia.

@@ -218,60 +218,54 @@ describe('i propri dati', () => {
 })
 
 describe('cambio password', () => {
-  /* Il riscontro arriva quando si è finito di scrivere la conferma, non dopo
-   * aver premuto: chi si accorge lì dello sbaglio corregge un campo invece di
-   * ricompilare un modulo respinto. */
-  it('avvisa che le due password non coincidono senza aspettare il pulsante', async () => {
-    renderPage()
-
-    await userEvent.type(screen.getByLabelText('Nuova Password'), 'Nuova-Lunga1!')
-    await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'Nuova-Lunga2!')
-    await userEvent.tab()
-
-    expect(await screen.findByText('Le nuove password non coincidono.')).toBeInTheDocument()
-    expect(passwordMutation.mutateAsync).not.toHaveBeenCalled()
-  })
-
-  it("toglie l'avviso appena le due password coincidono", async () => {
+  /* La coincidenza fra i due campi è un requisito come gli altri, e sta
+   * nello stesso elenco: chi sceglie la password legge in un posto solo cosa
+   * manca, invece di un errore sotto un campo e le regole da un'altra parte. */
+  it('conta la coincidenza fra i due campi tra i requisiti', async () => {
     renderPage()
 
     await userEvent.type(screen.getByLabelText('Nuova Password'), 'Nuova-Lunga1!')
     const conferma = screen.getByLabelText('Conferma Nuova Password')
     await userEvent.type(conferma, 'Nuova-Lunga2!')
-    await userEvent.tab()
-    expect(await screen.findByText('Le nuove password non coincidono.')).toBeInTheDocument()
+
+    const requisito = screen.getByText('Le due password coincidono')
+    expect(requisito.className).not.toContain('emerald')
 
     await userEvent.clear(conferma)
     await userEvent.type(conferma, 'Nuova-Lunga1!')
 
-    expect(screen.queryByText('Le nuove password non coincidono.')).not.toBeInTheDocument()
+    expect(screen.getByText('Le due password coincidono').className).toContain('emerald')
   })
 
-  it('rifiuta due password che non coincidono', async () => {
+  /* Il pulsante spento dice quello che dicono i requisiti ancora grigi: non
+   * c'è niente da mandare finché non sono tutti verdi, quindi non si arriva
+   * a un modulo respinto. */
+  it('tiene spento il pulsante finché le due password non coincidono', async () => {
     renderPage()
 
     await userEvent.type(screen.getByLabelText('Password Attuale'), 'Vecchia-1!')
     await userEvent.type(screen.getByLabelText('Nuova Password'), 'Nuova-Lunga1!')
-    await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'Nuova-Lunga2!')
-    await userEvent.click(aggiorna())
+    const conferma = screen.getByLabelText('Conferma Nuova Password')
+    await userEvent.type(conferma, 'Nuova-Lunga2!')
 
-    expect(await screen.findByText('Le nuove password non coincidono.')).toBeInTheDocument()
-    expect(passwordMutation.mutateAsync).not.toHaveBeenCalled()
+    expect(aggiorna()).toBeDisabled()
+
+    await userEvent.clear(conferma)
+    await userEvent.type(conferma, 'Nuova-Lunga1!')
+
+    expect(aggiorna()).toBeEnabled()
   })
 
-  /* I requisiti si controllano qui prima di mandarla: sono gli stessi che
-   * applica Cognito, e farli dire al server vorrebbe dire un giro di rete
-   * per sapere che manca una maiuscola. */
-  it('elenca i requisiti che la nuova password non rispetta', async () => {
+  /* I requisiti sono gli stessi che applica Cognito: farli dire al server
+   * vorrebbe dire un giro di rete per sapere che manca una maiuscola. */
+  it('tiene spento il pulsante finché la password non rispetta i requisiti', async () => {
     renderPage()
 
     await userEvent.type(screen.getByLabelText('Password Attuale'), 'Vecchia-1!')
     await userEvent.type(screen.getByLabelText('Nuova Password'), 'breve')
     await userEvent.type(screen.getByLabelText('Conferma Nuova Password'), 'breve')
-    await userEvent.click(aggiorna())
 
-    expect(await screen.findByText(/non soddisfa i requisiti/)).toBeInTheDocument()
-    expect(passwordMutation.mutateAsync).not.toHaveBeenCalled()
+    expect(aggiorna()).toBeDisabled()
   })
 
   it('cambia la password e svuota i campi', async () => {
@@ -347,7 +341,7 @@ describe('copia dei propri dati', () => {
   it("scarica l'archivio con la data di oggi nel nome", async () => {
     renderPage()
 
-    await userEvent.click(screen.getByRole('button', { name: /Scarica i Miei Dati/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Scarica i miei Dati/ }))
 
     await waitFor(() => expect(saveBlob).toHaveBeenCalled())
     const [, nomeFile] = saveBlob.mock.calls[0]
@@ -362,7 +356,7 @@ describe('copia dei propri dati', () => {
     fetchMyDataExport.mockReturnValue(new Promise(() => {}))
     renderPage()
 
-    await userEvent.click(screen.getByRole('button', { name: /Scarica i Miei Dati/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Scarica i miei Dati/ }))
 
     expect(await screen.findByText(/L'archivio si sta preparando/)).toBeInTheDocument()
   })
@@ -371,10 +365,10 @@ describe('copia dei propri dati', () => {
     fetchMyDataExport.mockRejectedValue(new Error('Archivio non disponibile.'))
     renderPage()
 
-    await userEvent.click(screen.getByRole('button', { name: /Scarica i Miei Dati/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Scarica i miei Dati/ }))
 
     expect(await screen.findByText('Archivio non disponibile.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Scarica i Miei Dati/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Scarica i miei Dati/ })).toBeEnabled()
     expect(saveBlob).not.toHaveBeenCalled()
   })
 })

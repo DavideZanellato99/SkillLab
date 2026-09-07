@@ -1,5 +1,11 @@
 FROM python:3.12-slim
 
+# Lega il pacchetto pubblicato su GHCR a questo repository. Senza questa
+# etichetta il registry non sa da dove viene l'immagine: la pagina del
+# pacchetto non punta a nessun sorgente, e i permessi non li eredita dal
+# repository che l'ha costruita.
+LABEL org.opencontainers.image.source=https://github.com/DavideZanellato99/SkillLab
+
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

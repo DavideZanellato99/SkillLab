@@ -90,7 +90,7 @@ export default function PathDebriefingModal({
         icon={<SparkleIcon size={24} stroke="#a78bfa" />}
         iconWrapperCls="border border-violet-500/30 bg-violet-500/10"
         title="Quadro d'Insieme"
-        description={`Dove «${path.title}» si inceppa, e cosa si ripete fra le persone che lo stanno percorrendo. Parla del gruppo e delle tappe: chi è fermo dove sta nell'elenco degli assegnati.`}
+        description={`Le difficoltà che si ripetono fra le persone che stanno percorrendo «${path.title}» e le tappe in cui l'avanzamento del percorso si arresta.`}
       />
 
       {loadError && <FormError message={loadError} />}
@@ -142,8 +142,7 @@ export default function PathDebriefingModal({
 
           {tooFewPeople && (
             <p className="py-4 text-center text-[0.85rem] italic text-slate-500">
-              Servono almeno {MIN_PEOPLE} persone in percorso per un quadro d'insieme. Con meno il
-              quadro del gruppo sarebbe la somma dei quadri individuali, che dicono di più
+              Servono almeno {MIN_PEOPLE} persone in percorso per un quadro d'insieme
             </p>
           )}
 

@@ -473,6 +473,42 @@ Utente e nome del database contano solo alla primissima creazione del volume:
 cambiarli dopo non li cambia dentro Postgres, li spezza e basta. Sceglili
 adesso e mettili nel gestore di password insieme al resto.
 
+### 7.3 L'accesso al registry
+
+Il server non costruisce le immagini, le scarica: le costruisce la CI e le
+pubblica su GHCR con lo SHA del commit come tag, ma solo dopo che hanno
+passato lo smoke test ([ci-cd.md](ci-cd.md)). I pacchetti nascono privati,
+quindi questa macchina ha bisogno di credenziali per leggerli, e di quelle
+soltanto.
+
+Sul tuo computer, non sul server: **GitHub → Settings → Developer settings →
+Personal access tokens → Tokens (classic) → Generate new token**, con l'unico
+permesso `read:packages` e una scadenza scritta in calendario. Un token
+classico e non fine-grained perché a oggi è quello che GHCR accetta per
+leggere i pacchetti.
+
+Poi, sul server:
+
+```bash
+echo 'IL_TOKEN' | docker login ghcr.io -u TUO-UTENTE --password-stdin
+```
+
+Si fa una volta sola: la credenziale resta in `~/.docker/config.json`
+dell'utente che rilascia, che è lo stesso con cui entra GitHub Actions. Un
+token in sola lettura, che è la ragione per cui questo passo non indebolisce
+niente: da qui non si pubblica, si scarica soltanto.
+
+La prova che è andata:
+
+```bash
+docker pull ghcr.io/davidezanellato99/skilllab-backend:$(git -C ~/SkillLab rev-parse HEAD)
+```
+
+Se risponde `denied` o `unauthorized`, il token non ha `read:packages` o
+l'utente è sbagliato. Se risponde `manifest unknown`, il login funziona e
+manca invece l'immagine: vuol dire che per quel commit la CI non è mai passata,
+quindi la cosa da guardare è la tab Actions.
+
 ---
 
 ## 8. Il primo avvio
@@ -494,7 +530,7 @@ fa adesso una volta sola e non ci si torna più.
 Poi l'avvio:
 
 ```bash
-docker compose -f docker-compose.yml up -d --build
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml up -d --no-build
 ```
 
 **Il `-f` esplicito non è un vezzo.** Accanto al compose c'è un file di
@@ -503,9 +539,11 @@ un ambiente di sviluppo: una replica sola, il database affacciato su internet,
 niente Caddy. Senza quel `-f` staresti avviando lo sviluppo credendo di avviare
 la produzione ([docker-e-ambienti.md](docker-e-ambienti.md)).
 
-La prima costruzione impiega diversi minuti, perché compila il frontend e
-installa le dipendenze Python. Le volte successive quasi tutto arriva dalla
-cache.
+Il primo avvio scarica le immagini dal registry, quindi impiega quanto ci mette
+la rete del server e non quanto ci metterebbe a compilare il frontend e a
+installare le dipendenze Python: quel lavoro l'ha già fatto la CI una volta
+sola. Il `--no-build` è lì apposta, perché senza, un tag che non si riesce a
+scaricare diventerebbe in silenzio una costruzione fatta qui sul momento.
 
 Se manca qualcosa nel `.env`, si ferma subito e lo dice. Aggiungi e rilancia:
 è il ciclo previsto dal passo 7.2, non un intoppo.

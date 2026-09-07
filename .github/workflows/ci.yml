@@ -119,6 +119,24 @@ jobs:
   docker-smoke:
     name: Docker build & compose smoke test
     runs-on: ubuntu-latest
+    permissions:
+      # Le immagini che passano i controlli qui sotto vengono pubblicate su
+      # GHCR, e questo è il permesso che serve al GITHUB_TOKEN per farlo. Il
+      # resto del workflow non ne ha bisogno, quindi sta su questo job e non
+      # in cima al file.
+      contents: read
+      packages: write
+    env:
+      # Il tag con cui le immagini nascono qui, e con cui vengono pubblicate
+      # se tutti i controlli passano: lo SHA del commit.
+      #
+      # È il perno di tutto il rilascio. Un tag immutabile vuol dire che
+      # quello che il server scarica sono esattamente i byte che hanno passato
+      # questo job, non una ricostruzione fatta più tardi da un'altra
+      # macchina; e vuol dire che la versione precedente esiste ancora, sotto
+      # il suo SHA, quindi tornare indietro è un pull invece di una
+      # ricostruzione (vedi deploy/deploy.sh).
+      IMAGE_TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - name: Write the .env files the stack needs
@@ -232,6 +250,25 @@ jobs:
             fi
           done
           echo "solo il frontend è affacciato"
+      - name: Entra nel registry
+        # Solo sui push ai due rami, non sulle pull request: una PR non si
+        # rilascia, quindi la sua immagine non serve a nessuno e occuperebbe
+        # spazio nel registry per sempre. Il token è quello del workflow, che
+        # con packages:write qui sopra basta a pubblicare senza nessun
+        # segreto da custodire.
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pubblica le immagini che hanno appena passato i controlli
+        # Sono le stesse che l'up qui sopra ha costruito e interrogato, non
+        # una ricostruzione: è tutto il senso della cosa. I servizi si
+        # nominano perché backend-init condivide l'immagine del backend, e
+        # senza nomi la stessa immagine verrebbe spinta due volte.
+        if: github.event_name == 'push'
+        run: docker compose -f docker-compose.yml push backend frontend db-backup
       - name: Dump logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml logs

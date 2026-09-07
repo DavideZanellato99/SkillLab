@@ -24,52 +24,68 @@ installazione.
    un default e dimenticandola il sito parte su `localhost` mentre dal dominio
    vero non risponde niente, e `VOICE_STT_DEBUG` e `DEV_ADMIN_LOGIN`, che vanno
    spente (vedi più sotto).
-4. Poi:
+4. L'accesso al registry, una volta sola: le immagini stanno su GHCR e il
+   server le scarica, non le costruisce ([messa-in-produzione.md](messa-in-produzione.md)).
+5. Poi:
 
 ```bash
-docker compose -f docker-compose.yml up -d --build
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml up -d --no-build
 ```
 
 Il `-f` esplicito esclude l'override di sviluppo, che Compose caricherebbe da
 solo. Vedi [docker-e-ambienti.md](docker-e-ambienti.md).
 
+`IMAGE_TAG` è il commit da mettere in piedi, e sul server coincide sempre con
+quello del repository, perché è il rilascio a tenerli allineati. Il `--no-build`
+è la guardia che rende onesto il resto: senza, un tag che nel registry non
+esiste diventerebbe silenziosamente una costruzione fatta lì sul momento, cioè
+un'immagine che nessuno ha mai provato.
+
 ## Gli aggiornamenti
 
 **Si rilascia mergiando `stage` in `main`**, e non entrando nel server: alla CI
 verde su `main` il workflow Deploy entra da solo e fa girare
-[deploy/deploy.sh](../deploy/deploy.sh), che è esattamente questo:
+[deploy/deploy.sh](../deploy/deploy.sh), che fa tre cose in fila:
 
-```bash
-git merge --ff-only origin/main
-docker compose -f docker-compose.yml up -d --build
-```
+1. porta il repository a `origin/main` in fast forward, perché il compose, il
+   Caddyfile e lo script dei backup non stanno dentro le immagini;
+2. scarica dal registry le tre immagini taggate con quel commit e le mette in
+   piedi, **senza costruire niente**;
+3. aspetta che lo stack torni sano, e se non torna sano rimette quello di
+   prima.
 
-Come è fatto il rilascio e perché non chiede conferma sta in
-[ci-cd.md](ci-cd.md). Gli stessi due comandi restano validi a mano sul server,
-che è la strada da prendere quando GitHub non è raggiungibile o quando si sta
-tornando indietro a un commit preciso:
+Le immagini le ha costruite la CI, una volta sola, e le ha pubblicate solo dopo
+che avevano passato lo smoke test: in produzione va quell'artefatto lì, non una
+ricostruzione ([ci-cd.md](ci-cd.md)). Lo stesso script si lancia a mano sul
+server, che è la strada da prendere quando GitHub non è raggiungibile:
 
 ```bash
 cd ~/SkillLab
 sh deploy/deploy.sh
 ```
 
-**Tornare indietro** è la stessa cosa fatta al contrario, e si fa sul server
-perché è l'unico posto dove le immagini esistono:
+**Tornare indietro succede da solo** quando un rilascio non diventa sano entro
+cinque minuti: commit e immagini tornano quelli di prima, e il job resta rosso
+perché il sito in piedi non rende buona la versione che l'aveva rotto. Il
+ritorno costa un pull e non una ricostruzione, ed è tutta la differenza che
+porta il registry.
+
+**A mano** si fa quando il guasto si scopre dopo, cioè quando il rilascio era
+sano ma la versione è sbagliata:
 
 ```bash
 cd ~/SkillLab
 git checkout <commit-buono>
-docker compose -f docker-compose.yml up -d --build
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml up -d --no-build
 ```
 
-Costa una ricostruzione, quindi qualche minuto. Da lì i rilasci automatici si
-fermano con un errore invece di riportare su la versione da cui sei scappato,
-ed è voluto: si riparte con `git checkout main` quando in `main` c'è la
-correzione. Attenzione a una cosa sola, che è la stessa di sempre: lo schema del
-database si aggiorna in avanti e non torna indietro, quindi il commit a cui si
-torna dev'essere uno che quello schema lo sa reggere
-([dati-e-schema.md](dati-e-schema.md)).
+Il commit deve essere uno che è passato dalla CI, o le sue immagini nel
+registry non esistono. Da lì i rilasci automatici riprendono al primo merge in
+`main`, quindi la correzione va fatta lì e non sul server: finché `main` ha la
+versione rotta, il rilascio successivo la riproverà. Attenzione a una cosa
+sola, che è la stessa di sempre: lo schema del database si aggiorna in avanti e
+non torna indietro, quindi il commit a cui si torna dev'essere uno che quello
+schema lo sa reggere ([dati-e-schema.md](dati-e-schema.md)).
 
 **Non c'è nessun passo di migrazione da ricordare**: lo schema si aggiorna da
 solo all'avvio, dietro un advisory lock, e ogni passo è idempotente
@@ -108,7 +124,7 @@ quando finiscono i core o la banda.
 Cambiare il numero di repliche non richiede di toccare nessun file:
 
 ```bash
-docker compose -f docker-compose.yml up -d --scale backend=6
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml up -d --no-build --scale backend=6
 ```
 
 Funziona perché tre cose sono già state risolte:

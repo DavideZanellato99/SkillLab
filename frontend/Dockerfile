@@ -41,6 +41,9 @@ RUN npm run build
 # listens on 8080 out of the box, so no root and no cap_net_bind needed.
 FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
 
+# Vedi backend/Dockerfile: lega il pacchetto su GHCR a questo repository.
+LABEL org.opencontainers.image.source=https://github.com/DavideZanellato99/SkillLab
+
 # Patch OS packages whose fixes are newer than the base image snapshot
 # (curl, openssl, libxml2, ... CVEs). apk needs root, so switch up and drop
 # back to the unprivileged user afterwards.

@@ -74,7 +74,7 @@ riferimento annulla la corsa in volo.
 | `backend-tests` | `pytest --cov` contro un **Postgres vero** avviato come service container |
 | `frontend` | `prettier --check`, `oxlint`, build (che fa anche il type check), `vitest` con soglia di copertura |
 | `secrets` | gitleaks su **tutta la storia**, non solo sulla punta |
-| `docker-smoke` | Costruisce e avvia lo stack di produzione, e lo interroga |
+| `docker-smoke` | Costruisce e avvia lo stack di produzione, lo interroga, e se tutto passa **pubblica quelle stesse immagini** su GHCR con lo SHA del commit come tag |
 | `infra-lint` | hadolint sui due Dockerfile, actionlint sui workflow, shellcheck sugli script |
 | `ci-success` | Verde solo se tutti i precedenti lo sono. È il check unico da richiedere nelle impostazioni del branch |
 
@@ -115,6 +115,18 @@ davvero l'API è il rifiuto di chi non ha i cookie.
 
 I file `.env` che lo stack pretende li scrive
 [.github/scripts/write-ci-env.sh](../.github/scripts/write-ci-env.sh).
+
+**Se tutte le verifiche passano, questo job pubblica le immagini che ha appena
+interrogato**, su GHCR e con lo SHA del commit come tag. Sta qui e non in un
+job a parte proprio per questo: pubblicare da un altro job vorrebbe dire
+pubblicare una ricostruzione, cioè un'immagine gemella di quella provata, e
+tutto il senso della cosa è che siano gli stessi byte. La pubblicazione è
+legata al superamento dei controlli e non al fatto di aver costruito, quindi
+un'immagine rotta nel registry non ci arriva.
+
+Non succede sulle pull request, dove il push è saltato: una PR non si
+rilascia, quindi la sua immagine non servirebbe a nessuno e resterebbe nel
+registry per sempre.
 
 ## Il workflow Security
 
@@ -166,11 +178,21 @@ autenticata.
 ## Il rilascio in produzione
 
 [.github/workflows/deploy.yml](../.github/workflows/deploy.yml). Entra nel
-server in SSH e gli fa eseguire [deploy/deploy.sh](../deploy/deploy.sh), che è
-lo stesso `git merge` più `docker compose up -d --build` del rilascio a mano
+server in SSH e gli fa eseguire [deploy/deploy.sh](../deploy/deploy.sh), che
+aggiorna il repository e mette in piedi le immagini già pubblicate
 ([deploy-e-scalabilita.md](deploy-e-scalabilita.md)). La prima installazione,
 compresa la preparazione della chiave, sta in
 [messa-in-produzione.md](messa-in-produzione.md).
+
+**Sul server non si costruisce niente**, ed è la regola da cui discende il
+resto del rilascio: si costruisce una volta sola, in CI, e quello che va in
+produzione è quell'artefatto lì. Il tag è lo SHA del commit, quindi indica per
+sempre gli stessi byte, e il server li scarica invece di rifarli. Vuol dire tre
+cose concrete: quello che gira è esattamente ciò che ha passato lo smoke test e
+non una ricostruzione fatta dieci minuti dopo con un'altra cache; il rilascio
+non ha più bisogno che npm e PyPI siano raggiungibili dalla macchina di
+produzione; e la versione precedente esiste ancora, sotto il suo SHA, che è la
+condizione senza la quale tornare indietro non può essere automatico.
 
 **Il trigger è la CI verde su `main`, non il push su `main`.** Fra le due cose
 passano i dieci minuti della corsa, e in quei dieci minuti sta la differenza fra
@@ -199,19 +221,32 @@ Tre dettagli valgono la riga che occupano:
 rimettere su lo stack senza un commit nuovo, per esempio dopo aver cambiato un
 `.env` sul server.
 
-**Quello che il rilascio non fa è tornare indietro.** Le immagini si
-costruiscono sul server e non sono conservate da nessuna parte, quindi il
-ritorno alla versione precedente si fa a mano e costa una ricostruzione
-([deploy-e-scalabilita.md](deploy-e-scalabilita.md)). Il giorno in cui quei
-minuti fossero troppi, la risposta è costruire le immagini in CI e pubblicarle
-su un registry, con il server che si limita a scaricarle: è un cambio che si fa
-quando serve, non prima.
+**Il rilascio torna indietro da solo.** Dopo l'avvio, lo script aspetta fino a
+cinque minuti che i quattro servizi che servono il traffico siano in piedi, e
+che quelli con un healthcheck si dichiarino sani. Se non succede, rimette il
+commit e le immagini di prima e finisce rosso lo stesso: il ritorno indietro
+riuscito rimette il sito in piedi, non rende buono il rilascio.
 
-Finché il server sta su un commit scelto a mano, i rilasci automatici
-**falliscono invece di sovrascriverlo**, perché lo script avanza solo in fast
-forward da `main`. È il comportamento voluto, non un intoppo: un rilascio che
-riportasse su la versione da cui sei appena scappato sarebbe molto peggio di un
-job rosso. Si torna in carreggiata con un `git checkout main` sul server, dopo
+L'attesa è dentro lo script e non solo nel workflow perché `docker compose up`
+torna appena i container sono stati creati, non quando funzionano: senza
+quell'attesa il rilascio risulterebbe riuscito anche con le repliche in ciclo
+di riavvio, e a saperlo per primo sarebbe il controllo dal dominio, cioè
+un'altra macchina che non può farci niente.
+
+Il ritorno indietro costa un pull perché le immagini precedenti sono nel
+registry, e questa è tutta la differenza rispetto a prima, quando le immagini
+nascevano sul server e tornare indietro voleva dire una ricostruzione a mano.
+Cosa aspettarsi dopo, e perché il commit torna indietro insieme alle immagini,
+sta in [deploy-e-scalabilita.md](deploy-e-scalabilita.md).
+
+Un caso resta scoperto di proposito: il primo rilascio dopo il passaggio al
+registry non ha una versione a cui tornare, perché per il commit precedente
+nessuna immagine è mai stata pubblicata. Lo script lo dice e si ferma, invece
+di far finta.
+
+Se il server sta su un commit che non è antenato di `main`, il rilascio
+**fallisce invece di sovrascriverlo**, perché lo script avanza solo in fast
+forward. Si torna in carreggiata con un `git checkout main` sul server, dopo
 aver corretto in `main` quello che non andava.
 
 ## I test
@@ -296,6 +331,7 @@ vanno rifatti a mano.
 | **`DEPLOY_USER`, `DEPLOY_HOST`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`** | Settings, Environments, `production` | L'utente, l'indirizzo, la chiave privata del runner e l'impronta del server. Come si ottengono sta in [messa-in-produzione.md](messa-in-produzione.md) |
 | **Variabile `SITE_ADDRESS`** | Settings, Secrets and variables, Actions, Variables | Il dominio su cui il rilascio verifica di aver funzionato. È una variabile e non un segreto perché è pubblico, e mascherato renderebbe illeggibili proprio i log da guardare |
 | **Il workflow Deploy si legge dal ramo di default** | Nessuna impostazione, è il comportamento del servizio | Come per `dependabot.yml`: finché una modifica a `deploy.yml` sta solo su `stage`, il rilascio continua a comportarsi come prima |
+| **I tre pacchetti su GHCR** | Nessuna impostazione se restano privati | Nascono privati alla prima pubblicazione, quindi il server ha bisogno di un `docker login ghcr.io` con un token in sola lettura ([messa-in-produzione.md](messa-in-produzione.md)). L'etichetta `org.opencontainers.image.source` nei tre Dockerfile è ciò che li lega a questo repository |
 
 Il ruleset ha **il bypass sul ruolo di amministratore**, ed è una scelta, non
 una dimenticanza: la regola esiste perché il merge automatico abbia un check da
@@ -316,10 +352,19 @@ a comportarsi come prima, e sembra che la modifica non abbia funzionato.
 
 ## Cosa non c'è
 
-**Non c'è un registry.** Le immagini si costruiscono sul server a ogni
-rilascio, e in CI solo per verifica: nessuna delle due viene pubblicata da
-qualche parte. È il motivo per cui il ritorno alla versione precedente costa
-una ricostruzione, ed è il punto in cui questa scelta andrà rivista.
-
 **Non c'è branch protection** che imponga una PR verso `main`: la garanzia è
 procedurale, si mergia solo a `stage` verde.
+
+**Non c'è una pulizia del registry.** Ogni push ai due rami lascia tre
+immagini nuove taggate con lo SHA, e nessuno le toglie: crescono per sempre.
+Sul server invece le vecchie se ne vanno da sole dopo una settimana
+([deploy/deploy.sh](../deploy/deploy.sh)), quindi il disco che si riempie non
+è quello di produzione. Il giorno in cui il numero desse fastidio, la risposta
+è un job che tiene le ultime N versioni di ogni pacchetto.
+
+**Non c'è un ambiente di prova che riceva le immagini** prima della
+produzione. Il `stage` del nome è un ramo, non una macchina: quello che si
+avvicina di più a una prova vera è lo smoke test, che avvia lo stack di
+produzione dentro il runner. Manca quindi il posto dove provare una migrazione
+su una copia dei dati veri, e finché non c'è quel posto quella prova si fa
+ripristinando un dump in locale.

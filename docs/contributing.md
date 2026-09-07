@@ -77,6 +77,11 @@ attivo per i test backend e per gitleaks. Se `ruff format --check` o
 `prettier --check` trovano file da sistemare, il hook li riformatta da
 solo: basta rifare `git add` e rilanciare il commit.
 
+Le due suite di test, `pytest` e `vitest`, girano in silenzio: il hook annuncia
+il controllo in corso e poi ne mostra solo l'esito, così il terminale resta
+leggibile. L'output completo, con i test falliti e il report di coverage,
+compare a schermo appena una delle due va in rosso.
+
 Per forzare un commit saltando i gate (es. un commit di lavoro usa-e-getta):
 
 ```bash

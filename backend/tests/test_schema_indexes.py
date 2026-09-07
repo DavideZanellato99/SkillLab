@@ -1,4 +1,4 @@
-"""Gli indici con cui si leggono conversazioni e messaggi.
+"""Gli indici con cui si leggono conversazioni, messaggi e quadri d'insieme.
 
 Un indice non cambia nessuna risposta, quindi nessun altro test si accorge
 se sparisce: se ne accorgono solo le pagine che diventano lente mesi dopo,
@@ -31,12 +31,17 @@ _ATTESI = {
         "ix_chat_conversations_created",
     ],
     "chat_messages": ["ix_chat_messages_conversation_created"],
+    "path_debriefings": ["ix_path_debriefings_path_created"],
 }
 
-# Quelli che i due sopra hanno sostituito, essendone il prefisso.
+# Quelli che i nuovi hanno sostituito. Sulle conversazioni e sui messaggi ne
+# erano il prefisso, quindi superflui; sui quadri d'insieme di un percorso il
+# vecchio era unico su path_id, cioè una riga per percorso, e finché resta lì
+# la seconda generazione sullo stesso percorso viene rifiutata dal database.
 _SOSTITUITI = {
     "chat_conversations": "ix_chat_conversations_user_id",
     "chat_messages": "ix_chat_messages_conversation_id",
+    "path_debriefings": "ix_path_debriefings_path_id",
 }
 
 
@@ -49,7 +54,7 @@ def _indici(tabella: str) -> set[str]:
         return {riga[0] for riga in righe}
 
 
-def test_conversazioni_e_messaggi_hanno_i_loro_indici():
+def test_le_tabelle_hanno_i_loro_indici():
     """Lo stato in cui l'applicazione si avvia, qualunque strada l'abbia portata lì."""
     prepare_schema()
 
@@ -80,6 +85,12 @@ def test_un_database_con_i_vecchi_indici_viene_aggiornato():
             text(
                 "CREATE INDEX IF NOT EXISTS ix_chat_messages_conversation_id "
                 "ON chat_messages (conversation_id)"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_path_debriefings_path_id "
+                "ON path_debriefings (path_id)"
             )
         )
 

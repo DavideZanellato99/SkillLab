@@ -24,7 +24,8 @@ docker compose up --build
 - Applicazione: <http://localhost:3000>
 - API: <http://localhost:8000>
 
-Per la produzione il comando è un altro, e il `-f` non è opzionale:
+Per provare lo stack di produzione sul proprio computer il comando è un altro,
+e il `-f` non è opzionale:
 
 ```bash
 docker compose -f docker-compose.yml up -d --build
@@ -32,6 +33,11 @@ docker compose -f docker-compose.yml up -d --build
 
 Senza, Compose legge anche `docker-compose.override.yml` e avvia l'ambiente di
 sviluppo credendo di avviare la produzione.
+
+Sul server non si costruisce niente: le immagini le costruisce la CI una volta
+sola e le pubblica su GHCR con il commit come tag, e il rilascio scarica quel
+tag e torna indietro da solo se lo stack non diventa sano
+([deploy-e-scalabilita.md](docs/deploy-e-scalabilita.md)).
 
 ## La documentazione
 

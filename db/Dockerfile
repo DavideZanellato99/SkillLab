@@ -13,6 +13,9 @@
 # repository raggiungibile ogni volta che riparte.
 FROM postgres:18-alpine
 
+# Vedi backend/Dockerfile: lega il pacchetto su GHCR a questo repository.
+LABEL org.opencontainers.image.source=https://github.com/DavideZanellato99/SkillLab
+
 # age deliberatamente non fissato a una versione: alpine toglie le vecchie
 # dal repository, e un pin qui romperebbe la build il giorno in cui succede.
 # hadolint ignore=DL3018

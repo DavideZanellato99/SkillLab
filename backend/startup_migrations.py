@@ -252,6 +252,18 @@ def _add_columns() -> None:
         # caratteri non ci sta. Allargare basta: la tabella tiene eventi che
         # scadono da soli, quindi non c'è niente da convertire.
         conn.execute(text("ALTER TABLE login_attempts ALTER COLUMN scope TYPE VARCHAR(40)"))
+        # L'impronta di chi stava percorrendo il percorso quando il quadro
+        # d'insieme è stato scritto (vedi ``PathDebriefing.covered_group``).
+        # I quadri scritti prima restano con l'impronta vuota, che non
+        # corrisponde a nessun gruppo: il primo quadro nuovo non proverà a
+        # dire come il gruppo si è mosso rispetto a loro, ed è giusto, perché
+        # di quel gruppo non sappiamo chi fosse.
+        conn.execute(
+            text(
+                "ALTER TABLE path_debriefings ADD COLUMN IF NOT EXISTS "
+                "covered_group VARCHAR(64) NOT NULL DEFAULT ''"
+            )
+        )
 
 
 def _add_authorship_columns() -> None:
@@ -895,6 +907,31 @@ def _index_conversations() -> None:
         conn.execute(text("DROP INDEX IF EXISTS ix_chat_messages_conversation_id"))
 
 
+def _index_path_debriefings() -> None:
+    """Fare spazio allo storico dei quadri d'insieme di un percorso.
+
+    La tabella nasceva con un indice unico su ``path_id``, cioè una riga per
+    percorso: rigenerare il quadro sovrascriveva quello di prima. Da qui in
+    avanti ogni generazione è una riga sua, come per i quadri di una persona
+    (vedi ``_version_debriefings``), perché "il gruppo si è mosso" è una frase
+    che si scrive solo avendo sotto mano il quadro precedente.
+
+    Su un database nuovo l'indice giusto lo fa create_all dal modello, e qui
+    non c'è niente da fare. Su uno avviato l'unico va tolto, altrimenti la
+    seconda generazione sullo stesso percorso viene rifiutata dal database.
+    Il nuovo si crea prima, così una replica interrotta a metà lascia sempre
+    un indice al posto suo.
+    """
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_path_debriefings_path_created "
+                "ON path_debriefings (path_id, created_at)"
+            )
+        )
+        conn.execute(text("DROP INDEX IF EXISTS ix_path_debriefings_path_id"))
+
+
 def _backfills_fingerprint() -> str | None:
     """L'impronta dei riempimenti che questo modulo sa fare, o None se non si legge.
 
@@ -1019,6 +1056,7 @@ def run_startup_migrations() -> None:
 
     _index_audit_logs()
     _index_conversations()
+    _index_path_debriefings()
 
 
 @contextmanager

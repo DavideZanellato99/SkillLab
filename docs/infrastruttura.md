@@ -259,6 +259,33 @@ cresce in modo non lineare.
 
 Vedi [loadtest.md](loadtest.md), il banco di prova già pronto per farlo.
 
+### 2.13 Si costruisce una volta, e si rilascia quell'artefatto lì
+
+Costruire l'immagine sul server a ogni rilascio è la cosa più naturale del
+mondo, ed è sbagliata per una ragione sola: quello che va in produzione non è
+mai stato provato. È stato provato il suo gemello, costruito in un altro
+momento, su un'altra macchina, con un'altra cache e un'altra rete.
+
+La regola è che l'artefatto nasce una volta, in CI, e da lì in poi si sposta
+senza essere ricostruito. Servono due cose, entrambe piccole:
+
+- **un registry** dove pubblicarlo (qui GHCR, che viene con il repository e
+  non va installato né mantenuto);
+- **un tag immutabile**, cioè lo SHA del commit e non `latest`. Un tag che si
+  sposta rimette esattamente il dubbio che il registry serviva a togliere.
+
+Quello che si guadagna non è la velocità, che pure c'è. È che **la versione
+precedente esiste ancora**, sotto il suo SHA, quindi tornare indietro diventa
+un pull: è la sola condizione che rende possibile un ritorno indietro
+automatico, e senza di essa un rilascio andato male si ripara a mano proprio
+mentre il sito è giù. Il corollario operativo è che il rilascio deve **aspettare
+la salute** prima di dichiararsi riuscito: `docker compose up` torna quando i
+container sono stati creati, non quando funzionano.
+
+Il pubblicare va legato al superamento dei controlli, non al fatto di aver
+costruito: qui le immagini escono dallo stesso job che le ha appena interrogate
+avviando lo stack, e solo se ha finito bene.
+
 ---
 
 ## 3. Cosa è stato fatto in questo progetto
@@ -287,6 +314,7 @@ Vedi [loadtest.md](loadtest.md), il banco di prova già pronto per farlo.
 | Solo file statici, niente più proxy | [frontend/nginx.conf](../frontend/nginx.conf) |
 | Dump ogni sei ore, cifrati a chiave pubblica, con ritenzione | [db/backup.sh](../db/backup.sh), [db/Dockerfile](../db/Dockerfile) |
 | Banco di prova per la capacità | [loadtest/](../loadtest/) |
+| Immagini costruite una volta in CI, pubblicate su GHCR col commit come tag, e rilascio che aspetta la salute e torna indietro da solo | [.github/workflows/ci.yml](../.github/workflows/ci.yml), [deploy/deploy.sh](../deploy/deploy.sh) |
 
 ### 3.3 Come è stato verificato
 
@@ -337,10 +365,13 @@ docker compose up -d --build frontend
    cioè quante repliche e quanta memoria a testa per backend e database. Il
    conto da rifare quando la macchina cambia è scritto lì sopra, accanto ai
    valori.
-4. Poi:
+4. L'accesso al registry da cui il server scarica le immagini, una volta sola
+   (vedi 2.13, e [messa-in-produzione.md](messa-in-produzione.md) per il
+   comando).
+5. Poi:
 
 ```bash
-docker compose -f docker-compose.yml up -d --build
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml up -d --no-build
 ```
 
 Il `-f` esplicito è quello che esclude l'override di sviluppo, che altrimenti
@@ -350,19 +381,27 @@ Compose caricherebbe da solo.
 
 ```bash
 git merge --ff-only origin/main
-docker compose -f docker-compose.yml up -d --build
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml pull backend frontend db-backup
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml up -d --no-build
 ```
 
-Lo schema si aggiorna da solo all'avvio, dietro il lock, quindi non c'è
-nessun passo di migrazione da ricordare.
+Il repository si aggiorna lo stesso, perché il compose, il Caddyfile e lo
+script dei backup non stanno dentro le immagini. Lo schema si aggiorna da solo
+all'avvio, dietro il lock, quindi non c'è nessun passo di migrazione da
+ricordare.
 
-**Quei due comandi non li dà una persona**, li dà GitHub Actions entrando in
+**Quei comandi non li dà una persona**, li dà GitHub Actions entrando in
 SSH quando la CI passa su `main` ([deploy/deploy.sh](../deploy/deploy.sh),
 [ci-cd.md](ci-cd.md)). Il principio riusabile è che il rilascio automatico vale
-la pena esattamente quando il rilascio a mano è già di due comandi: se ce ne
-volessero sei, con dei passi da ricordare, automatizzarli nasconderebbe il
+la pena esattamente quando il rilascio a mano è già di due o tre comandi: se ce
+ne volessero sei, con dei passi da ricordare, automatizzarli nasconderebbe il
 problema invece di risolverlo. La chiave che il runner usa ha un comando
 forzato in `authorized_keys`, quindi può fare quella cosa sola e nient'altro.
+
+Lo script aggiunge la sola cosa che a mano si fa guardando: **aspetta che lo
+stack sia sano, e se non lo diventa rimette quello di prima**. Il ritorno
+indietro è un pull perché le immagini precedenti sono ancora nel registry sotto
+il loro SHA, e senza quella proprietà non potrebbe essere automatico.
 
 **Le chiamate in corso cadono.** Le repliche vengono sostituite tutte
 insieme e chi è al telefono viene interrotto, quindi per ora il merge in
@@ -384,7 +423,7 @@ di recovery.
 **Cambiare la capacità**, senza toccare nessun file:
 
 ```bash
-docker compose -f docker-compose.yml up -d --scale backend=6
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml up -d --no-build --scale backend=6
 ```
 
 **Vedere cosa succede**, con le latenze di ogni turno di conversazione:
@@ -522,6 +561,11 @@ Nell'ordine in cui conviene affrontarli.
       ripristino fatta davvero**.
 - [ ] La configurazione obbligatoria dichiarata in modo che l'avvio fallisca
       dicendo cosa manca.
+- [ ] L'immagine costruita una volta sola, pubblicata con un tag immutabile
+      solo se i controlli passano, e il server che la scarica invece di
+      ricostruirla.
+- [ ] Il rilascio che aspetta la salute prima di dirsi riuscito, e che rimette
+      la versione precedente quando quella salute non arriva.
 
 **Prima di aprire le porte**
 

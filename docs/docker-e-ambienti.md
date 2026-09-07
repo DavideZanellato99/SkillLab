@@ -19,6 +19,19 @@ docker compose -f docker-compose.yml up -d   # produzione (l'override viene escl
 Il `-f` esplicito non è un vezzo: senza, si sta avviando lo sviluppo credendo
 di avviare la produzione.
 
+**In produzione le immagini non si costruiscono, si scaricano.** Le costruisce
+la CI una volta sola e le pubblica su GHCR con lo SHA del commit come tag, e il
+server mette in piedi quel tag lì:
+
+```bash
+IMAGE_TAG=$(git rev-parse HEAD) docker compose -f docker-compose.yml up -d --no-build
+```
+
+Sul proprio computer vale invece la riga di sopra con `--build`, che costruisce
+in locale e tagga `:local`: è il modo per provare lo stack di produzione senza
+passare dal registry. Il perché di tutto questo sta in
+[infrastruttura.md](infrastruttura.md), punto 2.13.
+
 | | Sviluppo | Produzione |
 | --- | --- | --- |
 | Backend | `uvicorn --reload`, sorgenti montate dall'host | uvicorn normale, codice dentro l'immagine |
@@ -54,11 +67,11 @@ flowchart TD
 | Servizio | Immagine | Affacciato | Note |
 | --- | --- | --- | --- |
 | `caddy` | `caddy:2-alpine` | **Sì**, 80 e 443 | Termina TLS, smista, bilancia |
-| `backend` | Costruita da `./backend` | No | N repliche identiche |
+| `backend` | `ghcr.io/davidezanellato99/skilllab-backend:<commit>`, costruita da `./backend` | No | N repliche identiche |
 | `backend-init` | La stessa del backend | No | Riempie `backend_static` e termina. Le repliche aspettano che abbia finito |
-| `frontend` | Costruita da `./frontend` | No | Solo file statici |
+| `frontend` | `ghcr.io/davidezanellato99/skilllab-frontend:<commit>`, costruita da `./frontend` | No | Solo file statici |
 | `db` | `postgres:18-alpine` | No | |
-| `db-backup` | costruita da [db/Dockerfile](../db/Dockerfile) | No | L'immagine del database, così `pg_dump` è della stessa versione del server che copia, più `age`, che è quello che cifra i dump |
+| `db-backup` | `ghcr.io/davidezanellato99/skilllab-db-backup:<commit>`, costruita da [db/Dockerfile](../db/Dockerfile) | No | L'immagine del database, così `pg_dump` è della stessa versione del server che copia, più `age`, che è quello che cifra i dump |
 
 **Nessun segreto sta nel compose.** Le credenziali del database arrivano dal
 file `.env` accanto al compose, e sono dichiarate con la sintassi che fa

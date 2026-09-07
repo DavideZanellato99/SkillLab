@@ -4,6 +4,11 @@
 # in automatico e lo trasforma in un ambiente di sviluppo con hot-reload. Per
 # far girare la produzione serve escluderlo esplicitamente:
 #
+#   IMAGE_TAG=$(git rev-parse HEAD) \
+#     docker compose -f docker-compose.yml up -d --no-build
+#
+# oppure, per provare la produzione sul proprio computer costruendo in locale:
+#
 #   docker compose -f docker-compose.yml up -d --build
 #
 # Tre regole, che sono il motivo per cui questo file non contiene né password
@@ -32,7 +37,32 @@
 #    voice_sessions) e Caddy manda ogni chiamata a quella che ne ha meno in
 #    corso. Per cambiarne il numero senza toccare questo file:
 #
-#      docker compose -f docker-compose.yml up -d --scale backend=6
+#      IMAGE_TAG=$(git rev-parse HEAD) \
+#        docker compose -f docker-compose.yml up -d --no-build --scale backend=6
+#
+# A queste si aggiunge la regola su dove nascono le immagini, che è il motivo
+# per cui i tre servizi costruiti da questo repository hanno un `image:` che
+# punta a ghcr.io e non un nome locale:
+#
+#   **si costruisce una volta, in CI, e si rilascia quell'immagine lì.**
+#
+# Il tag è lo SHA del commit, quindi immutabile: la stessa stringa indica per
+# sempre gli stessi byte. Vuol dire che quello che gira in produzione è
+# esattamente l'artefatto che ha passato lo smoke test della CI, e non una
+# ricostruzione fatta un'ora dopo con un'altra cache e un'altra rete. Vuol
+# dire anche che tornare indietro è ridistribuire il tag precedente, che
+# esiste già ed è a un pull di distanza, invece di ricostruire sul server
+# (vedi deploy/deploy.sh).
+#
+# `build:` resta accanto a `image:` perché serve a chi costruisce, cioè alla
+# CI e a chi prova la produzione sul proprio computer; il rilascio invece non
+# costruisce mai, e lo dice con `--no-build`.
+#
+# IMAGE_TAG ha un default, come SITE_ADDRESS e per la stessa ragione: senza,
+# sarebbe obbligatoria anche per lo sviluppo, dove le immagini si costruiscono
+# in locale e un tag non vuol dire niente. Dimenticarla sul server non è
+# pericoloso, è rumoroso: `:local` nel registry non esiste, quindi il pull
+# fallisce e non parte niente.
 #
 # HTTPS non è opzionale: i cookie di sessione sono Secure, e servita in
 # chiaro l'applicazione non riesce nemmeno a tenere il login.
@@ -143,7 +173,7 @@ services:
   # altro, cioè niente.
   backend-init:
     build: ./backend
-    image: skilllab-backend:local
+    image: ghcr.io/davidezanellato99/skilllab-backend:${IMAGE_TAG:-local}
     # Il volume esiste anche il giorno in cui l'immagine non porta più
     # ritratti di serie: la cartella dei caricamenti deve esserci comunque, o
     # il primo caricamento fallisce.
@@ -165,8 +195,9 @@ services:
     build: ./backend
     # Nome esplicito perché backend-init parte dalla stessa immagine: senza,
     # ognuno dei due si costruirebbe la sua, con lo stesso contenuto e un
-    # nome diverso.
-    image: skilllab-backend:local
+    # nome diverso. È anche l'indirizzo da cui il server la scarica, e il tag
+    # è lo SHA del commit rilasciato (vedi la testa di questo file).
+    image: ghcr.io/davidezanellato99/skilllab-backend:${IMAGE_TAG:-local}
     env_file:
       - ./backend/.env
     environment:
@@ -239,6 +270,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: ghcr.io/davidezanellato99/skilllab-frontend:${IMAGE_TAG:-local}
     depends_on:
       - backend
     deploy:
@@ -304,6 +336,7 @@ services:
     # installare age all'avvio vorrebbe dire un container che ha bisogno
     # della rete ogni volta che riparte.
     build: ./db
+    image: ghcr.io/davidezanellato99/skilllab-db-backup:${IMAGE_TAG:-local}
     environment:
       PGHOST: db
       PGUSER: ${POSTGRES_USER:?}

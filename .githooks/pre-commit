@@ -22,6 +22,26 @@ step() { printf '\n\033[1m▶ %s\033[0m\n' "$1"; }
 ok()   { printf '\033[32m✓ %s\033[0m\n' "$1"; }
 ko()   { printf '\033[31m✗ %s\033[0m\n' "$1"; fail=1; }
 
+# Le suite di test stampano centinaia di righe (elenco dei test, report di
+# coverage) che a gate verde non servono e allungano il terminale. run_quiet
+# annuncia il controllo, tiene l'output in un file e lo mostra soltanto se il
+# comando fallisce, cioè quando quelle righe servono davvero.
+QUIET_LOG="$(mktemp -t precommit-quiet.XXXXXX)"
+trap 'rm -f "$QUIET_LOG"' EXIT
+run_quiet() {
+  label="$1"
+  shift
+  printf '  %s: in corso...' "$label"
+  if "$@" >"$QUIET_LOG" 2>&1; then
+    printf '\r\033[K'
+    ok "$label"
+  else
+    printf '\r\033[K'
+    cat "$QUIET_LOG"
+    ko "$label"
+  fi
+}
+
 # Pick the backend interpreter: prefer the project venv (Windows or POSIX
 # layout), fall back to whatever python is on PATH.
 if [ -x "backend/venv/Scripts/python.exe" ]; then
@@ -96,8 +116,9 @@ else
     | grep -q 1 \
     || docker compose -f docker-compose.yml exec -T db createdb -U postgres skilllab_test >/dev/null 2>&1
 
-  DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_test" \
-    sh -c "cd backend && '$PY_ABS' -m pytest -q --cov" && ok "pytest" || ko "pytest"
+  run_quiet "pytest" env \
+    DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_test" \
+    sh -c "cd backend && '$PY_ABS' -m pytest -q --cov"
 fi
 
 # --- 3. frontend lint, build & tests --------------------------------------
@@ -112,7 +133,7 @@ else
 fi
 ( cd frontend && npm run lint ) && ok "oxlint" || ko "oxlint"
 ( cd frontend && npm run build ) && ok "build (tsc+vite)" || ko "build"
-( cd frontend && npm run test:coverage ) && ok "vitest (con soglia coverage)" || ko "vitest"
+run_quiet "vitest (con soglia coverage)" sh -c "cd frontend && npm run test:coverage"
 
 # --- 4. secret scan (gitleaks via Docker) ---------------------------------
 

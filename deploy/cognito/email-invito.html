@@ -1,0 +1,151 @@
+<!-- Messaggio che Cognito invia a chi viene creato da un amministratore:
+     nome utente e password temporanea del primo accesso.
+
+     Si incolla nel pool, in Messaging > Message templates > Invitation
+     message, scegliendo HTML. I due segnaposto {username} e {####} sono
+     obbligatori: Cognito rifiuta il salvataggio se ne manca uno.
+
+     Prima di incollarlo va sostituito INDIRIZZO_PIATTAFORMA con il dominio
+     su cui gira l'applicazione, lo stesso di SITE_ADDRESS. Compare tre
+     volte, nell'href del pulsante e nella riga di ripiego sotto. -->
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>Le tue credenziali di accesso a SkillLab</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#0a0e1a;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:#0a0e1a; font-size:1px; line-height:1px;">
+      Nome utente e password temporanea per il primo accesso alla piattaforma.
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0a0e1a; margin:0; padding:0;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%;">
+
+            <!-- Marchio -->
+            <tr>
+              <td align="center" style="padding-bottom:28px; font-family:'Outfit','Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:26px; font-weight:700; letter-spacing:-0.02em; color:#f1f5f9;">
+                Skill<span style="color:#22d3ee;">Lab</span>
+              </td>
+            </tr>
+
+            <!-- Scheda -->
+            <tr>
+              <td style="background-color:#111629; border:1px solid #1e2740; border-radius:20px;">
+
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td height="4" bgcolor="#7c3aed" style="height:4px; line-height:4px; font-size:0; background-color:#7c3aed; background-image:linear-gradient(90deg,#7c3aed 0%,#06b6d4 100%); border-radius:20px 20px 0 0;">&nbsp;</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:44px 44px 40px 44px;">
+
+                      <h1 style="margin:0 0 16px 0; font-family:'Outfit','Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:24px; line-height:1.3; font-weight:700; color:#f1f5f9;">
+                        Il tuo accesso a SkillLab
+                      </h1>
+
+                      <p style="margin:0 0 28px 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.7; color:#94a3b8;">
+                        È stato creato un account a tuo nome sulla piattaforma di formazione SkillLab.
+                        Qui sotto trovi le credenziali del primo accesso.
+                      </p>
+
+                      <!-- Credenziali -->
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0d1322; border:1px solid #1e2740; border-radius:14px;">
+                        <tr>
+                          <td style="padding:24px 24px 20px 24px;">
+                            <p style="margin:0 0 6px 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#64748b;">
+                              Indirizzo email
+                            </p>
+                            <p style="margin:0; font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; font-size:16px; line-height:1.5; color:#e2e8f0; word-break:break-all;">
+                              {username}
+                            </p>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:0 24px;">
+                            <div style="height:1px; line-height:1px; font-size:0; background-color:#1e2740;">&nbsp;</div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style="padding:20px 24px 24px 24px;">
+                            <p style="margin:0 0 6px 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#64748b;">
+                              Password temporanea
+                            </p>
+                            <p style="margin:0; font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; font-size:18px; line-height:1.5; letter-spacing:0.04em; font-weight:700; color:#22d3ee; word-break:break-all;">
+                              {####}
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <!-- Nota sulla password -->
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px; background-color:#161231; border-left:3px solid #7c3aed; border-radius:0 12px 12px 0;">
+                        <tr>
+                          <td style="padding:16px 20px;">
+                            <p style="margin:0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.65; color:#c4b5fd;">
+                              La password qui sopra vale solo per il primo accesso: appena entri, la piattaforma
+                              ti chiede di sceglierne una personale.
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <!-- Accesso -->
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0 0;">
+                        <tr>
+                          <td align="center" bgcolor="#7c3aed" style="border-radius:12px; background-color:#7c3aed; background-image:linear-gradient(135deg,#7c3aed 0%,#06b6d4 100%);">
+                            <a href="https://INDIRIZZO_PIATTAFORMA" style="display:inline-block; padding:15px 34px; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:12px;">
+                              Accedi alla piattaforma
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+
+                      <p style="margin:18px 0 0 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.6; color:#64748b;">
+                        Se il pulsante non funziona, apri
+                        <a href="https://INDIRIZZO_PIATTAFORMA" style="color:#a78bfa; text-decoration:none;">https://INDIRIZZO_PIATTAFORMA</a>
+                      </p>
+
+                      <!-- Requisiti della nuova password -->
+                      <div style="height:1px; line-height:1px; font-size:0; background-color:#1e2740; margin:32px 0 24px 0;">&nbsp;</div>
+
+                      <p style="margin:0 0 10px 0; font-family:'Outfit','Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:#94a3b8;">
+                        La nuova password
+                      </p>
+                      <p style="margin:0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.8; color:#64748b;">
+                        Almeno 12 caratteri, una lettera maiuscola, una minuscola, un numero e un simbolo.
+                      </p>
+
+                      <p style="margin:24px 0 0 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.7; color:#64748b;">
+                        Se non riconosci questa richiesta, non utilizzare le credenziali e avvisa il tuo
+                        amministratore.
+                      </p>
+
+                    </td>
+                  </tr>
+                </table>
+
+              </td>
+            </tr>
+
+            <!-- Fondo -->
+            <tr>
+              <td align="center" style="padding:28px 16px 0 16px; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.7; color:#475569;">
+                Messaggio automatico, questo indirizzo non riceve risposte.<br />
+                © SkillLab
+              </td>
+            </tr>
+
+          </table>
+
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

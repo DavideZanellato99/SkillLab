@@ -68,6 +68,20 @@ Un utente creato da un amministratore riceve da Cognito una password
 temporanea. Al primo accesso Cognito risponde con la sfida
 `NEW_PASSWORD_REQUIRED`, e il frontend mostra il form della nuova password.
 
+L'email che consegna quella password è la prima cosa che una persona vede
+della piattaforma, e il testo di serie di Cognito è una riga in inglese senza
+mittente riconoscibile. Al suo posto c'è
+[email-invito.html](../deploy/cognito/email-invito.html): stesso fondo scuro,
+stesso marchio e stesso viola verso ciano dell'applicazione, con le credenziali
+in un riquadro a parte e il pulsante che porta all'accesso. Si incolla a mano
+nel pool, in *Messaging > Message templates > Invitation message* scegliendo
+HTML, dopo aver sostituito `INDIRIZZO_PIATTAFORMA` con il dominio di
+`SITE_ADDRESS`. Il file tiene i segnaposto `{username}` e `{####}` che Cognito
+riempie, ed entrambi devono restarci: senza, il pool rifiuta il salvataggio.
+Lo username è l'indirizzo email, perché è con quello che
+[admin_create_user](../backend/cognito_service.py) crea l'account, quindi il
+riquadro lo etichetta come tale e non come un nome utente a parte.
+
 I requisiti sono controllati **due volte di proposito**: nel backend
 (`validate_password_strength`) e nella lista che l'utente vede mentre scrive
 nella [modale di accesso](../frontend/src/components/AuthModal.tsx). Entrambi devono

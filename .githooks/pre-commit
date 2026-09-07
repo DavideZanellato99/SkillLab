@@ -132,7 +132,7 @@ else
   ko "prettier (format) — file riformattati automaticamente: aggiungili con git add e rilancia il commit"
 fi
 ( cd frontend && npm run lint ) && ok "oxlint" || ko "oxlint"
-( cd frontend && npm run build ) && ok "build (tsc+vite)" || ko "build"
+run_quiet "build (tsc+vite)" sh -c "cd frontend && npm run build"
 run_quiet "vitest (con soglia coverage)" sh -c "cd frontend && npm run test:coverage"
 
 # --- 4. secret scan (gitleaks via Docker) ---------------------------------

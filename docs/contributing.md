@@ -77,6 +77,14 @@ attivo per i test backend e per gitleaks. Se `ruff format --check` o
 `prettier --check` trovano file da sistemare, il hook li riformatta da
 solo: basta rifare `git add` e rilanciare il commit.
 
+Non gira sempre tutto: i gate del backend partono solo se in stage c'è
+qualcosa sotto `backend/` o `db/`, oppure uno dei due `docker-compose*.yml`,
+perché quei file decidono il Postgres su cui gira `pytest`; i gate del
+frontend solo se in stage c'è qualcosa sotto `frontend/`. Igiene del commit e
+gitleaks valgono sempre, e se tocchi `.githooks/` gira tutto, così se rompi il
+hook te ne accorgi subito. Un commit di soli docs passa quindi in pochi
+secondi, e la rete completa resta la CI, che a ogni push gira ogni gate.
+
 I controlli più chiacchieroni, `pytest`, `vitest` e la build del frontend,
 girano in silenzio: il hook annuncia il controllo in corso e poi ne mostra solo
 l'esito, così il terminale resta leggibile. L'output completo, con i test

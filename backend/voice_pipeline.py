@@ -1,11 +1,15 @@
-"""Realtime voice pipeline: ElevenLabs STT → OpenAI LLM → ElevenLabs TTS.
+"""Realtime voice pipeline: ElevenLabs STT → LLM del roleplay → TTS.
 
 One instance per call. The browser streams mic audio (PCM16 @ 16 kHz,
 binary frames) over our WebSocket; we proxy it to ElevenLabs Scribe v2
 Realtime, whose VAD commits the end of each user turn. Each committed
 transcript triggers an LLM stream (voice model) whose tokens are piped
-in phrase-sized pieces into an ElevenLabs TTS context; the resulting PCM16 @ 24 kHz
+in phrase-sized pieces into a TTS context; the resulting PCM16 @ 24 kHz
 audio chunks are forwarded to the browser as binary frames.
+
+Quale fornitore sintetizzi lo decide `TTS_PROVIDER`, e qui non si vede: di
+lui questo file conosce solo la forma descritta da `tts_protocol`, che
+`tts_provider` gli consegna già scelta.
 
 Browser-bound JSON events:
   ready, user_partial, user_final, assistant_delta, assistant_end,
@@ -41,17 +45,22 @@ from websockets.exceptions import InvalidStatus
 import tls_setup  # noqa: F401  (TLS via OS store: must precede the websockets import)
 from database import SessionLocal
 from elevenlabs_service import STT_SAMPLE_RATE, log_stt_concurrency, stt_headers, stt_ws_url
-from elevenlabs_tts_service import (
-    ELEVENLABS_DEFAULT_VOICE_ID,
-    resolve_voice_id,
-    tts_chunk_message,
-    tts_close_message,
-    tts_headers,
-    tts_keepalive_message,
-    tts_ws_url,
-)
 from models import ChatConversation, ChatMessage
 from openai_service import prewarm_roleplay, stream_avatar_response
+from tts_provider import (
+    DEFAULT_VOICE_ID,
+    KEEPALIVE_SECS,
+    PROVIDER_LABEL,
+    VOICE_IN_URL,
+    cancel_message,
+    chunk_message,
+    end_message,
+    keepalive_message,
+    parse_event,
+    resolve_voice_id,
+    ws_headers,
+    ws_url,
+)
 from turn_metrics import (
     MARK_BROWSER_FIRST_AUDIO,
     MARK_LLM_FIRST_TOKEN,
@@ -179,55 +188,51 @@ _AUDIO_BYTES_PER_SEC = STT_SAMPLE_RATE * 2
 # How often the audio upload reports itself while the diagnostics are on.
 _AUDIO_REPORT_SECS = 5.0
 
-# Ogni quanto si tiene viva la socket della sintesi. Sta molto sotto il tetto
-# di inattività che si chiede a ElevenLabs (vedi elevenlabs_tts_service)
-# perché il margine serve: su questa socket, fra un turno e l'altro, non passa
-# niente per tutto il tempo in cui parla l'operatore, e a cadere sarebbe a
-# metà conversazione.
-_TTS_KEEPALIVE_SECS = 15.0
+
+async def _connect_tts(stack: contextlib.AsyncExitStack, voice_id: str):
+    """Un tentativo di connessione alla sintesi, con la voce data."""
+    return await stack.enter_async_context(
+        websockets.connect(
+            ws_url(voice_id),
+            additional_headers=ws_headers(),
+            max_size=16 * 1024 * 1024,
+        )
+    )
 
 
 async def _open_tts(stack: contextlib.AsyncExitStack, voice_id: str):
     """Open the TTS socket, falling back to the default voice if need be.
 
-    La voce sta nell'indirizzo della connessione, non nei messaggi: un id che
-    l'account non conosce non rovina un turno, rifiuta l'handshake e la
-    chiamata non parte affatto. Gli avatar possono portare id di un fornitore
-    precedente o di una voce cancellata, e un avatar che parla con la voce
-    sbagliata è molto meglio di un avatar che non parla: si sente al primo
-    ascolto, si corregge dal pannello, e intanto l'esercitazione si fa.
+    Il ripiego vale solo dove la voce sta nell'indirizzo della connessione e
+    non nei messaggi: lì un id che l'account non conosce non rovina un turno,
+    rifiuta l'handshake e la chiamata non parte affatto. Gli avatar possono
+    portare id di un fornitore precedente o di una voce cancellata, e un
+    avatar che parla con la voce sbagliata è molto meglio di un avatar che
+    non parla: si sente al primo ascolto, si corregge dal pannello, e intanto
+    l'esercitazione si fa. Dove invece la voce viaggia nei messaggi
+    l'handshake non la vede, quindi non c'è nessun rifiuto da intercettare e
+    un id sbagliato si manifesta come un turno muto.
 
     Il secondo tentativo è gratis: cade dentro lo squillo, che è tempo morto.
     """
     try:
-        return await stack.enter_async_context(
-            websockets.connect(
-                tts_ws_url(voice_id),
-                additional_headers=tts_headers(),
-                max_size=16 * 1024 * 1024,
-            )
-        )
+        return await _connect_tts(stack, voice_id)
     except InvalidStatus as e:
         status = e.response.status_code
         # Solo i rifiuti, e solo se c'è davvero un'altra voce da provare: un
         # 5xx o una rete che non risponde non li risolve una voce diversa, e
         # ritentare nasconderebbe il guasto vero.
-        ripiego = ELEVENLABS_DEFAULT_VOICE_ID
-        if not 400 <= status < 500 or not ripiego or voice_id == ripiego:
+        ripiego = DEFAULT_VOICE_ID
+        if not VOICE_IN_URL or not 400 <= status < 500 or not ripiego or voice_id == ripiego:
             raise
         logger.warning(
-            "Voce '%s' rifiutata da ElevenLabs (HTTP %d): la chiamata prosegue con la "
+            "Voce '%s' rifiutata da %s (HTTP %d): la chiamata prosegue con la "
             "voce predefinita. Riassegna la voce a questo avatar dal pannello.",
             voice_id,
+            PROVIDER_LABEL,
             status,
         )
-        return await stack.enter_async_context(
-            websockets.connect(
-                tts_ws_url(ripiego),
-                additional_headers=tts_headers(),
-                max_size=16 * 1024 * 1024,
-            )
-        )
+        return await _connect_tts(stack, ripiego)
 
 
 # STT error types that make the whole call unusable
@@ -386,10 +391,11 @@ class VoicePipeline:
                 self.stt = stt
                 self.tts = tts
                 log_stt_concurrency(stt)
-                # Il contesto dei keep alive nasce qui, non al primo turno:
-                # la socket va tenuta viva già durante lo squillo, che da solo
-                # può durare più del tetto di inattività.
-                await tts.send(tts_chunk_message(self._keepalive_context, " "))
+                if KEEPALIVE_SECS:
+                    # Il contesto dei keep alive nasce qui, non al primo
+                    # turno: la socket va tenuta viva già durante lo squillo,
+                    # che da solo può durare più del tetto di inattività.
+                    await tts.send(chunk_message(self._keepalive_context, " ", self.voice_id))
                 await self._send_json({"type": "ready"})
 
                 # The ring is dead time for the operator, so spend it on the
@@ -405,8 +411,9 @@ class VoicePipeline:
                     asyncio.create_task(self._browser_loop(), name="browser"),
                     asyncio.create_task(self._stt_loop(), name="stt"),
                     asyncio.create_task(self._tts_loop(), name="tts"),
-                    asyncio.create_task(self._keepalive_loop(), name="keepalive"),
                 ]
+                if KEEPALIVE_SECS:
+                    tasks.append(asyncio.create_task(self._keepalive_loop(), name="keepalive"))
                 try:
                     done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                     # Surface unexpected crashes of whichever loop ended first
@@ -614,40 +621,40 @@ class VoicePipeline:
     async def _keepalive_loop(self) -> None:
         """Tiene su la socket della sintesi mentre parla l'operatore.
 
-        Non è una cautela di troppo: ElevenLabs chiude la connessione dopo un
-        tetto di inattività, e su questa socket non passa niente per tutto il
-        tempo in cui l'avatar sta zitto. Senza, a cadere sarebbero proprio le
-        chiamate in cui l'operatore si dilunga, cioè quelle che vanno bene.
+        Non è una cautela di troppo: dove il fornitore chiude la connessione
+        dopo un tetto di inattività, su questa socket non passa niente per
+        tutto il tempo in cui l'avatar sta zitto. Senza, a cadere sarebbero
+        proprio le chiamate in cui l'operatore si dilunga, cioè quelle che
+        vanno bene. Il giro non parte affatto per chi non ha quel tetto.
         """
         while True:
-            await asyncio.sleep(_TTS_KEEPALIVE_SECS)
-            await self.tts.send(tts_keepalive_message(self._keepalive_context))
+            await asyncio.sleep(KEEPALIVE_SECS)
+            await self.tts.send(keepalive_message(self._keepalive_context, self.voice_id))
 
     async def _tts_loop(self) -> None:
         async for raw in self.tts:
-            event = json.loads(raw)
+            event = parse_event(raw)
 
             # Gli errori si guardano prima del filtro sul contesto: possono
             # arrivare senza, e scartarli insieme all'audio vecchio vorrebbe
             # dire non accorgersi mai che la sintesi ha smesso di rispondere.
-            if event.get("error"):
-                logger.error("ElevenLabs TTS: %s", event.get("message") or event.get("error"))
-                context_id = event.get("contextId")
-                if self._active_context and context_id in (None, self._active_context):
+            if event.error:
+                logger.error("%s TTS: %s", PROVIDER_LABEL, event.error)
+                if self._active_context and event.context_id in (None, self._active_context):
                     self._metrics.close_tts_slot(self._active_context, interrotto=True)
                     self._speaking = False
                     self._active_context = None
                     await self._send_json({"type": "speaking_end"})
                 continue
 
-            context_id = event.get("contextId")
+            context_id = event.context_id
             if context_id != self._active_context:
                 # Audio di un turno già annullato, o il contesto dei keep
                 # alive che non ha niente da dire: in nessuno dei due casi
                 # deve arrivare al browser.
                 continue
 
-            audio = base64.b64decode(event.get("audio") or "")
+            audio = event.audio
             if audio:
                 # Only this turn's own timer: audio tagged with another
                 # context belongs to a turn that was already cancelled.
@@ -668,7 +675,7 @@ class VoicePipeline:
                     self._metrics.record(timer)
                     self._turn_timer = None
 
-            if event.get("isFinal"):
+            if event.final:
                 self._metrics.close_tts_slot(context_id)
                 self._speaking = False
                 self._active_context = None
@@ -728,7 +735,7 @@ class VoicePipeline:
             task_cancelled = True
         if self._active_context:
             with contextlib.suppress(Exception):
-                await self.tts.send(tts_close_message(self._active_context))
+                await self.tts.send(cancel_message(self._active_context))
             self._metrics.close_tts_slot(self._active_context, interrotto=True)
             self._active_context = None
             interrupted = True
@@ -752,9 +759,9 @@ class VoicePipeline:
             self._turn_timer.mark(MARK_TTS_FIRST_SEND)
             self._turn_timer.count_tts_send()
         # Da qui il contesto occupa uno slot di concorrenza del piano, e lo
-        # tiene finché la sintesi non chiude con "isFinal".
+        # tiene finché la sintesi non dichiara finito il contesto.
         self._metrics.open_tts_slot(context_id)
-        await self.tts.send(tts_chunk_message(context_id, text))
+        await self.tts.send(chunk_message(context_id, text, self.voice_id))
 
     async def _run_turn(self) -> None:
         """Stream one assistant turn: LLM tokens → browser text + TTS audio."""
@@ -800,7 +807,7 @@ class VoicePipeline:
 
             # Chiudere il contesto manda in sintesi quel che è rimasto in
             # cassa: è anche il flush, non serve chiederlo a parte.
-            await self.tts.send(tts_close_message(context_id))
+            await self.tts.send(end_message(context_id, self.voice_id))
 
             if full_text:
                 self.history.append({"role": "assistant", "content": full_text})

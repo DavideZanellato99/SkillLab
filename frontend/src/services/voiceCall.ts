@@ -1,4 +1,4 @@
-/* Realtime voice call client (ElevenLabs STT + ElevenLabs TTS via backend WS).
+/* Realtime voice call client (trascrizione e sintesi via backend WS).
  *
  * Streams the microphone to the backend as binary PCM16 @ 16 kHz frames and
  * plays back the assistant's PCM16 @ 24 kHz audio chunks as they arrive.

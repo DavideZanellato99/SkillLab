@@ -362,7 +362,7 @@ export default function AdminPage() {
             errorMessage(resendMutation.error, 'Errore durante il rinvio delle credenziali.') ||
             undefined
           }
-          confirmLabel="Invia Nuova Password"
+          confirmLabel="Invia nuova Password"
           pendingLabel="Invio in corso..."
           confirmClassName="border-none bg-gradient-to-br from-violet-600 to-cyan-500 text-white hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.35)] active:translate-y-0"
           isPending={resendMutation.isPending}

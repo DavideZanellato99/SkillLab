@@ -12,7 +12,7 @@ documento aziendale, a scelta multipla o a risposta aperta.
 
 - **Backend**: FastAPI, SQLAlchemy, Postgres, autenticazione AWS Cognito.
 - **Frontend**: React 19, Vite, Tailwind, React Router, TanStack Query.
-- **Voce**: ElevenLabs (STT e TTS), OpenAI (LLM e valutazione).
+- **Voce**: ElevenLabs (STT), ElevenLabs o Cartesia a scelta (TTS), OpenAI (LLM e valutazione).
 - **Infra**: Docker Compose, Caddy davanti a tutto, backup automatici.
 
 ## Avvio rapido (sviluppo)

@@ -68,6 +68,10 @@ ELEVENLABS_TTS_WS_URL=ws://host.docker.internal:8802
 OPENAI_BASE_URL=http://host.docker.internal:8803/v1
 ```
 
+La sintesi finta parla il protocollo di ElevenLabs, quindi il banco vuole
+`TTS_PROVIDER=elevenlabs`: il fornitore scelto cambia i messaggi, non solo
+l'indirizzo.
+
 Su Docker Desktop `host.docker.internal` funziona così com'è. Su Linux
 aggiungi al servizio backend `extra_hosts: ["host.docker.internal:host-gateway"]`,
 oppure metti direttamente l'indirizzo della macchina dove girano i mock.

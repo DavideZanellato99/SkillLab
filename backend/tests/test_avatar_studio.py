@@ -2,16 +2,17 @@
 
 Three helpers that belong to the editor rather than to an avatar row: the
 portrait upload, the preview of the roleplay prompt a sheet produces, and
-the ElevenLabs voice catalogue with its one-shot preview. ElevenLabs is never
-reached from here: the catalogue is exercised with no API key (the honest
-503) and the preview is monkeypatched.
+the voice catalogue with its one-shot preview. Il fornitore di sintesi non
+viene mai raggiunto da qui: il catalogo si prova senza chiave (il 503
+onesto) e l'anteprima è sostituita. Quale sia lo decide `TTS_PROVIDER`,
+quindi le prove passano dal modulo che lo sceglie e non dall'adattatore.
 """
 
 import pytest
 
-import elevenlabs_tts_service
 import routers.admin_avatars as admin_avatars
 import routers.admin_voices as admin_voices
+import tts_provider
 
 # The smallest valid PNG: signature plus a minimal IHDR, enough for the
 # signature check that guards the upload.
@@ -123,21 +124,22 @@ def test_image_upload_refuses_an_oversized_file(admin_client):
     assert response.status_code == 413
 
 
-def test_voice_catalogue_says_so_when_elevenlabs_is_unreachable(admin_client, monkeypatch):
+def test_voice_catalogue_says_so_when_the_provider_is_unreachable(admin_client, monkeypatch):
     """A missing key or a network failure is a 503 the page can show, not a 500.
 
     Patched rather than left to the environment: a developer with a real
-    .env would otherwise make the suite call ElevenLabs for real.
+    .env would otherwise make the suite call the provider for real.
     """
 
     def _boom():
-        raise RuntimeError("ELEVENLABS_API_KEY non configurata.")
+        raise RuntimeError("Chiave non configurata.")
 
-    monkeypatch.setattr(elevenlabs_tts_service, "list_voices", _boom)
+    monkeypatch.setattr(tts_provider, "list_voices", _boom)
 
     response = admin_client.get("/api/admin/voices")
     assert response.status_code == 503
-    assert "ElevenLabs" in response.json()["detail"]
+    # Il messaggio nomina il fornitore attivo, non quello di ieri
+    assert tts_provider.PROVIDER_LABEL in response.json()["detail"]
 
 
 def test_voice_catalogue_puts_the_app_language_first(admin_client, monkeypatch):
@@ -147,7 +149,7 @@ def test_voice_catalogue_puts_the_app_language_first(admin_client, monkeypatch):
     voce, quindi toglierle vorrebbe dire nascondere voci usabili.
     """
     monkeypatch.setattr(
-        elevenlabs_tts_service,
+        tts_provider,
         "list_voices",
         lambda: [
             {"id": "en-1", "name": "Zoe", "language": "en", "description": None},
@@ -156,7 +158,7 @@ def test_voice_catalogue_puts_the_app_language_first(admin_client, monkeypatch):
             {"id": "it-1", "name": "Anna", "language": "it-IT", "description": None},
         ],
     )
-    monkeypatch.setattr(elevenlabs_tts_service, "ELEVENLABS_TTS_LANGUAGE", "it")
+    monkeypatch.setattr(tts_provider, "TTS_LANGUAGE", "it")
 
     response = admin_client.get("/api/admin/voices")
     assert response.status_code == 200
@@ -169,14 +171,14 @@ def test_voice_catalogue_keeps_its_order_when_no_voice_declares_the_language(
 ):
     """Nessuna voce dichiara l'italiano: restano tutte, in ordine di nome."""
     monkeypatch.setattr(
-        elevenlabs_tts_service,
+        tts_provider,
         "list_voices",
         lambda: [
             {"id": "en-1", "name": "Zoe", "language": "en", "description": None},
             {"id": "fr-1", "name": "Amelie", "language": "fr", "description": None},
         ],
     )
-    monkeypatch.setattr(elevenlabs_tts_service, "ELEVENLABS_TTS_LANGUAGE", "it")
+    monkeypatch.setattr(tts_provider, "TTS_LANGUAGE", "it")
 
     response = admin_client.get("/api/admin/voices")
     assert response.status_code == 200
@@ -191,7 +193,7 @@ def test_voice_preview_returns_audio(admin_client, monkeypatch):
         spoken["transcript"] = transcript
         return b"RIFF----WAVEfmt "
 
-    monkeypatch.setattr(elevenlabs_tts_service, "synthesize_preview", _fake_preview)
+    monkeypatch.setattr(tts_provider, "synthesize_preview", _fake_preview)
 
     response = admin_client.post("/api/admin/voices/preview", json={"voice_id": "it-1"})
     assert response.status_code == 200

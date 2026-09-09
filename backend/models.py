@@ -353,8 +353,10 @@ class Avatar(Authored, Base):
     # visible only within it. Only the super admin creates avatars and assigns
     # the owning organization.
     organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=False, index=True)
-    # ElevenLabs voice id used for the voice conversation mode (falls back
-    # to ELEVENLABS_DEFAULT_VOICE_ID when null)
+    # Voice id used for the voice conversation mode, of whichever provider
+    # TTS_PROVIDER selects (falls back to that provider's default voice when
+    # null). Un campo solo per tutti: un id vale soltanto per chi lo ha
+    # emesso, quindi dopo un cambio di fornitore le voci vanno riassegnate.
     voice_id = Column(String(100), nullable=True)
     # Training persona sheet (anagrafica, personalità, scenario, segreti...).
     # Required: every avatar IS a training persona — the sheet drives the

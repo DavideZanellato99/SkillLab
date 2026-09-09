@@ -16,7 +16,7 @@ flowchart TD
     BE -->|"login, utenti"| CG["AWS Cognito"]
     BE -->|"trascrizione"| EL["ElevenLabs<br/>Scribe v2 Realtime"]
     BE -->|"roleplay, valutazione,<br/>embedding"| OA["OpenAI"]
-    BE -->|"sintesi vocale"| CA["ElevenLabs<br/>Flash"]
+    BE -->|"sintesi vocale"| CA["ElevenLabs Flash<br/>oppure Cartesia Sonic"]
 ```
 
 Il browser vede **un solo indirizzo**. Non è estetica: i cookie di sessione
@@ -30,12 +30,34 @@ sola origine significa anche nessun CORS da gestire in produzione.
 | Database | PostgreSQL, senza estensioni | schema in [backend/models.py](../backend/models.py) |
 | Identità | AWS Cognito | [backend/cognito_service.py](../backend/cognito_service.py) |
 | Voce in entrata | ElevenLabs Scribe v2 Realtime | [backend/elevenlabs_service.py](../backend/elevenlabs_service.py) |
-| Cervello | OpenAI (roleplay, valutazione, embedding) | [backend/openai_service.py](../backend/openai_service.py) |
-| Voce in uscita | ElevenLabs Flash | [backend/elevenlabs_tts_service.py](../backend/elevenlabs_tts_service.py) |
+| Cervello del roleplay | OpenAI oppure Gemini, a scelta | [backend/roleplay_provider.py](../backend/roleplay_provider.py) |
+| Cervello della valutazione e degli embedding | OpenAI | [backend/openai_service.py](../backend/openai_service.py) |
+| Voce in uscita | ElevenLabs Flash oppure Cartesia Sonic, a scelta | [backend/tts_provider.py](../backend/tts_provider.py) |
 
-Nessuna chiave dei fornitori esterni sta nel browser: tutte le chiamate a
-OpenAI ed ElevenLabs partono dal backend, anche quelle in tempo reale
-della chiamata vocale.
+Le due voci con un'alternativa sono quelle della telefonata, e non è un caso:
+sono le sole chiamate a un fornitore che qualcuno aspetta in linea, quindi le
+sole in cui la velocità della prima parola conta più di tutto il resto.
+`ROLEPLAY_PROVIDER` decide chi recita e `TTS_PROVIDER` chi dà la voce, e
+servono a confrontare i fornitori sulle stesse chiamate invece che sulla
+carta: i numeri da guardare sono i segmenti `llm_ttft` e `tts` di
+[turn_metrics.py](../backend/turn_metrics.py).
+
+Quello che resta fermo è fermo per una ragione. La valutazione e gli
+embedding stanno su OpenAI in entrambi i casi, la prima perché nessuno è in
+attesa mentre ragiona, i secondi perché i vettori di due fornitori diversi
+non si confrontano fra loro. La trascrizione sta su ElevenLabs perché la fine
+del turno dell'operatore la decide la sua VAD, e cambiarla vorrebbe dire
+ritarare la conversazione, non il fornitore.
+
+Della sintesi cambia il protocollo, non solo il cliente: la forma unica che
+la pipeline conosce sta in [tts_protocol.py](../backend/tts_protocol.py) e
+ogni fornitore ha il suo adattatore che la implementa. Gli id delle voci non
+sono trasferibili, quindi dopo un cambio gli avatar parlano con la voce
+predefinita del nuovo fornitore finché non vengono riassegnati dal pannello.
+
+Nessuna chiave dei fornitori esterni sta nel browser: tutte le chiamate ai
+modelli, alla trascrizione e alla sintesi partono dal backend, anche quelle
+in tempo reale della chiamata vocale.
 
 ## Il database è l'unica memoria condivisa
 

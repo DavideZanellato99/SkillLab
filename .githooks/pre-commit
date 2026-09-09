@@ -56,6 +56,37 @@ PY_ABS="$REPO/$PY"
 
 docker_ready() { docker info >/dev/null 2>&1; }
 
+skip() { printf '\033[2m~ %s\033[0m\n' "$1"; }
+
+# --- perimetro: quali gate servono davvero per questo commit ---------------
+# I gate di un lato girano solo se il commit tocca quel lato: su un commit di
+# soli docs non c'è niente da verificare in backend o frontend, e la CI resta
+# comunque la rete che gira tutto a ogni push. Igiene e gitleaks non guardano
+# il perimetro, valgono per qualsiasi file.
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+staged_match() { printf '%s\n' "$STAGED" | grep -qE "$1"; }
+
+if staged_match '^\.githooks/'; then
+  # Il hook stesso è cambiato: gira tutto, è l'unico modo per accorgersi
+  # subito di averlo rotto.
+  RUN_BACKEND=1
+  RUN_FRONTEND=1
+else
+  # Il Postgres su cui gira pytest nasce da db/ e dal compose: toccarli
+  # cambia l'ambiente dei test, quindi contano come backend.
+  if staged_match '^(backend|db)/|^docker-compose(\.override)?\.yml$'; then
+    RUN_BACKEND=1
+  else
+    RUN_BACKEND=0
+  fi
+  if staged_match '^frontend/'; then
+    RUN_FRONTEND=1
+  else
+    RUN_FRONTEND=0
+  fi
+fi
+
 # --- 0. commit hygiene: conflict markers & huge files ----------------------
 # Checks the STAGED content (what is actually about to be committed), not the
 # working tree.
@@ -83,22 +114,28 @@ fi
 # --- 1. backend lint & types ----------------------------------------------
 
 step "Backend: ruff + mypy"
-( cd backend && "$PY_ABS" -m ruff check . ) && ok "ruff (lint)" || ko "ruff (lint)"
-if ( cd backend && "$PY_ABS" -m ruff format --check . ); then
-  ok "ruff (format)"
+if [ "$RUN_BACKEND" -eq 0 ]; then
+  skip "nessun file del backend in stage: salto"
 else
-  # Riformatta subito i file, così basta un git add e rilanciare il commit.
-  ( cd backend && "$PY_ABS" -m ruff format . )
-  ko "ruff (format) — file riformattati automaticamente: aggiungili con git add e rilancia il commit"
+  ( cd backend && "$PY_ABS" -m ruff check . ) && ok "ruff (lint)" || ko "ruff (lint)"
+  if ( cd backend && "$PY_ABS" -m ruff format --check . ); then
+    ok "ruff (format)"
+  else
+    # Riformatta subito i file, così basta un git add e rilanciare il commit.
+    ( cd backend && "$PY_ABS" -m ruff format . )
+    ko "ruff (format) — file riformattati automaticamente: aggiungili con git add e rilancia il commit"
+  fi
+  ( cd backend && "$PY_ABS" -m mypy ) && ok "mypy" || ko "mypy"
+  "$PY_ABS" .githooks/check-requirements-sync.py backend \
+    && ok "requirements (.in e lock coerenti)" || ko "requirements (lock non rigenerato)"
 fi
-( cd backend && "$PY_ABS" -m mypy ) && ok "mypy" || ko "mypy"
-"$PY_ABS" .githooks/check-requirements-sync.py backend \
-  && ok "requirements (.in e lock coerenti)" || ko "requirements (lock non rigenerato)"
 
 # --- 2. backend tests (need the test Postgres) -----------------------------
 
 step "Backend: pytest"
-if ! docker_ready; then
+if [ "$RUN_BACKEND" -eq 0 ]; then
+  skip "nessun file del backend in stage: salto"
+elif ! docker_ready; then
   ko "pytest (Docker non è in esecuzione: avvialo o usa 'git commit --no-verify')"
 else
   # Bring up the compose db if it isn't already running, then make sure the
@@ -124,16 +161,20 @@ fi
 # --- 3. frontend lint, build & tests --------------------------------------
 
 step "Frontend: format + lint + build + vitest"
-if ( cd frontend && npm run format:check >/dev/null 2>&1 ); then
-  ok "prettier (format)"
+if [ "$RUN_FRONTEND" -eq 0 ]; then
+  skip "nessun file del frontend in stage: salto"
 else
-  # Riformatta subito i file, così basta un git add e rilanciare il commit.
-  ( cd frontend && npm run format >/dev/null 2>&1 )
-  ko "prettier (format) — file riformattati automaticamente: aggiungili con git add e rilancia il commit"
+  if ( cd frontend && npm run format:check >/dev/null 2>&1 ); then
+    ok "prettier (format)"
+  else
+    # Riformatta subito i file, così basta un git add e rilanciare il commit.
+    ( cd frontend && npm run format >/dev/null 2>&1 )
+    ko "prettier (format) — file riformattati automaticamente: aggiungili con git add e rilancia il commit"
+  fi
+  ( cd frontend && npm run lint ) && ok "oxlint" || ko "oxlint"
+  run_quiet "build (tsc+vite)" sh -c "cd frontend && npm run build"
+  run_quiet "vitest (con soglia coverage)" sh -c "cd frontend && npm run test:coverage"
 fi
-( cd frontend && npm run lint ) && ok "oxlint" || ko "oxlint"
-run_quiet "build (tsc+vite)" sh -c "cd frontend && npm run build"
-run_quiet "vitest (con soglia coverage)" sh -c "cd frontend && npm run test:coverage"
 
 # --- 4. secret scan (gitleaks via Docker) ---------------------------------
 

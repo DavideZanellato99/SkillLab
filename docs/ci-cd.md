@@ -33,8 +33,11 @@ dettaglio è in [contributing.md](contributing.md).
 **Quando fai `git commit`** parte il hook, che gira in locale gli stessi
 controlli della CI: ruff, mypy, la coerenza dei lock, pytest, prettier, oxlint,
 la build, vitest e gitleaks sui file in stage. Se qualcosa è rosso il commit non
-viene creato. Sono circa dieci minuti, ed è il motivo per cui la CI quasi non
-trova mai niente: quello che trova, lo trova prima.
+viene creato. È il motivo per cui la CI quasi non trova mai niente: quello che
+trova, lo trova prima. I gate di un lato girano solo se il commit tocca quel
+lato, quindi un commit di soli docs passa in pochi secondi mentre uno che tocca
+backend e frontend insieme resta sui dieci minuti; la CI, per parte sua, gira
+sempre tutto.
 
 **Quando pushi su `stage`** il push passa subito. Sul branch c'è un ruleset che
 richiede il check `CI success`, ma il ruolo di amministratore lo scavalca: la

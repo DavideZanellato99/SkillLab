@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSoc
 from sqlalchemy.orm import Session
 
 import origins
+import tts_provider
 import voice_capacity
 from auth_dependency import get_current_user
 from conversation_titles import next_conversation_title
@@ -70,8 +71,17 @@ def start_voice_session(
     # Il dettaglio tecnico resta nei log: chi legge il messaggio si sta
     # esercitando, e i nomi delle variabili d'ambiente non gli servono a
     # nulla se non a capire che la piattaforma è configurata male.
-    if not ELEVENLABS_API_KEY:
-        logger.error("Sessione vocale rifiutata: ELEVENLABS_API_KEY mancante")
+    # Due chiavi, una per lato: la trascrizione è sempre di ElevenLabs, la
+    # sintesi è di chi dice TTS_PROVIDER. Guardarle qui vuol dire rifiutare
+    # la chiamata con un messaggio invece che con un socket che cade appena
+    # aperto, quando l'operatore ha già premuto "Chiama".
+    if not ELEVENLABS_API_KEY or not tts_provider.API_KEY:
+        logger.error(
+            "Sessione vocale rifiutata: chiave mancante (trascrizione ElevenLabs: %s, sintesi %s: %s)",
+            "sì" if ELEVENLABS_API_KEY else "NO",
+            tts_provider.PROVIDER_LABEL,
+            "sì" if tts_provider.API_KEY else "NO",
+        )
         raise HTTPException(
             status_code=503,
             detail="Il servizio vocale non è al momento disponibile. Utilizza la modalità chat oppure contatta l'amministratore.",

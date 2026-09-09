@@ -75,12 +75,17 @@ mittente riconoscibile. Al suo posto c'è
 stesso marchio e stesso viola verso ciano dell'applicazione, con le credenziali
 in un riquadro a parte e il pulsante che porta all'accesso. Si incolla a mano
 nel pool, in *Messaging > Message templates > Invitation message* scegliendo
-HTML, dopo aver sostituito `INDIRIZZO_PIATTAFORMA` con il dominio di
+HTML. Il pulsante punta per ora a `http://localhost:3000`, l'applicazione come
+gira in locale, e quando ci sarà un dominio vero va sostituito con quello di
 `SITE_ADDRESS`. Il file tiene i segnaposto `{username}` e `{####}` che Cognito
 riempie, ed entrambi devono restarci: senza, il pool rifiuta il salvataggio.
 Lo username è l'indirizzo email, perché è con quello che
 [admin_create_user](../backend/cognito_service.py) crea l'account, quindi il
-riquadro lo etichetta come tale e non come un nome utente a parte.
+riquadro lo etichetta come tale e non come un nome utente a parte. Essendo un
+indirizzo, i client di posta lo riconoscono e lo trasformerebbero da soli in
+un link per scrivere a se stessi: il template porta le poche righe che
+spengono quel comportamento, ed è l'unico motivo per cui non è tutto in stile
+in linea.
 
 I requisiti sono controllati **due volte di proposito**: nel backend
 (`validate_password_strength`) e nella lista che l'utente vede mentre scrive

@@ -222,6 +222,13 @@ monitoraggio sistematico, dati trattati su larga scala) la **DPIA ex art. 35
 | **ElevenLabs**  | Il testo generato dell'avatar, per sintetizzarlo in voce                                                                                                                                                 | Durante ogni telefonata simulata                                                                                   |
 | **AWS Cognito** | Solo l'indirizzo email, più la password gestita da Cognito                                                                                                                                               | Alla creazione dell'account e a ogni accesso                                                                       |
 
+La riga della sintesi vocale dipende dalla configurazione: `TTS_PROVIDER`
+sceglie fra ElevenLabs e Cartesia, e chi riceve il testo generato
+dell'avatar è il fornitore attivo. L'installazione in produzione usa
+ElevenLabs, ed è quello l'elenco dei sub responsabili da dichiarare;
+passando a Cartesia questa tabella e l'accordo art. 28 vanno aggiornati
+prima, non dopo.
+
 Nome e cognome non escono mai dall'infrastruttura di SkillLab: restano nella
 tabella `users` (`backend/cognito_service.py`, `admin_create_user` invia solo
 l'attributo `email`).

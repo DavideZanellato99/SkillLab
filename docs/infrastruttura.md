@@ -24,7 +24,7 @@ flowchart TD
     BE2 --> DB
     BE3 --> DB
     BE4 --> DB
-    BE1 -.->|"STT, LLM, TTS"| EXT["ElevenLabs<br/>OpenAI"]
+    BE1 -.->|"STT, LLM, TTS"| EXT["fornitori esterni<br/>ElevenLabs, OpenAI"]
     BK["db-backup<br/>dump ogni 6h"] --> DB
 ```
 

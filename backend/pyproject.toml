@@ -51,6 +51,10 @@ extend-immutable-calls = [
 # dell'autenticazione le credenziali finte sono il soggetto: nomi di rotta
 # come "/api/auth/change-password" e password di prova inventate sul posto.
 "tests/*" = ["B011", "S101", "S105", "S106", "S107"]
+# tts_provider importa l'adattatore del fornitore scelto, quindi dopo aver
+# letto TTS_PROVIDER e non in cima: è l'unico modo per non pretendere dal
+# .env anche le variabili del fornitore che non si sta usando.
+"tts_provider.py" = ["E402"]
 # assign_voices is a CLI script: print IS its user interface.
 "assign_voices.py" = ["T201"]
 # Modules that still use print() as their logging. Tracked as tech debt
@@ -107,6 +111,8 @@ omit = [
     "voice_pipeline.py",
     "voice_sessions.py",
     "elevenlabs_tts_service.py",
+    "cartesia_tts_service.py",
+    "tts_provider.py",
     "elevenlabs_service.py",
     "tls_setup.py",
 ]

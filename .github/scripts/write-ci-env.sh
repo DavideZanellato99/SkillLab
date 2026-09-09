@@ -44,28 +44,44 @@ EOF
 # Ogni variabile OBBLIGATORIA deve stare qui o il container si rifiuta di
 # partire, ed è voluto: questo file è il controllo che la regola "nessun
 # default per ciò che conta" resti vera.
+#
+# Dove c'è una scelta di fornitore (ROLEPLAY_PROVIDER, TTS_PROVIDER) obbliga
+# solo quello scelto, ma qui stanno i valori di entrambi: così cambiare la
+# riga della scelta basta a provare l'altro, senza scoprire le variabili che
+# mancano da un container che non parte.
 cat > backend/.env <<'EOF'
 DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/skilllab_db
 ALLOWED_ORIGINS=http://localhost
 COGNITO_REGION=eu-west-1
 COGNITO_USER_POOL_ID=
 COGNITO_APP_CLIENT_ID=
+ROLEPLAY_PROVIDER=openai
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o
 OPENAI_EVAL_MODEL=gpt-4o
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_FALLBACK_MODELS=
 OPENAI_EVAL_FALLBACK_MODELS=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_FALLBACK_MODELS=
 ELEVENLABS_API_KEY=
 ELEVENLABS_STT_MODEL=scribe_v1
 ELEVENLABS_STT_LANGUAGE=it
 ELEVENLABS_VAD_SILENCE_SECS=0.8
 ELEVENLABS_VAD_THRESHOLD=0.5
 ELEVENLABS_STT_WS_URL=wss://api.elevenlabs.io/v1/speech-to-text/stream
+TTS_PROVIDER=elevenlabs
 ELEVENLABS_TTS_MODEL=eleven_flash_v2_5
 ELEVENLABS_TTS_LANGUAGE=it
 ELEVENLABS_DEFAULT_VOICE_ID=
 ELEVENLABS_TTS_WS_URL=wss://api.elevenlabs.io/v1/text-to-speech
+CARTESIA_API_KEY=
+CARTESIA_MODEL=sonic-3.5
+CARTESIA_VERSION=2026-03-01
+CARTESIA_DEFAULT_VOICE_ID=
+CARTESIA_LANGUAGE=it
+CARTESIA_TTS_WS_URL=wss://api.cartesia.ai/tts/websocket
 VOICE_LATENCY_LOG=1
 VOICE_STT_DEBUG=0
 MAX_CONCURRENT_CALLS=20

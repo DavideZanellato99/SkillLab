@@ -1,11 +1,14 @@
 """OpenAI service for the avatar conversation LLM (roleplay) and the
 post-call evaluation.
 
-The live voice conversation streams from a low-latency model (OPENAI_MODEL).
-The post-call evaluation runs separately on a stronger reasoning model
-(OPENAI_EVAL_MODEL) since it's a single one-shot judgment call, not
-latency-sensitive. The persona prompt building lives in persona_prompt
-(pure string templating, provider-agnostic).
+The live voice conversation streams from a low-latency model, whose provider
+and model list live in roleplay_provider: the roleplay is the one call that
+can run on OpenAI or on Gemini, chosen from the .env. Everything else here is
+OpenAI and only OpenAI. The post-call evaluation runs on a stronger reasoning
+model (OPENAI_EVAL_MODEL) since it's a single one-shot judgment call, not
+latency-sensitive, and the embeddings have no fallback at all. The persona
+prompt building lives in persona_prompt (pure string templating,
+provider-agnostic).
 """
 
 import json
@@ -24,15 +27,20 @@ from persona_prompt import (
     build_persona_prompt,
     profile_section,
 )
+from roleplay_provider import (
+    missing_key_error,
+    roleplay_client,
+    roleplay_completion_kwargs,
+    roleplay_models,
+)
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL")
-if not OPENAI_MODEL:
-    raise RuntimeError("OPENAI_MODEL non configurato. Aggiungilo al file .env del backend.")
+# Il modello del roleplay non si legge qui: quale sia, e da quale fornitore,
+# lo decide roleplay_provider a partire da ROLEPLAY_PROVIDER.
 OPENAI_EVAL_MODEL = os.getenv("OPENAI_EVAL_MODEL")
 if not OPENAI_EVAL_MODEL:
     raise RuntimeError("OPENAI_EVAL_MODEL non configurato. Aggiungilo al file .env del backend.")
@@ -49,67 +57,44 @@ if not OPENAI_EMBEDDING_MODEL:
 
 # When the primary model is saturated or unavailable we retry the same
 # request on these, in order (comma-separated; empty = no fallback).
-OPENAI_FALLBACK_MODELS = [
-    m.strip() for m in os.getenv("OPENAI_FALLBACK_MODELS", "").split(",") if m.strip()
-]
 OPENAI_EVAL_FALLBACK_MODELS = [
     m.strip() for m in os.getenv("OPENAI_EVAL_FALLBACK_MODELS", "").split(",") if m.strip()
 ]
 
 # Quanto si aspetta OpenAI prima di dichiarare persa una richiesta.
 #
-# Senza questi la libreria usa i suoi default, che sono dell'ordine dei dieci
-# minuti: pensati per uno script che elabora un file, non per qualcuno che
-# aspetta al telefono. Il guaio non è la richiesta persa, è che perderla
-# richiede più tempo di quanto la conversazione ne abbia.
-#
-# Due numeri, perché i due usi hanno fretta diversa. Nel roleplay dal vivo
-# l'operatore sta parlando con l'avatar: passati venti secondi senza una
-# parola la battuta è comunque rovinata, e arrendersi in fretta lascia
-# almeno provare il modello di riserva mentre la chiamata è ancora viva.
-# Sul flusso, che è il caso normale, questo tetto vale fra un pezzo e il
-# successivo, non sull'intera risposta: un modello che parla lentamente non
-# viene interrotto, uno che si è piantato sì.
-_LIVE_TIMEOUT_SECONDS = 20
-# La valutazione invece gira su un modello di ragionamento che pensa prima
-# di rispondere, e due minuti di attesa sono un suo tempo normale, non un
-# sintomo. Qui nessuno è in linea: c'è una rotella che gira in una pagina.
+# Senza questo la libreria usa il suo default, che è dell'ordine dei dieci
+# minuti: pensato per uno script che elabora un file, non per qualcuno che
+# aspetta un esito da una pagina aperta. Qui gira un modello di ragionamento
+# che pensa prima di rispondere, e due minuti di attesa sono un suo tempo
+# normale, non un sintomo. L'attesa del roleplay dal vivo è un'altra cosa e
+# sta in roleplay_provider, insieme al cliente che la usa.
 _EVAL_TIMEOUT_SECONDS = 120
 
-# I ritentativi della libreria si moltiplicano per il timeout, e sono la
-# ragione per cui i due usi non possono avere la stessa regola.
+# I ritentativi della libreria si moltiplicano per il timeout.
 #
-# Dal vivo nessuno: due tentativi da venti secondi fanno quaranta secondi di
-# silenzio in una conversazione parlata, e a quel punto non c'è più niente
-# da salvare. Meglio dire subito che è andata male, con un tempo massimo che
-# si sa in anticipo.
+# Qui uno, perché valgono la pena: un singolo intoppo di rete altrimenti si
+# presenta all'utente come una valutazione fallita da rilanciare a mano, e il
+# costo è aspettare invece che rifare. Dal vivo la regola è opposta, e per lo
+# stesso motivo sta insieme all'altra attesa.
 #
-# Nella valutazione uno sì: lì i tentativi valgono la pena, perché un
-# singolo intoppo di rete altrimenti si presenta all'utente come una
-# valutazione fallita da rilanciare a mano, e il costo è aspettare invece
-# che rifare.
-#
-# Nota che qui contano solo questi numeri: un timeout non fa passare al
-# modello di riserva, perché _is_retryable guarda i sovraccarichi (429, 502,
-# 503) e non le attese scadute. Il caso peggiore è quindi venti secondi dal
-# vivo e quattro minuti per la valutazione, non la somma su tutti i modelli
-# in lista.
-_LIVE_MAX_RETRIES = 0
+# Nota che qui conta solo questo numero: un timeout non fa passare al modello
+# di riserva, perché _is_retryable guarda i sovraccarichi (429, 502, 503) e
+# non le attese scadute. Il caso peggiore è quindi quattro minuti, non la
+# somma su tutti i modelli in lista.
 _EVAL_MAX_RETRIES = 1
 
+# Il cliente della valutazione e degli embedding. Il roleplay ha il suo, che
+# può puntare a un altro fornitore: vedi roleplay_provider.
 async_client = (
     AsyncOpenAI(
         api_key=OPENAI_API_KEY,
-        timeout=_LIVE_TIMEOUT_SECONDS,
-        max_retries=_LIVE_MAX_RETRIES,
+        timeout=_EVAL_TIMEOUT_SECONDS,
+        max_retries=_EVAL_MAX_RETRIES,
     )
     if OPENAI_API_KEY
     else None
 )
-
-
-def _candidate_models() -> list[str]:
-    return [OPENAI_MODEL] + [m for m in OPENAI_FALLBACK_MODELS if m != OPENAI_MODEL]
 
 
 def _eval_candidate_models() -> list[str]:
@@ -123,21 +108,6 @@ def _is_retryable(error: Exception) -> bool:
         return True
     msg = str(error)
     return any(s in msg for s in ("429", "rate limit", "overloaded", "502", "503"))
-
-
-def _completion_kwargs(model: str) -> dict:
-    """Per-model sampling params.
-
-    The GPT-5 family are reasoning models: they reject `temperature`, and
-    reasoning is disabled/minimized to keep voice-mode latency low
-    ("none" exists only from 5.1 onward). Other models get a creative
-    temperature suited to the roleplay.
-    """
-    if model.startswith("gpt-5.1"):
-        return {"reasoning_effort": "none"}
-    if model.startswith("gpt-5"):
-        return {"reasoning_effort": "minimal"}
-    return {"temperature": 0.9}
 
 
 def _eval_completion_kwargs(model: str) -> dict:
@@ -259,39 +229,39 @@ def _roleplay_messages(
     channel: str,
 ) -> list[dict]:
     """Preflight the roleplay request and build its messages payload."""
-    if not async_client:
-        raise RuntimeError(
-            "OPENAI_API_KEY non configurata. Aggiungi OPENAI_API_KEY al file .env del backend."
-        )
+    if not roleplay_client():
+        raise missing_key_error()
     if not avatar_profile:
         raise RuntimeError("Avatar senza scheda persona: impossibile generare la risposta.")
     return _build_messages(build_persona_prompt(avatar_profile, channel), messages_history)
 
 
 async def prewarm_roleplay(avatar_profile: dict) -> None:
-    """Open the connection to OpenAI and prime the persona prompt cache.
+    """Open the connection to the provider and prime the persona prompt cache.
 
     Meant to run while the phone is still ringing, where the wait costs the
     operator nothing. It pays two things up front that the first turn would
     otherwise pay in full: the DNS/TCP/TLS handshake to the API, and the
     prefill of the persona prompt, which is the cacheable prefix every turn
-    of the call then reuses.
+    of the call then reuses. How much of the second half is actually saved
+    depends on the provider's caching rules, the handshake never is.
 
     Best effort by design: it asks for a single token and swallows any
     failure, since the worst case is simply the first turn paying what it
     would have paid without this.
     """
-    if not async_client or not avatar_profile:
+    client = roleplay_client()
+    if not client or not avatar_profile:
         return
+    model = roleplay_models()[0]
     try:
-        await async_client.chat.completions.create(
-            model=OPENAI_MODEL,
+        await client.chat.completions.create(
+            model=model,
             messages=_build_messages(build_persona_prompt(avatar_profile, CHANNEL_VOICE), []),
-            max_completion_tokens=1,
-            **_completion_kwargs(OPENAI_MODEL),
+            **roleplay_completion_kwargs(model, 1),
         )
     except Exception as e:
-        logger.warning("Prewarm OpenAI non riuscito: %s", str(e)[:120])
+        logger.warning("Prewarm del modello non riuscito: %s", str(e)[:120])
 
 
 async def stream_avatar_response(
@@ -305,20 +275,20 @@ async def stream_avatar_response(
     avatar is a training persona: avatar_profile is its sheet (required).
     The channel picks the persona prompt variant (call vs written chat).
     The last entry of messages_history must be the new user message.
-    Yields text fragments as soon as OpenAI produces them.
+    Yields text fragments as soon as the model produces them.
     """
     messages = _roleplay_messages(messages_history, avatar_profile, channel)
+    client = roleplay_client()
 
     last_error: Exception | None = None
-    for model in _candidate_models():
+    for model in roleplay_models():
         started = False
         try:
-            stream = await async_client.chat.completions.create(
+            stream = await client.chat.completions.create(
                 model=model,
                 messages=messages,
                 stream=True,
-                max_completion_tokens=1024,
-                **_completion_kwargs(model),
+                **roleplay_completion_kwargs(model, 1024),
             )
             async for chunk in stream:
                 delta = chunk.choices[0].delta.content if chunk.choices else None
@@ -329,15 +299,15 @@ async def stream_avatar_response(
         except Exception as e:
             # Once text has been emitted we can't switch model mid-response
             if started or not _is_retryable(e):
-                logger.exception("Streaming OpenAI fallito (%s)", model)
-                raise RuntimeError(f"Errore nella comunicazione con OpenAI: {e!s}")
+                logger.exception("Streaming del roleplay fallito (%s)", model)
+                raise RuntimeError(f"Errore nella comunicazione con il modello: {e!s}")
             logger.warning(
                 "Modello %s non disponibile, provo il successivo: %s", model, str(e)[:120]
             )
             last_error = e
 
-    logger.error("Tutti i modelli OpenAI non disponibili: %s", last_error)
-    raise RuntimeError(f"Errore nella comunicazione con OpenAI: {last_error!s}")
+    logger.error("Tutti i modelli del roleplay non disponibili: %s", last_error)
+    raise RuntimeError(f"Errore nella comunicazione con il modello: {last_error!s}")
 
 
 # ── Post-call evaluation (operator coaching) ──────────

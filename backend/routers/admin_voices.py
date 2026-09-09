@@ -1,16 +1,22 @@
-"""ElevenLabs voice catalogue and one-shot preview (super admin only).
+"""Catalogo voci e anteprima del fornitore di sintesi attivo (solo super admin).
 
 Exists for one screen: the avatar admin form, where the voice of a persona
 used to be an opaque id copied by hand from a CLI script. Here the catalogue
 is listed and a line can be heard before saving.
 
+Il catalogo è quello del fornitore scelto da `TTS_PROVIDER`, ed è l'unico che
+possa essere: un id di voce vale soltanto per chi lo ha emesso, e il campo
+dell'avatar su cui finisce è uno solo. Cambiando fornitore le voci assegnate
+vanno quindi riscelte da qui, e fino ad allora gli avatar parlano con quella
+predefinita.
+
 Nothing in this module touches the database: it is a thin, authenticated
-proxy in front of ElevenLabs, so the API key never reaches the browser.
+proxy in front of the provider, so the API key never reaches the browser.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-import elevenlabs_tts_service
+import tts_provider
 from auth_dependency import get_current_super_admin
 from models import User
 from schemas import VoiceOption, VoicePreviewRequest
@@ -35,10 +41,10 @@ def _base_language(code: str) -> str:
 
 
 def _unavailable(exc: Exception) -> HTTPException:
-    """ElevenLabs unreachable or misconfigured, told as a 503 the page can show."""
+    """Fornitore irraggiungibile o mal configurato, detto come un 503 mostrabile."""
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail=f"Catalogo voci ElevenLabs non disponibile: {exc}",
+        detail=f"Catalogo voci {tts_provider.PROVIDER_LABEL} non disponibile: {exc}",
     )
 
 
@@ -49,8 +55,8 @@ def list_voices(
     """The whole voice catalogue, the ones in the app's language first.
 
     Ordinate, non filtrate, ed è una differenza che vale la pena spiegare: il
-    modello di sintesi è multilingue e la lingua gliela impone la connessione,
-    non la voce, quindi qualunque voce del catalogo legge l'italiano. Togliere
+    modello di sintesi è multilingue e la lingua gliela imponiamo noi, non la
+    voce, quindi qualunque voce del catalogo legge l'italiano. Togliere
     quelle che dichiarano un'altra lingua nasconderebbe voci perfettamente
     usabili, e la lingua dichiarata resta comunque il criterio con cui si
     parte, perché una voce nata italiana l'accento giusto ce l'ha già.
@@ -59,11 +65,11 @@ def list_voices(
     la scheda la tiene in elenco per conto suo e la segnala.
     """
     try:
-        voices = elevenlabs_tts_service.list_voices()
+        voices = tts_provider.list_voices()
     except Exception as exc:  # network, auth, malformed payload
         raise _unavailable(exc) from exc
 
-    language = _base_language(elevenlabs_tts_service.ELEVENLABS_TTS_LANGUAGE)
+    language = _base_language(tts_provider.TTS_LANGUAGE)
     voices.sort(key=lambda v: (_base_language(v["language"]) != language, v["name"].lower()))
     return [VoiceOption(**v) for v in voices]
 
@@ -82,7 +88,7 @@ def preview_voice(
         )
 
     try:
-        audio = elevenlabs_tts_service.synthesize_preview(payload.voice_id, text)
+        audio = tts_provider.synthesize_preview(payload.voice_id, text)
     except Exception as exc:
         raise _unavailable(exc) from exc
 

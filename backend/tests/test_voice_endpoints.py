@@ -39,12 +39,13 @@ WEBM = "audio/webm;codecs=opus"
 
 @pytest.fixture(autouse=True)
 def servizi_vocali_configurati(monkeypatch):
-    """La chiave che l'apertura pretende.
+    """Le due chiavi che l'apertura pretende, trascrizione e sintesi.
 
-    Nel .env di test è vuota, ed è giusto che lo sia: senza, la risposta è
-    503 e non c'è niente da provare oltre a quella.
+    Nel .env di test sono vuote, ed è giusto che lo siano: senza, la
+    risposta è 503 e non c'è niente da provare oltre a quella.
     """
     monkeypatch.setattr(voice_router, "ELEVENLABS_API_KEY", "chiave-vocale")
+    monkeypatch.setattr(voice_router.tts_provider, "API_KEY", "chiave-sintesi")
 
 
 @pytest.fixture
@@ -92,16 +93,24 @@ def test_aprire_una_chiamata_nuova_crea_la_conversazione_e_l_identificativo(
     assert conversazione.title
 
 
-def test_senza_la_chiave_dei_servizi_vocali_la_chiamata_non_si_apre(
+def test_senza_le_chiavi_dei_servizi_vocali_la_chiamata_non_si_apre(
     user_client, avatar, monkeypatch
 ):
-    """Meglio dirlo qui che far squillare a vuoto: senza sintesi e senza
-    trascrizione il socket si aprirebbe per chiudersi subito."""
+    """Meglio dirlo qui che far squillare a vuoto: senza sintesi o senza
+    trascrizione il socket si aprirebbe per chiudersi subito.
+
+    Le due chiavi sono di due lati diversi, e con TTS_PROVIDER su un altro
+    fornitore sono proprio di due account diversi: manca l'una o manca
+    l'altra, la chiamata non si può fare lo stesso.
+    """
     monkeypatch.setattr(voice_router, "ELEVENLABS_API_KEY", "")
+    senza_trascrizione = user_client.post(SESSIONE, json={"avatar_id": str(avatar.id)})
+    assert senza_trascrizione.status_code == 503
 
-    risposta = user_client.post(SESSIONE, json={"avatar_id": str(avatar.id)})
-
-    assert risposta.status_code == 503
+    monkeypatch.setattr(voice_router, "ELEVENLABS_API_KEY", "chiave-vocale")
+    monkeypatch.setattr(voice_router.tts_provider, "API_KEY", "")
+    senza_sintesi = user_client.post(SESSIONE, json={"avatar_id": str(avatar.id)})
+    assert senza_sintesi.status_code == 503
 
 
 def test_un_avatar_che_non_si_vede_non_si_chiama(user_client, make_avatar, db_session):

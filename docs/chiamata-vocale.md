@@ -13,8 +13,8 @@ sequenceDiagram
     participant B as Browser
     participant P as VoicePipeline
     participant E as ElevenLabs STT
-    participant L as OpenAI
-    participant C as ElevenLabs TTS
+    participant L as LLM del roleplay
+    participant C as Sintesi vocale
 
     O->>B: preme "Chiama"
     B->>P: POST /api/voice/session
@@ -176,12 +176,14 @@ cicli concorrenti su un `asyncio.wait` che chiude tutto appena uno finisce:
 | `_browser_loop` | Legge dal browser: i frame binari li inoltra alla STT, il JSON `end` chiude la chiamata |
 | `_stt_loop` | Legge da ElevenLabs: parziali, commit, errori |
 | `_tts_loop` | Legge dalla sintesi: blocchi audio verso il browser |
-| `_keepalive_loop` | Tiene su la socket della sintesi mentre parla l'operatore |
+| `_keepalive_loop` | Tiene su la socket della sintesi mentre parla l'operatore, dove serve |
 
-Durante lo squillo parte anche un **prewarm**: una richiesta da un token sola a
-OpenAI che paga in anticipo l'handshake e il prefill del prompt della persona,
-cioè le due cose che altrimenti pagherebbe il primo turno. È best effort: nel
-caso peggiore il primo turno paga quello che avrebbe pagato comunque.
+Durante lo squillo parte anche un **prewarm**: una richiesta da un token sola
+al modello, che paga in anticipo l'handshake e il prefill del prompt della
+persona, cioè le due cose che altrimenti pagherebbe il primo turno. Quanto
+della seconda metà si risparmi davvero dipende dalle regole di cache del
+fornitore, l'handshake mai. È best effort: nel caso peggiore il primo turno
+paga quello che avrebbe pagato comunque.
 
 Gli eventi JSON verso il browser sono: `ready`, `user_partial`, `user_final`,
 `assistant_delta`, `assistant_end`, `speaking_start`, `speaking_end`,
@@ -230,7 +232,7 @@ l'operatore ha effettivamente sentito) e poi `interrupt`.
 ## Dentro un turno
 
 1. si apre un **contesto di sintesi** nuovo, identificato da un id;
-2. i token di OpenAI arrivano in streaming: ognuno va al browser come testo
+2. i token del modello arrivano in streaming: ognuno va al browser come testo
    (`assistant_delta`) e finisce in un buffer;
 3. il buffer viene mandato alla TTS **a pezzi interi**, mai un token alla
    volta: vedi [Perché il testo non parte parola per parola](#perché-il-testo-non-parte-parola-per-parola);
@@ -388,6 +390,39 @@ i keep alive vanno indirizzati a un contesto, e fra un turno e l'altro non ce
 n'è nessuno aperto. Un testo vuoto il fornitore lo ignora, quindi non
 sintetizza nulla e non consuma quota: conta solo che sia arrivato qualcosa.
 
+Il giro parte solo se serve: è l'adattatore del fornitore a dire ogni quanto
+tenere viva la socket, e su Cartesia, che non la chiude da sola, quel valore
+è vuoto e il ciclo non viene nemmeno acceso.
+
+## Cambiare il fornitore della sintesi
+
+`TTS_PROVIDER` sceglie chi dà la voce, `elevenlabs` oppure `cartesia`, e
+serve a confrontarli sulle stesse chiamate invece che sulla carta: il numero
+che li separa è il segmento `tts` del riepilogo, cioè il tempo fra la battuta
+pronta e il primo audio.
+
+I due protocolli non si somigliano, quindi non basta cambiare un indirizzo:
+
+| | ElevenLabs Flash | Cartesia Sonic |
+| --- | --- | --- |
+| La voce | nell'indirizzo della connessione | in ogni messaggio |
+| Un id di voce sbagliato | rifiuta l'handshake, e la chiamata riparte con la voce predefinita | passa, e il turno resta muto |
+| Fine del turno e interruzione | lo stesso messaggio, l'audio di troppo lo scarta la pipeline | due messaggi diversi, il secondo butta via quel che resta |
+| Inattività della socket | la chiude, quindi vuole i keep alive | non la chiude |
+
+La pipeline non conosce nessuna di queste differenze: vede solo la forma
+descritta da [tts_protocol.py](../backend/tts_protocol.py), che ogni
+fornitore implementa nel suo adattatore
+([elevenlabs_tts_service.py](../backend/elevenlabs_tts_service.py),
+[cartesia_tts_service.py](../backend/cartesia_tts_service.py)), e che
+[tts_provider.py](../backend/tts_provider.py) le consegna già scelta. Solo
+il fornitore scelto viene preteso dal `.env`, l'altro può restare vuoto.
+
+Una cosa non passa da un fornitore all'altro: il `voice_id` degli avatar. È
+un campo solo e un id vale soltanto per chi lo ha emesso, quindi dopo un
+cambio gli avatar parlano con la voce predefinita del nuovo fornitore, e le
+voci vanno riscelte dal pannello, dove il catalogo è già quello attivo.
+
 ## La registrazione, dopo
 
 Alla chiusura il browser carica l'audio con `POST /api/voice/recording/{id}`.
@@ -458,5 +493,5 @@ sbagliare.
 | La chiamata non parte e l'id sembra giusto | L'id è finito nella query string invece che nel sottoprotocollo | Chiusura 4401: il vecchio indirizzo non è più una strada |
 | "Tutte le linee sono occupate" | Tetto del processo raggiunto | Chiusura 1013 |
 | "Riconoscimento vocale non disponibile" | Errore fatale della STT (quota, autenticazione, limite di sessione) | Evento `error` e chiusura |
-| Il modello non risponde | Guasto su OpenAI | Battuta di ripiego, la chiamata continua |
+| Il modello non risponde | Guasto del fornitore | Battuta di ripiego, la chiamata continua |
 | L'avatar scrive ma non parla, e nei log non c'è nessun errore | La voce è di libreria e l'account sta su un piano che via API non la concede | Niente: il contesto di sintesi si apre, si chiude e non produce audio. Sul REST lo stesso account risponde 402 `paid_plan_required`, ed è da lì che si riconosce |

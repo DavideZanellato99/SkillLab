@@ -13,7 +13,7 @@ il roleplay sia il metro con cui la conversazione viene poi giudicata.
 | `category_id`              | La categoria in cui è raggruppato, una riga di `avatar_categories` |
 | `description`, `image_url` | Come si presenta nella galleria                                    |
 | `organization_id`          | Il tenant a cui appartiene: si vede solo lì dentro                 |
-| `voice_id`                 | La voce ElevenLabs con cui parla al telefono                       |
+| `voice_id`                 | La voce con cui parla al telefono, del fornitore attivo            |
 | `deleted_at`               | La data di archiviazione, NULL finché è attivo                     |
 
 Nella risposta dell'API, accanto a questi, viaggiano due numeri che nel
@@ -332,8 +332,10 @@ il segnaposto, e l'avviso compare mentre si scrive invece che alla fine.
 
 ## La voce
 
-Il campo `voice_id` è un id di voce ElevenLabs. Se manca si usa quella di
-default dalla configurazione.
+Il campo `voice_id` è un id di voce del fornitore di sintesi attivo, quello
+scelto da `TTS_PROVIDER`. Se manca si usa quella di default dalla
+configurazione, e lo stesso vale se l'id c'è ma è di un altro fornitore: gli
+id non sono trasferibili, quindi dopo un cambio le voci vanno riscelte qui.
 
 Nella scheda l'id si scrive a mano, con accanto il bottone dell'anteprima: le
 voci in uso sono poche e scelte una volta, mentre il catalogo del fornitore ne

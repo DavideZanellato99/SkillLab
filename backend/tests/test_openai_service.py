@@ -25,9 +25,7 @@ import openai_service
 from openai_service import (
     EVALUATION_CRITERIA,
     EVALUATION_SUGGESTION_THRESHOLD,
-    _candidate_models,
     _clamp_score,
-    _completion_kwargs,
     _eval_candidate_models,
     _eval_completion_kwargs,
     _evaluation_prompt,
@@ -90,8 +88,9 @@ def modelli(monkeypatch):
     """Il primario e la sua riserva, senza dipendere dal .env di chi esegue."""
     monkeypatch.setattr(openai_service, "OPENAI_EVAL_MODEL", "modello-primario")
     monkeypatch.setattr(openai_service, "OPENAI_EVAL_FALLBACK_MODELS", ["modello-riserva"])
-    monkeypatch.setattr(openai_service, "OPENAI_MODEL", "live-primario")
-    monkeypatch.setattr(openai_service, "OPENAI_FALLBACK_MODELS", ["live-riserva"])
+    monkeypatch.setattr(
+        openai_service, "roleplay_models", lambda: ["live-primario", "live-riserva"]
+    )
 
 
 @pytest.fixture
@@ -99,6 +98,7 @@ def cliente(monkeypatch):
     def _installa(esiti):
         finto = _ClienteFinto(esiti)
         monkeypatch.setattr(openai_service, "async_client", finto)
+        monkeypatch.setattr(openai_service, "roleplay_client", lambda: finto)
         return finto
 
     return _installa
@@ -106,8 +106,9 @@ def cliente(monkeypatch):
 
 @pytest.fixture
 def senza_chiave(monkeypatch):
-    """Il backend avviato senza OPENAI_API_KEY: il cliente resta spento."""
+    """Il backend avviato senza la chiave del fornitore: il cliente resta spento."""
     monkeypatch.setattr(openai_service, "async_client", None)
+    monkeypatch.setattr(openai_service, "roleplay_client", lambda: None)
 
 
 # ── Quando vale la pena riprovare ─────────────────────────────────────
@@ -142,13 +143,8 @@ def test_un_errore_di_programmazione_non_si_ritenta():
 
 # ── I parametri, che cambiano da modello a modello ────────────────────
 
-
-def test_i_modelli_di_ragionamento_non_accettano_la_temperatura():
-    """La rifiutano con un errore, quindi non è una preferenza: è la
-    differenza fra una risposta e un 400."""
-    assert _completion_kwargs("gpt-5.1-mini") == {"reasoning_effort": "none"}
-    assert _completion_kwargs("gpt-5-mini") == {"reasoning_effort": "minimal"}
-    assert _completion_kwargs("gpt-4o") == {"temperature": 0.9}
+# Quelli del roleplay stanno in test_roleplay_provider, insieme alla scelta
+# del fornitore che li decide.
 
 
 def test_la_valutazione_ragiona_quanto_serve_invece_di_correre():
@@ -158,13 +154,8 @@ def test_la_valutazione_ragiona_quanto_serve_invece_di_correre():
     assert _eval_completion_kwargs("gpt-4o") == {"temperature": 0.3}
 
 
-def test_il_primario_si_prova_per_primo_e_una_volta_sola(modelli, monkeypatch):
-    assert _candidate_models() == ["live-primario", "live-riserva"]
+def test_il_primario_si_prova_per_primo_e_una_volta_sola(modelli):
     assert _eval_candidate_models() == ["modello-primario", "modello-riserva"]
-
-    # Un .env che ripete il primario fra le riserve non lo fa provare due volte
-    monkeypatch.setattr(openai_service, "OPENAI_FALLBACK_MODELS", ["live-primario", "altro"])
-    assert _candidate_models() == ["live-primario", "altro"]
 
 
 # ── La risposta in JSON ───────────────────────────────────────────────
@@ -330,7 +321,7 @@ def _scheda():
 
 def test_la_risposta_arriva_a_pezzi_man_mano_che_il_modello_la_scrive(modelli, monkeypatch):
     finto = _ClienteChiChiacchiera({"live-primario": ["Buon", "giorno", None, " a lei"]})
-    monkeypatch.setattr(openai_service, "async_client", finto)
+    monkeypatch.setattr(openai_service, "roleplay_client", lambda: finto)
 
     assert _raccogli(messages_history=_conversazione(), avatar_profile=_scheda()) == [
         "Buon",
@@ -343,7 +334,7 @@ def test_un_modello_saturo_cede_il_turno_prima_di_aprire_bocca(modelli, monkeypa
     finto = _ClienteChiChiacchiera(
         {"live-primario": _Sovraccarico("overloaded"), "live-riserva": ["Pronto"]}
     )
-    monkeypatch.setattr(openai_service, "async_client", finto)
+    monkeypatch.setattr(openai_service, "roleplay_client", lambda: finto)
 
     assert _raccogli(messages_history=_conversazione(), avatar_profile=_scheda()) == ["Pronto"]
     assert finto.modelli_chiamati == ["live-primario", "live-riserva"]
@@ -355,9 +346,9 @@ def test_a_risposta_iniziata_non_si_cambia_piu_modello(modelli, monkeypatch):
     finto = _ClienteChiChiacchiera(
         {"live-primario": ["Buongi", _Sovraccarico("overloaded")], "live-riserva": ["Pronto"]}
     )
-    monkeypatch.setattr(openai_service, "async_client", finto)
+    monkeypatch.setattr(openai_service, "roleplay_client", lambda: finto)
 
-    with pytest.raises(RuntimeError, match="comunicazione con OpenAI"):
+    with pytest.raises(RuntimeError, match="comunicazione con il modello"):
         _raccogli(messages_history=_conversazione(), avatar_profile=_scheda())
     assert finto.modelli_chiamati == ["live-primario"]
 
@@ -366,9 +357,9 @@ def test_quando_nessun_modello_e_disponibile_la_chiamata_lo_dice(modelli, monkey
     finto = _ClienteChiChiacchiera(
         {"live-primario": _Sovraccarico("overloaded"), "live-riserva": _Sovraccarico("overloaded")}
     )
-    monkeypatch.setattr(openai_service, "async_client", finto)
+    monkeypatch.setattr(openai_service, "roleplay_client", lambda: finto)
 
-    with pytest.raises(RuntimeError, match="comunicazione con OpenAI"):
+    with pytest.raises(RuntimeError, match="comunicazione con il modello"):
         _raccogli(messages_history=_conversazione(), avatar_profile=_scheda())
 
 

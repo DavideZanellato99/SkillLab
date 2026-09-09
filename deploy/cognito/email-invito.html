@@ -5,9 +5,10 @@
      message, scegliendo HTML. I due segnaposto {username} e {####} sono
      obbligatori: Cognito rifiuta il salvataggio se ne manca uno.
 
-     Prima di incollarlo va sostituito INDIRIZZO_PIATTAFORMA con il dominio
-     su cui gira l'applicazione, lo stesso di SITE_ADDRESS. Compare tre
-     volte, nell'href del pulsante e nella riga di ripiego sotto. -->
+     Il link porta a http://localhost:3000, cioè all'applicazione come gira
+     in locale. Quando ci sarà un dominio vero va messo quello, lo stesso di
+     SITE_ADDRESS: compare tre volte, nell'href del pulsante e nelle due metà
+     della riga di ripiego sotto. -->
 <!doctype html>
 <html lang="it">
   <head>
@@ -15,9 +16,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <meta name="supported-color-schemes" content="dark" />
+    <meta name="format-detection" content="telephone=no, email=no, address=no" />
     <title>Le tue credenziali di accesso a SkillLab</title>
+    <!-- L'unica regola non in linea del file, e serve per una cosa sola: le
+         credenziali non devono diventare link. Nessuno le ha scritte come
+         tali, ma {username} è un indirizzo email, e i client lo riconoscono
+         e lo trasformano da soli in un mailto azzurro e sottolineato, che
+         invita a scrivere a se stessi. Spezzare la stringa non è possibile,
+         Cognito riempie solo il segnaposto esatto, quindi si spegne lo stile
+         del link dove i client lo mettono: iOS e Apple Mail con il loro
+         attributo, Gmail e Outlook.com dai contenitori che aggiungono
+         attorno al messaggio. -->
+    <style>
+      a[x-apple-data-detectors] {
+        color: inherit !important;
+        text-decoration: none !important;
+        font-size: inherit !important;
+        font-family: inherit !important;
+        font-weight: inherit !important;
+        line-height: inherit !important;
+      }
+      .credenziale a,
+      .credenziale a:visited,
+      u + #corpo .credenziale a,
+      #MessageViewBody .credenziale a {
+        color: #e2e8f0 !important;
+        text-decoration: none !important;
+        pointer-events: none !important;
+        cursor: default !important;
+      }
+    </style>
   </head>
-  <body style="margin:0; padding:0; background-color:#0a0e1a;">
+  <body id="corpo" style="margin:0; padding:0; background-color:#0a0e1a;">
     <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:#0a0e1a; font-size:1px; line-height:1px;">
       Nome utente e password temporanea per il primo accesso alla piattaforma.
     </div>
@@ -59,10 +89,10 @@
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0d1322; border:1px solid #1e2740; border-radius:14px;">
                         <tr>
                           <td style="padding:24px 24px 20px 24px;">
-                            <p style="margin:0 0 6px 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#64748b;">
+                            <p style="margin:0 0 6px 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#94a3b8;">
                               Indirizzo email
                             </p>
-                            <p style="margin:0; font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; font-size:16px; line-height:1.5; color:#e2e8f0; word-break:break-all;">
+                            <p class="credenziale" style="margin:0; font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; font-size:16px; line-height:1.5; color:#e2e8f0; word-break:break-all;">
                               {username}
                             </p>
                           </td>
@@ -74,7 +104,7 @@
                         </tr>
                         <tr>
                           <td style="padding:20px 24px 24px 24px;">
-                            <p style="margin:0 0 6px 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#64748b;">
+                            <p style="margin:0 0 6px 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.09em; text-transform:uppercase; color:#94a3b8;">
                               Password temporanea
                             </p>
                             <p style="margin:0; font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; font-size:18px; line-height:1.5; letter-spacing:0.04em; font-weight:700; color:#22d3ee; word-break:break-all;">
@@ -89,8 +119,8 @@
                         <tr>
                           <td style="padding:16px 20px;">
                             <p style="margin:0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.65; color:#c4b5fd;">
-                              La password qui sopra vale solo per il primo accesso: appena entri, la piattaforma
-                              ti chiede di sceglierne una personale.
+                              Questa password è valida solo per il primo accesso: al primo login, la piattaforma
+                              ti chiederà di impostare una password personale.
                             </p>
                           </td>
                         </tr>
@@ -100,7 +130,7 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0 0;">
                         <tr>
                           <td align="center" bgcolor="#7c3aed" style="border-radius:12px; background-color:#7c3aed; background-image:linear-gradient(135deg,#7c3aed 0%,#06b6d4 100%);">
-                            <a href="https://INDIRIZZO_PIATTAFORMA" style="display:inline-block; padding:15px 34px; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:12px;">
+                            <a href="http://localhost:3000" style="display:inline-block; padding:15px 34px; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:12px;">
                               Accedi alla piattaforma
                             </a>
                           </td>
@@ -109,7 +139,7 @@
 
                       <p style="margin:18px 0 0 0; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.6; color:#64748b;">
                         Se il pulsante non funziona, apri
-                        <a href="https://INDIRIZZO_PIATTAFORMA" style="color:#a78bfa; text-decoration:none;">https://INDIRIZZO_PIATTAFORMA</a>
+                        <a href="http://localhost:3000" style="color:#a78bfa; text-decoration:none;">http://localhost:3000</a>
                       </p>
 
                       <!-- Requisiti della nuova password -->

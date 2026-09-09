@@ -382,7 +382,7 @@ describe('azioni su una riga', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: /Rinvia Credenziali/ }))
     expect(screen.getByText(/cesseranno immediatamente di funzionare/)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Invia Nuova Password' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Invia nuova Password' }))
 
     await waitFor(() => expect(rinvia.mutateAsync).toHaveBeenCalledWith('u-1'))
     expect(await screen.findByText('Credenziali inviate.')).toBeInTheDocument()

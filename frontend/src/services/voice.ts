@@ -1,4 +1,4 @@
-/* Voice session API service (ElevenLabs STT + OpenAI + ElevenLabs TTS) */
+/* Voice session API service (ElevenLabs STT + LLM del roleplay + sintesi vocale) */
 
 import { apiFetch, apiFetchBlob } from './api'
 import type { CallRecording } from './voiceCall'

@@ -181,8 +181,9 @@ export default function DataTable<T>({
      *
      * Il giro si chiude perché anche l'ordine di arrivo è una risposta: è
      * quello in cui l'elenco è stato messo in fila da chi lo ha prodotto (la
-     * media più bassa in cima, la riga più recente per prima), e senza terzo
-     * stato lo si recupererebbe solo ricaricando la pagina. */
+     * media più bassa in cima, il cognome in ordine alfabetico, la riga più
+     * recente per prima), e senza terzo stato lo si recupererebbe solo
+     * ricaricando la pagina. */
     const next: SortState | null =
       activeSort?.key === key
         ? activeSort.direction === 'asc'

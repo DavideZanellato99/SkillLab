@@ -13,7 +13,11 @@ import type { SimulationAnswerResult } from '../services/simulations'
  * scelta multipla, e non sono l'unico segnale: accanto a ogni riga sbagliata
  * c'è scritto dove andava. */
 
-const rowCls = 'flex items-start gap-2 rounded-xl border px-3 py-2 text-[0.85rem]'
+/* `items-center` e non `items-start`: l'esito in fondo alla riga ("va al 4",
+ * "era: …") è scritto più piccolo del passo, e allineato in alto restava
+ * sospeso sopra la metà del riquadro. Lo stesso vale per le alternative a
+ * scelta multipla in `SimulationResult`. */
+const rowCls = 'flex items-center gap-2 rounded-xl border px-3 py-2 text-[0.85rem]'
 const rightCls = 'border-emerald-500/30 bg-emerald-500/8 text-emerald-200'
 const wrongCls = 'border-red-500/30 bg-red-500/8 text-red-200'
 

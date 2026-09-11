@@ -73,7 +73,7 @@ from schemas import (
     UserPage,
 )
 from table_sort import ordered, sort_or_400
-from user_fields import clean_email_or_400, clean_name_or_400, find_user_by_email
+from user_fields import PERSON_ORDER, clean_email_or_400, clean_name_or_400, find_user_by_email
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -182,9 +182,9 @@ def _conversation_in_scope_or_404(
 # da questo elenco viene rifiutata, che è anche quello che tiene una stringa
 # qualsiasi fuori da un `order_by`.
 USER_SORT_COLUMNS = {
-    # Per cognome, che è l'ordine di un elenco di persone; il nome viene
-    # subito dopo per chi il cognome non ce l'ha ancora scritto.
-    "utente": (User.cognome, User.nome, User.email),
+    # Per cognome, nome ed email, come ogni elenco di persone (`PERSON_ORDER`).
+    # È anche l'ordine di partenza della pagina, vedi `list_users`.
+    "utente": PERSON_ORDER,
     "organizzazione": (Organization.name,),
     "ruolo": (Role.name,),
     "stato": (User.status,),
@@ -209,7 +209,7 @@ def list_users(
     current_admin: User = Depends(get_current_super_admin),
     db: Session = Depends(get_db),
 ):
-    """A window of the registered users, newest first (Super Admin only).
+    """A window of the registered users, in alphabetical order (Super Admin only).
 
     `total` counts the rows matching the filters, not the ones returned:
     the list grows with every tenant, so the client reads a window of it
@@ -221,8 +221,9 @@ def list_users(
     utente" about someone who exists.
 
     `sort` vale lo stesso discorso, e le colonne che accetta sono quelle di
-    USER_SORT_COLUMNS. Senza, l'ordine resta quello di sempre: gli ultimi
-    registrati per primi, che è la domanda con cui questa pagina si apre.
+    USER_SORT_COLUMNS. Senza, l'ordine è quello alfabetico della colonna
+    "utente", cognome, nome ed email: un elenco di persone si scorre
+    cercando un cognome, e la pagina si apre già in quell'ordine.
     """
     if ruolo is not None and ruolo not in ALL_ROLES:
         raise HTTPException(
@@ -269,16 +270,11 @@ def list_users(
         )
 
     total = query.count()
-    # The id breaks ties on created_at: two users created in the same
-    # instant would otherwise be free to swap places between two requests,
-    # and an offset window would skip one of them and repeat the other.
-    # Vale per ogni ordinamento, non solo per quello di partenza: vedi
-    # `_ordered`.
-    query = (
-        ordered(query, USER_SORT_COLUMNS[sort], direction, User.id)
-        if sort
-        else query.order_by(User.created_at.desc(), User.id.desc())
-    )
+    # L'id scioglie i pareggi, qualunque sia l'ordinamento: due omonimi
+    # sarebbero altrimenti liberi di scambiarsi di posto fra due richieste,
+    # e una finestra a offset ne salterebbe uno e ripeterebbe l'altro. Vedi
+    # `ordered`.
+    query = ordered(query, USER_SORT_COLUMNS[sort or "utente"], direction, User.id)
     users = query.offset(offset).limit(limit).all()
     return UserPage(total=total, items=[AdminUserResponse.model_validate(u) for u in users])
 
@@ -316,7 +312,10 @@ def users_activity_report(
     users_query = db.query(User)
     if scope_org_id is not None:
         users_query = users_query.filter(User.organization_id == scope_org_id)
-    users = users_query.order_by(User.created_at.desc()).all()
+    # Lo stesso ordine della gestione utenti: una riga per persona si cerca
+    # per cognome, e il browser non deve rimettere in fila quello che arriva
+    # già in fila.
+    users = users_query.order_by(*PERSON_ORDER, User.id).all()
 
     # I conteggi li fa il database. Prima si materializzava ogni prova di ogni
     # persona per poi contarle in Python, cioè la stessa somma fatta due

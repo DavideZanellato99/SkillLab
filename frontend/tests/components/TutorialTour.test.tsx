@@ -69,9 +69,12 @@ describe('a chi compare', () => {
   it('racconta cose diverse a chi amministra', async () => {
     renderGuida({ ruolo: 'organization_admin' })
     await userEvent.click(avanti())
+    await userEvent.click(avanti())
+    await userEvent.click(avanti())
+    await userEvent.click(avanti())
 
-    /* Il secondo passo di chi amministra è il cruscotto della propria
-       organizzazione, non la galleria: le due guide divergono subito. */
+    /* Il quinto passo di chi amministra è il cruscotto della propria
+       organizzazione, un passo che chi si allena non ha affatto. */
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
   })
 })
@@ -111,7 +114,10 @@ describe('sfogliare i passi', () => {
     window.addEventListener(TUTORIAL_USER_MENU_EVENT, spia)
 
     renderGuida({ ruolo: 'organization_admin' })
-    // Benvenuto, dashboard, galleria, simulatore: nessuno dei quattro sta nel menu
+    // Benvenuto, galleria, simulatore, confronto, dashboard, account:
+    // nessuno dei sei sta nel menu
+    await userEvent.click(avanti())
+    await userEvent.click(avanti())
     await userEvent.click(avanti())
     await userEvent.click(avanti())
     await userEvent.click(avanti())

@@ -136,13 +136,6 @@ function adminSteps(): TutorialStep[] {
       Icon: SparkleIcon,
     },
     {
-      id: 'dashboard',
-      title: 'Dashboard',
-      body: 'Il riepilogo della tua organizzazione: i punteggi delle conversazioni valutate e dei test consegnati, nel complesso oppure su una singola persona.',
-      Icon: DashboardIcon,
-      anchor: navAnchor('/app/admin/dashboard'),
-    },
-    {
       id: 'galleria',
       title: 'Galleria Avatar',
       body: 'Gli interlocutori a disposizione della tua organizzazione. Puoi provarli in prima persona, esattamente come li incontra chi stai formando.',
@@ -155,6 +148,27 @@ function adminSteps(): TutorialStep[] {
       body: 'I test già pubblicati, nella forma in cui li trova chi si allena. Puoi svolgerli in prima persona, che è il modo più rapido per accorgersi se una domanda si presta a fraintendimenti.',
       Icon: ChecklistIcon,
       anchor: navAnchor('/app/simulatore'),
+    },
+    {
+      id: 'confronto',
+      title: 'Confronto',
+      body: "Due tentativi della stessa persona affiancati, per vedere cosa è cambiato fra l'uno e l'altro. Scegli tu chi guardare, fra le persone della tua organizzazione.",
+      Icon: CompareIcon,
+      anchor: navAnchor('/app/confronto'),
+    },
+    {
+      id: 'dashboard',
+      title: 'Dashboard',
+      body: 'Il riepilogo della tua organizzazione: i punteggi delle conversazioni valutate e dei test consegnati, nel complesso oppure su una singola persona.',
+      Icon: DashboardIcon,
+      anchor: navAnchor('/app/admin/dashboard'),
+    },
+    {
+      id: 'account',
+      title: 'Il tuo account',
+      body: 'Il pulsante in alto a destra apre le sezioni di gestione che vedrai nei prossimi passi e la tua scheda, dove aggiorni i tuoi dati e imposti una password sicura.',
+      Icon: UserIcon,
+      anchor: ACCOUNT,
     },
     {
       id: 'simulazioni',
@@ -179,20 +193,6 @@ function adminSteps(): TutorialStep[] {
       Icon: ChartIcon,
       anchor: navAnchor('/app/admin/report'),
       opensUserMenu: true,
-    },
-    {
-      id: 'confronto',
-      title: 'Confronto',
-      body: "Due tentativi della stessa persona affiancati, per vedere cosa è cambiato fra l'uno e l'altro. Scegli tu chi guardare, fra le persone della tua organizzazione.",
-      Icon: CompareIcon,
-      anchor: navAnchor('/app/confronto'),
-    },
-    {
-      id: 'account',
-      title: 'Il tuo account',
-      body: 'Il pulsante in alto a destra apre le sezioni di gestione che hai appena visto e la tua scheda, dove aggiorni i tuoi dati e imposti una password sicura.',
-      Icon: UserIcon,
-      anchor: ACCOUNT,
     },
     closing,
   ]

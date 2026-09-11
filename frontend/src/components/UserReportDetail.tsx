@@ -1,8 +1,9 @@
-/* Quello che si apre sotto la riga di una persona nel report attività: le
- * sue conversazioni con gli avatar da una parte, le sue simulazioni
- * dall'altra, una prova per volta, e il quadro d'insieme nella terza.
+/* Quello che si apre per una persona nel report attività, dentro la sua
+ * finestra (`UserReportModal`): le sue conversazioni con gli avatar da una
+ * parte, le sue simulazioni dall'altra, una prova per volta, e il quadro
+ * d'insieme nella terza.
  *
- * Le prove le legge questo componente, quando la riga si apre, e non
+ * Le prove le legge questo componente, quando la persona si apre, e non
  * arrivano dentro l'elenco: quello porta i conteggi, e le prove di ogni
  * persona ci stavano dentro tutte, cioè si scaricava lo storico di un tenant
  * intero per aprirne una riga alla volta.
@@ -34,8 +35,9 @@
  * la linguetta perché di una conversazione si chiede il canale e di un test
  * il tipo, e sono due domande che non si possono fare all'altra metà.
  *
- * Sta in un file suo perché la pagina descrive già una tabella con i suoi
- * filtri, e questa è la schermata dentro la schermata. */
+ * Sta in un file suo perché la finestra che lo ospita si occupa
+ * dell'intestazione e delle finestre che si aprono sopra, e questa è la
+ * schermata dentro la schermata. */
 
 import { useState } from 'react'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
@@ -84,11 +86,6 @@ function tabLabel(name: string, shown: number, total: number): string {
   return shown === total ? `${name} (${total})` : `${name} (${shown} di ${total})`
 }
 
-/* Oltre questo numero di prove l'elenco si impagina. Sotto, il piede della
- * tabella direbbe "da 1 a 3 di 3" e offrirebbe due frecce spente: comandi che
- * non servono dentro una riga che si è appena aperta. */
-const PAGINATE_OVER = 10
-
 /* Le colonne delle due prove. Sono diverse perché sono diverse le domande:
  * di una conversazione si guarda quanto è durata e con chi, di un test quante
  * risposte erano giuste.
@@ -99,9 +96,19 @@ const PAGINATE_OVER = 10
  *
  * Su una conversazione non valutata il voto è vuoto e finisce in fondo in
  * tutti e due i versi: non è uno zero, è un giudizio che non c'è ancora. */
+/* Le due colonne delle targhette (il canale di qua, il tipo di là) sono larghe
+ * quanto la targhetta più lunga con il padding compatto: erano più strette,
+ * e una targhetta più larga della cella sborda a destra invece di stare al
+ * centro. Cede lo spazio la colonna del titolo, l'unica che si tronca. */
 const CONVERSATION_COLUMNS: DataTableColumn<ConversationReport>[] = [
-  { key: 'canale', label: 'Canale', width: '10%', sortValue: (c) => conversationModeLabel(c.mode) },
-  { key: 'conversazione', label: 'Conversazione', width: '26%', sortValue: (c) => c.title },
+  {
+    key: 'canale',
+    label: 'Canale',
+    compact: true,
+    width: '13%',
+    sortValue: (c) => conversationModeLabel(c.mode),
+  },
+  { key: 'conversazione', label: 'Conversazione', width: '23%', sortValue: (c) => c.title },
   { key: 'avatar', label: 'Avatar', width: '18%', sortValue: (c) => c.avatar_name },
   { key: 'data', label: 'Data', width: '14%', sortValue: (c) => c.created_at },
   {
@@ -118,8 +125,14 @@ const CONVERSATION_COLUMNS: DataTableColumn<ConversationReport>[] = [
 ]
 
 const SIMULATION_COLUMNS: DataTableColumn<SimulationAttemptReport>[] = [
-  { key: 'tipo', label: 'Tipo', width: '16%', sortValue: (a) => kindLabel(a.simulation_kind) },
-  { key: 'simulazione', label: 'Simulazione', width: '36%', sortValue: (a) => a.simulation_title },
+  {
+    key: 'tipo',
+    label: 'Tipo',
+    compact: true,
+    width: '22%',
+    sortValue: (a) => kindLabel(a.simulation_kind),
+  },
+  { key: 'simulazione', label: 'Simulazione', width: '30%', sortValue: (a) => a.simulation_title },
   { key: 'data', label: 'Data', width: '16%', sortValue: (a) => a.created_at },
   {
     key: 'corrette',
@@ -154,8 +167,11 @@ const KIND_OPTIONS = [
 const titleCls =
   'block w-full truncate text-center text-[0.85rem] font-semibold text-slate-100 transition group-hover:text-violet-300'
 
+/* `inline-flex` e non `flex`: la cella centra col `text-center`, che muove
+ * le scatole in linea e non i blocchi. Da blocco largo 28px il cestino
+ * restava attaccato al bordo sinistro della sua colonna. */
 const deleteCls =
-  'flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 text-slate-400 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
+  'inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/6 bg-white/4 align-middle text-slate-400 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400'
 
 /** Il voto di una prova, o un trattino finché non c'è: una conversazione in
  * attesa di giudizio non è uno zero. */
@@ -209,7 +225,7 @@ function ConversationRow({
 }) {
   return (
     <Tr className="group" onActivate={() => onOpen(conversation)}>
-      <Td>
+      <Td compact>
         <ConversationModeBadge mode={conversation.mode} />
       </Td>
       <Td>
@@ -279,7 +295,7 @@ function SimulationRow({
 }) {
   return (
     <Tr className="group" onActivate={() => onOpen(attempt.id)}>
-      <Td>
+      <Td compact>
         <span className="flex items-center justify-center gap-2">
           <SimulationKindBadge kind={attempt.simulation_kind} />
           <SimulationSourceBadge source={attempt.simulation_source} />
@@ -325,16 +341,15 @@ export default function UserReportDetail({
    *  solo al quadro d'insieme, per non offrire un bottone che il server
    *  rifiuterebbe. */
   evidenceCount: number | null
-  /* Le due prove si aprono da fuori: le modali sono a schermo intero, e
-   * dentro il riquadro della tabella, che sfoca lo sfondo, resterebbero
-   * confinate lì. Le conferme di eliminazione stanno lì per lo stesso
-   * motivo. */
+  /* Le due prove si aprono da fuori, nella finestra che ospita questo
+   * pannello: è lei a tenere le finestre che si aprono sopra di sé, e le
+   * conferme di eliminazione stanno lì per lo stesso motivo. */
   onOpenConversation: (conversation: ConversationReport) => void
   onDeleteConversation: (conversation: ConversationReport) => void
   onOpenAttempt: (attemptId: string) => void
   onDeleteAttempt: (attempt: SimulationAttemptReport) => void
 }) {
-  /* Le prove si leggono qui, aprendo la riga, e non arrivano con l'elenco:
+  /* Le prove si leggono qui, aprendo la persona, e non arrivano con l'elenco:
    * la pagina ne mostra una persona alla volta, e portarle tutte voleva dire
    * scaricare le conversazioni e i tentativi di chiunque per aprirne uno.
    * Il periodo è quello scelto in cima, così i conteggi della riga e le
@@ -457,7 +472,7 @@ export default function UserReportDetail({
         />
       ) : error ? (
         /* La lettura delle prove è caduta, e il resto della pagina è ancora
-           lì: si riprova senza richiudere la riga. */
+           lì: si riprova senza richiudere la finestra. */
         <LoadError
           message={error instanceof Error ? error.message : 'Impossibile caricare le prove.'}
           onRetry={() => void refetch()}
@@ -489,7 +504,6 @@ export default function UserReportDetail({
               options={MODE_OPTIONS}
             />
           }
-          paginate={total > PAGINATE_OVER}
           /* Cambiare filtro o ricerca riporta alla prima pagina: restare
                alla terza di un elenco che non è più quello vuol dire guardare
                righe che non rispondono a niente. */
@@ -520,7 +534,6 @@ export default function UserReportDetail({
               options={KIND_OPTIONS}
             />
           }
-          paginate={total > PAGINATE_OVER}
           pageResetKey={`${kindFilter}|${debouncedSimulationSearch}`}
           emptyMessage={emptyMessage}
           renderRow={(attempt) => (

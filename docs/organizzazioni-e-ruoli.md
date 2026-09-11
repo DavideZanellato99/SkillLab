@@ -178,3 +178,14 @@ Una conseguenza pratica di questa impostazione: alcune pagine sono **la stessa
 pagina per tutti**. Il confronto fra tentativi e il simulatore stanno su rotte
 aperte a chiunque sia autenticato; è il server a decidere se chi guarda vede
 soltanto i propri dati o anche il selettore delle persone del proprio tenant.
+
+**Il nome dell'organizzazione lo legge solo il super admin.** A chi guarda
+più tenant insieme il nome dice di chi è una riga; a chi amministra il proprio,
+e a chi ci si allena dentro, è la stanza in cui si trova già, e l'app non
+glielo scrive da nessuna parte: né come colonna, né come sottotitolo, né come
+parola con cui cercare. Il server lo manda comunque, dove lo manda, perché è
+lo stesso oggetto per tutti i ruoli, ed è il frontend a mostrarlo solo dietro
+`isSuperAdmin` (i `showOrganization` e `showOrg` che girano fra i componenti).
+Vale anche per le ricerche: una tabella si cerca con le parole che mostra, e
+senza la colonna l'organizzazione non è una parola che si legge, quindi non
+può nemmeno essere una chiave con cui filtrare.

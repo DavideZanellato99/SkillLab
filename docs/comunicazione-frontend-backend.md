@@ -219,6 +219,18 @@ stringa arbitraria fuori da un `order_by`. Le chiavi sono le stesse delle
 colonne della tabella, così quello che si clicca e quello che il server riceve
 si chiamano allo stesso modo.
 
+Senza una colonna scelta, i due elenchi si aprono in due ordini diversi, e
+non è una svista: la gestione utenti in ordine alfabetico per cognome, poi
+nome, poi email, cioè lo stesso criterio della colonna «Utente», perché un
+elenco di persone si scorre cercando un cognome; il registro attività dalla
+riga più recente, perché lì la domanda è cosa è successo per ultimo. Quel
+criterio è scritto una volta in `PERSON_ORDER`
+([user_fields.py](../backend/user_fields.py)) e vale per ogni elenco con una
+persona per riga: gestione utenti, report attività, percorsi assegnati,
+persone a cui si può affidare un percorso. Il frontend lo ripete in
+[personOrder](../frontend/src/components/personOrder.ts) per le tendine che
+ordina da sé.
+
 Qualunque sia l'ordine scelto, **l'id chiude sempre la fila**
 ([table_sort.py](../backend/table_sort.py)): due righe che il criterio lascia
 pari sarebbero libere di scambiarsi di posto fra una lettura e l'altra, e una
@@ -239,3 +251,11 @@ Chi lo legge non passa dal context: usa
 All'avvio della pagina non c'è modo di sapere se la sessione è viva guardando i
 cookie, perché sono `HttpOnly`: si chiede al backend con `GET /api/auth/me`, e
 la risposta decide se si vede l'applicazione o la landing page.
+
+**All'uscita se ne va anche la cache delle letture** (`queryClient.clear()`),
+sia con il logout esplicito sia quando la sessione cade da un'altra scheda.
+Le risposte scaricate sono di chi le ha chieste: senza questo restavano in
+memoria per chi entrava dopo nella stessa scheda, e un organization admin che
+entrava dopo il super admin trovava la chiave della galleria già piena e vedeva
+per un minuto (lo `staleTime`) gli avatar di tutte le organizzazioni, senza che
+il server fosse mai interrogato.

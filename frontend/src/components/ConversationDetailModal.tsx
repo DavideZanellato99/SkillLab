@@ -106,6 +106,10 @@ interface ConversationDetailModalProps {
    * Serve a chiudere la schermata su una conversazione che non esiste più:
    * gli elenchi sotto si aggiornano da soli, questa no. */
   onDeleted?: () => void
+  /* Sopra la finestra da cui è stata aperta, quando ne ha una: dal report
+   * attività la persona è già una finestra, e questa è l'ultima cosa
+   * comparsa. Come nel dettaglio di un tentativo. */
+  elevated?: boolean
 }
 
 export default function ConversationDetailModal({
@@ -114,6 +118,7 @@ export default function ConversationDetailModal({
   onReviewSaved,
   onDeleted,
   scope = 'admin',
+  elevated = false,
 }: ConversationDetailModalProps) {
   const isOwn = scope === 'own'
   const canDelete = !isOwn && onDeleted !== undefined
@@ -264,6 +269,7 @@ export default function ConversationDetailModal({
       size="full"
       padding="none"
       layout="column"
+      elevated={elevated}
       closeLabel="Chiudi dettaglio conversazione"
     >
       {/* La stessa fascia del dettaglio di un test: titolo con i suoi badge,

@@ -136,6 +136,25 @@ describe('i numeri di un percorso', () => {
   })
 })
 
+describe('il nome dell’organizzazione', () => {
+  /* A chi guarda più tenant il nome dice di chi è il percorso; a chi
+   * amministra il proprio è la stanza in cui si trova già, e non si scrive. */
+  it('compare al super admin', () => {
+    renderPaths()
+
+    expect(screen.getByText(/Prima org/)).toBeInTheDocument()
+  })
+
+  it('non compare a chi amministra una sola organizzazione', () => {
+    useAuth.mockReturnValue({
+      user: { id: 'admin-2', ruolo: 'organization_admin', organization_id: 'org-1' },
+    })
+    renderPaths()
+
+    expect(screen.queryByText(/Prima org/)).not.toBeInTheDocument()
+  })
+})
+
 describe('le scadenze', () => {
   /* Sono l'unica cosa dell'applicazione che guarda avanti, e servono a
    * sapere su chi intervenire: senza la riga, una tappa scaduta si scopriva

@@ -19,6 +19,15 @@ from models import User
 # starts rejecting addresses that are perfectly valid.
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# L'ordine con cui si elencano delle persone, ovunque compaiano una per riga:
+# per cognome, che è come si cerca un nome in un elenco, poi per nome per i
+# cognomi che si ripetono, e per email in fondo, che è l'unico campo che c'è
+# sempre e su un account appena invitato anche l'unico che si legge. Scritto
+# una volta perché due elenchi delle stesse persone ordinati in due modi si
+# leggono come due elenchi diversi; il frontend lo ripete in `personOrder.ts`
+# per le tendine che ordina da sé. Va passato a `order_by` con l'asterisco.
+PERSON_ORDER = (User.cognome, User.nome, User.email)
+
 
 def normalize_email(email: str) -> str:
     """Canonical form of an address: trimmed and lowercased.

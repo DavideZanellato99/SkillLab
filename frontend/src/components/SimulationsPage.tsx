@@ -53,8 +53,8 @@ export default function SimulationsPage() {
 
   const options = useMemo(() => kindFilterOptions(simulations), [simulations])
   const visible = useMemo(
-    () => filterSimulations(simulations, filter, search),
-    [simulations, filter, search],
+    () => filterSimulations(simulations, filter, search, showOrganization),
+    [simulations, filter, search, showOrganization],
   )
 
   /* L'elenco è già a schermo e il rinfresco è fallito: si dice, senza

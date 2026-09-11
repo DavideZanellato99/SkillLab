@@ -230,4 +230,28 @@ describe('AssignPathModal', () => {
     expect(casella('Luca Verdi')).not.toBeChecked()
     expect(screen.getByRole('button', { name: 'Scegli chi deve percorrerlo' })).toBeDisabled()
   })
+
+  it('elenca le persone nell’ordine della tabella utenti, per cognome', () => {
+    /* Il server manda le persone come le trova; qui si leggono per cognome,
+     * poi nome, poi email, come nella gestione utenti, altrimenti le stesse
+     * persone in due schermate si leggono come due elenchi diversi. */
+    stato.users = [
+      utente({ id: 'u-3', nome: 'Zeno', cognome: 'Bianchi', email: 'z@t.it' }),
+      utente({ id: 'u-2', nome: 'Luca', cognome: 'Verdi', email: 'l@t.it' }),
+      utente({ id: 'u-4', nome: 'Élisa', cognome: 'Alberti', email: 'e@t.it' }),
+      utente({ id: 'u-5', nome: 'Anna', cognome: 'Bianchi', email: 'a@t.it' }),
+    ]
+    stato.assignments = []
+    render(<AssignPathModal path={percorso} onClose={vi.fn()} />)
+
+    const nomi = screen
+      .getAllByRole('checkbox')
+      .map((c) => c.getAttribute('aria-label') ?? c.closest('label')?.textContent ?? '')
+    expect(nomi.map((n) => n.replace(/\s+/g, ' ').trim())).toEqual([
+      expect.stringContaining('Élisa Alberti'),
+      expect.stringContaining('Anna Bianchi'),
+      expect.stringContaining('Zeno Bianchi'),
+      expect.stringContaining('Luca Verdi'),
+    ])
+  })
 })

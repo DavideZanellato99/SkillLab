@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -22,8 +23,16 @@ const utente = {
   role: 'user',
 }
 
+/* La cache delle letture, che il provider svuota all'uscita: se ne crea una
+ * per test, così un caso può riempirla e guardare cosa ne resta. */
+let cache: QueryClient
+
 function wrapper({ children }: { children: ReactNode }) {
-  return <AuthProvider>{children}</AuthProvider>
+  return (
+    <QueryClientProvider client={cache}>
+      <AuthProvider>{children}</AuthProvider>
+    </QueryClientProvider>
+  )
 }
 
 /** Monta il provider e aspetta che il ripristino della sessione sia finito. */
@@ -39,6 +48,7 @@ beforeEach(() => {
   servizio.isNewPasswordRequired.mockReturnValue(false)
   servizio.logout.mockResolvedValue(undefined)
   localStorage.clear()
+  cache = new QueryClient()
 })
 
 afterEach(() => {
@@ -159,6 +169,19 @@ describe('uscita e profilo', () => {
     expect(result.current.isAuthenticated).toBe(false)
     expect(servizio.logout).toHaveBeenCalled()
     revoca()
+  })
+
+  /* Le risposte già scaricate sono di chi le ha chieste. Senza questo, chi
+   * entrava dopo nella stessa scheda trovava la cache piena e vedeva per un
+   * minuto quello che vedeva l'account precedente: un organization admin
+   * dopo il super admin, gli avatar di tutte le organizzazioni. */
+  it('svuota la cache delle letture quando si esce', async () => {
+    const { result } = await montaSessione()
+    cache.setQueryData(['avatars', 'list'], [{ id: 'a-1' }])
+
+    act(() => result.current.logout())
+
+    expect(cache.getQueryData(['avatars', 'list'])).toBeUndefined()
   })
 
   /* Il profilo aggiornato arriva intero dal server invece di essere

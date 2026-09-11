@@ -301,30 +301,31 @@ describe('storico di una persona', () => {
     expect(screen.queryByText('Reclamo sul rimborso')).not.toBeInTheDocument()
   })
 
-  it('si apre e si richiude con un clic sulla riga', async () => {
+  /* Lo storico si apre in una finestra con il nome della persona in cima,
+   * e si richiude da lì: l'elenco dietro resta dov'era. */
+  it('si apre in una finestra con un clic sulla riga, e si richiude da lì', async () => {
     renderPage()
 
     await userEvent.click(screen.getByText('Anna Rossi'))
-    expect(screen.getByText('Reclamo sul rimborso')).toBeInTheDocument()
+    const finestra = screen.getByRole('dialog', { name: 'Anna Rossi' })
+    expect(within(finestra).getByText('Reclamo sul rimborso')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByText('Anna Rossi'))
+    await userEvent.click(screen.getByRole('button', { name: 'Chiudi report attività' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.queryByText('Reclamo sul rimborso')).not.toBeInTheDocument()
   })
 
-  /* Aprire la riga è l'unica cosa che questa pagina fa, e con il solo clic
-   * chi gira con il tabulatore non aveva nessun modo di farlo: la freccia
-   * in fondo alla riga è un disegno, non un comando. */
-  it('si apre anche da tastiera, e lo dice a chi non la vede', async () => {
+  /* Aprire la persona è l'unica cosa che questa pagina fa, e con il solo
+   * clic chi gira con il tabulatore non aveva nessun modo di farlo. */
+  it('si apre anche da tastiera', async () => {
     renderPage()
 
     const riga = screen.getAllByRole('row').find((r) => within(r).queryByText('Anna Rossi'))
-    expect(riga).toHaveAttribute('aria-expanded', 'false')
-
     riga?.focus()
     await userEvent.keyboard('{Enter}')
 
+    expect(screen.getByRole('dialog', { name: 'Anna Rossi' })).toBeInTheDocument()
     expect(screen.getByText('Reclamo sul rimborso')).toBeInTheDocument()
-    expect(riga).toHaveAttribute('aria-expanded', 'true')
   })
 
   /* Le prove arrivano quando la riga si apre, e nel periodo che la pagina

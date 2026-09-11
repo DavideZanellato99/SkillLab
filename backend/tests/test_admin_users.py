@@ -313,15 +313,17 @@ def test_sort_rejects_a_column_that_is_not_sortable(admin_client):
     assert response.status_code == 400
 
 
-def test_without_sort_the_newest_come_first(admin_client, make_user, organization):
-    """Senza ordinamento resta la domanda con cui la pagina si apre: chi è
-    stato registrato per ultimo."""
-    make_user(organization=organization, cognome="Primo")
-    ultimo = make_user(organization=organization, cognome="Ultimo")
+def test_without_sort_the_list_is_alphabetical(admin_client, make_user, organization):
+    """Senza ordinamento la pagina si apre in ordine alfabetico per cognome,
+    lo stesso della colonna "utente": un elenco di persone si scorre cercando
+    un cognome, non una data di registrazione."""
+    make_user(organization=organization, cognome="Verdi")
+    make_user(organization=organization, cognome="Bianchi")
+    make_user(organization=organization, cognome="Rossi")
 
     page = _list_users(admin_client, organization_id=str(organization.id))
 
-    assert page["items"][0]["id"] == str(ultimo.id)
+    assert [item["cognome"] for item in page["items"]] == ["Bianchi", "Rossi", "Verdi"]
 
 
 # ── Creazione ─────────────────────────────────────────

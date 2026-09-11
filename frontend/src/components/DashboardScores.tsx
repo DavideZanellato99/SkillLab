@@ -644,6 +644,9 @@ export default function DashboardScores() {
             rows={simulationRows}
             selectedUserId={selectedUserId}
             kindFilter={kindFilter}
+            compareIds={compareIds}
+            onCompareChange={(next) => setParam(COMPARE_PARAM, next.join(','))}
+            needsOrganization={needsOrganization}
           />
         </TabPanel>
       )}

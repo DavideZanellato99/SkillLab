@@ -997,6 +997,24 @@ def test_assigning_to_several_people_answers_with_all_of_them(
     assert set(row.details["utenti"]) == {standard_user.email, newcomer.email}
 
 
+def test_assignments_are_listed_by_surname(admin_client, db_session, organization, make_avatar):
+    """Una persona per riga, quindi la fila è quella della gestione utenti:
+    per cognome, non dall'assegnazione più recente."""
+    avatar = make_avatar(category="clienti")
+    path = _create_path(admin_client, organization, [_avatar_step(avatar)])
+    for cognome in ("Verdi", "Bianchi", "Rossi"):
+        user = _make_user_in(db_session, organization)
+        user.cognome = cognome
+        db_session.flush()
+        _assign(admin_client, path, user)
+
+    listed = admin_client.get(
+        "/api/training/assignments", params={"organization_id": str(organization.id)}
+    ).json()
+
+    assert [a["user_name"] for a in listed] == ["Utente Bianchi", "Utente Rossi", "Utente Verdi"]
+
+
 # ── Di cosa può essere fatta una tappa ────────────────
 
 

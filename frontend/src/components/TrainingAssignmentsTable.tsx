@@ -85,7 +85,7 @@ export default function TrainingAssignmentsTable({
           a.user_name,
           a.user_email,
           a.path_title,
-          a.organization_name ?? '',
+          showOrganization ? (a.organization_name ?? '') : '',
           current ? stepTarget(current) : '',
           STATUS_META[a.status].label,
         )

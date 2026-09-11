@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   type AuthUser,
   type AuthResult,
@@ -23,6 +24,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
 
   // On mount, resume the cookie session (HttpOnly: JS can't inspect it,
   // asking the backend for the profile is the only way to know)
@@ -62,18 +64,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [],
   )
 
+  /* La cache delle letture se ne va con la sessione. Le risposte già
+   * scaricate (la galleria, gli elenchi di amministrazione) sono di chi le
+   * ha chieste, e senza questo restavano in memoria per chi entra dopo
+   * nella stessa scheda: un organization admin che entrava dopo il super
+   * admin vedeva per un minuto gli avatar di tutte le organizzazioni,
+   * perché la galleria trovava la chiave già piena e non chiedeva niente. */
+  const forgetSession = useCallback(() => {
+    setUser(null)
+    queryClient.clear()
+  }, [queryClient])
+
   const logout = useCallback(() => {
     // Fire-and-forget: the backend revokes the tokens and clears the
     // HttpOnly cookies
     void authLogout()
-    setUser(null)
-  }, [])
+    forgetSession()
+  }, [forgetSession])
 
   // Session already killed elsewhere (another tab's idle logout): the
   // cookies are gone, only the local state needs to drop
-  const dropLocalSession = useCallback(() => {
-    setUser(null)
-  }, [])
+  const dropLocalSession = forgetSession
 
   // The backend is the source of truth for the profile — callers pass the
   // fresh object returned by the update-profile API instead of patching

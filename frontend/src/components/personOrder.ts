@@ -1,14 +1,15 @@
 /* L'ordine con cui si elencano delle persone, e il confronto fra due stringhe
  * da cui esce.
  *
- * **Per cognome, poi per nome, poi per email.** È la regola della tabella di
- * gestione utenti, dove la scrive il server (`USER_SORT_COLUMNS` in
- * [admin.py](../../../backend/routers/admin.py), `(cognome, nome, email)`):
- * un elenco di persone si scorre cercando il cognome, e l'email fa da
- * ripiego per chi l'anagrafica non ce l'ha ancora scritta. Qui la stessa
- * regola vale per gli elenchi che il frontend ordina da sé, cioè le tendine
- * in cui si sceglie una persona: due elenchi delle stesse persone ordinati in
- * due modi si leggono come due elenchi diversi.
+ * **Per cognome, poi per nome, poi per email.** È la regola di ogni elenco
+ * di persone che il server mette in fila (`PERSON_ORDER` in
+ * [user_fields.py](../../../backend/user_fields.py), `(cognome, nome, email)`):
+ * la gestione utenti, il report attività, i percorsi assegnati, gli
+ * assegnabili. Un elenco di persone si scorre cercando il cognome, e l'email
+ * fa da ripiego per chi l'anagrafica non ce l'ha ancora scritta. Qui la
+ * stessa regola vale per gli elenchi che il frontend ordina da sé, cioè le
+ * tendine in cui si sceglie una persona: due elenchi delle stesse persone
+ * ordinati in due modi si leggono come due elenchi diversi.
  *
  * Il collator sta qui perché è lo stesso che ordina le tabelle: costruirlo
  * una volta sola non è un dettaglio, `localeCompare` chiamato coppia per

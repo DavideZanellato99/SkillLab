@@ -49,7 +49,7 @@ function ChoiceRows({ answer, own }: { answer: SimulationAnswerResult; own: bool
         return (
           <li
             key={index}
-            className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-[0.85rem] ${
+            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-[0.85rem] ${
               isCorrect
                 ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-200'
                 : isChosen

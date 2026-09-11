@@ -81,6 +81,7 @@ from schemas import (
     UserResponse,
 )
 from training_progress import progress_of, proofs_by_key, step_kind
+from user_fields import PERSON_ORDER
 
 router = APIRouter(prefix="/api/training", tags=["training"])
 
@@ -1020,7 +1021,7 @@ def assignable_users(
             User.status == USER_STATUS_ACTIVE,
             Role.name == ROLE_USER,
         )
-        .order_by(User.cognome.asc(), User.nome.asc())
+        .order_by(*PERSON_ORDER)
         .all()
     )
     return [UserResponse.model_validate(u) for u in users]
@@ -1070,7 +1071,9 @@ def list_assignments(
         query = query.filter(User.organization_id == scope_org_id)
     if path_id is not None:
         query = query.filter(TrainingPathAssignment.path_id == path_id)
-    assignments = query.order_by(TrainingPathAssignment.created_at.desc()).all()
+    # Una persona per riga, quindi in fila come la gestione utenti: per
+    # cognome. Chi ha più percorsi li vede dal più recente.
+    assignments = query.order_by(*PERSON_ORDER, TrainingPathAssignment.created_at.desc()).all()
     return _assignment_responses(db, assignments)
 
 

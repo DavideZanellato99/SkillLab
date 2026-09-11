@@ -388,7 +388,11 @@ propria gente. Prima era una schermata sola, dove il form di assegnazione
 stava sopra la tabella e ogni assegnazione ricominciava dalla scelta
 dell'avatar; comporre e seguire sono due lavori, e si fanno in due momenti
 diversi della settimana. Nella tabella la riga dice quante tappe sono chiuse e
-qual è quella aperta, e la fila intera si apre solo sulla riga che interessa:
+qual è quella aperta, e le righe stanno nell'ordine della gestione utenti,
+per cognome, nome, email (`PERSON_ORDER` in
+[user_fields.py](../backend/user_fields.py)): una persona per riga si cerca
+come di là, e chi ha più percorsi li vede dal più recente. La fila intera
+delle tappe si apre solo sulla riga che interessa:
 sei tappe per venti persone tutte insieme sono una tabella che non si legge. La
 riga si apre col mouse e col fuoco, perché è `onActivate` di
 [DataTable](../frontend/src/components/DataTable.tsx) ad aprirla e non un
@@ -412,7 +416,12 @@ La finestra che affida il percorso
 ([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)) elenca le
 persone del tenant con la spunta già messa a chi il percorso ce l'ha, e
 **togliere quella spunta lo ritira**: la casella dice chi lo sta percorrendo,
-quindi deve poterlo dire anche al contrario.
+quindi deve poterlo dire anche al contrario. Le persone stanno nell'ordine
+della tabella di gestione utenti, cognome, nome, email: così le manda il
+server (`PERSON_ORDER`), e così le rimette in fila il browser dopo la ricerca
+([personOrder](../frontend/src/components/personOrder.ts)), con le regole
+dell'italiano invece di quelle del database. Un elenco in cui si cerca un
+nome si scorre per cognome.
 
 Per questo **aspetta tutte e due le letture** prima di mostrare l'elenco: le
 persone arrivano da una richiesta e chi il percorso ce l'ha già da un'altra, e
@@ -1223,7 +1232,7 @@ sopra di loro sarebbe la stessa cosa detta due volte.
 barre stanno dalla media più alta, che è la risposta della scheda; la tendina
 sta in ordine alfabetico per cognome, perché lì un nome si cerca. È la stessa
 regola della tabella di gestione utenti, che il server scrive una volta
-(`USER_SORT_COLUMNS`, `(cognome, nome, email)`) e il frontend riusa dove
+(`PERSON_ORDER`, `(cognome, nome, email)`) e il frontend riusa dove
 ordina da sé, cioè in ogni tendina che sceglie una persona
 ([personOrder](../frontend/src/components/personOrder.ts)): le stesse persone
 ordinate in due modi in due schermate si leggono come due elenchi diversi
@@ -1252,6 +1261,19 @@ Il filtro utente in cima alla vista resta un'altra cosa: quello **evidenzia**
 una persona fra le barre disegnate, il confronto decide **quali barre
 disegnare**. Sono due gesti diversi, restringere e indicare, e continuano a
 convivere.
+
+**Il comando c'è in tutte e due le metà, ed è una scelta sola.** La scheda dei
+test tecnici
+([DashboardSimulations](../frontend/src/components/DashboardSimulations.tsx))
+ha lo stesso campo nello stesso posto, e legge le stesse persone dallo stesso
+parametro dell'indirizzo: chi ha scelto quattro persone sulle conversazioni le
+ritrova scelte passando ai test, perché la domanda ("come vanno questi
+quattro") è la stessa e la prova è solo un'altra. La scelta e il vincolo
+sull'organizzazione stanno nella pagina, che li passa alla scheda come passa
+il filtro utente; la scheda non li ricava da sé, altrimenti le due metà
+avrebbero due copie della stessa scelta. Una persona scelta che nel tipo di
+test attivo non ha righe non perde la spunta: cambiando tipo la scelta deve
+restare, come restringendo il periodo.
 
 Un default diverso nelle due metà, e non è una svista. Il canale parte da
 "Chiamate", perché al telefono e in chat non si è valutati alla pari e
@@ -1549,7 +1571,7 @@ faccia a faccia.
 
 `/app/admin/report`
 ([UserReportPage](../frontend/src/components/UserReportPage.tsx)): una riga per
-persona, e sotto quella riga tutto quello che quella persona ha fatto.
+persona, e in sovrimpressione tutto quello che quella persona ha fatto.
 
 Prima la riga diceva **quante conversazioni** e **quanti minuti**, cioè solo
 quanto l'app era stata usata. Sono i due numeri che dicono meno: mezz'ora di
@@ -1564,15 +1586,15 @@ come una riga vuota. Ora la riga porta:
 
 **Nella riga ci sono i conteggi, e nient'altro.** Le prove una per una arrivano
 da una seconda lettura (`GET /api/admin/users-report/{user_id}`), che parte
-quando quella riga si apre. Stavano dentro l'elenco, cioè ogni conversazione e
+quando quella persona si apre. Stavano dentro l'elenco, cioè ogni conversazione e
 ogni tentativo di ogni persona: su un tenant avviato sono decine di migliaia di
 righe scaricate a ogni apertura della pagina e a ogni cambio di periodo, per
 aprirne una alla volta. Il periodo viaggia anche su questa lettura, così i
-conteggi della riga e le prove che si aprono sotto sono la stessa cosa contata
+conteggi della riga e le prove che si aprono di là sono la stessa cosa contata
 due volte.
 
 **Nella riga non c'è nessuna media.** Il voto appartiene alla singola prova e
-si legge lì, nello storico che si apre sotto; una media per persona accanto a
+si legge lì, nello storico che si apre; una media per persona accanto a
 un conteggio farebbe leggere due cose diverse come se fossero una, e una media
 sul gruppo la scrive già la dashboard. La riga risponde a quanto e a cosa, il
 dettaglio a com'è andata.
@@ -1617,11 +1639,19 @@ motivo e il comando per richiederla
 che questa pagina apre: prima sotto la fascia rossa restava la tabella con
 scritto "Nessun utente trovato", che si legge come un'organizzazione senza
 nessuno dentro, e per riprovare bisognava ricaricare la pagina. Vale anche per
-le prove che si aprono sotto una riga, che si riprovano senza richiuderla.
+le prove di una persona aperta, che si riprovano senza richiudere la finestra.
 
 **Gli utenti restano tutti in elenco** anche quando il periodo non lascia loro
 nessuna prova: una riga a zero è la risposta a "chi non si sta allenando", e
 sparendo dalla tabella si porterebbe via la domanda.
+
+**Le persone stanno in ordine alfabetico**, con la regola della gestione
+utenti, cognome, nome, email: le manda così il server (`PERSON_ORDER` in
+[user_fields.py](../backend/user_fields.py)), e chi apre il report cerca una
+persona come la cercherebbe di là. È anche l'ordine a cui la tabella torna
+quando si toglie un ordinamento con il terzo clic su un'intestazione. Prima
+il server le mandava dalla più recente e il browser le rimetteva in fila,
+cioè lo stesso ordine scritto due volte.
 
 **Il periodo e l'organizzazione stanno sotto l'intestazione**, nella fascia di
 [PeriodOrgFilters](../frontend/src/components/PeriodOrgFilters.tsx), che è la
@@ -1633,15 +1663,33 @@ aveva lasciati e non li trovava. La ricerca resta di là perché cerca dentro
 l'elenco che questi due hanno già scelto, ed è un filtro anche lei: «Azzera
 Filtri», che questa pagina prima non aveva, riporta il report intero e
 cancella pure quella. La pagina è larga come il registro attività, perché la
-riga di una persona ha sette colonne e quello che si apre sotto ne ha
-altrettante.
+riga di una persona ha sei colonne e la finestra che si apre ne ha di
+più.
 
 La barra della tabella sta comunque fuori dal contenitore che ritaglia le
 righe ([DataTable](../frontend/src/components/DataTable.tsx)): là dentro una
 tendina si aprirebbe contro il bordo e verrebbe tagliata. È lo stesso motivo
 per cui il piede con le righe per pagina sta già fuori.
 
-**Sotto la riga, tre linguette**
+**La persona si apre in una finestra**
+([UserReportModal](../frontend/src/components/UserReportModal.tsx)), con la
+sua intestazione in cima (iniziali, nome, email, ruolo e per il super admin
+l'organizzazione) e lo storico sotto. Lo storico si apriva sotto la riga,
+dentro la tabella: una riga aperta spingeva giù tutte le altre, e con dentro
+una seconda tabella con la sua ricerca, il suo filtro e le sue pagine la
+schermata diventava due elenchi uno dentro l'altro che scorrevano insieme.
+Per tornare all'elenco delle persone bisognava risalire, e per aprirne
+un'altra richiudere prima quella. In una finestra lo storico ha lo spazio
+suo, si chiude con Esc o con la X, e l'elenco dietro resta dov'era. È alta
+quanto lo storico che contiene (`layout="column"`): con tre prove una
+finestra ad altezza fissa era per due terzi vuota. Oltre lo schermo si ferma
+al 90vh e scorre solo lo storico, con l'intestazione che resta ferma. La
+persona da mostrare la pagina la ricerca nell'elenco a ogni
+disegno, e non tiene da parte la riga cliccata: eliminando una prova il
+report si rilegge, e la finestra deve mostrare i conteggi nuovi. Se il report
+riletto non la contiene più, la finestra sparisce da sé.
+
+**Dentro la finestra, tre linguette**
 ([UserReportDetail](../frontend/src/components/UserReportDetail.tsx)): le
 conversazioni di qua, le simulazioni di là, come nella dashboard e nel
 confronto, e in fondo il quadro d'insieme. "Come parla" e "cosa sa" sono due
@@ -1691,10 +1739,12 @@ simulazione, data, corrette e voto. L'intestazione è anche l'unico posto dove
 dire una volta sola cosa sono quei numeri, che è quello che "8/10" e "12" da
 soli non dicono.
 
-È la stessa tabella della pagina che la contiene, e si impagina **solo oltre
-le dieci prove**: sotto, il piede direbbe "da 1 a 3 di 3" e offrirebbe due
-frecce spente, cioè comandi che non servono dentro una riga appena aperta.
-La categoria dell'avatar ha smesso di essere una pastiglia ed è un pallino
+È la stessa tabella della pagina che la contiene, **con il suo piede**, cioè
+il conteggio delle righe e le pagine come in ogni altro elenco dell'app.
+Sotto la riga si impaginava solo oltre le dieci prove, per non mostrare due
+frecce spente in uno spazio aperto dentro la tabella: in una finestra lo
+spazio c'è, ed era l'unica tabella dell'applicazione a presentarsi senza
+piede. La categoria dell'avatar ha smesso di essere una pastiglia ed è un pallino
 colorato con la parola sotto il nome
 ([categoryStyles](../frontend/src/components/categoryStyles.ts)): la riga ha
 già la targhetta del canale, e due pastiglie di fila si contendono lo stesso
@@ -1745,20 +1795,24 @@ intestazione, e il resto lo carica dall'id. Il report attività elenca anche le
 conversazioni **mai valutate**, e una riga di valutazione per quelle non
 esiste proprio.
 
-Le modali stanno **fuori dalla tabella** e non dentro il dettaglio, perché il
-riquadro della tabella sfoca lo sfondo, e una schermata intera aperta lì
-dentro resterebbe confinata al riquadro. Dentro la riga, il cestino è un
-bersaglio separato dal resto e il suo clic si ferma lì, senza arrivare alla
-riga che aprirebbe la prova: aprire e cancellare sono due gesti sulla stessa
-riga, ed è lì che si confondono.
+Le modali delle prove e le conferme di eliminazione stanno **nella finestra
+della persona** e non nella pagina né dentro lo storico: partono da lì, e si
+aprono `elevated`, cioè sopra, perché sono l'ultima cosa comparsa. Per questo
+anche [ConversationDetailModal](../frontend/src/components/ConversationDetailModal.tsx)
+ha la prop `elevated`, come già il dettaglio di un tentativo. Dentro la riga
+di una prova, il cestino è un bersaglio separato dal resto e il suo clic si
+ferma lì, senza arrivare alla riga che aprirebbe la prova: aprire e cancellare
+sono due gesti sulla stessa riga, ed è lì che si confondono.
 
 **Ogni riga che si apre si apre anche da tastiera**, sia quella della persona
 sia quelle delle sue prove: lo dichiarano con `onActivate`
 ([DataTable](../frontend/src/components/DataTable.tsx)), che porta insieme il
-puntatore a manina, il fuoco, Invio e Spazio, e la riga della persona dice
-anche se è aperta (`aria-expanded`). Erano `onClick` scritti a mano, cioè il
-solo mouse, e aprire una riga è l'unica cosa che questa pagina fa: la freccia
-in fondo è un disegno, non un comando. Il titolo di una prova ha smesso di
+puntatore a manina, il fuoco, Invio e Spazio. Erano `onClick` scritti a mano,
+cioè il solo mouse, e aprire una riga è l'unica cosa che questa pagina fa. La
+riga della persona non porta nessun segno di apertura, come nella gestione
+utenti: lo dicono il puntatore e la riga che si accende al passaggio, e la
+freccia che c'era in fondo era un disegno che prometteva una riga sotto che
+non si apre più. Il titolo di una prova ha smesso di
 essere un pulsante nel momento in cui la riga ne è diventata uno: era
 l'appiglio da tastiera di prima, e adesso sarebbe una seconda fermata del Tab
 per lo stesso gesto.
@@ -1784,10 +1838,10 @@ finché non si preme.
 Perché una modale possa aprirsi da dentro un'altra,
 [ModalShell](../frontend/src/components/ModalShell.tsx) esce in fondo alla
 pagina attraverso un portal: il pannello che la ospita sfoca lo sfondo, e un
-antenato che sfoca diventa il riferimento di tutto quello che sta dentro,
-quindi è lo stesso motivo per cui le modali della tabella stanno fuori dal
-dettaglio. Chi le montava già a livello di pagina non se ne accorge, era già
-lì che finivano.
+antenato che sfoca diventa il riferimento di tutto quello che sta dentro. È
+quello che permette alla finestra della persona di tenere dentro di sé le
+finestre delle sue prove. Chi le montava già a livello di pagina non se ne
+accorge, era già lì che finivano.
 
 **Anche una simulazione si cancella da qui**
 (`DELETE /api/admin/simulation-attempts/{id}`), gemello della cancellazione di
@@ -1818,7 +1872,7 @@ dentro quella delle conversazioni.
 I conteggi dell'elenco li fa il database, non Python: `conversation_count`,
 `simulation_count` e `total_duration_seconds` escono da due `GROUP BY`, e la
 durata è la stessa espressione SQL che scrive quella della singola prova
-(`_duration_seconds`), così la somma della riga e le durate che si aprono sotto
+(`_duration_seconds`), così la somma della riga e le durate delle singole prove
 tornano. Prima si materializzava ogni prova di ogni persona per contarle in
 memoria, cioè la stessa somma fatta due volte, una dal server per costruire le
 liste e una da chi le riceveva per non guardarle.

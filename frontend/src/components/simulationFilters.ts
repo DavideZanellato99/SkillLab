@@ -40,11 +40,14 @@ const KIND_ORDER: SimulationKind[] = ['multiple', 'open', 'ordering', 'matching'
  * scheda si leggono come una targhetta o non si leggono affatto: cercare
  * "aperta" trova i test in cui si scrive, cercare "manuale" quelli scritti da
  * una persona, ed è la stessa regola delle ricerche nelle tabelle.
+ * L'organizzazione solo quando la scheda la scrive, cioè per il super admin:
+ * per tutti gli altri non è una parola che compare da nessuna parte.
  */
 export function filterSimulations(
   simulations: Simulation[],
   filter: SimulationFilter,
   search: string,
+  showOrganization = false,
 ): Simulation[] {
   return simulations.filter((simulation) => {
     if (filter !== ALL_KINDS && simulation.kind !== filter) return false
@@ -54,7 +57,7 @@ export function filterSimulations(
       simulation.description,
       kindLabel(simulation.kind),
       sourceLabel(simulation.source),
-      simulation.organization_name,
+      showOrganization ? simulation.organization_name : '',
     )
   })
 }

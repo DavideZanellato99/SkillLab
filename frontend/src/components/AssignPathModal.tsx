@@ -12,6 +12,7 @@ import ConfirmModal from './ConfirmModal'
 import FormError from './FormError'
 import LoadingState from './LoadingState'
 import ModalShell, { ModalHeader } from './ModalShell'
+import { comparePeople } from './personOrder'
 import PrimaryButton from './PrimaryButton'
 import SearchInput from './SearchInput'
 import Spinner from './Spinner'
@@ -93,11 +94,17 @@ export default function AssignPathModal({
   // il suo id, e per raccontarla serve il punto a cui è arrivata.
   const assigned = useMemo(() => new Map(assignments.map((a) => [a.user_id, a])), [assignments])
 
+  /* Nell'ordine della tabella di gestione utenti (cognome, nome, email): un
+   * elenco di persone si scorre cercando il cognome, e le stesse persone
+   * ordinate in due modi in due schermate si leggono come due elenchi
+   * diversi. */
   const visible = useMemo(
     () =>
-      users.filter((u) =>
-        matchesSearch(search, `${u.nome} ${u.cognome}`.trim(), u.email, u.nome, u.cognome),
-      ),
+      users
+        .filter((u) =>
+          matchesSearch(search, `${u.nome} ${u.cognome}`.trim(), u.email, u.nome, u.cognome),
+        )
+        .sort(comparePeople),
     [users, search],
   )
   // Chi si può ancora aggiungere fra quelli che la ricerca lascia vedere:

@@ -13,8 +13,14 @@ porta il marcatore:
   ``mock-``;
 - gli account hanno l'email su ``@mock.invalid``, che è un dominio che non
   esiste per definizione (RFC 2606), quindi nessuna mail può partire davvero;
-- avatar, test, percorsi e conversazioni hanno il titolo che comincia per
-  ``[MOCK]``.
+- avatar, test e percorsi hanno il titolo che comincia per ``[MOCK]``.
+
+Le conversazioni no: il loro titolo è quello che una persona vede in cima
+alla propria cronologia e nel confronto, e un marcatore lì sopra rendeva
+finta anche una demo su una organizzazione vera. Si riconoscono da chi le
+ha fatte, cioè da un account su ``@mock.invalid`` o dentro un tenant finto.
+L'unica eccezione sono quelle date a un account vero con ``--anche-per``,
+che non hanno nient'altro da cui farsi riconoscere e tengono il marcatore.
 
 **Come si toglie.** ``--rimuovi`` cancella le organizzazioni finte con tutto
 quello che contengono, riusando la stessa cancellazione del tenant che usa il
@@ -36,8 +42,17 @@ account vero:
 
     backend/venv/Scripts/python.exe demo/dati_mock.py --anche-per tizio@esempio.it
 
+Il contrario vale per le pagine di chi amministra: una organizzazione vera
+con tre account non fa vedere niente del confronto fra utenti né delle medie
+di gruppo. Le si aggiungono delle persone finte, che si allenano sugli avatar
+e sui test veri di quella organizzazione e percorrono i suoi percorsi:
+
+    backend/venv/Scripts/python.exe demo/dati_mock.py --persone-in med
+    backend/venv/Scripts/python.exe demo/dati_mock.py --persone-in med --quante 20
+
 Sono le uniche righe finte che vivono fuori da una organizzazione finta, e
-``--rimuovi`` le toglie lo stesso: le riconosce dal marcatore nel titolo.
+``--rimuovi`` le toglie lo stesso: le conversazioni le riconosce dal marcatore
+nel titolo, le persone dal dominio dell'email.
 
 I dati sono **deterministici**: il generatore casuale parte da un seme
 fisso, quindi due esecuzioni scrivono gli stessi voti e le stesse date
@@ -79,6 +94,7 @@ from models import (  # noqa: E402
     ChatMessage,
     ConversationEvaluation,
     ConversationReview,
+    MessageAnnotation,
     Organization,
     Role,
     SimulationAttempt,
@@ -89,8 +105,14 @@ from models import (  # noqa: E402
     TrainingPathStep,
     User,
 )
-from openai_service import EVALUATION_CRITERIA  # noqa: E402
-from simulation_scoring import attempt_points, question_points  # noqa: E402
+from openai_service import (  # noqa: E402
+    EVALUATION_CRITERIA,
+    EVALUATION_SUGGESTION_THRESHOLD,
+)
+from simulation_scoring import attempt_points  # noqa: E402
+
+from risposte import risposte as risposte_finte  # noqa: E402
+from trascrizioni import trascrizione  # noqa: E402
 
 # ── Come si riconosce quello che nasce da qui ──
 
@@ -518,29 +540,35 @@ def _voto(rng: random.Random, base: float, scarto: float = 0.0) -> float:
     return round(min(10.0, max(1.0, valore)), 1)
 
 
-def _valutazione(rng: random.Random, voto: float) -> dict:
-    """Il JSON di una valutazione, con i sei criteri canonici.
+def _voto_in_scala(valore: float) -> float:
+    return round(min(10.0, max(1.0, valore)), 1)
+
+
+def _valutazione_segnaposto(rng: random.Random, voto: float) -> tuple[dict, float]:
+    """La valutazione di una chiamata senza trascrizione, tutta segnaposto.
 
     I criteri sono quelli veri (``EVALUATION_CRITERIA``) e non un elenco
     scritto qui: le etichette che la dashboard mostra devono essere le stesse
-    su cui il giudizio vero verrebbe dato.
+    su cui il giudizio vero verrebbe dato. Restituisce anche il voto, che qui
+    è quello chiesto: i criteri gli stanno attorno.
     """
     criteri = []
-    for key, label, _peso in EVALUATION_CRITERIA:
+    for key, label, peso in EVALUATION_CRITERIA:
         # L'identificazione del cliente è il criterio su cui questo gruppo
         # inciampa: serve a far vedere che la dashboard lo sa dire
         penalita = 1.6 if key == "identificazione_cliente" else 0.0
-        punteggio = round(
-            min(10.0, max(1.0, voto - penalita + rng.uniform(-0.7, 0.7))), 1
-        )
+        punteggio = _voto_in_scala(voto - penalita + rng.uniform(-0.7, 0.7))
         criteri.append(
             {
                 "key": key,
                 "label": label,
+                "weight": peso,
                 "score": punteggio,
                 "comment": f"{MARCATORE} commento finto per {label.lower()}.",
                 "suggestions": (
-                    f"{MARCATORE} suggerimento finto." if punteggio < 8 else None
+                    f"{MARCATORE} suggerimento finto."
+                    if punteggio < EVALUATION_SUGGESTION_THRESHOLD
+                    else None
                 ),
                 "citations": [],
             }
@@ -548,7 +576,58 @@ def _valutazione(rng: random.Random, voto: float) -> dict:
     return {
         "summary": f"{MARCATORE} sintesi finta della conversazione.",
         "criteria": criteri,
-    }
+    }, voto
+
+
+def _valutazione(
+    rng: random.Random, chiamata: dict, voto: float, id_messaggi: list[uuid.UUID]
+) -> tuple[dict, float]:
+    """La valutazione di una chiamata scritta, nella forma del giudizio vero.
+
+    I punteggi della chiamata sono il suo profilo, quali criteri reggono e
+    quali cedono; qui si spostano tutti insieme attorno al voto della persona,
+    così la forma resta quella della chiamata e il numero è quello di chi
+    l'ha tenuta. Il voto complessivo si ricalcola come media pesata dei sei
+    criteri, come fa ``openai_service._normalize_evaluation``: è l'unico modo
+    perché i pesi siano rispettati davvero. I suggerimenti restano solo sotto
+    la soglia, anche questo come nel giudizio vero.
+
+    Le citazioni indicano le battute per numero, e qui si agganciano agli id
+    dei messaggi appena scritti: è quello che permette alla pagina di portare
+    il lettore sulla riga citata.
+    """
+    profilo = chiamata["criteri"]
+    peso_totale = sum(peso for _, _, peso in EVALUATION_CRITERIA)
+    media_profilo = sum(
+        profilo[key]["score"] * peso for key, _, peso in EVALUATION_CRITERIA
+    )
+    scarto = voto - media_profilo / peso_totale
+
+    criteri = []
+    for key, label, peso in EVALUATION_CRITERIA:
+        voce = profilo[key]
+        punteggio = _voto_in_scala(voce["score"] + scarto + rng.uniform(-0.3, 0.3))
+        criteri.append(
+            {
+                "key": key,
+                "label": label,
+                "weight": peso,
+                "score": punteggio,
+                "comment": voce["comment"],
+                "suggestions": (
+                    voce["suggestions"]
+                    if punteggio < EVALUATION_SUGGESTION_THRESHOLD
+                    else None
+                ),
+                "citations": [
+                    {"index": indice, "message_id": str(id_messaggi[indice - 1])}
+                    for indice in voce["citations"]
+                    if 1 <= indice <= len(id_messaggi)
+                ],
+            }
+        )
+    complessivo = round(sum(c["score"] * c["weight"] for c in criteri) / peso_totale, 1)
+    return {"summary": chiamata["sintesi"], "criteria": criteri}, complessivo
 
 
 def _conversazione(
@@ -561,17 +640,37 @@ def _conversazione(
     *,
     canale: str,
     revisione: bool = False,
+    docente: User | None = None,
+    marcata: bool = False,
 ) -> ChatConversation:
     """Una conversazione finta, già valutata, con la sua trascrizione.
+
+    ``marcata`` mette il marcatore nel titolo: solo per le prove date a un
+    account vero, che non hanno né un tenant finto né un'email finta da cui
+    ``--rimuovi`` le possa riconoscere.
 
     I messaggi non sono decorazione: la durata che il report attività e la
     dashboard dell'utilizzo mostrano si ricava dal primo e dall'ultimo, e
     senza di loro ogni chiamata durerebbe zero.
+
+    Se l'avatar è uno di quelli veri con una chiamata scritta
+    (``trascrizioni``), i messaggi sono quella chiamata, scelta in base al
+    voto, e con lei arrivano la valutazione che il modello avrebbe dato e,
+    se ``revisione``, quello che il docente ci ha lasciato sopra: la nota di
+    sintesi, la correzione del voto dove il modello ha sbagliato e le note
+    appuntate sulle singole battute. Altrimenti sono battute segnaposto, che
+    per la durata bastano, con una valutazione e una revisione segnaposto.
+
+    ``docente`` è chi firma la revisione: l'amministratore dell'organizzazione
+    se c'è, altrimenti un nome senza account come per un docente poi rimosso.
     """
     conversazione = ChatConversation(
         user_id=utente.id,
         avatar_id=avatar.id,
-        title=f"{MARCATORE} {rng.choice(ARGOMENTI)}",
+        # Senza marcatore, salvo dove è l'unica cosa che la fa riconoscere
+        title=f"{MARCATORE} {rng.choice(ARGOMENTI)}"
+        if marcata
+        else rng.choice(ARGOMENTI),
         mode=canale,
         created_at=quando,
         ended_at=quando + timedelta(minutes=rng.randint(4, 18)),
@@ -579,43 +678,87 @@ def _conversazione(
     db.add(conversazione)
     db.flush()
 
-    battute = rng.randint(6, 14)
-    passo = timedelta(seconds=rng.randint(40, 90))
-    for indice in range(battute):
-        db.add(
-            ChatMessage(
-                conversation_id=conversazione.id,
-                role="user" if indice % 2 == 0 else "assistant",
-                content=f"{MARCATORE} battuta finta numero {indice + 1}.",
-                created_at=quando + passo * indice,
+    chiamata = trascrizione(rng, avatar.name, voto, f"{utente.nome} {utente.cognome}")
+    if chiamata is None:
+        battute = [
+            (
+                "user" if indice % 2 == 0 else "assistant",
+                f"{MARCATORE} battuta finta numero {indice + 1}.",
             )
+            for indice in range(rng.randint(6, 14))
+        ]
+    else:
+        battute = chiamata["battute"]
+    passo = timedelta(seconds=rng.randint(40, 90))
+    messaggi = []
+    for indice, (ruolo, testo) in enumerate(battute):
+        messaggio = ChatMessage(
+            id=uuid.uuid4(),
+            conversation_id=conversazione.id,
+            role=ruolo,
+            content=testo,
+            created_at=quando + passo * indice,
         )
+        db.add(messaggio)
+        messaggi.append(messaggio)
 
+    if chiamata is None:
+        risultato, complessivo = _valutazione_segnaposto(rng, voto)
+    else:
+        risultato, complessivo = _valutazione(
+            rng, chiamata, voto, [m.id for m in messaggi]
+        )
     db.add(
         ConversationEvaluation(
             conversation_id=conversazione.id,
-            overall_score=voto,
-            result=_valutazione(rng, voto),
+            overall_score=complessivo,
+            result=risultato,
             created_at=quando + timedelta(minutes=20),
         )
     )
 
     if revisione:
-        # Una correzione del docente ogni tanto: è quello che fa comparire
-        # l'etichetta "corretto" accanto al voto, e la dashboard deve
-        # mostrare il voto finale e non quello della macchina.
+        # Il passaggio del docente: è quello che fa comparire l'etichetta
+        # "corretto" accanto al voto, e la dashboard deve mostrare il voto
+        # finale e non quello della macchina. Senza chiamata scritta è tutto
+        # segnaposto, con la correzione sempre verso l'alto.
+        firmato_da = f"{docente.nome} {docente.cognome}" if docente else "Docente"
+        quando_rivista = quando + timedelta(days=1)
+        if chiamata is None:
+            nota = f"{MARCATORE} nota finta del docente."
+            correzione = (1.5, f"{MARCATORE} motivazione finta della correzione.")
+            firmato_da = f"{MARCATORE} Docente"
+        else:
+            nota = chiamata["nota_docente"]
+            correzione = chiamata["correzione"]
         db.add(
             ConversationReview(
                 conversation_id=conversazione.id,
-                reviewer_id=None,
-                reviewer_name=f"{MARCATORE} Docente",
-                summary_note=f"{MARCATORE} nota finta del docente.",
-                override_score=round(min(10.0, voto + 1.5), 1),
-                override_reason=f"{MARCATORE} motivazione finta della correzione.",
-                ai_score_at_review=voto,
-                created_at=quando + timedelta(days=1),
+                reviewer_id=docente.id if docente else None,
+                reviewer_name=firmato_da,
+                summary_note=nota,
+                override_score=_voto_in_scala(complessivo + correzione[0])
+                if correzione
+                else None,
+                override_reason=correzione[1] if correzione else None,
+                ai_score_at_review=complessivo,
+                created_at=quando_rivista,
             )
         )
+        # Le note sulle battute vanno solo sulle righe dell'operatore, come
+        # impone l'applicazione: si è valutati su quello che si è detto
+        for indice, testo in (chiamata or {}).get("note_battute", {}).items():
+            if 1 <= indice <= len(messaggi) and messaggi[indice - 1].role == "user":
+                db.add(
+                    MessageAnnotation(
+                        conversation_id=conversazione.id,
+                        message_id=messaggi[indice - 1].id,
+                        reviewer_id=docente.id if docente else None,
+                        reviewer_name=firmato_da,
+                        note=testo,
+                        created_at=quando_rivista,
+                    )
+                )
     db.flush()
     return conversazione
 
@@ -633,49 +776,10 @@ def _tentativo(
 
     Le risposte servono per intero: la vista dei contenuti apre una riga e
     conta quante volte ogni domanda è stata data giusta, e senza la
-    fotografia non ci sarebbe niente da contare.
+    fotografia non ci sarebbe niente da contare. Come si scrivono dipende
+    dal tipo del test, e sta in ``risposte``.
     """
-    scelte = rng.sample(domande, k=min(10, len(domande)))
-    risposte = []
-    for posizione, domanda in enumerate(
-        sorted(scelte, key=lambda d: d.position), start=1
-    ):
-        # La seconda domanda del serbatoio è quella scritta male, e la nona
-        # è quella che la gente lascia in bianco: sono i due casi che la
-        # tabella delle domande deve far notare.
-        if domanda.position == 2:
-            giusta = rng.random() < 0.1
-            in_bianco = False
-        elif domanda.position == 9:
-            in_bianco = rng.random() < 0.5
-            giusta = False if in_bianco else rng.random() < bravura
-        else:
-            in_bianco = False
-            giusta = rng.random() < bravura
-
-        opzioni = domanda.options or []
-        if in_bianco:
-            scelta = None
-        elif giusta:
-            scelta = domanda.correct_option
-        else:
-            sbagliate = [i for i in range(len(opzioni)) if i != domanda.correct_option]
-            scelta = rng.choice(sbagliate) if sbagliate else None
-        millisecondi = None if in_bianco else rng.randint(6000, 240000)
-        risposte.append(
-            {
-                "question_id": str(domanda.id),
-                "position": posizione,
-                "text": domanda.text,
-                "options": opzioni,
-                "selected_option": scelta,
-                "correct_option": domanda.correct_option,
-                "is_correct": giusta,
-                "elapsed_ms": millisecondi,
-                "points": question_points(giusta, millisecondi),
-                "explanation": f"{MARCATORE} spiegazione finta.",
-            }
-        )
+    risposte = risposte_finte(rng, simulazione.kind, domande, bravura)
 
     punti = attempt_points([r["points"] for r in risposte])
     tentativo = SimulationAttempt(
@@ -1080,9 +1184,24 @@ def rimuovi(db) -> None:
         db.commit()
         print(f"  tolte {len(fuori)} conversazioni finte da account veri")  # noqa: T201
 
+    # Poi le persone finte messe dentro una organizzazione vera
+    # (`--persone-in`): anche loro fuori da ogni tenant finto, riconoscibili
+    # dal dominio dell'email. Se ne vanno con tutto quello che hanno fatto,
+    # per la stessa strada che il pannello usa per cancellare un account.
+    ospiti = (
+        db.query(User.id, User.organization_id)
+        .filter(User.email.like(f"%@{DOMINIO_EMAIL}"))
+        .filter(User.organization_id.notin_([o.id for o in organizzazioni]))
+        .all()
+    )
+    if ospiti:
+        erase_users(db, [row[0] for row in ospiti])
+        db.commit()
+        print(f"  tolti {len(ospiti)} account finti da organizzazioni vere")  # noqa: T201
+
     if not organizzazioni:
         _ritratti_orfani(db)
-        if not fuori:
+        if not fuori and not ospiti:
             print("Non c'è niente da togliere: nessun dato finto.")  # noqa: T201
         return
 
@@ -1214,6 +1333,7 @@ def prove_per_un_account_vero(db, email: str) -> None:
             # Una sola corretta dal docente: basta a far comparire
             # l'etichetta accanto al voto senza farla sembrare la regola
             revisione=indice == quante - 2,
+            marcata=True,
         )
 
     simulazioni = (
@@ -1243,12 +1363,260 @@ def prove_per_un_account_vero(db, email: str) -> None:
     print(f"  prove finte addosso a {email}: {quante} conversazioni e i suoi test")  # noqa: T201
 
 
+def persone_finte_in(db, slug: str, quante: int) -> None:
+    """Aggiunge a una organizzazione vera delle persone finte già allenate.
+
+    È l'altra faccia di ``--anche-per``: là si riempie la pagina di chi si
+    allena, qui quelle di chi amministra. Un tenant vero con tre account non
+    fa vedere niente del confronto fra utenti né delle medie di gruppo, e
+    rifarlo da capo come tenant finto vorrebbe dire perdere gli avatar e i
+    test veri che ci stanno dentro, che sono proprio quello su cui si vuole
+    guardare la dashboard.
+
+    Le persone usano gli avatar e i test dell'organizzazione, quindi le
+    prove finiscono nei contenuti veri. Sono riconoscibili dall'email su
+    ``@mock.invalid`` come tutte le altre, ed è da lì che ``--rimuovi`` le
+    toglie insieme a tutto quello che hanno fatto.
+
+    Ogni persona ha una manciata di conversazioni e di test: abbastanza da
+    avere una media, non tanto da sembrare che si alleni da mesi, su tutti i
+    tipi di test pubblicati. Una parte è ripetuta: lo stesso scenario sullo
+    stesso canale due o tre volte, e lo stesso test due volte, con il voto
+    che sale. È quello che la pagina del confronto affianca, e a prove
+    sparse a caso su due avatar e sedici test una coppia sulla stessa cosa
+    non capitava quasi mai: si apriva un selettore pieno di persone e per
+    ciascuna un riquadro che chiedeva una seconda prova.
+
+    Sono anche affidate ai percorsi veri dell'organizzazione, ognuno a un
+    gruppo diverso e ognuna con un esito diverso (``ESITI``): la pagina dei
+    percorsi, con i soli account veri, non aveva niente da mostrare, e con
+    tutti allo stesso punto non mostrerebbe la differenza fra chi ha finito
+    e chi non ha ancora cominciato.
+    """
+    rng = random.Random(SEME + 2)
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if org is None:
+        raise SystemExit(f"Nessuna organizzazione con lo slug {slug}.")
+
+    # Le persone finte già scritte qui se ne vanno prima: rilanciare il
+    # comando vuol dire rifarle, non sommarne altre quattordici
+    gia_presenti = [
+        row[0]
+        for row in db.query(User.id)
+        .filter(User.organization_id == org.id)
+        .filter(User.email.like(f"%@{DOMINIO_EMAIL}"))
+        .all()
+    ]
+    if gia_presenti:
+        erase_users(db, gia_presenti)
+        db.commit()
+        print(f"  tolte le {len(gia_presenti)} persone finte già presenti")  # noqa: T201
+
+    avatar = db.query(Avatar).filter(Avatar.organization_id == org.id).all()
+    if not avatar:
+        raise SystemExit(
+            f"{org.name} non ha avatar: senza interlocutori non si possono "
+            "scrivere conversazioni."
+        )
+    # Tutti i test dell'organizzazione con le loro domande, nella forma che
+    # `_prove_del_percorso` legge: le tappe di un percorso possono puntare a
+    # un test che non è pubblicato, e il tentativo va scritto lo stesso
+    catalogo_test = []
+    for simulazione in (
+        db.query(TechnicalSimulation)
+        .filter(TechnicalSimulation.organization_id == org.id)
+        .order_by(TechnicalSimulation.title)
+        .all()
+    ):
+        domande = (
+            db.query(SimulationQuestion)
+            .filter(SimulationQuestion.simulation_id == simulazione.id)
+            .all()
+        )
+        if domande:
+            catalogo_test.append({"riga": simulazione, "domande": domande})
+    # Le prove sparse si fanno sui test che una persona vede davvero
+    test = [
+        (t["riga"], t["domande"])
+        for t in catalogo_test
+        if t["riga"].status == SIMULATION_STATUS_PUBLISHED and len(t["domande"]) >= 3
+    ]
+    catalogo = {"avatar": [{"riga": a} for a in avatar], "test": catalogo_test}
+
+    # I percorsi veri che si possono percorrere per intero: una tappa su un
+    # avatar o un test che non è in catalogo (un test senza domande) non ha
+    # una prova da scrivere, e un percorso a metà seminabile è un percorso
+    # in cui non si capisce perché nessuno vada oltre
+    raggiungibili = {a.id for a in avatar} | {t["riga"].id for t in catalogo_test}
+    percorsi = [
+        percorso
+        for percorso in db.query(TrainingPath)
+        .filter(TrainingPath.organization_id == org.id)
+        .order_by(TrainingPath.title)
+        .all()
+        if percorso.steps
+        and all(
+            (s.avatar_id or s.simulation_id) in raggiungibili for s in percorso.steps
+        )
+    ]
+
+    # L'email è unica su tutta la piattaforma: i nomi già assegnati a un
+    # account finto, in qualunque tenant, non si ripetono
+    nomi_usati = {
+        f"{nome} {cognome}"
+        for nome, cognome in db.query(User.nome, User.cognome)
+        .filter(User.email.like(f"%@{DOMINIO_EMAIL}"))
+        .all()
+    }
+    ruoli = _ruoli(db)
+    # Chi firma le revisioni: l'amministratore dell'organizzazione, che è la
+    # persona che nell'applicazione le scrive davvero
+    docente = (
+        db.query(User)
+        .filter(User.organization_id == org.id)
+        .filter(User.role_id == ruoli[ROLE_ORGANIZATION_ADMIN].id)
+        .order_by(User.created_at)
+        .first()
+    )
+    persone = []
+    for nome, cognome, bravura in _persone_finte(rng, quante, nomi_usati):
+        utente = User(
+            cognito_sub=f"{SUB_PREFISSO}{uuid.uuid4()}",
+            email=f"{nome.lower()}.{cognome.lower()}@{DOMINIO_EMAIL}",
+            nome=nome,
+            cognome=cognome,
+            role_id=ruoli[ROLE_USER].id,
+            organization_id=org.id,
+            status=USER_STATUS_ACTIVE,
+            last_login_at=giorni_fa(rng.uniform(0, 20)),
+            last_activity_at=giorni_fa(rng.uniform(0, 5)),
+            tutorial_seen_at=giorni_fa(GIORNI_DI_STORIA),
+        )
+        db.add(utente)
+        db.flush()
+        persone.append({"utente": utente, "bravura": bravura})
+
+        # Lo scenario abituale, ripetuto sullo stesso canale: la prima volta
+        # più indietro nel tempo e con un voto più basso, così affiancando
+        # due prove si legge un progresso e non un rumore
+        abituale = rng.choice(avatar)
+        canale_abituale = "voice" if rng.random() < 0.65 else "text"
+        ripetizioni = rng.randint(2, 3)
+        for indice in range(ripetizioni):
+            quota = indice / (ripetizioni - 1)
+            _conversazione(
+                db,
+                rng,
+                utente,
+                abituale,
+                giorni_fa(GIORNI_DI_STORIA * (1 - quota) * rng.uniform(0.6, 1) + 0.2),
+                _voto(rng, bravura - 1.2 + 2 * quota),
+                canale=canale_abituale,
+                # Una su tre passa dal docente: qui le revisioni hanno note
+                # vere da leggere, e con poche persone una su otto non si
+                # troverebbe
+                revisione=rng.random() < 0.35,
+                docente=docente,
+            )
+        # E qualche prova sparsa, come l'allenamento normale
+        for _ in range(rng.randint(1, 2)):
+            _conversazione(
+                db,
+                rng,
+                utente,
+                rng.choice(avatar),
+                giorni_fa(rng.uniform(0.2, GIORNI_DI_STORIA)),
+                _voto(rng, bravura),
+                canale="voice" if rng.random() < 0.65 else "text",
+                revisione=rng.random() < 0.35,
+                docente=docente,
+            )
+
+        if not test:
+            continue
+        # Il test abituale, consegnato due volte con più domande giuste la
+        # seconda: la fotografia delle risposte è la stessa domanda per
+        # domanda, ed è quello che il confronto segna in verde o in rosso
+        simulazione, domande = rng.choice(test)
+        for indice in range(2):
+            _tentativo(
+                db,
+                rng,
+                utente,
+                simulazione,
+                domande,
+                giorni_fa(GIORNI_DI_STORIA * (1 - indice) * rng.uniform(0.6, 1) + 0.2),
+                # La bravura è in decimi, la probabilità di azzeccare no
+                min(1.0, (bravura - 1.5 + 3 * indice) / 10),
+            )
+        for _ in range(rng.randint(1, 2)):
+            simulazione, domande = rng.choice(test)
+            _tentativo(
+                db,
+                rng,
+                utente,
+                simulazione,
+                domande,
+                giorni_fa(rng.uniform(0.2, GIORNI_DI_STORIA)),
+                bravura / 10,
+            )
+
+    # Ogni percorso a un gruppo diverso, come fa chi compone: metà delle
+    # persone circa, estratte a caso, così nessuno le ha tutte e qualcuno
+    # non ne ha nessuna. L'esito ruota lungo il gruppo e riparte da un punto
+    # diverso a ogni percorso, quindi la stessa persona che ha finito uno è
+    # a metà di un altro
+    affidamenti = 0
+    for indice_percorso, percorso in enumerate(percorsi):
+        tappe = sorted(percorso.steps, key=lambda tappa: tappa.position)
+        gruppo = rng.sample(
+            persone, k=max(1, round(len(persone) * rng.uniform(0.4, 0.7)))
+        )
+        for indice, persona in enumerate(gruppo):
+            esito = ESITI[(indice + indice_percorso) % len(ESITI)]
+            affidato = giorni_fa(rng.uniform(20, 45))
+            if esito == "appena_affidato":
+                affidato = giorni_fa(rng.uniform(1, 3))
+            db.add(
+                TrainingPathAssignment(
+                    path_id=percorso.id,
+                    user_id=persona["utente"].id,
+                    created_at=affidato,
+                )
+            )
+            db.flush()
+            _prove_del_percorso(db, rng, persona, tappe, catalogo, affidato, esito)
+            affidamenti += 1
+
+    db.commit()
+    print(  # noqa: T201
+        f"  {org.name}: {quante} persone finte, ognuna con una manciata di "
+        f"conversazioni e di test, in parte ripetuti ({len(test)} test pubblicati), "
+        f"e {affidamenti} affidamenti su {len(percorsi)} percorsi"
+    )
+
+
 def stato(db) -> None:
     """Dice cosa c'è di finto nel database, senza toccare niente."""
     organizzazioni = _organizzazioni_finte(db)
-    if not organizzazioni:
+    # Le persone finte dentro organizzazioni vere (`--persone-in`), contate
+    # per organizzazione
+    ospiti = (
+        db.query(Organization.name, User.id)
+        .join(User, User.organization_id == Organization.id)
+        .filter(User.email.like(f"%@{DOMINIO_EMAIL}"))
+        .filter(Organization.id.notin_([o.id for o in organizzazioni]))
+        .all()
+    )
+    if not organizzazioni and not ospiti:
         print("Nessun dato finto: il database contiene solo dati veri.")  # noqa: T201
         return
+
+    per_organizzazione: dict[str, int] = {}
+    for nome, _id in ospiti:
+        per_organizzazione[nome] = per_organizzazione.get(nome, 0) + 1
+    for nome, quanti in per_organizzazione.items():
+        print(f"  {nome} (organizzazione vera): {quanti} account finti")  # noqa: T201
 
     for org in organizzazioni:
         utenti = db.query(User).filter(User.organization_id == org.id).count()
@@ -1291,6 +1659,21 @@ def main() -> None:
     gruppo.add_argument(
         "--rifai", action="store_true", help="toglie e riscrive da capo"
     )
+    gruppo.add_argument(
+        "--persone-in",
+        metavar="SLUG",
+        help=(
+            "mette in una organizzazione vera delle persone finte già "
+            "allenate, per riempire le dashboard di chi la amministra "
+            "(rilanciato, le rifà da capo)"
+        ),
+    )
+    parser.add_argument(
+        "--quante",
+        type=int,
+        default=14,
+        help="quante persone scrive --persone-in (14 se non indicato)",
+    )
     parser.add_argument(
         "--anche-per",
         metavar="EMAIL",
@@ -1309,6 +1692,10 @@ def main() -> None:
         if argomenti.rimuovi:
             print("Rimozione dei dati finti:")  # noqa: T201
             rimuovi(db)
+            return
+        if argomenti.persone_in:
+            print(f"Persone finte in una organizzazione vera (su @{DOMINIO_EMAIL}):")  # noqa: T201
+            persone_finte_in(db, argomenti.persone_in, argomenti.quante)
             return
         if argomenti.rifai:
             print("Rimozione dei dati finti:")  # noqa: T201

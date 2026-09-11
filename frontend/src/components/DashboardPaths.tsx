@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { usePathsDashboard } from '../hooks/useDashboards'
 import type { PathDeadline, PathStats } from '../services/dashboards'
-import { isAdmin } from '../services/auth'
+import { isAdmin, isSuperAdmin } from '../services/auth'
 import AssignmentStatusBadge from './AssignmentStatusBadge'
 import DataTable, { Td, Tr } from './DataTable'
 import { useDashboardScope } from './dashboardViews'
@@ -11,7 +11,6 @@ import { formatDateTime } from './dateFormat'
 import EmptyState from './EmptyState'
 import LoadError from './LoadError'
 import LoadingState from './LoadingState'
-import Notice from './Notice'
 import { formatDecimal } from './numberFormat'
 import { KpiCard, RateRow } from './scoreCharts'
 import { cardCls, formatScore } from './scoreFormat'
@@ -52,7 +51,10 @@ function reachedNote(reached: number): string {
   return `${reached} ${reached === 1 ? 'persona ci è arrivata' : 'persone ci sono arrivate'}`
 }
 
-function PathCard({ path }: { path: PathStats }) {
+/* L'organizzazione accanto al conteggio solo per chi ne guarda più di una:
+ * a chi amministra la propria è il nome della stanza in cui si trova già, e
+ * l'app non glielo scrive da nessuna parte. */
+function PathCard({ path, showOrganization }: { path: PathStats; showOrganization: boolean }) {
   return (
     <div className={`${cardCls} mb-6`}>
       <div className="mb-4 flex items-baseline justify-between gap-4 max-sm:flex-col max-sm:gap-1">
@@ -62,8 +64,8 @@ function PathCard({ path }: { path: PathStats }) {
           </Tooltip>
           <p className="mt-1 text-xs text-slate-500">
             {path.assignments} {path.assignments === 1 ? 'persona' : 'persone'}
-            {path.organization_name ? ` · ${path.organization_name}` : ''} · chiusi in media in{' '}
-            {formatDays(path.avg_days_to_complete)}
+            {showOrganization && path.organization_name ? ` · ${path.organization_name}` : ''} ·
+            chiusi in media in {formatDays(path.avg_days_to_complete)}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs text-slate-400">
@@ -206,13 +208,8 @@ export default function DashboardPaths() {
         </KpiCard>
       </div>
 
-      <Notice className="mb-6">
-        La quota di ogni tappa è calcolata su chi l’ha sbloccata, non su tutti gli assegnatari: una
-        tappa in fondo a un percorso lungo la raggiungono in pochi
-      </Notice>
-
       {data.paths.map((path) => (
-        <PathCard key={path.path_id} path={path} />
+        <PathCard key={path.path_id} path={path} showOrganization={isSuperAdmin(user)} />
       ))}
 
       <div className="mb-3">

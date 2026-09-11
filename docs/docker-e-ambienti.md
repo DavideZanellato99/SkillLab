@@ -361,14 +361,79 @@ quelle di tutto lo storico e non delle prove più recenti.
 **Tutto quello che nasce da lì è riconoscibile**: le organizzazioni si
 chiamano `[MOCK] ...` con lo slug che comincia per `mock-`, gli account
 stanno su `@mock.invalid` (un dominio che per definizione non esiste, quindi
-nessuna mail può partire davvero) e avatar, test, percorsi e conversazioni
-hanno il titolo che comincia per `[MOCK]`. La rimozione passa dalla stessa
+nessuna mail può partire davvero) e avatar, test e percorsi hanno il titolo
+che comincia per `[MOCK]`. Le conversazioni no, perché il titolo è quello che
+si legge in cima alla cronologia e nel confronto e un marcatore lì sopra
+rendeva finta anche una demo su una organizzazione vera: si riconoscono da
+chi le ha fatte. La rimozione passa dalla stessa
 cancellazione del tenant che usa il pannello di amministrazione
 ([erasure.py](../backend/erasure.py)), quindi non dimentica una tabella il
 giorno in cui ne nasce una nuova.
 
 La pagina dei propri progressi fa eccezione, perché si apre solo con il ruolo
 `user` e gli account finti non esistono sull'identity provider: per vederla
-piena le prove si danno a un account vero con `--anche-per <email>`. Sono le
-uniche righe finte che vivono fuori da una organizzazione finta, e la
-rimozione le riconosce dal marcatore nel titolo.
+piena le prove si danno a un account vero con `--anche-per <email>`.
+
+Il contrario vale per le pagine di chi amministra una organizzazione vera,
+che con tre account non fa vedere niente del confronto fra utenti né delle
+medie di gruppo. `--persone-in <slug>` le aggiunge quattordici persone finte
+(`--quante` per un altro numero), ognuna con una manciata di conversazioni
+e di test svolti sugli avatar e sui test veri di quella organizzazione, quindi
+le prove finiscono nei contenuti che si stanno guardando. Una parte è
+ripetuta di proposito, lo stesso scenario sullo stesso canale due o tre volte
+e lo stesso test due volte con il voto che sale, così la pagina del confronto
+ha una coppia da affiancare per ogni persona. Sono anche affidate ai percorsi
+veri dell'organizzazione, ognuno a un gruppo diverso di persone e ognuna con
+un esito diverso, dal percorso completato a quello mai cominciato, con le
+prove scritte nell'ordine in cui le tappe si sbloccano. Rilanciato sulla
+stessa organizzazione, le rifà da capo invece di sommarne altre.
+
+Sul server lo script non sta nell'immagine del backend, che copia solo la
+cartella `backend/`, ma il repository sì: si lancia dentro un contenitore
+usa e getta della stessa immagine, montando la cartella `demo/` e con
+`PYTHONPATH` sul codice del backend, perché lo script cerca i moduli accanto
+a sé in `backend/` e nell'immagine stanno in `/app`:
+
+```bash
+cd ~/SkillLab
+docker compose run --rm --no-deps -v "$PWD/demo:/app/demo:ro" -e PYTHONPATH=/app   backend python demo/dati_mock.py --persone-in med
+```
+
+I tentativi coprono i quattro tipi di test. La fotografia delle risposte la
+scrive [demo/risposte.py](../demo/risposte.py), con le stesse chiavi e gli
+stessi conti della consegna vera: sulla scelta multipla una crocetta e un
+tempo, sull'ordinamento i passi con qualche scambio fra vicini, come si
+sbaglia un ordine che si conosce a metà, sull'abbinamento le coppie non
+sapute che si scambiano l'abbinato fra loro, sulla risposta aperta un testo
+che riprende in prosa una parte della risposta attesa, con il giudizio pari
+alla quota ripresa. Le pagine che riaprono un tentativo non distinguono uno
+finto da uno vero.
+
+Le conversazioni di queste persone sono chiamate scritte per intero in
+[demo/trascrizioni.py](../demo/trascrizioni.py), una per ogni avatar che ne
+ha, riconosciuto dal nome: l'operatore apre come nell'applicazione e il
+cliente risponde secondo la sua scheda. Ogni chiamata porta con sé anche la
+valutazione che il modello avrebbe dato, con il commento su ciascuno dei sei
+criteri, i suggerimenti dove il punteggio è basso e le citazioni agganciate
+alle battute vere, e il passaggio del docente: la nota di sintesi, la
+correzione del voto con la motivazione dove il modello ha sbagliato (in
+entrambe le direzioni, e a volte nessuna correzione perché il docente
+conferma), e le note appuntate sulle singole battute dell'operatore. Il
+docente che firma è l'amministratore dell'organizzazione.
+
+La chiamata è scelta in base al voto, quindi sotto una valutazione alta c'è
+una chiamata condotta bene e sotto una bassa ci sono gli errori che i criteri
+penalizzano, ed è quello che serve al confronto per avere qualcosa da
+leggere. I punteggi per criterio scritti nella chiamata sono il suo profilo,
+e si spostano tutti insieme attorno al voto della persona: la forma resta
+quella della chiamata, il numero è quello di chi l'ha tenuta, e il voto
+complessivo si ricalcola come media pesata dei criteri come fa il giudizio
+vero. Gli avatar dei tenant finti non hanno una chiamata scritta e tengono
+battute, valutazione e revisione segnaposto, che alla durata e ai conteggi
+bastano.
+
+Sono le uniche righe finte che vivono fuori da una organizzazione finta, e
+la rimozione le riconosce lo stesso: le persone dal dominio dell'email, e le
+conversazioni di `--anche-per` dal marcatore nel titolo, che sono le sole a
+tenerlo perché stanno su un account vero e non hanno nient'altro da cui
+farsi riconoscere.

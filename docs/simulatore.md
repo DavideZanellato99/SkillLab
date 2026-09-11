@@ -151,9 +151,10 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/hooks/useLeaveConfirmation.ts](../frontend/src/hooks/useLeaveConfirmation.ts) | La conferma prima di chiudere o ricaricare, finché il test è a metà |
 | [frontend/src/components/SimulationQuestionStep.tsx](../frontend/src/components/SimulationQuestionStep.tsx) | Una domanda a scelta multipla e il suo cronometro |
 | [frontend/src/components/SimulationOpenQuestionStep.tsx](../frontend/src/components/SimulationOpenQuestionStep.tsx) | Una domanda aperta e la casella in cui si scrive |
-| [frontend/src/components/SimulationOrderingStep.tsx](../frontend/src/components/SimulationOrderingStep.tsx) | Una domanda di ordinamento: i passi mescolati e le frecce per disporli |
-| [frontend/src/components/SimulationMatchingStep.tsx](../frontend/src/components/SimulationMatchingStep.tsx) | Una domanda di abbinamento: le due colonne e una tendina per riga |
-| [frontend/src/components/MoveControls.tsx](../frontend/src/components/MoveControls.tsx) | Le due frecce che spostano un elemento, condivise fra l'editor e lo svolgimento |
+| [frontend/src/components/SimulationOrderingStep.tsx](../frontend/src/components/SimulationOrderingStep.tsx) | Una domanda di ordinamento: i box mescolati da trascinare nelle posizioni |
+| [frontend/src/components/SimulationMatchingStep.tsx](../frontend/src/components/SimulationMatchingStep.tsx) | Una domanda di abbinamento: le due colonne, una tendina per riga, e il conto di cosa è già stato usato |
+| [frontend/src/hooks/usePointerDrag.ts](../frontend/src/hooks/usePointerDrag.ts) | Il trascinamento con il mouse o con un dito, e le zone in cui si rilascia |
+| [frontend/src/components/MoveControls.tsx](../frontend/src/components/MoveControls.tsx) | Le due frecce che spostano un elemento, dove un elenco si scrive invece di rispondere |
 | [frontend/src/components/listOrder.ts](../frontend/src/components/listOrder.ts) | Il calcolo dietro le frecce: lo stesso elenco con un elemento in un'altra posizione |
 | [frontend/src/components/SimulationWrittenAnswer.tsx](../frontend/src/components/SimulationWrittenAnswer.tsx) | Nell'esito: la risposta scritta, la traccia attesa, la correzione |
 | [frontend/src/components/SimulationItemsAnswer.tsx](../frontend/src/components/SimulationItemsAnswer.tsx) | Nell'esito: la sequenza disposta e le coppie formate, con accanto la chiave |
@@ -163,7 +164,7 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationReviewPanel.tsx](../frontend/src/components/SimulationReviewPanel.tsx) | L'esito del controllo in testa alle domande, dalla segnalazione più grave, con il salto alla domanda di cui parla |
 | [frontend/src/components/SimulationSettingsPanel.tsx](../frontend/src/components/SimulationSettingsPanel.tsx) | I dati del test accanto alle domande: titolo, descrizione e la sostituzione del documento |
 | [frontend/src/components/SimulationAdminPage.tsx](../frontend/src/components/SimulationAdminPage.tsx) | La tabella di gestione: ricerca, filtri, e le tre finestre che apre |
-| [frontend/src/components/SimulationsFilters.tsx](../frontend/src/components/SimulationsFilters.tsx) | Le due tendine sopra la tabella di gestione: stato e tipo di test |
+| [frontend/src/components/SimulationsFilters.tsx](../frontend/src/components/SimulationsFilters.tsx) | Le tendine sopra la tabella di gestione: organizzazione, tipo di test, origine delle domande e stato |
 | [frontend/src/components/SimulationEditorModal.tsx](../frontend/src/components/SimulationEditorModal.tsx) | Il pannello dove una simulazione diventa un test: domande, risultati, dati, pubblicazione |
 | [frontend/src/hooks/useCloseGuard.ts](../frontend/src/hooks/useCloseGuard.ts) | La conferma fra un gesto di chiusura e una finestra piena di lavoro non salvato, condivisa con il resto dell'app |
 | [frontend/src/components/SimulationStepsEditor.tsx](../frontend/src/components/SimulationStepsEditor.tsx) | La chiave di un ordinamento: i passi nella sequenza corretta |
@@ -785,17 +786,28 @@ via un tentativo è un gesto del report, non di chi sta preparando il test.
 
 La tabella da cui il pannello si apre ha **sopra di sé** la sua barra di
 filtri ([SimulationsFilters](../frontend/src/components/SimulationsFilters.tsx)),
-com'è sopra la tabella quella della gestione utenti: tre tendine, il **tipo**
-di test, l'**origine** delle domande (IA, manuale) e lo **stato** (bozze,
-pubblicate, tutte), più «Azzera Filtri» quando c'è qualcosa da azzerare. Sono
-le tre domande che si fa chi apre la pagina, che lavoro siano questi test, chi
-ne ha scritto le domande e quali siano rimasti a metà, e la ricerca da sola non
-sa rispondere: né «bozza» né «scelta multipla» sono scritti in una riga come
-parole da cercare, e «IA» sulla riga è un'icona.
+com'è sopra la tabella quella della gestione utenti: l'**organizzazione**, il
+**tipo** di test, l'**origine** delle domande (IA, manuale) e lo **stato**
+(bozze, pubblicate, tutte), più «Azzera Filtri» quando c'è qualcosa da
+azzerare. Sono le domande che si fa chi apre la pagina, di chi siano questi
+test, che lavoro siano, chi ne ha scritto le domande e quali siano rimasti a
+metà, e la ricerca da sola non sa rispondere: né «bozza» né «scelta multipla»
+sono scritti in una riga come parole da cercare, e «IA» sulla riga è un'icona.
 
 L'ordine è quello delle colonne che restringono, come in ogni barra di filtri
-dell'app: il tipo e l'origine sono le due targhette della colonna «Tipo», lo
-stato è la colonna dopo.
+dell'app: l'organizzazione apre la fascia come apre la tabella, il tipo e
+l'origine sono le due targhette della colonna «Tipo», lo stato è la colonna
+dopo.
+
+L'organizzazione è la sola tendina che non c'è sempre: la vede il super admin,
+che è l'unico ad amministrarne più di una e l'unico ad averne la colonna. A un
+organization admin direbbe la propria su ogni voce, che è la stessa ragione per
+cui la colonna non gli compare, e il componente la salta del tutto quando non
+riceve le opzioni. Restringe in memoria come le altre tre, che le simulazioni
+arrivano tutte in una lettura sola (`GET /api/admin/simulations`), quindi
+scegliere non torna sul server. Quando c'è, è anche l'organizzazione da cui
+parte «Nuova Simulazione»: chi sta guardando i test di un'azienda sta per
+scriverne un altro per quella, come nella composizione di un percorso.
 
 L'origine è la domanda che vale la rilettura: le domande che ha scritto il
 modello sono quelle da controllare prima di pubblicare, quelle scritte da una
@@ -823,9 +835,11 @@ compare anche quando è l'unica cosa scritta.
 
 Quando la tabella resta vuota il messaggio dice **quale** filtro l'ha svuotata,
 che «nessuna simulazione presente» sotto un filtro attivo farebbe credere che
-siano sparite. Da due tendine scelte in su diventa un «nessuna simulazione
-corrisponde ai filtri» solo: quali siano si legge sopra, e riscriverle nella
-frase non direbbe comunque quale allargare.
+siano sparite. L'organizzazione lo dice per nome, «nessuna simulazione di
+Acme», perché è l'unica scelta della fascia che non è una parola della pagina.
+Da due tendine scelte in su diventa un «nessuna simulazione corrisponde ai
+filtri» solo: quali siano si legge sopra, e riscriverle nella frase non
+direbbe comunque quale allargare.
 
 ### I dati del test
 
@@ -1058,10 +1072,11 @@ casella da spuntare che lo dica, quello che si legge dall'alto in basso è
 quello che il test si aspetta, e i numeri accanto ai passi non sono
 decorazione. Si riordina con due frecce
 ([MoveControls](../frontend/src/components/MoveControls.tsx)) e non
-trascinando: si tocca con un dito senza prendere la mira, si usa con la
-tastiera senza sapere nessuna scorciatoia, e non chiede una libreria a
-un'applicazione che dopo il primo deploy non si tocca più. Un elenco lungo si
-riordinerebbe meglio trascinando, ma qui gli elementi sono al massimo sei.
+trascinando, al contrario di quello che fa chi risponde: qui l'elenco si sta
+scrivendo, ogni riga ha già la sua casella di testo e il suo cestino, e la
+freccia sta accanto alle altre modifiche della riga invece di contendere il
+gesto a chi ci sta scrivendo dentro. Un elenco lungo si riordinerebbe meglio
+trascinando, ma qui gli elementi sono al massimo sei.
 Sotto l'elenco sta scritto che chi svolge il test li riceve mescolati, e di
 non cominciare un passo con "poi" o "infine": è l'errore che si fa senza
 accorgersene, e regala la risposta.
@@ -1363,6 +1378,13 @@ eccezione è la simulazione che non si carica, dove non c'è un titolo a cui
 affiancarlo e il comando sta sotto il messaggio insieme a quello per riprovare
 la lettura.
 
+**Sull'esito i comandi sono due, e stanno uno accanto all'altro**
+nell'intestazione: "Riprova il Test" e "Torna all'Elenco". Vale per tutti e
+quattro i tipi di test, perché la schermata dell'esito è una sola. Riprovare e
+uscire sono la stessa scelta vista da due lati, e finché il primo stava dentro
+il riquadro dell'esito e il secondo sopra il titolo bisognava cercarli in due
+punti diversi della schermata.
+
 **Mentre il test è in corso quel comando non c'è**, ed è voluto: uscire di lì
 butta via le domande estratte e le risposte già date, e non deve capitare per
 un clic sbagliato.
@@ -1520,30 +1542,58 @@ Anche qui nessun riscontro durante il percorso.
 
 ### 4.2.3 Di ordinamento
 
-I passi arrivano già mescolati e si dispongono con le frecce, lo stesso
-[MoveControls](../frontend/src/components/MoveControls.tsx) che chi amministra
-usa per scrivere la chiave. Senza cronometro, come sopra e per la stessa
-ragione, e con la stessa conseguenza scritta nelle regole: ricontrollare prima
-di andare avanti non costa niente.
+La schermata è divisa in due: sopra i passi ancora da collocare, sotto le
+posizioni numerate che aspettano il proprio. Rispondere è **portare ogni box
+dalla prima zona alla seconda**, quindi la sequenza che si sta costruendo si
+legge da sola e quello che manca si vede senza contarlo, sono i box rimasti
+sopra. Un elenco unico da riordinare mostrerebbe invece una sequenza completa
+fin dal primo istante, cioè una risposta già data che nessuno ha dato.
 
-**L'ordine di partenza non si tocca.** È quello in cui il server li ha
-mandati, e rimescolarlo nel browser vorrebbe dire che ricaricare la pagina
+**Si trascina, e chi non trascina tocca.** Il gesto principale è prendere un
+box e portarlo dove va, con il mouse o con un dito
+([usePointerDrag](../frontend/src/hooks/usePointerDrag.ts)); un tocco secco
+sul box lo sceglie e il tocco dopo, su una posizione, ce lo colloca. Il
+secondo modo non ha comandi propri a schermo, e non è un ripiego: è quello che
+tiene la domanda rispondibile su uno schermo piccolo, per chi punta con
+fatica e per chi arriva alla posizione con il tabulatore invece che con il
+puntatore. Le frecce di [MoveControls](../frontend/src/components/MoveControls.tsx)
+qui non ci sono più: restano dove un elenco si scrive, cioè nella chiave che
+prepara chi amministra e nelle tappe di un percorso.
+
+Una posizione già occupata **non respinge** il box che arriva: se veniva da
+un'altra posizione i due si scambiano, se veniva dall'alto l'occupante torna
+fra quelli da collocare. Rimbalzare sarebbe l'unica mossa che chiede di
+svuotare prima per poter riempire. E un box già collocato, toccato di nuovo,
+risale da solo: è il modo di disfare una mossa senza che ci sia un comando per
+disfarla.
+
+**L'ordine in cui i box arrivano non si tocca.** È quello in cui il server li
+ha mandati, e rimescolarlo nel browser vorrebbe dire che ricaricare la pagina
 cambia la domanda: la mescolata è già avvenuta una volta, dove viveva la
 chiave.
 
-Chi non tocca niente sta saltando la domanda, e il pulsante lo dice ("Salta la
-domanda" invece di "Avanti"). Non basterebbe confrontare la sequenza con
-quella di partenza, perché consegnarla identica è una risposta legittima:
-quello che si guarda è se le frecce sono state usate.
+**Una sequenza incompleta non è una risposta.** Il server corregge posizione
+per posizione e rifiuta un ordine più corto della chiave (vedi 5.2), quindi
+finché resta anche un solo box da collocare la domanda viaggia in bianco, e il
+pulsante lo dice ("Salta la domanda" invece di "Avanti"). Sopra i box il
+conto dice a che punto è ("3 di 5 collocati") e la riga in fondo avverte che a
+metà non viene valutata: fermarsi a metà resta possibile, ma non per
+distrazione.
+
+Senza cronometro, come sopra e per la stessa ragione, e con la stessa
+conseguenza scritta nelle regole: ricontrollare prima di andare avanti non
+costa niente.
 
 ### 4.2.4 Di abbinamento
 
 Ogni voce di sinistra ha la sua tendina, quella di tutta l'app
 ([Select](../frontend/src/components/Select.tsx)), con dentro la colonna di
-destra mescolata. Una tendina per riga e non il trascinamento: si usa con un
-dito senza prendere la mira, si usa con la tastiera senza sapere nessuna
-scorciatoia, e non chiede una libreria a un'applicazione che dopo il primo
-deploy non si tocca più.
+destra mescolata. Una tendina per riga e non il trascinamento, che pure
+esiste sull'ordinamento: là i box sono cinque e le posizioni cinque, qui lo
+stesso abbinato si può scegliere due volte, ed è voluto (vedi sotto). Un box
+trascinato in una casella la occupa, quindi il doppione diventerebbe
+impossibile e chi si accorge a metà di aver sbagliato si ritroverebbe la
+scelta giusta già impegnata altrove.
 
 Ogni tendina porta il nome della voce che sta abbinando ("Abbinamento per
 Carta"): sono cinque, tutte con lo stesso invito scritto sopra, e chi le sente
@@ -1554,9 +1604,27 @@ il nome vive solo per chi legge con la voce.
 **Lo stesso abbinato si può scegliere due volte.** Impedirlo vorrebbe dire
 toglierlo dalle tendine che restano, e chi si accorge a metà di aver sbagliato
 la prima si ritroverebbe la scelta giusta sparita dal menu. Restano scelte
-sbagliate come le altre, con un avviso in fondo che le fa notare senza
-bloccare niente: la chiave dice che un abbinato vale per una voce sola, quindi
-due voci uguali sono già una risposta che perde punti.
+sbagliate come le altre: la chiave dice che un abbinato vale per una voce
+sola, quindi due voci uguali sono già una risposta che perde punti.
+
+Niente sparisce, ma la memoria non resta a carico di chi risponde: con sei
+voci ricordarsi cosa si è già usato è un lavoro che il test non sta
+misurando. Tre cose lo evitano, e nessuna delle tre blocca una scelta.
+
+- **Le tendine dicono cosa è già impegnato e dove.** Un abbinato finito su
+  un'altra voce compare attenuato e con accanto scritto «già su Bonifico»
+  (la `note` di [Select](../frontend/src/components/Select.tsx), un testo
+  secondario accanto all'etichetta). Si sceglie lo stesso, e nella tendina
+  della voce che se l'è preso la nota non compare: parlerebbe di sé stessa.
+- **Il contatore dice quanto manca**, «4 di 6 abbinate», accanto alla
+  consegna, così le voci scoperte si vedono senza contare le righe.
+- **Il duplicato accende le righe che se lo contendono** e l'avviso in fondo
+  le nomina («Sportello è su Bonifico e Carta»), invece di dire solo che da
+  qualche parte c'è una ripetizione. Con sei righe, sapere quale abbinato non
+  basta a sapere dove guardare.
+
+Il conflitto si vede quindi **prima di crearlo**, nella tendina, e chi lo crea
+lo trova segnalato subito invece di scoprirlo alla correzione.
 
 Le voci lasciate scoperte semplicemente non viaggiano, e valgono sbagliate.
 Chi non ne abbina nessuna consegna la domanda in bianco.

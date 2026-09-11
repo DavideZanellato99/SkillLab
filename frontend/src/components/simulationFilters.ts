@@ -99,9 +99,11 @@ export function kindFilterOptions(
  * una simulazione vive in bozza finché il serbatoio non è pieno e riletto,
  * **come ci si risponde**, che scrivere dieci domande a crocette e dieci da
  * correggere a mano sono due lavori diversi, e **chi le ha scritte**, perché
- * le domande di un modello sono quelle da rileggere. Stanno qui accanto
- * all'altro filtro perché sono modi di restringere lo stesso elenco, e
- * separarli vorrebbe dire due file che parlano di simulazioni filtrate. */
+ * le domande di un modello sono quelle da rileggere. Per il super admin ce
+ * n'è una prima di tutte, **di chi siano**, che con più tenant è la domanda
+ * che viene prima delle altre tre. Stanno qui accanto all'altro filtro perché
+ * sono modi di restringere lo stesso elenco, e separarli vorrebbe dire due
+ * file che parlano di simulazioni filtrate. */
 
 /** Quali simulazioni guardare nella gestione: le bozze, le pubblicate, tutte. */
 export type SimulationStatusFilter = SimulationStatus | 'all'
@@ -109,9 +111,16 @@ export type SimulationStatusFilter = SimulationStatus | 'all'
 /** Da dove vengono le domande: dal modello, da una persona, o non importa. */
 export type SimulationSourceFilter = SimulationSource | 'all'
 
-/** Le tre tendine sopra la tabella, in un valore solo: la pagina ne cambia
- *  una per volta e le passa insieme, come la barra della gestione utenti. */
+/** Le tendine sopra la tabella, in un valore solo: la pagina ne cambia una
+ *  per volta e le passa insieme, come la barra della gestione utenti. */
 export interface AdminSimulationFilters {
+  /* Di chi sono i test che si stanno guardando, vuoto per tutti. Lo sceglie
+   * il solo super admin, come nella gestione avatar e nei percorsi: un
+   * organization admin ne amministra una sola, e la tendina gli direbbe
+   * sempre la stessa parola. Sta qui insieme alle altre e non in uno stato
+   * suo perché è un modo di restringere lo stesso elenco, e «Azzera Filtri»
+   * deve riportarlo indietro con le altre tre. */
+  organizationId: string
   status: SimulationStatusFilter
   kind: SimulationFilter
   source: SimulationSourceFilter
@@ -119,6 +128,7 @@ export interface AdminSimulationFilters {
 
 /** L'elenco intero, che è da dove si parte e dove riporta «Azzera Filtri». */
 export const NO_ADMIN_FILTERS: AdminSimulationFilters = {
+  organizationId: '',
   status: 'all',
   kind: ALL_KINDS,
   source: 'all',
@@ -161,6 +171,9 @@ export const ADMIN_SOURCE_OPTIONS: { value: SimulationSourceFilter; label: strin
  * "manuale" quelli scritti da una persona. L'organizzazione entra solo dove
  * si vede, cioè per chi ne amministra più di una: per un organization admin
  * sarebbe la propria su ogni riga, e cercarla restituirebbe tutto.
+ *
+ * L'organizzazione è la prima a restringere perché è quella che toglie più
+ * righe: le altre tre girano su un elenco già di qualcuno.
  */
 export function filterAdminSimulations(
   simulations: AdminSimulation[],
@@ -169,6 +182,9 @@ export function filterAdminSimulations(
   showOrganization: boolean,
 ): AdminSimulation[] {
   return simulations.filter((simulation) => {
+    if (filters.organizationId && simulation.organization_id !== filters.organizationId) {
+      return false
+    }
     if (filters.status !== 'all' && simulation.status !== filters.status) return false
     if (filters.kind !== ALL_KINDS && simulation.kind !== filters.kind) return false
     if (filters.source !== 'all' && simulation.source !== filters.source) return false

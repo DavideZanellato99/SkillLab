@@ -228,18 +228,23 @@ export default function SimulationRunner() {
       <PageContainer>
         <PageHeader
           title={simulation.title}
-          description="Esito del test appena consegnato."
-          actions={<BackToList />}
+          description="Esito del test appena consegnato"
+          /* A test consegnato i comandi sono due e stanno insieme, uno accanto
+             all'altro nell'intestazione: riprovare e tornare all'elenco sono la
+             stessa scelta vista da due lati, e finché il primo stava dentro il
+             riquadro dell'esito e il secondo qui sopra bisognava cercarli in
+             due punti diversi della schermata. */
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              <PrimaryButton onClick={restart}>Riprova il Test</PrimaryButton>
+              <BackToList />
+            </div>
+          }
         />
         {/* Anche a test consegnato: da qui si torna al percorso, che è dove si
             vede se la tappa è stata superata e cosa viene dopo. */}
         <PathStepNotice kind="simulation" targetId={simulationId} className="mb-6" />
-        <SimulationResult
-          attempt={result}
-          /* Solo il comando che riguarda questo riquadro: uscire è dell'intera
-             schermata, e sta nella sua intestazione. */
-          actions={<PrimaryButton onClick={restart}>Riprova il Test</PrimaryButton>}
-        />
+        <SimulationResult attempt={result} />
       </PageContainer>
     )
   }

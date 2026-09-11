@@ -16,7 +16,7 @@ import tls_setup  # noqa: F401
 from audit import AuditMiddleware
 from authorship import AuthorshipMiddleware
 from database import log_connection_budget, replica_health
-from origins import ALLOWED_ORIGINS
+from origins import ALLOWED_ORIGIN_REGEX, ALLOWED_ORIGIN_SUFFIXES, ALLOWED_ORIGINS
 from routers.admin import router as admin_router
 from routers.admin_avatar_categories import router as admin_avatar_categories_router
 from routers.admin_avatars import router as admin_avatars_router
@@ -49,6 +49,17 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# I suffissi di origine sono una comodità di sviluppo, e ogni sottodominio del
+# dominio dichiarato diventa un'origine legittima, tunnel altrui compresi.
+# Detto a ogni avvio perché è l'unica cosa che impedisce a una riga lasciata
+# nel .env di arrivare in produzione senza che nessuno se ne accorga.
+if ALLOWED_ORIGIN_SUFFIXES:
+    logger.warning(
+        "ALLOWED_ORIGIN_SUFFIXES attivo (%s): ogni sottodominio di questi domini "
+        "è un'origine ammessa. Serve ai tunnel di sviluppo, va lasciato vuoto in produzione.",
+        ", ".join(ALLOWED_ORIGIN_SUFFIXES),
+    )
 
 # Create all database tables, then bring an existing database up to date.
 # create_all only creates missing tables; everything else (added columns,
@@ -86,10 +97,13 @@ app = FastAPI(
 )
 
 # CORS configuration — l'elenco vive in `origins`, che lo condivide con
-# l'handshake del WebSocket vocale.
+# l'handshake del WebSocket vocale. L'espressione accanto è la deroga per i
+# tunnel di sviluppo, e vale None quando nessun suffisso è dichiarato: qui
+# come sul socket, le due strade devono dire la stessa cosa.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

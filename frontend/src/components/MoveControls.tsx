@@ -3,15 +3,16 @@ import Tooltip from './Tooltip'
 
 /* Le due frecce con cui un elemento di un elenco sale o scende di un posto.
  *
- * Stanno in due posti che sembrano lontani e fanno la stessa cosa: il super
- * admin che dispone i passi di una domanda di ordinamento nella loro
- * sequenza corretta, e l'operatore che dispone gli stessi passi durante il
- * test. Un componente solo, perché il gesto è quello e due copie
- * finirebbero per disabilitarsi in modo diverso ai due capi dell'elenco.
+ * Sono di chi scrive, non di chi risponde: il super admin che dispone i passi
+ * di una domanda di ordinamento nella loro sequenza corretta, e le tappe di
+ * un percorso. Durante il test gli stessi passi si trascinano invece
+ * (``SimulationOrderingStep``), perché là disporli è la risposta e non la
+ * preparazione di un elenco.
  *
  * Le frecce e non il trascinamento: si tocca con un dito senza prendere la
- * mira, si usa con la tastiera senza sapere nessuna scorciatoia, e non
- * chiede una libreria. Un elenco lungo si riordinerebbe meglio trascinando,
+ * mira, si usa con la tastiera senza sapere nessuna scorciatoia, e su un
+ * elenco che si scrive una riga alla volta il gesto sta accanto alle altre
+ * modifiche della riga. Un elenco lungo si riordinerebbe meglio trascinando,
  * ma qui gli elementi sono al massimo sei.
  *
  * Il tooltip compare solo dove il bottone è vivo: "non si può salire più su"

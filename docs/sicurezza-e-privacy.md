@@ -247,7 +247,10 @@ Due altre difese stanno lontano dal login e vale la pena nominarle:
   aprirne uno verso qui e il browser glielo lascia fare. Con l'id di sessione
   fra le mani non le basterebbe comunque, perché quello non è un cookie che il
   browser attacca da solo, ma è la riga che regge il giorno in cui quella
-  scelta cambiasse.
+  scelta cambiasse. Il confronto è esatto, salvo i suffissi di
+  `ALLOWED_ORIGIN_SUFFIXES`, che ammettono un sottodominio qualunque dei domini
+  dichiarati: servono ai tunnel di sviluppo, dove l'hostname cambia a ogni
+  avvio, e in produzione quella variabile resta vuota;
 
 ## La conservazione
 

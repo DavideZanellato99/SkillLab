@@ -17,7 +17,7 @@ import os
 from collections.abc import Callable
 
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from openai import APITimeoutError, AsyncOpenAI
 
 import tls_setup  # noqa: F401  (TLS via OS store: must precede the openai import)
 import untrusted_text
@@ -108,6 +108,20 @@ def _is_retryable(error: Exception) -> bool:
         return True
     msg = str(error)
     return any(s in msg for s in ("429", "rate limit", "overloaded", "502", "503"))
+
+
+def _is_live_retryable(error: Exception) -> bool:
+    """True per gli errori che dal vivo meritano di provare la riserva.
+
+    Ai sovraccarichi si aggiunge l'attesa scaduta, e si aggiunge solo qui.
+    Gemini ogni tanto tiene una richiesta in coda oltre il tetto senza
+    rispondere e senza dichiararsi pieno: dal vivo l'alternativa al cambio di
+    modello è un turno perso, quindi vale la pena chiedere la stessa battuta
+    a qualcun altro. Per la valutazione la stessa attesa resta definitiva
+    (vedi _EVAL_MAX_RETRIES): lì nessuno è in linea, e ritentare costa minuti
+    invece di salvare una risposta.
+    """
+    return _is_retryable(error) or isinstance(error, APITimeoutError)
 
 
 def _eval_completion_kwargs(model: str) -> dict:
@@ -236,6 +250,19 @@ def _roleplay_messages(
     return _build_messages(build_persona_prompt(avatar_profile, channel), messages_history)
 
 
+# Il turno finto che accompagna il preriscaldamento.
+#
+# Non è cortesia verso il modello, è quello che rende la richiesta valida da
+# entrambi i fornitori: l'endpoint compatibile di Gemini traduce il messaggio
+# `system` in `system_instruction` e lascia in `contents` solo il resto, così
+# una richiesta con il solo prompt della persona gli arriva senza contenuti e
+# torna indietro come 400. Su OpenAI passerebbe, ma il fornitore lo sceglie il
+# .env, e un preriscaldamento che scalda solo metà delle installazioni non
+# scalda niente. La risposta si butta comunque, quindi del testo conta solo
+# che sia corto.
+_PREWARM_USER_MESSAGE = "."
+
+
 async def prewarm_roleplay(avatar_profile: dict) -> None:
     """Open the connection to the provider and prime the persona prompt cache.
 
@@ -257,7 +284,10 @@ async def prewarm_roleplay(avatar_profile: dict) -> None:
     try:
         await client.chat.completions.create(
             model=model,
-            messages=_build_messages(build_persona_prompt(avatar_profile, CHANNEL_VOICE), []),
+            messages=_build_messages(
+                build_persona_prompt(avatar_profile, CHANNEL_VOICE),
+                [{"role": "user", "content": _PREWARM_USER_MESSAGE}],
+            ),
             **roleplay_completion_kwargs(model, 1),
         )
     except Exception as e:
@@ -298,7 +328,7 @@ async def stream_avatar_response(
             return
         except Exception as e:
             # Once text has been emitted we can't switch model mid-response
-            if started or not _is_retryable(e):
+            if started or not _is_live_retryable(e):
                 logger.exception("Streaming del roleplay fallito (%s)", model)
                 raise RuntimeError(f"Errore nella comunicazione con il modello: {e!s}")
             logger.warning(

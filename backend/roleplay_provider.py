@@ -44,17 +44,26 @@ _GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 # Senza questo la libreria usa il suo default, che è dell'ordine dei dieci
 # minuti: pensato per uno script che elabora un file, non per qualcuno che
 # aspetta al telefono. Il guaio non è la richiesta persa, è che perderla
-# richiede più tempo di quanto la conversazione ne abbia. Passati venti
-# secondi senza una parola la battuta è comunque rovinata, e arrendersi in
-# fretta lascia almeno provare il modello di riserva mentre la chiamata è
-# ancora viva. Sul flusso, che è il caso normale, questo tetto vale fra un
-# pezzo e il successivo e non sull'intera risposta: un modello che parla
-# lentamente non viene interrotto, uno che si è piantato sì.
-LIVE_TIMEOUT_SECONDS = 20
-# Nessun ritentativo dal vivo: due tentativi da venti secondi fanno quaranta
-# secondi di silenzio in una conversazione parlata, e a quel punto non c'è più
-# niente da salvare. Un sovraccarico passa comunque al modello di riserva, che
-# è un'altra cosa dal ritentare lo stesso modello.
+# richiede più tempo di quanto la conversazione ne abbia.
+#
+# Otto secondi non sono una stima prudente, sono fuori scala: misurata sul
+# prompt di una persona vera, la prima parola arriva sotto il secondo e
+# mezzo, e quando non arriva entro otto non è un modello lento, è una
+# richiesta in coda. Gemini ogni tanto entra in fasi di qualche minuto in cui
+# tiene la richiesta ferma una ventina di secondi senza rispondere e senza
+# dichiararsi pieno, e il tetto che stava qui prima le lasciava bruciare il
+# turno intero per poi arrendersi comunque. Otto secondi lasciano invece alla
+# riserva il tempo di parlare mentre la chiamata è ancora viva.
+#
+# Sul flusso, che è il caso normale, questo tetto vale fra un pezzo e il
+# successivo e non sull'intera risposta: un modello che parla lentamente non
+# viene interrotto, uno che si è piantato sì.
+LIVE_TIMEOUT_SECONDS = 8
+# Nessun ritentativo dal vivo: due tentativi sullo stesso modello fanno il
+# doppio del silenzio per la stessa coda, e in una conversazione parlata non
+# c'è niente da salvare aspettando due volte chi non ha risposto la prima. Un
+# sovraccarico, e con lui un'attesa scaduta, passa comunque al modello di
+# riserva, che è un'altra cosa dal ritentare lo stesso modello.
 LIVE_MAX_RETRIES = 0
 
 # La temperatura del roleplay: alta, perché un avatar che ripete la stessa

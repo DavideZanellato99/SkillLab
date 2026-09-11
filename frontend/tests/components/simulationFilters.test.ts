@@ -108,8 +108,8 @@ describe('filterAdminSimulations', () => {
   const bozza = adminSimulazione({ id: 'bozza', title: 'Reclami', status: 'draft' })
   const pubblicata = adminSimulazione({ id: 'pubblicata', title: 'Bonifici esteri' })
 
-  /* Le due tendine viaggiano insieme, e ogni prova ne cambia una sola: così
-     si legge quale delle due sta restringendo l'elenco. */
+  /* Le tendine viaggiano insieme, e ogni prova ne cambia una sola: così si
+     legge quale sta restringendo l'elenco. */
   const filtri = (over: Partial<AdminSimulationFilters> = {}): AdminSimulationFilters => ({
     ...NO_ADMIN_FILTERS,
     ...over,
@@ -117,6 +117,30 @@ describe('filterAdminSimulations', () => {
 
   it('mostra tutto finché non si sceglie', () => {
     expect(filterAdminSimulations([bozza, pubblicata], filtri(), '', true)).toHaveLength(2)
+  })
+
+  /* La domanda che si fa il solo super admin, e la prima a restringere: di
+     chi siano questi test. */
+  it("restringe all'organizzazione scelta", () => {
+    const altrove = adminSimulazione({
+      id: 'altrove',
+      title: 'Sinistri',
+      organization_id: 'org-2',
+      organization_name: 'Assicura',
+    })
+    const elenco = [pubblicata, altrove]
+
+    expect(
+      filterAdminSimulations(elenco, filtri({ organizationId: 'org-2' }), '', true).map(
+        (s) => s.id,
+      ),
+    ).toEqual(['altrove'])
+    expect(
+      filterAdminSimulations(elenco, filtri({ organizationId: 'org-1' }), '', true).map(
+        (s) => s.id,
+      ),
+    ).toEqual(['pubblicata'])
+    expect(filterAdminSimulations(elenco, filtri(), '', true)).toHaveLength(2)
   })
 
   /* La domanda che si fa chi apre la gestione: quali test sono rimasti a

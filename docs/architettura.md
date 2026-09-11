@@ -151,7 +151,7 @@ stesso istante. Vedi [dati-e-schema.md](dati-e-schema.md).
 
 | Middleware | Cosa fa |
 | --- | --- |
-| `CORSMiddleware` | Origini ammesse da `ALLOWED_ORIGINS`, con le credenziali abilitate perché i cookie viaggino |
+| `CORSMiddleware` | Origini ammesse da `ALLOWED_ORIGINS`, con le credenziali abilitate perché i cookie viaggino. `ALLOWED_ORIGIN_SUFFIXES` aggiunge i sottodomini dei tunnel di sviluppo, e resta vuota in produzione (vedi [origins.py](../backend/origins.py)) |
 | `AuditMiddleware` | Registra le azioni che cambiano qualcosa. Sta **dentro** il CORS di proposito: una preflight OPTIONS non è un'azione, e una richiesta cross origin rifiutata non va registrata come tale |
 | `AuthorshipMiddleware` | Il più interno, quindi quando si arriva al database l'attore della richiesta è già a disposizione: `created_by` e `updated_by` si scrivono da soli |
 

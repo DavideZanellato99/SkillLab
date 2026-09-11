@@ -321,6 +321,14 @@ larghi sul frontend, perché lì gira Vite che tiene in memoria il grafo dei
 moduli, e col tetto della produzione verrebbe ucciso a metà lavoro sembrando un
 container che si riavvia da solo senza motivo.
 
+**In sviluppo `/app/static` è la cartella dell'host** e non il volume
+`backend_static`: l'override monta `./backend/static` su quel percorso, e la
+riga prende il posto del volume invece di aggiungersi. Serve perché i ritratti
+li scrivono anche i comandi lanciati dall'host, a partire dai dati finti qui
+sotto, e col volume di produzione al suo posto il backend li cercava dove
+nessuno li aveva scritti: le righe del database nominavano file esistenti sul
+disco, e il catalogo mostrava immagini rotte.
+
 ### I dati finti
 
 Un database appena avviato ha le dashboard vuote, e su dei grafici vuoti non

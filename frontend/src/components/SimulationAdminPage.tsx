@@ -36,9 +36,10 @@ import { iconActionCls as actionBtnCls } from './IconButton'
  * schermate.
  *
  * È la stessa pagina per tutti e due i ruoli, e la sola differenza è
- * l'organizzazione: il super admin la legge in colonna e la sceglie quando ne
- * crea una, un organization admin ha solo la propria e quelle due cose gli
- * direbbero sempre la stessa parola. A confinarlo è il server. */
+ * l'organizzazione: il super admin la legge in colonna, ci restringe l'elenco
+ * e la sceglie quando ne crea una, un organization admin ha solo la propria e
+ * quelle tre cose gli direbbero sempre la stessa parola. A confinarlo è il
+ * server. */
 
 /** Le colonne dipendono dal ruolo: l'organizzazione la vede solo chi ne
  * amministra più di una. Le percentuali sommano a 100 in entrambi gli
@@ -113,13 +114,26 @@ function simulationColumns(showOrg: boolean): DataTableColumn<AdminSimulation>[]
 /* Cosa dice la tabella vuota, che non è sempre la stessa cosa: senza righe
  * per via di un filtro, il messaggio deve dire quale, altrimenti "nessuna
  * simulazione presente" fa credere che siano sparite. */
-function emptyMessage(search: string, { status, kind, source }: AdminSimulationFilters): string {
+function emptyMessage(
+  search: string,
+  { organizationId, status, kind, source }: AdminSimulationFilters,
+  organizationName?: string,
+): string {
   if (search) return 'Nessuna simulazione corrisponde alla ricerca'
   /* Con più di una tendina scelta il messaggio non dice quale ha svuotato la
      tabella: le vede scritte sopra chi legge, e ripeterle in una frase non
      aiuterebbe comunque a capire quale allargare. */
-  const chosen = [status !== 'all', kind !== ALL_KINDS, source !== 'all'].filter(Boolean).length
+  const chosen = [
+    Boolean(organizationId),
+    status !== 'all',
+    kind !== ALL_KINDS,
+    source !== 'all',
+  ].filter(Boolean).length
   if (chosen > 1) return 'Nessuna simulazione corrisponde ai filtri'
+  /* L'organizzazione si dice per nome, che è l'unica scelta di questa barra a
+     non essere una parola della pagina: "nessuna simulazione per
+     l'organizzazione scelta" farebbe rileggere la tendina per sapere quale. */
+  if (organizationId) return `Nessuna simulazione di ${organizationName ?? "quest'organizzazione"}`
   if (status === 'draft') return 'Nessuna bozza da finire'
   if (status === 'published') return 'Nessuna simulazione pubblicata'
   if (kind !== ALL_KINDS) return `Nessuna simulazione di tipo ${kindLabel(kind).toLowerCase()}`
@@ -141,9 +155,10 @@ export default function SimulationAdminPage() {
    * test del tenant, riscorso da capo a ogni tasto premuto. */
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search)
-  /* Le tre domande di chi apre questa pagina: che lavoro siano questi test,
-   * chi ne ha scritto le domande e quali siano ancora da finire. Si parte
-   * dall'elenco intero, con le tre tendine sul valore che non restringe. */
+  /* Le domande di chi apre questa pagina: che lavoro siano questi test, chi
+   * ne ha scritto le domande, quali siano ancora da finire e, per chi
+   * amministra più di un tenant, di chi siano. Si parte dall'elenco intero,
+   * con le tendine sul valore che non restringe. */
   const [filters, setFilters] = useState<AdminSimulationFilters>(NO_ADMIN_FILTERS)
   const [creating, setCreating] = useState(false)
   /* Il pannello di revisione, aperto dalla matita. Tiene l'id e non la riga
@@ -155,6 +170,7 @@ export default function SimulationAdminPage() {
   const [toDelete, setToDelete] = useState<AdminSimulation | null>(null)
 
   const filtered = filterAdminSimulations(simulations, filters, debouncedSearch, showOrg)
+  const organizationName = organizations.find((o) => o.id === filters.organizationId)?.name
 
   const changeFilters = (patch: Partial<AdminSimulationFilters>) =>
     setFilters((prev) => ({ ...prev, ...patch }))
@@ -196,6 +212,13 @@ export default function SimulationAdminPage() {
 
       <SimulationsFilters
         value={filters}
+        /* La tendina delle organizzazioni la vede chi ne ha la colonna, cioè
+           il solo super admin: per gli altri `useOrganizations` non chiede
+           nemmeno l'elenco, e passare quello vuoto lascerebbe sopra la tabella
+           una tendina con dentro «Tutte le organizzazioni» e nient'altro. */
+        organizationOptions={
+          showOrg ? organizations.map((o) => ({ value: o.id, label: o.name })) : undefined
+        }
         isSearching={Boolean(search)}
         onChange={changeFilters}
         onReset={resetFilters}
@@ -207,7 +230,7 @@ export default function SimulationAdminPage() {
         <DataTable
           columns={columns}
           items={filtered}
-          emptyMessage={emptyMessage(debouncedSearch, filters)}
+          emptyMessage={emptyMessage(debouncedSearch, filters, organizationName)}
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder={
@@ -215,7 +238,7 @@ export default function SimulationAdminPage() {
               ? 'Cerca per titolo, organizzazione o documento...'
               : 'Cerca per titolo o documento...'
           }
-          pageResetKey={`${filters.status}|${filters.kind}|${filters.source}|${debouncedSearch}`}
+          pageResetKey={`${filters.organizationId}|${filters.status}|${filters.kind}|${filters.source}|${debouncedSearch}`}
           renderRow={(simulation) => (
             <Tr
               key={simulation.id}
@@ -293,7 +316,10 @@ export default function SimulationAdminPage() {
       {creating && (
         <SimulationCreateModal
           organizations={organizations}
-          defaultOrganizationId={user?.organization_id ?? null}
+          /* L'organizzazione che si sta guardando è quella per cui si sta per
+             scrivere un test, come nella composizione di un percorso: senza
+             filtro resta la propria, che per il super admin non c'è. */
+          defaultOrganizationId={filters.organizationId || user?.organization_id || null}
           onClose={() => setCreating(false)}
           onCreated={(id) => {
             setCreating(false)

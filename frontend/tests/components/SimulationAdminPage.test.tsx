@@ -24,7 +24,12 @@ vi.mock('../../src/hooks/useSimulations', () => ({
  * vuoto. È il caso dell'org admin, che le organizzazioni non le legge. */
 vi.mock('../../src/hooks/useOrganizations', () => ({
   useOrganizations: (enabled = true) => ({
-    data: enabled ? [{ id: 'org-1', name: 'Banca Esempio' }] : [],
+    data: enabled
+      ? [
+          { id: 'org-1', name: 'Banca Esempio' },
+          { id: 'org-2', name: 'Assicura' },
+        ]
+      : [],
   }),
 }))
 
@@ -87,8 +92,8 @@ function renderPage(righe: AdminSimulation[] = [simulazione()], ruolo = 'super_a
   render(<SimulationAdminPage />)
 }
 
-/* Le due tendine dei filtri: si apre quella con la sua etichetta e si sceglie
- * la voce, come nella barra della gestione utenti. */
+/* Le tendine dei filtri: si apre quella con la sua etichetta e si sceglie la
+ * voce, come nella barra della gestione utenti. */
 async function scegli(filtro: string, voce: string) {
   await userEvent.click(screen.getByLabelText(filtro))
   await userEvent.click(screen.getByRole('option', { name: voce }))
@@ -194,6 +199,25 @@ describe('elenco', () => {
 
   /* L'altra domanda: scrivere dieci domande a crocette e dieci da correggere
      a mano sono due lavori diversi. */
+  /* La prima tendina, che vede il solo super admin: di chi siano questi
+     test. */
+  it("restringe all'organizzazione scelta", async () => {
+    renderPage([
+      simulazione(),
+      simulazione({
+        id: 's-2',
+        title: 'Privacy',
+        organization_id: 'org-2',
+        organization_name: 'Assicura',
+      }),
+    ])
+
+    await scegli('Organizzazione', 'Assicura')
+
+    expect(screen.getByText('Privacy')).toBeInTheDocument()
+    expect(screen.queryByText('Normativa antiriciclaggio')).not.toBeInTheDocument()
+  })
+
   it('restringe al tipo di test', async () => {
     renderPage([simulazione(), simulazione({ id: 's-2', title: 'Privacy', kind: 'open' })])
 
@@ -250,6 +274,16 @@ describe('elenco', () => {
     expect(screen.getByText('Nessuna simulazione con domande scritte a mano')).toBeInTheDocument()
   })
 
+  /* L'organizzazione si dice per nome, che è l'unica scelta della fascia a
+     non essere una parola della pagina. */
+  it("nomina l'organizzazione che ha svuotato la tabella", async () => {
+    renderPage([simulazione()])
+
+    await scegli('Organizzazione', 'Assicura')
+
+    expect(screen.getByText('Nessuna simulazione di Assicura')).toBeInTheDocument()
+  })
+
   it('mostra il caricamento', () => {
     stato.elenco = { data: [], isLoading: true }
     render(<SimulationAdminPage />)
@@ -261,15 +295,18 @@ describe('elenco', () => {
     renderPage()
 
     expect(screen.getByRole('columnheader', { name: 'Organizzazione' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Organizzazione')).toBeInTheDocument()
     expect(screen.getByText('Banca Esempio')).toBeInTheDocument()
   })
 
   /* Un org admin la sua organizzazione la conosce già: la colonna sarebbe la
-   * stessa parola ripetuta su ogni riga. */
-  it('toglie la colonna a un org admin', () => {
+   * stessa parola ripetuta su ogni riga, e la tendina la stessa voce sola.
+   * Spariscono insieme, che è la stessa domanda fatta due volte. */
+  it('toglie la colonna e la tendina a un org admin', () => {
     renderPage([simulazione()], 'organization_admin')
 
     expect(screen.queryByRole('columnheader', { name: 'Organizzazione' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Organizzazione')).not.toBeInTheDocument()
     expect(screen.queryByText('Banca Esempio')).not.toBeInTheDocument()
     expect(screen.getByText('Normativa antiriciclaggio')).toBeInTheDocument()
   })

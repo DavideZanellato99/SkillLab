@@ -2,8 +2,8 @@
  *
  * Accanto a `MoveControls`, che sono le frecce con cui lo si comanda, ma in
  * un file a parte: lo stesso calcolo serve al super admin che dispone i passi
- * di una domanda di ordinamento e all'operatore che li dispone durante il
- * test, e in mezzo passa anche da chi non disegna nessuna freccia. */
+ * di una domanda di ordinamento e a chi mette in fila le tappe di un
+ * percorso, e in mezzo passa anche da chi non disegna nessuna freccia. */
 
 /** Lo stesso elenco con un elemento portato da una posizione a un'altra. */
 export function moved<T>(items: T[], from: number, to: number): T[] {

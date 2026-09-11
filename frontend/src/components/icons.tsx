@@ -194,6 +194,23 @@ export function SortIcon(props: IconProps) {
   )
 }
 
+/* I sei puntini di quello che si afferra: stanno sul fianco dei passi da
+ * disporre in una domanda di ordinamento e non comandano niente. Sono la
+ * sola parte del box che dice "questo si prende", ma il gesto parte da tutto
+ * il box, quindi chi non li nota trascina lo stesso. */
+export function GripIcon(props: IconProps) {
+  return (
+    <IconBase {...props} stroke="none">
+      <circle cx="9" cy="6" r="1.6" fill="currentColor" />
+      <circle cx="15" cy="6" r="1.6" fill="currentColor" />
+      <circle cx="9" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="15" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="9" cy="18" r="1.6" fill="currentColor" />
+      <circle cx="15" cy="18" r="1.6" fill="currentColor" />
+    </IconBase>
+  )
+}
+
 /* Sagoma con il più accanto: crea un utente, non una cosa qualsiasi. */
 export function UserPlusIcon(props: IconProps) {
   return (

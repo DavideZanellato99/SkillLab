@@ -97,6 +97,20 @@ regge il giorno in cui quella scelta cambiasse. Un'origine assente passa, ed è
 voluto: la manda il browser, e chi non è un browser (uno script, la suite) non
 la manda affatto.
 
+Il confronto è esatto, e questo lascia scoperto un caso solo, che però capita
+tutti i giorni: l'applicazione raggiunta da un tunnel. Il resto funziona senza
+accorgersene, perché le richieste HTTP passano dal proxy del frontend e per il
+browser sono nella stessa origine della pagina; la chiamata no, perché il suo
+handshake l'`Origin` lo porta fino al backend, e l'hostname di un quick tunnel
+è casuale e cambia a ogni avvio, quindi non è un valore che si possa scrivere
+una volta in `ALLOWED_ORIGINS`. Per quel caso c'è `ALLOWED_ORIGIN_SUFFIXES`,
+che ammette ogni sottodominio dei domini dichiarati: `.trycloudflare.com` fa
+passare il tunnel di oggi e quello di domani. Ammette però anche il tunnel di
+chiunque altro sullo stesso servizio, quindi è una deroga da sviluppo e in
+produzione la variabile resta vuota, dove l'origine è un dominio noto che sta
+nell'elenco esatto. Quando è valorizzata, il backend lo dice nei log a ogni
+avvio.
+
 ### Lo stato dell'account si rilegge qui
 
 Il socket è l'unica rotta che non passa da `get_current_user`, quindi è anche
@@ -180,10 +194,13 @@ cicli concorrenti su un `asyncio.wait` che chiude tutto appena uno finisce:
 
 Durante lo squillo parte anche un **prewarm**: una richiesta da un token sola
 al modello, che paga in anticipo l'handshake e il prefill del prompt della
-persona, cioè le due cose che altrimenti pagherebbe il primo turno. Quanto
-della seconda metà si risparmi davvero dipende dalle regole di cache del
-fornitore, l'handshake mai. È best effort: nel caso peggiore il primo turno
-paga quello che avrebbe pagato comunque.
+persona, cioè le due cose che altrimenti pagherebbe il primo turno. Porta con
+sé un turno utente finto, un carattere e basta, perché l'endpoint compatibile
+di Gemini legge il `system` come istruzione a parte e senza altri messaggi si
+ritroverebbe una richiesta senza contenuti, cioè un 400. Quanto della seconda
+metà si risparmi davvero dipende dalle regole di cache del fornitore,
+l'handshake mai. È best effort: nel caso peggiore il primo turno paga quello
+che avrebbe pagato comunque.
 
 Gli eventi JSON verso il browser sono: `ready`, `user_partial`, `user_final`,
 `assistant_delta`, `assistant_end`, `speaking_start`, `speaking_end`,
@@ -241,9 +258,16 @@ l'operatore ha effettivamente sentito) e poi `interrupt`.
 5. alla fine si chiude il contesto, il che manda in sintesi anche il testo
    rimasto in cassa: non serve chiedere il flush a parte.
 
-Se il modello fallisce e non è ancora uscito niente, l'avatar dice una battuta
-di ripiego ("ho avuto un problema tecnico, puoi ripetere?"), che è meglio di un
-silenzio che l'operatore non sa come interpretare.
+Se il modello fallisce e non è ancora uscito niente si prova la **riserva**,
+e solo dopo di lei l'avatar dice una battuta di ripiego ("ho avuto un problema
+tecnico, puoi ripetere?"), che è meglio di un silenzio che l'operatore non sa
+come interpretare. Il cambio di modello vale finché nessuna parola è uscita,
+perché una battuta cominciata non si può ricominciare con un'altra voce, e
+vale su due casi: un fornitore pieno, e una richiesta che resta in coda oltre
+gli otto secondi del tetto. Il secondo non è un caso di scuola: Gemini
+attraversa fasi di qualche minuto in cui tiene la richiesta ferma una ventina
+di secondi senza rispondere e senza dichiararsi pieno, e senza riserva quei
+turni si perdono tutti.
 
 Le scritture a database sono **fire and forget** su un thread: la trascrizione
 non deve mai fermare l'audio. I task vengono tenuti in un insieme finché non
@@ -490,8 +514,9 @@ sbagliare.
 | La chiamata non parte | Chiavi dei fornitori mancanti | 503 sul POST della sessione |
 | `session_id` mancante, sconosciuto, scaduto, o account sospeso | Sessione mai creata, già consumata, o utente e organizzazione non più attivi | Chiusura 4401, uguale in tutti i casi così chi prova a indovinare non impara niente dalla differenza |
 | La chiamata non parte da una pagina che non è l'applicazione | L'origine dell'handshake non è fra quelle dichiarate in `ALLOWED_ORIGINS` | Chiusura 4403 |
+| Tutto funziona da un tunnel tranne la chiamata | Le richieste HTTP passano dal proxy come stessa origine, l'handshake del socket invece porta l'`Origin` del tunnel, che non è nell'elenco | Chiusura 4403, che nei log del backend si legge come `403 Forbidden` perché arriva prima dell'accept. Si dichiara il dominio del tunnel in `ALLOWED_ORIGIN_SUFFIXES` |
 | La chiamata non parte e l'id sembra giusto | L'id è finito nella query string invece che nel sottoprotocollo | Chiusura 4401: il vecchio indirizzo non è più una strada |
 | "Tutte le linee sono occupate" | Tetto del processo raggiunto | Chiusura 1013 |
 | "Riconoscimento vocale non disponibile" | Errore fatale della STT (quota, autenticazione, limite di sessione) | Evento `error` e chiusura |
-| Il modello non risponde | Guasto del fornitore | Battuta di ripiego, la chiamata continua |
+| Il modello non risponde, o resta in coda oltre otto secondi | Guasto del fornitore, o una delle sue fasi di attesa | Si prova il modello di riserva; se non parla nemmeno quello, battuta di ripiego e la chiamata continua |
 | L'avatar scrive ma non parla, e nei log non c'è nessun errore | La voce è di libreria e l'account sta su un piano che via API non la concede | Niente: il contesto di sintesi si apre, si chiude e non produce audio. Sul REST lo stesso account risponde 402 `paid_plan_required`, ed è da lì che si riconosce |

@@ -1,6 +1,12 @@
-/* La barra dei filtri della gestione simulazioni: il tipo di test, l'origine
- * delle domande e lo stato, nell'ordine delle colonne che restringono, più il
- * pulsante che li azzera.
+/* La barra dei filtri della gestione simulazioni: l'organizzazione, il tipo
+ * di test, l'origine delle domande e lo stato, nell'ordine delle colonne che
+ * restringono, più il pulsante che li azzera.
+ *
+ * L'organizzazione apre la fascia come apre la tabella, ed è la sola che non
+ * c'è sempre: la vede il super admin, che è l'unico ad amministrarne più di
+ * una e l'unico ad averne la colonna. A un organization admin la tendina
+ * direbbe la propria su ogni voce, che è la stessa ragione per cui non ha la
+ * colonna.
  *
  * Sopra la tabella e non dentro, come in ogni altro elenco: i filtri dicono
  * quale elenco si sta guardando, e questa è una cosa che si decide prima di
@@ -16,6 +22,7 @@
 import FiltersBar, { FilterField } from './FiltersBar'
 import ResetFiltersButton from './ResetFiltersButton'
 import Select from './Select'
+import type { SelectOption } from './Select'
 import {
   ADMIN_KIND_OPTIONS,
   ADMIN_SOURCE_OPTIONS,
@@ -26,6 +33,9 @@ import type { AdminSimulationFilters } from './simulationFilters'
 
 interface SimulationsFiltersProps {
   value: AdminSimulationFilters
+  /** Le organizzazioni fra cui scegliere, assenti per chi ne ha una sola:
+   *  senza, la tendina non compare affatto. */
+  organizationOptions?: SelectOption[]
   /** Se c'è una ricerca in corso nella casella della tabella. */
   isSearching: boolean
   onChange: (patch: Partial<AdminSimulationFilters>) => void
@@ -34,11 +44,13 @@ interface SimulationsFiltersProps {
 
 export default function SimulationsFilters({
   value,
+  organizationOptions,
   isSearching,
   onChange,
   onReset,
 }: SimulationsFiltersProps) {
   const hasFilters =
+    value.organizationId !== NO_ADMIN_FILTERS.organizationId ||
     value.status !== NO_ADMIN_FILTERS.status ||
     value.kind !== NO_ADMIN_FILTERS.kind ||
     value.source !== NO_ADMIN_FILTERS.source ||
@@ -46,6 +58,17 @@ export default function SimulationsFilters({
 
   return (
     <FiltersBar>
+      {organizationOptions && (
+        <FilterField label="Organizzazione" htmlFor="simulations-org-filter">
+          <Select
+            id="simulations-org-filter"
+            className="min-w-[220px]"
+            value={value.organizationId}
+            onChange={(organizationId) => onChange({ organizationId })}
+            options={[{ value: '', label: 'Tutte le organizzazioni' }, ...organizationOptions]}
+          />
+        </FilterField>
+      )}
       {/* Nell'ordine delle colonne della tabella: il tipo e l'origine sono
           le due targhette della colonna "Tipo", lo stato è la colonna dopo.
           Chi cerca il comando lo trova dove sta la colonna che restringe. */}

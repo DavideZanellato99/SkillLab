@@ -191,8 +191,12 @@ describe('SimulationRunner', () => {
 
     expect(await screen.findByRole('link', { name: "Torna all'Elenco" })).toBeInTheDocument()
     expect(uscita()?.closest('header')).toContainElement(titolo())
-    /* Nel riepilogo resta il solo comando che riguarda quel riquadro. */
-    expect(screen.getByRole('button', { name: 'Riprova il Test' }).closest('header')).toBeNull()
+    /* A test consegnato i due comandi stanno insieme, uno accanto all'altro
+       nell'intestazione: riprovare e uscire sono la stessa scelta vista da
+       due lati, e non vanno cercati in due punti diversi della schermata. */
+    expect(
+      screen.getByRole('button', { name: 'Riprova il Test' }).closest('header'),
+    ).toContainElement(titolo())
   })
 
   /* Anche il test pubblicato ma ancora senza domande: era uno dei tre stati
@@ -358,11 +362,20 @@ describe('SimulationRunner', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
 
-    // I passi arrivano mescolati: rimetterli a posto è la risposta
-    await user.click(await screen.findByRole('button', { name: 'Sposta in Alto: Alfa' }))
+    /* I passi arrivano mescolati e nessuna posizione è già occupata:
+       rimetterli a posto è la risposta. Qui si collocano con il tocco secco,
+       che è l'altra metà del trascinamento e l'unico gesto che jsdom sa
+       riprodurre. */
+    await user.click(await screen.findByRole('button', { name: 'Passo da collocare: Alfa' }))
+    await user.click(screen.getByRole('button', { name: 'Posizione 1, vuota' }))
+    await user.click(screen.getByRole('button', { name: 'Passo da collocare: Beta' }))
+    await user.click(screen.getByRole('button', { name: 'Posizione 2, vuota' }))
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
 
-    await user.click(await screen.findByRole('button', { name: 'Sposta in Basso: Delta' }))
+    await user.click(await screen.findByRole('button', { name: 'Passo da collocare: Gamma' }))
+    await user.click(screen.getByRole('button', { name: 'Posizione 1, vuota' }))
+    await user.click(screen.getByRole('button', { name: 'Passo da collocare: Delta' }))
+    await user.click(screen.getByRole('button', { name: 'Posizione 2, vuota' }))
     await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
@@ -378,22 +391,26 @@ describe('SimulationRunner', () => {
     }
   })
 
-  it('un ordinamento mai toccato viaggia come non risposto', async () => {
+  it('un ordinamento incompleto viaggia come non risposto', async () => {
     const user = userEvent.setup()
     serve(orderingSimulation, orderingQuestions, 'ordering')
     renderRunner()
 
     await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
-    /* Consegnare la sequenza così com'era arrivata sarebbe una risposta, e
-       chi non tocca niente non ne sta dando una: il pulsante lo dice, e il
-       corpo della richiesta pure. */
+    /* Chi non colloca niente non sta dando una risposta, e il pulsante lo
+       dice. */
     await user.click(await screen.findByRole('button', { name: 'Salta la Domanda' }))
-    await user.click(await screen.findByRole('button', { name: 'Sposta in Alto: Gamma' }))
+    /* Nemmeno una sequenza a metà è una risposta: il server corregge
+       posizione per posizione e un ordine più corto della chiave lo rifiuta,
+       quindi qui parte in bianco invece di partire monco. */
+    await user.click(await screen.findByRole('button', { name: 'Passo da collocare: Gamma' }))
+    await user.click(screen.getByRole('button', { name: 'Posizione 1, vuota' }))
     await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
 
     await waitFor(() => expect(submittedBody()).not.toBeNull())
-    const [saltata] = submittedBody().answers
+    const [saltata, meta] = submittedBody().answers
     expect(saltata.ordered_steps).toBeNull()
+    expect(meta.ordered_steps).toBeNull()
   })
 
   it('su un test di abbinamento consegna le coppie formate', async () => {

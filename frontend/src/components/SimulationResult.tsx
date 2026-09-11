@@ -173,13 +173,11 @@ function AnswerRow({
 
 interface SimulationResultProps {
   attempt: SimulationAttempt
-  /** Azioni sotto il riepilogo, es. "Riprova" e "Torna all'Elenco". */
-  actions?: React.ReactNode
   /** Falso quando a rileggere il test è un altro, non chi l'ha svolto. */
   own?: boolean
 }
 
-export default function SimulationResult({ attempt, actions, own = true }: SimulationResultProps) {
+export default function SimulationResult({ attempt, own = true }: SimulationResultProps) {
   const kind = attempt.simulation_kind
   return (
     <div className="flex flex-col gap-4">
@@ -202,8 +200,6 @@ export default function SimulationResult({ attempt, actions, own = true }: Simul
           {formatScore(attempt.score)}
         </Badge>
       </div>
-
-      {actions && <div className="flex flex-wrap gap-3">{actions}</div>}
 
       <ul className="flex list-none flex-col gap-3">
         {attempt.answers.map((answer) => (

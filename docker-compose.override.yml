@@ -42,6 +42,19 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      # I ritratti degli avatar stanno nella cartella dell'host come tutto il
+      # resto del backend. In produzione /app/static è un volume, perché le
+      # repliche devono servire le stesse immagini caricate e quelle non
+      # possono vivere dentro un container che si rifà a ogni rilascio; qui
+      # quel volume verrebbe montato sopra il bind della riga precedente e
+      # nasconderebbe backend/static, che è proprio la cartella in cui
+      # scrivono i comandi lanciati dall'host, a partire dalla generazione
+      # dei dati finti (demo/dati_mock.py). Il risultato era un catalogo di
+      # immagini rotte: le righe del database nominavano file che sul disco
+      # c'erano davvero, ma non dove il processo andava a cercarli. Stesso
+      # bersaglio del volume, quindi questa riga prende il suo posto invece
+      # di aggiungersi.
+      - ./backend/static:/app/static
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     # Una sola copia: le repliche servono a usare tutti i core di un server,
     # e qui il carico è una persona che ricarica la pagina. Sono anche

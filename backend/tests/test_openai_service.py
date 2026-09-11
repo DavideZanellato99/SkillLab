@@ -19,7 +19,9 @@ import asyncio
 import json
 from types import SimpleNamespace
 
+import httpx
 import pytest
+from openai import APITimeoutError
 
 import openai_service
 from openai_service import (
@@ -29,6 +31,7 @@ from openai_service import (
     _eval_candidate_models,
     _eval_completion_kwargs,
     _evaluation_prompt,
+    _is_live_retryable,
     _is_retryable,
     _normalize_evaluation,
     embed_texts,
@@ -38,6 +41,11 @@ from openai_service import (
     stream_avatar_response,
 )
 from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
+
+
+def _attesa_scaduta() -> APITimeoutError:
+    """L'attesa scaduta come la solleva la libreria, senza stato HTTP."""
+    return APITimeoutError(request=httpx.Request("POST", "https://esempio.invalido"))
 
 
 class _Sovraccarico(Exception):
@@ -111,6 +119,19 @@ def senza_chiave(monkeypatch):
     monkeypatch.setattr(openai_service, "roleplay_client", lambda: None)
 
 
+def _spia_sui_messaggi(finto) -> dict:
+    """Trattiene quello che è stato mandato al modello, lasciandolo passare."""
+    inviato: dict = {}
+    creazione = finto.chat.completions.create
+
+    async def _spia(*, model, messages, **kwargs):
+        inviato["messages"] = messages
+        return await creazione(model=model, messages=messages, **kwargs)
+
+    finto.chat.completions.create = _spia
+    return inviato
+
+
 # ── Quando vale la pena riprovare ─────────────────────────────────────
 
 
@@ -130,6 +151,17 @@ def test_il_sovraccarico_si_riconosce_anche_solo_dal_messaggio(messaggio):
     è l'ultima rete, e senza di essa un sovraccarico diventerebbe un errore
     definitivo."""
     assert _is_retryable(Exception(messaggio)) is True
+
+
+def test_un_attesa_scaduta_merita_la_riserva_solo_dal_vivo():
+    """Dal vivo l'alternativa al cambio di modello è un turno perso, quindi
+    vale la pena chiedere la stessa battuta a qualcun altro. Nella
+    valutazione nessuno è in linea, e ritentare costa minuti invece di
+    salvare una risposta."""
+    scaduta = _attesa_scaduta()
+
+    assert _is_live_retryable(scaduta) is True
+    assert _is_retryable(scaduta) is False
 
 
 def test_un_errore_di_programmazione_non_si_ritenta():
@@ -340,6 +372,17 @@ def test_un_modello_saturo_cede_il_turno_prima_di_aprire_bocca(modelli, monkeypa
     assert finto.modelli_chiamati == ["live-primario", "live-riserva"]
 
 
+def test_un_modello_che_resta_in_coda_cede_il_turno_alla_riserva(modelli, monkeypatch):
+    """Gemini ogni tanto tiene la richiesta ferma oltre il tetto senza
+    rispondere e senza dichiararsi pieno: fermarsi lì vorrebbe dire un turno
+    perso e la battuta di ripiego."""
+    finto = _ClienteChiChiacchiera({"live-primario": _attesa_scaduta(), "live-riserva": ["Pronto"]})
+    monkeypatch.setattr(openai_service, "roleplay_client", lambda: finto)
+
+    assert _raccogli(messages_history=_conversazione(), avatar_profile=_scheda()) == ["Pronto"]
+    assert finto.modelli_chiamati == ["live-primario", "live-riserva"]
+
+
 def test_a_risposta_iniziata_non_si_cambia_piu_modello(modelli, monkeypatch):
     """Una battuta non si può ricominciare a metà con un'altra voce: quello
     che è già uscito dall'altoparlante è stato detto."""
@@ -386,6 +429,18 @@ def test_il_preriscaldamento_apre_la_connessione_e_scalda_il_prompt(modelli, cli
     assert finto.modelli_chiamati == ["live-primario"]
 
 
+def test_il_preriscaldamento_manda_anche_un_turno_utente(modelli, cliente):
+    """Il prompt della persona da solo sarebbe un `system` e nient'altro, e
+    l'endpoint compatibile di Gemini lo prende per istruzione lasciando i
+    contenuti vuoti: una richiesta così torna indietro come 400 senza scaldare
+    niente."""
+    inviato = _spia_sui_messaggi(cliente(["ok"]))
+
+    asyncio.run(prewarm_roleplay(_scheda()))
+
+    assert [m["role"] for m in inviato["messages"]] == ["system", "user"]
+
+
 def test_un_preriscaldamento_fallito_non_rovina_la_chiamata(modelli, cliente):
     """Il caso peggiore è il primo turno che paga quello che avrebbe pagato
     comunque: non c'è niente da riferire a nessuno."""
@@ -410,19 +465,6 @@ def _valutazione_grezza(**primo_criterio) -> str:
     }
     criteri[EVALUATION_CRITERIA[0][0]].update(primo_criterio)
     return json.dumps({"overall_feedback": "riassunto", "criteria": criteri})
-
-
-def _spia_sui_messaggi(finto) -> dict:
-    """Trattiene quello che è stato mandato al modello, lasciandolo passare."""
-    inviato: dict = {}
-    creazione = finto.chat.completions.create
-
-    async def _spia(*, model, messages, **kwargs):
-        inviato["messages"] = messages
-        return await creazione(model=model, messages=messages, **kwargs)
-
-    finto.chat.completions.create = _spia
-    return inviato
 
 
 def test_una_conversazione_vuota_non_si_valuta(modelli, cliente):

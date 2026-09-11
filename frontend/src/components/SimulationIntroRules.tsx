@@ -8,11 +8,11 @@ import {
   CompareIcon,
   EyeIcon,
   FileTextIcon,
+  GripIcon,
   LockIcon,
   MinusIcon,
   PencilIcon,
   RestoreIcon,
-  SortIcon,
   SparkleIcon,
   StopIcon,
   TargetIcon,
@@ -61,7 +61,7 @@ import {
 const ANSWER_HINTS: Record<SimulationKind, string> = {
   multiple: 'Per ogni domanda scegli una risposta fra le alternative proposte.',
   open: 'Per ogni domanda scrivi una risposta di qualche riga con parole tue.',
-  ordering: "Per ogni domanda disponi i passi della procedura nell'ordine corretto.",
+  ordering: 'Per ogni domanda trascini i passi della procedura nelle posizioni corrette.',
   matching: 'Per ogni domanda abbini fra loro le voci di due colonne.',
 }
 
@@ -74,10 +74,11 @@ const RECAPS: Record<SimulationKind, string> = {
 }
 
 /* Il gesto con cui si risponde, disegnato: la spunta della scelta, la matita
- * di chi scrive, le frecce di chi riordina, le due colonne da accoppiare. */
+ * di chi scrive, i puntini di chi trascina i passi, le due colonne da
+ * accoppiare. */
 function AnswerIcon({ kind }: { kind: SimulationKind }) {
   if (kind === 'open') return <PencilIcon size={13} />
-  if (kind === 'ordering') return <SortIcon size={13} />
+  if (kind === 'ordering') return <GripIcon size={13} />
   if (kind === 'matching') return <CompareIcon size={13} />
   return <CheckIcon size={13} />
 }
@@ -175,7 +176,7 @@ export default function SimulationIntroRules({ simulation }: { simulation: Simul
           {kind === 'open'
             ? 'Una risposta non fornita vale zero.'
             : kind === 'ordering'
-              ? 'Una domanda non affrontata vale zero.'
+              ? 'Una sequenza lasciata incompleta vale zero.'
               : kind === 'matching'
                 ? 'Le voci lasciate senza abbinamento valgono zero.'
                 : 'Una risposta errata o lasciata in bianco vale zero.'}

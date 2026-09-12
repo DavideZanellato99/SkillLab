@@ -257,7 +257,7 @@ jobs:
         # con packages:write qui sopra basta a pubblicare senza nessun
         # segreto da custodire.
         if: github.event_name == 'push'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

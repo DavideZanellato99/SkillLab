@@ -117,15 +117,17 @@ export default function UserRow({
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 text-xs font-bold text-white">
             {getInitials(user.nome, user.cognome, user.email)}
           </div>
-          <div className="flex flex-col">
-            <span className="font-semibold text-slate-100">{fullName}</span>
-            <span className="text-[0.75rem] text-slate-500">{user.email}</span>
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate font-semibold text-slate-100">{fullName}</span>
+            <span className="truncate text-[0.75rem] text-slate-500">{user.email}</span>
           </div>
         </div>
       </Td>
       <Td>
         {user.organization_name ? (
-          <span className="text-[0.85rem] text-slate-300">{user.organization_name}</span>
+          <span className="line-clamp-2 text-[0.85rem] text-slate-300">
+            {user.organization_name}
+          </span>
         ) : (
           <span className="text-[0.75rem] italic text-slate-500">Nessuna (super admin)</span>
         )}

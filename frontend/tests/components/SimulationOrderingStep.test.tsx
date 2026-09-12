@@ -25,7 +25,14 @@ const question: SimulationQuestion = {
   right: [],
 }
 
-const baseProps = { question, number: 1, total: 4, isLast: false, onAnswer: () => {} }
+const baseProps = {
+  question,
+  number: 1,
+  total: 4,
+  isLast: false,
+  onChange: () => {},
+  onNext: () => {},
+}
 
 const daCollocare = (step: string) =>
   screen.getByRole('button', { name: `Passo da collocare: ${step}` })
@@ -59,20 +66,50 @@ describe('SimulationOrderingStep', () => {
     expect(collocato(1, 'Alfa')).toBeInTheDocument()
   })
 
-  it('consegna la sequenza solo quando è completa', async () => {
+  it('la sequenza vale come risposta solo quando è completa', async () => {
     const user = userEvent.setup()
-    const onAnswer = vi.fn()
-    render(<SimulationOrderingStep {...baseProps} onAnswer={onAnswer} />)
+    const onChange = vi.fn()
+    const onNext = vi.fn()
+    render(<SimulationOrderingStep {...baseProps} onChange={onChange} onNext={onNext} />)
 
     await colloca(user, 'Alfa', 1)
     await colloca(user, 'Beta', 2)
     /* Con un passo ancora da collocare la domanda è saltata, perché il server
-       rifiuta una sequenza più corta della chiave. */
+       rifiuta una sequenza più corta della chiave. La sequenza com'è esce
+       lo stesso, ed è quella che chi torna su questa domanda ritroverà. */
     expect(screen.getByRole('button', { name: 'Salta la Domanda' })).toBeInTheDocument()
+    expect(onChange).toHaveBeenLastCalledWith(null, ['Alfa', 'Beta', null])
 
     await colloca(user, 'Gamma', 3)
+    expect(onChange).toHaveBeenLastCalledWith(['Alfa', 'Beta', 'Gamma'], ['Alfa', 'Beta', 'Gamma'])
+    // Andare avanti non porta la risposta con sé: è già uscita a ogni mossa
     await user.click(screen.getByRole('button', { name: 'Avanti' }))
-    expect(onAnswer).toHaveBeenCalledWith(['Alfa', 'Beta', 'Gamma'])
+    expect(onNext).toHaveBeenCalledOnce()
+  })
+
+  /* Chi torna su una domanda la ritrova com'era, anche a metà: il
+     componente riparte dalla sequenza che gli si passa, non da zero. */
+  it('riparte dalla sequenza lasciata, anche incompleta', () => {
+    render(<SimulationOrderingStep {...baseProps} initial={['Alfa', null, 'Gamma']} />)
+
+    expect(collocato(1, 'Alfa')).toBeInTheDocument()
+    expect(posizioneVuota(2)).toBeInTheDocument()
+    expect(collocato(3, 'Gamma')).toBeInTheDocument()
+    expect(daCollocare('Beta')).toBeInTheDocument()
+    expect(screen.getByText('2 di 3 collocati')).toBeInTheDocument()
+  })
+
+  /* "Indietro" c'è solo se c'è dove tornare: sulla prima domanda il
+     chiamante non passa il comando, e il pulsante non compare. */
+  it("mostra Indietro solo quando c'è una domanda prima", async () => {
+    const user = userEvent.setup()
+    const onBack = vi.fn()
+    const { rerender } = render(<SimulationOrderingStep {...baseProps} />)
+    expect(screen.queryByRole('button', { name: 'Indietro' })).not.toBeInTheDocument()
+
+    rerender(<SimulationOrderingStep {...baseProps} number={2} onBack={onBack} />)
+    await user.click(screen.getByRole('button', { name: 'Indietro' }))
+    expect(onBack).toHaveBeenCalledOnce()
   })
 
   it('una posizione occupata scambia invece di respingere', async () => {
@@ -114,6 +151,29 @@ describe('SimulationOrderingStep', () => {
     fireEvent.pointerUp(window, { clientX: 120, clientY: 220 })
 
     expect(collocato(2, 'Beta')).toBeInTheDocument()
+  })
+
+  /* Il box che segue il puntatore resta afferrato dove lo si è preso. Era
+     centrato sul puntatore, e un box largo quanto la pagina preso vicino al
+     bordo sinistro finiva per metà fuori dallo schermo. */
+  it('il fantasma tiene il punto afferrato sotto il puntatore', () => {
+    render(<SimulationOrderingStep {...baseProps} />)
+
+    const box = daCollocare('Beta')
+    // jsdom non misura niente: il box sta a 100,50 ed è largo 600
+    box.getBoundingClientRect = () => ({ left: 100, top: 50, width: 600, height: 40 }) as DOMRect
+
+    // Afferrato a 20 pixel dal bordo sinistro e a 10 da quello in alto
+    fireEvent.pointerDown(box, { button: 0, clientX: 120, clientY: 60 })
+    fireEvent.pointerMove(window, { clientX: 320, clientY: 260 })
+
+    const ghost = document.body.querySelector<HTMLElement>('.fixed.z-50')
+    expect(ghost).not.toBeNull()
+    expect(ghost?.style.left).toBe('300px')
+    expect(ghost?.style.top).toBe('250px')
+    expect(ghost?.style.width).toBe('600px')
+
+    fireEvent.pointerUp(window, { clientX: 320, clientY: 260 })
   })
 
   it('un trascinamento lasciato fuori da ogni posizione non sposta niente', () => {

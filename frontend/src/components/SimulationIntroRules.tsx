@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Simulation, SimulationKind } from '../services/simulations'
 import {
+  ArrowLeftIcon,
   ChartIcon,
   CheckIcon,
   ChecklistIcon,
@@ -114,8 +115,9 @@ export default function SimulationIntroRules({ simulation }: { simulation: Simul
     <div className="flex flex-col gap-5">
       <RuleGroup title="Svolgimento">
         <Rule icon={<ChecklistIcon size={13} />}>
-          Le domande sono {simulation.question_count} e compaiono una alla volta, la successiva dopo
-          aver confermato la precedente.
+          {timed
+            ? `Le domande sono ${simulation.question_count} e compaiono una alla volta, la successiva dopo aver confermato la precedente.`
+            : `Le domande sono ${simulation.question_count} e compaiono una alla volta.`}
         </Rule>
         <Rule icon={<AnswerIcon kind={kind} />}>{ANSWER_HINTS[kind]}</Rule>
         {timed ? (
@@ -133,7 +135,18 @@ export default function SimulationIntroRules({ simulation }: { simulation: Simul
             Non è previsto un limite di tempo e la durata non incide sul punteggio.
           </Rule>
         )}
-        <Rule icon={<LockIcon size={13} />}>Una domanda confermata non si può più riaprire.</Rule>
+        {/* Il lucchetto e la freccia dicono due regole opposte, e sono
+            opposte per via del cronometro: una domanda a tempo consegnata ha
+            il suo tempo misurato e non si riapre, una senza tempo sì, fino
+            alla consegna. */}
+        {timed ? (
+          <Rule icon={<LockIcon size={13} />}>Una domanda confermata non si può più riaprire.</Rule>
+        ) : (
+          <Rule icon={<ArrowLeftIcon size={13} />}>
+            Fino alla consegna puoi tornare sulle domande già viste, con il pulsante Indietro o
+            dalla barra di avanzamento, e cambiare la risposta.
+          </Rule>
+        )}
         <Rule icon={<RestoreIcon size={13} />}>
           <span className="text-slate-100">Le domande cambiano a ogni tentativo</span>, perché
           vengono estratte in modo casuale a ogni avvio del test.

@@ -147,7 +147,8 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationsPage.tsx](../frontend/src/components/SimulationsPage.tsx) | L'elenco dei test da svolgere: la ricerca, i filtri e le schede |
 | [frontend/src/components/simulationFilters.ts](../frontend/src/components/simulationFilters.ts) | Quali test restano dopo la ricerca e il filtro, su una lista già in memoria |
 | [frontend/src/components/SimulationRunner.tsx](../frontend/src/components/SimulationRunner.tsx) | Le tre schermate dello svolgimento: regole, domande, esito |
-| [frontend/src/components/SimulationProgress.tsx](../frontend/src/components/SimulationProgress.tsx) | A che punto è il test: un trattino per domanda, sopra il riquadro |
+| [frontend/src/components/SimulationProgress.tsx](../frontend/src/components/SimulationProgress.tsx) | A che punto è il test: un trattino per domanda, sopra il riquadro. Senza cronometro i trattini si premono e portano alla domanda |
+| [frontend/src/components/SimulationStepFooter.tsx](../frontend/src/components/SimulationStepFooter.tsx) | La riga in fondo ai tre passi senza cronometro: la nota, "Indietro" e "Avanti" |
 | [frontend/src/hooks/useLeaveConfirmation.ts](../frontend/src/hooks/useLeaveConfirmation.ts) | La conferma prima di chiudere o ricaricare, finché il test è a metà |
 | [frontend/src/components/SimulationQuestionStep.tsx](../frontend/src/components/SimulationQuestionStep.tsx) | Una domanda a scelta multipla e il suo cronometro |
 | [frontend/src/components/SimulationOpenQuestionStep.tsx](../frontend/src/components/SimulationOpenQuestionStep.tsx) | Una domanda aperta e la casella in cui si scrive |
@@ -1399,12 +1400,49 @@ rotte stanno su `<BrowserRouter>`.
 
 A che punto è il test lo dice una fila di trattini sopra la domanda
 ([SimulationProgress](../frontend/src/components/SimulationProgress.tsx)), uno
-per domanda, accesi fino a quella a schermo. Sta fuori dal riquadro perché è
-del test e non della domanda, e perché dentro, sulla scelta multipla, ci
-sarebbe già la barra del tempo: due barre a un centimetro l'una dall'altra che
-misurano cose diverse. A trattini invece che continua per lo stesso motivo, e
-`aria-hidden` perché "Domanda 3 di 10" è scritto in lettere subito
-sotto.
+per domanda. Sta fuori dal riquadro perché è del test e non della domanda, e
+perché dentro, sulla scelta multipla, ci sarebbe già la barra del tempo: due
+barre a un centimetro l'una dall'altra che misurano cose diverse. A trattini
+invece che continua per lo stesso motivo.
+
+**Sui tre tipi senza cronometro si torna indietro, fino alla consegna.** Il
+cronometro è quello che decide: una domanda a scelta multipla consegnata ha il
+suo tempo misurato, e riaprirla vorrebbe dire misurarlo di nuovo, quindi lì
+si va solo avanti. Sugli altri il tempo non conta, e non c'è ragione di
+impedire a chi si accorge alla sesta domanda di aver frainteso la terza di
+tornarci. Due modi, e sono due perché servono a due cose diverse: il pulsante
+"Indietro" in fondo al passo, accanto ad "Avanti", per la domanda appena
+lasciata, e i trattini della barra, che sono pulsanti e portano a qualsiasi
+domanda già comparsa. Quelle mai comparse non si premono: arrivano quando è
+il loro turno. La risposta cambiata è quella che parte alla consegna, e la
+consegna resta sull'ultima domanda: da una domanda precedente si torna avanti
+dalla barra.
+
+Per questo i tre passi senza cronometro **comunicano la risposta a ogni
+modifica** (`onChange`) e non solo quando si va avanti, come fa invece la
+scelta multipla con `onAnswer`: la barra sta fuori dal passo, e chi lascia la
+domanda da lì non passa dal pulsante. Il runner tiene sempre l'ultima forma
+della risposta e, tornando su una domanda, rimonta il passo con `initial`,
+cioè con quello che si era lasciato. Sull'ordinamento il passo comunica due
+cose, la risposta (la sequenza completa, o null) e la sequenza com'è, caselle
+vuote comprese: una sequenza lasciata a metà per andare a rivedere una
+domanda deve ritrovarsi a metà, e la risposta da sola non basta a
+ricostruirla perché a metà è null. La riga in fondo ai tre passi è un
+componente solo
+([SimulationStepFooter](../frontend/src/components/SimulationStepFooter.tsx)):
+con due pulsanti e tre etichette, scritta tre volte era già una copia di
+troppo. Una domanda saltata senza toccare niente parte con il campo del suo
+tipo a `null`, come una saltata dopo aver scritto e cancellato: il server
+legge allo stesso modo il campo assente, ma un corpo in cui ogni risposta ha
+la stessa forma si legge meglio.
+
+La barra ha quattro stati per trattino e non tre, perché con il ritorno
+indietro "prima di questa" non vuol più dire "risposta": una domanda si può
+aver vista e lasciata in bianco, e va distinta da una mai raggiunta, che è
+l'unica su cui non si può andare. Sulla scelta multipla i trattini non si
+premono e la fila è `aria-hidden`, perché "Domanda 3 di 10" è scritto in
+lettere subito sotto; sugli altri sono comandi, ognuno con il nome della
+domanda a cui porta e `aria-current` su quella a schermo.
 
 Le domande stanno nello stato del componente e **non nella cache di TanStack
 Query**, che è l'unica deroga alla regola del progetto, e per una ragione:
@@ -1453,8 +1491,9 @@ lo ripete: le regole le ha già lette, e vuole sapere se ha mezz'ora davanti
 senza rileggere un paragrafo. Sotto le regole vere e proprie
 ([SimulationIntroRules](../frontend/src/components/SimulationIntroRules.tsx)),
 divise in **svolgimento, punteggio, esito**, ognuna con l'icona di cosa parla:
-l'orologio del tempo, il lucchetto di quello che non si può disfare, le
-scintille delle domande scritte dal modello. Erano sette righe di seguito con
+l'orologio del tempo, il lucchetto di quello che non si può disfare (o la
+freccia del tornare indietro, dove si può), le scintille delle domande
+scritte dal modello. Erano sette righe di seguito con
 lo stesso pallino davanti, e sette cose che pesano uguale si leggono di
 traverso: come viene il voto finiva in quinta posizione, fra come si passa alla
 domanda dopo e da dove vengono le domande. In fondo il pulsante, staccato da
@@ -1522,14 +1561,14 @@ qualcuno di barare.
 
 ### 4.2.2 A risposta aperta
 
-Una domanda alla volta e nessun ritorno indietro come sopra, ma **senza
-cronometro**. Il tempo di una domanda a crocette è il tempo di decidere fra
-quattro righe già scritte e non di scriverne una, e un tempo che scorre mentre
-si compone una risposta premierebbe chi scrive in fretta invece di chi conosce
-il lavoro. Qui i punti dipendono solo
-da quanto la risposta è completa, quindi rileggersi prima di consegnare non
-costa niente ed è anzi la cosa giusta da fare, ed è scritto nelle regole prima
-di cominciare.
+Una domanda alla volta come sopra, ma **senza cronometro** e, per questo,
+con il ritorno indietro (vedi 4.2). Il tempo di una domanda a crocette è il
+tempo di decidere fra quattro righe già scritte e non di scriverne una, e un
+tempo che scorre mentre si compone una risposta premierebbe chi scrive in
+fretta invece di chi conosce il lavoro. Qui i punti dipendono solo da quanto
+la risposta è completa, quindi rileggersi prima di consegnare non costa niente
+ed è anzi la cosa giusta da fare, ed è scritto nelle regole prima di
+cominciare.
 
 La casella prende il fuoco da sola, perché è l'unica cosa da fare in quella
 schermata. Il tetto è di 5000 caratteri, lo stesso che il server accetta, e lo
@@ -1559,6 +1598,12 @@ fatica e per chi arriva alla posizione con il tabulatore invece che con il
 puntatore. Le frecce di [MoveControls](../frontend/src/components/MoveControls.tsx)
 qui non ci sono più: restano dove un elenco si scrive, cioè nella chiave che
 prepara chi amministra e nelle tappe di un percorso.
+
+Il box che segue il puntatore resta afferrato **dove lo si è preso**: l'hook
+ricorda di quanto il punto premuto dista dall'angolo del box e da lì ricava
+l'angolo del fantasma a ogni movimento. Era centrato sul puntatore, e siccome
+i box sono larghi quanto la scheda, uno preso vicino al bordo sinistro finiva
+per metà fuori dallo schermo appena lo si muoveva.
 
 Una posizione già occupata **non respinge** il box che arriva: se veniva da
 un'altra posizione i due si scambiano, se veniva dall'alto l'occupante torna

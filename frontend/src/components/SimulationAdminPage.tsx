@@ -246,7 +246,7 @@ export default function SimulationAdminPage() {
               onClick={() => setViewing(simulation)}
             >
               <Td align="left">
-                <span className="block text-[0.9rem] font-medium text-slate-100">
+                <span className="block truncate text-[0.9rem] font-medium text-slate-100">
                   {simulation.title}
                 </span>
                 {/* Sotto il titolo il documento, dove c'è. Che le domande

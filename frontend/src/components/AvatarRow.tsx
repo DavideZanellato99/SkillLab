@@ -71,7 +71,7 @@ export default function AvatarRow({
           </div>
           <div className="flex min-w-0 flex-col">
             <div className="flex items-center gap-2">
-              <span className="truncate font-semibold text-slate-100">{avatar.name}</span>
+              <span className="min-w-0 truncate font-semibold text-slate-100">{avatar.name}</span>
               {isArchived && (
                 <Badge
                   tone="border border-amber-500/30 bg-amber-500/10 text-amber-400"

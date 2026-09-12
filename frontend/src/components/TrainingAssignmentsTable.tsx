@@ -182,15 +182,22 @@ export default function TrainingAssignmentsTable({
 
                   L'organizzazione la vede solo il super admin: a un org admin
                   direbbe, riga per riga, la sola organizzazione che può
-                  vedere. */}
+                  vedere. Sta accanto all'email e non su una terza riga: la
+                  riga è alta quanto due righe di testo, come in tutte le
+                  tabelle di persone, e una terza la sfonderebbe. */}
               <Td align="left">
-                <span className="block text-[0.85rem] font-medium text-slate-100">
+                <span className="block truncate text-[0.85rem] font-medium text-slate-100">
                   {a.user_name}
                 </span>
-                <span className="block text-[0.72rem] text-slate-500">{a.user_email}</span>
-                {showOrganization && a.organization_name && (
-                  <span className="block text-[0.72rem] text-slate-500">{a.organization_name}</span>
-                )}
+                <span className="block truncate text-[0.72rem] text-slate-500">
+                  <span>{a.user_email}</span>
+                  {showOrganization && a.organization_name && (
+                    <>
+                      {' · '}
+                      <span>{a.organization_name}</span>
+                    </>
+                  )}
+                </span>
               </Td>
               <Td className="text-[0.85rem] text-slate-100">{a.path_title}</Td>
               {/* Solo quale tappa è, senza la sua scadenza: la riga serve a
@@ -202,11 +209,11 @@ export default function TrainingAssignmentsTable({
                   già la targhetta dello stato. */}
               <Td>
                 {current ? (
-                  <span className="block text-[0.85rem] text-slate-100">
+                  <span className="line-clamp-2 text-[0.85rem] text-slate-100">
                     {a.current_position}. {stepTarget(current)}
                   </span>
                 ) : (
-                  <span className="text-[0.85rem] text-emerald-400">tutte superate</span>
+                  <span className="text-[0.85rem] text-emerald-400">Tutte superate</span>
                 )}
               </Td>
               <Td>
@@ -249,7 +256,7 @@ export default function TrainingAssignmentsTable({
               </Td>
             </Tr>
             {isOpen && (
-              <Tr hover={false}>
+              <Tr detail>
                 {/* Le tappe che si aprono sono un elenco, non una riga di
                     colonne: restano allineate a sinistra. */}
                 <Td colSpan={7} align="left" className="bg-gray-950/40">

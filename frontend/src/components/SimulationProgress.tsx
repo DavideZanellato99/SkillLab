@@ -13,32 +13,88 @@
  * misurano cose diverse. A trattini invece che continua per lo stesso motivo:
  * di lontano non si confonde con quella che scende da sola.
  *
+ * Sui test senza cronometro i trattini sono anche il modo di tornare su una
+ * domanda: ognuno di quelli già raggiunti è un pulsante, e premerlo la
+ * rimette a schermo. Sono quattro stati e non tre, perché con il ritorno
+ * indietro "prima di questa" non vuol più dire "risposta": una domanda si
+ * può aver vista e lasciata in bianco, e va distinta da una mai raggiunta,
+ * che è l'unica su cui non si può andare.
+ *
+ * Quando i trattini non si premono, cioè sulla scelta multipla, la fila è
  * `aria-hidden` perché non aggiunge niente: il numero della domanda e il
  * totale sono scritti in lettere subito sotto, e chi legge con la voce li
- * sente già da lì.
+ * sente già da lì. Quando si premono no: sono comandi, e ogni pulsante dice
+ * a quale domanda porta.
  */
+
+/** Cosa si sa di una domanda, vista dalla barra. */
+export type ProgressMark =
+  /** Ha una risposta. */
+  | 'done'
+  /** È quella a schermo. */
+  | 'current'
+  /** È stata vista e lasciata senza risposta. */
+  | 'seen'
+  /** Non è ancora comparsa. */
+  | 'todo'
+
+const DASH_CLS: Record<ProgressMark, string> = {
+  done: 'bg-violet-600 group-hover:bg-violet-400',
+  current: 'bg-violet-500/45',
+  seen: 'bg-white/20 group-hover:bg-white/35',
+  todo: 'bg-white/8',
+}
+
 export default function SimulationProgress({
-  /** Quante domande sono state consegnate, cioè quella a schermo contata da 0. */
-  answered,
-  total,
+  marks,
+  onSelect,
 }: {
-  answered: number
-  total: number
+  /** Un segno per domanda, nell'ordine del test. */
+  marks: ProgressMark[]
+  /** Porta alla domanda premuta. Assente dove non si torna indietro. */
+  onSelect?: (index: number) => void
 }) {
+  const dash = (mark: ProgressMark) => (
+    <span className={`block h-1 w-full rounded-full transition-colors ${DASH_CLS[mark]}`} />
+  )
+
+  if (!onSelect) {
+    return (
+      <div className="mb-3 flex items-center gap-1" aria-hidden>
+        {marks.map((mark, index) => (
+          <span key={index} className="flex-1">
+            {dash(mark)}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
   return (
-    <div className="mb-3 flex items-center gap-1" aria-hidden>
-      {Array.from({ length: total }, (_, index) => (
-        <span
-          key={index}
-          className={`h-1 flex-1 rounded-full transition-colors ${
-            index < answered
-              ? 'bg-violet-600'
-              : index === answered
-                ? 'bg-violet-500/45'
-                : 'bg-white/8'
-          }`}
-        />
-      ))}
+    <div className="mb-1 flex items-center gap-1">
+      {marks.map((mark, index) =>
+        mark === 'todo' ? (
+          /* Una domanda mai comparsa non si può raggiungere: arriverà quando
+             sarà il suo turno. Lo spazio verticale è lo stesso dei pulsanti,
+             o la fila avrebbe trattini a due altezze. */
+          <span key={index} className="flex-1 py-2" aria-hidden>
+            {dash(mark)}
+          </span>
+        ) : (
+          /* L'imbottitura sopra e sotto è per il dito e per il mouse: un
+             trattino alto un pixel non è un bersaglio. */
+          <button
+            key={index}
+            type="button"
+            onClick={() => onSelect(index)}
+            aria-label={`Vai alla domanda ${index + 1}`}
+            aria-current={mark === 'current' ? 'step' : undefined}
+            className="group flex-1 cursor-pointer py-2"
+          >
+            {dash(mark)}
+          </button>
+        ),
+      )}
     </div>
   )
 }

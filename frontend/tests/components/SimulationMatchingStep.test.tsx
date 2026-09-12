@@ -23,7 +23,14 @@ const question: SimulationQuestion = {
   right: ['Sportello', 'App', 'Cassa'],
 }
 
-const baseProps = { question, number: 1, total: 4, isLast: false, onAnswer: () => {} }
+const baseProps = {
+  question,
+  number: 1,
+  total: 4,
+  isLast: false,
+  onChange: () => {},
+  onNext: () => {},
+}
 
 /** Sceglie un abbinato per una voce, aprendo la sua tendina. */
 async function abbina(user: ReturnType<typeof userEvent.setup>, left: string, right: string) {
@@ -86,18 +93,29 @@ describe('SimulationMatchingStep', () => {
     expect(screen.getByText('Prelievo').className).not.toMatch(/amber/)
   })
 
-  it('consegna le coppie formate e lascia fuori le voci scoperte', async () => {
+  it('comunica le coppie formate a ogni scelta e lascia fuori le voci scoperte', async () => {
     const user = userEvent.setup()
-    const onAnswer = vi.fn()
-    render(<SimulationMatchingStep {...baseProps} onAnswer={onAnswer} />)
+    const onChange = vi.fn()
+    const onNext = vi.fn()
+    render(<SimulationMatchingStep {...baseProps} onChange={onChange} onNext={onNext} />)
 
     await abbina(user, 'Bonifico', 'Sportello')
     await abbina(user, 'Prelievo', 'Cassa')
-    await user.click(screen.getByRole('button', { name: 'Avanti' }))
 
-    expect(onAnswer).toHaveBeenCalledWith([
+    expect(onChange).toHaveBeenLastCalledWith([
       { left: 'Bonifico', right: 'Sportello' },
       { left: 'Prelievo', right: 'Cassa' },
     ])
+    // Andare avanti non porta la risposta con sé: è già uscita a ogni scelta
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+    expect(onNext).toHaveBeenCalledOnce()
+  })
+
+  /* Chi torna su una domanda ritrova le coppie che aveva formato. */
+  it('riparte dalle coppie lasciate', () => {
+    render(<SimulationMatchingStep {...baseProps} initial={[{ left: 'Carta', right: 'App' }]} />)
+
+    expect(screen.getByText('1 di 3 abbinate')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Abbinamento per Carta' })).toHaveTextContent('App')
   })
 })

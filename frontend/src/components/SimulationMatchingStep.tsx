@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { SimulationPair, SimulationQuestion } from '../services/simulations'
-import PrimaryButton from './PrimaryButton'
 import Select from './Select'
+import SimulationStepFooter from './SimulationStepFooter'
 
 /* Una domanda di abbinamento: ogni voce di sinistra sceglie il proprio
  * abbinato fra quelli di destra, che arrivano mescolati.
@@ -27,9 +27,11 @@ import Select from './Select'
  * Tutto resta scegliibile: si vede il conflitto prima di crearlo, e chi lo
  * crea lo vede subito invece di scoprirlo alla correzione.
  *
- * Senza cronometro come l'ordinamento, e per la stessa ragione. Nessun
- * riscontro sulla correttezza durante il percorso e nessun ritorno indietro,
- * come su tutti gli altri passi. */
+ * Senza cronometro come l'ordinamento, e per la stessa ragione. E come là si
+ * può tornare indietro, sulla domanda prima con il pulsante o su una già
+ * vista dalla barra in cima: le coppie escono a ogni scelta e non solo quando
+ * si va avanti, e chi torna le ritrova in `initial`. Nessun riscontro sulla
+ * correttezza durante il percorso, come su tutti gli altri passi. */
 
 interface SimulationMatchingStepProps {
   question: SimulationQuestion
@@ -37,9 +39,13 @@ interface SimulationMatchingStepProps {
   number: number
   total: number
   isLast: boolean
-  /** La domanda è finita: le coppie formate, o null se non ne ha formata
-   *  nessuna. */
-  onAnswer: (pairs: SimulationPair[] | null) => void
+  /** Le coppie com'erano state lasciate, per chi torna su questa domanda. */
+  initial?: SimulationPair[] | null
+  /** A ogni scelta: le coppie formate, o null se non ce n'è nessuna. */
+  onChange: (pairs: SimulationPair[] | null) => void
+  onNext: () => void
+  /** Torna alla domanda prima. Assente sulla prima domanda. */
+  onBack?: () => void
 }
 
 /** Un elenco come si legge, con la «e» al posto dell'ultima virgola. */
@@ -53,16 +59,30 @@ export default function SimulationMatchingStep({
   number,
   total,
   isLast,
-  onAnswer,
+  initial,
+  onChange,
+  onNext,
+  onBack,
 }: SimulationMatchingStepProps) {
   /* Cosa ha scelto per ogni voce di sinistra. Le voci senza scelta non
    * compaiono, ed è quello che le rende "lasciate scoperte" quando la
    * risposta parte. */
-  const [chosen, setChosen] = useState<Record<string, string>>({})
+  const [chosen, setChosen] = useState<Record<string, string>>(() =>
+    Object.fromEntries((initial ?? []).map(({ left, right }) => [left, right])),
+  )
 
-  const pairs: SimulationPair[] = question.left
-    .filter((left) => chosen[left])
-    .map((left) => ({ left, right: chosen[left] }))
+  /** Le coppie formate, nell'ordine delle voci di sinistra. */
+  const pairsOf = (picks: Record<string, string>): SimulationPair[] =>
+    question.left.filter((left) => picks[left]).map((left) => ({ left, right: picks[left] }))
+
+  const pairs = pairsOf(chosen)
+
+  const pick = (left: string, right: string) => {
+    const next = { ...chosen, [left]: right }
+    setChosen(next)
+    const formed = pairsOf(next)
+    onChange(formed.length ? formed : null)
+  }
 
   /* A quali voci di sinistra ogni abbinato è già andato. Da qui esce tutto il
    * resto: la nota nelle tendine, le righe in conflitto e l'avviso. Più di
@@ -142,7 +162,7 @@ export default function SimulationMatchingStep({
               ariaLabel={`Abbinamento per ${left}`}
               className="min-w-0 flex-1 max-sm:w-full"
               value={chosen[left] ?? ''}
-              onChange={(value) => setChosen((prev) => ({ ...prev, [left]: value }))}
+              onChange={(value) => pick(left, value)}
               options={optionsFor(left)}
               placeholder="Scegli l'abbinamento"
             />
@@ -157,16 +177,15 @@ export default function SimulationMatchingStep({
         </p>
       )}
 
-      <div className="mt-6 flex items-center justify-between gap-4 border-t border-white/6 pt-5">
-        <span className="text-xs text-slate-500">
-          {pairs.length
-            ? 'Proseguendo le associazioni vengono confermate e non sono più modificabili'
-            : 'Le voci lasciate senza abbinamento vengono considerate errate'}
-        </span>
-        <PrimaryButton onClick={() => onAnswer(pairs.length ? pairs : null)}>
-          {isLast ? 'Consegna il Test' : pairs.length ? 'Avanti' : 'Salta la Domanda'}
-        </PrimaryButton>
-      </div>
+      <SimulationStepFooter
+        hint={
+          pairs.length ? undefined : 'Le voci lasciate senza abbinamento vengono considerate errate'
+        }
+        answered={pairs.length > 0}
+        isLast={isLast}
+        onNext={onNext}
+        onBack={onBack}
+      />
     </div>
   )
 }

@@ -135,7 +135,9 @@ export default function TutorialTour() {
 
       {/* La stessa fila di trattini del simulatore: quanti passi ci sono,
           quanti ne restano, e a quale si è. */}
-      <SimulationProgress answered={index} total={steps.length} />
+      <SimulationProgress
+        marks={steps.map((_, i) => (i < index ? 'done' : i === index ? 'current' : 'todo'))}
+      />
 
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-slate-500">

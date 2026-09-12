@@ -118,10 +118,10 @@ describe('la riga', () => {
   /* A percorso finito non c'è nessuna tappa corrente: si dice che sono tutte
    * superate invece di lasciare la colonna vuota, che sembrerebbe un dato
    * mancante. */
-  it('dice "tutte superate" su un percorso chiuso', () => {
+  it('dice "Tutte superate" su un percorso chiuso', () => {
     renderTable([assegnazione({ status: 'completed', current_position: null, completed_steps: 2 })])
 
-    expect(screen.getByText('tutte superate')).toBeInTheDocument()
+    expect(screen.getByText('Tutte superate')).toBeInTheDocument()
   })
 
   /* L'organizzazione si scrive solo a chi ne vede più di una: a un org

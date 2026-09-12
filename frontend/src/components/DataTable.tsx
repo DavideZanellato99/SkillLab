@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react'
-import type { HTMLAttributes, KeyboardEvent, ReactNode, TdHTMLAttributes } from 'react'
+import type {
+  CSSProperties,
+  HTMLAttributes,
+  KeyboardEvent,
+  MouseEvent,
+  ReactNode,
+  TdHTMLAttributes,
+} from 'react'
 import Tooltip from './Tooltip'
+import { ROW_HEIGHT } from './rowHeights'
+import { clippedTexts } from './truncation'
 import SearchInput from './SearchInput'
 import PaginationBar from './Pagination'
 import { usePagination } from '../hooks/usePagination'
@@ -229,9 +238,14 @@ export default function DataTable<T>({
          * tabella a deciderlo, non la pagina, perché una colonna allineata
          * diversamente dalle altre si legge come una tabella diversa. Per
          * questo una colonna non ha più un `align` da scegliere. */}
+        {/* L'altezza delle righe (vedi rowHeights) viaggia in una variabile
+         * CSS e non in una classe per riga: le righe le disegna la pagina, e
+         * questa è una misura della tabella. Sulle sole righe dell'elenco:
+         * quella che si apre sotto un'altra è un pannello e prende l'altezza
+         * sua. */}
         <table
-          style={{ minWidth }}
-          className="w-full table-fixed border-collapse text-center [&_tbody>tr:last-child>td]:border-b-0"
+          style={{ minWidth, '--row-h': ROW_HEIGHT } as CSSProperties}
+          className="w-full table-fixed border-collapse text-center [&_tbody>tr:last-child>td]:border-b-0 [&_tbody>tr:not([data-detail])]:h-(--row-h)"
         >
           <colgroup>
             {columns.map((col) => (
@@ -351,6 +365,11 @@ function HeaderCell<T>({
 interface TrProps extends HTMLAttributes<HTMLTableRowElement> {
   /** Evidenzia la riga al passaggio del mouse (default: attivo) */
   hover?: boolean
+  /* La riga che si apre sotto un'altra: il registro di un'operazione, le
+   * tappe di un percorso. È un pannello e non una riga dell'elenco, quindi
+   * non si evidenzia al passaggio e non prende l'altezza fissa delle righe:
+   * è alta quanto quello che contiene. */
+  detail?: boolean
   /* La riga apre qualcosa: il dettaglio di una conversazione, un test
    * consegnato, il pannello che si dispiega sotto. Da usare al posto di un
    * `onClick` scritto a mano, che era il modo in cui queste righe si aprivano
@@ -365,7 +384,13 @@ interface TrProps extends HTMLAttributes<HTMLTableRowElement> {
   onActivate?: () => void
 }
 
-export function Tr({ hover = true, onActivate, className = '', ...props }: TrProps) {
+export function Tr({
+  hover = true,
+  detail = false,
+  onActivate,
+  className = '',
+  ...props
+}: TrProps) {
   const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
     if (!onActivate) return
     /* Solo sulla riga stessa: dentro le celle ci sono bottoni e menu, e
@@ -379,7 +404,8 @@ export function Tr({ hover = true, onActivate, className = '', ...props }: TrPro
 
   return (
     <tr
-      className={`transition ${hover ? 'hover:[&>td]:bg-white/4' : ''} ${
+      data-detail={detail ? '' : undefined}
+      className={`transition ${hover && !detail ? 'hover:[&>td]:bg-white/4' : ''} ${
         onActivate
           ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-violet-500'
           : ''
@@ -409,12 +435,85 @@ interface TdProps extends Omit<TdHTMLAttributes<HTMLTableCellElement>, 'align'> 
 /* Il contenuto sta al centro della cella in orizzontale e in verticale. Una
  * cella che dentro si costruisce da sé con un flex (un'immagine accanto a un
  * nome, due bottoncini) lo centra con `justify-center`: il centramento del
- * testo non arriva fin lì. */
-export function Td({ compact = false, align = 'center', className = '', ...props }: TdProps) {
+ * testo non arriva fin lì.
+ *
+ * Il testo va a capo una volta sola. L'altezza delle righe è della tabella
+ * (vedi rowHeights) ed è quella di due righe di testo: un titolo lungo si
+ * spezza sulla seconda, e quello che non ci sta nemmeno lì si tronca con i
+ * puntini, con il testo intero nel tooltip. Prima il testo andava a capo
+ * quanto voleva e la riga cresceva con lui, e sfogliando le pagine la
+ * tabella cambiava altezza a seconda di quale titolo lungo ci fosse dentro.
+ *
+ * Il limite alle due righe lo mette la cella quando il contenuto è testo e
+ * basta, che è il caso più frequente. Quando invece dentro c'è una
+ * composizione (l'immagine accanto al nome, la targhetta con il titolo) il
+ * limite lo chiede il testo stesso con `line-clamp-2`, e la riga sotto il
+ * nome (l'email, la categoria) resta su una riga con `truncate`: la cella
+ * non può decidere al posto loro quale dei due pezzi ha diritto alla seconda
+ * riga. Di suo tiene comunque il contenuto entro l'altezza della riga, così
+ * un pezzo che si dimentica del limite non la sfonda.
+ *
+ * Il tooltip con il testo intero lo porta la cella, e non chi la disegna:
+ * il taglio lo decide lei, quindi è lei che sa cosa non si legge. Al
+ * passaggio del mouse guarda cosa dentro di sé è stato tagliato (il testo
+ * diretto, o l'email sotto il nome) e lo mostra per intero, una riga per
+ * pezzo; su una cella che si legge tutta non compare niente, e non zittisce
+ * il tooltip della riga. Prima ogni cella con un testo che poteva non
+ * entrare doveva ricordarsi di avvolgerlo in un `Tooltip truncateOnly`, e
+ * quelle che non se lo ricordavano tagliavano senza dire cosa. */
+
+/** Se quello che la cella contiene è testo e basta: una stringa, un numero,
+ *  o una fila di questi (`{fatte}/{totali}`). */
+const isText = (node: ReactNode): boolean =>
+  typeof node === 'string' ||
+  typeof node === 'number' ||
+  (Array.isArray(node) &&
+    node.every((n) => n === null || n === undefined || typeof n === 'boolean' || isText(n)))
+
+/* Quanto è alto il contenuto di una riga: l'altezza della riga meno
+ * l'imbottitura e il filetto. Nella riga di dettaglio non vale, perché
+ * quella è alta quanto il pannello che contiene. */
+const contentHeightCls = 'max-h-[calc(var(--row-h)_-_2rem_-_2px)] [tr[data-detail]_&]:max-h-none'
+
+export function Td({
+  compact = false,
+  align = 'center',
+  className = '',
+  onMouseEnter,
+  children,
+  ...props
+}: TdProps) {
+  const [clipped, setClipped] = useState<string[]>([])
+
+  const readClipped = (e: MouseEvent<HTMLTableCellElement>) => {
+    setClipped(clippedTexts(e.currentTarget))
+    onMouseEnter?.(e)
+  }
+
   return (
-    <td
-      className={`border-b border-white/6 ${compact ? 'px-3' : 'px-6'} py-4 ${align === 'left' ? 'text-left' : 'text-center'} align-middle break-words ${className}`}
-      {...props}
-    />
+    <Tooltip
+      content={
+        clipped.length > 0
+          ? clipped.map((text) => (
+              <span key={text} className="block whitespace-pre-line">
+                {text}
+              </span>
+            ))
+          : ''
+      }
+      truncateOnly
+    >
+      <td
+        onMouseEnter={readClipped}
+        className={`border-b border-white/6 ${compact ? 'px-3' : 'px-6'} py-4 ${align === 'left' ? 'text-left' : 'text-center'} align-middle overflow-hidden break-words ${className}`}
+        {...props}
+      >
+        {isText(children) ? (
+          <span className="line-clamp-2">{children}</span>
+        ) : (
+          <div className={contentHeightCls}>{children}</div>
+        )}
+      </td>
+    </Tooltip>
   )
 }

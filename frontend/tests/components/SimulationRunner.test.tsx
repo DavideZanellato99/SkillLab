@@ -439,6 +439,97 @@ describe('SimulationRunner', () => {
     expect(body.answers[1].pairs).toBeNull()
   })
 
+  /* Sui test senza cronometro si torna indietro, e la risposta cambiata è
+     quella che parte: il passo comunica a ogni modifica, e il runner tiene
+     l'ultima. Qui il ritorno è dal pulsante del passo. */
+  it('su un test senza cronometro si torna indietro e si cambia la risposta', async () => {
+    const user = userEvent.setup()
+    serveOpenSimulation()
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
+    await user.type(await screen.findByRole('textbox'), 'Prima versione')
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+    await screen.findByText('Seconda domanda?')
+
+    await user.click(screen.getByRole('button', { name: 'Indietro' }))
+    /* La domanda di prima torna con quello che si era scritto, non vuota */
+    const casella = await screen.findByRole('textbox')
+    expect(casella).toHaveValue('Prima versione')
+    /* E sulla prima domanda non c'è dove tornare */
+    expect(screen.queryByRole('button', { name: 'Indietro' })).not.toBeInTheDocument()
+
+    await user.clear(casella)
+    await user.type(casella, 'Seconda versione')
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+    await user.type(await screen.findByRole('textbox'), 'Ultima')
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
+
+    await waitFor(() => expect(submittedBody()).not.toBeNull())
+    expect(submittedBody().answers.map((a: { answer_text: string }) => a.answer_text)).toEqual([
+      'Seconda versione',
+      'Ultima',
+    ])
+  })
+
+  /* L'altro modo di tornare: la barra in cima, che sta fuori dal passo.
+     Chi lascia la domanda da lì non passa dal pulsante, e quello che aveva
+     fatto deve essere già arrivato al runner. Sull'ordinamento vale anche
+     per una sequenza a metà, che tornando si ritrova a metà. */
+  it("dalla barra si torna a una domanda già vista, e si ritrova com'era", async () => {
+    const user = userEvent.setup()
+    serve(orderingSimulation, orderingQuestions, 'ordering')
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
+    await user.click(await screen.findByRole('button', { name: 'Passo da collocare: Alfa' }))
+    await user.click(screen.getByRole('button', { name: 'Posizione 1, vuota' }))
+    await user.click(screen.getByRole('button', { name: 'Salta la Domanda' }))
+    await screen.findByText('E questi?')
+
+    /* La seconda domanda è a schermo, la terza non esiste: i trattini che
+       si premono sono due, e portano alla prima e a questa */
+    expect(screen.getByRole('button', { name: 'Vai alla domanda 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Vai alla domanda 2' })).toHaveAttribute(
+      'aria-current',
+      'step',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Vai alla domanda 1' }))
+    expect(await screen.findByText('Rimetti in ordine?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Posizione 1: Alfa' })).toBeInTheDocument()
+    expect(screen.getByText('1 di 2 collocati')).toBeInTheDocument()
+
+    /* Si completa, e dalla barra si salta di nuovo alla seconda, che era
+       già stata raggiunta */
+    await user.click(screen.getByRole('button', { name: 'Passo da collocare: Beta' }))
+    await user.click(screen.getByRole('button', { name: 'Posizione 2, vuota' }))
+    await user.click(screen.getByRole('button', { name: 'Vai alla domanda 2' }))
+    await screen.findByText('E questi?')
+    await user.click(screen.getByRole('button', { name: 'Consegna il Test' }))
+
+    await waitFor(() => expect(submittedBody()).not.toBeNull())
+    const [prima, seconda] = submittedBody().answers
+    expect(prima.ordered_steps).toEqual(['Alfa', 'Beta'])
+    expect(seconda.ordered_steps).toBeNull()
+  })
+
+  /* Sulla scelta multipla no: una domanda consegnata ha il suo tempo
+     misurato, e riaprirla vorrebbe dire misurarlo di nuovo. Né il pulsante
+     né i trattini. */
+  it('sulla scelta multipla non si torna indietro', async () => {
+    const user = userEvent.setup()
+    renderRunner()
+
+    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
+    await user.click(await screen.findByText('Alfa'))
+    await user.click(screen.getByRole('button', { name: 'Avanti' }))
+    await screen.findByText('Seconda domanda?')
+
+    expect(screen.queryByRole('button', { name: 'Indietro' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Vai alla domanda/ })).not.toBeInTheDocument()
+  })
+
   /* Le domande estratte e le risposte date vivono solo qui dentro: un F5
      involontario a metà test rimanda alle regole con le mani vuote, quindi il
      browser chiede conferma finché c'è qualcosa da perdere. Prima di

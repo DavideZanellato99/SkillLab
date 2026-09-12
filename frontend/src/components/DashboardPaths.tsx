@@ -233,8 +233,10 @@ export default function DashboardPaths() {
         renderRow={(d) => (
           <Tr key={d.assignment_id}>
             <Td align="left">
-              <span className="text-[0.85rem] font-medium text-slate-100">{d.user_name}</span>
-              <span className="block text-[0.72rem] text-slate-500">{d.user_email}</span>
+              <span className="block truncate text-[0.85rem] font-medium text-slate-100">
+                {d.user_name}
+              </span>
+              <span className="block truncate text-[0.72rem] text-slate-500">{d.user_email}</span>
             </Td>
             <Td className="text-[0.85rem] text-slate-300">{d.path_title}</Td>
             <Td className="text-[0.85rem] text-slate-300">

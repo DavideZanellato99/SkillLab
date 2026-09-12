@@ -1662,9 +1662,11 @@ che nessun'altra schermata usa: chi passava dalla dashboard li cercava dove li
 aveva lasciati e non li trovava. La ricerca resta di là perché cerca dentro
 l'elenco che questi due hanno già scelto, ed è un filtro anche lei: «Azzera
 Filtri», che questa pagina prima non aveva, riporta il report intero e
-cancella pure quella. La pagina è larga come il registro attività, perché la
-riga di una persona ha sei colonne e la finestra che si apre ne ha di
-più.
+cancella pure quella. La pagina ha la misura normale delle pagine di gestione:
+era larga come il registro attività per le sei colonne della riga e le sette
+della finestra che si apre sotto, ma le colonne stanno alle percentuali
+dichiarate e sotto la larghezza minima scorre il riquadro, quindi la misura in
+più andava tutta a stirare le colonne dei numeri.
 
 La barra della tabella sta comunque fuori dal contenitore che ritaglia le
 righe ([DataTable](../frontend/src/components/DataTable.tsx)): là dentro una

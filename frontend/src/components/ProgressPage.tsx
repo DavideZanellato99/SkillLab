@@ -366,7 +366,7 @@ export default function ProgressPage() {
                         <Td align="left">
                           <span className="flex items-center gap-2">
                             <ConversationModeBadge mode={c.mode} iconOnly />
-                            <span className="text-[0.85rem] font-medium text-slate-100">
+                            <span className="line-clamp-2 min-w-0 text-[0.85rem] font-medium text-slate-100">
                               {c.title}
                             </span>
                           </span>
@@ -409,7 +409,7 @@ export default function ProgressPage() {
                         <Td align="left">
                           <span className="flex items-center gap-2">
                             <SimulationKindBadge kind={s.simulation_kind} />
-                            <span className="text-[0.85rem] font-medium text-slate-100">
+                            <span className="line-clamp-2 min-w-0 text-[0.85rem] font-medium text-slate-100">
                               {s.simulation_title}
                             </span>
                           </span>

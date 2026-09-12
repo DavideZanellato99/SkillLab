@@ -17,7 +17,9 @@
  * invece di una griglia di caselle vuote.
  */
 
+import type { CSSProperties } from 'react'
 import type { DataTableColumn } from './DataTable'
+import { ROW_HEIGHT } from './rowHeights'
 
 /* Quante righe finte. Cinque riempiono la scheda quanto basta a farne
  * riconoscere la forma, e restano meno di quante ne arriveranno: uno
@@ -52,7 +54,13 @@ export default function TableSkeleton({
           lì è lo scheletro stesso a dire che si sta caricando. */}
       <span className="sr-only">{message}</span>
       <div className="overflow-x-auto rounded-2xl">
-        <table style={{ minWidth }} className="w-full table-fixed border-collapse">
+        <table
+          /* Le righe finte sono alte quanto quelle vere, altrimenti la scheda
+             cambia altezza quando i dati compaiono, che è il salto che questo
+             componente esiste per evitare. */
+          style={{ minWidth, '--row-h': ROW_HEIGHT } as CSSProperties}
+          className="w-full table-fixed border-collapse [&_tbody>tr]:h-(--row-h)"
+        >
           <colgroup>
             {columns.map((col) => (
               <col key={col.key} style={{ width: col.width }} />

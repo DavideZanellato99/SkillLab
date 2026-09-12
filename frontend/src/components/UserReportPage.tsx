@@ -186,9 +186,12 @@ export default function UserReportPage() {
    * cioè si riscriveva lato client una somma che il server fa già. */
 
   return (
-    /* Larga come il registro attività: la riga di una persona ha sei
-     * colonne, e la finestra che si apre ne ha di più. */
-    <PageContainer width="wide">
+    /* La misura normale delle pagine di gestione. Era larga come il
+     * registro attività per le sei colonne della riga e le sette della
+     * finestra che si apre sotto, ma le colonne stanno alle percentuali
+     * dichiarate e sotto la larghezza minima scorre il riquadro: la misura
+     * in più andava tutta a stirare le colonne dei numeri. */
+    <PageContainer>
       <PageHeader
         title="Report Attività"
         description="Attività di ogni persona: le conversazioni con gli avatar e le simulazioni consegnate."

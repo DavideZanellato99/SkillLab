@@ -165,7 +165,7 @@ const KIND_OPTIONS = [
  * stringe sul proprio testo e il taglio dei titoli lunghi cadrebbe in un
  * punto diverso a ogni riga. */
 const titleCls =
-  'block w-full truncate text-center text-[0.85rem] font-semibold text-slate-100 transition group-hover:text-violet-300'
+  'line-clamp-2 w-full text-center text-[0.85rem] font-semibold text-slate-100 transition group-hover:text-violet-300'
 
 /* `inline-flex` e non `flex`: la cella centra col `text-center`, che muove
  * le scatole in linea e non i blocchi. Da blocco largo 28px il cestino

@@ -42,3 +42,16 @@ describe('TableSkeleton', () => {
     expect(container.querySelectorAll('th[aria-hidden="true"]')).toHaveLength(3)
   })
 })
+
+/* Le righe finte sono alte quanto quelle vere, con la stessa misura della
+ * tabella che sta arrivando: altrimenti la scheda cambia altezza quando i
+ * dati compaiono, che è il salto che lo scheletro esiste per evitare. */
+describe('altezza delle righe', () => {
+  it('prende la misura della tabella che sta arrivando', () => {
+    const { container } = render(<TableSkeleton columns={COLUMNS} message="Caricamento..." />)
+
+    const table = container.querySelector('table')!
+    expect(table.style.getPropertyValue('--row-h')).toBe('80px')
+    expect(table.className).toContain('[&_tbody>tr]:h-(--row-h)')
+  })
+})

@@ -48,7 +48,7 @@ export default function AuditLogRow({ log, isExpanded, onToggle }: AuditLogRowPr
         </Td>
         <Td>
           <div className="flex flex-col items-center">
-            <span className="text-[0.85rem] font-semibold text-slate-100">
+            <span className="max-w-full truncate text-[0.85rem] font-semibold text-slate-100">
               {log.user_email || '—'}
             </span>
             {log.user_role && (
@@ -60,12 +60,8 @@ export default function AuditLogRow({ log, isExpanded, onToggle }: AuditLogRowPr
             )}
           </div>
         </Td>
-        <Td>
-          <span className="text-[0.85rem] text-slate-300">{log.organization_name ?? '—'}</span>
-        </Td>
-        <Td>
-          <span className="text-[0.85rem] font-medium text-slate-100">{log.action_label}</span>
-        </Td>
+        <Td className="text-[0.85rem] text-slate-300">{log.organization_name ?? '—'}</Td>
+        <Td className="text-[0.85rem] font-medium text-slate-100">{log.action_label}</Td>
         <Td>
           {/* La chiave e il valore non si vestono uguale: la prima è
             l'etichetta, il secondo è quello che si sta cercando con l'occhio.
@@ -76,7 +72,7 @@ export default function AuditLogRow({ log, isExpanded, onToggle }: AuditLogRowPr
             anchor="cursor"
             truncateOnly
           >
-            <span className="mx-auto block max-w-[320px] truncate text-[0.8rem]">
+            <span className="mx-auto line-clamp-2 max-w-[320px] text-[0.8rem]">
               {details.length === 0 ? (
                 <span className="text-slate-500">—</span>
               ) : (
@@ -113,7 +109,7 @@ export default function AuditLogRow({ log, isExpanded, onToggle }: AuditLogRowPr
       </Tr>
 
       {isExpanded && (
-        <tr>
+        <Tr detail>
           {/* Il pannello che si apre non è una riga di colonne ma un elenco di
             voci e valori: resta allineato a sinistra, dove un elenco si
             legge. */}
@@ -145,7 +141,7 @@ export default function AuditLogRow({ log, isExpanded, onToggle }: AuditLogRowPr
               )}
             </dl>
           </Td>
-        </tr>
+        </Tr>
       )}
     </Fragment>
   )

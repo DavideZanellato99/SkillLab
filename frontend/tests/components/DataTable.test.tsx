@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { Fragment } from 'react'
 import { describe, expect, it } from 'vitest'
 
 import DataTable, { Td, Tr } from '../../src/components/DataTable'
@@ -95,6 +96,119 @@ describe('larghezza delle colonne', () => {
 /* Il centramento è della tabella e non della pagina: una colonna non può
  * scegliere di allinearsi diversamente dalle altre, perché è la riga intera a
  * doversi leggere come una riga sola. */
+/* Le righe di una tabella sono alte tutte uguali, e quanto lo decide la
+ * tabella con una misura nominata per il contenuto: la riga con meno dentro
+ * resta alta come le altre. Intestazione e fascia in fondo non c'entrano, e
+ * nemmeno il pannello che si apre sotto una riga. */
+describe('altezza delle righe', () => {
+  it('scrive la misura sulla tabella e la applica alle righe del corpo', () => {
+    const { container } = renderTable()
+
+    const table = container.querySelector('table')!
+    expect(table.style.getPropertyValue('--row-h')).toBe('80px')
+    expect(table.className).toContain('[&_tbody>tr:not([data-detail])]:h-(--row-h)')
+  })
+
+  /* L'altezza regge se il testo va a capo una volta sola: la cella mette il
+   * limite alle due righe quando dentro c'è testo e basta, e quando c'è una
+   * composizione tiene comunque il contenuto entro l'altezza della riga. */
+  it('lascia andare a capo il testo una volta sola', () => {
+    const { container } = renderTable()
+
+    const td = screen.getByText('Anna Rossi').closest('td')!
+    expect(td.className).toContain('break-words')
+    expect(td.className).not.toContain('whitespace-nowrap')
+    expect(screen.getByText('Anna Rossi').className).toContain('line-clamp-2')
+    expect(container.querySelector('tbody td')!.className).toContain('overflow-hidden')
+  })
+
+  it('tiene una composizione entro l altezza della riga', () => {
+    render(
+      <DataTable
+        columns={COLUMNS}
+        items={RIGHE.slice(0, 1)}
+        renderRow={(p) => (
+          <Tr key={p.id}>
+            <Td colSpan={3}>
+              <div className="flex">
+                <span>{p.nome}</span>
+              </div>
+            </Td>
+          </Tr>
+        )}
+      />,
+    )
+
+    const composizione = screen.getByText('Anna Rossi').parentElement!
+    expect(composizione.className).not.toContain('line-clamp-2')
+    expect(composizione.parentElement!.className).toContain(
+      'max-h-[calc(var(--row-h)_-_2rem_-_2px)]',
+    )
+  })
+
+  it('lascia fuori la riga di dettaglio, che è alta quanto contiene', () => {
+    const { container } = render(
+      <DataTable
+        columns={COLUMNS}
+        items={RIGHE.slice(0, 1)}
+        renderRow={(p) => (
+          <Fragment key={p.id}>
+            <Tr>
+              <Td>{p.nome}</Td>
+              <Td>{p.eta ?? '—'}</Td>
+              <Td compact>Elimina</Td>
+            </Tr>
+            <Tr detail>
+              <Td colSpan={3} align="left">
+                dettaglio
+              </Td>
+            </Tr>
+          </Fragment>
+        )}
+      />,
+    )
+
+    const righe = container.querySelectorAll('tbody tr')
+    expect(righe[0]).not.toHaveAttribute('data-detail')
+    expect(righe[1]).toHaveAttribute('data-detail')
+    // Un pannello non si evidenzia al passaggio come una riga dell'elenco
+    expect(righe[1].className).not.toContain('hover:')
+  })
+})
+
+/* Il tooltip con il testo intero lo porta la cella: al passaggio del mouse
+ * guarda cosa dentro di sé è stato tagliato e lo mostra, e su una cella che
+ * si legge tutta non compare niente. jsdom non impagina, quindi il taglio si
+ * simula scrivendo le misure sull'elemento. */
+describe('tooltip sul testo tagliato', () => {
+  const clip = (el: Element, clipped = true) => {
+    Object.defineProperty(el, 'clientWidth', { value: 100, configurable: true })
+    Object.defineProperty(el, 'scrollWidth', { value: clipped ? 300 : 100, configurable: true })
+  }
+
+  it('mostra per intero il testo che la cella ha tagliato', async () => {
+    const user = userEvent.setup()
+    renderTable()
+    const td = screen.getByText('Anna Rossi').closest('td')!
+    clip(td)
+
+    await user.hover(td)
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Anna Rossi')
+  })
+
+  it('non compare su una cella che si legge tutta', async () => {
+    const user = userEvent.setup()
+    renderTable()
+    const td = screen.getByText('Anna Rossi').closest('td')!
+    clip(td, false)
+
+    await user.hover(td)
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+  })
+})
+
 describe('allineamento', () => {
   it('centra le intestazioni', () => {
     const { container } = renderTable()

@@ -261,9 +261,7 @@ export default function DashboardContent() {
             }
             renderRow={(a) => (
               <Tr key={a.avatar_id}>
-                <Td>
-                  <span className="text-[0.85rem] font-medium text-slate-100">{a.avatar_name}</span>
-                </Td>
+                <Td className="text-[0.85rem] font-medium text-slate-100">{a.avatar_name}</Td>
                 <Td className="text-[0.85rem] text-slate-300">{a.conversations}</Td>
                 <Td className="text-[0.85rem] text-slate-300">{a.people}</Td>
                 <Td>
@@ -273,11 +271,9 @@ export default function DashboardContent() {
                 </Td>
                 <Td>
                   {a.weakest_criterion_key ? (
-                    <Tooltip content={criterionLabel(a.weakest_criterion_key)} truncateOnly>
-                      <span className="block truncate text-[0.82rem] text-slate-300">
-                        {criterionLabel(a.weakest_criterion_key)}
-                      </span>
-                    </Tooltip>
+                    <span className="line-clamp-2 text-[0.82rem] text-slate-300">
+                      {criterionLabel(a.weakest_criterion_key)}
+                    </span>
                   ) : (
                     <span className="text-slate-600">—</span>
                   )}
@@ -313,10 +309,8 @@ export default function DashboardContent() {
             renderRow={(s) => (
               <Tooltip key={s.simulation_id} content="Vedi le domande una per una" anchor="cursor">
                 <Tr onActivate={() => setOpenTest(s)}>
-                  <Td align="left">
-                    <span className="text-[0.85rem] font-medium text-slate-100">
-                      {s.simulation_title}
-                    </span>
+                  <Td align="left" className="text-[0.85rem] font-medium text-slate-100">
+                    {s.simulation_title}
                   </Td>
                   <Td>
                     <span className="flex items-center justify-center gap-1.5">

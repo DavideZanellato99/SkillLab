@@ -27,9 +27,16 @@ const DRAG_THRESHOLD_PX = 6
 export interface DragState<T> {
   /** Cosa si sta trascinando, così com'è stato passato a `startDrag`. */
   item: T
-  /** Dov'è il puntatore adesso, per disegnarci il fantasma. */
+  /** Dov'è il puntatore adesso. */
   x: number
   y: number
+  /** L'angolo in alto a sinistra del fantasma: il punto in cui l'elemento è
+   *  stato afferrato resta sotto il puntatore, come se lo si tenesse davvero.
+   *  Centrare il fantasma sul puntatore lo portava fuori dallo schermo:
+   *  afferrando un box largo quanto la pagina vicino al bordo sinistro, metà
+   *  box finiva oltre il bordo. */
+  left: number
+  top: number
   /** La larghezza di quello che è stato afferrato: il fantasma la eredita,
    *  altrimenti a mezz'aria l'elemento cambierebbe forma. */
   width: number
@@ -49,9 +56,15 @@ export function usePointerDrag<T>(onDrop: (item: T, zone: string) => void) {
   /** Il trascinamento in corso, `null` finché la soglia non è superata. */
   const [drag, setDrag] = useState<DragState<T> | null>(null)
   /** Il puntatore è premuto su qualcosa, e potrebbe diventare un click. */
-  const [pressed, setPressed] = useState<{ item: T; x: number; y: number; width: number } | null>(
-    null,
-  )
+  const [pressed, setPressed] = useState<{
+    item: T
+    x: number
+    y: number
+    /** Di quanto il punto afferrato dista dall'angolo dell'elemento. */
+    grabX: number
+    grabY: number
+    width: number
+  } | null>(null)
 
   /* Il rilascio e lo stato corrente letti dai gestori globali, che vivono
    * quanto la pressione e non quanto il render: senza le ref l'ascolto si
@@ -76,6 +89,8 @@ export function usePointerDrag<T>(onDrop: (item: T, zone: string) => void) {
         item: pressed.item,
         x: event.clientX,
         y: event.clientY,
+        left: event.clientX - pressed.grabX,
+        top: event.clientY - pressed.grabY,
         width: pressed.width,
         zone: zoneAt(event.clientX, event.clientY),
       })
@@ -108,11 +123,14 @@ export function usePointerDrag<T>(onDrop: (item: T, zone: string) => void) {
     // e restare in ascolto lascerebbe un trascinamento appeso.
     if (event.button !== 0) return
     draggedRef.current = false
+    const rect = event.currentTarget.getBoundingClientRect()
     setPressed({
       item,
       x: event.clientX,
       y: event.clientY,
-      width: event.currentTarget.getBoundingClientRect().width,
+      grabX: event.clientX - rect.left,
+      grabY: event.clientY - rect.top,
+      width: rect.width,
     })
   }
 

@@ -202,10 +202,8 @@ export default function DashboardUsage() {
         }
         renderRow={(o) => (
           <Tr key={o.organization_id}>
-            <Td align="left">
-              <span className="text-[0.85rem] font-medium text-slate-100">
-                {o.organization_name}
-              </span>
+            <Td align="left" className="text-[0.85rem] font-medium text-slate-100">
+              {o.organization_name}
             </Td>
             <Td>
               <span className="text-[0.85rem] text-slate-300 tabular-nums">

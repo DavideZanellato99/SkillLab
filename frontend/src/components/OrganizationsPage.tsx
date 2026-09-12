@@ -323,7 +323,7 @@ export default function OrganizationsPage() {
                  si legge. */
               <Tr key={o.id} onActivate={() => openDetail(o)}>
                 <Td>
-                  <span className="font-semibold text-slate-100">{o.name}</span>
+                  <span className="block truncate font-semibold text-slate-100">{o.name}</span>
                 </Td>
                 <Td>
                   <code className="rounded-lg bg-white/5 px-2 py-1 text-xs text-violet-400">
@@ -348,11 +348,9 @@ export default function OrganizationsPage() {
                     {/* Il motivo sta accanto allo stato che spiega: cercarlo
                         nel dettaglio vorrebbe dire aprire riga per riga. */}
                     {o.status === 'suspended' && o.suspension_reason && (
-                      <Tooltip truncateOnly content={o.suspension_reason}>
-                        <span className="block max-w-[180px] truncate text-[0.72rem] text-slate-500">
-                          {o.suspension_reason}
-                        </span>
-                      </Tooltip>
+                      <span className="block max-w-[180px] truncate text-[0.72rem] text-slate-500">
+                        {o.suspension_reason}
+                      </span>
                     )}
                   </div>
                 </Td>

@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { MouseEvent as ReactMouseEvent, FocusEvent, ReactElement, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { TOOLTIP_MARK, isTruncated } from './truncation'
 
 /* Tooltip custom dell'app, in sostituzione di quello nativo del browser
  * (attributo `title`). Renderizzato in un portal con position:fixed, quindi
@@ -36,27 +37,6 @@ interface TooltipProps {
   truncateOnly?: boolean
   children: ReactElement<Record<string, unknown>>
 }
-
-/* Troncato = il contenuto reale non entra nello spazio visibile, in larghezza
- * o in altezza. Il primo confronto è quello di `.truncate`, che tiene il testo
- * su una riga sola e lo taglia con i puntini; il secondo è quello di
- * `line-clamp-*`, che di righe ne lascia vedere due o tre e taglia in basso.
- *
- * Senza il confronto sull'altezza un testo tagliato in basso non poteva usare
- * `truncateOnly`: restava senza tooltip quando era tagliato davvero, oppure,
- * se glielo si metteva comunque, lo mostrava anche sulle descrizioni corte,
- * ripetendo parola per parola quello che si stava già leggendo. */
-const isClipped = (el: Element) =>
-  el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1
-
-/* Il taglio si cerca anche nei testi dentro l'elemento, non solo su di lui:
- * quando il tooltip è agganciato al riquadro che contiene il testo, a non
- * entrare sono le righe dentro, mentre il riquadro sta nella sua misura e da
- * solo direbbe sempre che non c'è niente di tagliato. Serve dove l'area che
- * risponde al mouse è più larga del testo, come nelle tappe di un percorso,
- * che si passano sopra come un riquadro solo. */
-const isTruncated = (el: Element) =>
-  isClipped(el) || Array.from(el.querySelectorAll('*')).some(isClipped)
 
 interface Pos {
   x: number
@@ -85,6 +65,12 @@ export default function Tooltip({
   const tipRef = useRef<HTMLDivElement | null>(null)
   const visible = pos !== null && Boolean(content)
   const hideParent = useContext(ParentTooltipContext)
+  /* Se all'ingresso del mouse questo tooltip ha deciso di mostrarsi. Uno con
+   * `truncateOnly` su un testo intero non ha niente da dire, e allora non
+   * deve nemmeno spegnere quello che sta fuori: la cella di una tabella ne
+   * porta uno per il testo tagliato, e se ogni cella zittisse la riga il
+   * tooltip della riga («Vedi il test svolto») non si vedrebbe mai. */
+  const engaged = useRef(false)
 
   /* Annidati: si spegne il tooltip che sta fuori e gli si tiene fermo il
    * mouse, altrimenti il suo onMouseMove lo riaccenderebbe subito e se ne
@@ -101,12 +87,14 @@ export default function Tooltip({
   }
 
   const handleMouseEnter = (e: ReactMouseEvent) => {
+    engaged.current = !truncateOnly || isTruncated(e.currentTarget)
+    if (!engaged.current) return
     takeOver(e)
-    if (truncateOnly && !isTruncated(e.currentTarget)) return
     if (anchor === 'cursor') setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 })
     else showFromElement(e.currentTarget)
   }
   const handleMouseMove = (e: ReactMouseEvent) => {
+    if (!engaged.current) return
     takeOver(e)
     if (anchor === 'cursor') setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 })
   }
@@ -118,6 +106,19 @@ export default function Tooltip({
     setPos(null)
     setFlip(false)
   }, [])
+  const handleMouseLeave = () => {
+    engaged.current = false
+    hide()
+  }
+
+  /* Quello che un tooltip più interno chiama per spegnere questo: spegne
+   * anche chi sta sopra, così con tre livelli (la riga di una tabella, la
+   * cella, un pezzo dentro la cella) il più interno spegne tutti e non solo
+   * il suo vicino, che lascerebbe acceso quello della riga. */
+  const hideChain = useCallback(() => {
+    hide()
+    hideParent?.()
+  }, [hide, hideParent])
 
   // Allo scroll l'ancora si sposta ma il tooltip (fixed) no: nascondilo
   useEffect(() => {
@@ -147,17 +148,18 @@ export default function Tooltip({
   const eventProps = {
     onMouseEnter: handleMouseEnter,
     onMouseMove: handleMouseMove,
-    onMouseLeave: hide,
+    onMouseLeave: handleMouseLeave,
     onFocus: handleFocus,
     onBlur: hide,
   }
 
   const target = wrap ? (
-    <span className="inline-flex" {...eventProps}>
+    <span className="inline-flex" {...{ [TOOLTIP_MARK]: '' }} {...eventProps}>
       {children}
     </span>
   ) : (
     cloneElement(children, {
+      [TOOLTIP_MARK]: '',
       ...eventProps,
       onMouseEnter: (e: ReactMouseEvent) => {
         ;(children.props.onMouseEnter as ((e: ReactMouseEvent) => void) | undefined)?.(e)
@@ -165,7 +167,7 @@ export default function Tooltip({
       },
       onMouseLeave: (e: ReactMouseEvent) => {
         ;(children.props.onMouseLeave as ((e: ReactMouseEvent) => void) | undefined)?.(e)
-        hide()
+        handleMouseLeave()
       },
     })
   )
@@ -174,7 +176,7 @@ export default function Tooltip({
     <>
       {/* Il provider non aggiunge nodi: serve solo perché un eventuale
           tooltip più interno sappia spegnere questo. */}
-      <ParentTooltipContext.Provider value={hide}>{target}</ParentTooltipContext.Provider>
+      <ParentTooltipContext.Provider value={hideChain}>{target}</ParentTooltipContext.Provider>
       {visible &&
         pos &&
         createPortal(

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { SimulationQuestion } from '../services/simulations'
 import { usePointerDrag } from '../hooks/usePointerDrag'
 import { GripIcon } from './icons'
-import PrimaryButton from './PrimaryButton'
+import SimulationStepFooter from './SimulationStepFooter'
 
 /* Una domanda di ordinamento: i passi arrivano mescolati e si trascinano
  * nelle posizioni della sequenza.
@@ -44,10 +44,18 @@ import PrimaryButton from './PrimaryButton'
  * tocca: rimescolarlo qui vorrebbe dire che ricaricare la pagina cambia la
  * domanda, e la mescolata è già avvenuta una volta, dove la chiave viveva.
  *
- * Come sugli altri passi, nessun riscontro durante il percorso e nessun
- * ritorno indietro: giusto e sbagliato arrivano tutti insieme alla fine. E
- * come là, il componente non sa niente del test: riceve una domanda,
- * raccoglie una risposta e la consegna. */
+ * E siccome il tempo non conta, si può tornare indietro: sulla domanda prima
+ * con il pulsante, su una qualsiasi già vista dalla barra in cima. Per questo
+ * la sequenza esce a ogni mossa e non solo quando si va avanti, ed esce due
+ * volte: come risposta, cioè l'ordine completo o null, e com'è, con le
+ * caselle ancora vuote. La seconda serve a chi torna: una sequenza lasciata a
+ * metà per andare a rivedere una domanda prima deve ritrovarsi a metà, non
+ * vuota, e la risposta da sola non basta a ricostruirla perché a metà è null.
+ *
+ * Come sugli altri passi, nessun riscontro durante il percorso: giusto e
+ * sbagliato arrivano tutti insieme alla fine. E come là, il componente non sa
+ * niente del test: riceve una domanda, raccoglie una risposta e la passa a
+ * chi lo ha montato. */
 
 interface SimulationOrderingStepProps {
   question: SimulationQuestion
@@ -55,9 +63,14 @@ interface SimulationOrderingStepProps {
   number: number
   total: number
   isLast: boolean
-  /** La domanda è finita: i passi nell'ordine scelto, o null se la sequenza
-   *  non è completa. */
-  onAnswer: (steps: string[] | null) => void
+  /** La sequenza com'era stata lasciata, per chi torna su questa domanda. */
+  initial?: (string | null)[]
+  /** A ogni mossa: i passi nell'ordine scelto, o null se la sequenza non è
+   *  completa, e la sequenza com'è, caselle vuote comprese. */
+  onChange: (steps: string[] | null, placed: (string | null)[]) => void
+  onNext: () => void
+  /** Torna alla domanda prima. Assente sulla prima domanda. */
+  onBack?: () => void
 }
 
 /** La zona in alto, quella dei passi non ancora collocati. */
@@ -71,14 +84,19 @@ export default function SimulationOrderingStep({
   number,
   total,
   isLast,
-  onAnswer,
+  initial,
+  onChange,
+  onNext,
+  onBack,
 }: SimulationOrderingStepProps) {
   /* La sequenza in costruzione: una casella per posizione, vuota finché
    * nessun passo ci è stato portato. È l'unico stato della risposta, e i
    * passi ancora da collocare si ricavano da qui invece di essere tenuti a
    * parte: due elenchi da mantenere allineati sarebbero due modi di
    * perdere un passo per strada. */
-  const [placed, setPlaced] = useState<(string | null)[]>(() => question.steps.map(() => null))
+  const [placed, setPlaced] = useState<(string | null)[]>(
+    () => initial ?? question.steps.map(() => null),
+  )
   /** Il passo scelto con un tocco, che aspetta di sapere dove andare. */
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -86,27 +104,37 @@ export default function SimulationOrderingStep({
   const filled = placed.filter((step) => step !== null).length
   const complete = filled === placed.length
 
+  /* La sequenza dopo una mossa, o null se la mossa non cambia niente. Legge
+   * `placed` dalla chiusura e non da un aggiornatore funzionale, perché
+   * quello che ne esce va anche comunicato fuori, e un aggiornatore che
+   * chiama un callback è un effetto nascosto dentro un calcolo. */
+  const moved = (step: string, zone: string): (string | null)[] | null => {
+    const next = [...placed]
+    const from = next.indexOf(step)
+    if (zone === POOL_ZONE) {
+      if (from < 0) return null
+      next[from] = null
+      return next
+    }
+    const to = Number(zone.slice('slot-'.length))
+    if (!Number.isInteger(to) || to < 0 || to >= next.length) return null
+    if (from === to) return null
+    // La casella di partenza si prende quello che c'era nella casella di
+    // arrivo: da un'altra posizione è uno scambio, dall'alto è l'occupante
+    // che torna fra quelli da collocare, e in tutti e due i casi nessun
+    // passo sparisce.
+    if (from >= 0) next[from] = next[to]
+    next[to] = step
+    return next
+  }
+
   /** Un passo arriva in una zona, trascinato o mandato con un tocco. */
   const drop = (step: string, zone: string) => {
     setSelected(null)
-    setPlaced((prev) => {
-      const next = [...prev]
-      const from = next.indexOf(step)
-      if (zone === POOL_ZONE) {
-        if (from >= 0) next[from] = null
-        return next
-      }
-      const to = Number(zone.slice('slot-'.length))
-      if (!Number.isInteger(to) || to < 0 || to >= next.length) return prev
-      if (from === to) return prev
-      // La casella di partenza si prende quello che c'era nella casella di
-      // arrivo: da un'altra posizione è uno scambio, dall'alto è l'occupante
-      // che torna fra quelli da collocare, e in tutti e due i casi nessun
-      // passo sparisce.
-      if (from >= 0) next[from] = next[to]
-      next[to] = step
-      return next
-    })
+    const next = moved(step, zone)
+    if (!next) return
+    setPlaced(next)
+    onChange(next.every((s) => s !== null) ? (next as string[]) : null, next)
   }
 
   const { drag, startDrag, wasDragged } = usePointerDrag<string>(drop)
@@ -250,32 +278,36 @@ export default function SimulationOrderingStep({
         ))}
       </ol>
 
-      <div className="mt-6 flex items-center justify-between gap-4 border-t border-white/6 pt-5">
-        <span className="text-xs text-slate-500">
-          {selected
+      <SimulationStepFooter
+        hint={
+          selected
             ? placed.includes(selected)
               ? 'Scegli la nuova posizione, o tocca di nuovo il passo per riportarlo in alto'
               : 'Scegli la posizione in cui collocare il passo scelto'
             : complete
-              ? 'Proseguendo la sequenza viene confermata e non è più modificabile'
+              ? undefined
               : filled
                 ? 'Una sequenza incompleta non viene valutata: colloca tutti i passi'
-                : 'Trascina i passi nelle posizioni, dal primo da eseguire'}
-        </span>
-        <PrimaryButton onClick={() => onAnswer(complete ? (placed as string[]) : null)}>
-          {isLast ? 'Consegna il Test' : complete ? 'Avanti' : 'Salta la Domanda'}
-        </PrimaryButton>
-      </div>
+                : 'Trascina i passi nelle posizioni, dal primo da eseguire'
+        }
+        answered={complete}
+        isLast={isLast}
+        onNext={onNext}
+        onBack={onBack}
+      />
 
       {/* Il box che segue il puntatore mentre lo si porta a destinazione.
           Fuori dalla scheda, appeso al body: dentro, il riquadro sfocato del
           test gli farebbe da riferimento e la posizione fissa lo aggancerebbe
-          a quello invece che allo schermo. */}
+          a quello invece che allo schermo. Con l'angolo dove dice l'hook e
+          non centrato sul puntatore: il punto afferrato resta sotto il dito,
+          e un box largo quanto la pagina preso vicino al bordo non finisce
+          per metà fuori dallo schermo. */}
       {drag &&
         createPortal(
           <div
-            style={{ left: drag.x, top: drag.y, width: drag.width }}
-            className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 rotate-1 rounded-xl border border-violet-500/50 bg-gray-900 px-3 py-2.5 text-[0.92rem] leading-snug text-slate-50 shadow-2xl shadow-black/60"
+            style={{ left: drag.left, top: drag.top, width: drag.width }}
+            className="pointer-events-none fixed z-50 rounded-xl border border-violet-500/50 bg-gray-900 px-3 py-2.5 text-[0.92rem] leading-snug text-slate-50 shadow-2xl shadow-black/60"
           >
             {drag.item}
           </div>,

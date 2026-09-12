@@ -413,14 +413,12 @@ export default function DashboardSimulations({
                 <div className="flex items-center gap-2">
                   <SimulationKindBadge kind={r.simulation_kind} iconOnly />
                   <SimulationSourceBadge source={r.simulation_source} />
-                  <span className="text-[0.85rem] font-medium text-slate-100">
+                  <span className="line-clamp-2 min-w-0 text-[0.85rem] font-medium text-slate-100">
                     {r.simulation_title}
                   </span>
                 </div>
               </Td>
-              <Td>
-                <span className="text-[0.85rem] font-medium text-slate-100">{personName(r)}</span>
-              </Td>
+              <Td className="text-[0.85rem] font-medium text-slate-100">{personName(r)}</Td>
               <Td className="text-[0.82rem] text-slate-400">{formatDateTime(r.attempted_at)}</Td>
               <Td compact className="text-[0.82rem] tabular-nums text-slate-400">
                 {r.correct_count}/{r.question_count}

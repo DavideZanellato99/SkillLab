@@ -227,13 +227,13 @@ export default function DashboardEvaluationsTable({
               <Td compact align="left">
                 <div className="flex items-center gap-2">
                   <ConversationModeBadge mode={r.mode} iconOnly />
-                  <span className="text-[0.85rem] font-medium text-slate-100">
+                  <span className="line-clamp-2 min-w-0 text-[0.85rem] font-medium text-slate-100">
                     {r.conversation_title}
                   </span>
                 </div>
               </Td>
-              <Td compact>
-                <span className="text-[0.85rem] font-medium text-slate-100">{personName(r)}</span>
+              <Td compact className="text-[0.85rem] font-medium text-slate-100">
+                {personName(r)}
               </Td>
               <Td compact className="text-[0.82rem] text-slate-400">
                 {formatDateTime(r.conversation_at)}
@@ -260,23 +260,19 @@ export default function DashboardEvaluationsTable({
               <Td compact>
                 {/* Il voto in colonna è quello che conta: se un docente l'ha
                     corretto va detto, altrimenti la tabella sembrerebbe
-                    contraddire la valutazione automatica.
-
-                    L'etichetta è fuori dal flusso (absolute): la cella è
-                    centrata in verticale, quindi una seconda riga vera
-                    alzerebbe il numero. Riservare lo spazio in tutte le celle
-                    allineava i voti fra loro ma spostava l'intera colonna
-                    rispetto a quelle dei criteri; così invece il numero non si
-                    muove di un pixel, con o senza correzione. */}
+                    contraddire la valutazione automatica. L'etichetta è una
+                    riga sotto il numero, come nei progressi: la riga è alta
+                    quanto due righe di testo, quindi il posto c'è, e la cella
+                    non può più ritagliare un'etichetta fuori dal flusso. */}
                 <span
-                  className={`relative block text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}
+                  className={`block text-sm font-bold tabular-nums ${scoreTextColor(r.overall_score)}`}
                 >
                   {formatScore(r.overall_score)}/10
                   {r.has_override && (
                     <Tooltip
                       content={`Punteggio corretto dal docente, la valutazione automatica assegnava ${formatScore(r.ai_overall_score)}`}
                     >
-                      <span className="absolute inset-x-0 top-full whitespace-nowrap text-[0.7rem] font-semibold text-violet-300">
+                      <span className="block text-[0.7rem] font-semibold text-violet-300">
                         corretto
                       </span>
                     </Tooltip>

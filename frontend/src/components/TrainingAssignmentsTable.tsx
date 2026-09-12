@@ -90,7 +90,7 @@ export default function TrainingAssignmentsTable({
           STATUS_META[a.status].label,
         )
       }),
-    [assignments, debouncedSearch, pathFilter],
+    [assignments, debouncedSearch, pathFilter, showOrganization],
   )
 
   const filteredPath = paths.find((path) => path.id === pathFilter)

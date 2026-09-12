@@ -19,7 +19,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-import httpx
+import httpx2
 import pytest
 from openai import APITimeoutError
 
@@ -45,7 +45,7 @@ from persona_prompt import CHANNEL_TEXT, CHANNEL_VOICE
 
 def _attesa_scaduta() -> APITimeoutError:
     """L'attesa scaduta come la solleva la libreria, senza stato HTTP."""
-    return APITimeoutError(request=httpx.Request("POST", "https://esempio.invalido"))
+    return APITimeoutError(request=httpx2.Request("POST", "https://esempio.invalido"))
 
 
 class _Sovraccarico(Exception):

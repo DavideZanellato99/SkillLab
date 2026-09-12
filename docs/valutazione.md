@@ -96,6 +96,17 @@ La scala è da 1 a 10, con una guida esplicita su cosa vuol dire ogni fascia.
 Lo zero non esiste: il fondo è una prestazione gravemente insufficiente, non
 l'assenza di prestazione.
 
+Il giudice è istruito per essere equo, non severo: parte da quello che
+l'operatore ha fatto bene e toglie punti solo per errori e omissioni che si
+vedono nella trascrizione, in proporzione alla loro gravità. La sufficienza è
+6 e spetta a chi copre gli elementi essenziali del criterio; un criterio
+gestito correttamente vale da 8 in su, e chi fa tutto quello che il criterio
+chiede prende 9 o 10, perché il massimo va usato e non riservato a una
+perfezione teorica. Uno stesso difetto pesa una volta sola, nel criterio a cui
+appartiene, e nel dubbio tra due punteggi vicini vince quello più alto. Prima
+di questa regola una conversazione senza errori si fermava attorno al 7, e la
+sufficienza era difficile da raggiungere.
+
 Le stesse chiavi sono anche quelle con cui una tappa di un percorso può
 chiedere un minimo su un singolo criterio, oltre al voto complessivo: la
 media pesata copre un criterio andato male con gli altri cinque, e una tappa

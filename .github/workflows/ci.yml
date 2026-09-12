@@ -112,7 +112,7 @@ jobs:
           # just the tip. gitleaks-action exits non-zero on any finding,
           # which fails this job and (via ci-success) blocks the merge.
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

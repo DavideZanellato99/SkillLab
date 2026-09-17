@@ -52,6 +52,7 @@ os.environ.setdefault("AUDIT_LOG_RETENTION_DAYS", "180")
 os.environ.setdefault("AUDIO_RECORDING_RETENTION_DAYS", "90")
 os.environ.setdefault("CONVERSATION_RETENTION_DAYS", "730")
 os.environ.setdefault("SIMULATION_ATTEMPT_RETENTION_DAYS", "730")
+os.environ.setdefault("SCREEN_RECORDING_RETENTION_DAYS", "90")
 # The background purge loop stays off under test: `with TestClient(app)`
 # triggers the lifespan, and a sweep firing mid-test would run its DELETEs
 # on its own connection, outside the transaction the test rolls back.

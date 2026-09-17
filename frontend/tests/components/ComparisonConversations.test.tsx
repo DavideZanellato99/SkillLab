@@ -149,7 +149,7 @@ describe('ComparisonConversations', () => {
     renderConfronto()
 
     await user.click(screen.getByRole('radio', { name: 'Chiamate' }))
-    await user.click(screen.getByLabelText('Scenario'))
+    await user.click(screen.getByLabelText('Avatar'))
 
     /* Bruno è stato affrontato solo in chat, e non c'è nessuna voce "tutti":
        due scenari diversi non hanno un confronto da mostrare. */

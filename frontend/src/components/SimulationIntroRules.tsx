@@ -11,6 +11,7 @@ import {
   GripIcon,
   LockIcon,
   MinusIcon,
+  MonitorIcon,
   PencilIcon,
   RestoreIcon,
   SparkleIcon,
@@ -101,13 +102,43 @@ function RuleGroup({ title, children }: { title: string; children: ReactNode }) 
   )
 }
 
-export default function SimulationIntroRules({ simulation }: { simulation: Simulation }) {
+export default function SimulationIntroRules({
+  simulation,
+  recorded = false,
+}: {
+  simulation: Simulation
+  /** Lo schermo di chi legge verrà registrato durante il test. */
+  recorded?: boolean
+}) {
   const kind = simulation.kind
   const timed = isTimed(kind)
   const isManual = simulation.source === 'manual'
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Prima di tutto il resto, e con il pallino rosso invece del viola: è
+          la regola che cambia di più il modo di affrontare il test, e non
+          deve stare in fondo a un elenco di cose che pesano meno. Compare
+          solo a chi verrà registrato davvero. */}
+      {recorded && (
+        <RuleGroup title="Registrazione">
+          <li className="flex items-start gap-3 text-[0.9rem] leading-relaxed text-slate-300">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-red-500/25 bg-red-500/10 text-red-400">
+              <MonitorIcon size={13} />
+            </span>
+            <span>
+              <span className="text-slate-100">
+                L'intero schermo viene registrato dall'avvio alla consegna
+              </span>
+              , e la registrazione è consultabile dai formatori della tua organizzazione. All'avvio
+              il browser chiede cosa condividere: scegli l'intero schermo. Se interrompi la
+              condivisione, il test viene consegnato in quel momento con le risposte fornite fino a
+              lì.
+            </span>
+          </li>
+        </RuleGroup>
+      )}
+
       <RuleGroup title="Svolgimento">
         <Rule icon={<ChecklistIcon size={13} />}>
           {timed

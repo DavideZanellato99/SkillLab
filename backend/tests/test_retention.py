@@ -20,6 +20,7 @@ from models import (
     MessageAnnotation,
     PathDebriefing,
     SimulationAttempt,
+    SimulationScreenRecording,
     TechnicalSimulation,
     UserDebriefing,
 )
@@ -130,7 +131,7 @@ def test_recent_conversation_is_left_alone(db_session, standard_user, make_avata
 
     result = _purge(db_session)
 
-    assert result == (0, 0, 0, 0, 0)
+    assert result == (0, 0, 0, 0, 0, 0)
     assert (
         db_session.query(ChatConversation).filter(ChatConversation.id == conversation.id).count()
         == 1
@@ -191,8 +192,8 @@ def test_an_old_chat_still_in_use_is_not_expired(db_session, standard_user, make
 # ── I tentativi delle simulazioni, sul proprio orologio ────────────────
 
 
-def _seed_attempt(db_session, user, organization, *, age_days):
-    """Un test tecnico consegnato, invecchiato."""
+def _seed_attempt(db_session, user, organization, *, age_days, with_screen=False):
+    """Un test tecnico consegnato, invecchiato, con o senza lo schermo registrato."""
     simulation = TechnicalSimulation(
         title="Sblocco carta",
         status="published",
@@ -212,6 +213,18 @@ def _seed_attempt(db_session, user, organization, *, age_days):
     )
     db_session.add(attempt)
     db_session.flush()
+    if with_screen:
+        db_session.add(
+            SimulationScreenRecording(
+                attempt_id=attempt.id,
+                mime_type="video/webm",
+                duration_ms=60_000,
+                size_bytes=3,
+                video=b"abc",
+                created_at=_days_ago(age_days),
+            )
+        )
+        db_session.flush()
     return simulation, attempt
 
 
@@ -250,6 +263,67 @@ def test_recent_attempt_is_left_alone(db_session, standard_user, organization):
     assert (
         db_session.query(SimulationAttempt).filter(SimulationAttempt.id == attempt.id).count() == 1
     )
+
+
+def _has_screen(db_session, attempt_id) -> bool:
+    return (
+        db_session.query(SimulationScreenRecording)
+        .filter(SimulationScreenRecording.attempt_id == attempt_id)
+        .count()
+        > 0
+    )
+
+
+def test_the_screen_expires_first_and_the_attempt_survives_it(
+    db_session, standard_user, organization
+):
+    """Come l'audio per una conversazione: il video ha la finestra corta."""
+    _, attempt = _seed_attempt(
+        db_session,
+        standard_user,
+        organization,
+        age_days=retention.SCREEN_RECORDING_RETENTION_DAYS + 1,
+        with_screen=True,
+    )
+    attempt_id = attempt.id
+
+    result = _purge(db_session)
+
+    assert result.screen_recordings == 1
+    assert result.simulation_attempts == 0
+    assert not _has_screen(db_session, attempt_id)
+    assert (
+        db_session.query(SimulationAttempt).filter(SimulationAttempt.id == attempt_id).count() == 1
+    )
+
+
+def test_a_recent_screen_recording_is_left_alone(db_session, standard_user, organization):
+    _, attempt = _seed_attempt(
+        db_session, standard_user, organization, age_days=1, with_screen=True
+    )
+
+    result = _purge(db_session)
+
+    assert result.screen_recordings == 0
+    assert _has_screen(db_session, attempt.id)
+
+
+def test_an_expired_attempt_takes_its_screen_recording_with_it(
+    db_session, standard_user, organization
+):
+    _, attempt = _seed_attempt(
+        db_session,
+        standard_user,
+        organization,
+        age_days=retention.SIMULATION_ATTEMPT_RETENTION_DAYS + 1,
+        with_screen=True,
+    )
+    attempt_id = attempt.id
+
+    result = _purge(db_session)
+
+    assert result.simulation_attempts == 1
+    assert not _has_screen(db_session, attempt_id)
 
 
 # ── Il debriefing non sopravvive a quello che riassume ─────────────────
@@ -349,4 +423,4 @@ def test_purge_is_idempotent(db_session, standard_user, make_avatar):
     second = _purge(db_session)
 
     assert first.conversations == 1
-    assert second == (0, 0, 0, 0, 0)
+    assert second == (0, 0, 0, 0, 0, 0)

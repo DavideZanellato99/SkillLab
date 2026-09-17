@@ -145,20 +145,23 @@
 
 	# Quanto può pesare quello che arriva. È il tetto che manca a monte: gli
 	# endpoint che ricevono un file hanno i loro (2 MB un ritratto, 10 MB un
-	# documento, 50 MB la registrazione di una chiamata), ma quei controlli
-	# guardano i byte quando sono già arrivati. Un multipart lo legge intero
-	# FastAPI prima di passarlo alla funzione, e finisce in un file
-	# temporaneo dentro il container: senza una riga qui, un caricamento da
-	# svariati giga viene scritto per intero sul disco e solo dopo rifiutato
-	# perché supera i 10 MB.
+	# documento, 50 MB la registrazione di una chiamata, 150 MB lo schermo
+	# registrato durante un test), ma quei controlli guardano i byte quando
+	# sono già arrivati. Un multipart lo legge intero FastAPI prima di
+	# passarlo alla funzione, e finisce in un file temporaneo dentro il
+	# container: senza una riga qui, un caricamento da svariati giga viene
+	# scritto per intero sul disco e solo dopo rifiutato perché supera i
+	# 10 MB.
 	#
-	# Due misure e non una perché le registrazioni delle chiamate stanno su
-	# un altro ordine di grandezza, e il WebSocket vocale resta fuori da
-	# entrambe: non ha un corpo, ha una connessione che dura quanto la
-	# telefonata.
+	# Tre misure e non una perché le registrazioni stanno su altri ordini di
+	# grandezza, l'audio di una chiamata e il video di uno schermo su due
+	# diversi, e il WebSocket vocale resta fuori da tutte: non ha un corpo,
+	# ha una connessione che dura quanto la telefonata.
 	@registrazione path /api/voice/recording/*
+	@registrazione_schermo path /api/simulations/attempts/*/screen-recording
 	@altre_scritture {
 		not path /api/voice/recording/*
+		not path /api/simulations/attempts/*/screen-recording
 		not path /api/voice/ws
 	}
 
@@ -169,6 +172,9 @@
 	handle @backend {
 		request_body @registrazione {
 			max_size 55MB
+		}
+		request_body @registrazione_schermo {
+			max_size 160MB
 		}
 		request_body @altre_scritture {
 			max_size 12MB

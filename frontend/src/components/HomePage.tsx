@@ -2,9 +2,10 @@
  * I due pezzi leggono gli stessi dati dalla stessa cache.
  *
  * Lo stato che sta qui in mezzo è uno solo, se la modale della richiesta è
- * aperta: il pulsante che la apre sta nell'angolo della fascia, l'elenco
- * delle richieste e la modale stessa stanno nel pannello sotto, e i due si
- * parlano attraverso la pagina.
+ * aperta: il pulsante che la apre sta nell'angolo della fascia, e la modale
+ * porta con sé sia il modulo sia l'elenco delle richieste già mandate.
+ * L'elenco stava in un riquadro suo sopra la ricerca, e spingeva in basso il
+ * catalogo ogni volta che c'era una richiesta aperta.
  *
  * Sta in un file suo e non dentro App perché è la pagina di una rotta come
  * tutte le altre, e come tutte le altre arriva su richiesta: dentro App
@@ -16,7 +17,7 @@ import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { isOrganizationAdmin } from '../services/auth'
 import AvatarGallery from './AvatarGallery'
-import AvatarRequestsPanel from './AvatarRequestsPanel'
+import AvatarRequestModal from './AvatarRequestModal'
 import Header from './Header'
 import { GalleryContainer } from './PageLayout'
 import PrimaryButton from './PrimaryButton'
@@ -41,14 +42,10 @@ export default function HomePage() {
         }
       />
       <GalleryContainer>
-        {canRequest && (
-          <AvatarRequestsPanel
-            isRequesting={isRequesting}
-            onCloseRequest={() => setIsRequesting(false)}
-          />
-        )}
         <AvatarGallery />
       </GalleryContainer>
+
+      {canRequest && isRequesting && <AvatarRequestModal onClose={() => setIsRequesting(false)} />}
     </>
   )
 }

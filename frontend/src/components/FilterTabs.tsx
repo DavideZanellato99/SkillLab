@@ -21,7 +21,8 @@
 interface FilterTabsOption<T extends string> {
   value: T
   label: string
-  /** Quanti elementi ci sono dentro questa scelta. Solo per `pills`. */
+  /** Quanti elementi ci sono dentro questa scelta: le categorie della
+   *  galleria, le richieste inviate nella scheda della modale. */
   count?: number
 }
 

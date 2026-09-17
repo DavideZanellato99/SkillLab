@@ -34,6 +34,7 @@ from models import (
     Organization,
     PathDebriefing,
     SimulationAttempt,
+    SimulationScreenRecording,
     TechnicalSimulation,
     TokenSession,
     User,
@@ -181,13 +182,24 @@ def _seed_everything(db_session, victim: User, other: User, avatar, make_assigne
     )
     db_session.add(simulation)
     db_session.flush()
+    attempt = SimulationAttempt(
+        simulation_id=simulation.id,
+        user_id=victim.id,
+        correct_count=7,
+        question_count=10,
+        answers=[{"question_id": str(uuid.uuid4()), "selected_option": 1}],
+        screen_recording_expected=True,
+    )
+    db_session.add(attempt)
+    db_session.flush()
+    # E lo schermo registrato mentre rispondeva, che è suo quanto la voce
     db_session.add(
-        SimulationAttempt(
-            simulation_id=simulation.id,
-            user_id=victim.id,
-            correct_count=7,
-            question_count=10,
-            answers=[{"question_id": str(uuid.uuid4()), "selected_option": 1}],
+        SimulationScreenRecording(
+            attempt_id=attempt.id,
+            mime_type="video/webm",
+            duration_ms=1000,
+            size_bytes=3,
+            video=b"abc",
         )
     )
     # Il quadro d'insieme scritto su di loro: è fatto di quello che hanno
@@ -353,8 +365,20 @@ def test_the_recording_and_the_transcript_go_too(
     conversation_id = (
         db_session.query(ChatConversation.id).filter(ChatConversation.user_id == victim_id).scalar()
     )
+    attempt_id = (
+        db_session.query(SimulationAttempt.id)
+        .filter(SimulationAttempt.user_id == victim_id)
+        .scalar()
+    )
 
     _delete_account(admin_client, db_session, victim_id)
+
+    assert (
+        db_session.query(SimulationScreenRecording)
+        .filter(SimulationScreenRecording.attempt_id == attempt_id)
+        .count()
+        == 0
+    )
 
     assert (
         db_session.query(ConversationRecording)

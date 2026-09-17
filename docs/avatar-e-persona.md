@@ -405,16 +405,21 @@ Gli avatar li crea solo il super admin, ma è l'organizzazione a sapere di
 quale cliente ha bisogno per allenare i suoi. La richiesta è il modo in cui
 glielo dice: nella galleria, chi amministra un tenant trova in alto a destra
 della fascia, subito sotto la barra, il pulsante "Richiedi un Avatar" che
-apre il modulo
-([AvatarRequestModal](../frontend/src/components/AvatarRequestModal.tsx)), e
-sopra la ricerca il pannello "Richieste di pubblicazione"
-([AvatarRequestsPanel](../frontend/src/components/AvatarRequestsPanel.tsx))
-con le richieste in attesa e quelle rifiutate. Il pannello compare solo
-quando ha qualcosa da elencare; lo stato della modale sta nella pagina
-([HomePage](../frontend/src/components/HomePage.tsx)), perché il pulsante e
-il pannello sono in due punti diversi. Lo vede solo lui: chi si allena non ha
-un catalogo da far crescere, e il super admin non ha nessuno a cui chiedere
-(la rotta risponde 403 a entrambi).
+apre la modale
+([AvatarRequestModal](../frontend/src/components/AvatarRequestModal.tsx)).
+La modale ha due schede (`FilterTabs`, lo stesso gruppo dei filtri della
+dashboard): "Nuova richiesta", con il modulo, e "Richieste inviate", con il
+conteggio accanto, che elenca quelle in attesa e quelle rifiutate
+([AvatarRequestsList](../frontend/src/components/AvatarRequestsList.tsx)).
+Le schede compaiono solo quando c'è qualcosa da elencare, altrimenti c'è il
+modulo e basta; ritirata l'ultima richiesta si torna al modulo da soli. Dopo
+l'invio la modale non si chiude: passa all'elenco, dove la richiesta nuova sta
+sotto il banner che la conferma, e i campi si svuotano per la prossima.
+L'elenco stava in un riquadro suo sopra la ricerca, e spingeva in basso il
+catalogo ogni volta che c'era una richiesta aperta; poi sopra il modulo nella
+stessa modale, e con molte richieste il modulo finiva in fondo. Lo vede solo
+lui: chi si allena non ha un catalogo da far crescere, e il super admin non ha
+nessuno a cui chiedere (la rotta risponde 403 a entrambi).
 
 **Il modulo chiede i pochi campi da cui una scheda nasce**, non la scheda:
 nome e cognome, la categoria, il tipo di scenario e la problematica raccontata
@@ -463,10 +468,20 @@ una sezione che compare solo quando c'è qualcosa in attesa, e nella campanella
 
 Una richiesta si chiude una volta sola: rifiutarne una già chiusa, o
 pubblicarne una rifiutata, è un 409. Le richieste in attesa e quelle rifiutate
-restano nel pannello dell'organization admin, che può ritirare le prime e
-togliere di mezzo le seconde con `DELETE`; quelle pubblicate non compaiono,
-perché l'avatar è nella griglia sotto e parla da sé, e non si cancellano: la
+restano nell'elenco della modale dell'organization admin, che può ritirare le
+prime e togliere di mezzo le seconde con `DELETE`; quelle pubblicate non
+compaiono, perché l'avatar è nella griglia e parla da sé, e non si cancellano: la
 riga è la traccia di come l'avatar è arrivato in galleria.
+Ogni riga dell'elenco
+([AvatarRequestItem](../frontend/src/components/AvatarRequestItem.tsx))
+chiusa dice solo nome e stato, quello che serve per scorrere e trovare la
+richiesta che si cerca; dalla freccia accanto al cestino si apre il resto,
+categoria, tipo di scenario, problematica, data d'invio e il motivo se è
+stata rifiutata, in un elenco di voci e valori come il pannello del registro
+attività. Non sta scritto per intero come nella riga del super admin: lì è il
+testo su cui si decide, qui è quello che si è scritto da soli e si rilegge
+prima di riprovare dopo un rifiuto. Sempre aperto, con più richieste in attesa
+la modale diventava una colonna di paragrafi.
 
 **Chi vede cosa** passa dallo stesso filtro di tutta l'amministrazione
 (`resolve_admin_scope`, vedi

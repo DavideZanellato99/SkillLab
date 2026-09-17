@@ -19,6 +19,11 @@ different moments:
   quindi un dato di valutazione come gli altri, ma senza voce registrata né
   trascrizione, e chi li conserva di solito li conserva per un tempo diverso.
   La simulazione resta, se ne vanno i tentativi.
+- lo **schermo registrato durante un test** sta all'orologio dei tentativi
+  come l'audio sta a quello delle conversazioni: è la cosa più pesante e più
+  invasiva che un tentativo si porta dietro, e dopo che chi corregge lo ha
+  guardato non aggiunge niente alle risposte. Scade per primo, e il
+  tentativo gli sopravvive con il voto e la fotografia delle risposte.
 - i **debriefing** non hanno un orologio proprio e non ne meritano uno: sono
   una sintesi delle conversazioni, quindi non possono sopravvivere alle
   conversazioni che riassumono. A misurarli è ``covered_until``, cioè la
@@ -64,6 +69,7 @@ from models import (
     ConversationRecording,
     PathDebriefing,
     SimulationAttempt,
+    SimulationScreenRecording,
     UserDebriefing,
 )
 
@@ -90,6 +96,9 @@ CONVERSATION_RETENTION_DAYS = _required_days(
 SIMULATION_ATTEMPT_RETENTION_DAYS = _required_days(
     "SIMULATION_ATTEMPT_RETENTION_DAYS", "dei tentativi delle simulazioni tecniche"
 )
+SCREEN_RECORDING_RETENTION_DAYS = _required_days(
+    "SCREEN_RECORDING_RETENTION_DAYS", "delle registrazioni dello schermo durante i test"
+)
 
 # The age of a conversation is counted from when it stopped being used, not
 # from when it was opened: the hang-up for a call, the last activity for a
@@ -113,6 +122,7 @@ class PurgeResult(NamedTuple):
     conversations: int
     recordings: int
     simulation_attempts: int
+    screen_recordings: int
     debriefings: int
     path_debriefings: int
 
@@ -134,6 +144,11 @@ def conversation_cutoff() -> datetime:
 def simulation_attempt_cutoff() -> datetime:
     """Timestamp before which a simulation attempt has expired (naive UTC)."""
     return _cutoff(SIMULATION_ATTEMPT_RETENTION_DAYS)
+
+
+def screen_recording_cutoff() -> datetime:
+    """Timestamp before which a test's screen recording has expired (naive UTC)."""
+    return _cutoff(SCREEN_RECORDING_RETENTION_DAYS)
 
 
 def purge_expired(conn: Connection | None = None) -> PurgeResult:
@@ -181,9 +196,26 @@ def _purge(conn: Connection) -> PurgeResult:
     # I tentativi dei test tecnici, sul proprio orologio. La riga se ne va
     # intera, fotografia delle risposte compresa: è quella la parte personale,
     # mentre la simulazione con le sue domande non riguarda nessuno in
-    # particolare e resta.
+    # particolare e resta. Prima lo schermo registrato dei tentativi che
+    # scadono, esplicitamente come per i figli di una conversazione, poi lo
+    # schermo dei tentativi che restano ma la cui registrazione ha già
+    # passato la propria finestra, più corta.
+    attempt_cutoff = simulation_attempt_cutoff()
+    expired_attempts = select(SimulationAttempt.id).where(
+        SimulationAttempt.created_at < attempt_cutoff
+    )
+    conn.execute(
+        delete(SimulationScreenRecording).where(
+            SimulationScreenRecording.attempt_id.in_(expired_attempts)
+        )
+    )
     simulation_attempts = conn.execute(
-        delete(SimulationAttempt).where(SimulationAttempt.created_at < simulation_attempt_cutoff())
+        delete(SimulationAttempt).where(SimulationAttempt.created_at < attempt_cutoff)
+    ).rowcount
+    screen_recordings = conn.execute(
+        delete(SimulationScreenRecording).where(
+            SimulationScreenRecording.created_at < screen_recording_cutoff()
+        )
     ).rowcount
 
     # Il debriefing si misura sulla prova più recente che aveva letto e non
@@ -201,11 +233,19 @@ def _purge(conn: Connection) -> PurgeResult:
         delete(PathDebriefing).where(PathDebriefing.covered_until < conv_cutoff)
     ).rowcount
 
-    if conversations or recordings or simulation_attempts or debriefings or path_debriefings:
+    if (
+        conversations
+        or recordings
+        or simulation_attempts
+        or screen_recordings
+        or debriefings
+        or path_debriefings
+    ):
         logger.info(
             "Retention: %d conversazioni eliminate (oltre %d giorni), "
             "%d registrazioni audio eliminate (oltre %d giorni), "
             "%d tentativi di simulazione eliminati (oltre %d giorni), "
+            "%d registrazioni dello schermo eliminate (oltre %d giorni), "
             "%d debriefing eliminati (sulla finestra delle conversazioni), "
             "%d quadri di percorso eliminati (sulla stessa finestra)",
             conversations,
@@ -214,6 +254,8 @@ def _purge(conn: Connection) -> PurgeResult:
             AUDIO_RETENTION_DAYS,
             simulation_attempts,
             SIMULATION_ATTEMPT_RETENTION_DAYS,
+            screen_recordings,
+            SCREEN_RECORDING_RETENTION_DAYS,
             debriefings,
             path_debriefings,
         )
@@ -221,6 +263,7 @@ def _purge(conn: Connection) -> PurgeResult:
         conversations=conversations,
         recordings=recordings,
         simulation_attempts=simulation_attempts,
+        screen_recordings=screen_recordings,
         debriefings=debriefings,
         path_debriefings=path_debriefings,
     )
@@ -231,10 +274,11 @@ if __name__ == "__main__":
     result = purge_expired()
     logger.info(
         "Purge completato: %d conversazioni, %d registrazioni, %d tentativi, "
-        "%d debriefing, %d quadri di percorso.",
+        "%d registrazioni dello schermo, %d debriefing, %d quadri di percorso.",
         result.conversations,
         result.recordings,
         result.simulation_attempts,
+        result.screen_recordings,
         result.debriefings,
         result.path_debriefings,
     )

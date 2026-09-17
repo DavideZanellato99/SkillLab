@@ -16,6 +16,13 @@ Il super admin è l'unico a non avere un'organizzazione, ed è esattamente quest
 che lo mette al di sopra: ogni filtro per tenant lo lascia passare per come è
 scritto, senza nessun caso speciale da ricordare.
 
+L'unico caso speciale sul ruolo, e non sul tenant, è la registrazione dello
+schermo durante un test tecnico: un test che la prevede la applica a chiunque
+lo svolga tranne al super admin, che non viene registrato mai (vedi
+[simulatore.md](simulatore.md#44-la-registrazione-dello-schermo)). Lui il
+test lo svolge per provarlo, non per essere valutato, e a decidere è il server
+alla consegna, non il browser.
+
 ## Il confine, in un punto solo
 
 ```python

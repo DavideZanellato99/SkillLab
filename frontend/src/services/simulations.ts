@@ -10,6 +10,7 @@
 
 import { apiFetch, apiFetchBlob } from './api'
 import type { Authored } from './authorship'
+import type { ScreenRecording } from './screenRecording'
 
 /** In bozza esiste solo per il super admin, pubblicata la vede la sua org. */
 export type SimulationStatus = 'draft' | 'published'
@@ -133,6 +134,11 @@ export interface Simulation {
   source: SimulationSource
   document_name: string
   question_count: number
+  /* Se lo schermo viene registrato durante il test. Arriva anche a chi lo
+   * svolge, perché lo deve sapere prima di premere "inizia": è la regola
+   * che cambia di più il modo in cui si affronta il test. Il super admin
+   * non viene registrato comunque (vedi `SimulationRunner`). */
+  records_screen: boolean
   created_at: string
   updated_at: string
   /** Come è andata a chi guarda, sull'ultimo tentativo. */
@@ -225,6 +231,23 @@ export interface SimulationAnswerResult {
   sources: string[]
 }
 
+/**
+ * I metadati della registrazione dello schermo di un tentativo, senza il
+ * video: quanto basta a disegnare il pulsante per guardarla. Il video si
+ * scarica a parte, e solo quando qualcuno preme.
+ */
+export interface ScreenRecordingInfo {
+  attempt_id: string
+  mime_type: string
+  /** Misurata alla registrazione: il contenitore WebM non la porta. */
+  duration_ms: number | null
+  size_bytes: number
+  /* La condivisione è stata fermata prima della consegna: il video finisce
+   * lì, e il test è stato consegnato in quel momento con le risposte date. */
+  interrupted: boolean
+  created_at: string
+}
+
 export interface SimulationAttemptSummary {
   id: string
   simulation_id: string
@@ -243,6 +266,11 @@ export interface SimulationAttemptSummary {
   /** Il voto in decimi, sulla stessa scala delle valutazioni. */
   score: number
   created_at: string
+  /* Se il tentativo doveva arrivare con lo schermo registrato, e la
+   * registrazione che c'è. Prevista e assente vuol dire che il caricamento
+   * non è mai arrivato, che è la cosa da leggere accanto al voto. */
+  screen_recording_expected: boolean
+  screen_recording: ScreenRecordingInfo | null
 }
 
 export interface SimulationAttempt extends SimulationAttemptSummary {
@@ -301,6 +329,27 @@ export const submitSimulation = (simulationId: string, answers: SimulationAnswer
     body: { answers },
   })
 
+/**
+ * Carica lo schermo registrato durante il test appena consegnato.
+ *
+ * Arriva dopo la consegna e non insieme: il tentativo nasce lì, e prima non
+ * c'è un id a cui attaccare il video. Un secondo caricamento per lo stesso
+ * tentativo sostituisce il primo, quindi si ripete senza lasciare pezzi.
+ */
+export const uploadScreenRecording = (attemptId: string, recording: ScreenRecording) =>
+  apiFetch<ScreenRecordingInfo>(`/api/simulations/attempts/${attemptId}/screen-recording`, {
+    method: 'POST',
+    params: {
+      duration_ms: String(recording.durationMs),
+      interrupted: recording.interrupted ? 'true' : 'false',
+    },
+    body: recording.blob,
+  })
+
+/** Il video dello schermo di un tentativo, per chi amministra. */
+export const fetchScreenRecordingBlob = (attemptId: string) =>
+  apiFetchBlob(`/api/simulations/attempts/${attemptId}/screen-recording`)
+
 /** I propri tentativi su una simulazione, dal più recente. */
 export const fetchMyAttempts = (simulationId: string) =>
   apiFetch<SimulationAttemptSummary[]>(`/api/simulations/${simulationId}/attempts`)
@@ -341,6 +390,7 @@ export function createSimulation(payload: {
   description: string
   kind: SimulationKind
   source: SimulationSource
+  recordsScreen: boolean
   file: File | null
 }) {
   const form = new FormData()
@@ -349,6 +399,7 @@ export function createSimulation(payload: {
   form.append('description', payload.description)
   form.append('kind', payload.kind)
   form.append('source', payload.source)
+  form.append('records_screen', payload.recordsScreen ? 'true' : 'false')
   if (payload.file) form.append('file', payload.file)
   return apiFetch<SimulationAdminDetail>('/api/admin/simulations', {
     method: 'POST',
@@ -386,7 +437,7 @@ export const reviewSimulationPool = (simulationId: string) =>
 
 export const updateSimulation = (
   simulationId: string,
-  payload: { title: string; description: string },
+  payload: { title: string; description: string; records_screen: boolean },
 ) =>
   apiFetch<SimulationAdminDetail>(`/api/admin/simulations/${simulationId}`, {
     method: 'PUT',

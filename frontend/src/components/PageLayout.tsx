@@ -19,8 +19,6 @@ const WIDTHS = {
   default: 'max-w-[1200px]',
   /** Tabelle con molte colonne, come il registro attività */
   wide: 'max-w-[1400px]',
-  /** Contenuto affiancato in due colonne, come il confronto tra tentativi */
-  split: 'max-w-[1100px]',
   /** Una sola colonna di campi, come il profilo */
   form: 'max-w-[720px]',
 } as const

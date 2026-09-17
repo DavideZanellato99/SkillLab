@@ -47,6 +47,7 @@ from models import (
     ConversationEvaluation,
     ConversationRecording,
     SimulationAttempt,
+    SimulationScreenRecording,
     TechnicalSimulation,
     TokenSession,
     TrainingPath,
@@ -62,7 +63,13 @@ _RECORDINGS_DIR = "registrazioni"
 # stored mime type is the only thing that knows which. It arrives with the
 # codec attached ("audio/webm;codecs=opus"), so the lookup is on the base
 # type: an archive full of .bin files is not a copy anybody can play.
-_EXTENSIONS = {"audio/webm": "webm", "audio/mp4": "m4a", "audio/ogg": "ogg"}
+_EXTENSIONS = {
+    "audio/webm": "webm",
+    "audio/mp4": "m4a",
+    "audio/ogg": "ogg",
+    "video/webm": "webm",
+    "video/mp4": "mp4",
+}
 
 
 def _extension(mime_type: str) -> str:
@@ -83,9 +90,11 @@ esportato il {data}.
                      delle tue attività.
 
   {cartella}/   Le registrazioni audio delle tue telefonate simulate,
-                     una per conversazione. Il nome del file corrisponde al
-                     campo "registrazione_audio" della conversazione dentro
-                     dati.json.
+                     una per conversazione, e le registrazioni del tuo
+                     schermo durante i test tecnici che le prevedevano, una
+                     per test. Il nome del file corrisponde al campo
+                     "registrazione_audio" della conversazione, o
+                     "registrazione_schermo" del test, dentro dati.json.
 
 Il file dati.json è in formato JSON: puoi aprirlo con un qualsiasi editor di
 testo, oppure importarlo in un altro sistema.
@@ -279,13 +288,19 @@ def _assignments(db: Session, user: User) -> list[dict]:
     ]
 
 
-def _simulation_attempts(db: Session, user: User) -> list[dict]:
+def _simulation_attempts(db: Session, user: User) -> tuple[list[dict], dict[UUID, str]]:
     """I test tecnici svolti, con le risposte date domanda per domanda.
 
     Le risposte ci sono per intero e non solo il voto: è quello che la
     persona ha scritto, ed è la parte dell'archivio da cui si può contestare
     un esito. Il titolo della simulazione viene dalla riga e non dalla
     fotografia del tentativo, così un test rinominato resta riconoscibile.
+
+    La seconda metà della coppia è come per le conversazioni: id del
+    tentativo -> percorso del video dentro lo ZIP, per quelli che hanno lo
+    schermo registrato. Qui nell'applicazione la persona non lo rivede (lo
+    guardano solo gli amministratori), ma è il suo schermo e nel proprio
+    archivio lo ritrova.
     """
     rows = (
         db.query(SimulationAttempt, TechnicalSimulation)
@@ -294,6 +309,24 @@ def _simulation_attempts(db: Session, user: User) -> list[dict]:
         .order_by(SimulationAttempt.created_at.asc())
         .all()
     )
+    # Solo i metadati: il blob resta deferred finché il file non si scrive.
+    recordings: dict[UUID, SimulationScreenRecording] = {}
+    if rows:
+        recordings = {
+            r.attempt_id: r
+            for r in db.query(SimulationScreenRecording)
+            .filter(SimulationScreenRecording.attempt_id.in_([a.id for a, _ in rows]))
+            .all()
+        }
+
+    filenames: dict[UUID, str] = {}
+    for attempt, simulation in rows:
+        recording = recordings.get(attempt.id)
+        if recording is not None:
+            title = simulation.title if simulation else ""
+            name = f"test-{_slug(title, 'test')}-{str(attempt.id)[:8]}"
+            filenames[attempt.id] = f"{_RECORDINGS_DIR}/{name}.{_extension(recording.mime_type)}"
+
     return [
         {
             "simulazione": simulation.title if simulation else None,
@@ -302,6 +335,10 @@ def _simulation_attempts(db: Session, user: User) -> list[dict]:
             "domande_totali": attempt.question_count,
             "punti": attempt.earned_points,
             "punteggio": attempt.score,
+            "registrazione_schermo": filenames.get(attempt.id),
+            "registrazione_schermo_interrotta": (
+                recordings[attempt.id].interrupted if attempt.id in recordings else None
+            ),
             "risposte": [
                 {
                     "domanda": answer.get("text"),
@@ -319,7 +356,7 @@ def _simulation_attempts(db: Session, user: User) -> list[dict]:
             ],
         }
         for attempt, simulation in rows
-    ]
+    ], filenames
 
 
 def _debriefings(db: Session, user: User) -> list[dict]:
@@ -428,30 +465,35 @@ def _activity(db: Session, user: User) -> list[dict]:
     ]
 
 
-def _payload(db: Session, user: User) -> tuple[dict, dict[UUID, str]]:
-    """The contents of dati.json, plus the recordings it points at."""
-    conversations, filenames = _conversations(db, user)
-    return {
-        "esportato_il": datetime.now(UTC).isoformat(),
-        "account": _account(user),
-        "conversazioni": conversations,
-        "percorsi_assegnati": _assignments(db, user),
-        "simulazioni_tecniche": _simulation_attempts(db, user),
-        "quadri_di_insieme": _debriefings(db, user),
-        "sessioni_di_accesso": _sessions(db, user),
-        "registro_attivita": _activity(db, user),
-    }, filenames
+def _payload(db: Session, user: User) -> tuple[dict, dict[UUID, str], dict[UUID, str]]:
+    """The contents of dati.json, plus the audio and the videos it points at."""
+    conversations, audio_files = _conversations(db, user)
+    attempts, video_files = _simulation_attempts(db, user)
+    return (
+        {
+            "esportato_il": datetime.now(UTC).isoformat(),
+            "account": _account(user),
+            "conversazioni": conversations,
+            "percorsi_assegnati": _assignments(db, user),
+            "simulazioni_tecniche": attempts,
+            "quadri_di_insieme": _debriefings(db, user),
+            "sessioni_di_accesso": _sessions(db, user),
+            "registro_attivita": _activity(db, user),
+        },
+        audio_files,
+        video_files,
+    )
 
 
 def build(db: Session, user: User) -> dict:
     """The structured half of the export, exactly as it lands in dati.json."""
-    payload, _ = _payload(db, user)
+    payload, _, _ = _payload(db, user)
     return payload
 
 
 def export_zip(db: Session, user: User) -> bytes:
-    """Everything held about this person: dati.json, the audio, a README."""
-    payload, filenames = _payload(db, user)
+    """Everything held about this person: dati.json, audio and videos, a README."""
+    payload, filenames, video_files = _payload(db, user)
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -471,5 +513,15 @@ def export_zip(db: Session, user: User) -> bytes:
             )
             if recording is not None and recording.audio:
                 archive.writestr(path, recording.audio)
+        # Lo stesso per lo schermo registrato durante i test, che pesa anche
+        # di più: un video per volta, mai tutti in memoria insieme.
+        for attempt_id, path in video_files.items():
+            recording = (
+                db.query(SimulationScreenRecording)
+                .filter(SimulationScreenRecording.attempt_id == attempt_id)
+                .first()
+            )
+            if recording is not None and recording.video:
+                archive.writestr(path, recording.video)
 
     return buffer.getvalue()

@@ -35,7 +35,7 @@ interface ComparisonFilterBarProps<F extends string> {
   onKindChange: (value: F) => void
   /** Serve a legare la label alla tendina, e le due metà convivono nella stessa pagina. */
   targetId: string
-  /** Cosa sceglie la tendina: "Scenario", "Test". */
+  /** Cosa sceglie la tendina: "Avatar", "Test". */
   targetLabel: string
   targetValue: string
   targetOptions: SelectOption[]

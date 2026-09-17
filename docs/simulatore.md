@@ -165,7 +165,12 @@ Questo file racconta il procedimento per intero, nell'ordine in cui accade.
 | [frontend/src/components/SimulationSourceBadge.tsx](../frontend/src/components/SimulationSourceBadge.tsx) | La targhetta dell'origine, che le sta sempre accanto: domande di un modello o di una persona |
 | [frontend/src/components/SimulationQuestionEditor.tsx](../frontend/src/components/SimulationQuestionEditor.tsx) | Una domanda in scrittura: il testo, la chiave del suo tipo, la spiegazione, e le segnalazioni del controllo sopra il testo |
 | [frontend/src/components/SimulationReviewPanel.tsx](../frontend/src/components/SimulationReviewPanel.tsx) | L'esito del controllo in testa alle domande, dalla segnalazione più grave, con il salto alla domanda di cui parla |
-| [frontend/src/components/SimulationSettingsPanel.tsx](../frontend/src/components/SimulationSettingsPanel.tsx) | I dati del test accanto alle domande: titolo, descrizione e la sostituzione del documento |
+| [frontend/src/components/SimulationSettingsPanel.tsx](../frontend/src/components/SimulationSettingsPanel.tsx) | I dati del test accanto alle domande: titolo, descrizione, la spunta della registrazione dello schermo e la sostituzione del documento |
+| [frontend/src/components/SimulationScreenRecordingField.tsx](../frontend/src/components/SimulationScreenRecordingField.tsx) | La spunta con cui il test registra lo schermo, con le stesse parole alla creazione e fra i dati |
+| [frontend/src/services/screenRecording.ts](../frontend/src/services/screenRecording.ts) | Chiede lo schermo al browser, lo registra, e avvisa se l'utente interrompe la condivisione |
+| [frontend/src/components/ScreenRecordingNoticeModal.tsx](../frontend/src/components/ScreenRecordingNoticeModal.tsx) | L'informativa prima della condivisione, la prima volta per ogni utente |
+| [frontend/src/components/ScreenRecordingUploadStatus.tsx](../frontend/src/components/ScreenRecordingUploadStatus.tsx) | Sopra l'esito: il video che sale, è salito, o non è salito e si riprova |
+| [frontend/src/components/ScreenRecordingPlayer.tsx](../frontend/src/components/ScreenRecordingPlayer.tsx) | Nel dettaglio di un tentativo, per chi corregge: il video, o la nota che non è arrivato |
 | [frontend/src/components/SimulationAdminPage.tsx](../frontend/src/components/SimulationAdminPage.tsx) | La tabella di gestione: ricerca, filtri, e le tre finestre che apre |
 | [frontend/src/components/SimulationsFilters.tsx](../frontend/src/components/SimulationsFilters.tsx) | Le tendine sopra la tabella di gestione: organizzazione, tipo di test, origine delle domande e stato |
 | [frontend/src/components/SimulationEditorModal.tsx](../frontend/src/components/SimulationEditorModal.tsx) | Il pannello dove una simulazione diventa un test: domande, risultati, dati, pubblicazione |
@@ -820,12 +825,15 @@ direbbe comunque quale allargare.
 
 ### I dati del test
 
-`PUT /api/admin/simulations/{id}` cambia **titolo e descrizione**, e nient'altro.
-Non l'organizzazione, che si porterebbe dietro i tentativi di persone che
-nell'organizzazione nuova non esistono; non il tipo di test e non l'origine
-delle domande, perché le domande sono già nate dell'una o dell'altra forma e
-cambiarle vorrebbe dire buttarle senza dirlo. Quei campi nel pannello non
-compaiono proprio: un campo spento sarebbe una promessa che nessuno mantiene.
+`PUT /api/admin/simulations/{id}` cambia **titolo, descrizione e la spunta
+della registrazione dello schermo**, e nient'altro. Non l'organizzazione, che
+si porterebbe dietro i tentativi di persone che nell'organizzazione nuova non
+esistono; non il tipo di test e non l'origine delle domande, perché le domande
+sono già nate dell'una o dell'altra forma e cambiarle vorrebbe dire buttarle
+senza dirlo. Quei campi nel pannello non compaiono proprio: un campo spento
+sarebbe una promessa che nessuno mantiene. La spunta invece si cambia in tutti
+e due i versi, perché non tocca le domande, e vale dal tentativo successivo
+(vedi § [4.4](#44-la-registrazione-dello-schermo)).
 
 Sta insieme alle domande e non in una modale a parte perché è lo stesso test
 visto da un altro lato: chi apre la matita per correggere un refuso nel titolo
@@ -1598,6 +1606,85 @@ per riprovare la consegna.
 
 ---
 
+### 4.4 La registrazione dello schermo
+
+Chi prepara un test può decidere che, mentre lo si svolge, **lo schermo intero
+di chi risponde venga registrato**. È una spunta, alla creazione o dopo fra i
+dati del test (`records_screen` su `technical_simulations`), e vale per
+chiunque svolga quel test nell'organizzazione: la registrazione la rivedono
+gli amministratori dal dettaglio del tentativo, che è l'unico modo che hanno
+di sapere se un dieci è stato preso a memoria o con la procedura aperta di
+fianco. L'eccezione è il **super admin, che non viene registrato mai**: il
+test lo svolge per provarlo, non per essere valutato, e il server lo sa alla
+consegna senza che il browser debba dirglielo.
+
+**Prima lo schermo, poi le domande.** Su un test con la spunta, il pulsante
+"inizia" chiede lo schermo al browser con `getDisplayMedia` e solo dopo
+estrae le domande dal server
+([screenRecording.ts](../frontend/src/services/screenRecording.ts)). L'ordine
+è obbligato: il browser apre la finestra di scelta solo se glielo si chiede
+dentro un clic, e un'attesa di rete di mezzo gliela fa dimenticare. Senza
+condivisione il test **non parte**, ed è voluto: chi ha messo la spunta voleva
+lo schermo di tutti, non di chi accetta. Si pretende lo **schermo intero**,
+perché una finestra sola mostrerebbe il test e nasconderebbe tutto il resto,
+cioè il contrario di quello per cui la spunta esiste; il browser non lascia
+imporre la scelta, la si suggerisce (`displaySurface: 'monitor'`) e si guarda
+cosa è stato scelto dopo, rifiutando finestre e schede. Dove il browser non
+dice cosa è stato scelto (Firefox, Safari) si prende quello che arriva. Tre
+rifiuti, tre frasi sotto il pulsante: il browser non sa farlo, l'utente ha
+chiuso la finestra, l'utente ha scelto una finestra.
+
+**Chi risponde lo sa prima.** La regola sta in testa alle altre, con il
+pallino rosso, solo a chi verrà registrato davvero; la prima volta su ogni
+browser un'informativa bloccante dice le tre cose che vanno dette
+([ScreenRecordingNoticeModal](../frontend/src/components/ScreenRecordingNoticeModal.tsx),
+memorizzata per utente come quella della chiamata, vedi [gdpr.md](gdpr.md));
+durante il test l'intestazione porta la targhetta "Schermo in registrazione"
+al posto del comando per uscire, oltre alla barra che il browser stesso
+mostra per tutta la condivisione.
+
+**Il video sale dopo la consegna**, non insieme: il tentativo nasce alla
+consegna, e prima non c'è un id a cui attaccarlo. Fra l'avvio e la consegna
+vive nella memoria del browser come le risposte, quindi un test abbandonato a
+metà non lascia né l'uno né le altre. All'esito il registratore si ferma, il
+file si chiude, e parte `POST /api/simulations/attempts/{id}/screen-recording`
+con il corpo grezzo e il Content-Type di MediaRecorder, come per l'audio di
+una chiamata: si legge a pezzi, si smette al primo che supera i **150 MB**
+(`MAX_SCREEN_RECORDING_BYTES`, con il gemello a 160 MB in Caddy su quella
+rotta), un secondo caricamento sostituisce il primo. Sopra l'esito
+[ScreenRecordingUploadStatus](../frontend/src/components/ScreenRecordingUploadStatus.tsx)
+dice che sta salendo, che è salito, o che non è salito e si riprova: il file
+resta nella pagina finché il caricamento non riesce. Il bitrate è tenuto
+basso apposta (cinque fotogrammi al secondo, 600 kbit/s): uno schermo mentre
+si risponde è quasi fermo, e mezz'ora di test aperto sono un centinaio di
+megabyte.
+
+**L'interruzione consegna.** Il browser mette sotto gli occhi di chi
+condivide un pulsante "interrompi" per tutta la durata; se lo preme, la
+traccia finisce, il runner **consegna in quell'istante** le risposte date con
+le altre in bianco, e il video sale segnato come `interrupted`. Chi corregge
+lo legge come targhetta sopra il lettore, prima di guardare il video finire a
+metà, ed è quello che spiega le risposte in bianco dopo.
+
+**Cosa resta scritto.** Il tentativo congela `screen_recording_expected`: la
+simulazione la chiedeva e chi rispondeva non era il super admin. È la
+fotografia di quel giorno, come il resto: la spunta si può togliere domani e
+il ruolo può cambiare, e "manca la registrazione" deve restare vero o falso
+per quello che valeva alla consegna. È quello che distingue un tentativo senza
+video perché non era previsto da uno a cui manca perché il caricamento non è
+arrivato: il secondo, nel dettaglio e nell'elenco dei risultati, porta la
+nota "Non pervenuta". Il video sta in `simulation_screen_recordings`, una
+riga per tentativo con la colonna `deferred` (vedi
+[Il modello dati](#il-modello-dati)).
+
+**Chi guarda.** `GET /api/simulations/attempts/{id}/screen-recording` risponde
+solo agli amministratori del tenant di **chi ha risposto**, lo stesso confine
+del dettaglio del tentativo meno chi lo ha svolto: nell'applicazione non c'è
+una schermata in cui rivedersi rispondere gli servirebbe a qualcosa, e un video
+apribile da due lati è due volte il posto in cui un link sbagliato lo mostra
+a chi non deve. È il suo schermo però, e nell'archivio dei propri dati lo
+ritrova (vedi [gdpr.md](gdpr.md)).
+
 ## Fase 5, la correzione
 
 `POST /api/simulations/{id}/attempts`, con una voce per domanda. Un campo per
@@ -2037,10 +2124,11 @@ persone".
 
 | Tabella | Contiene | Note |
 | --- | --- | --- |
-| `technical_simulations` | Titolo, descrizione, stato, `kind`, `source`, nome e testo del documento, organizzazione | Il file originale non c'è, solo il testo estratto, e su una simulazione a mano non c'è nemmeno quello. `kind` e `source` si decidono alla creazione e non si cambiano |
+| `technical_simulations` | Titolo, descrizione, stato, `kind`, `source`, `records_screen`, nome e testo del documento, organizzazione | Il file originale non c'è, solo il testo estratto, e su una simulazione a mano non c'è nemmeno quello. `kind` e `source` si decidono alla creazione e non si cambiano; `records_screen` sì, in tutti e due i versi |
 | `simulation_chunks` | `ordinal`, `content`, `embedding` | Cancellati e riscritti a ogni caricamento del documento |
 | `simulation_questions` | `position`, `text`, `options`, `correct_option`, `expected_answer`, `ordered_steps`, `explanation`, `source_chunks` | Il serbatoio: cinquanta righe per simulazione, e `position` è il posto lì dentro, non il numero che chi risponde vede accanto alla domanda. Le tre chiavi sono alternative fra loro e se ne riempie una sola, secondo il `kind` della simulazione: per questo sono nullable, non perché una domanda possa non avere una risposta esatta. `options` e `correct_option` stanno comunque sulla stessa riga, quindi correggere il testo di un'opzione non può spostare la risposta esatta su un'altra. `ordered_steps` sono i passi **nell'ordine giusto**, che è la chiave stessa: JSON e non una tabella, perché sono da tre a sei righe che si leggono, si scrivono e si buttano sempre insieme alla domanda, e nessuna query le cerca per conto loro |
-| `simulation_attempts` | `correct_count`, `question_count`, `earned_points`, `answers` (la fotografia), `created_at` | `question_count` sono le domande di **quel** tentativo, dieci, non quelle del serbatoio. Il voto si ricava da punti e domande, quindi resta leggibile anche se un giorno le domande non fossero più dieci, e i tentativi consegnati quando il test era di dieci domande fisse si leggono ancora come allora. `earned_points` è arrivata dopo: i tentativi di prima l'hanno riempita con le loro risposte esatte, che è quello che valevano quando il tempo non contava (vedi [startup_migrations](../backend/startup_migrations.py)) |
+| `simulation_attempts` | `correct_count`, `question_count`, `earned_points`, `answers` (la fotografia), `screen_recording_expected`, `created_at` | `question_count` sono le domande di **quel** tentativo, dieci, non quelle del serbatoio. Il voto si ricava da punti e domande, quindi resta leggibile anche se un giorno le domande non fossero più dieci, e i tentativi consegnati quando il test era di dieci domande fisse si leggono ancora come allora. `earned_points` è arrivata dopo: i tentativi di prima l'hanno riempita con le loro risposte esatte, che è quello che valevano quando il tempo non contava (vedi [startup_migrations](../backend/startup_migrations.py)). `screen_recording_expected` è congelato alla consegna: la spunta del test e il ruolo di chi rispondeva, quel giorno |
+| `simulation_screen_recordings` | `attempt_id`, `mime_type`, `duration_ms`, `size_bytes`, `interrupted`, `video` (`deferred`), `created_at` | Lo schermo registrato durante il test, una riga per tentativo, sul modello di `conversation_recordings`: il blob non si legge se non lo si chiede, e la colonna sta in `STORAGE EXTERNAL` perché è video già compresso. `interrupted` dice che la condivisione è stata fermata prima della consegna |
 
 **Quali domande siano state date a un tentativo non è scritto da nessuna
 parte** prima della consegna, e **nemmeno in che ordine erano state
@@ -2125,17 +2213,25 @@ pubblicazione.
 
 ## Conservazione e cancellazione
 
-I tentativi sono l'unica parte personale del simulatore, e hanno il proprio
+I tentativi sono la parte personale del simulatore, e hanno il proprio
 orologio: `SIMULATION_ATTEMPT_RETENTION_DAYS` (730 giorni in produzione, vedi
 [gdpr.md](gdpr.md)). Il purge in [backend/retention.py](../backend/retention.py)
 gira dentro l'applicazione, senza cron esterni, e cancella la riga intera,
 fotografia delle risposte compresa. La simulazione con le sue domande non
 riguarda nessuno in particolare e resta.
 
+Lo schermo registrato durante un test ha un orologio più corto,
+`SCREEN_RECORDING_RETENTION_DAYS`, e sta al tentativo come l'audio sta alla
+conversazione: è la cosa più pesante e più invasiva che il tentativo si porta
+dietro, e dopo che chi corregge lo ha guardato non aggiunge niente alle
+risposte. Scade per primo, e il tentativo gli sopravvive con il voto e la
+fotografia. Un tentativo che scade si porta via il proprio video comunque.
+
 Alla cancellazione di un utente
 ([backend/erasure.py](../backend/erasure.py)) i suoi `SimulationAttempt` spariscono
-con lui, mentre la firma di chi ha creato una `TechnicalSimulation` viene solo
-anonimizzata: quella riga non è **su** di lui, porta solo il suo nome in calce.
+con lui, video compreso, mentre la firma di chi ha creato una
+`TechnicalSimulation` viene solo anonimizzata: quella riga non è **su** di lui,
+porta solo il suo nome in calce.
 
 Un singolo tentativo può anche essere tolto a mano da un admin, dal report
 attività (`DELETE /api/admin/simulation-attempts/{id}`, vedi

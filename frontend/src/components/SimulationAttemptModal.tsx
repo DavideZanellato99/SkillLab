@@ -6,6 +6,7 @@ import ModalShell from './ModalShell'
 import ModalDeleteButton from './ModalDeleteButton'
 import LoadingState from './LoadingState'
 import LoadError from './LoadError'
+import ScreenRecordingPlayer from './ScreenRecordingPlayer'
 import SimulationResult from './SimulationResult'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
@@ -128,6 +129,17 @@ export default function SimulationAttemptModal({
           </header>
 
           <div className="flex-1 overflow-y-auto px-8 py-5">
+            {/* Lo schermo registrato, per chi corregge e solo per lui: chi
+                rilegge un test proprio non lo rivede, e il server glielo
+                negherebbe comunque. Sopra le risposte, perché è il contesto
+                in cui vanno lette. */}
+            {!own && (
+              <ScreenRecordingPlayer
+                attemptId={attempt.id}
+                expected={attempt.screen_recording_expected}
+                info={attempt.screen_recording}
+              />
+            )}
             <SimulationResult attempt={attempt} own={own} />
           </div>
 

@@ -206,21 +206,30 @@ export default function SimulationEditorModal({
    * disegna: chi corregge il titolo e passa alle domande non deve ritrovarlo
    * com'era. Si riallineano quando li cambia il server, non a ogni lettura,
    * perché le dipendenze sono i due valori e non la simulazione intera. */
-  const [details, setDetails] = useState({ title: '', description: '' })
+  const [details, setDetails] = useState({ title: '', description: '', recordsScreen: false })
   const serverTitle = simulation?.title
   const serverDescription = simulation?.description ?? ''
+  const serverRecordsScreen = simulation?.records_screen ?? false
   /* Gli ultimi valori del server copiati nei campi: finché non cambiano, i
      campi restano quello che si sta scrivendo. */
   const [syncedDetails, setSyncedDetails] = useState<{
     title: string
     description: string
+    recordsScreen: boolean
   } | null>(null)
   if (
     serverTitle !== undefined &&
-    (serverTitle !== syncedDetails?.title || serverDescription !== syncedDetails.description)
+    (serverTitle !== syncedDetails?.title ||
+      serverDescription !== syncedDetails.description ||
+      serverRecordsScreen !== syncedDetails.recordsScreen)
   ) {
-    setSyncedDetails({ title: serverTitle, description: serverDescription })
-    setDetails({ title: serverTitle, description: serverDescription })
+    const fromServer = {
+      title: serverTitle,
+      description: serverDescription,
+      recordsScreen: serverRecordsScreen,
+    }
+    setSyncedDetails(fromServer)
+    setDetails(fromServer)
   }
 
   const busy =
@@ -248,7 +257,9 @@ export default function SimulationEditorModal({
   const questionsChanged = JSON.stringify(written) !== synced
   const detailsChanged =
     simulation !== undefined &&
-    (details.title !== simulation.title || details.description !== (simulation.description ?? ''))
+    (details.title !== simulation.title ||
+      details.description !== (simulation.description ?? '') ||
+      details.recordsScreen !== simulation.records_screen)
   const unsaved = questionsChanged || detailsChanged
 
   /* Le due vie di uscita, che vanno presidiate tutte e due: la X, Esc e lo
@@ -525,6 +536,20 @@ export default function SimulationEditorModal({
                           </span>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
+                          {/* Solo quando c'è qualcosa da dire sulla registrazione
+                              dello schermo: non arrivata, o interrotta. Accanto
+                              al voto, perché è lì che va letta. */}
+                          {attempt.screen_recording_expected &&
+                            attempt.screen_recording === null && (
+                              <Badge tone="border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                                Registrazione non pervenuta
+                              </Badge>
+                            )}
+                          {attempt.screen_recording?.interrupted && (
+                            <Badge tone="border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                              Registrazione interrotta
+                            </Badge>
+                          )}
                           <span className="text-xs text-slate-500">
                             {formatDateTime(attempt.created_at)}
                           </span>
@@ -546,6 +571,7 @@ export default function SimulationEditorModal({
                 simulation={simulation}
                 title={details.title}
                 description={details.description}
+                recordsScreen={details.recordsScreen}
                 onChange={setDetails}
                 onSave={() => {
                   setSaved(false)
@@ -553,6 +579,7 @@ export default function SimulationEditorModal({
                   updateDetails.mutate({
                     title: details.title.trim(),
                     description: details.description.trim(),
+                    records_screen: details.recordsScreen,
                   })
                 }}
                 isSaving={updateDetails.isPending}

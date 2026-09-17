@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -1121,6 +1122,17 @@ class TechnicalSimulation(Authored, Base):
     # debriefing e per la revisione di una conversazione.
     review_fingerprint = Column(String(64), nullable=True)
 
+    # ── La registrazione dello schermo ──
+    #
+    # Se durante il test lo schermo di chi risponde viene registrato. Lo
+    # decide chi crea o modifica il test, e vale per chiunque lo svolga: la
+    # registrazione la vedono gli amministratori dell'organizzazione, che è
+    # l'unico modo che hanno di sapere se un dieci è stato preso a memoria o
+    # con la procedura aperta di fianco. L'eccezione è il super admin, che
+    # non viene registrato mai (vedi ``SimulationAttempt.screen_recording_expected``):
+    # il test lo svolge per provarlo, non per essere valutato.
+    records_screen = Column(Boolean, nullable=False, default=False)
+
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(
         DateTime,
@@ -1354,10 +1366,25 @@ class SimulationAttempt(Base):
     # verità di allora: lì una risposta esatta valeva un punto pieno.
     earned_points = Column(Float, nullable=False, default=0.0)
     answers = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=False)
+    # Se questo tentativo doveva arrivare con la registrazione dello schermo:
+    # la simulazione la chiedeva e chi rispondeva non era il super admin.
+    # Congelato alla consegna come il resto della fotografia, perché la
+    # spunta sulla simulazione si può togliere domani e il ruolo di chi ha
+    # risposto può cambiare, e "manca la registrazione" deve restare vero o
+    # falso per quello che valeva quel giorno. È quello che distingue un
+    # tentativo senza registrazione perché non era prevista da uno a cui
+    # manca perché il caricamento non è mai arrivato.
+    screen_recording_expected = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), index=True)
 
     simulation = relationship("TechnicalSimulation", back_populates="attempts")
     user = relationship("User")
+    screen_recording = relationship(
+        "SimulationScreenRecording",
+        back_populates="attempt",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     @property
     def score(self) -> float:
@@ -1369,6 +1396,54 @@ class SimulationAttempt(Base):
             f"<SimulationAttempt(id={self.id}, user_id={self.user_id}, "
             f"corrette={self.correct_count}/{self.question_count}, "
             f"punti={self.earned_points})>"
+        )
+
+
+class SimulationScreenRecording(Base):
+    """Lo schermo di chi ha svolto un test, registrato dall'inizio alla consegna.
+
+    Il gemello video di ``ConversationRecording``, e costruito allo stesso
+    modo per le stesse ragioni: una tabella sua, una riga per tentativo, il
+    blob ``deferred`` così che leggere i metadati (c'è? quanto dura? è stata
+    interrotta?) non trascini dentro decine di megabyte che l'elenco dei
+    tentativi non mostrerà mai.
+
+    La registra il browser con ``getDisplayMedia`` dal momento in cui il
+    test comincia, e la carica dopo la consegna, quando il tentativo esiste
+    e ha un id a cui attaccarla. Tra i due momenti il video vive solo nella
+    memoria di quel browser, come le risposte: un test abbandonato a metà
+    non lascia né l'uno né le altre.
+
+    ``interrupted`` dice che la condivisione è stata fermata prima della
+    fine: il browser mette un pulsante "interrompi" sotto gli occhi di chi
+    condivide, e premerlo consegna il test com'è in quel momento (vedi
+    ``routers.simulations.upload_screen_recording``). Il video c'è lo
+    stesso, fino a lì, e chi lo guarda deve sapere che finisce prima del
+    test.
+    """
+
+    __tablename__ = "simulation_screen_recordings"
+
+    attempt_id = Column(
+        Uuid,
+        ForeignKey("simulation_attempts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # Quello che MediaRecorder ha prodotto: video/webm su Chrome e Firefox,
+    # video/mp4 su Safari. Torna indietro come Content-Type alla riproduzione.
+    mime_type = Column(String(64), nullable=False)
+    duration_ms = Column(Integer, nullable=True)
+    size_bytes = Column(Integer, nullable=False)
+    interrupted = Column(Boolean, nullable=False, default=False)
+    video = deferred(Column(LargeBinary, nullable=False))
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), index=True)
+
+    attempt = relationship("SimulationAttempt", back_populates="screen_recording")
+
+    def __repr__(self):
+        return (
+            f"<SimulationScreenRecording(attempt_id={self.attempt_id}, "
+            f"size_bytes={self.size_bytes}, interrupted={self.interrupted})>"
         )
 
 

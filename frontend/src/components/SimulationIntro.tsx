@@ -31,10 +31,14 @@ import Spinner from './Spinner'
 
 export default function SimulationIntro({
   simulation,
+  recorded = false,
   onStart,
   starting = false,
 }: {
   simulation: Simulation
+  /* Lo schermo di chi guarda verrà registrato: la spunta del test, meno il
+   * super admin. È chi ci porta qui a saperlo, perché conosce chi guarda. */
+  recorded?: boolean
   onStart: () => void
   /** Le domande si stanno estraendo: il test è cominciato ma non è a schermo. */
   starting?: boolean
@@ -48,7 +52,7 @@ export default function SimulationIntro({
       <div className="rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md">
         <h2 className="mb-4 font-heading text-base font-semibold text-slate-100">Come Funziona</h2>
         <SimulationIntroFacts simulation={simulation} />
-        <SimulationIntroRules simulation={simulation} />
+        <SimulationIntroRules simulation={simulation} recorded={recorded} />
 
         <div className="mt-6 border-t border-white/6 pt-5">
           <PrimaryButton onClick={onStart} disabled={starting}>

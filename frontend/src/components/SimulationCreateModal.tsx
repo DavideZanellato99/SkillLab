@@ -6,6 +6,7 @@ import type { SimulationKind, SimulationSource } from '../services/simulations'
 import ModalShell, { ModalHeader } from './ModalShell'
 import Field, { textareaCls, TextInput } from './Field'
 import Select from './Select'
+import SimulationScreenRecordingField from './SimulationScreenRecordingField'
 import PrimaryButton from './PrimaryButton'
 import Spinner from './Spinner'
 import FormError from './FormError'
@@ -66,6 +67,7 @@ export default function SimulationCreateModal({
   const [description, setDescription] = useState('')
   const [kind, setKind] = useState<SimulationKind>('multiple')
   const [source, setSource] = useState<SimulationSource>('ai')
+  const [recordsScreen, setRecordsScreen] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   /** Il file scelto che il server rifiuterebbe, con il perché. */
   const [rejected, setRejected] = useState<string | null>(null)
@@ -97,6 +99,7 @@ export default function SimulationCreateModal({
         description: description.trim(),
         kind,
         source,
+        recordsScreen,
         /* Il file resta selezionato se qualcuno torna sulla generazione dopo
          * averlo scelto, ma a mano non si manda: il server rifiuta una
          * simulazione scritta a mano che porta un documento. */
@@ -219,6 +222,16 @@ export default function SimulationCreateModal({
             </button>
           </Field>
         )}
+
+        {/* Dopo il documento e prima del pulsante: non cambia le domande, è
+            una regola in più per chi risponderà, e si legge dopo aver detto
+            di cosa è fatto il test. */}
+        <SimulationScreenRecordingField
+          id="simulation-records-screen"
+          checked={recordsScreen}
+          onChange={setRecordsScreen}
+          disabled={create.isPending}
+        />
 
         {rejected && <FormError message={rejected} />}
         {create.isError && <FormError message={(create.error as Error).message} />}

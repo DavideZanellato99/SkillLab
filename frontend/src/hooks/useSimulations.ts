@@ -9,6 +9,7 @@
  * `useApplyDetail`). */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ScreenRecording } from '../services/screenRecording'
 import type {
   Simulation,
   SimulationAdminDetail,
@@ -34,6 +35,7 @@ import {
   submitSimulation,
   updateSimulation,
   updateSimulationStatus,
+  uploadScreenRecording,
 } from '../services/simulations'
 import { queryKeys } from './queryKeys'
 
@@ -126,6 +128,21 @@ export function useSubmitSimulation(simulationId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (answers: SimulationAnswerPayload[]) => submitSimulation(simulationId, answers),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.simulations.all })
+    },
+  })
+}
+
+/* Il video dello schermo, dopo la consegna. L'id del tentativo arriva con
+ * l'esito, quindi viaggia nelle variabili e non nella chiave dell'hook. Un
+ * caricamento riuscito cambia i metadati del tentativo, che l'elenco dei
+ * propri tentativi e il dettaglio mostrano. */
+export function useUploadScreenRecording() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ attemptId, recording }: { attemptId: string; recording: ScreenRecording }) =>
+      uploadScreenRecording(attemptId, recording),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.simulations.all })
     },
@@ -243,7 +260,7 @@ export function useReviewPool(simulationId: string) {
 export function useUpdateSimulation(simulationId: string) {
   const applyDetail = useApplyDetail()
   return useMutation({
-    mutationFn: (payload: { title: string; description: string }) =>
+    mutationFn: (payload: { title: string; description: string; records_screen: boolean }) =>
       updateSimulation(simulationId, payload),
     onSuccess: applyDetail,
   })

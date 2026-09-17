@@ -28,6 +28,7 @@ const simulazione = (over: Partial<Simulation> = {}): Simulation => ({
   source: 'ai',
   document_name: 'normativa.pdf',
   question_count: 10,
+  records_screen: false,
   created_at: '2026-01-01T10:00:00',
   updated_at: '2026-01-01T10:00:00',
   last_attempt_at: null,

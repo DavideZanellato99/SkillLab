@@ -132,6 +132,7 @@ describe('gestione dei test', () => {
       description: 'Le verifiche',
       kind: 'multiple',
       source: 'ai',
+      recordsScreen: true,
       file,
     })
 
@@ -143,6 +144,7 @@ describe('gestione dei test', () => {
     expect(form.get('title')).toBe('Antiriciclaggio')
     expect(form.get('kind')).toBe('multiple')
     expect(form.get('source')).toBe('ai')
+    expect(form.get('records_screen')).toBe('true')
     expect(form.get('file')).toBe(file)
   })
 
@@ -155,6 +157,7 @@ describe('gestione dei test', () => {
       description: '',
       kind: 'open',
       source: 'manual',
+      recordsScreen: false,
       file: null,
     })
 
@@ -170,6 +173,7 @@ describe('gestione dei test', () => {
       description: '',
       kind: 'multiple',
       source: 'manual',
+      recordsScreen: false,
       file: null,
     })
 
@@ -193,11 +197,18 @@ describe('gestione dei test', () => {
     })
   })
 
-  it('modifica titolo e descrizione', async () => {
-    await updateSimulation('s-1', { title: 'Antiriciclaggio', description: 'Le verifiche' })
+  it('modifica titolo, descrizione e registrazione dello schermo', async () => {
+    await updateSimulation('s-1', {
+      title: 'Antiriciclaggio',
+      description: 'Le verifiche',
+      records_screen: true,
+    })
     expect(ultimaChiamata()).toEqual({
       endpoint: '/api/admin/simulations/s-1',
-      options: { method: 'PUT', body: { title: 'Antiriciclaggio', description: 'Le verifiche' } },
+      options: {
+        method: 'PUT',
+        body: { title: 'Antiriciclaggio', description: 'Le verifiche', records_screen: true },
+      },
     })
   })
 

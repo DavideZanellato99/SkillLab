@@ -1,7 +1,20 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { useAuth } from '../hooks/useAuth'
 import { useLeaveConfirmation } from '../hooks/useLeaveConfirmation'
-import { useSimulation, useStartSimulation, useSubmitSimulation } from '../hooks/useSimulations'
+import {
+  useSimulation,
+  useStartSimulation,
+  useSubmitSimulation,
+  useUploadScreenRecording,
+} from '../hooks/useSimulations'
+import { isSuperAdmin } from '../services/auth'
+import {
+  hasSeenScreenRecordingNotice,
+  rememberScreenRecordingNotice,
+} from '../services/recordingNotice'
+import { startScreenRecording } from '../services/screenRecording'
+import type { ScreenRecorder, ScreenRecording } from '../services/screenRecording'
 import type {
   SimulationAnswerPayload,
   SimulationAttempt,
@@ -21,6 +34,8 @@ import SimulationQuestionStep from './SimulationQuestionStep'
 import SimulationOpenQuestionStep from './SimulationOpenQuestionStep'
 import SimulationOrderingStep from './SimulationOrderingStep'
 import SimulationProgress, { type ProgressMark } from './SimulationProgress'
+import ScreenRecordingNoticeModal from './ScreenRecordingNoticeModal'
+import ScreenRecordingUploadStatus from './ScreenRecordingUploadStatus'
 import { isTimed, kindHint, QUESTION_SECONDS } from './simulationFormat'
 
 /* Lo svolgimento di un test e, alla fine, il suo esito.
@@ -64,7 +79,17 @@ import { isTimed, kindHint, QUESTION_SECONDS } from './simulationFormat'
  * Le risposte si consegnano da sole quando finisce l'ultima domanda, quindi
  * questa è l'unica pagina in cui una chiamata fallita non lascia niente da
  * ritentare a mano: l'errore resta a schermo con le risposte ancora in mano e
- * il pulsante per riprovare la consegna. */
+ * il pulsante per riprovare la consegna.
+ *
+ * Su un test che registra lo schermo (vedi `records_screen`) il pulsante
+ * "inizia" chiede prima lo schermo al browser e solo dopo le domande al
+ * server: senza condivisione il test non parte, ed è voluto, perché chi ha
+ * messo la spunta voleva vedere lo schermo di tutti e non di chi accetta. Il
+ * super admin è l'eccezione e non viene registrato mai: il test lo svolge per
+ * provarlo. La registrazione vive nel browser fino alla consegna e sale dopo,
+ * attaccata al tentativo appena nato; se l'utente interrompe la condivisione
+ * dal pulsante del browser, il test si consegna in quell'istante con le
+ * risposte che ci sono, e le altre restano in bianco. */
 
 /* Il comando per uscire dal test, sempre lo stesso e sempre nello stesso
  * posto: a destra dell'intestazione, dove ogni schermata dell'applicazione
@@ -84,11 +109,25 @@ function BackToList() {
   )
 }
 
+/* L'indicatore fisso durante un test registrato: la stessa targhetta della
+ * chiamata vocale, perché dice la stessa cosa. Sta nell'intestazione, dove
+ * durante il test non c'è nient'altro. */
+function RecordingBadge() {
+  return (
+    <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-wider text-red-400">
+      <span className="h-[7px] w-[7px] animate-voice-blink rounded-full bg-current" />
+      Schermo in registrazione
+    </span>
+  )
+}
+
 export default function SimulationRunner() {
   const { simulationId } = useParams<{ simulationId: string }>()
+  const { user } = useAuth()
   const { data: simulation, isLoading, error, refetch } = useSimulation(simulationId)
   const start = useStartSimulation(simulationId ?? '')
   const submit = useSubmitSimulation(simulationId ?? '')
+  const upload = useUploadScreenRecording()
 
   /** Le domande estratte per questo tentativo: vuote finché non si comincia. */
   const [questions, setQuestions] = useState<SimulationQuestion[]>([])
@@ -107,12 +146,50 @@ export default function SimulationRunner() {
   const [sequences, setSequences] = useState<Record<string, (string | null)[]>>({})
   const [result, setResult] = useState<SimulationAttempt | null>(null)
 
+  /* Lo schermo in registrazione, se questo test lo chiede. Sta in un ref e
+   * non nello stato perché non disegna niente: è un oggetto da fermare, e
+   * va fermato anche se la pagina viene lasciata senza consegnare. */
+  const recorderRef = useRef<ScreenRecorder | null>(null)
+  /* Il video pronto, dopo la consegna: resta qui finché il caricamento non
+   * riesce, così si può ripetere. `undefined` finché il registratore non ha
+   * chiuso, `null` se non ha prodotto niente. */
+  const [recording, setRecording] = useState<ScreenRecording | null | undefined>(undefined)
+  /* L'utente ha fermato la condivisione dal browser a test in corso: si
+   * consegna subito quello che c'è (vedi l'effetto più sotto). */
+  const [interrupted, setInterrupted] = useState(false)
+  const [shareError, setShareError] = useState('')
+  const [noticeOpen, setNoticeOpen] = useState(false)
+
+  useEffect(() => () => recorderRef.current?.cancel(), [])
+
+  /* La condivisione è stata fermata dal browser a test in corso: si
+   * consegna adesso, con le risposte date e le altre in bianco. Un effetto
+   * e non una chiamata dentro il callback del registratore, perché quel
+   * callback è nato al clic su "inizia" e non conosce le risposte di dopo;
+   * e `send` passa da un ref perché nasce più sotto, dopo le uscite
+   * anticipate, mentre un hook deve stare prima. Una volta sola: la seconda
+   * consegna la farebbe il pulsante di ripetizione, se la prima cade. */
+  const autoSent = useRef(false)
+  const sendRef = useRef<((given: Record<string, SimulationAnswerPayload>) => void) | null>(null)
+  useEffect(() => {
+    if (!interrupted || autoSent.current) return
+    autoSent.current = true
+    if (questions.length > 0 && result === null && !submit.isPending) sendRef.current?.(answers)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interrupted])
+
   /* Il test è cominciato e non è ancora consegnato: qui dentro ci sono le
    * domande estratte e le risposte già date, e nessuna delle due cose vive
    * altrove. Ricaricare per sbaglio le butta via, quindi si chiede conferma
    * prima. Sta prima delle uscite di sopra perché un hook si chiama sempre,
-   * e con il test non cominciato la condizione è falsa e non fa niente. */
-  useLeaveConfirmation(questions.length > 0 && result === null)
+   * e con il test non cominciato la condizione è falsa e non fa niente.
+   *
+   * Vale anche dopo la consegna finché il video dello schermo non è salito:
+   * il file vive solo in questa pagina, e chiuderla mentre sale, o dopo un
+   * caricamento caduto, è l'unico modo di perderlo. */
+  const uploadPending =
+    result !== null && result.screen_recording_expected && recording !== null && !upload.isSuccess
+  useLeaveConfirmation((questions.length > 0 && result === null) || uploadPending)
 
   if (isLoading) {
     return (
@@ -149,18 +226,63 @@ export default function SimulationRunner() {
   const kind = simulation.kind
   const isOpen = kind === 'open'
   const timed = isTimed(kind)
+  const recorded = simulation.records_screen && !isSuperAdmin(user)
 
   /* Comincia il test: le domande le estrae il server adesso. Finché non
    * arrivano si resta sulle regole con il pulsante che gira, perché una
    * schermata vuota in mezzo farebbe sembrare partito un test che non è
    * ancora cominciato. */
-  const begin = () => {
+  const draw = () => {
     start.mutate(undefined, {
       onSuccess: (drawn) => {
         setQuestions(drawn)
         window.scrollTo({ top: 0 })
       },
+      /* Le domande non sono arrivate: lo schermo si smette di registrare,
+       * perché un video di una pagina di regole non è la registrazione di
+       * niente. Si ricomincia da "inizia". */
+      onError: () => {
+        recorderRef.current?.cancel()
+        recorderRef.current = null
+      },
     })
+  }
+
+  /* Prima lo schermo, poi le domande, nell'ordine e dentro lo stesso clic:
+   * il browser apre la scelta di cosa condividere solo se glielo si chiede
+   * da un gesto dell'utente, e un'attesa di rete in mezzo lo fa dimenticare.
+   * Un rifiuto, una finestra al posto dello schermo o un browser che non sa
+   * farlo si fermano qui, con il perché scritto sotto il pulsante. */
+  const beginRecorded = async () => {
+    setShareError('')
+    try {
+      recorderRef.current = await startScreenRecording(() => setInterrupted(true))
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : 'Condivisione dello schermo non riuscita.')
+      return
+    }
+    draw()
+  }
+
+  const begin = () => {
+    if (!recorded) return draw()
+    if (user && !hasSeenScreenRecordingNotice(user.id)) {
+      setNoticeOpen(true)
+      return
+    }
+    void beginRecorded()
+  }
+
+  /* Il video sale dopo la consegna, attaccato al tentativo appena nato.
+   * Prima si ferma il registratore e si aspetta che chiuda il file; il
+   * risultato resta nello stato finché il caricamento non riesce. */
+  const uploadRecording = async (attemptId: string) => {
+    const recorder = recorderRef.current
+    if (!recorder) return
+    recorderRef.current = null
+    const captured = await recorder.stop()
+    setRecording(captured)
+    if (captured) upload.mutate({ attemptId, recording: captured })
   }
 
   /* Una domanda lasciata in bianco, nella forma del suo tipo. Sulla scelta
@@ -185,10 +307,12 @@ export default function SimulationRunner() {
         onSuccess: (attempt) => {
           setResult(attempt)
           window.scrollTo({ top: 0, behavior: 'smooth' })
+          void uploadRecording(attempt.id)
         },
       },
     )
   }
+  sendRef.current = send
 
   /** Mette a schermo un'altra domanda, qualunque sia la direzione. */
   const show = (target: number) => {
@@ -260,14 +384,21 @@ export default function SimulationRunner() {
    * prima si buttano, perché il tentativo nuovo ne avrà altre estratte
    * quando lo si comincerà. */
   const restart = () => {
+    recorderRef.current?.cancel()
+    recorderRef.current = null
     setResult(null)
     setAnswers({})
     setIndex(0)
     setReached(0)
     setSequences({})
     setQuestions([])
+    setRecording(undefined)
+    setInterrupted(false)
+    setShareError('')
+    autoSent.current = false
     start.reset()
     submit.reset()
+    upload.reset()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -292,6 +423,20 @@ export default function SimulationRunner() {
         {/* Anche a test consegnato: da qui si torna al percorso, che è dove si
             vede se la tappa è stata superata e cosa viene dopo. */}
         <PathStepNotice kind="simulation" targetId={simulationId} className="mb-6" />
+        {/* Solo se questo tentativo era registrato: su un test senza spunta,
+            o svolto dal super admin, non c'è niente da caricare e niente da
+            dire. `undefined` è il registratore che sta ancora chiudendo il
+            file, e si legge come caricamento in corso. */}
+        {result.screen_recording_expected && (
+          <ScreenRecordingUploadStatus
+            interrupted={interrupted || recording?.interrupted === true}
+            empty={recording === null}
+            isPending={recording === undefined || upload.isPending}
+            isSuccess={upload.isSuccess}
+            error={upload.error instanceof Error ? upload.error.message : ''}
+            onRetry={() => recording && upload.mutate({ attemptId: result.id, recording })}
+          />
+        )}
         <SimulationResult attempt={result} />
       </PageContainer>
     )
@@ -326,8 +471,9 @@ export default function SimulationRunner() {
               `${simulation.question_count} domande, una alla volta. ${kindHint(kind)}.`
         }
         /* Durante il test non c'è: uscire di lì butta via le domande estratte
-           e le risposte già date. */
-        actions={started ? undefined : <BackToList />}
+           e le risposte già date. Al suo posto, se lo schermo è in
+           registrazione, la targhetta che lo dice per tutta la durata. */
+        actions={started ? recorded ? <RecordingBadge /> : undefined : <BackToList />}
       />
 
       {submit.isPending ? (
@@ -423,12 +569,31 @@ export default function SimulationRunner() {
               }
             />
           )}
+          {shareError && <FormError message={shareError} />}
           {/* Prima di cominciare, se questo test è la tappa di un percorso:
               il voto che serve va saputo mentre si leggono le regole, non
               cercato nella mappa da cui si è usciti. Non durante le domande,
               dove sarebbe una cosa in più da guardare a cronometro acceso. */}
           <PathStepNotice kind="simulation" targetId={simulationId} className="mb-6" />
-          <SimulationIntro simulation={simulation} onStart={begin} starting={start.isPending} />
+          <SimulationIntro
+            simulation={simulation}
+            recorded={recorded}
+            onStart={begin}
+            starting={start.isPending}
+          />
+          {/* L'avviso, la prima volta: il suo bottone è il clic da cui parte la
+              richiesta dello schermo al browser, quindi da qui si va dritti
+              alla condivisione senza ripassare da "inizia". */}
+          {noticeOpen && (
+            <ScreenRecordingNoticeModal
+              onAccept={() => {
+                if (user) rememberScreenRecordingNotice(user.id)
+                setNoticeOpen(false)
+                void beginRecorded()
+              }}
+              onClose={() => setNoticeOpen(false)}
+            />
+          )}
         </>
       )}
     </PageContainer>

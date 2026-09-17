@@ -91,7 +91,7 @@ export default function ComparisonPage() {
   )
 
   return (
-    <PageContainer width="split">
+    <PageContainer>
       {section === 'tentativi' ? (
         <ComparisonAttempts prova={prova} onProvaChange={setProva} sectionTabs={sectionTabs} />
       ) : (

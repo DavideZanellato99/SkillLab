@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { hasSeenRecordingNotice, rememberRecordingNotice } from '../../src/services/recordingNotice'
+import {
+  hasSeenRecordingNotice,
+  hasSeenScreenRecordingNotice,
+  rememberRecordingNotice,
+  rememberScreenRecordingNotice,
+} from '../../src/services/recordingNotice'
 
 describe('recordingNotice', () => {
   beforeEach(() => {
@@ -32,5 +37,23 @@ describe('recordingNotice', () => {
 
     expect(() => rememberRecordingNotice('utente-1')).not.toThrow()
     expect(hasSeenRecordingNotice('utente-1')).toBe(false)
+  })
+})
+
+/* Lo schermo registrato in un test è un trattamento diverso dalla voce in
+ * una chiamata: chi ha letto un avviso non ha letto l'altro. */
+describe('screen recording notice', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  it('ha la sua memoria, separata da quella della chiamata', () => {
+    rememberRecordingNotice('utente-1')
+    expect(hasSeenScreenRecordingNotice('utente-1')).toBe(false)
+
+    rememberScreenRecordingNotice('utente-1')
+    expect(hasSeenScreenRecordingNotice('utente-1')).toBe(true)
+    expect(hasSeenScreenRecordingNotice('utente-2')).toBe(false)
   })
 })

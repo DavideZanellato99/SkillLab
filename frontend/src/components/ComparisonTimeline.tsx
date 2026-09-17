@@ -59,9 +59,6 @@ export default function ComparisonTimeline({
     <div>
       <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="text-xs font-medium text-slate-400">{label}</span>
-        <span className="text-[0.72rem] text-slate-500">
-          Assegna a due prove il loro posto nel confronto
-        </span>
       </div>
 
       {/* Con molte prove la fila scorre invece di allungare la pagina: quello

@@ -20,6 +20,9 @@ from models import (
     ConversationEvaluation,
     ConversationRecording,
     ConversationReview,
+    SimulationAttempt,
+    SimulationScreenRecording,
+    TechnicalSimulation,
     UserDebriefing,
 )
 
@@ -106,6 +109,54 @@ def test_the_archive_holds_the_data_the_readme_and_the_audio(
     assert archive.read(recordings[0]) == b"AUDIOBYTE"
     # Il JSON punta al file che c'è davvero
     assert _data(archive)["conversazioni"][0]["registrazione_audio"] == recordings[0]
+
+
+def test_the_archive_holds_the_screen_recorded_during_a_test(
+    user_client, db_session, standard_user, organization
+):
+    """Nell'applicazione non lo rivede, nel proprio archivio sì: è il suo schermo."""
+    simulation = TechnicalSimulation(
+        title="Sblocco carta",
+        status="published",
+        organization_id=organization.id,
+        document_name="procedura.txt",
+        document_text="Testo.",
+        records_screen=True,
+    )
+    db_session.add(simulation)
+    db_session.flush()
+    attempt = SimulationAttempt(
+        simulation_id=simulation.id,
+        user_id=standard_user.id,
+        correct_count=3,
+        question_count=3,
+        answers=[],
+        screen_recording_expected=True,
+    )
+    db_session.add(attempt)
+    db_session.flush()
+    db_session.add(
+        SimulationScreenRecording(
+            attempt_id=attempt.id,
+            mime_type="video/webm",
+            duration_ms=42_000,
+            size_bytes=9,
+            interrupted=True,
+            video=b"VIDEOBYTE",
+        )
+    )
+    db_session.flush()
+
+    archive = _download(user_client)
+    names = [n for n in archive.namelist() if n.startswith("registrazioni/")]
+
+    assert len(names) == 1
+    assert names[0].startswith("registrazioni/test-sblocco-carta-")
+    assert names[0].endswith(".webm")
+    assert archive.read(names[0]) == b"VIDEOBYTE"
+    test = _data(archive)["simulazioni_tecniche"][0]
+    assert test["registrazione_schermo"] == names[0]
+    assert test["registrazione_schermo_interrotta"] is True
 
 
 def test_the_export_carries_the_transcript_and_every_verdict(

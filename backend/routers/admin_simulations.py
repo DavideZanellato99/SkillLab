@@ -436,6 +436,7 @@ def _insert_simulation(
     description: str | None,
     kind: str,
     source: str,
+    records_screen: bool,
 ) -> TechnicalSimulation:
     """Blocking insert of a simulation still being composed (run via asyncio.to_thread).
 
@@ -449,6 +450,7 @@ def _insert_simulation(
         status=SIMULATION_STATUS_DRAFT,
         kind=kind,
         source=source,
+        records_screen=records_screen,
     )
     db.add(simulation)
     db.flush()
@@ -510,6 +512,7 @@ async def create_simulation(
     description: str = Form(""),
     kind: str = Form(SIMULATION_KIND_MULTIPLE),
     source: str = Form(SIMULATION_SOURCE_AI),
+    records_screen: bool = Form(False),
     file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
@@ -532,6 +535,10 @@ async def create_simulation(
     L'organizzazione la nomina solo il super admin: per un organization
     admin è la propria, e il campo che arriva non viene guardato (vedi
     ``_target_organization``).
+
+    ``records_screen`` è l'unica scelta di qui che si può cambiare dopo
+    (vedi ``update_simulation``): non tocca le domande, e chi si accorge che
+    un test è delicato solo dopo averlo pubblicato non deve rifarlo.
     """
     title = title.strip()
     if not title:
@@ -570,6 +577,7 @@ async def create_simulation(
         description.strip() or None,
         kind,
         source,
+        records_screen,
     )
     if file is not None and data is not None:
         await _index_document(db, simulation, file.filename or "documento", data, current_admin.id)
@@ -579,7 +587,9 @@ async def create_simulation(
     documento = simulation.document_name or "scritto a mano"
     detail = await asyncio.to_thread(_commit_detail, db, simulation, current_admin)
 
-    audit.describe(http_request, titolo=title, documento=documento)
+    audit.describe(
+        http_request, titolo=title, documento=documento, registrazione_schermo=records_screen
+    )
     return detail
 
 
@@ -830,12 +840,18 @@ def update_simulation(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Titolo e descrizione, e nient'altro.
+    """Titolo, descrizione e la registrazione dello schermo, e nient'altro.
 
     Il tenant non si cambia: una simulazione che cambia organizzazione si
     porterebbe dietro i tentativi di persone che nell'organizzazione nuova
     non esistono. Nemmeno il tipo: le domande sono già nate dell'una forma o
     dell'altra, e cambiarlo vorrebbe dire buttarle senza dirlo.
+
+    La registrazione dello schermo invece sì, in tutti e due i versi, e vale
+    dal tentativo successivo: quelli già consegnati portano congelato se la
+    aspettavano o no (vedi ``SimulationAttempt.screen_recording_expected``),
+    e una spunta tolta oggi non fa sparire i video di ieri né ne inventa di
+    mancanti.
     """
     simulation = _scoped_or_404(db, current_admin, simulation_id)
     # Come alla creazione: un titolo di soli spazi passa la lunghezza minima
@@ -849,9 +865,12 @@ def update_simulation(
         )
     simulation.title = title
     simulation.description = (payload.description or "").strip() or None
+    simulation.records_screen = payload.records_screen
     db.commit()
     db.refresh(simulation)
-    audit.describe(http_request, titolo=simulation.title)
+    audit.describe(
+        http_request, titolo=simulation.title, registrazione_schermo=simulation.records_screen
+    )
     return _admin_detail(db, simulation, current_admin)
 
 

@@ -14,7 +14,11 @@ import { formatScore, scoreTextColor } from './scoreFormat'
  *
  * Il voto grande sta nel verdetto e qui compare in piccolo accanto al nome:
  * scritto due volte in grande, il numero avrebbe fatto cercare la differenza
- * fra le due card proprio dove è già stata calcolata. */
+ * fra le due card proprio dove è già stata calcolata.
+ *
+ * La card è una colonna che riempie la propria cella: le due affiancate
+ * vengono alte uguali, e il comando in fondo sta in fondo in tutte e due
+ * anche quando quello che c'è in mezzo è lungo quanto capita. */
 export default function ComparisonAttemptCard({
   role,
   title,
@@ -45,7 +49,7 @@ export default function ComparisonAttemptCard({
   children?: ReactNode
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/6 bg-gray-900/60 p-5">
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/6 bg-gray-900/60 p-5">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="rounded-full bg-white/6 px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-slate-400">
           {role}
@@ -58,9 +62,11 @@ export default function ComparisonAttemptCard({
       </div>
       <p className="text-[0.72rem] text-slate-500">{meta}</p>
 
-      {children}
+      <div className="flex-1">{children}</div>
 
-      <ComparisonOpenButton label={openLabel} ariaLabel={openAriaLabel} onClick={onOpen} />
+      <div>
+        <ComparisonOpenButton label={openLabel} ariaLabel={openAriaLabel} onClick={onOpen} />
+      </div>
     </div>
   )
 }

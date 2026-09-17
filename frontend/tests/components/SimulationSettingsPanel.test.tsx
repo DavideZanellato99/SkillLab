@@ -20,6 +20,7 @@ const simulazione = (over: Partial<SimulationAdminDetail> = {}): SimulationAdmin
     source: 'ai',
     document_name: 'procedura-v2.pdf',
     question_count: 50,
+    records_screen: false,
     created_at: '2026-03-01T09:00:00',
     updated_at: '2026-03-01T09:00:00',
     last_attempt_at: null,
@@ -44,6 +45,7 @@ function renderPanel(over: Partial<SimulationAdminDetail> = {}, props = {}) {
       simulation={simulation}
       title={simulation.title}
       description={simulation.description ?? ''}
+      recordsScreen={simulation.records_screen}
       onChange={onChange}
       onSave={onSave}
       isSaving={false}
@@ -104,7 +106,27 @@ describe('SimulationSettingsPanel', () => {
     expect(onChange).toHaveBeenCalledWith({
       title: 'Normativa antiriciclaggio!',
       description: 'Le verifiche di primo livello',
+      recordsScreen: false,
     })
+  })
+
+  it('accende la registrazione dello schermo passando la terna intera', async () => {
+    const { onChange } = renderPanel()
+
+    await userEvent.click(screen.getByLabelText(/Registra lo schermo durante il test/))
+
+    expect(onChange).toHaveBeenCalledWith({
+      title: 'Normativa antiriciclaggio',
+      description: 'Le verifiche di primo livello',
+      recordsScreen: true,
+    })
+  })
+
+  /* La spunta cambiata è una modifica come il titolo: il pulsante si accende. */
+  it('lascia salvare quando cambia solo la spunta della registrazione', () => {
+    renderPanel({ records_screen: false }, { recordsScreen: true })
+
+    expect(screen.getByRole('button', { name: 'Salva i dati' })).toBeEnabled()
   })
 
   /* «Dati aggiornati» sopra un titolo riscritto nel frattempo direbbe una

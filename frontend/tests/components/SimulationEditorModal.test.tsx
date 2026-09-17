@@ -72,6 +72,7 @@ const dettaglio = (over: Partial<SimulationAdminDetail> = {}): SimulationAdminDe
     kind: 'multiple',
     source: 'manual',
     document_name: '',
+    records_screen: false,
     question_count: 1,
     created_at: '2026-03-01T09:00:00',
     updated_at: '2026-03-01T09:00:00',
@@ -154,6 +155,23 @@ describe('SimulationEditorModal', () => {
     expect(mutazioni.dati.mutate).toHaveBeenCalledWith({
       title: 'Normativa antiriciclaggio 2026',
       description: 'Le verifiche di primo livello',
+      records_screen: false,
+    })
+  })
+
+  /* La spunta viaggia con titolo e descrizione, nella stessa chiamata: è
+     l'unica scelta della creazione che si può cambiare dopo. */
+  it('salva la registrazione dello schermo insieme ai dati', async () => {
+    apri()
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Dati del test' }))
+    await userEvent.click(screen.getByLabelText(/Registra lo schermo durante il test/))
+    await userEvent.click(screen.getByRole('button', { name: 'Salva i dati' }))
+
+    expect(mutazioni.dati.mutate).toHaveBeenCalledWith({
+      title: 'Normativa antiriciclaggio',
+      description: 'Le verifiche di primo livello',
+      records_screen: true,
     })
   })
 

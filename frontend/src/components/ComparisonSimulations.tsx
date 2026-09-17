@@ -335,7 +335,7 @@ export default function ComparisonSimulations({
           {/* Il contesto in fondo, come nell'altra metà: di quali due prove si
               stava parlando, per chi ha già letto di quanto e su cosa. */}
           <h2 className="mb-3 text-sm font-semibold text-slate-300">I Due Test</h2>
-          <div className="grid grid-cols-2 items-start gap-6 max-md:grid-cols-1">
+          <div className="grid grid-cols-2 gap-6 max-md:grid-cols-1">
             <AttemptPanel
               role="Prima"
               attempt={left}

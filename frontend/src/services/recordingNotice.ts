@@ -18,14 +18,18 @@
 
 const KEY_PREFIX = 'skilllab.recording-notice.'
 
+/* Lo schermo registrato durante un test è un trattamento diverso dalla voce
+ * registrata in una chiamata, con un avviso suo: chi ha letto l'uno non ha
+ * letto l'altro, quindi le due chiavi sono distinte. */
+const SCREEN_KEY_PREFIX = 'skilllab.screen-recording-notice.'
+
 function key(userId: string): string {
   return `${KEY_PREFIX}${userId}`
 }
 
-/** True se questo utente ha già visto l'avviso su questo browser. */
-export function hasSeenRecordingNotice(userId: string): boolean {
+function hasSeen(storageKey: string): boolean {
   try {
-    return localStorage.getItem(key(userId)) !== null
+    return localStorage.getItem(storageKey) !== null
   } catch {
     // Storage negato (modalità privata, policy del browser): mostriamo
     // l'avviso a ogni chiamata, che è il lato giusto in cui sbagliare.
@@ -33,11 +37,30 @@ export function hasSeenRecordingNotice(userId: string): boolean {
   }
 }
 
-/** Segna l'avviso come letto da questo utente. */
-export function rememberRecordingNotice(userId: string): void {
+function remember(storageKey: string): void {
   try {
-    localStorage.setItem(key(userId), new Date().toISOString())
+    localStorage.setItem(storageKey, new Date().toISOString())
   } catch {
     // Vedi sopra: senza storage l'avviso tornerà, e va bene così.
   }
+}
+
+/** True se questo utente ha già visto l'avviso su questo browser. */
+export function hasSeenRecordingNotice(userId: string): boolean {
+  return hasSeen(key(userId))
+}
+
+/** Segna l'avviso come letto da questo utente. */
+export function rememberRecordingNotice(userId: string): void {
+  remember(key(userId))
+}
+
+/** True se questo utente ha già letto l'avviso sulla registrazione dello schermo. */
+export function hasSeenScreenRecordingNotice(userId: string): boolean {
+  return hasSeen(`${SCREEN_KEY_PREFIX}${userId}`)
+}
+
+/** Segna l'avviso sulla registrazione dello schermo come letto. */
+export function rememberScreenRecordingNotice(userId: string): void {
+  remember(`${SCREEN_KEY_PREFIX}${userId}`)
 }

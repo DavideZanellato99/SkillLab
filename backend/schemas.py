@@ -1830,6 +1830,10 @@ class SimulationResponse(BaseModel):
     source: str
     document_name: str
     question_count: int
+    # Se lo schermo viene registrato durante il test. Arriva anche a chi lo
+    # svolge, ed è la ragione per cui esiste il campo: lo deve sapere prima
+    # di premere "inizia", non quando il browser gli chiede cosa condividere
+    records_screen: bool = False
     created_at: datetime
     updated_at: datetime
     # Come è andata a chi guarda, sull'ultimo tentativo: assenti se non ne
@@ -1935,10 +1939,12 @@ class SimulationCreateRequest(BaseModel):
 
 
 class SimulationUpdateRequest(BaseModel):
-    """Titolo e descrizione. Il documento non si modifica: si ricarica."""
+    """Titolo, descrizione e se registrare lo schermo. Il documento non si
+    modifica: si ricarica."""
 
     title: str = Field(min_length=1, max_length=150)
     description: str | None = None
+    records_screen: bool = False
 
 
 class SimulationStatusRequest(BaseModel):
@@ -2143,6 +2149,26 @@ class SimulationAnswerResult(BaseModel):
     sources: list[str] = []
 
 
+class ScreenRecordingInfo(BaseModel):
+    """I metadati della registrazione dello schermo di un tentativo, senza il video.
+
+    Come ``VoiceRecordingInfo`` per l'audio di una chiamata: quanto basta a
+    disegnare il pulsante per guardarla senza muovere un byte del video, che
+    si scarica da un endpoint suo e solo quando qualcuno lo chiede.
+    """
+
+    model_config = {"from_attributes": True}
+
+    attempt_id: UUID
+    mime_type: str
+    duration_ms: int | None
+    size_bytes: int
+    # La condivisione è stata fermata prima della consegna: il video finisce
+    # dove è stata fermata, e il test è stato consegnato in quel momento
+    interrupted: bool
+    created_at: datetime
+
+
 class SimulationAttemptResponse(BaseModel):
     """L'esito di un test consegnato."""
 
@@ -2164,6 +2190,8 @@ class SimulationAttemptResponse(BaseModel):
     earned_points: float
     score: float
     created_at: datetime
+    screen_recording_expected: bool = False
+    screen_recording: ScreenRecordingInfo | None = None
     answers: list[SimulationAnswerResult]
 
 
@@ -2183,6 +2211,12 @@ class SimulationAttemptSummary(BaseModel):
     earned_points: float
     score: float
     created_at: datetime
+    # Se la registrazione dello schermo era prevista, e quella che c'è.
+    # Prevista e assente vuol dire che il caricamento non è mai arrivato, ed
+    # è una cosa che chi corregge deve leggere accanto al voto, non scoprire
+    # aprendo il tentativo
+    screen_recording_expected: bool = False
+    screen_recording: ScreenRecordingInfo | None = None
 
 
 # --- Le dashboard: percorsi, utilizzo, i propri progressi ---

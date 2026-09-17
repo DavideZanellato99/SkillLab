@@ -43,6 +43,7 @@ questo documento e firmare l'accordo art. 28.
 | Ruolo, stato, organizzazione, ultimo accesso      | `users.*`                                                                                                                                                       | Generati dall'applicazione                                                                                                                                                                                                                                              |
 | Ultima attività nell'applicazione                 | `users.last_activity_at`                                                                                                                                        | Scritta a intervalli di pochi minuti a ogni richiesta autenticata (`backend/activity.py`)                                                                                                                                                                               |
 | **Registrazione audio della chiamata**            | `conversation_recordings.audio`                                                                                                                                 | Registrata dal browser durante la telefonata simulata                                                                                                                                                                                                                   |
+| **Registrazione dello schermo durante un test**    | `simulation_screen_recordings.video` | Registrata dal browser durante un test tecnico che la prevede (spunta di chi lo ha preparato). Mai per il super admin. Consultabile dagli amministratori dell'organizzazione, non da chi ha risposto |
 | **Trascrizione della conversazione**              | `chat_messages.content`                                                                                                                                         | Prodotta dallo speech to text, oppure digitata in modalità chat                                                                                                                                                                                                         |
 | **Valutazione automatica della prestazione**      | `conversation_evaluations.result`, `.overall_score`                                                                                                             | Generata da un modello linguistico                                                                                                                                                                                                                                      |
 | Revisione umana e annotazioni del formatore       | `conversation_reviews`, `message_annotations`                                                                                                                   | Scritte da un formatore                                                                                                                                                                                                                                                 |
@@ -63,6 +64,16 @@ esiste un secondo interessato nella chiamata.
 venisse usata per identificare univocamente qualcuno. SkillLab non lo fa e
 non deve iniziare a farlo senza rifare la valutazione dei rischi: nessun
 riconoscimento del parlante, nessuna impronta vocale.
+
+**Lo schermo registrato può contenere di tutto.** È lo schermo intero, non
+la sola pagina del test: quello che la persona ha aperto di fianco mentre
+rispondeva finisce nel video, e può essere una procedura aziendale come una
+finestra di posta personale. Per questo la registrazione è opzionale per
+test, la si dichiara prima di cominciare, senza condivisione il test non
+parte (chi non vuole essere registrato non lo svolge), la guardano solo gli
+amministratori dell'organizzazione della persona, e scade con la finestra
+corta dell'audio. Nel contratto con il cliente va detto che l'accensione
+della spunta su un test è una scelta sua, con gli obblighi della sezione 5.
 
 ## 3. Finalità e base giuridica
 
@@ -197,7 +208,8 @@ giudizio, come il resto, è sul gruppo e non su qualcuno in particolare.
 ## 5. Il monitoraggio dei lavoratori (Italia)
 
 Uno strumento che registra, trascrive e valuta la prestazione di un
-dipendente consente il controllo a distanza dell'attività lavorativa. In
+dipendente, e che su richiesta registra lo schermo intero mentre svolge un
+test, consente il controllo a distanza dell'attività lavorativa. In
 Italia questo ricade nell'**art. 4 della legge 300/1970**: il datore di
 lavoro deve avere un accordo sindacale o un'autorizzazione dell'Ispettorato
 del Lavoro prima di usarlo.
@@ -271,6 +283,7 @@ cliente**: se si cambiano lì vanno cambiati anche nell'informativa.
 | Dato                                                                | Finestra attuale                                                             | Variabile                              |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------- |
 | Registrazione audio della chiamata                                  | 90 giorni                                                                    | `AUDIO_RECORDING_RETENTION_DAYS`       |
+| Registrazione dello schermo durante un test                         | 90 giorni                                                                    | `SCREEN_RECORDING_RETENTION_DAYS`      |
 | Conversazione intera: messaggi, valutazione, revisione, annotazioni | 730 giorni                                                                   | `CONVERSATION_RETENTION_DAYS`          |
 | Tentativi delle simulazioni tecniche: risposte date e punteggio     | 730 giorni                                                                   | `SIMULATION_ATTEMPT_RETENTION_DAYS`    |
 | Quadro d'insieme su una persona                                     | Quella delle conversazioni, misurata sulla prova più recente che aveva letto | `CONVERSATION_RETENTION_DAYS`          |
@@ -286,7 +299,9 @@ mentre la voce sparisce.
 Dei test tecnici scade il tentativo, non la simulazione: le risposte date da
 una persona e il voto che ne è uscito sono un dato di valutazione come gli
 altri, mentre le domande e il documento da cui nascono non riguardano
-nessuno in particolare e restano.
+nessuno in particolare e restano. Lo schermo registrato durante il test sta
+al tentativo come l'audio sta alla conversazione: scade per primo, sulla
+propria variabile, e il tentativo gli sopravvive con il voto e le risposte.
 
 Il quadro d'insieme non ha una finestra propria e non ne merita una: è una
 sintesi delle conversazioni, quindi non può sopravvivere alle conversazioni
@@ -331,8 +346,8 @@ giorni ma indefinito.
 
 | Diritto                                 | Come è soddisfatto                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, tutti i quadri d'insieme scritti su di lui con la direzione che ciascuno indicava, accessi e registro attività, più le registrazioni audio come file riproducibili (`backend/personal_data.py`) |
-| **Cancellazione** (art. 17)             | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni, sessioni, percorsi assegnati e il quadro d'insieme, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`)                                                                                                                                                                                                                |
+| **Accesso e portabilità** (art. 15, 20) | L'utente scarica da solo un archivio ZIP dalla pagina Profilo: JSON strutturato con profilo, trascrizioni integrali, valutazioni, revisioni, percorsi assegnati con le loro tappe, test tecnici svolti con le risposte date, il tempo impiegato e i punti presi, tutti i quadri d'insieme scritti su di lui con la direzione che ciascuno indicava, accessi e registro attività, più le registrazioni audio e i video dello schermo registrato durante i test come file riproducibili (`backend/personal_data.py`) |
+| **Cancellazione** (art. 17)             | Un amministratore elimina l'account: spariscono conversazioni, messaggi, valutazioni, revisioni, annotazioni, registrazioni audio e dello schermo, tentativi dei test, sessioni, percorsi assegnati e il quadro d'insieme, e l'utenza viene rimossa anche da Cognito (`backend/erasure.py`)                                                                                                                                                                                                                |
 | **Rettifica** (art. 16)                 | L'anagrafica la tiene l'amministrazione: nome, cognome ed email li corregge un amministratore su richiesta dell'interessato, che dalla pagina Profilo li vede in sola lettura                                                                                                                                                                                                                                                                                    |
 | **Intervento umano** (art. 22)          | Correzione del voto da parte di un formatore, firmata e motivata (sezione 4)                                                                                                                                                                                                                                                                                                                                                                                     |
 | **Opposizione, limitazione**            | Da gestire contrattualmente con il titolare: non esistono nel software                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -392,6 +407,17 @@ dipendente il consenso non sarebbe valido. Chi non vuole procedere annulla.
 Dopo la prima volta l'avviso non si ripete, ma restano una riga fissa sotto
 il pulsante di chiamata e un indicatore "Registrazione in corso" che compare
 durante la telefonata, quando la registrazione sta effettivamente avvenendo.
+
+Lo stesso schema per lo schermo registrato durante un test tecnico, con un
+avviso suo e una memoria sua
+(`frontend/src/components/ScreenRecordingNoticeModal.tsx`): l'intero schermo
+viene registrato dall'avvio alla consegna, lo guardano i formatori
+dell'organizzazione, interrompere la condivisione consegna il test in quel
+momento. È un trattamento diverso dalla voce e chi ha letto un avviso non ha
+letto l'altro. Prima ancora dell'avviso, la regola sta scritta in testa a
+quelle del test, solo a chi verrà registrato davvero; durante il test
+l'intestazione porta "Schermo in registrazione" e il browser la propria barra
+di condivisione, che è anche il modo di interrompere.
 
 **Cookie.** L'applicazione usa due soli cookie, entrambi tecnici di sessione,
 `HttpOnly` `Secure` `SameSite=Lax`, e nessuno script di terze parti né

@@ -78,10 +78,12 @@ from models import (
     SIMULATION_STATUS_PUBLISHED,
     SimulationAttempt,
     SimulationQuestion,
+    SimulationScreenRecording,
     TechnicalSimulation,
     User,
 )
 from schemas import (
+    ScreenRecordingInfo,
     SimulationAnswerResult,
     SimulationAttemptResponse,
     SimulationAttemptSummary,
@@ -101,6 +103,17 @@ from simulation_scoring import (
 )
 
 router = APIRouter(prefix="/api/simulations", tags=["simulations"])
+
+# Quanto può pesare lo schermo registrato durante un test. Più dell'audio di
+# una chiamata (50 MB) perché un test a risposta aperta non ha limite di
+# tempo, e mezz'ora di schermo a cinque fotogrammi al secondo sono un
+# centinaio di megabyte anche con il bitrate tenuto basso dal browser (vedi
+# ``screenRecording.ts``). Il gemello sta in Caddy, che rifiuta prima che il
+# corpo arrivi qui.
+MAX_SCREEN_RECORDING_BYTES = 150 * 1024 * 1024
+# Solo il container: i parametri del codec che il browser attacca dietro
+# ("video/webm;codecs=vp9") non contano per accettare o rifiutare.
+_ALLOWED_SCREEN_RECORDING_TYPES = {"video/webm", "video/mp4"}
 
 
 def visible_query(db: Session, user: User, include_drafts: bool = False):
@@ -243,6 +256,7 @@ def to_response(
         "source": simulation.source,
         "document_name": simulation.document_name,
         "question_count": question_count,
+        "records_screen": simulation.records_screen,
         "created_at": simulation.created_at,
         "updated_at": simulation.updated_at,
         "last_attempt_at": stats.get("last_at"),
@@ -442,6 +456,14 @@ def _attempt_response(attempt: SimulationAttempt) -> dict:
         "earned_points": attempt.earned_points or 0.0,
         "score": attempt.score,
         "created_at": attempt.created_at,
+        "screen_recording_expected": attempt.screen_recording_expected,
+        # I metadati e basta: la colonna del video è deferred e questa
+        # lettura non la tocca (vedi ``SimulationScreenRecording``).
+        "screen_recording": (
+            ScreenRecordingInfo.model_validate(attempt.screen_recording)
+            if attempt.screen_recording is not None
+            else None
+        ),
     }
 
 
@@ -782,6 +804,10 @@ def _store_attempt(
         question_count=question_count,
         earned_points=attempt_points([a["points"] for a in answers]),
         answers=answers,
+        # Congelato adesso, con quello che valeva adesso: la spunta del test
+        # e il ruolo di chi lo consegna. Il super admin non si registra mai.
+        screen_recording_expected=bool(simulation.records_screen)
+        and user.ruolo != ROLE_SUPER_ADMIN,
     )
     db.add(attempt)
     db.commit()
@@ -882,6 +908,7 @@ def list_my_attempts(
     simulation = get_visible_or_404(db, current_user, simulation_id)
     attempts = (
         db.query(SimulationAttempt)
+        .options(joinedload(SimulationAttempt.screen_recording))
         .filter(
             SimulationAttempt.simulation_id == simulation.id,
             SimulationAttempt.user_id == current_user.id,
@@ -915,16 +942,20 @@ def _readable_attempt_or_404(db: Session, attempt_id: UUID, user: User) -> Simul
     if not attempt:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentativo non trovato.")
     is_owner = attempt.user_id == user.id
-    is_admin_of_tenant = False
-    if user.ruolo in (ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN):
-        scope = resolve_admin_scope(user)
-        # `attempt.user` è None solo se la persona è stata cancellata, e allora
-        # il tentativo non è di nessun tenant: resta al super admin.
-        taker_org = attempt.user.organization_id if attempt.user else None
-        is_admin_of_tenant = scope is None or scope == taker_org
-    if not is_owner and not is_admin_of_tenant:
+    if not is_owner and not _administers_taker(user, attempt):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentativo non trovato.")
     return attempt
+
+
+def _administers_taker(user: User, attempt: SimulationAttempt) -> bool:
+    """`user` amministra il tenant di chi ha svolto questo tentativo."""
+    if user.ruolo not in (ROLE_SUPER_ADMIN, ROLE_ORGANIZATION_ADMIN):
+        return False
+    scope = resolve_admin_scope(user)
+    # `attempt.user` è None solo se la persona è stata cancellata, e allora
+    # il tentativo non è di nessun tenant: resta al super admin.
+    taker_org = attempt.user.organization_id if attempt.user else None
+    return scope is None or scope == taker_org
 
 
 @router.get("/attempts/{attempt_id}", response_model=SimulationAttemptResponse)
@@ -977,6 +1008,169 @@ def download_attempt_pdf(
     )
 
 
+# ── La registrazione dello schermo ────────────────────────────────────
+#
+# Il gemello di ``routers.voice.upload_recording`` per il video di un test,
+# e con la stessa forma: il corpo è il file grezzo, il Content-Type è quello
+# che MediaRecorder ha prodotto, si legge a pezzi e si smette al primo che
+# manda oltre il tetto. Le due parti che toccano il database girano in un
+# thread per la stessa ragione di là: sono decine di megabyte in una INSERT
+# sola, e su questo stesso event loop ci sono le telefonate in corso.
+#
+# La differenza è in chi legge. L'audio di una chiamata se lo riascolta anche
+# chi ha parlato; lo schermo di un test lo guardano solo gli amministratori
+# del tenant di chi lo ha svolto. Non perché sia un segreto per lui, è il suo
+# schermo e nell'archivio dei propri dati lo ritrova (vedi ``personal_data``),
+# ma perché nell'applicazione non c'è una schermata in cui rivedersi
+# rispondere gli servirebbe a qualcosa, e un video che si può aprire da due
+# lati è due volte il posto in cui un link sbagliato lo mostra a chi non deve.
+
+
+async def _read_capped(request: Request) -> bytes:
+    """Il corpo della richiesta, e non un byte oltre il tetto (vedi ``routers.voice``)."""
+    pezzi: list[bytes] = []
+    totale = 0
+    async for pezzo in request.stream():
+        totale += len(pezzo)
+        if totale > MAX_SCREEN_RECORDING_BYTES:
+            raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
+        pezzi.append(pezzo)
+    return b"".join(pezzi)
+
+
+def _own_recorded_attempt_or_error(db: Session, attempt_id: UUID, user_id: UUID) -> None:
+    """Il tentativo è di chi carica e aspettava una registrazione, o niente.
+
+    Un tentativo che non prevedeva la registrazione la rifiuta: la spunta
+    l'ha decisa chi ha preparato il test, e un video arrivato a un tentativo
+    che non doveva averne è un video che nessuno ha detto di voler tenere.
+    Vale anche per il super admin, che non è mai registrato.
+
+    Lettura bloccante, chiamata da un thread (vedi ``upload_screen_recording``).
+    """
+    attempt = (
+        db.query(SimulationAttempt)
+        .filter(SimulationAttempt.id == attempt_id, SimulationAttempt.user_id == user_id)
+        .first()
+    )
+    if attempt is None:
+        raise HTTPException(status_code=404, detail="Tentativo non trovato.")
+    if not attempt.screen_recording_expected:
+        raise HTTPException(
+            status_code=409, detail="Questo tentativo non prevedeva la registrazione dello schermo."
+        )
+
+
+def _store_screen_recording(
+    db: Session,
+    attempt_id: UUID,
+    container: str,
+    duration_ms: int | None,
+    interrupted: bool,
+    video: bytes,
+) -> ScreenRecordingInfo:
+    """Scrive la registrazione, sostituendo quella che c'era.
+
+    Un secondo caricamento per lo stesso tentativo prende il posto del
+    primo: la ripetizione dopo una POST caduta a metà non deve lasciare due
+    video a metà. Scrittura bloccante, chiamata da un thread, e la risposta
+    si costruisce qui dentro perché dopo il commit la riga è scaduta.
+    """
+    recording = (
+        db.query(SimulationScreenRecording)
+        .filter(SimulationScreenRecording.attempt_id == attempt_id)
+        .first()
+    )
+    if recording is None:
+        recording = SimulationScreenRecording(attempt_id=attempt_id)
+        db.add(recording)
+    recording.mime_type = container
+    recording.duration_ms = duration_ms
+    recording.interrupted = interrupted
+    recording.size_bytes = len(video)
+    recording.video = video
+    db.commit()
+    db.refresh(recording)
+    return ScreenRecordingInfo.model_validate(recording)
+
+
+@router.post("/attempts/{attempt_id}/screen-recording", response_model=ScreenRecordingInfo)
+async def upload_screen_recording(
+    attempt_id: UUID,
+    request: Request,
+    duration_ms: int | None = None,
+    interrupted: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Carica lo schermo registrato durante il test appena consegnato.
+
+    Arriva dopo la consegna e non insieme: il tentativo nasce lì, e prima di
+    quel momento non c'è un id a cui attaccare il video. Il browser tiene il
+    file in memoria finché il caricamento non riesce, quindi una POST caduta
+    si ripete e sostituisce quello che eventualmente era arrivato.
+
+    ``interrupted`` lo dice il browser, ed è l'unico che può: la condivisione
+    l'ha fermata chi rispondeva, dal pulsante che il browser gli mette sotto
+    gli occhi, e il test è stato consegnato in quell'istante con le risposte
+    che c'erano. Il video arriva lo stesso, fino a lì.
+    """
+    user_id = current_user.id
+    await asyncio.to_thread(_own_recorded_attempt_or_error, db, attempt_id, user_id)
+
+    content_type = (request.headers.get("content-type") or "").strip()
+    container = content_type.split(";")[0].strip().lower()
+    if container not in _ALLOWED_SCREEN_RECORDING_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Formato video non supportato: {container or 'assente'}.",
+        )
+
+    # Sulla lunghezza dichiarata prima di leggere, e sul corpo vero dopo:
+    # il Content-Length è una dichiarazione, non una garanzia.
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_SCREEN_RECORDING_BYTES:
+        raise HTTPException(status_code=413, detail="Registrazione troppo grande.")
+
+    video = await _read_capped(request)
+    if not video:
+        raise HTTPException(status_code=400, detail="Registrazione vuota.")
+
+    return await asyncio.to_thread(
+        _store_screen_recording, db, attempt_id, container, duration_ms, interrupted, video
+    )
+
+
+@router.get("/attempts/{attempt_id}/screen-recording")
+def get_screen_recording(
+    attempt_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Il video, nel formato in cui è stato registrato. Solo per chi amministra.
+
+    Lo stesso confine del dettaglio del tentativo, meno chi lo ha svolto:
+    l'organizzazione di **chi ha risposto**, non quella del test (vedi
+    ``_readable_attempt_or_404``). Un video che non si può guardare è
+    indistinguibile da uno che non c'è.
+    """
+    attempt = db.query(SimulationAttempt).filter(SimulationAttempt.id == attempt_id).first()
+    if attempt is None or not _administers_taker(current_user, attempt):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tentativo non trovato.")
+    recording = attempt.screen_recording
+    if recording is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Registrazione non trovata."
+        )
+    # È leggere `.video` a caricare il blob deferred: una query in più, solo
+    # sull'endpoint che i byte li serve davvero.
+    return Response(
+        content=recording.video,
+        media_type=recording.mime_type,
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
 @router.get("/{simulation_id}/results", response_model=list[SimulationAttemptSummary])
 def list_simulation_results(
     simulation_id: UUID,
@@ -1008,8 +1202,12 @@ def list_simulation_results(
     l'organizzazione che quella persona ha appena lasciato.
     """
     simulation = get_visible_or_404(db, current_admin, simulation_id, include_drafts=True)
+    # La registrazione arriva con la stessa query: sono i metadati e basta
+    # (la colonna del video resta deferred), e senza sarebbe una SELECT per
+    # ogni riga dell'elenco.
     attempts = (
         db.query(SimulationAttempt)
+        .options(joinedload(SimulationAttempt.screen_recording))
         .filter(SimulationAttempt.simulation_id == simulation.id)
         .order_by(SimulationAttempt.created_at.desc())
         .all()

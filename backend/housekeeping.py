@@ -151,7 +151,8 @@ def purge_now(conn: Connection | None = None) -> None:
     logger.info(
         "Housekeeping: %d righe di audit, %d sessioni scadute, %d chiamate mai "
         "iniziate, %d tentativi di accesso, %d conversazioni, %d registrazioni "
-        "audio, %d tentativi di simulazione, %d debriefing eliminati.",
+        "audio, %d tentativi di simulazione, %d registrazioni dello schermo, "
+        "%d debriefing eliminati.",
         logs,
         sessions,
         calls,
@@ -159,6 +160,7 @@ def purge_now(conn: Connection | None = None) -> None:
         removed.conversations,
         removed.recordings,
         removed.simulation_attempts,
+        removed.screen_recordings,
         removed.debriefings,
     )
 

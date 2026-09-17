@@ -131,10 +131,12 @@ degli avatar sotto `/static`.
 | `frame-ancestors 'none'` (dentro la CSP) | Il clickjacking sui gesti distruttivi dell'area di amministrazione |
 | `Strict-Transport-Security` | Il primo collegamento in chiaro, su cui i cookie `Secure` non viaggerebbero |
 
-Nello stesso blocco, e per un motivo diverso, ci sono anche **due tetti su
+Nello stesso blocco, e per un motivo diverso, ci sono anche **tre tetti su
 quanto può pesare una richiesta**: 55 MB sulla rotta che riceve la
-registrazione di una chiamata, 12 MB su tutto il resto dell'API. Gli endpoint
-che ricevono un file hanno già i loro (2 MB un ritratto, 10 MB un documento),
+registrazione di una chiamata, 160 MB su quella che riceve lo schermo
+registrato durante un test, 12 MB su tutto il resto dell'API. Gli endpoint
+che ricevono un file hanno già i loro (2 MB un ritratto, 10 MB un documento,
+50 MB un audio, 150 MB un video),
 ma quei controlli guardano i byte **quando sono già arrivati**: un multipart lo
 legge per intero FastAPI prima di passarlo alla funzione, e finisce in un file
 temporaneo dentro il container, quindi un caricamento da svariati giga veniva
@@ -263,6 +265,7 @@ produzione i valori sono quelli elencati in [gdpr.md](gdpr.md):
 | Registrazione audio della chiamata | 90 giorni | `AUDIO_RECORDING_RETENTION_DAYS` |
 | Conversazione intera con valutazione e revisione | 730 giorni | `CONVERSATION_RETENTION_DAYS` |
 | Tentativi delle simulazioni tecniche | 730 giorni | `SIMULATION_ATTEMPT_RETENTION_DAYS` |
+| Registrazione dello schermo durante un test | 90 giorni | `SCREEN_RECORDING_RETENTION_DAYS` |
 | Quadro d'insieme su una persona | La finestra delle conversazioni, misurata sulla prova più recente che aveva letto | `CONVERSATION_RETENTION_DAYS` |
 | Registro delle azioni | 180 giorni | `AUDIT_LOG_RETENTION_DAYS` |
 

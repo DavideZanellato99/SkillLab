@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /* La pagina della galleria: a chi compare il pulsante con cui si chiede un
- * avatar al super admin, e il filo che lo lega alla modale nel pannello
- * sotto. Testata, galleria e pannello hanno i loro test. */
+ * avatar al super admin, e la modale che apre. Testata, galleria e modale
+ * hanno i loro test. */
 
 const sessione = vi.hoisted(() => ({ ruolo: 'user' }))
 vi.mock('../../src/hooks/useAuth', () => ({
@@ -16,18 +16,9 @@ vi.mock('../../src/components/Header', () => ({
 vi.mock('../../src/components/AvatarGallery', () => ({
   default: () => <div>galleria</div>,
 }))
-vi.mock('../../src/components/AvatarRequestsPanel', () => ({
-  default: ({
-    isRequesting,
-    onCloseRequest,
-  }: {
-    isRequesting: boolean
-    onCloseRequest: () => void
-  }) => (
-    <div>
-      pannello delle richieste
-      {isRequesting && <button onClick={onCloseRequest}>chiudi la modale</button>}
-    </div>
+vi.mock('../../src/components/AvatarRequestModal', () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <button onClick={onClose}>chiudi la modale</button>
   ),
 }))
 
@@ -42,7 +33,7 @@ describe('HomePage', () => {
     sessione.ruolo = 'organization_admin'
     render(<HomePage />)
 
-    expect(screen.getByText('pannello delle richieste')).toBeInTheDocument()
+    expect(screen.getByText('galleria')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'chiudi la modale' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Richiedi un Avatar' }))
@@ -56,7 +47,6 @@ describe('HomePage', () => {
     render(<HomePage />)
 
     expect(screen.queryByRole('button', { name: 'Richiedi un Avatar' })).not.toBeInTheDocument()
-    expect(screen.queryByText('pannello delle richieste')).not.toBeInTheDocument()
   })
 
   it('al super admin non lo offre', () => {
@@ -64,6 +54,5 @@ describe('HomePage', () => {
     render(<HomePage />)
 
     expect(screen.queryByRole('button', { name: 'Richiedi un Avatar' })).not.toBeInTheDocument()
-    expect(screen.queryByText('pannello delle richieste')).not.toBeInTheDocument()
   })
 })

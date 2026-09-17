@@ -102,6 +102,11 @@ def _add_columns() -> None:
         conn.execute(
             text("ALTER TABLE conversation_recordings ALTER COLUMN audio SET STORAGE EXTERNAL")
         )
+        # Stessa ragione per lo schermo registrato durante un test: VP9 o
+        # H.264 già compressi, e TOAST non ci guadagna niente a riprovarci.
+        conn.execute(
+            text("ALTER TABLE simulation_screen_recordings ALTER COLUMN video SET STORAGE EXTERNAL")
+        )
         # Multi-tenant columns (the organizations table itself is created by
         # create_all). Added nullable here; avatars.organization_id is locked
         # down to NOT NULL later, after any legacy rows are adopted. On users
@@ -201,6 +206,23 @@ def _add_columns() -> None:
             text(
                 "ALTER TABLE technical_simulations ADD COLUMN IF NOT EXISTS "
                 "review_fingerprint VARCHAR(64)"
+            )
+        )
+        # Se il test registra lo schermo di chi lo svolge. Le simulazioni di
+        # prima non lo facevano, che è il default della colonna: nessun
+        # backfill, nessuno si ritrova registrato da un giorno all'altro.
+        conn.execute(
+            text(
+                "ALTER TABLE technical_simulations ADD COLUMN IF NOT EXISTS "
+                "records_screen BOOLEAN NOT NULL DEFAULT FALSE"
+            )
+        )
+        # E se un tentativo doveva arrivare con quella registrazione. Sui
+        # tentativi di prima nessuna era prevista, che è di nuovo il default.
+        conn.execute(
+            text(
+                "ALTER TABLE simulation_attempts ADD COLUMN IF NOT EXISTS "
+                "screen_recording_expected BOOLEAN NOT NULL DEFAULT FALSE"
             )
         )
         # La chiave di una domanda aperta. Vuota sulle domande a scelta

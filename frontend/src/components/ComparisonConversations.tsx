@@ -311,7 +311,7 @@ export default function ComparisonConversations({
           kindOptions={MODE_FILTERS}
           onKindChange={setModeFilter}
           targetId="conversation-avatar"
-          targetLabel="Scenario"
+          targetLabel="Avatar"
           targetValue={avatarFilter}
           targetOptions={avatarOptions}
           onTargetChange={setPickedAvatarId}
@@ -423,11 +423,12 @@ export default function ComparisonConversations({
 
           {/* Il contesto in fondo: chi è arrivato fin qui ha già letto di
               quanto e su cosa, e adesso vuole sapere di quali due prove si
-              stava parlando. Senza `items-start` i due riquadri si stirano
-              all'altezza del più alto, e le sintesi sono lunghe quanto
-              capita. */}
-          <h2 className="mb-3 text-sm font-semibold text-slate-300">Le Due Conversazioni</h2>
-          <div className="grid grid-cols-2 items-start gap-6 max-md:grid-cols-1">
+              stava parlando. I due riquadri sono alti uguali, all'altezza
+              del più lungo: le sintesi sono lunghe quanto capita, e due
+              schede affiancate che finiscono a due altezze diverse si
+              leggono come due cose diverse invece che come una coppia. */}
+          <h2 className="mb-3 text-sm font-semibold text-slate-300">Le due Conversazioni</h2>
+          <div className="grid grid-cols-2 gap-6 max-md:grid-cols-1">
             <AttemptPanel role="Prima" attempt={left} onOpen={() => setOpenAttempt(left)} />
             <AttemptPanel role="Dopo" attempt={right} onOpen={() => setOpenAttempt(right)} />
           </div>

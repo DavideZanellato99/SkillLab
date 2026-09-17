@@ -152,7 +152,7 @@ function adminSteps(): TutorialStep[] {
     {
       id: 'confronto',
       title: 'Confronto',
-      body: 'Da questa sezione puoi mettere a confronto due tentativi effettuati dalla stessa risorsa. Analizza i progressi e indentifica eventuali aree di miglioramento.',
+      body: 'Da questa sezione puoi mettere a confronto due tentativi effettuati dalla stessa risorsa. Analizza i progressi e identifica eventuali aree di miglioramento.',
       Icon: CompareIcon,
       anchor: navAnchor('/app/confronto'),
     },

@@ -6,6 +6,7 @@ import Field, { TextInput, textareaCls } from './Field'
 import FormError from './FormError'
 import FormSuccess from './FormSuccess'
 import PrimaryButton from './PrimaryButton'
+import SimulationScreenRecordingField from './SimulationScreenRecordingField'
 import Spinner from './Spinner'
 import { UploadIcon } from './icons'
 
@@ -25,7 +26,8 @@ import { UploadIcon } from './icons'
  * non chi ha scritto le domande, perché le domande sono già nate dell'una o
  * dell'altra forma. A dirlo è il server (vedi `update_simulation`), e qui
  * quei campi non compaiono proprio: un campo spento sarebbe una promessa che
- * nessuno mantiene.
+ * nessuno mantiene. La registrazione dello schermo invece sì: non tocca le
+ * domande, e vale dal prossimo tentativo in poi.
  *
  * La sostituzione del documento esiste dove un documento c'è: su un test
  * scritto a mano non ce n'è mai stato uno. Sostituirlo cancella i passaggi di
@@ -40,7 +42,8 @@ interface SimulationSettingsPanelProps {
    *  ospita questo: cambiando linguetta non si perdono. */
   title: string
   description: string
-  onChange: (details: { title: string; description: string }) => void
+  recordsScreen: boolean
+  onChange: (details: { title: string; description: string; recordsScreen: boolean }) => void
   onSave: () => void
   isSaving: boolean
   /** L'ultimo salvataggio è riuscito, e da allora i campi non sono stati più
@@ -59,6 +62,7 @@ export default function SimulationSettingsPanel({
   simulation,
   title,
   description,
+  recordsScreen,
   onChange,
   onSave,
   isSaving,
@@ -80,7 +84,10 @@ export default function SimulationSettingsPanel({
 
   const isManual = simulation.source === 'manual'
   const busy = disabled || isSaving || isReplacing
-  const changed = title !== simulation.title || description !== (simulation.description ?? '')
+  const changed =
+    title !== simulation.title ||
+    description !== (simulation.description ?? '') ||
+    recordsScreen !== simulation.records_screen
   const canSave = Boolean(title.trim()) && changed && !busy
 
   const chooseFile = (file: File | null) => {
@@ -102,7 +109,7 @@ export default function SimulationSettingsPanel({
         <TextInput
           id="simulation-settings-title"
           value={title}
-          onChange={(e) => onChange({ title: e.target.value, description })}
+          onChange={(e) => onChange({ title: e.target.value, description, recordsScreen })}
           maxLength={150}
           disabled={busy}
         />
@@ -118,11 +125,18 @@ export default function SimulationSettingsPanel({
           className={textareaCls}
           rows={3}
           value={description}
-          onChange={(e) => onChange({ title, description: e.target.value })}
+          onChange={(e) => onChange({ title, description: e.target.value, recordsScreen })}
           placeholder="Es. Le venti casistiche più frequenti del primo livello"
           disabled={busy}
         />
       </Field>
+
+      <SimulationScreenRecordingField
+        id="simulation-settings-records-screen"
+        checked={recordsScreen}
+        onChange={(checked) => onChange({ title, description, recordsScreen: checked })}
+        disabled={busy}
+      />
 
       {error && <FormError message={error} />}
       {/* Il buon esito sparisce al primo tasto premuto: «Dati aggiornati»

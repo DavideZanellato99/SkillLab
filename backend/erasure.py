@@ -44,6 +44,7 @@ together.
 from collections.abc import Sequence
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from authorship import DELETED_ACTOR_EMAIL
@@ -56,6 +57,7 @@ from models import (
     Organization,
     PathDebriefing,
     SimulationAttempt,
+    SimulationScreenRecording,
     TechnicalSimulation,
     TokenSession,
     TrainingPath,
@@ -163,6 +165,14 @@ def erase_users(db: Session, user_ids: Sequence[UUID]) -> int:
         .all()
     ]
     erase_conversations(db, conversation_ids)
+
+    # Lo schermo registrato durante i loro test, prima dei tentativi a cui è
+    # attaccato: esplicito come per i figli di una conversazione, invece di
+    # affidarsi al cascade che il vincolo dichiara.
+    attempt_ids = select(SimulationAttempt.id).where(SimulationAttempt.user_id.in_(user_ids))
+    db.query(SimulationScreenRecording).filter(
+        SimulationScreenRecording.attempt_id.in_(attempt_ids)
+    ).delete(synchronize_session=False)
 
     for model in _USER_OWNED:
         db.query(model).filter(model.user_id.in_(user_ids)).delete(synchronize_session=False)

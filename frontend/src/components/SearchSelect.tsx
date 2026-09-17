@@ -7,11 +7,22 @@ import { matchesSearch } from './tableSearch'
  * (valore vuoto). Pattern ARIA "editable combobox" con listbox a comparsa,
  * stile in linea con Select.
  *
- * Le due varianti dicono che spazio prende la scelta. Come filtro la chip sta
- * accanto al campo, che resta lì pronto a filtrare di nuovo. Come campo di un
- * form la chip prende il posto del campo: è il valore di una casella che ne
- * vuole uno solo, e affiancare i due dentro una colonna di tabella
- * lascerebbe al campo di ricerca una fessura in cui non si legge nulla.
+ * Le due varianti dicono che spazio prende la scelta. Sopra (`above`, il
+ * default) la chip sta fuori dal flusso, a destra sulla riga dell'etichetta
+ * che chi usa il campo scrive sopra di lui, e il campo resta lì pronto a
+ * cercare di nuovo, largo sempre uguale: è per un campo con l'etichetta sopra
+ * e una larghezza sua, come quello accanto al titolo del confronto e il
+ * filtro utente della dashboard. Lo stesso posto del contatore di
+ * `MultiSearchSelect`, che è l'altro campo del confronto. Come campo di un
+ * form (`field`) la chip prende il posto del campo: è il valore di una
+ * casella che ne vuole uno solo, e affiancare i due dentro una colonna di
+ * tabella lascerebbe al campo di ricerca una fessura in cui non si legge
+ * nulla.
+ *
+ * C'era una terza variante, con la chip accanto al campo: ogni scelta lo
+ * restringeva, e un campo che cambia larghezza alla prima scelta si legge
+ * come un altro campo. Sotto non poteva stare, perché i suggerimenti aperti
+ * l'avrebbero coperta.
  *
  * **I nomi non si tagliano.** Chi cerca sta scegliendo fra cose che si
  * somigliano, e due avatar dello stesso reparto si distinguono spesso per
@@ -33,11 +44,12 @@ interface SearchSelectProps {
   onChange: (value: string) => void
   options: SearchSelectOption[]
   placeholder?: string
-  /** Testo muto mostrato accanto al campo quando non c'è selezione */
+  /** Testo muto mostrato al posto della chip quando non c'è selezione */
   emptyHint?: string
-  /** 'filter': la chip sta accanto al campo. 'field': la chip prende il posto
-   * del campo, che torna solo quando si toglie la scelta. */
-  variant?: 'filter' | 'field'
+  /** 'above': la chip sta sopra il campo, a destra, sulla riga dell'etichetta.
+   * 'field': la chip prende il posto del campo, che torna solo quando si
+   * toglie la scelta. */
+  variant?: 'above' | 'field'
   /** Classi extra sul wrapper (es. larghezza) */
   className?: string
 }
@@ -49,7 +61,7 @@ export default function SearchSelect({
   options,
   placeholder,
   emptyHint,
-  variant = 'filter',
+  variant = 'above',
   className = '',
 }: SearchSelectProps) {
   const [query, setQuery] = useState('')
@@ -151,15 +163,17 @@ export default function SearchSelect({
 
   const chip = selected && (
     <span
+      /* Sopra il campo la chip è bassa: sta sulla riga dell'etichetta, che
+         è una riga di testo piccolo, e con più imbottitura la sovrastava. */
       className={`flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 pl-3 pr-1.5 text-xs font-medium text-violet-300 ${
-        variant === 'field' ? 'min-w-0 flex-1 py-1.5' : 'max-w-[240px] shrink-0 py-1'
+        variant === 'field' ? 'min-w-0 flex-1 py-1.5' : 'max-w-[240px] shrink-0 py-0.5'
       }`}
     >
       {/* Come campo di un form il nome scelto va a capo invece di finire in
           puntini: è il valore della casella, e mezzo nome non dice quale
-          delle due cose simili si è scelta. Come filtro resta su una riga,
-          perché lì la chip sta in una barra di comandi accanto ad altri e
-          crescendo in altezza sposterebbe tutto il resto. */}
+          delle due cose simili si è scelta. Sopra il campo resta su una riga,
+          perché lì la chip sta sulla riga dell'etichetta e crescendo in
+          altezza salirebbe sopra di lei. */}
       <span className={variant === 'field' ? 'min-w-0 break-words' : 'truncate'}>
         {selected.label}
       </span>
@@ -191,9 +205,9 @@ export default function SearchSelect({
   )
 
   return (
-    <div ref={rootRef} className={`relative flex items-center gap-2 ${className}`}>
+    <div ref={rootRef} className={`relative ${className}`}>
       {!(variant === 'field' && selected) && (
-        <div className="relative flex-1">
+        <div className="relative">
           <svg
             width="14"
             height="14"
@@ -280,10 +294,18 @@ export default function SearchSelect({
         </div>
       )}
 
-      {selected
-        ? chip
-        : variant === 'filter' &&
-          emptyHint && <span className="shrink-0 text-xs text-slate-500">{emptyHint}</span>}
+      {/* Sopra il campo, fuori dal flusso e ancorata al suo bordo alto con lo
+          stesso margine di ogni campo fra etichetta e casella (`fieldCls`):
+          il campo non si sposta quando la chip compare, e la chip sta sulla
+          riga dell'etichetta, dall'altra parte. Come campo di un form la
+          chip ha già preso il posto del campo qui sopra. */}
+      {variant === 'above'
+        ? (selected || emptyHint) && (
+            <span className="absolute bottom-full right-0 mb-1.5 flex max-w-full items-center">
+              {selected ? chip : <span className="text-xs text-slate-500">{emptyHint}</span>}
+            </span>
+          )
+        : chip}
     </div>
   )
 }

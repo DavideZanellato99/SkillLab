@@ -859,12 +859,22 @@ di là si sceglie una persona, di qua se ne spuntano quante se ne vogliono.
 **Il campo è lo stesso nelle due sezioni**, etichetta sopra e stessa
 larghezza, e cambia solo quello che ci si fa: due campi diversi nello stesso
 posto si leggevano come due comandi diversi, e sono la stessa domanda
-(«chi»). Nel confronto tra utenti
+(«chi»). Anche quello che il campo dice di sé sta nello stesso posto, a
+destra sulla riga dell'etichetta e fuori dal flusso: di là la persona
+scelta, o «Le mie Prove» quando non ce n'è una, di qua quante persone
+sono spuntate e «Azzera». Accanto al campo lo restringevano, e sotto i
+suggerimenti aperti lo coprirebbero. Il contorno è scritto una volta sola in
+[ComparisonPeopleField](../frontend/src/components/ComparisonPeopleField.tsx),
+che si aggancia al bordo alto dell'intestazione e non al suo centro: la
+descrizione di una sezione andava a capo mentre quella dell'altra stava su
+una riga, e passando da una linguetta all'altra il campo saliva e scendeva di
+mezza riga. Il titolo è alto uguale nelle due, e agganciato a quello il campo
+sta fermo qualunque cosa ci sia scritto sotto. Nel confronto tra utenti
 ([MultiSearchSelect](../frontend/src/components/MultiSearchSelect.tsx)) ogni
 voce dell'elenco porta una **casella da spuntare**, come le persone nella
 finestra di assegnazione di un percorso: una spunta scritta davanti al nome
 diceva chi era scelto ma non che le altre si potevano scegliere insieme.
-Accanto al campo stanno quante persone sono state scelte e «Azzera»; i nomi
+Sopra il campo, a destra, stanno quante persone sono state scelte e «Azzera»; i nomi
 non si ripetono lì, li dicono le barre sotto.
 
 Si sceglie **cercando**, con lo stesso `SearchSelect` della dashboard e non con
@@ -1140,8 +1150,14 @@ e **si spuntano**
 ([MultiSearchSelect](../frontend/src/components/MultiSearchSelect.tsx)), e le
 barre sono di loro e soltanto di loro. Trenta barre aperte prima di aver
 scelto nessuno sarebbero la classifica dell'aula, che è la cosa che questa
-pagina non vuole essere. Chi è stato scelto non viene riscritto accanto al
-campo: lo dicono le barre che restano disegnate.
+pagina non vuole essere. In cima all'elenco sta però una riga **«Tutti gli
+utenti»**, che li spunta tutti in una volta ed è spuntata quando lo sono
+tutti, da cui si tolgono anche tutti: «tutta l'aula» è una scelta anche lei,
+e farla spuntando trenta nomi uno per uno era il gesto che il campo esiste
+per evitare. La riga compare solo a ricerca vuota, perché con un filtro
+scritto «tutti» direbbe una cosa e ne farebbe un'altra. Chi è stato scelto
+non viene riscritto accanto al campo: lo dicono le barre che restano
+disegnate.
 
 **Le barre e la tendina hanno due ordini diversi, e non è una svista.** Le
 barre stanno dalla media più alta, che è la risposta del riquadro; la tendina
@@ -1253,7 +1269,12 @@ dicono i grafici e la tabella sotto.
 Stessi filtri in cima (periodo, organizzazione e utente) e stessi disegni
 ([scoreCharts](../frontend/src/components/scoreCharts.tsx):
 andamento nel tempo, righe a barra, card dei KPI), perché la domanda è la
-stessa e cambia solo la prova su cui si risponde.
+stessa e cambia solo la prova su cui si risponde. La riga con l'utente e il
+canale (o il tipo di test) è una `FiltersBar` come nelle altre schermate,
+con l'etichetta sopra ogni campo, e la persona scelta, o «Tutti gli utenti»
+quando non ce n'è una, sta a destra sulla riga dell'etichetta
+(`SearchSelect`), come nel confronto: accanto al campo
+lo restringeva alla prima scelta.
 
 **Le due metà non si aspettano a vicenda.** La linguetta che si sta guardando
 disegna appena i suoi dati sono pronti: prima la pagina restava ferma dietro

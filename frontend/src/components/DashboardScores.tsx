@@ -8,8 +8,8 @@ import DashboardEvaluationsTable from './DashboardEvaluationsTable'
 import DashboardSimulations from './DashboardSimulations'
 import { useDashboardScope } from './dashboardViews'
 import EmptyState from './EmptyState'
-import { labelCls } from './Field'
 import FilterTabs from './FilterTabs'
+import FiltersBar, { FilterField } from './FiltersBar'
 import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import { MODE_FILTERS } from './conversationMode'
@@ -310,46 +310,50 @@ export default function DashboardScores() {
         panelBase={TAB_BASE}
       />
 
-      {/* Riga filtri: scopa tutto ciò che sta sotto */}
-      <div className="mb-6 flex items-center gap-3 max-lg:flex-wrap">
-        <label htmlFor="dashboard-user-filter" className={labelCls}>
-          Utente
-        </label>
-        <SearchSelect
-          id="dashboard-user-filter"
-          value={selectedUserId}
-          onChange={(value) => setParam(USER_PARAM, value)}
-          options={usersInData.map((u) => ({ value: u.id, label: u.name, sub: u.email }))}
-          placeholder="Cerca per nome o email..."
-          emptyHint="Tutti gli utenti"
+      {/* Riga filtri: scopa tutto ciò che sta sotto. La stessa barra delle
+          altre schermate, con l'etichetta sopra ogni campo; la persona
+          scelta, o «Tutti gli utenti», sta sulla riga dell'etichetta a
+          destra, come nel confronto: accanto al campo lo restringeva alla
+          prima scelta. */}
+      <FiltersBar>
+        <FilterField
+          label="Utente"
+          htmlFor="dashboard-user-filter"
           className="w-full max-w-[440px]"
-        />
+        >
+          <SearchSelect
+            id="dashboard-user-filter"
+            value={selectedUserId}
+            onChange={(value) => setParam(USER_PARAM, value)}
+            options={usersInData.map((u) => ({ value: u.id, label: u.name, sub: u.email }))}
+            placeholder="Cerca per nome o email..."
+            emptyHint="Tutti gli utenti"
+          />
+        </FilterField>
         {/* Ogni metà ha il proprio selettore di prova, nello stesso posto
             della barra: il canale di là, il tipo di test di qua. Sono la
             stessa domanda ("quale delle due sto guardando") fatta su due
             cose diverse, quindi non possono essere un selettore solo. */}
         {section === 'conversazioni' ? (
-          <>
-            <span className={`ml-auto ${labelCls} max-lg:ml-0`}>Canale</span>
+          <FilterField label="Canale" className="ml-auto max-lg:ml-0">
             <FilterTabs
               value={modeFilter}
               onChange={(value) => setParam(MODE_PARAM, value === 'voice' ? '' : value)}
               options={MODE_FILTERS}
               ariaLabel="Canale delle conversazioni"
             />
-          </>
+          </FilterField>
         ) : (
-          <>
-            <span className={`ml-auto ${labelCls} max-lg:ml-0`}>Tipo</span>
+          <FilterField label="Tipo" className="ml-auto max-lg:ml-0">
             <FilterTabs
               value={kindFilter}
               onChange={(value) => setParam(KIND_PARAM, value === 'all' ? '' : value)}
               options={KIND_FILTERS}
               ariaLabel="Tipo dei test tecnici"
             />
-          </>
+          </FilterField>
         )}
-      </div>
+      </FiltersBar>
 
       {isLoadingSection ? (
         <LoadingState message="Caricamento dashboard..." />

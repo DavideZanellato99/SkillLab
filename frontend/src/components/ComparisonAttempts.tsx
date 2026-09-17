@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { isAdmin } from '../services/auth'
 import { useAttempts, useComparableUsers, useSimulationAttempts } from '../hooks/useComparison'
 import ComparisonConversations from './ComparisonConversations'
+import ComparisonPeopleField from './ComparisonPeopleField'
 import ComparisonProvaTabs from './ComparisonProvaTabs'
 import type { ComparisonProva } from './ComparisonProvaTabs'
 import ComparisonSimulations from './ComparisonSimulations'
@@ -11,7 +12,6 @@ import { comparePeople } from './personOrder'
 import SearchSelect from './SearchSelect'
 import { TabPanel } from './TabBar'
 import LoadingState from './LoadingState'
-import { labelCls } from './Field'
 import FormError from './FormError'
 import { PageHeader } from './PageLayout'
 
@@ -138,16 +138,10 @@ export default function ComparisonAttempts({
      (vedi `personOrder`): le stesse persone ordinate in due modi in due
      schermate si leggono come due elenchi diversi.
 
-     `relative z-30` perché i suggerimenti cadono sopra il pannello dei
-     filtri, che con il suo backdrop-blur apre un contesto di impilamento e
-     gli passerebbe davanti. */
+     Il contorno, etichetta sopra e posto accanto al titolo, è quello di
+     `ComparisonPeopleField`, lo stesso dell'altra sezione. */
   const subjectPicker = canPickUser && (
-    <div className="relative z-30 w-[380px] shrink-0 max-lg:w-full">
-      {/* L'etichetta di ogni campo dell'app, non una riga di classi scritta
-          qui: in questa copia aveva perso la spaziatura delle altre. */}
-      <label className={`mb-1 block ${labelCls}`} htmlFor="subject">
-        Utente
-      </label>
+    <ComparisonPeopleField label="Utente" htmlFor="subject">
       <SearchSelect
         id="subject"
         value={subjectId}
@@ -158,9 +152,9 @@ export default function ComparisonAttempts({
           sub: p.email,
         }))}
         placeholder="Cerca per nome o email..."
-        emptyHint="Le Mie Prove"
+        emptyHint="Le mie Prove"
       />
-    </div>
+    </ComparisonPeopleField>
   )
 
   return (

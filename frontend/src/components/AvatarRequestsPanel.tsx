@@ -68,9 +68,6 @@ export default function AvatarRequestsPanel({
           <h2 id="avatar-requests-title" className="font-heading text-lg font-bold text-slate-100">
             Richieste di pubblicazione
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
-            Gli avatar chiesti al super admin: quelli in attesa e quelli rifiutati, con il motivo.
-          </p>
 
           {successMsg && (
             <div className="mt-5">

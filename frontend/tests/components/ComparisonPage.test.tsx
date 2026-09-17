@@ -153,7 +153,7 @@ describe('scelta della persona', () => {
   it('parte dalle proprie prove anche per un admin', () => {
     renderPage('organization_admin')
 
-    expect(screen.getByText('Le Mie Prove')).toBeInTheDocument()
+    expect(screen.getByText('Le mie Prove')).toBeInTheDocument()
     expect(stato.chiesto.subjectId).toBe('')
   })
 

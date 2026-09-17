@@ -35,10 +35,6 @@ export default function AvatarRequestsSection({ onFulfill, onReject }: AvatarReq
           {pending.length}
         </span>
       </h2>
-      <p className="mt-1 text-sm text-slate-400">
-        Le organizzazioni che aspettano un avatar nuovo. Compila la scheda per pubblicarlo, o
-        rifiuta la richiesta indicando il motivo.
-      </p>
       <ul className="mt-5 flex flex-col gap-2">
         {pending.map((request) => (
           <AvatarRequestAdminRow

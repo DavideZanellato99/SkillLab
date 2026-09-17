@@ -18,7 +18,8 @@ import { matchesSearch } from './tableSearch'
  * con i nomi: chi lo usa sta comandando qualcosa che si vede subito sotto (le
  * barre di un grafico, le righe di un elenco), e riscrivere lì gli stessi
  * nomi sarebbe la stessa cosa detta due volte a un centimetro di distanza.
- * Accanto al campo stanno solo quante sono e il comando per azzerarle tutte.
+ * Sopra il campo, a destra, stanno solo quante sono e il comando per
+ * azzerarle tutte.
  *
  * **In elenco ogni voce ha una casella.** Una spunta scritta davanti al nome
  * diceva chi era scelto ma non che le altre si potevano scegliere insieme:
@@ -30,6 +31,13 @@ import { matchesSearch } from './tableSearch'
  * scelta sola. Da qui si disfa una scelta ricliccandola in elenco o con il
  * backspace a campo vuoto.
  *
+ * **In cima, se chi lo usa lo chiede, una riga che spunta tutti.** Con
+ * `selectAllLabel` la lista comincia con una voce che sceglie tutte le voci
+ * in una volta, e che è spuntata quando lo sono tutte: da lì si tolgono
+ * anche tutte, come da «Azzera». Compare solo a ricerca vuota, perché con un
+ * filtro scritto «tutti» direbbe una cosa e ne farebbe un'altra, e con la
+ * ricerca si sta cercando qualcuno in particolare.
+ *
  * **La lista sta in un portal, con `position: fixed`.** Il campo vive dentro
  * una scheda con `backdrop-blur`, che è un contesto di impilamento a sé: uno
  * `z-index` alto dentro la scheda non vale niente contro la scheda successiva,
@@ -40,6 +48,19 @@ import { matchesSearch } from './tableSearch'
 const GAP = 6
 const EDGE_PAD = 8
 
+/* La chiave della riga che spunta tutti. Le voci vere hanno per chiave il
+   proprio valore, che è un id, e uno spazio non lo è mai. */
+const SELECT_ALL_KEY = ' '
+
+interface Row {
+  key: string
+  label: string
+  sub?: string
+  isSelected: boolean
+  /** Le scelte dopo aver cliccato questa riga. */
+  next: string[]
+}
+
 export default function MultiSearchSelect({
   id,
   values,
@@ -47,6 +68,7 @@ export default function MultiSearchSelect({
   options,
   placeholder,
   align = 'left',
+  selectAllLabel,
   className = '',
 }: {
   id?: string
@@ -55,6 +77,9 @@ export default function MultiSearchSelect({
   onChange: (values: string[]) => void
   options: SearchSelectOption[]
   placeholder?: string
+  /** Il testo della riga in cima che spunta tutte le voci. Senza, la riga
+      non c'è. */
+  selectAllLabel?: string
   /* Da che parte si apre la lista dei suggerimenti. Conta dove il campo è
    * appoggiato al bordo destro di una scheda, come nel confronto fra utenti:
    * lì una lista che si allarga verso destra uscirebbe dal riquadro. */
@@ -75,11 +100,40 @@ export default function MultiSearchSelect({
     [options, query],
   )
 
+  const allSelected = options.length > 0 && options.every((o) => values.includes(o.value))
+  const showSelectAll = Boolean(selectAllLabel) && query === '' && options.length > 0
+
+  /* Le righe della lista come si scorrono con le frecce: la riga che spunta
+     tutti, se c'è, sta in cima e conta come le altre, così `activeIndex` e
+     gli id delle opzioni contano una cosa sola. */
+  const rows = useMemo<Row[]>(() => {
+    const list: Row[] = visible.map((opt) => ({
+      key: opt.value,
+      label: opt.label,
+      sub: opt.sub,
+      isSelected: values.includes(opt.value),
+      next: values.includes(opt.value)
+        ? values.filter((value) => value !== opt.value)
+        : [...values, opt.value],
+    }))
+    if (showSelectAll) {
+      list.unshift({
+        key: SELECT_ALL_KEY,
+        label: selectAllLabel ?? '',
+        isSelected: allSelected,
+        next: allSelected ? [] : options.map((o) => o.value),
+      })
+    }
+    return list
+  }, [visible, values, showSelectAll, selectAllLabel, allSelected, options])
+
   // Ancora la lista al campo: il bordo scelto con `align` combacia con quello
-  // del campo, e la lista resta dentro la finestra. Misurabile solo dopo il
-  // primo render, fino ad allora è invisibile per evitare lo sfarfallio. Si
-  // rimisura anche quando cambiano le voci visibili, perché con esse cambia
-  // la larghezza della lista.
+  // del campo, e la lista resta dentro la finestra. Il campo è largo sempre
+  // uguale: quando il conteggio gli stava accanto lo restringeva, e la lista,
+  // ancorata al bordo di prima, saltava di lato alla prima rimisurazione.
+  // Misurabile solo dopo il primo render, fino ad allora è invisibile per
+  // evitare lo sfarfallio. Si rimisura anche quando cambiano le voci
+  // visibili, perché con esse cambia la larghezza della lista.
   const place = useCallback(() => {
     const rect = inputRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -93,14 +147,24 @@ export default function MultiSearchSelect({
   }, [align])
   useLayoutEffect(() => {
     if (isOpen) place()
-  }, [isOpen, visible.length, place])
+  }, [isOpen, rows.length, place])
 
   // Chiudi al click fuori dal campo e dalla lista. Allo scroll o al resize
   // l'ancora si sposta e la lista (fixed) no, quindi la si riposiziona: qui
   // non si chiude come nel `KebabMenu`, perché chi sta scrivendo nel campo
   // non deve vedersi sparire i suggerimenti per un tocco alla rotella.
+  //
+  // L'ancora si sposta anche senza scroll e senza resize: ogni spunta
+  // disegna qualcosa sotto (una barra in più nel confronto), la pagina si
+  // allunga, compare la barra di scorrimento e tutto il contenuto centrato
+  // si sposta di qualche pixel. Un `ResizeObserver` sulla radice del
+  // documento, che si restringe di quanto è larga la barra, e sul campo lo
+  // vede, mentre a un evento di scroll o resize non corrisponde.
   useEffect(() => {
     if (!isOpen) return
+    const observer = new ResizeObserver(() => place())
+    observer.observe(document.documentElement)
+    if (inputRef.current) observer.observe(inputRef.current)
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node
       if (!rootRef.current?.contains(target) && !listRef.current?.contains(target)) {
@@ -116,18 +180,15 @@ export default function MultiSearchSelect({
     window.addEventListener('scroll', onReflow, true)
     window.addEventListener('resize', onReflow)
     return () => {
+      observer.disconnect()
       document.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('scroll', onReflow, true)
       window.removeEventListener('resize', onReflow)
     }
   }, [isOpen, place])
 
-  const toggle = (option: SearchSelectOption) => {
-    onChange(
-      values.includes(option.value)
-        ? values.filter((value) => value !== option.value)
-        : [...values, option.value],
-    )
+  const toggle = (row: Row) => {
+    onChange(row.next)
     /* La lista resta aperta e la ricerca scritta: chi sta componendo un
        confronto ne sceglie tre o quattro di fila, e richiudere dopo ognuna
        vorrebbe dire riaprire e riscrivere ogni volta. */
@@ -142,7 +203,7 @@ export default function MultiSearchSelect({
           setIsOpen(true)
           setActiveIndex(0)
         } else {
-          setActiveIndex((i) => Math.min(visible.length - 1, i + 1))
+          setActiveIndex((i) => Math.min(rows.length - 1, i + 1))
         }
         break
       case 'ArrowUp':
@@ -150,9 +211,9 @@ export default function MultiSearchSelect({
         if (isOpen) setActiveIndex((i) => Math.max(0, i - 1))
         break
       case 'Enter':
-        if (isOpen && activeIndex >= 0 && visible[activeIndex]) {
+        if (isOpen && activeIndex >= 0 && rows[activeIndex]) {
           e.preventDefault()
-          toggle(visible[activeIndex])
+          toggle(rows[activeIndex])
         }
         break
       case 'Escape':
@@ -175,8 +236,8 @@ export default function MultiSearchSelect({
   }
 
   return (
-    <div ref={rootRef} className={`relative flex items-center gap-2 ${className}`}>
-      <div className="relative flex-1">
+    <div ref={rootRef} className={`relative ${className}`}>
+      <div className="relative">
         <svg
           width="14"
           height="14"
@@ -238,42 +299,44 @@ export default function MultiSearchSelect({
                decidere e i nomi tornerebbero a tagliarsi. */
               className="fixed z-[1000] max-h-60 w-max max-w-[min(34rem,calc(100vw-1rem))] animate-menu-in overflow-y-auto rounded-xl border border-white/6 bg-gray-900/95 p-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl"
             >
-              {visible.length === 0 ? (
+              {rows.length === 0 ? (
                 <li className="px-3 py-2 text-[0.85rem] italic text-slate-500">Nessun risultato</li>
               ) : (
-                visible.map((opt, i) => {
-                  const isSelected = values.includes(opt.value)
-                  return (
-                    <li
-                      key={opt.value}
-                      id={`${listboxId}-${i}`}
-                      role="option"
-                      aria-selected={isSelected}
-                      onPointerMove={() => setActiveIndex(i)}
-                      onClick={() => toggle(opt)}
-                      className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-[0.85rem] transition ${
-                        i === activeIndex ? 'bg-white/8 text-slate-100' : 'text-slate-300'
-                      } ${isSelected ? 'bg-violet-600/15 font-medium text-slate-100' : ''}`}
+                rows.map((row, i) => (
+                  <li
+                    key={row.key}
+                    id={`${listboxId}-${i}`}
+                    role="option"
+                    aria-selected={row.isSelected}
+                    onPointerMove={() => setActiveIndex(i)}
+                    onClick={() => toggle(row)}
+                    /* La riga che spunta tutti porta un filetto sotto: è un
+                       comando sull'elenco, non una voce dell'elenco, e senza
+                       niente in mezzo si leggeva come la prima persona. */
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-[0.85rem] transition ${
+                      i === activeIndex ? 'bg-white/8 text-slate-100' : 'text-slate-300'
+                    } ${row.isSelected ? 'bg-violet-600/15 font-medium text-slate-100' : ''} ${
+                      row.key === SELECT_ALL_KEY
+                        ? 'mb-1.5 rounded-b-none border-b border-white/6 pb-2.5'
+                        : ''
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                        row.isSelected
+                          ? 'border-violet-500 bg-violet-600 text-white'
+                          : 'border-white/20 bg-white/4'
+                      }`}
                     >
-                      <span
-                        aria-hidden="true"
-                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
-                          isSelected
-                            ? 'border-violet-500 bg-violet-600 text-white'
-                            : 'border-white/20 bg-white/4'
-                        }`}
-                      >
-                        {isSelected && <CheckIcon size={11} />}
-                      </span>
-                      <span className="min-w-0 flex-1 break-words">{opt.label}</span>
-                      {opt.sub && (
-                        <span className="shrink-0 text-xs font-normal text-slate-500">
-                          {opt.sub}
-                        </span>
-                      )}
-                    </li>
-                  )
-                })
+                      {row.isSelected && <CheckIcon size={11} />}
+                    </span>
+                    <span className="min-w-0 flex-1 break-words">{row.label}</span>
+                    {row.sub && (
+                      <span className="shrink-0 text-xs font-normal text-slate-500">{row.sub}</span>
+                    )}
+                  </li>
+                ))
               )}
             </ul>,
             document.body,
@@ -281,14 +344,23 @@ export default function MultiSearchSelect({
       </div>
       {/* Niente targhette con i nomi scelti: chi si sta guardando lo dicono
           già le barre qui sotto, e una fila di chip sopra di loro ripeteva
-          gli stessi nomi due volte a un centimetro di distanza. Accanto al
-          campo stanno quante sono, perché a lista chiusa nient'altro lo
-          direbbe, e il comando per azzerarle tutte, che è l'unica cosa che
-          dall'elenco non si può fare in un gesto solo. */}
+          gli stessi nomi due volte a un centimetro di distanza. Sopra il
+          campo, a destra, stanno quante sono, perché a lista chiusa
+          nient'altro lo direbbe, e il comando per azzerarle tutte, che è
+          l'unica cosa che dall'elenco non si può fare in un gesto solo.
+
+          Sopra e fuori dal flusso: accanto restringevano il campo, sotto
+          la lista aperta li copriva, e in flusso sopra spingevano giù il
+          campo alla prima spunta. Ancorati al bordo alto con lo stesso
+          margine di ogni campo fra etichetta e casella (`fieldCls`), stanno sulla riga
+          dell'etichetta, che sta a sinistra, dall'altra parte. */}
       {values.length > 0 && (
-        <span className="flex shrink-0 items-center gap-2 text-xs">
+        <p className="absolute bottom-full right-0 mb-1.5 flex items-center gap-1.5 text-xs">
           <span className="tabular-nums text-violet-300">
             {values.length} {values.length === 1 ? 'scelta' : 'scelte'}
+          </span>
+          <span aria-hidden="true" className="text-slate-600">
+            ·
           </span>
           <button
             type="button"
@@ -297,7 +369,7 @@ export default function MultiSearchSelect({
           >
             Azzera
           </button>
-        </span>
+        </p>
       )}
     </div>
   )

@@ -72,6 +72,67 @@ describe('scegliere', () => {
   })
 })
 
+describe('la riga che spunta tutti', () => {
+  function renderConTutti(values: string[] = []) {
+    const onChange = vi.fn()
+    render(
+      <MultiSearchSelect
+        id="prova"
+        values={values}
+        onChange={onChange}
+        options={PERSONE}
+        selectAllLabel="Tutte le persone"
+      />,
+    )
+    return onChange
+  }
+
+  it('c’è solo se chi usa il campo la chiede', async () => {
+    renderSelect()
+
+    await userEvent.click(screen.getByRole('combobox'))
+
+    expect(screen.queryByRole('option', { name: 'Tutte le persone' })).not.toBeInTheDocument()
+  })
+
+  it('sta in cima e sceglie tutte le voci in una volta', async () => {
+    const onChange = renderConTutti(['u-2'])
+
+    await userEvent.click(screen.getByRole('combobox'))
+    const voci = screen.getAllByRole('option')
+    expect(voci[0]).toHaveTextContent('Tutte le persone')
+    expect(voci[0]).toHaveAttribute('aria-selected', 'false')
+
+    await userEvent.click(voci[0])
+
+    expect(onChange).toHaveBeenCalledWith(['u-1', 'u-2', 'u-3'])
+  })
+
+  /* Spuntata quando lo sono tutte, e da lì si tolgono anche tutte: è la
+   * stessa casella delle altre voci, e si comporta come loro. */
+  it('è spuntata quando lo sono tutte, e ricliccata le toglie', async () => {
+    const onChange = renderConTutti(['u-1', 'u-2', 'u-3'])
+
+    await userEvent.click(screen.getByRole('combobox'))
+    const tutte = screen.getByRole('option', { name: 'Tutte le persone' })
+    expect(tutte).toHaveAttribute('aria-selected', 'true')
+
+    await userEvent.click(tutte)
+
+    expect(onChange).toHaveBeenCalledWith([])
+  })
+
+  /* Con un filtro scritto «tutte» direbbe una cosa e ne farebbe un'altra. */
+  it('sparisce mentre si cerca', async () => {
+    renderConTutti()
+
+    await userEvent.type(screen.getByRole('combobox'), 'anna')
+
+    expect(screen.queryByRole('option', { name: 'Tutte le persone' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Anna Ferrari/ })).toBeInTheDocument()
+  })
+})
+
 describe('disfare una scelta', () => {
   /* A lista chiusa nient'altro direbbe quante persone sono state scelte. */
   it('dice quante sono le scelte', () => {

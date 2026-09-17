@@ -6,7 +6,7 @@ import { useOrganizations } from '../hooks/useOrganizations'
 import { useEvaluationsReport, useSimulationsReport } from '../hooks/useReports'
 import { isSuperAdmin } from '../services/auth'
 import { ANY, matchesFilter } from './comparisonFilters'
-import { labelCls } from './Field'
+import ComparisonPeopleField from './ComparisonPeopleField'
 import ComparisonProvaTabs from './ComparisonProvaTabs'
 import type { ComparisonProva } from './ComparisonProvaTabs'
 import { MODE_FILTERS } from './conversationMode'
@@ -241,36 +241,40 @@ export default function ComparisonUsers({
           pagina è quello della sezione aperta, e il comando sta a destra del
           titolo perché è quello che decide cosa c'è sotto.
 
-          Il campo è lo stesso dell'altra sezione, etichetta sopra e stessa
-          larghezza, e cambia solo quello che ci si fa: là si sceglie una
-          persona, qui se ne spuntano quante se ne vogliono. Due campi
-          diversi nello stesso posto delle due sezioni si leggevano come due
-          comandi diversi, e sono la stessa domanda («chi»). */}
+          Il campo è lo stesso dell'altra sezione (`ComparisonPeopleField`),
+          etichetta sopra, stessa larghezza e stesso posto, e cambia solo
+          quello che ci si fa: là si sceglie una persona, qui se ne spuntano
+          quante se ne vogliono. Due campi diversi nello stesso posto delle
+          due sezioni si leggevano come due comandi diversi, e sono la stessa
+          domanda («chi»). */}
       <PageHeader
         title="Confronto tra Utenti"
         description={
           prova === 'conversazioni'
-            ? 'Voto medio complessivo delle conversazioni valutate di ogni persona scelta, dalla media più alta.'
-            : 'Voto medio dei test tecnici consegnati da ogni persona scelta, dalla media più alta.'
+            ? 'Voto medio delle conversazioni valutate di ogni persona scelta, dalla più alta.'
+            : 'Voto medio dei test tecnici consegnati da ogni persona scelta, dalla più alta.'
         }
         actions={
           !needsOrganization && (
-            <div className="relative z-30 w-[380px] shrink-0 max-lg:w-full">
-              <label className={`mb-1 block ${labelCls}`} htmlFor="confronto-utenti-persone">
-                Utenti
-              </label>
+            <ComparisonPeopleField label="Utenti" htmlFor="confronto-utenti-persone">
               <MultiSearchSelect
                 id="confronto-utenti-persone"
                 values={compareIds}
                 onChange={(next) => setParam(COMPARE_PARAM, next.join(','))}
                 options={people.map((u) => ({ value: u.userId, label: u.name, sub: u.email }))}
                 placeholder="Cerca per nome o email..."
+                /* In cima all'elenco una riga che spunta tutti: la pagina
+                   parte vuota perché si viene per scegliere, ma «tutta
+                   l'aula» è una scelta anche lei, e farla spuntando trenta
+                   nomi uno per uno era il gesto che il campo esiste per
+                   evitare. */
+                selectAllLabel="Tutti gli utenti"
                 /* Le voci si allineano a destra sotto il campo, dove il campo
                    stesso è: una lista che si allarga verso destra uscirebbe
                    dalla pagina. */
                 align="right"
               />
-            </div>
+            </ComparisonPeopleField>
           )
         }
       />

@@ -173,14 +173,29 @@ describe('le persone si scelgono', () => {
   })
 
   /* Le barre stanno dalla media più alta, la tendina per cognome, come ogni
-   * elenco in cui un nome si cerca. */
+   * elenco in cui un nome si cerca. In cima, prima delle persone, la riga
+   * che le spunta tutte. */
   it('elenca le persone per cognome nella tendina', async () => {
     renderUsers()
 
     await userEvent.click(campoPersone())
     const voci = screen.getAllByRole('option').map((o) => o.textContent)
-    expect(voci[0]).toContain('Marco Bianchi')
-    expect(voci[1]).toContain('Anna Ferrari')
+    expect(voci[0]).toBe('Tutti gli utenti')
+    expect(voci[1]).toContain('Marco Bianchi')
+    expect(voci[2]).toContain('Anna Ferrari')
+  })
+
+  /* «Tutta l'aula» è una scelta anche lei, e farla un nome per volta era il
+   * gesto che il campo esiste per evitare. */
+  it('«Tutti gli utenti» li spunta tutti e li scrive nell’indirizzo', async () => {
+    renderUsers()
+
+    await userEvent.click(campoPersone())
+    await userEvent.click(screen.getByRole('option', { name: 'Tutti gli utenti' }))
+
+    expect(within(riquadro()).getByText('Anna Ferrari')).toBeInTheDocument()
+    expect(within(riquadro()).getByText('Marco Bianchi')).toBeInTheDocument()
+    expect(indirizzo()).toContain('confronto=u-2%2Cu-1')
   })
 })
 

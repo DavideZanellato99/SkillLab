@@ -26,14 +26,17 @@ from auth_dependency import get_current_super_admin
 from avatar_images import generate_avatar_image
 from database import get_db
 from models import (
+    AVATAR_REQUEST_PUBLISHED,
     Avatar,
     AvatarCategory,
+    AvatarRequest,
     ChatConversation,
     Organization,
     User,
 )
 from persona_draft import draft_persona
 from persona_prompt import build_persona_prompt, clean_value
+from routers.avatar_requests import ensure_pending
 from schemas import (
     AdminAvatarPayload,
     AdminAvatarResponse,
@@ -220,9 +223,29 @@ def create_avatar(
     """Create a new avatar/persona (Super Admin only).
 
     organization_id is required: the avatar is private to that organization.
+
+    Con `request_id` l'avatar nasce da una richiesta di un organization
+    admin: deve essere ancora in attesa e dello stesso tenant dell'avatar,
+    e salvare la scheda la chiude come pubblicata. È l'unica strada per
+    pubblicarla, perché un avatar nasce da una scheda compilata e non da un
+    bottone (vedi ``routers/avatar_requests``).
     """
     name = _validated_name_or_400(payload.profile)
     organization_id = _resolve_avatar_org_or_400(db, payload.organization_id)
+
+    request = None
+    if payload.request_id is not None:
+        request = db.query(AvatarRequest).filter(AvatarRequest.id == payload.request_id).first()
+        if not request:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Richiesta non trovata."
+            )
+        ensure_pending(request)
+        if request.organization_id != organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La richiesta appartiene a un'altra organizzazione.",
+            )
 
     avatar = Avatar(
         name=name,
@@ -237,9 +260,21 @@ def create_avatar(
     db.flush()  # assigns the id needed for the placeholder filename
     if not avatar.image_url:
         avatar.image_url = generate_avatar_image(name, avatar.id)
+    if request is not None:
+        # Nella stessa transazione dell'avatar: o nascono insieme o non
+        # nasce niente, così una richiesta non risulta mai evasa da un
+        # avatar che non c'è.
+        request.status = AVATAR_REQUEST_PUBLISHED
+        request.avatar_id = avatar.id
+        request.resolved_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
     db.refresh(avatar)
-    audit.describe(http_request, target_id=str(avatar.id), nome=avatar.name)
+    audit.describe(
+        http_request,
+        target_id=str(avatar.id),
+        nome=avatar.name,
+        **({"richiesta": str(request.id)} if request is not None else {}),
+    )
     return _to_response(avatar)
 
 

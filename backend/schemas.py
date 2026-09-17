@@ -488,7 +488,7 @@ class TrainingPathStepResponse(BaseModel):
     avatar_category_color: str = DEFAULT_AVATAR_CATEGORY_COLOR
     simulation_id: UUID | None = None
     simulation_title: str | None = None
-    # Come si risponde al test: "multiple", "open", "ordering", "matching"
+    # Come si risponde al test: "multiple", "open", "ordering"
     simulation_kind: str | None = None
 
 
@@ -627,7 +627,7 @@ class AssignableSimulation(BaseModel):
 
     id: UUID
     title: str
-    # Come si risponde: "multiple", "open", "ordering", "matching"
+    # Come si risponde: "multiple", "open", "ordering"
     kind: str
 
 
@@ -955,6 +955,10 @@ class AdminAvatarPayload(BaseModel):
     # Required — only the super admin sets this.
     organization_id: UUID
     profile: dict
+    # La richiesta da cui questo avatar nasce, se ne nasce da una: salvare
+    # la scheda la chiude come pubblicata e lega l'avatar alla riga. Solo in
+    # creazione; in modifica viene ignorata.
+    request_id: UUID | None = None
 
     @field_validator("image_url")
     @classmethod
@@ -1101,6 +1105,79 @@ class AvatarPromptPreviewResponse(BaseModel):
     prompt: str
     channel: str
     ignored_fields: list[str] = []
+
+
+# --- Richieste di avatar (organization admin → super admin) ---
+
+
+class AvatarRequestPayload(BaseModel):
+    """Quello che un organization admin scrive per chiedere un avatar.
+
+    Sono i campi da cui una scheda persona si ricava: chi è, dove va in
+    galleria, che cosa gli è successo. Tutto il resto lo compila il super
+    admin.
+    """
+
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    # Testo libero, anche di una categoria che l'organizzazione non ha
+    # ancora: la lunghezza è quella di `AvatarCategory.name`, perché il super
+    # admin deve poterla creare con lo stesso nome.
+    category: str = Field(min_length=1, max_length=50)
+    scenario_type: str = Field(min_length=1, max_length=200)
+    problem: str = Field(min_length=1)
+
+    @field_validator("first_name", "last_name", "category", "scenario_type", "problem")
+    @classmethod
+    def _pieno(cls, value: str) -> str:
+        """Gli spazi ai bordi non sono un valore, e un campo di soli spazi è vuoto."""
+        value = value.strip()
+        if not value:
+            raise ValueError(
+                "Nome, cognome, categoria, tipo di scenario e problematica sono obbligatori."
+            )
+        return value
+
+
+class AvatarRequestRejectPayload(BaseModel):
+    """Il motivo con cui il super admin rifiuta una richiesta.
+
+    Obbligatorio: un rifiuto senza motivo è una porta chiusa in faccia a chi
+    ha chiesto, e non gli dice cosa cambiare per riprovare.
+    """
+
+    reason: str = Field(min_length=1)
+
+    @field_validator("reason")
+    @classmethod
+    def _con_un_motivo(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Indica il motivo del rifiuto.")
+        return value
+
+
+class AvatarRequestResponse(AuthorshipResponse):
+    """Una richiesta, per chi l'ha mandata e per chi deve evaderla.
+
+    Il mittente è `created_by_email` e il momento è `created_at`, ereditati
+    dalla paternità: la riga non ha altre colonne per dire chi e quando.
+    """
+
+    id: UUID
+    organization_id: UUID
+    organization_name: str
+    # Il nome scritto da chi ha chiesto, non una categoria dell'anagrafica.
+    category: str
+    first_name: str
+    last_name: str
+    scenario_type: str
+    problem: str
+    status: str
+    # L'avatar nato dalla richiesta, quando è pubblicata
+    avatar_id: UUID | None = None
+    rejection_reason: str | None = None
+    resolved_at: datetime | None = None
 
 
 class VoiceOption(BaseModel):
@@ -1677,19 +1754,6 @@ class AuditActionOption(BaseModel):
 # --- Simulazioni tecniche ---
 
 
-class SimulationPair(BaseModel):
-    """Una coppia di una domanda di abbinamento: la voce e il suo abbinato.
-
-    Un oggetto con due campi e non una lista di due elementi: le coppie
-    viaggiano nella chiave, nella risposta consegnata e nell'esito, e in
-    tutti e tre i posti serve poter dire quale dei due sta a sinistra senza
-    contare su un indice.
-    """
-
-    left: str
-    right: str
-
-
 class SimulationQuestionResponse(BaseModel):
     """Una domanda come la vede chi deve rispondere.
 
@@ -1704,11 +1768,10 @@ class SimulationQuestionResponse(BaseModel):
     la mostra guarda il tipo della simulazione, non la lunghezza di queste
     liste.
 
-    **Sulle domande di ordinamento e di abbinamento la mescolata è già
-    avvenuta qui.** ``steps`` sono i passi in ordine sparso e ``right`` la
-    colonna di destra rimescolata: l'ordine giusto è la chiave, quindi
-    mandarlo com'è scritto vorrebbe dire consegnare la risposta insieme alla
-    domanda. Il server non si segna quale mescolata ha spedito, come non si
+    **Sulle domande di ordinamento la mescolata è già avvenuta qui.**
+    ``steps`` sono i passi in ordine sparso: l'ordine giusto è la chiave,
+    quindi mandarlo com'è scritto vorrebbe dire consegnare la risposta
+    insieme alla domanda. Il server non si segna quale mescolata ha spedito, come non si
     segna quali domande ha estratto, ed è per questo che la consegna rimanda
     indietro il testo degli elementi e non la loro posizione (vedi
     ``SimulationAnswerPayload``).
@@ -1725,11 +1788,6 @@ class SimulationQuestionResponse(BaseModel):
     options: list[str] = []
     # I passi da rimettere in ordine, mescolati
     steps: list[str] = []
-    # Le due colonne da accoppiare: la sinistra come è scritta, la destra
-    # mescolata. Sono due liste e non una di coppie proprio perché le coppie
-    # sono la chiave
-    left: list[str] = []
-    right: list[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -1739,8 +1797,7 @@ class SimulationQuestionAdminResponse(SimulationQuestionResponse):
 
     Le chiavi viaggiano tutte insieme e se ne legge una sola, quella del tipo
     del test: l'indice dell'alternativa corretta, la traccia di quello che
-    una risposta scritta deve dire, i passi nell'ordine giusto, le coppie
-    esatte.
+    una risposta scritta deve dire, i passi nell'ordine giusto.
 
     Qui l'ordinamento arriva **in ordine**, al contrario che nello schema da
     cui eredita: chi rivede la domanda deve leggere la chiave, non provare a
@@ -1750,7 +1807,6 @@ class SimulationQuestionAdminResponse(SimulationQuestionResponse):
     correct_option: int | None = None
     expected_answer: str = ""
     ordered_steps: list[str] | None = None
-    pairs: list[SimulationPair] | None = None
     explanation: str
     source_chunks: list[int] | None = None
 
@@ -1929,7 +1985,6 @@ class SimulationQuestionPayload(BaseModel):
     correct_option: int | None = None
     expected_answer: str = ""
     ordered_steps: list[str] | None = None
-    pairs: list[SimulationPair] | None = None
     explanation: str = ""
 
     @field_validator("options")
@@ -1960,19 +2015,6 @@ class SimulationQuestionPayload(BaseModel):
         if not SIMULATION_MIN_ITEMS <= len(cleaned) <= SIMULATION_MAX_ITEMS:
             raise ValueError(
                 f"I passi da ordinare devono essere da {SIMULATION_MIN_ITEMS} a "
-                f"{SIMULATION_MAX_ITEMS}."
-            )
-        return cleaned
-
-    @field_validator("pairs")
-    @classmethod
-    def validate_pairs(cls, v: list[SimulationPair] | None) -> list[SimulationPair] | None:
-        if v is None:
-            return None
-        cleaned = [SimulationPair(left=p.left.strip(), right=p.right.strip()) for p in v]
-        if not SIMULATION_MIN_ITEMS <= len(cleaned) <= SIMULATION_MAX_ITEMS:
-            raise ValueError(
-                f"Le coppie da abbinare devono essere da {SIMULATION_MIN_ITEMS} a "
                 f"{SIMULATION_MAX_ITEMS}."
             )
         return cleaned
@@ -2009,15 +2051,15 @@ class SimulationQuestionsPayload(BaseModel):
 
 
 class SimulationAnswerPayload(BaseModel):
-    """La risposta data a una domanda: quale opzione, cosa ha scritto, in
-    che ordine ha messo i passi o come ha accoppiato le due colonne.
+    """La risposta data a una domanda: quale opzione, cosa ha scritto, o in
+    che ordine ha messo i passi.
 
     Un campo per tipo di test, e se ne riempie uno solo. Vuoti tutti
     significa lasciata in bianco, che è una cosa che si può fare in ogni
     tipo.
 
-    **Ordinamento e abbinamento rimandano il testo degli elementi e non la
-    loro posizione.** Il server ha mescolato la domanda al momento
+    **L'ordinamento rimanda il testo dei passi e non la loro posizione.**
+    Il server ha mescolato la domanda al momento
     dell'estrazione e non si è segnato come, esattamente come non si è
     segnato quali domande aveva estratto: un indice riferito a una mescolata
     che nessuno ha conservato non vorrebbe dire niente. Il testo invece si
@@ -2036,10 +2078,6 @@ class SimulationAnswerPayload(BaseModel):
     # I passi nell'ordine in cui li ha disposti, come testo. Il tetto è quello
     # della domanda: una lista più lunga non è una risposta a questa domanda
     ordered_steps: list[str] | None = Field(default=None, max_length=SIMULATION_MAX_ITEMS)
-    # Le coppie che ha formato. Una coppia lasciata a metà non si manda: chi
-    # non ha abbinato una voce l'ha lasciata in bianco, e le voci in bianco
-    # sono quelle che non compaiono qui
-    pairs: list[SimulationPair] | None = Field(default=None, max_length=SIMULATION_MAX_ITEMS)
     # Quanto ci ha messo, misurato dal browser da quando la domanda è
     # comparsa: è quello che fa scendere il valore di una risposta corretta
     # (vedi simulation_scoring). Assente vale come il tempo massimo, non come
@@ -2085,11 +2123,7 @@ class SimulationAnswerResult(BaseModel):
     # vede quale passo era fuori posto.
     given_steps: list[str] = []
     correct_steps: list[str] = []
-    # Le stesse due cose sulle domande di abbinamento: le coppie che ha
-    # formato e quelle giuste
-    given_pairs: list[SimulationPair] = []
-    correct_pairs: list[SimulationPair] = []
-    # Quanti elementi ha indovinato su quanti erano: è il numero da cui
+    # Quanti passi ha indovinato su quanti erano: è il numero da cui
     # escono i punti, e va scritto accanto a loro perché "0,7" non dice cosa
     # sia andato storto mentre "4 su 6" sì. Zero su zero sugli altri tipi
     matched_count: int = 0
@@ -2151,192 +2185,37 @@ class SimulationAttemptSummary(BaseModel):
     created_at: datetime
 
 
-# --- Le dashboard: percorsi, contenuti, utilizzo, i propri progressi ---
+# --- Le dashboard: percorsi, utilizzo, i propri progressi ---
 #
-# Quattro domande diverse sulle stesse prove che il resto dell'applicazione
+# Tre domande diverse sulle stesse prove che il resto dell'applicazione
 # registra. I rendiconti qui sopra rispondono a "come va questa persona": la
-# dashboard dei percorsi risponde a "il programma funziona", quella dei
-# contenuti a "cosa è tarato male", quella dell'utilizzo a "chi sta usando la
-# piattaforma", e i progressi a "sto migliorando", che è la stessa domanda
-# fatta su di sé da chi si allena.
+# dashboard dei percorsi risponde a "il programma funziona", quella
+# dell'utilizzo a "chi sta usando la piattaforma", e i progressi a "sto
+# migliorando", che è la stessa domanda fatta su di sé da chi si allena.
 #
 # Nessuna di loro porta uno stato nuovo: sono aggregati calcolati in lettura
 # sulle righe che esistono già, come il progresso di un percorso.
 
 
-class PathStepStats(BaseModel):
-    """Una tappa vista su tutti quelli che la stanno percorrendo.
+class PathsDashboard(BaseModel):
+    """I percorsi assegnati nel periodo e nello scope, in quattro numeri:
+    quanti, quanti chiusi, in quanti giorni, quanti scaduti.
 
-    `reached` è quanti l'hanno sbloccata, cioè quanti ci sono arrivati, ed è
-    su quello che si misura `passed`: una tappa in fondo a un percorso lungo
-    la sbloccano in pochi, e contarne le riuscite su tutti gli assegnatari
-    direbbe che non funziona quando invece nessuno ci è ancora arrivato.
+    Il dettaglio persona per persona non sta qui ma nella gestione percorsi,
+    che è dove poi si interviene.
     """
 
-    position: int
-    label: str
-    # "avatar" per una conversazione, "simulation" per un test tecnico
-    kind: str
-    target_score: float
-    reached: int
-    passed: int
-    # Superate, ma dopo la data della tappa: sono dentro `passed`
-    late: int
-    overdue: int
-    # Prove svolte in media da chi l'ha sbloccata, e il meglio che ha fatto.
-    # None quando non l'ha sbloccata nessuno: zero sarebbe un numero, e qui
-    # non c'è niente da leggere
-    avg_attempts: float | None = None
-    avg_best_score: float | None = None
-
-
-class PathStats(BaseModel):
-    """Un percorso e come sta andando su tutti quelli a cui è stato affidato."""
-
-    path_id: UUID
-    title: str
-    organization_name: str | None = None
     assignments: int
+    people: int
     active: int
     completed: int
     completed_late: int
     overdue: int
-    # Percentuale di percorsi chiusi sul totale di quelli affidati
+    # Percentuale di percorsi chiusi sul totale di quelli assegnati
     completion_rate: float
-    # Giorni medi dall'affidamento all'ultima tappa superata, sui soli
+    # Giorni medi dall'assegnazione all'ultima tappa superata, sui soli
     # percorsi chiusi. None finché non ne ha chiuso nessuno
     avg_days_to_complete: float | None = None
-    steps: list[PathStepStats]
-
-
-class PathDeadline(BaseModel):
-    """Una tappa con una data, di chi la sta percorrendo adesso.
-
-    Sono le uniche righe dell'applicazione che guardano avanti: tutto il
-    resto racconta prove già svolte. Ci finisce la tappa aperta o scaduta di
-    ogni percorso in corso che porti una data, perché è quella su cui si può
-    ancora fare qualcosa.
-    """
-
-    assignment_id: UUID
-    path_id: UUID
-    path_title: str
-    user_id: UUID
-    user_name: str
-    user_email: str
-    step_position: int
-    step_label: str
-    due_at: datetime
-    # "active" se è ancora in tempo, "overdue" se la data è passata
-    status: str
-
-
-class PathsDashboard(BaseModel):
-    """L'avanzamento dei percorsi affidati, nel periodo e nello scope."""
-
-    assignments: int
-    people: int
-    active: int
-    completed: int
-    completed_late: int
-    overdue: int
-    completion_rate: float
-    avg_days_to_complete: float | None = None
-    paths: list[PathStats]
-    deadlines: list[PathDeadline]
-
-
-class AvatarStats(BaseModel):
-    """Un interlocutore visto dal lato di chi lo ha scritto.
-
-    Il criterio più debole è la ragione per cui questa riga esiste: il voto
-    medio dice che con questo avatar si va male, il criterio dice su cosa, ed
-    è la differenza fra sapere che qualcosa non funziona e sapere cosa
-    cambiare.
-    """
-
-    avatar_id: UUID
-    avatar_name: str
-    conversations: int
-    people: int
-    avg_score: float
-    # Conversazioni chiuse sotto la sufficienza, che è dove si vede se un
-    # avatar è duro o soltanto poco frequentato
-    below_pass: int
-    weakest_criterion_key: str | None = None
-    weakest_criterion_avg: float | None = None
-    criteria: dict[str, float] = {}
-    last_at: datetime
-
-
-class SimulationStats(BaseModel):
-    """Un test tecnico visto dal lato di chi lo ha scritto."""
-
-    simulation_id: UUID
-    simulation_title: str
-    simulation_kind: str
-    simulation_source: str
-    attempts: int
-    people: int
-    avg_score: float
-    # Percentuale di risposte esatte su tutte le domande poste, che pesa un
-    # test da dieci domande per quanto chiede
-    correct_rate: float
-    below_pass: int
-    last_at: datetime
-
-
-class ContentDashboard(BaseModel):
-    """Quanto è difficile quello che è stato scritto, avatar per avatar e
-    test per test.
-
-    Le etichette dei criteri viaggiano una volta sola sulla risposta, come
-    nel report delle valutazioni e per la stessa ragione: sono le stesse sei
-    parole per ogni riga.
-    """
-
-    criteria_labels: dict[str, str]
-    avatars: list[AvatarStats]
-    simulations: list[SimulationStats]
-    truncated: bool = False
-
-
-class SimulationItemStats(BaseModel):
-    """Una domanda e come è andata a chi se l'è trovata davanti.
-
-    La domanda porta il proprio testo e non solo il proprio id: le domande si
-    riscrivono e i test si rigenerano, e una riga che dicesse soltanto "la
-    terza" non si potrebbe leggere.
-    """
-
-    question_id: str
-    text: str
-    # Quante volte è stata posta, quante volte è stata data giusta e quante
-    # volte è rimasta in bianco. Una in bianco sta dentro `answers` e fuori
-    # da `correct`: è una domanda a cui non si è saputo rispondere
-    answers: int
-    correct: int
-    unanswered: int
-    correct_rate: float
-    # Secondi medi impiegati, solo dove il cronometro c'è (scelta multipla)
-    avg_seconds: float | None = None
-
-
-class SimulationItemsReport(BaseModel):
-    """Le domande di un test, una per una.
-
-    Si legge aprendo una riga della dashboard dei contenuti e non insieme a
-    lei: le risposte date stanno nella fotografia di ogni tentativo, che è la
-    colonna più pesante di quella tabella, e leggerle per ogni test del
-    tenant per aprirne uno vorrebbe dire scaricarli tutti.
-    """
-
-    simulation_id: UUID
-    simulation_title: str
-    simulation_kind: str
-    attempts: int
-    items: list[SimulationItemStats]
-    truncated: bool = False
 
 
 class OrganizationUsage(BaseModel):

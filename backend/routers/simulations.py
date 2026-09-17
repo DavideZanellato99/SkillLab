@@ -15,8 +15,8 @@ davvero sue e che siano il numero giusto. Una riga in più per ogni test
 iniziato e mai finito sarebbe una tabella di sessioni da far scadere, per un
 test di formazione dove un tentativo esiste solo quando viene consegnato.
 
-**Quattro modi di rispondere, e una sola correzione che chiama un modello.**
-Scelta multipla, ordinamento e abbinamento si correggono qui: le chiavi sono
+**Tre modi di rispondere, e una sola correzione che chiama un modello.**
+Scelta multipla e ordinamento si correggono qui: le chiavi sono
 state decise quando la domanda è nata, rilette da un umano prima della
 pubblicazione, e da quel momento lo stesso test consegnato due volte prende
 lo stesso voto. Un test a risposta aperta non può funzionare così, perché
@@ -25,12 +25,12 @@ una chiamata sola che giudica tutte le risposte insieme (vedi
 ``simulation_open_answers``), e il giudizio viene congelato nel tentativo
 perché è stato dato una volta sola.
 
-Le tre correzioni deterministiche non danno però lo stesso genere di voto.
+Le due correzioni deterministiche non danno però lo stesso genere di voto.
 Sulla scelta multipla una risposta è giusta o sbagliata, e a fare la
-differenza è il tempo; su ordinamento e abbinamento una risposta può essere
-giusta **in parte**, e i punti sono la quota di elementi al posto giusto
-(vedi ``matched_points``). È la ragione per cui quei due tipi non hanno il
-cronometro: là il punto si guadagna a pezzi, e toglierne anche col tempo
+differenza è il tempo; sull'ordinamento una risposta può essere giusta **in
+parte**, e i punti sono la quota di passi al posto giusto (vedi
+``matched_points``). È la ragione per cui quel tipo non ha il cronometro:
+là il punto si guadagna a pezzi, e toglierne anche col tempo
 vorrebbe dire due scale che si moltiplicano su una domanda dove nessuno
 saprebbe più dire da dove viene il voto.
 
@@ -72,7 +72,6 @@ from exports import simulation_attempt_pdf
 from models import (
     ROLE_ORGANIZATION_ADMIN,
     ROLE_SUPER_ADMIN,
-    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
     SIMULATION_QUESTION_COUNT,
@@ -340,33 +339,21 @@ def start_attempt(
 
 
 def _shuffled_items(question: SimulationQuestion) -> dict:
-    """Gli elementi di una domanda di ordinamento o di abbinamento, mescolati.
+    """I passi di una domanda di ordinamento, mescolati.
 
-    **La mescolata è la domanda.** I passi sono salvati nell'ordine giusto e
-    le coppie già accoppiate, perché quella è la chiave: mandarli come sono
-    scritti vorrebbe dire consegnare la risposta insieme alla domanda. Si
-    mescola qui, nel momento in cui la domanda esce dal server, come le
-    domande stesse si estraggono qui e non quando la pagina si apre.
-
-    Sull'abbinamento si mescola **solo la colonna di destra**: la sinistra è
-    l'elenco dei casi e il suo ordine non dice niente, mentre rimescolare
-    tutte e due farebbe leggere la stessa domanda in due modi a due persone
-    senza aggiungere niente.
+    **La mescolata è la domanda.** I passi sono salvati nell'ordine giusto,
+    perché quello è la chiave: mandarli come sono scritti vorrebbe dire
+    consegnare la risposta insieme alla domanda. Si mescola qui, nel momento
+    in cui la domanda esce dal server, come le domande stesse si estraggono
+    qui e non quando la pagina si apre.
 
     Il server non si segna quale mescolata ha spedito, e non gli serve: la
-    consegna rimanda il testo degli elementi, non la loro posizione (vedi
+    consegna rimanda il testo dei passi, non la loro posizione (vedi
     ``SimulationAnswerPayload``).
     """
     steps = [str(s) for s in (question.ordered_steps or [])]
     if steps:
         return {"steps": random.sample(steps, len(steps))}
-    pairs = question.pairs or []
-    if pairs:
-        right = [str(p.get("right") or "") for p in pairs]
-        return {
-            "left": [str(p.get("left") or "") for p in pairs],
-            "right": random.sample(right, len(right)),
-        }
     return {}
 
 
@@ -422,14 +409,12 @@ def _answer_results(
                 answer_text=entry.get("answer_text"),
                 expected_answer=entry.get("expected_answer", ""),
                 feedback=entry.get("feedback", ""),
-                # Come aveva disposto i passi e come aveva accoppiato le due
-                # colonne, con accanto la chiave: sono nella fotografia come
-                # tutto il resto, quindi una domanda riscritta dopo non può
-                # far apparire fuori posto un passo che era al suo posto
+                # Come aveva disposto i passi, con accanto la chiave: sono
+                # nella fotografia come tutto il resto, quindi una domanda
+                # riscritta dopo non può far apparire fuori posto un passo
+                # che era al suo posto
                 given_steps=entry.get("given_steps") or [],
                 correct_steps=entry.get("correct_steps") or [],
-                given_pairs=entry.get("given_pairs") or [],
-                correct_pairs=entry.get("correct_pairs") or [],
                 matched_count=entry.get("matched_count", 0),
                 item_count=entry.get("item_count", 0),
                 is_correct=entry["is_correct"],
@@ -485,7 +470,6 @@ class _SubmittedQuestion:
     options: list | None
     correct_option: int | None
     ordered_steps: list | None
-    pairs: list | None
     expected_answer: str | None
     explanation: str | None
 
@@ -541,7 +525,6 @@ def _snapshot(question: SimulationQuestion) -> _SubmittedQuestion:
         options=question.options,
         correct_option=question.correct_option,
         ordered_steps=question.ordered_steps,
-        pairs=question.pairs,
         expected_answer=question.expected_answer,
         explanation=question.explanation,
     )
@@ -641,54 +624,6 @@ def _ordering_answers(questions: list[_SubmittedQuestion], given: dict) -> list[
                 # zero punti, ma nell'esito si distinguono
                 "given_steps": proposed,
                 "correct_steps": correct,
-                "matched_count": matched,
-                "item_count": len(correct),
-                "is_correct": is_partially_correct(points),
-                "points": points,
-                "explanation": question.explanation,
-            }
-        )
-    return answers
-
-
-def _matching_answers(questions: list[_SubmittedQuestion], given: dict) -> list[dict]:
-    """La correzione di un test di abbinamento: quante coppie indovinate.
-
-    La stessa scala dell'ordinamento, su un'altra chiave: si conta quante
-    voci di sinistra hanno accanto l'abbinato giusto. Le voci che chi
-    rispondeva ha lasciato scoperte semplicemente non arrivano, e valgono
-    come sbagliate senza bisogno di dirlo.
-
-    Non si controlla che gli abbinati proposti siano quelli mandati: chi ne
-    scrive uno inventato ha già sbagliato quella coppia, e rifiutare la
-    consegna intera per una riga storta butterebbe via un test che qualcuno
-    ha appena svolto. È la differenza con l'ordinamento, dove una lista di
-    lunghezza diversa non è una risposta sbagliata ma una domanda diversa.
-    """
-    answers = []
-    for position, question in enumerate(questions, start=1):
-        answer = given.get(question.id)
-        correct = [
-            {"left": str(p.get("left") or ""), "right": str(p.get("right") or "")}
-            for p in (question.pairs or [])
-        ]
-        proposed = (
-            [{"left": p.left, "right": p.right} for p in (answer.pairs or [])] if answer else []
-        )
-        by_left = {" ".join(p["left"].split()).casefold(): p["right"] for p in proposed}
-        matched = sum(
-            1
-            for pair in correct
-            if _same_text(by_left.get(" ".join(pair["left"].split()).casefold(), ""), pair["right"])
-        )
-        points = matched_points(matched, len(correct))
-        answers.append(
-            {
-                "question_id": str(question.id),
-                "position": position,
-                "text": question.text,
-                "given_pairs": proposed,
-                "correct_pairs": correct,
                 "matched_count": matched,
                 "item_count": len(correct),
                 "is_correct": is_partially_correct(points),
@@ -922,8 +857,6 @@ async def submit_attempt(
         answers = _open_answers(consegna.questions, given, giudizi)
     elif consegna.kind == SIMULATION_KIND_ORDERING:
         answers = _ordering_answers(consegna.questions, given)
-    elif consegna.kind == SIMULATION_KIND_MATCHING:
-        answers = _matching_answers(consegna.questions, given)
     else:
         answers = _multiple_choice_answers(consegna.questions, given)
 

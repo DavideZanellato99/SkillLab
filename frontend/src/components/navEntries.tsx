@@ -102,8 +102,8 @@ export function mainNavEntries(user: AuthUser | null): NavEntry[] {
       to: '/app/admin/dashboard',
       label: 'Dashboard',
       Icon: DashboardIcon,
-      /* Accesa dentro tutte le viste della sezione: punteggi, percorsi,
-         contenuti e utilizzo sono quattro rotte, ma una voce sola. */
+      /* Accesa dentro tutte le viste della sezione: punteggi, percorsi e
+         utilizzo sono tre rotte, ma una voce sola. */
       isActive: within('/app/admin/dashboard'),
     })
   }

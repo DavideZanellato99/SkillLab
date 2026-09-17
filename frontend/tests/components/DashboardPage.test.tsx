@@ -51,7 +51,6 @@ function renderDashboard(percorso = '/app/admin/dashboard/punteggi') {
         <Route path="/app/admin/dashboard" element={<DashboardPage />}>
           <Route path="punteggi" element={<VistaFinta nome="punteggi" />} />
           <Route path="percorsi" element={<VistaFinta nome="percorsi" />} />
-          <Route path="contenuti" element={<VistaFinta nome="contenuti" />} />
           <Route path="utilizzo" element={<VistaFinta nome="utilizzo" />} />
         </Route>
       </Routes>
@@ -65,7 +64,7 @@ beforeEach(() => {
 })
 
 describe('le viste della sezione', () => {
-  /* Quattro domande diverse sulle stesse prove, quindi quattro rotte: ognuna
+  /* Tre domande diverse sulle stesse prove, quindi tre rotte: ognuna
    * ha il proprio indirizzo, che è quello che si può mandare a qualcuno. */
   it('porta a un indirizzo suo ogni vista', async () => {
     renderDashboard()
@@ -77,11 +76,11 @@ describe('le viste della sezione', () => {
   })
 
   /* I filtri sono di tutta la sezione: ritrovarli accesi cambiando linguetta
-   * è quello che rende le quattro viste una schermata sola. */
+   * è quello che rende le tre viste una schermata sola. */
   it('si porta dietro i filtri cambiando vista', async () => {
     renderDashboard('/app/admin/dashboard/punteggi?periodo=30&organizzazione=org-1')
 
-    await userEvent.click(screen.getByRole('tab', { name: 'Contenuti' }))
+    await userEvent.click(screen.getByRole('tab', { name: 'Percorsi' }))
 
     expect(indirizzo()).toContain('periodo=30')
     expect(indirizzo()).toContain('organizzazione=org-1')
@@ -105,7 +104,7 @@ describe('le viste della sezione', () => {
   it('descrive la vista aperta', () => {
     renderDashboard('/app/admin/dashboard/percorsi')
 
-    expect(screen.getByText(/su quale tappa si ferma il gruppo/)).toBeInTheDocument()
+    expect(screen.getByText(/quanti si chiudono, in quanto tempo/)).toBeInTheDocument()
   })
 })
 

@@ -513,6 +513,18 @@ def test_su_una_chat_il_valutatore_sa_di_leggere_uno_scritto(modelli, cliente):
     assert "CHAT TESTUALE" in inviato["messages"][0]["content"]
 
 
+def test_al_telefono_il_valutatore_sa_che_la_trascrizione_storpia_i_nomi():
+    """Le battute dell'operatore arrivano dal riconoscimento vocale, e una
+    lettera sbagliata nel nome del cliente finiva contata come sua
+    disattenzione. In chat il nome è quello che l'operatore ha scritto."""
+    voce = _evaluation_prompt(_scheda(), "<<<recinto>>>", channel=CHANNEL_VOICE)
+    chat = _evaluation_prompt(_scheda(), "<<<recinto>>>", channel=CHANNEL_TEXT)
+
+    assert "trascrizione automatica del parlato" in voce
+    assert "non è un errore da penalizzare" in voce
+    assert "trascrizione automatica del parlato" not in chat
+
+
 def test_il_prompt_porta_la_scheda_dello_scenario_come_chiave_di_lettura():
     """È l'unico modo per distinguere una diagnosi vera da una plausibile,
     ma non è prova di cosa l'operatore abbia fatto: il prompt lo dice."""

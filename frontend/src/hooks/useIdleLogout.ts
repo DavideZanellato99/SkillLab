@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useEffectEvent } from 'react'
 
 /**
  * Auto-logout after a period of user inactivity, synchronized across tabs.
@@ -42,11 +42,10 @@ interface UseIdleLogoutOptions {
 }
 
 export function useIdleLogout({ enabled, onIdle, onRemoteLogout }: UseIdleLogoutOptions): void {
-  // Refs keep the effect independent from callback identities
-  const onIdleRef = useRef(onIdle)
-  const onRemoteLogoutRef = useRef(onRemoteLogout)
-  onIdleRef.current = onIdle
-  onRemoteLogoutRef.current = onRemoteLogout
+  // Effect Events keep the effect independent from callback identities:
+  // the timers and listeners below always call the latest ones.
+  const fireIdle = useEffectEvent(() => onIdle())
+  const fireRemoteLogout = useEffectEvent(() => onRemoteLogout())
 
   useEffect(() => {
     if (!enabled) return
@@ -83,7 +82,7 @@ export function useIdleLogout({ enabled, onIdle, onRemoteLogout }: UseIdleLogout
       } catch {
         // ignore
       }
-      onIdleRef.current()
+      fireIdle()
     }
 
     // storage events only fire in the OTHER tabs — exactly what we need
@@ -95,7 +94,7 @@ export function useIdleLogout({ enabled, onIdle, onRemoteLogout }: UseIdleLogout
         }
       } else if (e.key === LOGOUT_KEY && e.newValue && !fired) {
         fired = true
-        onRemoteLogoutRef.current()
+        fireRemoteLogout()
       }
     }
 

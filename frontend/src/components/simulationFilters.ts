@@ -27,11 +27,11 @@ export type SimulationFilter = SimulationKind | 'all'
 export const ALL_KINDS = 'all'
 
 /* L'ordine in cui i tipi si presentano, che è quello con cui sono arrivati e
- * con cui li racconta la documentazione: prima i due che c'erano, poi i due
- * che verificano quello che una crocetta non raggiunge. Un ordine dato dal
+ * con cui li racconta la documentazione: prima i due che c'erano, poi quello
+ * che verifica quello che una crocetta non raggiunge. Un ordine dato dal
  * caso, come sarebbe quello del catalogo, sposterebbe le pastiglie sotto le
  * dita da un'organizzazione all'altra. */
-const KIND_ORDER: SimulationKind[] = ['multiple', 'open', 'ordering', 'matching']
+const KIND_ORDER: SimulationKind[] = ['multiple', 'open', 'ordering']
 
 /**
  * I test che restano dopo il filtro e la ricerca.
@@ -147,7 +147,7 @@ export const ADMIN_STATUS_OPTIONS: { value: SimulationStatusFilter; label: strin
   { value: 'published', label: 'Pubblicate' },
 ]
 
-/* I quattro tipi ci sono sempre, anche dove il catalogo non li ha ancora:
+/* I tre tipi ci sono sempre, anche dove il catalogo non li ha ancora:
  * qui non c'è il numero accanto alla voce che c'è sulle pastiglie del
  * catalogo, quindi una tendina che cambia lunghezza da un'organizzazione
  * all'altra direbbe solo che le voci si spostano sotto il cursore. */

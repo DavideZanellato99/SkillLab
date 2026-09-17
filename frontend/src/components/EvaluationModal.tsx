@@ -112,7 +112,7 @@ export default function EvaluationModal({
           Valutazione della Chiamata
         </h2>
         <p className="text-[0.85rem] text-slate-500">
-          Il formatore AI ha analizzato la tua conversazione con {avatarName}.
+          Il formatore AI ha analizzato la tua conversazione con {avatarName}
         </p>
       </div>
 

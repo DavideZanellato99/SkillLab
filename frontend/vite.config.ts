@@ -54,10 +54,11 @@ export default defineConfig({
       '/api': { target: backendUrl, ws: true },
       '/static': backendUrl,
     },
-    // L'indirizzo stabile del tunnel ngrok, da cui si prova l'applicazione su
-    // un telefono o la si mostra a qualcuno. Senza, il dev server rifiuta la
+    // I quick tunnel di Cloudflare prendono un hostname casuale sotto
+    // trycloudflare.com a ogni avvio, da cui si prova l'applicazione su un
+    // telefono o la si mostra a qualcuno. Senza, il dev server rifiuta la
     // richiesta prima ancora che arrivi al backend.
-    allowedHosts: ['molecular-fantasize-underdone.ngrok-free.dev'],
+    allowedHosts: ['.trycloudflare.com'],
     // The Docker Compose hot-reload override bind-mounts ./frontend from the
     // Windows host into the container; native inotify events don't cross
     // that boundary, so chokidar never sees host-side edits without polling.

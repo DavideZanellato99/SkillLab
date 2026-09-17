@@ -69,12 +69,17 @@ export function formatScore(score: number): string {
   return formatDecimal(score)
 }
 
-/* Le tre soglie sono quelle della scuola, ed è voluto: sotto il sei non si
- * passa, dall'otto in su si è preparati, in mezzo si è passati e basta. */
+/* La soglia è quella della scuola: dal sei si passa, sotto no. Un voto ha due
+ * tinte in tutta l'app, verde dalla sufficienza e arancione sotto, e niente
+ * rosso: sotto il sei c'è da lavorare, non c'è un allarme. Le funzioni di
+ * [scoreFormat.ts](./scoreFormat.ts) colorano testo e barre con la stessa
+ * soglia, qui è la targhetta con bordo e sfondo. */
+export const PASS_SCORE = 6
+
 export function scoreBadgeTone(score: number): string {
-  if (score >= 8) return 'border border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
-  if (score >= 6) return 'border border-amber-500/25 bg-amber-500/10 text-amber-400'
-  return 'border border-red-500/25 bg-red-500/10 text-red-300'
+  return score >= PASS_SCORE
+    ? 'border border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
+    : 'border border-orange-500/25 bg-orange-500/10 text-orange-300'
 }
 
 /* Lo stato compare nella tabella di gestione, nella scheda di dettaglio e in
@@ -101,7 +106,6 @@ const KIND_LABELS: Record<SimulationKind, string> = {
   multiple: 'Scelta multipla',
   open: 'Risposta aperta',
   ordering: 'Ordinamento',
-  matching: 'Abbinamento',
 }
 
 export function kindLabel(kind: SimulationKind): string {
@@ -115,7 +119,6 @@ const KIND_HINTS: Record<SimulationKind, string> = {
   multiple: 'Una risposta fra le alternative, con il tempo che scorre',
   open: 'Una risposta scritta di qualche riga, senza limiti di tempo',
   ordering: "I passi di una procedura da rimettere nell'ordine giusto",
-  matching: 'Due colonne da accoppiare, una voce alla volta',
 }
 
 export function kindHint(kind: SimulationKind): string {
@@ -132,10 +135,10 @@ export function isTimed(kind: SimulationKind): boolean {
 }
 
 /* Se una domanda di questo tipo può essere giusta a metà. Dove è vero,
- * accanto ai punti si scrive quanti elementi erano al posto giusto: "0,7"
- * da solo non dice cosa sia andato storto, "4 su 6" sì. */
+ * accanto ai punti si scrive quanti passi erano al posto giusto: "0,7" da
+ * solo non dice cosa sia andato storto, "4 su 6" sì. */
 export function hasPartialScore(kind: SimulationKind): boolean {
-  return kind === 'ordering' || kind === 'matching'
+  return kind === 'ordering'
 }
 
 /* Chi ha scritto le domande, in una parola.
@@ -161,11 +164,11 @@ export type KindFilter = SimulationKind | 'all'
  * confronto e lo storico di una persona nel report attività.
  *
  * Ogni tipo ha la sua voce e non ce n'è una che ne raccoglie più d'uno: i
- * quattro si correggono con quattro scale diverse, quindi tenerne due
- * insieme in un filtro vorrebbe dire mettere sulla stessa media un voto
- * preso a crocette col cronometro che scorre e uno preso disponendo sei
- * passi senza fretta. "Tutti" resta in fondo perché è il punto di partenza,
- * non una quinta scelta.
+ * tre si correggono con tre scale diverse, quindi tenerne due insieme in un
+ * filtro vorrebbe dire mettere sulla stessa media un voto preso a crocette
+ * col cronometro che scorre e uno preso disponendo sei passi senza fretta.
+ * "Tutti" resta in fondo perché è il punto di partenza, non una quarta
+ * scelta.
  *
  * L'ordine è quello in cui i tipi sono nati, che è anche quello dal più
  * usato al meno: chi cerca un filtro trova per primo quello che gli serve
@@ -174,6 +177,5 @@ export const KIND_FILTERS: { value: KindFilter; label: string }[] = [
   { value: 'multiple', label: kindLabel('multiple') },
   { value: 'open', label: kindLabel('open') },
   { value: 'ordering', label: kindLabel('ordering') },
-  { value: 'matching', label: kindLabel('matching') },
   { value: 'all', label: 'Tutti' },
 ]

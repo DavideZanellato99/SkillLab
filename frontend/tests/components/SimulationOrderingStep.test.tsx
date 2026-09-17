@@ -21,8 +21,6 @@ const question: SimulationQuestion = {
   options: [],
   // Mescolati, come arrivano dal server: la sequenza giusta è Alfa, Beta, Gamma
   steps: ['Gamma', 'Alfa', 'Beta'],
-  left: [],
-  right: [],
 }
 
 const baseProps = {

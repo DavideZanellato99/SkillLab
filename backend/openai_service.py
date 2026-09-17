@@ -534,7 +534,18 @@ def _evaluation_prompt(profile: dict, marker: str, channel: str = CHANNEL_VOICE)
         "penalizzare l'operatore per elementi che il canale scritto non prevede, come il "
         "tono di voce.\n"
         if channel == CHANNEL_TEXT
-        else ""
+        # Le battute dell'operatore arrivano dal riconoscimento vocale, che
+        # storpia i nomi propri più di ogni altra parola: senza questa nota il
+        # giudice contava a carico dell'operatore un errore della trascrizione.
+        else (
+            "\nATTENZIONE: questo contatto è avvenuto al telefono e le battute dell'operatore "
+            "sono il risultato di una trascrizione automatica del parlato, che può "
+            "sbagliare una lettera o una sillaba, soprattutto nei nomi propri. Se il nome o "
+            "il cognome del cliente compare leggermente diverso da quello della scheda, "
+            "considera che l'operatore lo ha pronunciato correttamente: non è un errore da "
+            "penalizzare né da citare. Lo stesso vale per singole parole evidentemente "
+            "storpiate dalla trascrizione, che non vanno lette come errori di forma.\n"
+        )
     )
 
     return (

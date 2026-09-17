@@ -4,7 +4,7 @@ import Badge from './Badge'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import { statusBadgeTone, statusLabel } from './simulationFormat'
-import { requiredPool } from '../services/simulations'
+import { REQUIRED_POOL } from '../services/simulations'
 import type { AdminSimulation } from '../services/simulations'
 
 /* Scheda di sola lettura di una simulazione, aperta dal clic sulla riga della
@@ -27,7 +27,6 @@ export default function SimulationDetailModal({
   showOrganization?: boolean
   onClose: () => void
 }) {
-  const required = requiredPool(simulation.source)
   return (
     <DetailModal
       onClose={onClose}
@@ -68,14 +67,13 @@ export default function SimulationDetailModal({
       {/* Quante ne mancano al serbatoio è la sola cosa che tiene una
           simulazione in bozza, quindi finché ne mancano si legge quante ne
           servono e quando ci sono non si legge niente: il serbatoio completo
-          è la normalità e non una notizia. La soglia dipende da chi le ha
-          scritte: cinquanta se le genera il modello, dieci se le scrive una
-          persona. */}
+          è la normalità e non una notizia. La soglia è la stessa qualunque
+          sia l'origine: le domande di un tentativo. */}
       <DetailField label="Domande">
         <div>{simulation.question_count}</div>
-        {simulation.question_count < required && (
+        {simulation.question_count < REQUIRED_POOL && (
           <div className="text-xs text-slate-500">
-            Ne servono {required} per pubblicare, non è pubblicabile finché non ci sono
+            Ne servono {REQUIRED_POOL} per pubblicare, non è pubblicabile finché non ci sono
           </div>
         )}
       </DetailField>

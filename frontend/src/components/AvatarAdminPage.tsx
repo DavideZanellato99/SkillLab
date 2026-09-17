@@ -17,11 +17,14 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useFlashMessage } from '../hooks/useFlashMessage'
 import { useOrganizations } from '../hooks/useOrganizations'
 import type { AdminAvatar } from '../services/admin'
+import type { AvatarRequest } from '../services/avatarRequests'
 import { isSuperAdmin } from '../services/auth'
 import { errorMessage } from '../services/errors'
 import AvatarCategoriesModal from './AvatarCategoriesModal'
 import AvatarDetailModal from './AvatarDetailModal'
 import AvatarFormModal from './AvatarFormModal'
+import AvatarRequestRejectModal from './AvatarRequestRejectModal'
+import AvatarRequestsSection from './AvatarRequestsSection'
 import AvatarRow from './AvatarRow'
 import AvatarsFilters, { STATUS_ACTIVE, STATUS_ARCHIVED } from './AvatarsFilters'
 import ConfirmModal from './ConfirmModal'
@@ -139,6 +142,11 @@ export default function AvatarAdminPage() {
 
   // Cosa è aperto sopra la tabella: 'new' crea, un avatar modifica
   const [editing, setEditing] = useState<AdminAvatar | 'new' | null>(null)
+  /* La richiesta di un organization admin da cui una scheda nuova parte, e
+   * quella che si sta rifiutando. Sono due gesti sulla stessa riga e non
+   * possono essere aperti insieme. */
+  const [fulfilling, setFulfilling] = useState<AvatarRequest | null>(null)
+  const [rejecting, setRejecting] = useState<AvatarRequest | null>(null)
   /* Dettaglio in sola lettura, aperto dal clic sulla riga come nelle tabelle
    * di utenti e organizzazioni: la matita resta l'unica strada per modificare. */
   const [viewing, setViewing] = useState<AdminAvatar | null>(null)
@@ -191,6 +199,14 @@ export default function AvatarAdminPage() {
             </PrimaryButton>
           </div>
         }
+      />
+
+      <AvatarRequestsSection
+        onFulfill={(request) => {
+          setFulfilling(request)
+          setEditing('new')
+        }}
+        onReject={setRejecting}
       />
 
       <AvatarsFilters
@@ -279,8 +295,12 @@ export default function AvatarAdminPage() {
       {editing && (
         <AvatarFormModal
           target={editing}
+          request={editing === 'new' ? (fulfilling ?? undefined) : undefined}
           organizationOptions={organizationOptions}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null)
+            setFulfilling(null)
+          }}
           onSaved={(message) => {
             // Un avatar nuovo nasce in catalogo: se la tabella sta mostrando
             // l'archivio, torna sul catalogo così l'admin lo vede comparire.
@@ -288,6 +308,7 @@ export default function AvatarAdminPage() {
               setStatusFilter(STATUS_ACTIVE)
             }
             setEditing(null)
+            setFulfilling(null)
             flashSuccess(message)
           }}
           onManageCategories={(organizationId) => setCategoriesOrgId(organizationId || orgFilter)}
@@ -299,6 +320,17 @@ export default function AvatarAdminPage() {
           organizationId={categoriesOrgId || undefined}
           elevated={editing !== null}
           onClose={() => setCategoriesOrgId(null)}
+        />
+      )}
+
+      {rejecting && (
+        <AvatarRequestRejectModal
+          request={rejecting}
+          onClose={() => setRejecting(null)}
+          onRejected={(message) => {
+            setRejecting(null)
+            flashSuccess(message)
+          }}
         />
       )}
 

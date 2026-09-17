@@ -22,6 +22,7 @@ import {
   draftPersona,
 } from '../services/admin'
 import { queryKeys } from './queryKeys'
+import { useInvalidateAvatarRequests } from './useAvatarRequests'
 
 /** Il catalogo admin. `includeDeleted` fa parte della chiave: con e senza gli
  *  archiviati sono due risposte diverse dello stesso endpoint. */
@@ -51,11 +52,18 @@ function useInvalidateAvatars() {
   return () => queryClient.invalidateQueries({ queryKey: queryKeys.avatars.all })
 }
 
+/* Un avatar può nascere da una richiesta di un organization admin, e
+ * salvarlo la chiude: si invalidano anche le richieste e la campanella, o
+ * la riga resterebbe fra quelle in attesa fino al prossimo giro. */
 export function useCreateAvatar() {
   const invalidate = useInvalidateAvatars()
+  const invalidateRequests = useInvalidateAvatarRequests()
   return useMutation({
     mutationFn: (payload: AdminAvatarPayload) => createAvatar(payload),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate()
+      invalidateRequests()
+    },
   })
 }
 

@@ -29,13 +29,14 @@ import { kindLabel } from './simulationFormat'
  * mano non ha documento e uno generato ne ha uno indicizzato. Chi si accorge
  * di aver scelto male ne crea una nuova. */
 
-/* I quattro tipi nell'ordine in cui sono nati, che è anche quello dal più
+/* I tre tipi nell'ordine in cui sono nati, che è anche quello dal più
  * usato al meno. Le stesse parole del badge, prese da `kindLabel`: qui si
  * sceglie il tipo che poi si leggerà scritto su ogni riga, e due parole
  * diverse per la stessa cosa sarebbero due tipi apparenti. */
-const KIND_OPTIONS = (['multiple', 'open', 'ordering', 'matching'] as SimulationKind[]).map(
-  (value) => ({ value, label: kindLabel(value) }),
-)
+const KIND_OPTIONS = (['multiple', 'open', 'ordering'] as SimulationKind[]).map((value) => ({
+  value,
+  label: kindLabel(value),
+}))
 
 const SOURCE_OPTIONS = [
   { value: 'ai', label: 'Generate da un documento' },

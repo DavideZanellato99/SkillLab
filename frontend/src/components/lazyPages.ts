@@ -38,12 +38,11 @@ const exactImports = {
   '/app/admin': () => import('./AdminPage'),
   '/app/admin/organizations': () => import('./OrganizationsPage'),
   '/app/admin/dashboard': () => import('./DashboardPage'),
-  /* Le quattro viste della dashboard, una per rotta: il guscio arriva
+  /* Le tre viste della dashboard, una per rotta: il guscio arriva
      entrando nella sezione, la vista quando la si apre. Le linguette fanno
      partire il file al passaggio del puntatore, come le voci della barra. */
   '/app/admin/dashboard/punteggi': () => import('./DashboardScores'),
   '/app/admin/dashboard/percorsi': () => import('./DashboardPaths'),
-  '/app/admin/dashboard/contenuti': () => import('./DashboardContent'),
   '/app/admin/dashboard/utilizzo': () => import('./DashboardUsage'),
   '/app/admin/training': () => import('./TrainingPage'),
   '/app/admin/report': () => import('./UserReportPage'),
@@ -77,7 +76,6 @@ export const OrganizationsPage = lazy(exactImports['/app/admin/organizations'])
 export const DashboardPage = lazy(exactImports['/app/admin/dashboard'])
 export const DashboardScores = lazy(exactImports['/app/admin/dashboard/punteggi'])
 export const DashboardPaths = lazy(exactImports['/app/admin/dashboard/percorsi'])
-export const DashboardContent = lazy(exactImports['/app/admin/dashboard/contenuti'])
 export const DashboardUsage = lazy(exactImports['/app/admin/dashboard/utilizzo'])
 export const TrainingPage = lazy(exactImports['/app/admin/training'])
 export const UserReportPage = lazy(exactImports['/app/admin/report'])

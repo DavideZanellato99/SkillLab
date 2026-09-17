@@ -3,14 +3,12 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import type { SimulationReportRow } from '../services/admin'
 import type { SimulationKind } from '../services/simulations'
 import DataTable, { Td, Tr } from './DataTable'
-import MultiSearchSelect from './MultiSearchSelect'
 import Notice from './Notice'
 import Tooltip from './Tooltip'
 import SimulationAttemptModal from './SimulationAttemptModal'
 import SimulationKindBadge from './SimulationKindBadge'
 import SimulationSourceBadge from './SimulationSourceBadge'
 import { kindLabel, sourceLabel } from './simulationFormat'
-import { comparePeople } from './personOrder'
 import { matchesSearch } from './tableSearch'
 import { KpiCard, MeterRow, TrendChart } from './scoreCharts'
 import {
@@ -46,7 +44,6 @@ const KIND_SUFFIX: Record<SimulationKind | 'all', string> = {
   multiple: ' a scelta multipla',
   open: ' a risposta aperta',
   ordering: ' di ordinamento',
-  matching: ' di abbinamento',
   all: '',
 }
 
@@ -61,38 +58,16 @@ interface SimulationAvg {
   count: number
 }
 
-interface UserAvg {
-  userId: string
-  name: string
-  nome: string
-  cognome: string
-  email: string
-  avg: number
-  count: number
-}
-
 export default function DashboardSimulations({
   rows,
   selectedUserId,
   kindFilter,
-  compareIds,
-  onCompareChange,
-  needsOrganization,
 }: {
   rows: SimulationReportRow[]
   /** Vuoto quando la pagina non sta filtrando su nessuno. */
   selectedUserId: string
   /** Il tipo scelto in cima alla pagina, o 'all' per entrambi. */
   kindFilter: SimulationKind | 'all'
-  /** Le persone scelte per il confronto, vuoto per confrontarle tutte. La
-   *  scelta è della pagina, come il filtro utente: le due metà mettono a
-   *  confronto le stesse persone, e passando da una linguetta all'altra la
-   *  scelta non si perde. */
-  compareIds: string[]
-  onCompareChange: (ids: string[]) => void
-  /** Vero finché il super admin guarda tutte le organizzazioni insieme: il
-   *  confronto non si compone, perché due tenant non stanno sulla stessa scala. */
-  needsOrganization: boolean
 }) {
   /* La casella scrive subito, il filtro aspetta la fine della parola: sotto
    * ci sono tutti i test consegnati nel periodo, riscorsi da capo a ogni
@@ -166,43 +141,6 @@ export default function DashboardSimulations({
       .map((e) => ({ ...e, avg: e.sum / e.count }))
       .sort((a, b) => b.avg - a.avg)
   }, [filtered])
-
-  /* Confronto fra utenti: sempre su tutti, il filtro utente evidenzia
-   * soltanto. Il tipo invece li restringe davvero, perché è la prova di cui
-   * si sta parlando e non un modo di guardarla. */
-  const userAvgs = useMemo<UserAvg[]>(() => {
-    const acc = new Map<string, UserAvg & { sum: number }>()
-    for (const r of scoped) {
-      const entry = acc.get(r.user_id) ?? {
-        userId: r.user_id,
-        name: personName(r),
-        nome: r.user_nome,
-        cognome: r.user_cognome,
-        email: r.user_email,
-        avg: 0,
-        count: 0,
-        sum: 0,
-      }
-      entry.sum += r.score
-      entry.count += 1
-      acc.set(r.user_id, entry)
-    }
-    return Array.from(acc.values())
-      .map((e) => ({ ...e, avg: e.sum / e.count }))
-      .sort((a, b) => b.avg - a.avg)
-  }, [scoped])
-
-  /* Le stesse persone per cognome, per la tendina che le sceglie: un nome in
-   * un elenco si cerca così, non scorrendo le medie. */
-  const usersByName = useMemo(() => [...userAvgs].sort(comparePeople), [userAvgs])
-
-  /* Il grafico è di chi è stato scelto, e senza nessuna scelta è di tutti.
-   * Un id scelto che qui non ha righe non si scarta: potrebbe aver svolto
-   * solo test dell'altro tipo, e cambiando tipo la scelta deve restare. */
-  const comparedUsers = useMemo(
-    () => (compareIds.length ? userAvgs.filter((u) => compareIds.includes(u.userId)) : userAvgs),
-    [userAvgs, compareIds],
-  )
 
   const detailRows = useMemo(
     () =>
@@ -321,57 +259,6 @@ export default function DashboardSimulations({
           ))}
         </div>
       </div>
-
-      {/* Confronto tra utenti: stessa scheda dell'altra metà, con il comando
-          che sceglie le persone in testa a destra del titolo. */}
-      <section aria-labelledby="confronto-utenti-test" className={`${cardCls} mb-6`}>
-        <div className="mb-4 flex items-start justify-between gap-4 max-lg:flex-col">
-          <div className="min-w-0">
-            <h2 id="confronto-utenti-test" className="text-sm font-semibold text-slate-300">
-              Confronto tra Utenti
-            </h2>
-            <p className="text-xs text-slate-500">
-              Voto medio per utente, su tutti i test{KIND_SUFFIX[kindFilter]} che ha consegnato
-              {compareIds.length > 0 ? ', fra le persone scelte' : ''}
-            </p>
-          </div>
-          {!needsOrganization && userAvgs.length > 0 && (
-            <MultiSearchSelect
-              id="dashboard-compare-simulazioni"
-              values={compareIds}
-              onChange={onCompareChange}
-              options={usersByName.map((u) => ({
-                value: u.userId,
-                label: u.name,
-                sub: u.email,
-              }))}
-              placeholder="Cerca e scegli le persone da confrontare..."
-              align="right"
-              className="w-[520px] shrink-0 max-lg:w-full"
-            />
-          )}
-        </div>
-        {needsOrganization ? (
-          <Notice>
-            Scegli una organizzazione qui sopra per mettere a confronto le sue persone: due tenant
-            diversi si allenano su avatar e test diversi, quindi le loro medie non si leggono sulla
-            stessa scala
-          </Notice>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            {comparedUsers.map((u) => (
-              <MeterRow
-                key={u.userId}
-                label={u.name}
-                sub={conteggio(u.count)}
-                score={u.avg}
-                dimmed={selectedUserId !== '' && u.userId !== selectedUserId}
-                highlighted={selectedUserId !== '' && u.userId === selectedUserId}
-              />
-            ))}
-          </div>
-        )}
-      </section>
 
       {/* Vista tabellare */}
       <DataTable

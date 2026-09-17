@@ -64,6 +64,12 @@ export function isSuperAdmin(user: AuthUser | null): boolean {
   return user?.ruolo === 'super_admin'
 }
 
+/* Solo chi amministra un'organizzazione: è l'unico ruolo che ha qualcosa da
+ * chiedere al super admin, cioè un avatar nuovo per la propria galleria. */
+export function isOrganizationAdmin(user: AuthUser | null): boolean {
+  return user?.ruolo === 'organization_admin'
+}
+
 /** True for super admin or organization admin — roles that can view the activity report. */
 export function isAdmin(user: AuthUser | null): boolean {
   return user?.ruolo === 'super_admin' || user?.ruolo === 'organization_admin'

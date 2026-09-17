@@ -64,7 +64,7 @@ export interface PathStepDraft {
    *
    * Sta nel dato per la stessa ragione per cui ci sta il tipo: le tappe si
    * riordinano, e uno stato del componente legato alla posizione resterebbe
-   * dov'è mentre i valori si spostano, lasciando aperto il pannello della
+   * dov'è mentre i valori si spostano, lasciando aperto il pannello
    * tappa sbagliata. Nasce chiuso anche quando si riapre in modifica una
    * tappa che le soglie ce le ha già: chi torna su un percorso lo fa quasi
    * sempre per altro, e il bottone porta comunque il numero delle soglie,

@@ -3,8 +3,8 @@
 Un tentativo porta con sé le domande, la risposta data e quella esatta come
 erano al momento della consegna (vedi ``SimulationAttempt``), e ogni tipo di
 test le fotografa a modo suo: la scelta multipla un indice e un tempo,
-l'ordinamento due liste, l'abbinamento due elenchi di coppie, la risposta
-aperta un testo e il giudizio del modello. Queste quattro funzioni scrivono
+l'ordinamento due liste, la risposta aperta un testo e il giudizio del
+modello. Queste tre funzioni scrivono
 quelle fotografie con le stesse chiavi e gli stessi conti della consegna
 vera (``routers/simulations.py``), così la vista dei contenuti, che le
 riapre per contare quante volte ogni domanda è stata data giusta, non
@@ -17,7 +17,6 @@ persona porta dentro, e il resto è il caso.
 import random
 
 from models import (
-    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_MULTIPLE,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
@@ -114,36 +113,6 @@ def _ordinamento(
     }
 
 
-def _abbinamento(
-    rng: random.Random, domanda: SimulationQuestion, posizione: int, bravura: float
-) -> dict:
-    """Le coppie proposte: quelle sbagliate si scambiano l'abbinato fra loro."""
-    corrette = [
-        {"left": str(p.get("left") or ""), "right": str(p.get("right") or "")}
-        for p in (domanda.pairs or [])
-    ]
-    sapute = [c for c in corrette if rng.random() < bravura]
-    confuse = [c for c in corrette if c not in sapute]
-    destre = [c["right"] for c in confuse]
-    rng.shuffle(destre)
-    proposte = [dict(c) for c in sapute] + [
-        {"left": c["left"], "right": d} for c, d in zip(confuse, destre, strict=True)
-    ]
-    proposte.sort(key=lambda p: [c["left"] for c in corrette].index(p["left"]))
-    per_sinistra = {p["left"]: p["right"] for p in proposte}
-    indovinate = sum(1 for c in corrette if per_sinistra.get(c["left"]) == c["right"])
-    punti = matched_points(indovinate, len(corrette))
-    return {
-        **_base(domanda, posizione),
-        "given_pairs": proposte,
-        "correct_pairs": corrette,
-        "matched_count": indovinate,
-        "item_count": len(corrette),
-        "is_correct": is_partially_correct(punti),
-        "points": punti,
-    }
-
-
 def _aperta(
     rng: random.Random, domanda: SimulationQuestion, posizione: int, bravura: float
 ) -> dict:
@@ -196,7 +165,6 @@ def _aperta(
 _PER_TIPO = {
     SIMULATION_KIND_MULTIPLE: _multipla,
     SIMULATION_KIND_ORDERING: _ordinamento,
-    SIMULATION_KIND_MATCHING: _abbinamento,
     SIMULATION_KIND_OPEN: _aperta,
 }
 

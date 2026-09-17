@@ -4,7 +4,7 @@ import type {
   SimulationKind,
 } from '../services/simulations'
 import Badge from './Badge'
-import { MatchedAnswer, OrderedAnswer } from './SimulationItemsAnswer'
+import SimulationOrderedAnswer from './SimulationOrderedAnswer'
 import SimulationWrittenAnswer from './SimulationWrittenAnswer'
 import { formatElapsed, formatScore, optionLabel, scoreBadgeTone } from './simulationFormat'
 
@@ -15,7 +15,6 @@ const POINTS_REASON: Record<SimulationKind, string> = {
   multiple: 'diminuisce con il passare del tempo',
   open: 'è proporzionale alla sua completezza: una risposta parziale vale una parte del punto',
   ordering: 'è la quota di passi collocati al posto giusto',
-  matching: 'è la quota di associazioni corrette',
 }
 
 /* L'esito di un test consegnato: il voto in cima e poi, domanda per domanda,
@@ -127,9 +126,7 @@ function AnswerRow({
       {kind === 'open' ? (
         <SimulationWrittenAnswer answer={answer} own={own} />
       ) : kind === 'ordering' ? (
-        <OrderedAnswer answer={answer} own={own} />
-      ) : kind === 'matching' ? (
-        <MatchedAnswer answer={answer} own={own} />
+        <SimulationOrderedAnswer answer={answer} own={own} />
       ) : (
         <>
           <ChoiceRows answer={answer} own={own} />

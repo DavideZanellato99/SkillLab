@@ -5,7 +5,6 @@ import { useSimulation, useStartSimulation, useSubmitSimulation } from '../hooks
 import type {
   SimulationAnswerPayload,
   SimulationAttempt,
-  SimulationPair,
   SimulationQuestion,
 } from '../services/simulations'
 import { PageContainer, PageHeader } from './PageLayout'
@@ -21,7 +20,6 @@ import SimulationIntro from './SimulationIntro'
 import SimulationQuestionStep from './SimulationQuestionStep'
 import SimulationOpenQuestionStep from './SimulationOpenQuestionStep'
 import SimulationOrderingStep from './SimulationOrderingStep'
-import SimulationMatchingStep from './SimulationMatchingStep'
 import SimulationProgress, { type ProgressMark } from './SimulationProgress'
 import { isTimed, kindHint, QUESTION_SECONDS } from './simulationFormat'
 
@@ -178,9 +176,7 @@ export default function SimulationRunner() {
       ? { question_id: q.id, selected_option: null, elapsed_ms: QUESTION_SECONDS * 1000 }
       : kind === 'open'
         ? { question_id: q.id, answer_text: null }
-        : kind === 'ordering'
-          ? { question_id: q.id, ordered_steps: null }
-          : { question_id: q.id, pairs: null }
+        : { question_id: q.id, ordered_steps: null }
 
   const send = (given: Record<string, SimulationAnswerPayload>) => {
     submit.mutate(
@@ -244,7 +240,7 @@ export default function SimulationRunner() {
    * questa" e "questa". */
   const hasAnswer = (question: SimulationQuestion) => {
     const given = answers[question.id]
-    return (given?.answer_text ?? given?.ordered_steps ?? given?.pairs) != null
+    return (given?.answer_text ?? given?.ordered_steps) != null
   }
 
   /* Un segno per domanda. Sulla scelta multipla non si torna indietro,
@@ -402,27 +398,16 @@ export default function SimulationRunner() {
                 />
               )
             }
-            if (kind === 'ordering') {
-              return (
-                <SimulationOrderingStep
-                  key={key}
-                  {...step}
-                  {...moves}
-                  initial={sequences[key]}
-                  onChange={(ordered_steps: string[] | null, placed: (string | null)[]) => {
-                    handleGiven({ ordered_steps })
-                    setSequences((prev) => ({ ...prev, [key]: placed }))
-                  }}
-                />
-              )
-            }
             return (
-              <SimulationMatchingStep
+              <SimulationOrderingStep
                 key={key}
                 {...step}
                 {...moves}
-                initial={answers[key]?.pairs}
-                onChange={(pairs: SimulationPair[] | null) => handleGiven({ pairs })}
+                initial={sequences[key]}
+                onChange={(ordered_steps: string[] | null, placed: (string | null)[]) => {
+                  handleGiven({ ordered_steps })
+                  setSequences((prev) => ({ ...prev, [key]: placed }))
+                }}
               />
             )
           })()}

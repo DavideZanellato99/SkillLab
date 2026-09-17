@@ -180,14 +180,13 @@ describe('SimulationsPage', () => {
     })
 
     /* Una pastiglia con lo zero accanto è un bottone che porta a una griglia
-       vuota: in un catalogo di soli test a crocette sarebbero tre. */
+       vuota: in un catalogo di soli test a crocette sarebbero due. */
     it('non offre i tipi che il catalogo non contiene', () => {
       renderPage({ data: [mai, aperta] })
 
       expect(screen.getByRole('radio', { name: /Tutti/ })).toBeInTheDocument()
       expect(screen.getByRole('radio', { name: /Scelta multipla/ })).toBeInTheDocument()
       expect(screen.queryByRole('radio', { name: /Ordinamento/ })).not.toBeInTheDocument()
-      expect(screen.queryByRole('radio', { name: /Abbinamento/ })).not.toBeInTheDocument()
     })
 
     it('cerca fra i test a schermo', async () => {

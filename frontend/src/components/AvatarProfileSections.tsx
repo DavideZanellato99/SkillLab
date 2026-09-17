@@ -12,7 +12,7 @@
  * `expandSignal`, e per lo stesso motivo l'apertura di tutte resta a portata
  * di mano anche senza bozza. */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { countFilled, PROFILE_SECTIONS } from './avatarProfileConfig'
 import ProfileFieldInput from './ProfileFieldInput'
@@ -36,15 +36,21 @@ export default function AvatarProfileSections({
   disabled,
   expandSignal = 0,
 }: AvatarProfileSectionsProps) {
-  // L'anagrafica parte aperta perché è da lì che si comincia sempre.
-  const [openSections, setOpenSections] = useState<string[]>([PROFILE_SECTIONS[0].title])
+  /* L'anagrafica parte aperta perché è da lì che si comincia sempre. Se la
+     scheda nasce già con una bozza dentro, nasce aperta tutta. */
+  const [openSections, setOpenSections] = useState<string[]>(
+    expandSignal === 0 ? [PROFILE_SECTIONS[0].title] : ALL_TITLES,
+  )
 
-  /* Il valore iniziale non è un segnale: all'apertura della scheda le sezioni
-     restano come sopra, ed è solo il cambiamento successivo ad aprirle. */
-  useEffect(() => {
-    if (expandSignal === 0) return
+  /* Lo zero non è un segnale: all'apertura della scheda le sezioni restano
+     come sopra, ed è il cambiamento successivo ad aprirle. Il confronto con
+     il segnale del render precedente si fa qui e non in un effetto, così la
+     fisarmonica si apre nello stesso disegno in cui la bozza arriva. */
+  const [seenSignal, setSeenSignal] = useState(expandSignal)
+  if (expandSignal !== seenSignal) {
+    setSeenSignal(expandSignal)
     setOpenSections(ALL_TITLES)
-  }, [expandSignal])
+  }
 
   const toggleSection = (title: string) =>
     setOpenSections((prev) =>
@@ -60,7 +66,7 @@ export default function AvatarProfileSections({
         className="w-fit cursor-pointer self-end border-none bg-transparent p-0 text-[0.7rem] text-violet-400 underline-offset-2 transition hover:underline"
         onClick={() => setOpenSections(allOpen ? [] : ALL_TITLES)}
       >
-        {allOpen ? 'Chiudi Tutte le Sezioni' : 'Apri Tutte le Sezioni'}
+        {allOpen ? 'Chiudi Tutte le Sezioni' : 'Apri tutte le sezioni'}
       </button>
       {PROFILE_SECTIONS.map((section) => {
         const keys = section.fields.map((f) => f.key)

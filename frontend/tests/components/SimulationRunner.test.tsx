@@ -55,33 +55,13 @@ const simulation = {
 const openSimulation = { ...simulation, kind: 'open' }
 const openQuestions = questions.map((q) => ({ ...q, options: [] }))
 
-/* Gli altri due tipi senza cronometro. Le domande arrivano già mescolate dal
+/* L'altro tipo senza cronometro. Le domande arrivano già mescolate dal
  * server, quindi il mock le manda nell'ordine sbagliato apposta: rimetterle a
  * posto è quello che il test deve provare. */
 const orderingSimulation = { ...simulation, kind: 'ordering' }
 const orderingQuestions = [
   { id: 'q1', position: 1, text: 'Rimetti in ordine?', options: [], steps: ['Beta', 'Alfa'] },
   { id: 'q2', position: 2, text: 'E questi?', options: [], steps: ['Delta', 'Gamma'] },
-]
-
-const matchingSimulation = { ...simulation, kind: 'matching' }
-const matchingQuestions = [
-  {
-    id: 'q1',
-    position: 1,
-    text: 'Abbina?',
-    options: [],
-    left: ['Carta'],
-    right: ['Estero', 'Sportello'],
-  },
-  {
-    id: 'q2',
-    position: 2,
-    text: 'E questi?',
-    options: [],
-    left: ['Mutuo'],
-    right: ['Crediti', 'Estero'],
-  },
 ]
 
 const attemptResponse = {
@@ -411,32 +391,6 @@ describe('SimulationRunner', () => {
     const [saltata, meta] = submittedBody().answers
     expect(saltata.ordered_steps).toBeNull()
     expect(meta.ordered_steps).toBeNull()
-  })
-
-  it('su un test di abbinamento consegna le coppie formate', async () => {
-    const user = userEvent.setup()
-    serve(matchingSimulation, matchingQuestions, 'matching')
-    renderRunner()
-
-    await user.click(await screen.findByRole('button', { name: 'Inizia il Test' }))
-
-    /* La tendina si trova dal nome della voce che sta abbinando: sono una per
-       riga e tutte con lo stesso invito, quindi senza quel nome chi le sente
-       lette una dopo l'altra non saprebbe a cosa si riferiscono. */
-    await user.click(await screen.findByRole('combobox', { name: 'Abbinamento per Carta' }))
-    await user.click(await screen.findByRole('option', { name: 'Sportello' }))
-    await user.click(screen.getByRole('button', { name: 'Avanti' }))
-
-    /* La seconda si lascia scoperta: vale sbagliata, e non viaggia. Sul
-       passo finale il pulsante consegna, quindi non dice "salta" nemmeno
-       quando non è stato scelto niente. */
-    await user.click(await screen.findByRole('button', { name: 'Consegna il Test' }))
-
-    await waitFor(() => expect(submittedBody()).not.toBeNull())
-    const body = submittedBody()
-
-    expect(body.answers[0].pairs).toEqual([{ left: 'Carta', right: 'Sportello' }])
-    expect(body.answers[1].pairs).toBeNull()
   })
 
   /* Sui test senza cronometro si torna indietro, e la risposta cambiata è

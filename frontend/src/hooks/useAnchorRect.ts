@@ -47,13 +47,16 @@ const same = (a: AnchorRect | null, b: AnchorRect | null) =>
     a.height === b.height)
 
 export function useAnchorRect(selector: string | undefined, active: boolean): AnchorRect | null {
-  const [rect, setRect] = useState<AnchorRect | null>(null)
+  /* La misura porta con sé il selettore misurato: quella di un passo non
+     vale per il successivo, e senza questo il riquadro resterebbe un
+     disegno sul bersaglio di prima. */
+  const [measured, setMeasured] = useState<{
+    selector: string
+    rect: AnchorRect | null
+  } | null>(null)
 
   useEffect(() => {
-    if (!active || !selector) {
-      setRect(null)
-      return
-    }
+    if (!active || !selector) return
 
     /* L'elemento può stare fuori dalla parte visibile della pagina: la
        galleria è lunga, e illuminare qualcosa che sta sotto al bordo
@@ -75,7 +78,9 @@ export function useAnchorRect(selector: string | undefined, active: boolean): An
       const next = box
         ? { top: box.top, left: box.left, width: box.width, height: box.height }
         : null
-      setRect((prev) => (same(prev, next) ? prev : next))
+      setMeasured((prev) =>
+        prev?.selector === selector && same(prev.rect, next) ? prev : { selector, rect: next },
+      )
       frame = requestAnimationFrame(read)
     }
     read()
@@ -83,5 +88,5 @@ export function useAnchorRect(selector: string | undefined, active: boolean): An
     return () => cancelAnimationFrame(frame)
   }, [selector, active])
 
-  return rect
+  return active && selector && measured?.selector === selector ? measured.rect : null
 }

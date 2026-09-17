@@ -90,7 +90,6 @@ def _question(position=1, **campi) -> ReviewQuestion:
         "correct_option": 0,
         "expected_answer": "",
         "ordered_steps": [],
-        "pairs": [],
         "source_chunks": [1],
     }
     base.update(campi)
@@ -327,7 +326,6 @@ def test_riscrivere_una_domanda_fa_invecchiare_l_esito(admin_client, make_pool, 
             "correct_option": q["correct_option"],
             "expected_answer": q["expected_answer"],
             "ordered_steps": None,
-            "pairs": None,
             "explanation": q["explanation"],
         }
         for q in domande

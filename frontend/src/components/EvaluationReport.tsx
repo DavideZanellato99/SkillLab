@@ -2,7 +2,7 @@ import type { ConversationEvaluation, EvaluationCitation } from '../services/api
 import TrainerReviewNote from './TrainerReviewNote'
 import Tooltip from './Tooltip'
 import { formatDate, formatDateTime } from './dateFormat'
-import { formatScore } from './scoreFormat'
+import { formatScore, scoreBarColor, scoreTextColor } from './scoreFormat'
 
 /* Corpo della valutazione: punteggio complessivo, punteggi per criterio e
  * spunti di miglioramento. Usato sia dalla EvaluationModal post-chiamata sia
@@ -16,18 +16,6 @@ import { formatScore } from './scoreFormat'
  * c'è: la pagella deve dire qual è il voto, con quello proposto dalla
  * macchina accanto e non al suo posto. I punteggi per criterio restano
  * quelli dell'AI, che il docente corregge nel complesso e non uno a uno. */
-
-function scoreTextColor(score: number): string {
-  if (score >= 7) return 'text-emerald-400'
-  if (score >= 5) return 'text-orange-400'
-  return 'text-red-400'
-}
-
-function scoreBarColor(score: number): string {
-  if (score >= 7) return 'bg-emerald-500'
-  if (score >= 5) return 'bg-orange-500'
-  return 'bg-red-500'
-}
 
 /* Variazione rispetto al tentativo precedente sullo stesso scenario: verde
  * se in miglioramento, rossa se in peggioramento, neutra se invariata. */

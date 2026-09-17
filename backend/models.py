@@ -61,8 +61,21 @@ SIMULATION_STATUS_DRAFT = "draft"
 SIMULATION_STATUS_PUBLISHED = "published"
 ALL_SIMULATION_STATUSES = [SIMULATION_STATUS_DRAFT, SIMULATION_STATUS_PUBLISHED]
 
-# Come si risponde a un test: scegliendo fra alternative, scrivendo,
-# rimettendo dei passi in ordine o accoppiando due colonne.
+# Stati di una richiesta di avatar. Nasce in attesa quando un organization
+# admin la manda; il super admin la chiude in uno dei due modi, pubblicando
+# l'avatar che ne nasce o rifiutandola con un motivo. Da chiusa non si
+# riapre: una richiesta è una domanda, e a una domanda si risponde una volta.
+AVATAR_REQUEST_PENDING = "pending"
+AVATAR_REQUEST_PUBLISHED = "published"
+AVATAR_REQUEST_REJECTED = "rejected"
+ALL_AVATAR_REQUEST_STATUSES = [
+    AVATAR_REQUEST_PENDING,
+    AVATAR_REQUEST_PUBLISHED,
+    AVATAR_REQUEST_REJECTED,
+]
+
+# Come si risponde a un test: scegliendo fra alternative, scrivendo, o
+# rimettendo dei passi in ordine.
 #
 # Il tipo sta sulla simulazione e non sulla singola domanda, quindi un test è
 # tutto dell'una forma o tutto dell'altra. Le forme si svolgono in modi troppo
@@ -71,22 +84,17 @@ ALL_SIMULATION_STATUSES = [SIMULATION_STATUS_DRAFT, SIMULATION_STATUS_PUBLISHED]
 # in più modi carica due volte lo stesso documento, che costa una
 # generazione e non un disegno.
 #
-# I due tipi aggiunti dopo verificano quello che una crocetta non raggiunge:
-# l'ordinamento chiede la **sequenza** di una procedura, che è dove gli
-# operatori sbagliano davvero (tutti sanno che il cliente va identificato,
-# pochi sanno che va fatto prima di aprire la pratica), e l'abbinamento
-# chiede le **corrispondenze**, cioè le tabelle dei documenti aziendali
-# (casistica, importo, ufficio competente), che a crocette diventano quattro
-# domande dove ne basterebbe una.
+# L'ordinamento verifica quello che una crocetta non raggiunge: la
+# **sequenza** di una procedura, che è dove gli operatori sbagliano davvero
+# (tutti sanno che il cliente va identificato, pochi sanno che va fatto
+# prima di aprire la pratica).
 SIMULATION_KIND_MULTIPLE = "multiple"
 SIMULATION_KIND_OPEN = "open"
 SIMULATION_KIND_ORDERING = "ordering"
-SIMULATION_KIND_MATCHING = "matching"
 ALL_SIMULATION_KINDS = [
     SIMULATION_KIND_MULTIPLE,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
-    SIMULATION_KIND_MATCHING,
 ]
 
 # Chi scrive le domande: il modello a partire da un documento, oppure il
@@ -126,7 +134,7 @@ SIMULATION_OPTION_COUNT = 4
 SIMULATION_MIN_OPTIONS = 2
 SIMULATION_MAX_OPTIONS = 6
 
-# Quanti elementi ha una domanda di ordinamento o di abbinamento.
+# Quanti passi ha una domanda di ordinamento.
 #
 # Sono gli stessi due limiti delle alternative, per la stessa ragione: sotto
 # i tre non c'è niente da riordinare (due passi si indovinano metà delle
@@ -136,11 +144,9 @@ SIMULATION_MAX_OPTIONS = 6
 SIMULATION_MIN_ITEMS = 3
 SIMULATION_MAX_ITEMS = 6
 
-# Quanti elementi scrive il modello quando genera una domanda di ordinamento
-# o di abbinamento. Sta in mezzo all'intervallo consentito: cinque passi sono
-# una procedura intera senza diventare un esercizio di memoria, e cinque
-# coppie coprono una tabella senza costringere il modello a inventare la
-# quinta riga.
+# Quanti passi scrive il modello quando genera una domanda di ordinamento.
+# Sta in mezzo all'intervallo consentito: cinque passi sono una procedura
+# intera senza diventare un esercizio di memoria.
 SIMULATION_GENERATED_ITEMS = 5
 
 # Le tinte fra cui si sceglie il colore di una categoria di avatar. Un elenco
@@ -414,6 +420,73 @@ class Avatar(Authored, Base):
 
     def __repr__(self):
         return f"<Avatar(id={self.id}, name='{self.name}', category='{self.category_name}')>"
+
+
+class AvatarRequest(Authored, Base):
+    """La richiesta di un avatar nuovo, mandata da un organization admin.
+
+    Gli avatar li crea solo il super admin, ma è l'organizzazione a sapere
+    di quale cliente ha bisogno per allenare i suoi: questa riga è il modo
+    in cui glielo dice. Porta i pochi campi da cui una scheda persona nasce
+    (chi è, in che categoria va, che cosa gli è successo), e il resto dei
+    settanta campi lo compila il super admin, con la bozza del modello se
+    vuole. Niente campo per una nota libera: quello che c'è da dire sul
+    cliente sta nella problematica, che è il testo da cui la scheda nasce.
+
+    Chi l'ha mandata e quando sta nelle colonne di `Authored`: il mittente
+    è `created_by`, chi l'ha chiusa è `updated_by`. Non c'è un'altra coppia
+    di colonne per dire la stessa cosa.
+
+    La categoria è testo libero e non una chiave verso `avatar_categories`:
+    chi chiede può volere un gruppo che nella sua galleria non c'è ancora, e
+    l'anagrafica la tiene il super admin, che compilando la scheda sceglie la
+    categoria con quel nome o la crea prima di salvare. Per questo la
+    lunghezza è la stessa di `AvatarCategory.name`: il nome richiesto deve
+    poter diventare una categoria tale e quale.
+
+    Quando la richiesta è pubblicata, `avatar_id` punta all'avatar che ne è
+    nato: è quello che la notifica all'organizzazione apre. Se poi l'avatar
+    viene archiviato, la riga resta a dire che la richiesta è stata evasa.
+    """
+
+    __tablename__ = "avatar_requests"
+
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4, index=True)
+    organization_id = Column(Uuid, ForeignKey("organizations.id"), nullable=False, index=True)
+    category = Column(String(50), nullable=False)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    # Il tipo di scenario e cosa è successo, cioè le due righe della scheda
+    # da cui il resto si ricava (TIPO_SCENARIO e DESCRIZIONE_PROBLEMATICA).
+    scenario_type = Column(String(200), nullable=False)
+    problem = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default=AVATAR_REQUEST_PENDING, index=True)
+    avatar_id = Column(Uuid, ForeignKey("avatars.id", ondelete="SET NULL"), nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    # Quando è stata chiusa, in un modo o nell'altro. NULL finché aspetta.
+    resolved_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'published', 'rejected')",
+            name="ck_avatar_requests_status",
+        ),
+    )
+
+    organization = relationship("Organization", foreign_keys=[organization_id])
+    avatar = relationship("Avatar", foreign_keys=[avatar_id])
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == AVATAR_REQUEST_PENDING
+
+    @property
+    def name(self) -> str:
+        """Come si chiamerà l'avatar, per i messaggi e le notifiche."""
+        return f"{self.first_name} {self.last_name}".strip()
+
+    def __repr__(self):
+        return f"<AvatarRequest(id={self.id}, name='{self.name}', status='{self.status}')>"
 
 
 class RevokedJti(Base):
@@ -985,8 +1058,11 @@ class TechnicalSimulation(Authored, Base):
     ``source`` dice chi le ha scritte, e nemmeno lui si cambia: su una
     simulazione scritta a mano non c'è documento da cui generare, e su una
     generata le domande citano passaggi che a mano nessuno riscriverebbe.
-    Quello che cambia è quante domande servono per pubblicare (vedi
-    ``required_pool``) e quali bottoni compaiono nel pannello di revisione.
+    Quello che cambia è come si riempie il serbatoio la prima volta, con un
+    bottone o una domanda per volta: da lì in poi il pannello di revisione
+    è lo stesso, e ogni domanda si corregge, si toglie o si aggiunge a mano
+    qualunque sia l'origine. Il minimo per pubblicare è uno solo (vedi
+    ``required_pool``).
 
     Il tenant è la stessa regola di ovunque: ogni simulazione appartiene a
     una sola organizzazione e si vede solo dentro quella. Solo il super admin
@@ -1084,10 +1160,6 @@ class TechnicalSimulation(Authored, Base):
         return self.kind == SIMULATION_KIND_ORDERING
 
     @property
-    def is_matching(self) -> bool:
-        return self.kind == SIMULATION_KIND_MATCHING
-
-    @property
     def is_timed(self) -> bool:
         """Se le domande di questo test hanno il cronometro.
 
@@ -1108,17 +1180,21 @@ class TechnicalSimulation(Authored, Base):
     def required_pool(self) -> int:
         """Quante domande servono per pubblicare questa simulazione.
 
-        Il serbatoio pieno è quello che rende diverso un tentativo dal
-        successivo, e alla generazione non costa niente: cinquanta domande
-        sono la stessa attesa di dieci, quindi lì si pretendono tutte.
+        Il minimo è quanto serve a comporre un tentativo, qualunque sia
+        l'origine delle domande. La generazione ne scrive cinquanta perché
+        alla generazione non costano niente, ma cinquanta è il tetto e non
+        una pretesa: chi rilegge il serbatoio e ne toglie qualcuna che non
+        regge deve poter pubblicare lo stesso, e obbligarlo a rigenerare
+        tutto per una domanda storta butterebbe via anche le quarantanove
+        buone. Con dieci domande tutti vedono le stesse dieci, chi vuole
+        che la seconda prova sia diversa ne tiene o ne scrive di più, fino
+        al tetto.
 
-        A mano sono cinquanta domande scritte una per una, ed è il genere di
-        richiesta che finisce con un test mai pubblicato. Il minimo è quanto
-        serve a comporre un tentativo: con dieci domande tutti vedono le
-        stesse dieci, e chi vuole che la seconda prova sia diversa ne scrive
-        di più, fino allo stesso tetto di cinquanta.
+        Resta una proprietà e non una costante perché è il posto che il
+        router interroga per dire quante ne mancano, e il numero deve stare
+        in un punto solo.
         """
-        return SIMULATION_QUESTION_COUNT if self.is_manual else SIMULATION_POOL_COUNT
+        return SIMULATION_QUESTION_COUNT
 
     def __repr__(self):
         return f"<TechnicalSimulation(id={self.id}, title='{self.title}', status='{self.status}')>"
@@ -1168,7 +1244,7 @@ class SimulationQuestion(Base):
     corregge prima di pubblicare, perché un test che vale come verifica non
     può contenere una domanda che nessun umano ha mai guardato.
 
-    Le colonne della chiave sono quattro e se ne riempie una sola, a seconda
+    Le colonne della chiave sono tre e se ne riempie una sola, a seconda
     del ``kind`` della simulazione a cui la domanda appartiene:
 
     - a scelta multipla, ``options`` è la lista delle alternative nell'ordine
@@ -1184,15 +1260,12 @@ class SimulationQuestion(Base):
       che è la chiave stessa: chi risponde li riceve mescolati e il confronto
       è fra due liste. Salvarli in ordine e mescolarli alla consegna delle
       domande è l'unico modo di non avere una seconda colonna che dice la
-      stessa cosa in un altro modo;
-    - di abbinamento, ``pairs`` sono le coppie giuste, ognuna un oggetto
-      ``{"left": "", "right": ""}``. La colonna di sinistra si mostra
-      nell'ordine in cui è scritta, quella di destra mescolata.
+      stessa cosa in un altro modo.
 
-    Le due liste nuove sono JSON e non due tabelle: sono da tre a sei righe
-    che si leggono, si scrivono e si buttano sempre insieme alla domanda, e
-    nessuna query le cerca per conto loro. È la stessa ragione per cui
-    ``options`` è JSON da sempre.
+    I passi sono JSON e non una tabella: sono da tre a sei righe che si
+    leggono, si scrivono e si buttano sempre insieme alla domanda, e nessuna
+    query le cerca per conto loro. È la stessa ragione per cui ``options`` è
+    JSON da sempre.
 
     Il tipo non sta qui perché non è una proprietà della domanda: sta sulla
     simulazione, che è quello che decide come si svolge il test.
@@ -1225,9 +1298,6 @@ class SimulationQuestion(Base):
     # I passi nell'ordine giusto, che è la chiave di una domanda di
     # ordinamento: chi risponde li riceve mescolati
     ordered_steps = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
-    # Le coppie giuste di una domanda di abbinamento, come
-    # [{"left": "", "right": ""}]
-    pairs = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
     explanation = Column(Text, nullable=False, default="")
     source_chunks = Column(JSON().with_variant(JSONB(), "postgresql"), nullable=True)
 

@@ -263,11 +263,11 @@ describe('elenco', () => {
     await scegli('Stato', 'Bozze')
     expect(screen.getByText('Nessuna bozza da finire')).toBeInTheDocument()
 
-    await scegli('Tipo', 'Abbinamento')
+    await scegli('Tipo', 'Ordinamento')
     expect(screen.getByText('Nessuna simulazione corrisponde ai filtri')).toBeInTheDocument()
 
     await scegli('Stato', 'Tutti gli stati')
-    expect(screen.getByText('Nessuna simulazione di tipo abbinamento')).toBeInTheDocument()
+    expect(screen.getByText('Nessuna simulazione di tipo ordinamento')).toBeInTheDocument()
 
     await scegli('Tipo', 'Tutti i tipi')
     await scegli('Origine', 'Manuale')

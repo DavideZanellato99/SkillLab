@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { useEvaluationsReport, useSimulationsReport } from '../hooks/useReports'
 import type { EvaluationReportRow, SimulationReportRow } from '../services/admin'
-import { isAdmin, isSuperAdmin } from '../services/auth'
+import { isAdmin } from '../services/auth'
 import DashboardEvaluationsTable from './DashboardEvaluationsTable'
 import DashboardSimulations from './DashboardSimulations'
 import { useDashboardScope } from './dashboardViews'
@@ -17,7 +17,6 @@ import type { ModeFilter } from './conversationMode'
 import Notice from './Notice'
 import { KIND_FILTERS } from './simulationFormat'
 import type { KindFilter } from './simulationFormat'
-import MultiSearchSelect from './MultiSearchSelect'
 import SearchSelect from './SearchSelect'
 import { KpiCard, MeterRow, TrendChart } from './scoreCharts'
 import { comparePeople } from './personOrder'
@@ -36,7 +35,7 @@ import Tooltip from './Tooltip'
  * gli stessi disegni (vedi scoreCharts), ma non nella stessa colonna: si
  * guarda una prova per volta.
  *
- * Il periodo e l'organizzazione non sono qui: valgono per tutte e quattro le
+ * Il periodo e l'organizzazione non sono qui: valgono per tutte e tre le
  * viste della sezione e stanno nel guscio (vedi DashboardPage), che li passa
  * di qui dentro. Quello che resta sono i filtri che restringono righe già
  * arrivate: la persona, il canale e il tipo di test.
@@ -52,10 +51,6 @@ type ScoresSection = 'conversazioni' | 'simulazioni'
  * corte: è un indirizzo che finisce copiato in una chat. */
 const SECTION_PARAM = 'prova'
 const USER_PARAM = 'persona'
-/* Le persone messe a confronto, separate da virgola. Sono id e non nomi,
- * quindi l'indirizzo si allunga: è il prezzo dell'unica identità che non
- * cambia quando qualcuno si sposa o corregge il proprio cognome. */
-const COMPARE_PARAM = 'confronto'
 const MODE_PARAM = 'canale'
 const KIND_PARAM = 'tipo'
 
@@ -70,19 +65,6 @@ const TAB_BASE = 'dashboard'
 const NO_EVALUATIONS: EvaluationReportRow[] = []
 const NO_SIMULATIONS: SimulationReportRow[] = []
 const NO_LABELS: Record<string, string> = {}
-
-interface UserAvg {
-  userId: string
-  name: string
-  /* Nome e cognome separati oltre al nome da mostrare: le barre si ordinano
-     per media, la tendina che le sceglie per cognome, e quella regola vuole i
-     due campi distinti (vedi `personOrder`). */
-  nome: string
-  cognome: string
-  email: string
-  avg: number
-  count: number
-}
 
 /* Come si legge il canale attivo dentro le descrizioni delle sezioni */
 const MODE_SUFFIX: Record<ModeFilter, string> = {
@@ -273,67 +255,6 @@ export default function DashboardScores() {
     [criteriaAvgs],
   )
 
-  /* Confronto tra utenti: sempre su tutti gli utenti del canale attivo,
-   * il filtro utente evidenzia soltanto */
-  const userAvgs = useMemo<UserAvg[]>(() => {
-    const acc = new Map<string, UserAvg & { sum: number }>()
-    for (const r of scopedRows) {
-      const entry = acc.get(r.user_id) ?? {
-        userId: r.user_id,
-        name: personName(r),
-        nome: r.user_nome,
-        cognome: r.user_cognome,
-        email: r.user_email,
-        avg: 0,
-        count: 0,
-        sum: 0,
-      }
-      entry.sum += r.overall_score
-      entry.count += 1
-      acc.set(r.user_id, entry)
-    }
-    return Array.from(acc.values())
-      .map((e) => ({
-        userId: e.userId,
-        name: e.name,
-        nome: e.nome,
-        cognome: e.cognome,
-        email: e.email,
-        avg: e.sum / e.count,
-        count: e.count,
-      }))
-      .sort((a, b) => b.avg - a.avg)
-  }, [scopedRows])
-
-  /* Le stesse persone in ordine alfabetico, per la tendina che le sceglie.
-     Le barre restano dalla media più alta, che è la risposta della scheda;
-     una tendina ordinata per media invece sarebbe un elenco in cui un nome si
-     cerca scorrendo, e la regola per cercare un nome è quella della gestione
-     utenti: cognome, nome, email. */
-  const usersByName = useMemo(() => [...userAvgs].sort(comparePeople), [userAvgs])
-
-  /* Le persone scelte per il confronto. Un id nell'indirizzo che non
-     corrisponde a nessuna riga non si scarta: potrebbe essere qualcuno che
-     nel periodo scelto non ha svolto prove, e togliergli la chip mentre si
-     restringe il periodo farebbe sparire una scelta che nessuno ha disfatto. */
-  const compareIds = useMemo(() => {
-    const raw = params.get(COMPARE_PARAM) ?? ''
-    return raw ? raw.split(',').filter(Boolean) : []
-  }, [params])
-
-  /* Il grafico è di chi è stato scelto, e senza nessuna scelta è di tutti:
-     una scheda che parte vuota chiederebbe di comporre un confronto anche a
-     chi voleva solo guardare come va il gruppo. */
-  const comparedUsers = useMemo(
-    () => (compareIds.length ? userAvgs.filter((u) => compareIds.includes(u.userId)) : userAvgs),
-    [userAvgs, compareIds],
-  )
-
-  /* Il confronto vive dentro una organizzazione sola. Chi ne amministra una
-     ce l'ha già, perché il server gli risponde solo con la sua; il super
-     admin che le sta guardando tutte insieme deve prima sceglierne una. */
-  const needsOrganization = isSuperAdmin(user) && !organizationId
-
   const detailRows = useMemo(
     () =>
       [...filtered].sort(
@@ -341,10 +262,6 @@ export default function DashboardScores() {
       ),
     [filtered],
   )
-
-  /** Il conteggio sulla linguetta, finché la sua metà non è arrivata. */
-  const tabLabel = (label: string, count: number, isPending: boolean) =>
-    isPending ? label : `${label} (${count})`
 
   if (loadErrorMessage) {
     return <LoadError message={loadErrorMessage} onRetry={retryLoad} variant="page" />
@@ -384,14 +301,8 @@ export default function DashboardScores() {
        * l'uno dell'altro. */}
       <TabBar
         items={[
-          {
-            value: 'conversazioni',
-            label: tabLabel('Conversazioni', rows.length, isLoadingEvaluations),
-          },
-          {
-            value: 'simulazioni',
-            label: tabLabel('Simulazioni tecniche', simulationRows.length, isLoadingSimulations),
-          },
+          { value: 'conversazioni', label: 'Conversazioni' },
+          { value: 'simulazioni', label: 'Simulazioni tecniche' },
         ]}
         value={section}
         onChange={(value) => setParam(SECTION_PARAM, value === 'conversazioni' ? '' : value)}
@@ -553,80 +464,6 @@ export default function DashboardScores() {
                 )}
               </div>
 
-              {/* Confronto tra utenti. È una `section` col proprio nome, come
-                  la mappa di un percorso: chi ascolta la pagina la ritrova
-                  fra le regioni invece di attraversare tutte le barre per
-                  capire dove si trova. */}
-              <section aria-labelledby="confronto-utenti" className={`${cardCls} mb-6`}>
-                {/* Il comando sta in testa alla scheda, a destra del titolo:
-                    è quello che decide cosa c'è sotto, e messo sopra le barre
-                    a tutta larghezza si leggeva come una seconda riga della
-                    descrizione. Su schermo stretto scende sotto il titolo,
-                    perché a fianco resterebbe una fessura in cui i nomi non
-                    si leggono. */}
-                <div className="mb-4 flex items-start justify-between gap-4 max-lg:flex-col">
-                  <div className="min-w-0">
-                    <h2 id="confronto-utenti" className="text-sm font-semibold text-slate-300">
-                      Confronto tra Utenti
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                      Voto medio complessivo per utente, su tutte le valutazioni{' '}
-                      {MODE_SUFFIX[modeFilter]}
-                      {compareIds.length > 0 ? ', fra le persone scelte' : ''}
-                    </p>
-                  </div>
-                  {!needsOrganization && userAvgs.length > 0 && (
-                    <MultiSearchSelect
-                      id="dashboard-compare"
-                      values={compareIds}
-                      onChange={(next) => setParam(COMPARE_PARAM, next.join(','))}
-                      options={usersByName.map((u) => ({
-                        value: u.userId,
-                        label: u.name,
-                        sub: u.email,
-                      }))}
-                      placeholder="Cerca e scegli le persone da confrontare..."
-                      /* Le chip scelte si allineano a destra sotto il campo,
-                         dove il campo stesso è: crescono verso il basso senza
-                         spostare il titolo. */
-                      align="right"
-                      className="w-[520px] shrink-0 max-lg:w-full"
-                    />
-                  )}
-                </div>
-                {/* Mettere a confronto due persone di organizzazioni diverse
-                    non è una domanda che si fa: si allenano su avatar diversi,
-                    con test diversi, dentro programmi diversi, e le due medie
-                    non stanno sulla stessa scala. Quindi finché il super admin
-                    guarda tutti i tenant insieme la scheda non offre il
-                    comando e lo dice, invece di lasciar comporre un confronto
-                    che non vorrebbe dire niente. */}
-                {needsOrganization ? (
-                  <Notice>
-                    Scegli una organizzazione qui sopra per mettere a confronto le sue persone: due
-                    tenant diversi si allenano su avatar e test diversi, quindi le loro medie non si
-                    leggono sulla stessa scala
-                  </Notice>
-                ) : userAvgs.length > 0 ? (
-                  <div className="flex flex-col gap-1.5">
-                    {comparedUsers.map((u) => (
-                      <MeterRow
-                        key={u.userId}
-                        label={u.name}
-                        sub={`${u.count} ${u.count === 1 ? 'valutazione' : 'valutazioni'}`}
-                        score={u.avg}
-                        dimmed={selectedUserId !== '' && u.userId !== selectedUserId}
-                        highlighted={selectedUserId !== '' && u.userId === selectedUserId}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="py-6 text-center text-sm italic text-slate-500">
-                    Nessuna valutazione per la selezione corrente.
-                  </p>
-                )}
-              </section>
-
               <DashboardEvaluationsTable
                 rows={detailRows}
                 criteria={criteriaAvgs}
@@ -644,9 +481,6 @@ export default function DashboardScores() {
             rows={simulationRows}
             selectedUserId={selectedUserId}
             kindFilter={kindFilter}
-            compareIds={compareIds}
-            onCompareChange={(next) => setParam(COMPARE_PARAM, next.join(','))}
-            needsOrganization={needsOrganization}
           />
         </TabPanel>
       )}

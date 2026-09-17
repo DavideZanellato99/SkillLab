@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
@@ -49,6 +50,17 @@ vi.mock('../../src/components/ComparisonSimulations', () => ({
     stato.suggerimento = emptyHint
     return <div>simulazioni: {attempts.length}</div>
   },
+}))
+/* La seconda sezione ha i suoi test: qui interessa a chi la pagina la mostra
+ * e quale prova le dice di guardare. Disegna la linguetta di primo livello
+ * che la pagina le passa, altrimenti da lì non si tornerebbe indietro. */
+vi.mock('../../src/components/ComparisonUsers', () => ({
+  default: ({ prova, sectionTabs }: { prova: string; sectionTabs: ReactNode }) => (
+    <>
+      {sectionTabs}
+      <div>confronto utenti: {prova}</div>
+    </>
+  ),
 }))
 
 import ComparisonPage from '../../src/components/ComparisonPage'
@@ -198,7 +210,7 @@ describe('quando non c’è niente da confrontare', () => {
     stato.attempts = { data: [], isPending: false, error: null }
     renderPage('organization_admin')
 
-    expect(stato.suggerimento).toBe('Scegli una persona in alto per leggere le sue prove')
+    expect(stato.suggerimento).toBe('Scegli una persona qui sopra per leggere le sue prove')
   })
 
   it('non indica niente a uno studente', () => {
@@ -230,7 +242,9 @@ describe('quando non c’è niente da confrontare', () => {
  * guardano una per volta, perché il miglioramento in una non dice niente
  * dell'altra. */
 describe('le due prove', () => {
-  it('conta i tentativi di ciascuna', () => {
+  /* Solo il nome della prova: quante ne ha la persona scelta si legge
+     nell'elenco appena sotto. */
+  it('nomina le due prove senza contarle', () => {
     stato.simulations = {
       data: [{ attempt_id: 't-1' }, { attempt_id: 't-2' }],
       isPending: false,
@@ -238,16 +252,7 @@ describe('le due prove', () => {
     }
     renderPage()
 
-    expect(screen.getByRole('tab', { name: 'Conversazioni (1)' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Simulazioni tecniche (2)' })).toBeInTheDocument()
-  })
-
-  /* Un "(0)" che diventa "(12)" ha detto una cosa falsa proprio mentre si
-     decideva dove andare. */
-  it('non conta finché il conteggio non è quello vero', () => {
-    stato.simulations = { data: [], isPending: true, error: null }
-    renderPage()
-
+    expect(screen.getByRole('tab', { name: 'Conversazioni' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Simulazioni tecniche' })).toBeInTheDocument()
   })
 
@@ -282,6 +287,70 @@ describe('le due prove', () => {
       'id',
       linguetta.getAttribute('aria-controls'),
     )
+  })
+})
+
+/* Le due sezioni sono due linguette, e il titolo della pagina è quello della
+ * sezione aperta. Le medie di più persone sono una domanda che si fa chi
+ * amministra: uno studente ha sé stesso e nessun altro, e la classifica
+ * dell'aula non è una cosa che gli si mostra, quindi non ha nemmeno la
+ * linguetta per arrivarci. */
+describe('le due sezioni', () => {
+  const linguettaUtenti = () => screen.getByRole('tab', { name: 'Tra utenti' })
+
+  it('si apre sui tentativi, con il loro titolo', () => {
+    renderPage('organization_admin')
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Confronto tra i Tentativi')
+    expect(screen.getByRole('tab', { name: 'Tra tentativi' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.queryByText(/confronto utenti/)).not.toBeInTheDocument()
+  })
+
+  it('un admin passa al confronto tra utenti e lo scrive nell’indirizzo', async () => {
+    renderPage('organization_admin')
+
+    await userEvent.click(linguettaUtenti())
+
+    expect(screen.getByText('confronto utenti: conversazioni')).toBeInTheDocument()
+    expect(screen.queryByText(/^conversazioni:/)).not.toBeInTheDocument()
+    expect(indirizzo()).toContain('sezione=utenti')
+  })
+
+  it('riapre sulla sezione che l’indirizzo porta con sé', () => {
+    renderPage('organization_admin', '/app/confronto?sezione=utenti')
+
+    expect(screen.getByText('confronto utenti: conversazioni')).toBeInTheDocument()
+  })
+
+  /* I link composti quando le due sezioni erano due riquadri della stessa
+     pagina portano le persone e nessuna sezione: devono aprirsi ancora sul
+     grafico che portano. */
+  it('un indirizzo con le persone scelte e senza sezione apre sugli utenti', () => {
+    renderPage('organization_admin', '/app/confronto?confronto=u-2,u-3')
+
+    expect(screen.getByText('confronto utenti: conversazioni')).toBeInTheDocument()
+  })
+
+  it('uno studente non ha la seconda sezione né la linguetta', () => {
+    renderPage('user', '/app/confronto?sezione=utenti')
+
+    expect(screen.queryByRole('tab', { name: 'Tra utenti' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/confronto utenti/)).not.toBeInTheDocument()
+    expect(screen.getByText('conversazioni: 1')).toBeInTheDocument()
+  })
+
+  /* La prova è una sola per tutte e due le sezioni: passando dall'una
+     all'altra si resta su quella. */
+  it('la seconda sezione guarda la stessa prova della prima', async () => {
+    renderPage('organization_admin')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Simulazioni tecniche/ }))
+    await userEvent.click(linguettaUtenti())
+
+    expect(screen.getByText('confronto utenti: simulazioni')).toBeInTheDocument()
   })
 })
 

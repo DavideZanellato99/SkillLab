@@ -18,7 +18,9 @@
  * illeggibili. */
 
 import { useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router'
+import { useCloseOnClickOutside } from '../hooks/useCloseOnClickOutside'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { CloseIcon, MenuIcon } from './icons'
 import { prefetchOnHover } from './lazyPages'
@@ -44,7 +46,9 @@ export default function NavbarMobileMenu({
 }: NavbarMobileMenuProps) {
   const { pathname } = useLocation()
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLElement>(null)
   useCloseOnEscape(isOpen, onClose, triggerRef)
+  useCloseOnClickOutside(isOpen, onClose, [triggerRef, panelRef])
 
   return (
     <>
@@ -63,14 +67,21 @@ export default function NavbarMobileMenu({
 
       {isOpen && (
         <>
-          {/* Il velo copre la pagina ma non la barra: il pulsante che ha
-              aperto il pannello deve restare quello che lo richiude. */}
-          <div
-            className="fixed inset-x-0 bottom-0 top-16 z-[98] bg-night/60 backdrop-blur-sm lg:hidden"
-            onClick={onClose}
-            aria-hidden="true"
-          />
+          {/* Il velo scurisce la pagina sotto il pannello, e nient'altro: a
+              chiudere ci pensa `useCloseOnClickOutside`. Esce in fondo alla
+              pagina da un portal perché dentro la barra, che sfoca lo
+              sfondo, un elemento `fixed` si misura sulla barra e non sulla
+              finestra: steso qui, dalla base della barra in giù, sarebbe
+              alto zero. */}
+          {createPortal(
+            <div
+              className="fixed inset-x-0 bottom-0 top-16 z-[98] bg-night/60 backdrop-blur-sm lg:hidden"
+              aria-hidden="true"
+            />,
+            document.body,
+          )}
           <nav
+            ref={panelRef}
             id="navbar-mobile-menu"
             aria-label="Sezioni"
             className="fixed inset-x-0 top-16 z-[99] animate-menu-in border-b border-white/6 bg-gray-900/95 p-3 shadow-[0_16px_48px_rgba(0,0,0,0.5)] backdrop-blur-2xl lg:hidden"

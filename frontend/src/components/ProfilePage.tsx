@@ -436,7 +436,7 @@ export default function ProfilePage() {
           </div>
 
           <p className="mb-4 text-[0.85rem] leading-relaxed text-slate-400">
-            È la stessa guida che hai visto al primo accesso, e riparte dal principio. Dura pochi
+            È la stessa guida che hai visto al primo accesso e riparte dal principio. Dura pochi
             passi e la puoi chiudere quando vuoi.
           </p>
 

@@ -69,8 +69,10 @@ export default function Tooltip({
    * `truncateOnly` su un testo intero non ha niente da dire, e allora non
    * deve nemmeno spegnere quello che sta fuori: la cella di una tabella ne
    * porta uno per il testo tagliato, e se ogni cella zittisse la riga il
-   * tooltip della riga («Vedi il test svolto») non si vedrebbe mai. */
-  const engaged = useRef(false)
+   * tooltip della riga («Vedi il test svolto») non si vedrebbe mai. Uno
+   * stato e non un ref: cambia insieme a `pos`, nello stesso disegno, e i
+   * gestori passati a cloneElement non devono toccare ref. */
+  const [engaged, setEngaged] = useState(false)
 
   /* Annidati: si spegne il tooltip che sta fuori e gli si tiene fermo il
    * mouse, altrimenti il suo onMouseMove lo riaccenderebbe subito e se ne
@@ -87,14 +89,17 @@ export default function Tooltip({
   }
 
   const handleMouseEnter = (e: ReactMouseEvent) => {
-    engaged.current = !truncateOnly || isTruncated(e.currentTarget)
-    if (!engaged.current) return
+    const engage = !truncateOnly || isTruncated(e.currentTarget)
+    setEngaged(engage)
+    if (!engage) return
     takeOver(e)
+
     if (anchor === 'cursor') setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 })
     else showFromElement(e.currentTarget)
   }
   const handleMouseMove = (e: ReactMouseEvent) => {
-    if (!engaged.current) return
+    if (!engaged) return
+
     takeOver(e)
     if (anchor === 'cursor') setPos({ x: e.clientX, top: e.clientY - 10, bottom: e.clientY + 18 })
   }
@@ -107,7 +112,7 @@ export default function Tooltip({
     setFlip(false)
   }, [])
   const handleMouseLeave = () => {
-    engaged.current = false
+    setEngaged(false)
     hide()
   }
 
@@ -153,6 +158,12 @@ export default function Tooltip({
     onBlur: hide,
   }
 
+  /* I gestori che il figlio aveva già, da chiamare prima dei nostri. */
+  const childOnMouseEnter = children.props.onMouseEnter as
+    ((e: ReactMouseEvent) => void) | undefined
+  const childOnMouseLeave = children.props.onMouseLeave as
+    ((e: ReactMouseEvent) => void) | undefined
+
   const target = wrap ? (
     <span className="inline-flex" {...{ [TOOLTIP_MARK]: '' }} {...eventProps}>
       {children}
@@ -162,11 +173,11 @@ export default function Tooltip({
       [TOOLTIP_MARK]: '',
       ...eventProps,
       onMouseEnter: (e: ReactMouseEvent) => {
-        ;(children.props.onMouseEnter as ((e: ReactMouseEvent) => void) | undefined)?.(e)
+        childOnMouseEnter?.(e)
         handleMouseEnter(e)
       },
       onMouseLeave: (e: ReactMouseEvent) => {
-        ;(children.props.onMouseLeave as ((e: ReactMouseEvent) => void) | undefined)?.(e)
+        childOnMouseLeave?.(e)
         handleMouseLeave()
       },
     })

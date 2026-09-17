@@ -18,6 +18,11 @@ export type NotificationKind =
   | 'assignment.due_soon'
   | 'assignment.overdue'
   | 'review.published'
+  /* Le richieste di avatar: la domanda per il super admin, le due risposte
+   * per chi l'ha mandata (vedi services/avatarRequests). */
+  | 'avatar_request.pending'
+  | 'avatar_request.published'
+  | 'avatar_request.rejected'
 
 export interface AppNotification {
   /** Identità stabile dell'evento: è a questa che si riferisce la lettura. */

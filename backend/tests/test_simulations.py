@@ -19,7 +19,6 @@ import pytest
 from auth_dependency import ensure_roles
 from models import (
     ROLE_USER,
-    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
     SIMULATION_STATUS_DRAFT,
@@ -154,11 +153,10 @@ def test_le_domande_non_portano_la_risposta_esatta(user_client, make_simulation)
     for question in domande:
         # I campi sono quelli che servono a mostrare la domanda, uno per
         # tipo di test: nessuna chiave e nessuna spiegazione
-        assert set(question) == {"id", "position", "text", "options", "steps", "left", "right"}
+        assert set(question) == {"id", "position", "text", "options", "steps"}
         assert "correct_option" not in question
         assert "expected_answer" not in question
         assert "ordered_steps" not in question
-        assert "pairs" not in question
         assert "explanation" not in question
 
 
@@ -1113,13 +1111,13 @@ def test_il_pdf_di_un_test_a_risposta_aperta_porta_le_risposte_scritte(
     assert response.content.startswith(b"%PDF")
 
 
-# ── I test di ordinamento e di abbinamento ────────────────────────────
+# ── I test di ordinamento ─────────────────────────────────────────────
 #
-# I due tipi in cui una risposta può essere giusta a metà, e in cui la
-# domanda che esce dal server non è quella scritta nella riga: i passi
-# vengono mescolati e la colonna di destra pure. Le due cose vanno verificate
-# insieme, perché è la mescolata a rendere la chiave una chiave, e il
-# punteggio parziale a rendere il voto qualcosa che si può spiegare.
+# Il tipo in cui una risposta può essere giusta a metà, e in cui la domanda
+# che esce dal server non è quella scritta nella riga: i passi vengono
+# mescolati. Le due cose vanno verificate insieme, perché è la mescolata a
+# rendere la chiave una chiave, e il punteggio parziale a rendere il voto
+# qualcosa che si può spiegare.
 
 
 @pytest.fixture
@@ -1144,41 +1142,6 @@ def make_ordering_simulation(db_session, organization):
                 text="Rimetti in ordine i passi.",
                 ordered_steps=["Uno", "Due", "Tre", "Quattro", "Cinque"],
                 explanation="L'ordine è quello.",
-            )
-        )
-        db_session.flush()
-        db_session.refresh(simulation)
-        return simulation
-
-    return _factory
-
-
-@pytest.fixture
-def make_matching_simulation(db_session, organization):
-    """Una simulazione di abbinamento, pubblicata, con una domanda sola."""
-
-    def _factory(*, status=SIMULATION_STATUS_PUBLISHED) -> TechnicalSimulation:
-        simulation = TechnicalSimulation(
-            title="Reclami e uffici",
-            status=status,
-            kind=SIMULATION_KIND_MATCHING,
-            organization_id=organization.id,
-            document_name="procedura.txt",
-            document_text="Ogni reclamo ha il suo ufficio.",
-        )
-        db_session.add(simulation)
-        db_session.flush()
-        db_session.add(
-            SimulationQuestion(
-                simulation_id=simulation.id,
-                position=1,
-                text="Abbina ogni reclamo al suo ufficio.",
-                pairs=[
-                    {"left": "Carta", "right": "Sportello"},
-                    {"left": "Bonifico", "right": "Estero"},
-                    {"left": "Mutuo", "right": "Crediti"},
-                ],
-                explanation="Ognuno al suo.",
             )
         )
         db_session.flush()
@@ -1269,75 +1232,8 @@ def test_un_ordinamento_con_un_numero_di_passi_diverso_e_rifiutato(
     assert response.status_code == 400
 
 
-def test_l_abbinamento_manda_la_colonna_di_destra_mescolata(user_client, make_matching_simulation):
-    """La sinistra resta com'è scritta, la destra no: le coppie sono la
-    chiave, e affiancarle sarebbe darla."""
-    simulation = make_matching_simulation()
-    ordini = set()
-    for _ in range(12):
-        domanda = user_client.post(f"/api/simulations/{simulation.id}/start").json()[0]
-        assert domanda["left"] == ["Carta", "Bonifico", "Mutuo"]
-        assert sorted(domanda["right"]) == ["Crediti", "Estero", "Sportello"]
-        ordini.add(tuple(domanda["right"]))
-    assert len(ordini) > 1
-
-
-def test_l_abbinamento_vale_quante_coppie_sono_indovinate(user_client, make_matching_simulation):
-    """Due coppie su tre, con la terza lasciata scoperta: sette decimi."""
-    simulation = make_matching_simulation()
-    esito = user_client.post(
-        f"/api/simulations/{simulation.id}/attempts",
-        json={
-            "answers": [
-                {
-                    "question_id": str(simulation.questions[0].id),
-                    "pairs": [
-                        {"left": "Carta", "right": "Sportello"},
-                        {"left": "Bonifico", "right": "Estero"},
-                    ],
-                }
-            ]
-        },
-    ).json()
-
-    risposta = esito["answers"][0]
-    assert risposta["matched_count"] == 2
-    assert risposta["item_count"] == 3
-    assert risposta["points"] == 0.7
-    assert risposta["is_correct"] is True
-    # La chiave torna intera, compresa la coppia che non è stata nemmeno
-    # tentata: è quella che chi rilegge deve imparare
-    assert {p["left"] for p in risposta["correct_pairs"]} == {"Carta", "Bonifico", "Mutuo"}
-
-
-def test_un_abbinamento_scambiato_non_prende_niente(user_client, make_matching_simulation):
-    simulation = make_matching_simulation()
-    esito = user_client.post(
-        f"/api/simulations/{simulation.id}/attempts",
-        json={
-            "answers": [
-                {
-                    "question_id": str(simulation.questions[0].id),
-                    "pairs": [
-                        {"left": "Carta", "right": "Estero"},
-                        {"left": "Bonifico", "right": "Sportello"},
-                        {"left": "Mutuo", "right": "Crediti"},
-                    ],
-                }
-            ]
-        },
-    ).json()
-
-    risposta = esito["answers"][0]
-    assert risposta["matched_count"] == 1
-    assert risposta["points"] == 0.3
-    assert risposta["is_correct"] is False
-
-
-def test_il_pdf_dei_due_tipi_nuovi_si_genera(
-    user_client, make_ordering_simulation, make_matching_simulation
-):
-    """Il referto ha un ramo per tipo, e su questi due stampa degli elenchi."""
+def test_il_pdf_dell_ordinamento_si_genera(user_client, make_ordering_simulation):
+    """Il referto ha un ramo per tipo, e su questo stampa un elenco."""
     ordinamento = make_ordering_simulation()
     esito = user_client.post(
         f"/api/simulations/{ordinamento.id}/attempts",
@@ -1346,22 +1242,6 @@ def test_il_pdf_dei_due_tipi_nuovi_si_genera(
                 {
                     "question_id": str(ordinamento.questions[0].id),
                     "ordered_steps": ["Due", "Uno", "Tre", "Quattro", "Cinque"],
-                }
-            ]
-        },
-    ).json()
-    pdf = user_client.get(f"/api/simulations/attempts/{esito['id']}/pdf")
-    assert pdf.status_code == 200
-    assert pdf.content.startswith(b"%PDF")
-
-    abbinamento = make_matching_simulation()
-    esito = user_client.post(
-        f"/api/simulations/{abbinamento.id}/attempts",
-        json={
-            "answers": [
-                {
-                    "question_id": str(abbinamento.questions[0].id),
-                    "pairs": [{"left": "Carta", "right": "Crediti"}],
                 }
             ]
         },

@@ -19,6 +19,13 @@ export const queryKeys = {
     list: () => ['avatars', 'list'] as const,
     detail: (id: string) => ['avatars', 'detail', id] as const,
   },
+  /** Le richieste di avatar, viste da chi le manda e da chi le evade. Il
+   *  filtro entra nella chiave: le richieste in attesa e tutte le richieste
+   *  sono due domande diverse. */
+  avatarRequests: {
+    all: ['avatar-requests'] as const,
+    list: (filters: unknown) => ['avatar-requests', 'list', filters] as const,
+  },
   categories: {
     /** Da invalidare a ogni scrittura sull'anagrafica: le due liste sotto
      *  sono la stessa cosa vista da chi si allena e da chi la governa. */
@@ -88,17 +95,6 @@ export const queryKeys = {
     all: ['dashboards'] as const,
     paths: (organizationId?: string, days?: number) =>
       ['dashboards', 'paths', organizationId ?? '__all__', days ?? '__ever__'] as const,
-    content: (organizationId?: string, days?: number) =>
-      ['dashboards', 'content', organizationId ?? '__all__', days ?? '__ever__'] as const,
-    /** Le domande di un test, che si leggono aprendo la sua riga. */
-    simulationItems: (simulationId: string, organizationId?: string, days?: number) =>
-      [
-        'dashboards',
-        'simulation-items',
-        simulationId,
-        organizationId ?? '__all__',
-        days ?? '__ever__',
-      ] as const,
     /** L'utilizzo per organizzazione: niente filtro tenant, lo guarda il
      *  super admin e le guarda tutte. */
     usage: (days?: number) => ['dashboards', 'usage', days ?? '__ever__'] as const,

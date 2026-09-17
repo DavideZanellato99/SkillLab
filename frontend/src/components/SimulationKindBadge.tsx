@@ -4,21 +4,19 @@ import Tooltip from './Tooltip'
 
 /* Come si risponde a un test, in un colore e un disegno.
  *
- * I quattro tipi si dividono in due famiglie, e i colori dicono quella: dove
+ * I tre tipi si dividono in due famiglie, e i colori dicono quella: dove
  * si sceglie fra cose già scritte il badge è violetto, dove si compone una
  * risposta è ciano. Sono gli stessi due colori di `ConversationModeBadge`, e
- * vogliono dire la stessa cosa. Un terzo e un quarto colore avrebbero reso
- * la riga di una tabella un arcobaleno da decifrare, mentre a distinguere i
- * tipi dentro la famiglia basta il disegno, che è quello che si guarda per
- * secondo.
+ * vogliono dire la stessa cosa. Un terzo colore avrebbe reso la riga di una
+ * tabella un arcobaleno da decifrare, mentre a distinguere i tipi dentro la
+ * famiglia basta il disegno, che è quello che si guarda per secondo.
  *
  * Il disegno racconta il gesto: il pallino da selezionare, la matita che
- * scrive, le righe da riordinare, le due colonne da accoppiare. */
+ * scrive, le righe da riordinare. */
 const KIND_TONES: Record<SimulationKind, string> = {
   multiple: 'border-violet-600/35 bg-violet-600/10 text-violet-400',
   open: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',
   ordering: 'border-violet-600/35 bg-violet-600/10 text-violet-400',
-  matching: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400',
 }
 
 function KindIcon({ kind }: { kind: SimulationKind }) {
@@ -50,15 +48,6 @@ function KindIcon({ kind }: { kind: SimulationKind }) {
       </svg>
     )
   }
-  if (kind === 'matching') {
-    /* Due colonne unite da un ponte: qui si accoppia */
-    return (
-      <svg {...stroke}>
-        <path d="M4 7h5M4 17h5M15 7h5M15 17h5" />
-        <path d="M9 7h2a2 2 0 0 1 2 2v6a2 2 0 0 0 2 2h0" />
-      </svg>
-    )
-  }
   /* Il pallino da selezionare: qui si sceglie */
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -73,11 +62,10 @@ function KindIcon({ kind }: { kind: SimulationKind }) {
  *
  * Il gemello di `ConversationModeBadge`, e non per somiglianza: là due
  * conversazioni si leggono nella stessa tabella e una è al telefono e l'altra
- * scritta, qui quattro tentativi si leggono nella stessa tabella e uno è a
+ * scritta, qui tre tentativi si leggono nella stessa tabella e uno è a
  * crocette con il cronometro, uno a risposte scritte giudicate da un modello,
- * uno a passi da riordinare, uno a colonne da accoppiare. In tutti i casi il
- * voto da solo non dice quale prova era, e due prove diverse non si
- * confrontano senza saperlo.
+ * uno a passi da riordinare. In tutti i casi il voto da solo non dice quale
+ * prova era, e due prove diverse non si confrontano senza saperlo.
  *
  * Con `iconOnly` resta il solo disegno, per i posti fitti come la tabella
  * della dashboard. La parola resta nel markup per chi legge con uno screen

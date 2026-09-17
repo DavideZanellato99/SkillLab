@@ -285,6 +285,15 @@ In tutti e due i casi **è l'operatore ad aprire**, e c'è una regola esplicita
 contro lo scambio di ruolo: qualunque cosa dica l'operatore, anche se saluta in
 modo informale, l'avatar resta il cliente.
 
+Solo al telefono c'è anche una regola ferrea sul **nome storpiato**: se
+l'operatore chiama l'avatar con una lettera cambiata o una sillaba diversa,
+l'avatar non reagisce, non corregge e non cala la fiducia. Il parlato
+dell'operatore arriva al modello attraverso la trascrizione, e la trascrizione
+sbaglia i nomi propri più di ogni altra parola: senza la regola l'avatar si
+risentiva per un errore che l'operatore non aveva commesso, e la valutazione
+finale glielo contava a carico. In chat il nome arriva come l'operatore lo ha
+scritto, e la regola non c'è.
+
 Il prompt insiste su un punto sopra tutti: l'avatar **non deve aiutare**
 l'operatore a superare la simulazione. Non è un assistente e non è un tutor, è
 una persona con un problema.
@@ -389,6 +398,96 @@ solo l'inizio di una nuova che viene bloccato.
 L'archiviazione è reversibile con `restore`. L'unico modo perché un avatar
 sparisca davvero è la cancellazione dell'organizzazione a cui appartiene, dove
 se ne va il tenant intero.
+
+## Le richieste degli organization admin
+
+Gli avatar li crea solo il super admin, ma è l'organizzazione a sapere di
+quale cliente ha bisogno per allenare i suoi. La richiesta è il modo in cui
+glielo dice: nella galleria, chi amministra un tenant trova in alto a destra
+della fascia, subito sotto la barra, il pulsante "Richiedi un Avatar" che
+apre il modulo
+([AvatarRequestModal](../frontend/src/components/AvatarRequestModal.tsx)), e
+sopra la ricerca il pannello "Richieste di pubblicazione"
+([AvatarRequestsPanel](../frontend/src/components/AvatarRequestsPanel.tsx))
+con le richieste in attesa e quelle rifiutate. Il pannello compare solo
+quando ha qualcosa da elencare; lo stato della modale sta nella pagina
+([HomePage](../frontend/src/components/HomePage.tsx)), perché il pulsante e
+il pannello sono in due punti diversi. Lo vede solo lui: chi si allena non ha
+un catalogo da far crescere, e il super admin non ha nessuno a cui chiedere
+(la rotta risponde 403 a entrambi).
+
+**Il modulo chiede i pochi campi da cui una scheda nasce**, non la scheda:
+nome e cognome, la categoria, il tipo di scenario e la problematica raccontata
+come la si esporrebbe a un collega. La categoria è un campo di testo e non
+l'elenco di quelle esistenti: chi chiede può volere un gruppo che la sua
+galleria non ha ancora, e a crearlo è il super admin quando compila la scheda.
+Il campo ha la stessa lunghezza del nome di una categoria (cinquanta
+caratteri), così quel nome può diventare una categoria tale e quale.
+Niente nota libera: quello che c'è da dire sul cliente sta nella problematica,
+che è il testo da cui la scheda nasce. Il resto dei settanta campi lo compila
+chi riceve la richiesta. La problematica deve avere almeno quaranta caratteri per
+la stessa ragione della bozza: da tre parole si inventa lo scenario al posto
+di chi lo ha chiesto. E il modulo rifiuta una seconda richiesta in attesa per
+la stessa persona, sui dati che ha già in cache.
+
+La riga sta in `avatar_requests` ([AvatarRequest](../backend/models.py)), con
+chi l'ha mandata e chi l'ha chiusa nelle colonne di paternità: il mittente è
+`created_by`, chi la evade è `updated_by`. La categoria è la colonna di testo
+`category`, non una chiave verso `avatar_categories`: il server la salva come
+è scritta, senza cercarla nell'anagrafica, quindi eliminare o rinominare una
+categoria non tocca le richieste che la nominano.
+
+**Il super admin la trova in cima alla gestione avatar**
+([AvatarRequestsSection](../frontend/src/components/AvatarRequestsSection.tsx)),
+una sezione che compare solo quando c'è qualcosa in attesa, e nella campanella
+(vedi sotto). Da ogni riga può fare due cose:
+
+- **compilare la scheda**: si apre `AvatarFormModal` con `request`, cioè già
+  con tenant, nome e scenario al loro posto (`avatarFormFromRequest` in
+  [avatarForm.ts](../frontend/src/components/avatarForm.ts)) e la bozza del
+  modello già pronta con il caso raccontato. La categoria arriva come nome:
+  quando la scheda ha caricato le categorie del tenant, se una ha quel nome
+  (maiuscole e spazi ai bordi a parte, `requestedCategoryId`) la seleziona da
+  sola; se nessuna corrisponde, una nota sotto la tendina dice quale categoria
+  la richiesta indica, e il super admin la crea da "Gestisci Categorie" prima
+  di salvare. La vera causa del problema resta vuota di proposito: è la
+  soluzione dell'esercizio, e la decide chi compila. Salvare la scheda è
+  **l'unica strada per pubblicare**: `POST /api/admin/avatars` con
+  `request_id` crea l'avatar e chiude la richiesta nella stessa transazione,
+  così una richiesta non risulta mai evasa da un avatar che non c'è. Un avatar
+  nasce da una scheda compilata, non da un bottone;
+- **rifiutare**, con un motivo obbligatorio
+  ([AvatarRequestRejectModal](../frontend/src/components/AvatarRequestRejectModal.tsx)):
+  lo legge chi ha chiesto, ed è quello che gli dice cosa cambiare per
+  riprovare.
+
+Una richiesta si chiude una volta sola: rifiutarne una già chiusa, o
+pubblicarne una rifiutata, è un 409. Le richieste in attesa e quelle rifiutate
+restano nel pannello dell'organization admin, che può ritirare le prime e
+togliere di mezzo le seconde con `DELETE`; quelle pubblicate non compaiono,
+perché l'avatar è nella griglia sotto e parla da sé, e non si cancellano: la
+riga è la traccia di come l'avatar è arrivato in galleria.
+
+**Chi vede cosa** passa dallo stesso filtro di tutta l'amministrazione
+(`resolve_admin_scope`, vedi
+[organizzazioni-e-ruoli.md](organizzazioni-e-ruoli.md)): un organization
+admin vede le richieste del suo tenant, il super admin tutte, e da fuori una
+richiesta altrui è un 404. Le rotte stanno in
+[routers/avatar_requests.py](../backend/routers/avatar_requests.py).
+
+**La campanella la racconta da tutte e due le parti dello sportello.** Al
+super admin ogni richiesta in attesa (`avatar_request.pending`), che resta
+finché non è chiusa e sparisce da sola dopo, come ogni notifica derivata; a
+chi l'ha mandata l'esito, `avatar_request.published` con il link alla galleria
+o `avatar_request.rejected` con il motivo nel testo. Al mittente e non a tutti
+gli admin del tenant, perché è lui ad aspettare una risposta. Ogni scrittura
+sulle richieste invalida anche la campanella, altrimenti il contatore
+resterebbe vecchio fino al prossimo giro di polling.
+
+Quando l'organizzazione viene eliminata le sue richieste se ne vanno prima
+degli avatar e delle categorie a cui puntano; quando viene eliminato un
+account, la richiesta resta all'organizzazione e di lui se ne va solo la firma
+(`_AUTHORED` in [erasure.py](../backend/erasure.py)).
 
 ## Dove va a finire la scheda
 

@@ -8,10 +8,6 @@ import { useState, useEffect, useRef, useId } from 'react'
 export interface SelectOption {
   value: string
   label: string
-  /** Testo secondario accanto all'etichetta, per un'opzione che si può
-   *  ancora scegliere ma che vale la pena segnalare (per esempio perché è
-   *  già impegnata altrove). La riga che ce l'ha si attenua. */
-  note?: string
 }
 
 interface SelectProps {
@@ -240,19 +236,9 @@ export default function Select({
                 onClick={() => pick(opt)}
                 className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-[0.85rem] transition ${
                   i === activeIndex ? 'bg-white/8 text-slate-100' : 'text-slate-300'
-                } ${isSelected ? 'font-semibold' : ''} ${opt.note ? 'opacity-70' : ''}`}
+                } ${isSelected ? 'font-semibold' : ''}`}
               >
-                <span className="flex min-w-0 items-baseline gap-2">
-                  <span className="truncate">{opt.label}</span>
-                  {opt.note && (
-                    <>
-                      {/* Uno spazio vero e non solo il `gap`: chi legge con la
-                          voce sente il nome dell'opzione attaccato alla nota,
-                          il `gap` lo vede solo chi guarda. */}{' '}
-                      <span className="shrink-0 text-[0.75rem] text-slate-500">{opt.note}</span>
-                    </>
-                  )}
-                </span>
+                <span className="truncate">{opt.label}</span>
                 {isSelected && (
                   <svg
                     width="14"

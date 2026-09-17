@@ -1,6 +1,6 @@
 /* Le viste della dashboard e i filtri che valgono per tutte.
  *
- * La sezione è un guscio con dentro quattro schermate (vedi DashboardPage):
+ * La sezione è un guscio con dentro tre schermate (vedi DashboardPage):
  * ognuna è una domanda diversa sulle stesse prove, quindi ognuna è una rotta
  * sua, con il proprio file e la propria lettura. Cosa sono e come si
  * chiamano sta qui, perché lo leggono in tre: la barra delle linguette, il
@@ -8,7 +8,7 @@
  *
  * Periodo e organizzazione sono del guscio e non delle singole viste: sono i
  * due filtri che il server capisce, cioè quelli che decidono quali righe
- * arrivano, e sono gli stessi per tutte e quattro. Chi cambia linguetta li
+ * arrivano, e sono gli stessi per tutte e tre. Chi cambia linguetta li
  * ritrova dove li ha lasciati, che è quello che tiene insieme la sezione.
  * Gli altri (la persona, il canale, il tipo di test) restringono righe già
  * arrivate e restano dentro la vista che li usa. */
@@ -31,14 +31,7 @@ export const DASHBOARD_VIEWS = [
     value: 'percorsi',
     label: 'Percorsi',
     description:
-      'Avanzamento dei percorsi affidati: quanti si chiudono, in quanto tempo e su quale tappa si ferma il gruppo.',
-    superAdminOnly: false,
-  },
-  {
-    value: 'contenuti',
-    label: 'Contenuti',
-    description:
-      'Quanto sono difficili gli avatar e i test tecnici, con le domande di un test una per una.',
+      'Avanzamento dei percorsi assegnati: quanti sono, quanti si chiudono, in quanto tempo e quanti sono scaduti.',
     superAdminOnly: false,
   },
   {
@@ -60,6 +53,28 @@ export const DEFAULT_VIEW: DashboardView = 'punteggi'
 /** L'indirizzo di una vista. */
 export const dashboardPath = (view: DashboardView) => `${DASHBOARD_ROOT}/${view}`
 
+/* Come le scelte del guscio si scrivono nell'indirizzo. In italiano come le
+ * rotte, e corte: è un indirizzo che finisce copiato in una chat. Stanno qui
+ * e non nel guscio perché li scrive anche chi arriva da fuori: la scheda di
+ * un percorso manda alla vista dei percorsi già ristretta su di sé. */
+export const ORG_PARAM = 'organizzazione'
+export const PERIOD_PARAM = 'periodo'
+/** Il percorso su cui la vista dei percorsi restringe le assegnazioni. */
+export const PATH_PARAM = 'percorso'
+
+/**
+ * L'indirizzo di chi sta percorrendo un percorso: la vista dei percorsi già
+ * ristretta su quello. L'organizzazione viaggia con lui perché il percorso
+ * ne ha una sola, e senza il super admin arriverebbe su «tutte» con il
+ * filtro acceso su un percorso che la tendina, in quello scope, offre lo
+ * stesso ma in mezzo a tutti gli altri.
+ */
+export function assignedPathUrl(pathId: string, organizationId?: string): string {
+  const params = new URLSearchParams({ [PATH_PARAM]: pathId })
+  if (organizationId) params.set(ORG_PARAM, organizationId)
+  return `${dashboardPath('percorsi')}?${params}`
+}
+
 /** La vista che si sta guardando, letta dall'indirizzo. */
 export function viewFromPath(pathname: string): DashboardView {
   const found = DASHBOARD_VIEWS.find((view) => pathname.startsWith(dashboardPath(view.value)))
@@ -76,7 +91,7 @@ export function visibleViews(isSuperAdmin: boolean) {
  *
  * Viaggia nel contesto dell'`Outlet` e non nei parametri dell'indirizzo letti
  * di nuovo: l'indirizzo resta la loro unica copia, ma a interpretarlo è il
- * guscio, così le quattro viste non ne tengono quattro letture libere di
+ * guscio, così le tre viste non ne tengono tre letture libere di
  * divergere.
  */
 export interface DashboardScope {

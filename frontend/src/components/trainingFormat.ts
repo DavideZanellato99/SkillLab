@@ -145,6 +145,25 @@ export function currentStep(assignment: PathAssignment): StepProgress | undefine
 }
 
 /**
+ * Le assegnazioni fatte negli ultimi `days` giorni, tutte se il periodo è
+ * «sempre».
+ *
+ * È lo stesso taglio che il server fa per i quattro numeri della dashboard
+ * (`days` su `created_at`, e non sulle prove svolte), rifatto sulle righe
+ * già in mano: una tabella che sotto quei numeri mostrasse anche le
+ * assegnazioni di prima li smentirebbe.
+ */
+export function assignedWithin(
+  assignments: PathAssignment[],
+  days: number | undefined,
+  now: Date = new Date(),
+): PathAssignment[] {
+  if (!days) return assignments
+  const since = now.getTime() - days * 86_400_000
+  return assignments.filter((a) => parseInstant(a.created_at).getTime() >= since)
+}
+
+/**
  * I percorsi divisi in due: quelli da chiudere e quelli chiusi.
  *
  * Chi apre la propria pagina cerca cosa deve fare, non cosa ha già fatto; i

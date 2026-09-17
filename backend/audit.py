@@ -157,6 +157,19 @@ ACTIONS: dict[tuple[str, str], AuditAction] = {
     ("POST", "/api/admin/avatars/draft"): AuditAction(
         "avatar.draft", "Scheda persona generata", "avatar"
     ),
+    # Richieste di avatar: la domanda di un organization admin e le due
+    # risposte del super admin. La pubblicazione non ha una voce sua perché
+    # è la creazione dell'avatar, già registrata sopra, che porta l'id della
+    # richiesta fra i dettagli.
+    ("POST", "/api/avatar-requests"): AuditAction(
+        "avatar_request.create", "Avatar richiesto", "avatar_request"
+    ),
+    ("POST", "/api/avatar-requests/{request_id}/reject"): AuditAction(
+        "avatar_request.reject", "Richiesta avatar rifiutata", "avatar_request", "request_id"
+    ),
+    ("DELETE", "/api/avatar-requests/{request_id}"): AuditAction(
+        "avatar_request.delete", "Richiesta avatar rimossa", "avatar_request", "request_id"
+    ),
     # Categorie degli avatar
     ("POST", "/api/admin/avatar-categories"): AuditAction(
         "avatar_category.create", "Categoria avatar creata", "avatar"

@@ -77,7 +77,7 @@ class ReviewQuestion:
     database proprio mentre nessuno gliela sta tenendo. È la stessa ragione
     per cui il catalogo di una bozza di percorso passa da una dataclass.
 
-    Ci sono tutti e quattro i tipi di chiave: quale sia piena lo decide il
+    Ci sono tutti e tre i tipi di chiave: quale sia piena lo decide il
     tipo del test, e questo modulo non ha nessun motivo di saperlo.
     """
 
@@ -87,7 +87,6 @@ class ReviewQuestion:
     correct_option: int | None
     expected_answer: str
     ordered_steps: list
-    pairs: list
     source_chunks: list[int]
 
 
@@ -109,7 +108,6 @@ def snapshot(questions) -> list[ReviewQuestion]:
             correct_option=q.correct_option,
             expected_answer=q.expected_answer or "",
             ordered_steps=list(q.ordered_steps or []),
-            pairs=list(q.pairs or []),
             source_chunks=list(q.source_chunks or []),
         )
         for q in sorted(questions, key=lambda q: q.position)
@@ -157,7 +155,6 @@ def fingerprint(questions) -> str:
             q.correct_option,
             q.expected_answer,
             q.ordered_steps,
-            q.pairs,
             q.source_chunks,
         ]
         for q in snapshot(questions)

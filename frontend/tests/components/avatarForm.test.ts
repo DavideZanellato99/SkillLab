@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AdminAvatar } from '../../src/services/admin'
+import type { AvatarRequest } from '../../src/services/avatarRequests'
 import {
   applyDraft,
   avatarFormChanged,
   avatarFormError,
   avatarFormFrom,
+  avatarFormFromRequest,
   avatarPayload,
+  draftTextFromRequest,
   emptyAvatarForm,
   isExternalImageUrl,
+  requestedCategoryId,
 } from '../../src/components/avatarForm'
 import { emptyProfile } from '../../src/components/avatarProfileConfig'
 
@@ -307,5 +311,95 @@ describe('avatarFormChanged', () => {
     delete senzaUnaChiave.profile.EMOZIONE_INIZIALE
 
     expect(avatarFormChanged(senzaUnaChiave, form)).toBe(false)
+  })
+})
+
+/* La scheda che parte da una richiesta di un organization admin: quello che
+ * la richiesta decide entra nel form, quello che spetta a chi compila resta
+ * vuoto. */
+describe('avatarFormFromRequest', () => {
+  const richiesta = (over: Partial<AvatarRequest> = {}): AvatarRequest =>
+    ({
+      id: 'r-1',
+      organization_id: 'org-1',
+      organization_name: 'Banca Esempio',
+      category: 'Clienti',
+      first_name: 'Giovanni',
+      last_name: 'Salemmi',
+      scenario_type: 'Reclamo',
+      problem: 'Vede due addebiti uguali sulla carta.',
+      status: 'pending',
+      avatar_id: null,
+      rejection_reason: null,
+      resolved_at: null,
+      created_at: '2026-03-01T10:00:00Z',
+      created_by_email: 'admin@banca.it',
+      updated_at: '2026-03-01T10:00:00Z',
+      updated_by_email: 'admin@banca.it',
+      ...over,
+    }) as AvatarRequest
+
+  it('porta tenant, nome e scenario nella scheda', () => {
+    const form = avatarFormFromRequest(richiesta())
+
+    expect(form.organizationId).toBe('org-1')
+    expect(form.description).toBe('Reclamo')
+    expect(form.profile.NOME).toBe('Giovanni')
+    expect(form.profile.COGNOME).toBe('Salemmi')
+    expect(form.profile.TIPO_SCENARIO).toBe('Vede due addebiti uguali sulla carta.')
+  })
+
+  it('lascia vuota la vera causa del problema, che è la soluzione', () => {
+    expect(avatarFormFromRequest(richiesta()).profile.DESCRIZIONE_PROBLEMATICA).toBe('')
+  })
+
+  it('ha tutti i campi della scheda, non solo quelli della richiesta', () => {
+    const form = avatarFormFromRequest(richiesta())
+
+    expect(Object.keys(form.profile)).toEqual(Object.keys(emptyProfile()))
+  })
+
+  it('la categoria è un nome, e la scheda parte senza finché non la trova', () => {
+    const form = avatarFormFromRequest(richiesta())
+
+    expect(form.categoryId).toBe('')
+    expect(avatarFormError(form)).toContain('categoria')
+  })
+
+  it('riconosce la categoria del tenant con quel nome, maiuscole a parte', () => {
+    const categorie = [
+      { id: 'cat-1', name: 'clienti ' },
+      { id: 'cat-2', name: 'Fornitori' },
+    ]
+
+    expect(requestedCategoryId(richiesta(), categorie)).toBe('cat-1')
+    expect(requestedCategoryId(richiesta({ category: 'fornitori' }), categorie)).toBe('cat-2')
+  })
+
+  it('una categoria che il tenant non ha ancora resta da creare', () => {
+    expect(requestedCategoryId(richiesta({ category: 'Sportello' }), [])).toBe('')
+    expect(
+      requestedCategoryId(richiesta({ category: 'Sportello' }), [{ id: 'cat-1', name: 'Clienti' }]),
+    ).toBe('')
+  })
+
+  it('racconta il caso alla bozza con il tipo di scenario davanti', () => {
+    expect(draftTextFromRequest(richiesta())).toBe('Reclamo. Vede due addebiti uguali sulla carta.')
+  })
+
+  it('la bozza non tocca quello che la richiesta ha deciso', () => {
+    // Nome e scenario contano come scritti a mano: una bozza generata dal
+    // caso non deve ribattezzare il cliente che l'organizzazione ha chiesto
+    const form = avatarFormFromRequest(richiesta())
+    const merge = applyDraft(
+      form.profile,
+      { NOME: 'Mario', TIPO_SCENARIO: 'Altro', PROFESSIONE: 'Impiegato' },
+      [],
+    )
+
+    expect(merge.profile.NOME).toBe('Giovanni')
+    expect(merge.profile.TIPO_SCENARIO).toBe('Vede due addebiti uguali sulla carta.')
+    expect(merge.profile.PROFESSIONE).toBe('Impiegato')
+    expect(merge.kept).toBe(2)
   })
 })

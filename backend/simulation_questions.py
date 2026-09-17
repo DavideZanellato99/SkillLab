@@ -1,17 +1,17 @@
 """Il serbatoio di domande di una simulazione tecnica, ricavato dal documento.
 
-Le domande sono di uno dei quattro tipi a seconda della simulazione, e il
+Le domande sono di uno dei tre tipi a seconda della simulazione, e il
 procedimento è lo stesso: cambia solo la seconda passata, cioè cosa si chiede
 al modello di scrivere per ogni argomento. Quattro alternative con una giusta,
 la traccia di quello che una risposta deve dire, cinque passi già nella
-sequenza corretta, cinque coppie già accoppiate. Gli argomenti su cui vale la
-pena interrogare qualcuno sono gli stessi in tutti i casi, ed è il motivo per
-cui la prima passata non sa niente del tipo.
+sequenza corretta. Gli argomenti su cui vale la pena interrogare qualcuno
+sono gli stessi in tutti i casi, ed è il motivo per cui la prima passata non
+sa niente del tipo.
 
-Sugli ultimi due il modello scrive la domanda **già risolta**, e la mescolata
+Sull'ordinamento il modello scrive la domanda **già risolta**, e la mescolata
 avviene molto più tardi, quando la domanda viene consegnata a chi risponde
-(vedi ``routers/simulations``): l'ordine dei passi e l'accoppiamento sono la
-chiave, quindi qui non c'è niente da nascondere e tutto da scrivere bene.
+(vedi ``routers/simulations``): l'ordine dei passi è la chiave, quindi qui
+non c'è niente da nascondere e tutto da scrivere bene.
 
 **Qui nascono cinquanta domande, non dieci.** Dieci sono quelle di un
 tentativo, estratte a caso quando qualcuno preme "inizia" (vedi
@@ -63,7 +63,6 @@ import asyncio
 
 from models import (
     SIMULATION_GENERATED_ITEMS,
-    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_MULTIPLE,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
@@ -285,62 +284,6 @@ def _ordering_questions_prompt() -> str:
     )
 
 
-def _matching_questions_prompt() -> str:
-    """Le domande di abbinamento: due colonne e le loro corrispondenze.
-
-    La chiave sono le coppie. La regola che regge tutto il tipo è che ogni
-    voce di sinistra abbia **una sola** destinazione giusta: due voci che
-    potrebbero finire sullo stesso abbinato, o una voce che ne accetta due,
-    producono una domanda in cui chi conosce la procedura sbaglia lo stesso,
-    ed è il modo più veloce di rendere un tipo odiato.
-    """
-    return (
-        "Sei un formatore tecnico che scrive le domande di una verifica per gli operatori di "
-        "un'azienda. Ogni domanda chiede di abbinare gli elementi di due colonne.\n\n"
-        "Riceverai alcuni argomenti, e per ciascuno i passaggi del documento aziendale che lo "
-        "riguardano. Ogni passaggio è preceduto dal suo numero fra parentesi quadre, ad esempio "
-        f"[7]. Ogni domanda ha {SIMULATION_GENERATED_ITEMS} coppie: a sinistra il caso, a destra "
-        "quello che gli corrisponde. Sarà il sistema a mescolare la colonna di destra quando la "
-        "mostrerà all'operatore.\n\n" + _variety_rules() + "## REGOLE PER LE DOMANDE\n"
-        "- Scegli una corrispondenza che il documento stabilisce: casistica e azione da fare, "
-        "situazione e ufficio competente, importo e autorizzazione necessaria, termine e giorni "
-        "entro cui rispettarlo, tipo di richiesta e documento da chiedere.\n"
-        "- Le tabelle del documento sono il materiale migliore per questo tipo di domanda: se "
-        "nei passaggi ce n'è una, parti da lì.\n"
-        "- Il testo della domanda dice cosa si sta abbinando, ad esempio "
-        '"abbina ogni tipo di reclamo all\'ufficio che lo tratta".\n'
-        "- Deve essere comprensibile da sola, senza rimandare al documento.\n\n"
-        "## REGOLE PER LE COPPIE\n"
-        "- **Ogni voce di sinistra deve avere una sola corrispondenza giusta**, e nessun elemento "
-        "di destra deve poter valere per due voci di sinistra. Se due casi hanno lo stesso "
-        "trattamento, tienine uno solo e cerca un'altra coppia.\n"
-        "- Le voci di una colonna devono essere fra loro omogenee: tutte casi a sinistra, tutte "
-        "azioni a destra, non un misto.\n"
-        "- Scrivile brevi, poche parole ciascuna: si leggono in due colonne affiancate.\n"
-        "- Non ripetere nella voce di sinistra una parola che compare solo nel suo abbinato: "
-        "l'abbinamento si deve fare conoscendo la procedura, non riconoscendo una parola.\n"
-        "- Non inventare corrispondenze che il documento non stabilisce: se le coppie certe sono "
-        f"meno di {SIMULATION_GENERATED_ITEMS}, scrivi la domanda su un'altra corrispondenza.\n\n"
-        "## REGOLE PER LA SPIEGAZIONE\n"
-        "- Spiega su cosa si fondano gli abbinamenti, riprendendo quello che dice il documento, "
-        "in due o tre frasi.\n"
-        "- Di' quale scambio è l'errore tipico e perché è un errore.\n"
-        "- La legge chi ha appena sbagliato un abbinamento: deve insegnare la regola, non "
-        "rileggere la tabella.\n\n"
-        "## ISTRUZIONI SUI CAMPI\n"
-        f'- "pairs" contiene esattamente {SIMULATION_GENERATED_ITEMS} coppie, ognuna con "left" '
-        '(il caso) e "right" (quello che gli corrisponde).\n'
-        '- "source_chunks" elenca i numeri fra parentesi quadre dei passaggi su cui la domanda '
-        "si fonda.\n"
-        "- Scrivi tutto in italiano.\n\n"
-        "## FORMATO DELLA RISPOSTA\n"
-        "Restituisci esclusivamente un JSON valido, senza testo aggiuntivo prima o dopo, con "
-        "questa struttura esatta:\n"
-        '{"questions": [{"text": "", "pairs": [{"left": "", "right": ""}], "explanation": "", '
-        '"source_chunks": [0]}]}'
-    )
-
-
 def _questions_prompt() -> str:
     letters = ", ".join(OPTION_LABELS)
     return (
@@ -396,7 +339,6 @@ def _questions_prompt() -> str:
 _SYSTEM_PROMPTS = {
     SIMULATION_KIND_OPEN: _open_questions_prompt,
     SIMULATION_KIND_ORDERING: _ordering_questions_prompt,
-    SIMULATION_KIND_MATCHING: _matching_questions_prompt,
     SIMULATION_KIND_MULTIPLE: _questions_prompt,
 }
 
@@ -493,43 +435,17 @@ _EMPTY_KEYS = {
     "correct_option": None,
     "expected_answer": "",
     "ordered_steps": None,
-    "pairs": None,
 }
 
 
 def _has_duplicates(values: list[str]) -> bool:
     """Se due elementi sono lo stesso testo, a meno di spazi e maiuscole.
 
-    Due passi identici in un ordinamento, o due voci uguali in una colonna
-    di un abbinamento, sono una domanda con due risposte giuste: la si
-    scarta, come si scarta una domanda a cui manca la chiave.
+    Due passi identici in un ordinamento sono una domanda con due risposte
+    giuste: la si scarta, come si scarta una domanda a cui manca la chiave.
     """
     keys = [" ".join(v.split()).casefold() for v in values]
     return len(set(keys)) != len(keys)
-
-
-def _clean_pairs(raw_pairs) -> list[dict] | None:
-    """Le coppie di un abbinamento, o None se non se ne può fare una domanda.
-
-    Servono entrambi i lati pieni su ogni coppia, il numero giusto di coppie,
-    e nessuna ripetizione **dentro una colonna**: un elemento di destra che
-    vale per due voci di sinistra darebbe una domanda in cui chi conosce la
-    procedura sbaglia lo stesso.
-    """
-    pairs = []
-    for entry in raw_pairs or []:
-        if not isinstance(entry, dict):
-            return None
-        left = str(entry.get("left") or "").strip()
-        right = str(entry.get("right") or "").strip()
-        if not left or not right:
-            return None
-        pairs.append({"left": left, "right": right})
-    if len(pairs) != SIMULATION_GENERATED_ITEMS:
-        return None
-    if _has_duplicates([p["left"] for p in pairs]) or _has_duplicates([p["right"] for p in pairs]):
-        return None
-    return pairs
 
 
 def _normalize_questions(raw: dict, valid_ordinals: set[int], kind: str, limit: int) -> list[dict]:
@@ -543,11 +459,10 @@ def _normalize_questions(raw: dict, valid_ordinals: set[int], kind: str, limit: 
 
     Cosa renda una domanda malformata dipende dal tipo: quattro alternative e
     un indice dentro l'intervallo, una traccia della risposta attesa che non
-    sia vuota, dei passi tutti diversi fra loro, delle coppie con entrambi i
-    lati pieni e senza ripetizioni. Una domanda aperta senza traccia non è
-    una domanda a cui manca un pezzo, è una domanda che nessuno potrebbe
-    correggere, e vale lo stesso per un ordinamento con due passi identici,
-    che avrebbe due risposte giuste.
+    sia vuota, dei passi tutti diversi fra loro. Una domanda aperta senza
+    traccia non è una domanda a cui manca un pezzo, è una domanda che nessuno
+    potrebbe correggere, e vale lo stesso per un ordinamento con due passi
+    identici, che avrebbe due risposte giuste.
 
     Ogni domanda esce con tutti i mazzi di campi, vuoti quelli inutili, così
     chi la scrive nel database non deve sapere di che tipo era.
@@ -578,13 +493,6 @@ def _normalize_questions(raw: dict, valid_ordinals: set[int], kind: str, limit: 
             if len(steps) != SIMULATION_GENERATED_ITEMS or _has_duplicates(steps):
                 continue
             questions.append({**common, "ordered_steps": steps})
-            continue
-
-        if kind == SIMULATION_KIND_MATCHING:
-            pairs = _clean_pairs(entry.get("pairs"))
-            if pairs is None:
-                continue
-            questions.append({**common, "pairs": pairs})
             continue
 
         options = [str(o).strip() for o in (entry.get("options") or []) if str(o).strip()]

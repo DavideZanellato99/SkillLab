@@ -205,6 +205,23 @@ def get_current_admin(
     return current_user
 
 
+def get_current_organization_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Solo chi amministra un'organizzazione, non chi sta sopra a tutte.
+
+    Serve a quello che si chiede al super admin invece di farlo da sé, cioè
+    la richiesta di un avatar: il super admin non ha niente da chiedere a se
+    stesso, e un utente non ha un catalogo da far crescere.
+    """
+    if current_user.ruolo != ROLE_ORGANIZATION_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Azione riservata agli amministratori di organizzazione.",
+        )
+    return current_user
+
+
 def get_current_standard_user(
     current_user: User = Depends(get_current_user),
 ) -> User:

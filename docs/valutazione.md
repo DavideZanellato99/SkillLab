@@ -32,6 +32,16 @@ riferimento alla "chiamata" come riferito al contatto scritto e di non
 penalizzare quello che il canale scritto non prevede, come il tono di voce. I
 criteri restano gli stessi.
 
+Se invece è una telefonata, al valutatore viene detto che le battute
+dell'operatore sono una trascrizione automatica del parlato, e che un nome o
+un cognome del cliente con una lettera diversa dalla scheda va letto come
+pronunciato correttamente, senza penalità e senza citarlo. È la stessa
+tolleranza che il prompt del roleplay chiede all'avatar
+([avatar-e-persona.md](avatar-e-persona.md)): il riconoscimento vocale sbaglia
+i nomi propri più di ogni altra parola, e senza le due note un errore della
+trascrizione arrivava al voto due volte, prima come reazione dell'avatar e poi
+come mancanza segnata dal giudice.
+
 ### Metà della trascrizione la scrive chi viene valutato
 
 È il motivo per cui il testo dell'operatore non arriva al giudice così com'è

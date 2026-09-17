@@ -25,6 +25,7 @@ from routers.admin_simulations import router as admin_simulations_router
 from routers.admin_voices import router as admin_voices_router
 from routers.audit_logs import router as audit_logs_router
 from routers.auth import router as auth_router
+from routers.avatar_requests import router as avatar_requests_router
 from routers.avatars import router as avatars_router
 from routers.chat import router as chat_router
 from routers.comparison import router as comparison_router
@@ -134,6 +135,7 @@ app.include_router(admin_simulations_router)
 app.include_router(admin_voices_router)
 app.include_router(audit_logs_router)
 app.include_router(organizations_router)
+app.include_router(avatar_requests_router)
 app.include_router(avatars_router)
 app.include_router(chat_router)
 app.include_router(comparison_router)

@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sessione = vi.hoisted(() => ({
@@ -10,7 +11,6 @@ vi.mock('../../src/hooks/useAuth', () => ({ useAuth: () => ({ user: sessione.cur
 const ricaricaPercorsi = vi.hoisted(() => vi.fn())
 const stato = vi.hoisted(() => ({
   paths: { data: [] as unknown[], isPending: false, error: null as unknown },
-  assignments: { data: [] as unknown[], isPending: false, error: null as unknown },
 }))
 const deletePath = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
@@ -18,17 +18,9 @@ const deletePath = vi.hoisted(() => ({
   isPending: false,
   error: null as Error | null,
 }))
-const deleteAssignment = vi.hoisted(() => ({
-  mutateAsync: vi.fn(),
-  reset: vi.fn(),
-  isPending: false,
-  error: null as Error | null,
-}))
 vi.mock('../../src/hooks/useTraining', () => ({
   usePaths: () => ({ ...stato.paths, refetch: ricaricaPercorsi }),
-  useAssignments: () => ({ ...stato.assignments, refetch: vi.fn() }),
   useDeletePath: () => deletePath,
-  useDeleteAssignment: () => deleteAssignment,
 }))
 vi.mock('../../src/hooks/useOrganizations', () => ({
   useOrganizations: () => ({ data: [{ id: 'org-1', name: 'Banca Esempio' }] }),
@@ -57,7 +49,7 @@ vi.mock('../../src/components/AssignPathModal', () => ({
   default: ({ path }: { path: { title: string } }) => <div>assegna: {path.title}</div>,
 }))
 
-import type { PathAssignment, TrainingPath } from '../../src/services/training'
+import type { TrainingPath } from '../../src/services/training'
 import TrainingPage from '../../src/components/TrainingPage'
 
 const percorso = (over: Partial<TrainingPath> = {}): TrainingPath => ({
@@ -73,71 +65,43 @@ const percorso = (over: Partial<TrainingPath> = {}): TrainingPath => ({
   ...over,
 })
 
-const assegnazione = (over: Partial<PathAssignment> = {}): PathAssignment => ({
-  id: 'as-1',
-  path_id: 'p-1',
-  path_title: 'Onboarding',
-  path_description: null,
-  user_id: 'u-1',
-  user_name: 'Anna Rossi',
-  user_email: 'anna@test.it',
-  organization_id: 'org-1',
-  organization_name: 'Banca Esempio',
-  created_at: '2026-03-01T10:00:00Z',
-  assigned_by_name: 'Marco Bianchi',
-  status: 'active',
-  steps: [],
-  completed_steps: 0,
-  current_position: null,
-  ...over,
-})
-
-function renderPage(ruolo = 'super_admin') {
-  sessione.current = { ruolo, organization_id: 'org-1' }
-  render(<TrainingPage />)
+/* Dove la pagina manda: la scheda di un percorso porta alla dashboard, e
+ * quello che conta è l'indirizzo con cui ci arriva. */
+function Indirizzo() {
+  const { pathname, search } = useLocation()
+  return <output data-testid="indirizzo">{`${pathname}${search}`}</output>
 }
 
-const linguetta = (nome: RegExp) => screen.getByRole('tab', { name: nome })
+function renderPage(ruolo = 'super_admin', organizationId: string | null = 'org-1') {
+  sessione.current = { ruolo, organization_id: organizationId }
+  render(
+    <MemoryRouter initialEntries={['/app/admin/training']}>
+      <Routes>
+        <Route path="/app/admin/training" element={<TrainingPage />} />
+        <Route path="*" element={<Indirizzo />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
 
 beforeEach(() => {
   stato.paths = { data: [percorso()], isPending: false, error: null }
-  stato.assignments = { data: [assegnazione()], isPending: false, error: null }
   deletePath.mutateAsync.mockReset()
   deletePath.mutateAsync.mockResolvedValue({ success: true })
   deletePath.reset.mockReset()
   deletePath.isPending = false
   deletePath.error = null
-  deleteAssignment.mutateAsync.mockReset()
-  deleteAssignment.mutateAsync.mockResolvedValue({ success: true })
-  deleteAssignment.reset.mockReset()
-  deleteAssignment.isPending = false
-  deleteAssignment.error = null
 })
 
-/* Due linguette perché sono due domande diverse: di cosa sono fatti i
- * percorsi, e a che punto è la propria gente. */
-describe('le due linguette', () => {
-  it("contano quello che c'è sotto ciascuna", () => {
-    renderPage()
-
-    expect(linguetta(/Percorsi \(1\)/)).toBeInTheDocument()
-    expect(linguetta(/Assegnati \(1\)/)).toBeInTheDocument()
-  })
-
-  it('si apre sui percorsi', () => {
+/* La pagina è dei percorsi e basta: a che punto è la propria gente sta
+ * nella dashboard, nella vista dei percorsi. */
+describe('la pagina', () => {
+  it('mostra le schede dei percorsi, senza linguette', () => {
     renderPage()
 
     expect(screen.getByRole('heading', { name: 'Onboarding' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-  })
-
-  it('passa alle assegnazioni', async () => {
-    renderPage()
-
-    await userEvent.click(linguetta(/Assegnati/))
-
-    expect(screen.getByRole('table')).toBeInTheDocument()
-    expect(screen.getByText('Anna Rossi')).toBeInTheDocument()
   })
 })
 
@@ -259,64 +223,41 @@ describe('filtro per organizzazione', () => {
   })
 })
 
-/* Le due linguette non sono due schermate separate: dal numero di chi sta
- * percorrendo un percorso si arriva a chi sono, che è la domanda che quel
- * numero fa venire. */
+/* Le due pagine restano legate: dal numero di chi sta percorrendo un
+ * percorso si arriva a chi sono, che è la domanda che quel numero fa
+ * venire, nella dashboard già ristretta su quel percorso. */
 describe('dalla scheda a chi lo sta percorrendo', () => {
-  const dueSuDuePercorsi = () => {
-    stato.paths = {
-      data: [
-        percorso({ assigned_count: 1 }),
-        percorso({ id: 'p-2', title: 'Gestione reclami', assigned_count: 1 }),
-      ],
-      isPending: false,
-      error: null,
-    }
-    stato.assignments = {
-      data: [
-        assegnazione(),
-        assegnazione({
-          id: 'as-2',
-          path_id: 'p-2',
-          path_title: 'Gestione reclami',
-          user_id: 'u-2',
-          user_name: 'Luca Verdi',
-          user_email: 'luca@test.it',
-        }),
-      ],
-      isPending: false,
-      error: null,
-    }
-  }
-
-  it('passa alla linguetta accanto, già ristretta su quel percorso', async () => {
-    dueSuDuePercorsi()
-    renderPage()
-
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Mostra chi sta percorrendo Onboarding' }),
-    )
-
-    expect(screen.getByRole('table')).toBeInTheDocument()
-    expect(screen.getByText('Anna Rossi')).toBeInTheDocument()
-    expect(screen.queryByText('Luca Verdi')).not.toBeInTheDocument()
+  beforeEach(() => {
+    stato.paths = { data: [percorso({ assigned_count: 1 })], isPending: false, error: null }
   })
 
-  /* Cambiando organizzazione cambia l'elenco dei percorsi, e quello su cui si
-   * stava guardando non è più fra questi: il filtro resterebbe a nominare un
-   * percorso che la tendina non offre più, e la tabella resterebbe vuota
-   * senza che si capisca perché. */
-  it('lascia andare il filtro quando si cambia organizzazione', async () => {
-    dueSuDuePercorsi()
+  /* Il super admin ci arriva anche con l'organizzazione del percorso, che è
+   * quella in cui la tendina di là lo offre. */
+  it('porta alla dashboard dei percorsi, ristretta su quello e sulla sua organizzazione', async () => {
     renderPage()
 
     await userEvent.click(
       screen.getByRole('button', { name: 'Mostra chi sta percorrendo Onboarding' }),
     )
-    await userEvent.click(screen.getByRole('combobox', { name: 'Organizzazione' }))
-    await userEvent.click(screen.getByRole('option', { name: 'Banca Esempio' }))
 
-    expect(screen.getByText('Luca Verdi')).toBeInTheDocument()
+    expect(screen.getByTestId('indirizzo')).toHaveTextContent(
+      '/app/admin/dashboard/percorsi?percorso=p-1&organizzazione=org-1',
+    )
+  })
+
+  /* A un org admin l'organizzazione non si scrive: la dashboard non gliela
+   * lascia scegliere, e nell'indirizzo sarebbe un parametro morto. */
+  it('per un org admin porta il solo percorso', async () => {
+    renderPage('organization_admin')
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Mostra chi sta percorrendo Onboarding' }),
+    )
+
+    expect(screen.getByTestId('indirizzo')).toHaveTextContent(
+      '/app/admin/dashboard/percorsi?percorso=p-1',
+    )
+    expect(screen.getByTestId('indirizzo')).not.toHaveTextContent('organizzazione')
   })
 })
 
@@ -350,8 +291,7 @@ describe('composizione e assegnazione', () => {
    * sarebbe nato altrove e sarebbe sparito dalla schermata da cui lo si è
    * composto. */
   it("parte dall'organizzazione che si sta guardando", async () => {
-    sessione.current = { ruolo: 'super_admin', organization_id: null }
-    render(<TrainingPage />)
+    renderPage('super_admin', null)
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Organizzazione' }))
     await userEvent.click(screen.getByRole('option', { name: 'Banca Esempio' }))
@@ -363,8 +303,7 @@ describe('composizione e assegnazione', () => {
   /* Senza filtro non c'è nessuna organizzazione da imporre, e a chi ne vede
    * più di una la scelta resta da fare nella tendina del form. */
   it('senza filtro lascia scegliere al form', async () => {
-    sessione.current = { ruolo: 'super_admin', organization_id: null }
-    render(<TrainingPage />)
+    renderPage('super_admin', null)
 
     await userEvent.click(screen.getByRole('button', { name: /Nuovo Percorso/ }))
 
@@ -436,51 +375,12 @@ describe('eliminazione di un percorso', () => {
   })
 })
 
-describe("ritiro di un'assegnazione", () => {
-  it('avverte di chi sparisce dalla home', async () => {
-    renderPage()
-
-    await userEvent.click(linguetta(/Assegnati/))
-    await userEvent.click(screen.getByRole('button', { name: 'Ritira il percorso di Anna Rossi' }))
-
-    expect(screen.getByText(/sparisce dalla home di/)).toBeInTheDocument()
-  })
-
-  it('ritira il percorso confermato', async () => {
-    renderPage()
-
-    await userEvent.click(linguetta(/Assegnati/))
-    await userEvent.click(screen.getByRole('button', { name: 'Ritira il percorso di Anna Rossi' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Ritira il percorso' }))
-
-    await waitFor(() => expect(deleteAssignment.mutateAsync).toHaveBeenCalledWith('as-1'))
-  })
-
-  it('apre la conferma senza il rifiuto di quella di prima', async () => {
-    renderPage()
-
-    await userEvent.click(linguetta(/Assegnati/))
-    await userEvent.click(screen.getByRole('button', { name: 'Ritira il percorso di Anna Rossi' }))
-
-    expect(deleteAssignment.reset).toHaveBeenCalled()
-  })
-})
-
 describe('caricamento ed errori', () => {
   it('mostra il caricamento dei percorsi', () => {
     stato.paths = { data: [], isPending: true, error: null }
     renderPage()
 
     expect(screen.getByText('Caricamento percorsi...')).toBeInTheDocument()
-  })
-
-  it('mostra il caricamento delle assegnazioni', async () => {
-    stato.assignments = { data: [], isPending: true, error: null }
-    renderPage()
-
-    await userEvent.click(linguetta(/Assegnati/))
-
-    expect(screen.getByText('Caricamento assegnazioni...')).toBeInTheDocument()
   })
 
   /* Due righe: cosa manca, e cosa lo farebbe comparire. La prima da sola
@@ -491,19 +391,6 @@ describe('caricamento ed errori', () => {
 
     expect(screen.getByText('Nessun percorso ancora composto')).toBeInTheDocument()
     expect(screen.getByText(/Si compone con «Nuovo Percorso»/)).toBeInTheDocument()
-  })
-
-  /* Le linguette dicono cosa comandano, come nella dashboard e nel confronto:
-     erano le uniche due dell'applicazione a non dirlo, e chi le scorre con
-     uno screen reader sentiva un gruppo di alternative senza sapere cosa
-     cambiavano. */
-  it('lega le linguette al contenuto che comandano', () => {
-    renderPage()
-
-    const linguetta = screen.getByRole('tab', { selected: true })
-    const pannello = screen.getByRole('tabpanel')
-    expect(linguetta).toHaveAttribute('aria-controls', pannello.id)
-    expect(pannello).toHaveAttribute('aria-labelledby', linguetta.id)
   })
 
   /* Una lettura caduta non è un elenco senza percorsi: senza il comando per

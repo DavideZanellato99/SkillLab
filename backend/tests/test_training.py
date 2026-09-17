@@ -444,6 +444,46 @@ def test_work_done_while_a_step_was_locked_does_not_pass_it(
     assert listed["current_position"] == 2
 
 
+def test_one_conversation_passes_one_step_only(
+    admin_client, db_session, organization, standard_user, make_avatar
+):
+    """Una conversazione che vale per tutte le tappe ne supera una.
+
+    Cinque tappe sullo stesso avatar a soglie crescenti: la conversazione
+    che supera la prima apre la seconda, ma non la supera, anche se il suo
+    voto basterebbe a tutti e cinque. Ogni tappa vuole una prova nuova.
+    """
+    avatar = make_avatar(category="clienti")
+    path = _create_path(
+        admin_client,
+        organization,
+        [_avatar_step(avatar, target) for target in (5.0, 6.0, 7.0, 8.0, 9.0)],
+    )
+    created = _assign(admin_client, path, standard_user)
+
+    _seed_evaluated_conversation(db_session, standard_user, avatar, 9.5)
+    listed = _reload(admin_client, created["id"])
+
+    assert [s["status"] for s in listed["steps"]] == [
+        "completed",
+        "active",
+        "locked",
+        "locked",
+        "locked",
+    ]
+    assert listed["completed_steps"] == 1
+    assert listed["current_position"] == 2
+    assert listed["steps"][1]["attempts"] == 0
+    assert listed["steps"][1]["best_score"] is None
+
+    # La seconda conversazione ne supera uno e uno solo, come la prima
+    _seed_evaluated_conversation(db_session, standard_user, avatar, 9.5)
+    listed = _reload(admin_client, created["id"])
+
+    assert listed["completed_steps"] == 2
+    assert listed["current_position"] == 3
+
+
 def test_a_simulation_step_is_passed_by_an_attempt(
     admin_client, db_session, organization, standard_user, make_avatar
 ):

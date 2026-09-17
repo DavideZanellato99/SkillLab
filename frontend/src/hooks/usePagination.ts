@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 /* Il conto di quale fetta di un elenco mostrare, per chiunque lo sfogli: la
  * tabella condivisa e la griglia dei percorsi. La barra che si vede è
@@ -46,18 +46,21 @@ export function usePagination<T>(
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
-  useEffect(() => {
+  /* La chiave del render precedente: il cambio si riconosce mentre si
+   * disegna, e la pagina uno compare insieme all'elenco nuovo, non un
+   * disegno dopo la terza pagina di quello vecchio. */
+  const [seenKey, setSeenKey] = useState(resetKey)
+  if (resetKey !== seenKey) {
+    setSeenKey(resetKey)
     setPage(1)
-  }, [resetKey])
+  }
 
   const total = items.length
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   // Riporta la pagina in un range valido quando i dati cambiano (es. una ricerca
   // riduce gli elementi filtrati e la pagina corrente non esiste più).
   const safePage = Math.min(page, totalPages)
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage)
-  }, [page, safePage])
+  if (page !== safePage) setPage(safePage)
 
   return {
     visible: items.slice((safePage - 1) * pageSize, safePage * pageSize),

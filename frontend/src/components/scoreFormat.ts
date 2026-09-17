@@ -7,6 +7,7 @@
 
 /** Il voto in decimi come si scrive in italiano: 7,5 e non 7.5. */
 export { formatScore } from './simulationFormat'
+import { PASS_SCORE } from './simulationFormat'
 
 /* I due formattatori della dashboard, costruiti una volta sola invece che a
  * ogni cella: il perché sta su `formatInstant` in [instant.ts](./instant.ts). */
@@ -20,20 +21,16 @@ const DAY_MONTH_NUMERIC = new Intl.DateTimeFormat('it-IT', { day: '2-digit', mon
 
 export const cardCls = 'rounded-2xl border border-white/6 bg-gray-900/60 p-6 backdrop-blur-md'
 
-/* Stessa convenzione colori dell'EvaluationModal: ≥7 verde, ≥5 arancio, <5 rosso.
- * Vale anche sui voti dei test scritti: dentro una pagina la scala è una, e
- * le soglie scolastiche del simulatore (6 e 8) restano dove si legge un voto
- * per volta, cioè nell'esito e nell'elenco delle simulazioni. */
+/* Due fasce e una soglia sola, la sufficienza di `scoreBadgeTone` in
+ * [simulationFormat.ts](./simulationFormat.ts): dal sei verde, sotto
+ * arancione. Un voto si colora allo stesso modo ovunque lo si legga, in una
+ * pagella, in una tabella della dashboard o su una barra. */
 export function scoreTextColor(score: number): string {
-  if (score >= 7) return 'text-emerald-400'
-  if (score >= 5) return 'text-orange-400'
-  return 'text-red-400'
+  return score >= PASS_SCORE ? 'text-emerald-400' : 'text-orange-400'
 }
 
 export function scoreBarColor(score: number): string {
-  if (score >= 7) return 'bg-emerald-500'
-  if (score >= 5) return 'bg-orange-500'
-  return 'bg-red-500'
+  return score >= PASS_SCORE ? 'bg-emerald-500' : 'bg-orange-500'
 }
 
 /** Data e ora brevi, senza anno: nelle tabelle della dashboard le righe

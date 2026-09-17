@@ -69,11 +69,15 @@ export default forwardRef<CallRecordingPlayerHandle, CallRecordingPlayerProps>(
     }, [audioUrl])
 
     // A different conversation is different audio: drop the loaded one (the
-    // effect above revokes it) and go back to offering the play button.
-    useEffect(() => {
+    // effect above revokes it) and go back to offering the play button. The
+    // switch is caught during render, against the conversation of the
+    // previous one, so the old audio never gets a frame under the new title.
+    const [loadedFor, setLoadedFor] = useState(conversationId)
+    if (conversationId !== loadedFor) {
+      setLoadedFor(conversationId)
       setAudioUrl(null)
       setError('')
-    }, [conversationId])
+    }
 
     const handleLoad = async () => {
       setIsLoading(true)

@@ -17,8 +17,6 @@ const question: SimulationQuestion = {
   text: 'Entro quanto va sbloccata la carta?',
   options: ['Subito', 'Entro 24 ore', 'Entro 7 giorni', 'Mai'],
   steps: [],
-  left: [],
-  right: [],
 }
 
 const baseProps = {

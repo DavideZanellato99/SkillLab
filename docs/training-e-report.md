@@ -166,12 +166,18 @@ frontend a tenerle separate è
 sblocco e non lo stato, così nessuna schermata offre una strada dentro una
 tappa che il percorso non ha ancora aperto.
 
-Tre conseguenze volute:
+Quattro conseguenze volute:
 
 - **l'allenamento fatto prima non supera niente**, né quello precedente
   all'assegnazione né quello fatto mentre la tappa era ancora chiusa. Una
   tappa è qualcosa da fare quando è il suo turno, non un premio per quello che
   c'era già;
+- **una prova supera una tappa sola**. La conversazione che apre una
+  tappa è quella che ha superato la precedente, e per la tappa appena
+  aperta è il momento dello sblocco, non una prova: contano solo le prove
+  strettamente successive. Un percorso di cinque tappe sullo stesso
+  avatar a soglie crescenti chiede quindi almeno cinque conversazioni, anche
+  se la prima le raggiungerebbe tutte;
 - **il blocco vive dentro il percorso, non sulla risorsa**. L'avatar e il test
   restano aperti a tutti dalla galleria e dalla pagina delle simulazioni: il
   percorso decide in che ordine le prove contano, non cosa si può aprire. Un
@@ -382,35 +388,25 @@ che hanno una sezione loro, quel promemoria è un doppione di ciò che sta a un
 clic nella barra, e chi arriva in home ci arriva per scegliere un avatar.
 
 Gli amministratori stanno in `/app/admin/training`
-([TrainingPage](../frontend/src/components/TrainingPage.tsx)), **due linguette
-perché sono due domande**: di cosa sono fatti i percorsi, e a che punto è la
-propria gente. Prima era una schermata sola, dove il form di assegnazione
-stava sopra la tabella e ogni assegnazione ricominciava dalla scelta
-dell'avatar; comporre e seguire sono due lavori, e si fanno in due momenti
-diversi della settimana. Nella tabella la riga dice quante tappe sono chiuse e
-qual è quella aperta, e le righe stanno nell'ordine della gestione utenti,
-per cognome, nome, email (`PERSON_ORDER` in
-[user_fields.py](../backend/user_fields.py)): una persona per riga si cerca
-come di là, e chi ha più percorsi li vede dal più recente. La fila intera
-delle tappe si apre solo sulla riga che interessa:
-sei tappe per venti persone tutte insieme sono una tabella che non si legge. La
-riga si apre col mouse e col fuoco, perché è `onActivate` di
-[DataTable](../frontend/src/components/DataTable.tsx) ad aprirla e non un
-`onClick` scritto a mano: era l'ultima tabella dell'applicazione a rispondere
-al solo clic, e chi naviga col Tab aveva la sola freccia in fondo alla riga.
+([TrainingPage](../frontend/src/components/TrainingPage.tsx)), che risponde a
+una domanda sola: **di cosa sono fatti i percorsi**, e da lì si compongono e
+si assegnano. A che punto è la propria gente si legge invece nella dashboard,
+nella vista dei percorsi (vedi [Le tre viste della dashboard](#le-tre-viste-della-dashboard)): è una
+lettura, la stessa domanda dei quattro numeri che le stanno sopra fatta
+persona per persona, e comporre e seguire sono due lavori che si fanno in due
+momenti diversi della settimana. Prima la tabella stava qui, in una seconda
+linguetta, e prima ancora la pagina era una schermata sola con il form di
+assegnazione sopra la tabella.
 
-**Le due linguette non sono due schermate separate.** Sulla scheda di un
-percorso il numero di chi lo sta percorrendo è un collegamento: porta alla
-linguetta accanto già ristretta su quel percorso, che è la domanda che quel
-numero fa venire («chi sono, e a che punto»). Il filtro sta nella fascia della
-tabella, accanto alla ricerca, e non nella fascia sotto l'intestazione insieme
-a quello per organizzazione: quello vale per entrambe le linguette, questo parla delle sole
-righe sotto. Lavora sulle righe già scaricate invece di richiedere al server le
-assegnazioni di un percorso, perché sono un sottoinsieme di quelle che si
-stanno già guardando; la rotta col `path_id` resta quella che serve alla
-finestra di assegnazione, che di quel percorso ha bisogno da sola. Cambiando
-organizzazione il filtro se ne va, perché quel percorso non è più fra quelli
-che la tendina offre.
+**Le due pagine restano legate.** Sulla scheda di un percorso il numero di chi
+lo sta percorrendo è un collegamento: porta alla vista dei percorsi della
+dashboard già ristretta su quel percorso (`assignedPathUrl` in
+[dashboardViews](../frontend/src/components/dashboardViews.ts), cioè
+`?percorso=<id>`), che è la domanda che quel numero fa venire («chi sono, e a
+che punto»). Il super admin ci arriva anche con l'organizzazione del percorso
+nell'indirizzo, che è quella in cui la tendina di là lo offre; a un org admin
+l'organizzazione non si scrive, perché la dashboard non gliela lascia
+scegliere.
 
 La finestra che affida il percorso
 ([AssignPathModal](../frontend/src/components/AssignPathModal.tsx)) elenca le
@@ -439,22 +435,23 @@ persone voleva dire cinque giri di rilettura dei percorsi e delle assegnazioni,
 che sono le due query più costose della sezione, mentre la passata era ancora
 in corso. La rilettura c'è anche quando qualcosa si rompe a metà: quello che è
 stato scritto prima dell'errore è nel database, e la pagina dietro deve
-raccontarlo. Prima era spenta, e il ritiro
-viveva solo nel cestino della tabella accanto, che è un posto in cui chi
-apriva questa finestra per togliere una persona non veniva mandato da niente.
+raccontarlo. Prima era spenta, e il ritiro viveva solo nel cestino della
+tabella delle assegnazioni, che è un posto in cui chi apriva questa finestra
+per togliere una persona non veniva mandato da niente; adesso **il ritiro si
+fa solo da qui**, perché la tabella sta nella dashboard, che legge e basta.
 I ritiri però non partono dal clic sulla casella: si accumulano, e prima di
 salvare una conferma li nomina uno per uno con il punto a cui ognuno è
 arrivato («3 tappe superate su 5»), perché togliere una spunta è un gesto
 piccolo mentre quello che fa è far sparire un percorso dalla home di qualcuno
 che magari lo ha quasi finito. Le conversazioni e i test già svolti restano
-dove sono, qui come nel ritiro dalla tabella. Il bottone di massa invece non
+dove sono. Il bottone di massa invece non
 ritira nessuno: «seleziona tutti» aggiunge chi manca fra quelli che la ricerca
 lascia vedere, «deseleziona tutti» annulla soltanto quella scelta, perché
 premuto per abitudine toglierebbe il percorso a un'organizzazione intera con
 un clic solo.
 
-Anche la linguetta dei percorsi si cerca e si sfoglia, come la tabella
-accanto: la casella guarda titolo, descrizione, organizzazione e nomi delle
+Anche i percorsi si cercano e si sfogliano: la casella guarda titolo,
+descrizione, organizzazione e nomi delle
 tappe, perché chi cerca un avatar sta cercando i percorsi che lo attraversano,
 e sotto stanno una griglia di due schede per riga e la barra condivisa
 ([Pagination](../frontend/src/components/Pagination.tsx)). Un elenco che
@@ -687,7 +684,10 @@ quella tappa: annunciare l'obiettivo di una tappa futura prometterebbe un
 avanzamento che non arriva.
 
 Nel simulatore compare sulle regole e sull'esito, non fra le domande, dove
-sarebbe una cosa in più da guardare a cronometro acceso. A chi amministra non
+sarebbe una cosa in più da guardare a cronometro acceso. Nella chat, allo
+stesso modo, sparisce mentre la conversazione è in corso (una chiamata viva, o
+una chat che si può ancora continuare) e torna a conversazione finita, che è il
+momento in cui dice se il voto appena preso basta. A chi amministra non
 compare mai, e la domanda non gliela facciamo nemmeno: `useMyAssignments` resta
 spento fuori dal ruolo `user`, che è la stessa cosa che il server direbbe con
 un 403.
@@ -723,6 +723,8 @@ Cose che succedono a uno studente mentre non sta guardando: gli viene
 assegnato un percorso, una tappa si apre, la sua scadenza si avvicina, la
 scadenza passa, l'ultima tappa si chiude, un docente pubblica una revisione di
 una sua conversazione. Prima venivano scoperte per caso, al login successivo.
+Le ultime tre righe della tabella non parlano di chi si allena ma di chi
+amministra: sono le due parti dello sportello delle richieste di avatar.
 
 Nessuna di queste è **salvata** come notifica
 ([notifications.py](../backend/notifications.py)): si ricavano dalle righe che
@@ -732,14 +734,17 @@ una cosa che non è più vera; ritira un percorso e la sua notifica gli
 sopravvive. Derivate,
 smettono semplicemente di essere prodotte.
 
-| Tipo                   | Quando                                            |
-| ---------------------- | ------------------------------------------------- |
-| `assignment.assigned`  | Un percorso è stato assegnato                     |
-| `assignment.unlocked`  | Una tappa si è aperta                             |
-| `assignment.due_soon`  | La scadenza della tappa aperta è entro tre giorni |
-| `assignment.overdue`   | La scadenza è passata e la tappa non è superata   |
-| `assignment.completed` | L'ultima tappa è stata superata                   |
-| `review.published`     | Un docente ha pubblicato o rivisto una revisione  |
+| Tipo                       | Quando                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `assignment.assigned`      | Un percorso è stato assegnato                                                                                                        |
+| `assignment.unlocked`      | Una tappa si è aperta                                                                                                                |
+| `assignment.due_soon`      | La scadenza della tappa aperta è entro tre giorni                                                                                    |
+| `assignment.overdue`       | La scadenza è passata e la tappa non è superata                                                                                      |
+| `assignment.completed`     | L'ultima tappa è stata superata                                                                                                      |
+| `review.published`         | Un docente ha pubblicato o rivisto una revisione                                                                                     |
+| `avatar_request.pending`   | Al super admin: un organization admin ha chiesto un avatar, e la richiesta aspetta (vedi [avatar-e-persona.md](avatar-e-persona.md)) |
+| `avatar_request.published` | A chi ha chiesto: l'avatar è in galleria                                                                                             |
+| `avatar_request.rejected`  | A chi ha chiesto: la richiesta è stata rifiutata, con il motivo nel testo                                                            |
 
 **Le tappe già chiuse non annunciano niente**, e nemmeno quelle bloccate
 finché sono in tempo: una scadenza che deve ancora arrivare, per qualcosa a
@@ -797,11 +802,38 @@ una scadenza si avvicina o passa.
 `/app/confronto` ([ComparisonPage](../frontend/src/components/ComparisonPage.tsx)),
 servito da [routers/comparison.py](../backend/routers/comparison.py).
 
-Uno studente vede i propri tentativi e quelli di nessun altro. Un admin sceglie
-una persona del proprio ambito e legge i suoi, **una persona alla volta**: non
-c'è nessun modo di mettere due studenti fianco a fianco, e non è una mancanza.
-Quella schermata esiste per rispondere a "sono migliorato?", e una classifica
-fra studenti è una domanda diversa, con conseguenze diverse dentro un'aula.
+La pagina ha **due sezioni, una linguetta per ciascuna**, «Tra tentativi» e
+«Tra utenti». La prima
+([ComparisonAttempts](../frontend/src/components/ComparisonAttempts.tsx))
+affianca due prove della stessa persona: uno studente vede i propri tentativi
+e quelli di nessun altro, un admin sceglie una persona del proprio ambito e
+legge i suoi, **una persona alla volta**. La seconda, che uno studente non
+vede, mette una sotto l'altra le medie di più persone scelte da chi amministra
+(vedi
+[Il confronto fra utenti, per chi amministra](#il-confronto-fra-utenti-per-chi-amministra)).
+Sono due domande diverse, "sono migliorato?" e "come vanno questi quattro?",
+e la seconda ha conseguenze sue dentro un'aula: per questo la vede solo il
+docente, e per questo parte vuota.
+
+Erano due riquadri uno sotto l'altro nella stessa pagina, e sono diventati
+due linguette: chi fa una delle due domande non sta facendo l'altra, e il
+secondo riquadro sotto il primo si leggeva come la continuazione dello stesso
+confronto. **Il titolo della pagina è quello della sezione aperta**,
+«Confronto tra i Tentativi» o «Confronto tra Utenti», e ogni sezione scrive da
+sé la propria intestazione (`PageHeader`) con il comando che le sta accanto: un
+«Confronto» sopra due sottotitoli diceva la stessa cosa due volte, ed è per
+questo che l'intestazione di sezione che i due riquadri avevano in comune non
+esiste più. Lo studente, che ha una sezione sola, non vede nessuna linguetta
+di primo livello: una linguetta sola non è una scelta. La sezione sta
+nell'indirizzo (`?sezione=utenti`), e un indirizzo che porta le persone del
+confronto tra utenti (`confronto=`) senza dire la sezione apre su quella: i
+link composti quando le due sezioni erano due riquadri devono aprirsi ancora
+sul grafico che portano. Passare da una sezione all'altra **sostituisce** il
+passo, come la prova.
+
+Gli endpoint di `comparison.py` servono la prima sezione, e lì non c'è nessun
+modo di mettere due studenti fianco a fianco: le medie della seconda arrivano
+dai report della dashboard.
 
 Un utente normale che passasse l'id di qualcun altro se lo vede **ignorare**,
 non rifiutare: la risposta a cui ha diritto è la stessa in entrambi i casi, e
@@ -810,20 +842,38 @@ un 403 confermerebbe che quell'id esiste.
 Anche qui i punteggi passano da `final_score`, altrimenti il confronto
 contraddirebbe la pagella che lo studente ha in mano.
 
-**Anche il confronto ha due linguette**, come la dashboard: le conversazioni
-valutate (`GET /api/comparison/attempts`) e i test tecnici
-(`GET /api/comparison/simulation-attempts`), una prova per volta. La persona
-invece si sceglie **una volta sola, accanto al titolo**: è sempre la stessa di
-cui si guardano entrambe, ripetere il selettore in ciascuna metà sarebbe due
-modi di dire la stessa cosa, e un riquadro suo sopra i filtri faceva tre
-pannelli da attraversare prima di arrivare a un voto.
+**Dentro ogni sezione, due linguette per la prova**, come nella dashboard: le
+conversazioni valutate (`GET /api/comparison/attempts`) e i test tecnici
+(`GET /api/comparison/simulation-attempts`), una prova per volta. La linguetta
+è la stessa nelle due sezioni
+([ComparisonProvaTabs](../frontend/src/components/ComparisonProvaTabs.tsx)),
+e la scelta è una sola, tenuta dalla pagina nell'indirizzo: è la stessa prova
+guardata su una persona e su più persone, e passando da una sezione all'altra
+si resta su quella. La persona
+invece si sceglie **una volta sola, accanto al titolo della pagina**: è sempre
+la stessa di cui si guardano entrambe le prove, ripetere il selettore in
+ciascuna metà sarebbe due modi di dire la stessa cosa, e un riquadro suo sopra
+i filtri faceva tre pannelli da attraversare prima di arrivare a un voto. Ogni
+sezione ha il proprio comando nello stesso posto, a destra del proprio titolo:
+di là si sceglie una persona, di qua se ne spuntano quante se ne vogliono.
+**Il campo è lo stesso nelle due sezioni**, etichetta sopra e stessa
+larghezza, e cambia solo quello che ci si fa: due campi diversi nello stesso
+posto si leggevano come due comandi diversi, e sono la stessa domanda
+(«chi»). Nel confronto tra utenti
+([MultiSearchSelect](../frontend/src/components/MultiSearchSelect.tsx)) ogni
+voce dell'elenco porta una **casella da spuntare**, come le persone nella
+finestra di assegnazione di un percorso: una spunta scritta davanti al nome
+diceva chi era scelto ma non che le altre si potevano scegliere insieme.
+Accanto al campo stanno quante persone sono state scelte e «Azzera»; i nomi
+non si ripetono lì, li dicono le barre sotto.
 
 Si sceglie **cercando**, con lo stesso `SearchSelect` della dashboard e non con
 una tendina: un'aula intera si scorreva voce per voce, mentre il nome che si
 cerca lo si sa già. Sotto a ciascuno **solo l'email**, che è quello che
-distingue due omonimi: quante prove ha si legge nelle linguette appena scelto,
-e accanto all'indirizzo allungava ogni voce con un numero che non cambia chi si
-sta cercando.
+distingue due omonimi: quante prove ha si legge nell'elenco appena scelto, e
+accanto all'indirizzo allungava ogni voce con un numero che non cambia chi si
+sta cercando. Le linguette delle due prove portano il solo nome, senza il
+conteggio, come nella dashboard.
 
 **In ordine alfabetico sul nome che si legge**, come nella dashboard: è lo
 stesso campo sulla stessa aula, e chi lo scorre a occhio invece di digitare
@@ -833,12 +883,9 @@ server, perché deve seguire la label, che per chi non ha nome è l'email.
 **Le due metà si caricano ognuna per conto suo.** Le due chiamate partono
 insieme, ma la linguetta aperta aspetta solo i propri dati: legarle faceva
 attendere alle conversazioni l'elenco dei test, che in quel momento nessuno sta
-guardando. Per la stessa ragione il numero fra parentesi compare **quando è
-quello vero**, e non prima: durante il caricamento le due liste sono vuote, e
-un "(0)" che diventa poi "(12)" ha detto una cosa falsa proprio mentre si
-decideva dove andare.
+guardando.
 
-**La persona e la linguetta stanno nell'indirizzo** (`?persona=&prova=`). Un
+**La persona e la prova stanno nell'indirizzo** (`?persona=&prova=`). Un
 confronto è una cosa che un docente tiene aperta accanto a un'altra scheda o
 riapre dopo essere andato a leggere una trascrizione, e il tasto indietro deve
 riportarlo sulla persona di prima invece di farlo uscire dalla pagina. La
@@ -1073,23 +1120,85 @@ elenco che cresce con tutto quello che quella persona ha consegnato.
 Il selettore delle persone conta **entrambe le prove**: chi ha solo svolto dei
 test deve poterci finire, o la metà scritta si aprirebbe su nessuno.
 
+### Il confronto fra utenti, per chi amministra
+
+La seconda sezione
+([ComparisonUsers](../frontend/src/components/ComparisonUsers.tsx)), sotto la
+linguetta «Tra utenti» e con il titolo «Confronto tra Utenti», disegna una
+barra per persona, dalla media più alta: sulle conversazioni il voto medio
+complessivo delle valutazioni, sui test tecnici il voto medio dei tentativi.
+Era nata in fondo alla vista dei punteggi della dashboard, e si è spostata qui
+perché la dashboard risponde su tutto il gruppo mentre questo grafico si
+compone scegliendo chi metterci, che è il gesto di questa pagina: un
+riquadro che parte da una scelta stava in mezzo a schede che non ne chiedono
+nessuna.
+
+**Parte vuoto.** Nella dashboard, senza nessuna scelta, il grafico era di
+tutti, perché chi voleva solo guardare come va il gruppo non doveva comporre
+niente. Qui si viene per scegliere: le persone **si cercano** per nome o email
+e **si spuntano**
+([MultiSearchSelect](../frontend/src/components/MultiSearchSelect.tsx)), e le
+barre sono di loro e soltanto di loro. Trenta barre aperte prima di aver
+scelto nessuno sarebbero la classifica dell'aula, che è la cosa che questa
+pagina non vuole essere. Chi è stato scelto non viene riscritto accanto al
+campo: lo dicono le barre che restano disegnate.
+
+**Le barre e la tendina hanno due ordini diversi, e non è una svista.** Le
+barre stanno dalla media più alta, che è la risposta del riquadro; la tendina
+sta in ordine alfabetico per cognome, perché lì un nome si cerca. È la stessa
+regola della tabella di gestione utenti, che il server scrive una volta
+(`PERSON_ORDER`, `(cognome, nome, email)`) e il frontend riusa in ogni tendina
+che sceglie una persona
+([personOrder](../frontend/src/components/personOrder.ts)). La tendina elenca
+tutte le persone con almeno una prova della specie aperta, e non solo quelle
+del canale o del tipo attivo: restringere l'elenco col filtro farebbe sparire
+dalla tendina qualcuno già scelto.
+
+**Le righe sono quelle dei report della dashboard**
+(`GET /api/admin/evaluations-report` e `GET /api/admin/simulations-report`),
+lette **su tutto lo storico**: questa pagina non ha un periodo, e la prima
+sezione mostra tutte le prove di una persona. Si legge solo la prova della
+linguetta aperta, perché l'altra in quel momento non la sta guardando nessuno.
+Quando le prove superano `REPORT_ROW_CAP` il riquadro dice che le medie sono
+delle più recenti, come la dashboard. Il canale e il tipo di test si
+restringono dentro il riquadro, con gli stessi gruppi di pastiglie delle due
+metà (`MODE_FILTERS`, `KIND_FILTERS`), e **partono aperti** come i filtri della
+prima sezione: qui si guarda cosa una persona ha fatto, e non un canale solo.
+Una persona scelta che nel filtro attivo non ha righe non perde la spunta, e
+il riquadro dice che il filtro ha lasciato fuori tutti gli scelti invece di
+sembrare vuoto.
+
+**Le persone scelte stanno nell'indirizzo** (`?confronto=<id>,<id>`), come la
+persona della prima sezione: un confronto composto si manda a qualcuno. Sono
+id e non nomi, e l'indirizzo si allunga, ma è l'unica identità che non cambia
+quando qualcuno corregge il proprio cognome. Ogni spunta **sostituisce** il
+passo invece di aggiungerne uno: lasciata in cronologia sarebbe un tasto
+indietro che toglie una persona invece di uscire dalla pagina.
+
+**Il confronto vive dentro una organizzazione sola.** Due persone di tenant
+diversi si allenano su avatar diversi, con test diversi, dentro programmi
+diversi: le loro medie non stanno sulla stessa scala. Chi amministra una sola
+organizzazione ce l'ha già, perché il server gli risponde solo con la sua. Il
+super admin, che le vede tutte, **sceglie prima una organizzazione** con una
+tendina dentro il riquadro (`?organizzazione=<id>`): finché non l'ha fatto il
+riquadro non legge niente e dice perché. Cambiando organizzazione le persone
+scelte se ne vanno con il filtro che le ha portate.
+
 ## I cruscotti e i report
 
 Le schermate di lettura, tutte confinate dallo stesso `resolve_admin_scope`
 tranne l'ultima, che è di chi si allena e guarda solo sé stesso:
 
-| Schermata                        | Endpoint                                          | Cosa mostra                                                    |
-| -------------------------------- | ------------------------------------------------- | -------------------------------------------------------------- |
-| `/app/admin/dashboard/punteggi`  | `GET /api/admin/evaluations-report`               | I punteggi delle valutazioni, per grafici e medie              |
-| `/app/admin/dashboard/punteggi`  | `GET /api/admin/simulations-report`               | I test tecnici consegnati, con voto e risposte esatte          |
-| `/app/admin/dashboard/percorsi`  | `GET /api/dashboards/paths`                       | I percorsi affidati: quanti si chiudono e su quale tappa ci si ferma |
-| `/app/admin/dashboard/contenuti` | `GET /api/dashboards/content`                     | Quanto sono difficili avatar e test, dal lato di chi li scrive |
-| `/app/admin/dashboard/contenuti` | `GET /api/dashboards/content/simulations/{id}`    | Le domande di un test, quando la sua riga si apre              |
-| `/app/admin/dashboard/utilizzo`  | `GET /api/dashboards/usage`                       | L'utilizzo per organizzazione (solo super admin)               |
-| `/app/admin/report`              | `GET /api/admin/users-report`                     | Una riga per persona: quanto ha fatto nel periodo, in conteggi |
-| `/app/admin/report`              | `GET /api/admin/users-report/{id}`                | Le prove di quella persona, quando la sua riga si apre         |
-| `/app/admin`                     | `GET /api/admin/users`                            | La tabella degli utenti, filtrata e paginata                   |
-| `/app/progressi`                 | `GET /api/dashboards/me`                          | Le proprie prove, per chi si allena                            |
+| Schermata                       | Endpoint                            | Cosa mostra                                                          |
+| ------------------------------- | ----------------------------------- | -------------------------------------------------------------------- |
+| `/app/admin/dashboard/punteggi` | `GET /api/admin/evaluations-report` | I punteggi delle valutazioni, per grafici e medie                    |
+| `/app/admin/dashboard/punteggi` | `GET /api/admin/simulations-report` | I test tecnici consegnati, con voto e risposte esatte                |
+| `/app/admin/dashboard/percorsi` | `GET /api/dashboards/paths`         | I percorsi assegnati: quanti, quanti chiusi, in quanti giorni, scaduti |
+| `/app/admin/dashboard/utilizzo` | `GET /api/dashboards/usage`         | L'utilizzo per organizzazione (solo super admin)                     |
+| `/app/admin/report`             | `GET /api/admin/users-report`       | Una riga per persona: quanto ha fatto nel periodo, in conteggi       |
+| `/app/admin/report`             | `GET /api/admin/users-report/{id}`  | Le prove di quella persona, quando la sua riga si apre               |
+| `/app/admin`                    | `GET /api/admin/users`              | La tabella degli utenti, filtrata e paginata                         |
+| `/app/progressi`                | `GET /api/dashboards/me`            | Le proprie prove, per chi si allena                                  |
 
 **Le due letture della dashboard sono le più pesanti dell'applicazione**, e la
 forma della risposta è quello che le tiene in piedi.
@@ -1137,8 +1246,9 @@ avatar e le simulazioni tecniche
 ([DashboardSimulations](../frontend/src/components/DashboardSimulations.tsx)).
 Si guarda una prova per volta, e non una sotto l'altra: "come parlano" e "cosa
 sanno" sono due domande, e in una colonna sola i grafici della seconda si
-leggerebbero come il seguito della prima. Il conteggio sulla linguetta dice
-subito da che parte ci sono dati.
+leggerebbero come il seguito della prima. Sulla linguetta c'è solo il nome
+della prova: il conteggio accanto è stato tolto, quante prove ci sono lo
+dicono i grafici e la tabella sotto.
 
 Stessi filtri in cima (periodo, organizzazione e utente) e stessi disegni
 ([scoreCharts](../frontend/src/components/scoreCharts.tsx):
@@ -1146,9 +1256,9 @@ andamento nel tempo, righe a barra, card dei KPI), perché la domanda è la
 stessa e cambia solo la prova su cui si risponde.
 
 **Le due metà non si aspettano a vicenda.** La linguetta che si sta guardando
-disegna appena i suoi dati sono pronti, e il conteggio dell'altra compare
-quando arriva: prima la pagina restava ferma dietro la più lenta delle due
-letture, cioè si guardava una scansione che non si stava nemmeno leggendo. Sull'asse orizzontale della
+disegna appena i suoi dati sono pronti: prima la pagina restava ferma dietro
+la più lenta delle due letture, cioè si guardava una scansione che non si
+stava nemmeno leggendo. Sull'asse orizzontale della
 sezione scritta, al posto dei sei criteri di una valutazione, ci sono le
 simulazioni svolte: quale test la gente non passa è la cosa che quella metà sa
 dire e l'altra no.
@@ -1184,7 +1294,7 @@ pagina di prima non è quello che nessuno si aspetta.
 dei filtri e con lo stesso gruppo di pulsanti
 ([FilterTabs](../frontend/src/components/FilterTabs.tsx), estratto dal
 selettore di canale quando è servito il gemello): di là chiamate, chat o
-entrambe, di qua uno dei quattro tipi di test o tutti. Non può essere
+entrambe, di qua uno dei tre tipi di test o tutti. Non può essere
 un selettore solo, perché è la stessa domanda ("quale delle due sto
 guardando") fatta su due cose diverse.
 
@@ -1206,91 +1316,25 @@ invece restano qui, e sono una decisione di questa pagina: la dashboard parte
 dalle chiamate perché una media che mescola i due canali è ambigua, il confronto
 parte da tutto perché lì si guarda cosa una persona ha fatto.
 
-La scelta **sta a monte di tutto**: KPI, andamento, medie per test e confronto
-fra utenti partono dalle righe già ristrette, perché una media che mescola due
-prove diverse non risponde alla domanda che il selettore ha appena posto. Il
-filtro utente invece continua solo a evidenziare nel confronto fra utenti, e
-non a restringerlo: quello è un modo di guardare, il tipo è la prova di cui si
-parla. Quando il filtro non lascia niente la sezione lo dice con parole sue,
-perché "nessun test ancora consegnato" davanti a un filtro attivo si legge
-come un dato sbagliato.
+La scelta **sta a monte di tutto**: KPI, andamento e medie per test partono
+dalle righe già ristrette, perché una media che mescola due prove diverse non
+risponde alla domanda che il selettore ha appena posto. Quando il filtro non
+lascia niente la sezione lo dice con parole sue, perché "nessun test ancora
+consegnato" davanti a un filtro attivo si legge come un dato sbagliato.
 
-### Il confronto fra utenti si compone
-
-La scheda in fondo alla vista dei punteggi disegna una barra per persona,
-dalla media più alta. Con quattro persone era l'elenco intero; con
-venticinque o trenta, che è la misura di una organizzazione vera, è una
-colonna da scorrere in cui la domanda vera ("come vanno questi quattro")
-si perde.
-
-Quindi le persone **si scelgono**: si cercano per nome o email e si spuntano,
-e il grafico resta di loro. Chi è stato scelto non viene riscritto accanto al
-campo: lo dicono le barre che restano disegnate, e una fila di targhette
-sopra di loro sarebbe la stessa cosa detta due volte.
-
-**Le barre e la tendina hanno due ordini diversi, e non è una svista.** Le
-barre stanno dalla media più alta, che è la risposta della scheda; la tendina
-sta in ordine alfabetico per cognome, perché lì un nome si cerca. È la stessa
-regola della tabella di gestione utenti, che il server scrive una volta
-(`PERSON_ORDER`, `(cognome, nome, email)`) e il frontend riusa dove
-ordina da sé, cioè in ogni tendina che sceglie una persona
-([personOrder](../frontend/src/components/personOrder.ts)): le stesse persone
-ordinate in due modi in due schermate si leggono come due elenchi diversi
-([MultiSearchSelect](../frontend/src/components/MultiSearchSelect.tsx)). Il
-campo sta in testa alla scheda, a destra del titolo, dove stanno i comandi che
-decidono cosa c'è sotto: sopra le barre e a tutta larghezza si leggeva come
-una seconda riga della descrizione. Su schermo stretto scende sotto il titolo,
-perché a fianco resterebbe una fessura in cui i nomi non si leggono.
-Senza nessuna scelta resta di tutti, perché chi voleva solo guardare come va
-il gruppo non deve comporre niente. La scelta sta nell'indirizzo come ogni
-altra della dashboard (`?confronto=<id>,<id>`), quindi un confronto composto
-si manda a qualcuno: sono id e non nomi, e l'indirizzo si allunga, ma è
-l'unica identità che non cambia quando qualcuno corregge il proprio cognome.
-
-**Il confronto vive dentro una organizzazione sola.** Due persone di tenant
-diversi si allenano su avatar diversi, con test diversi, dentro programmi
-diversi: le loro medie non stanno sulla stessa scala, e affiancarle sarebbe
-una classifica fra cose che non si misurano insieme. Chi amministra una sola
-organizzazione ce l'ha già, perché il server gli risponde solo con la sua; al
-super admin che le sta guardando tutte insieme la scheda non offre il comando
-e dice perché, invece di lasciar comporre un confronto che non vorrebbe dire
-niente. Cambiando organizzazione le persone scelte se ne vanno con il filtro
-che le ha portate, come il filtro utente.
-
-Il filtro utente in cima alla vista resta un'altra cosa: quello **evidenzia**
-una persona fra le barre disegnate, il confronto decide **quali barre
-disegnare**. Sono due gesti diversi, restringere e indicare, e continuano a
-convivere.
-
-**Il comando c'è in tutte e due le metà, ed è una scelta sola.** La scheda dei
-test tecnici
-([DashboardSimulations](../frontend/src/components/DashboardSimulations.tsx))
-ha lo stesso campo nello stesso posto, e legge le stesse persone dallo stesso
-parametro dell'indirizzo: chi ha scelto quattro persone sulle conversazioni le
-ritrova scelte passando ai test, perché la domanda ("come vanno questi
-quattro") è la stessa e la prova è solo un'altra. La scelta e il vincolo
-sull'organizzazione stanno nella pagina, che li passa alla scheda come passa
-il filtro utente; la scheda non li ricava da sé, altrimenti le due metà
-avrebbero due copie della stessa scelta. Una persona scelta che nel tipo di
-test attivo non ha righe non perde la spunta: cambiando tipo la scelta deve
-restare, come restringendo il periodo.
-
-Un default diverso nelle due metà, e non è una svista. Il canale parte da
-"Chiamate", perché al telefono e in chat non si è valutati alla pari e
-mescolarli di default darebbe una media ambigua. Il tipo parte da "Tutti",
-perché i tipi sono quattro e tre di loro sono arrivati dopo il primo: un
-default che ne mostrasse uno solo terrebbe nascosta la maggior parte della
-dashboard a chi non sa che il selettore esiste.
+Le medie per persona non stanno più qui: il confronto fra utenti, che si
+compone scegliendo chi metterci, vive nella pagina del confronto (vedi
+[Il confronto fra utenti, per chi amministra](#il-confronto-fra-utenti-per-chi-amministra)).
 
 **Ogni riga dice di che prova si tratta**, in tutte e due le metà. Là una
 conversazione è al telefono o in chat
 ([ConversationModeBadge](../frontend/src/components/ConversationModeBadge.tsx)),
-qui un test è di uno dei quattro tipi
+qui un test è di uno dei tre tipi
 ([SimulationKindBadge](../frontend/src/components/SimulationKindBadge.tsx)): due
 badge gemelli, stessa forma e stessi colori, violetto dove si sceglie fra cose
 già scritte e ciano dove si compone una risposta. I colori restano due anche
-con quattro tipi, e a distinguerli dentro la famiglia è il disegno: quattro
-tinte in fila su una riga di tabella sarebbero un arcobaleno da decifrare. Il
+con tre tipi, e a distinguerli dentro la famiglia è il disegno: tre tinte in
+fila su una riga di tabella sarebbero un arcobaleno da decifrare. Il
 motivo del badge è lo stesso nei due casi, cioè che il voto da solo non dice
 quale prova era, e nel simulatore pesa anche di più: un 7 preso a crocette col
 cronometro che scorre e un 7 preso scrivendo dieci risposte non sono la stessa
@@ -1386,23 +1430,22 @@ cade, il messaggio compare **accanto al bottone che l'ha chiesta** e i grafici
 restano dove sono: un file non prodotto non è una pagina senza dati, e
 mescolare i due errori faceva sembrare rotta una dashboard che funzionava.
 
-## Le quattro viste della dashboard
+## Le tre viste della dashboard
 
 La dashboard era una schermata sola, i punteggi, e rispondeva a una domanda:
 chi è messo bene. Le prove che l'applicazione registra però ne reggono altre
-tre, e nessuna di quelle si poteva fare guardando delle medie per persona.
-Adesso la sezione è un **guscio con dentro quattro viste**, una per domanda:
+due, e nessuna di quelle si poteva fare guardando delle medie per persona.
+Adesso la sezione è un **guscio con dentro tre viste**, una per domanda:
 
-| Vista       | Indirizzo                        | Domanda                          | Chi la vede           |
-| ----------- | -------------------------------- | -------------------------------- | --------------------- |
-| Punteggi    | `/app/admin/dashboard/punteggi`  | Chi è messo bene                 | Admin                 |
-| Percorsi    | `/app/admin/dashboard/percorsi`  | Il programma funziona            | Admin                 |
-| Contenuti   | `/app/admin/dashboard/contenuti` | Cosa è tarato male               | Admin                 |
-| Utilizzo    | `/app/admin/dashboard/utilizzo`  | Chi sta usando la piattaforma    | Solo il super admin   |
+| Vista    | Indirizzo                       | Domanda                       | Chi la vede         |
+| -------- | ------------------------------- | ----------------------------- | ------------------- |
+| Punteggi | `/app/admin/dashboard/punteggi` | Chi è messo bene              | Admin               |
+| Percorsi | `/app/admin/dashboard/percorsi` | Il programma funziona         | Admin               |
+| Utilizzo | `/app/admin/dashboard/utilizzo` | Chi sta usando la piattaforma | Solo il super admin |
 
-**Quattro rotte e non quattro pannelli.** Sono quattro domande diverse, ognuna
-con le proprie letture: tenerle in una pagina sola voleva dire far partire
-quattro scansioni per guardarne una, e non avrebbe dato a nessuna un indirizzo
+**Tre rotte e non tre pannelli.** Sono tre domande diverse, ognuna con le
+proprie letture: tenerle in una pagina sola voleva dire far partire tre
+scansioni per guardarne una, e non avrebbe dato a nessuna un indirizzo
 da mandare a qualcuno. Ogni vista è anche un file che il browser scarica solo
 entrandoci ([lazyPages](../frontend/src/components/lazyPages.ts)), e le
 linguette lo fanno partire al passaggio del puntatore (`onItemHover` su
@@ -1412,20 +1455,20 @@ navigazione.
 **Il periodo e l'organizzazione stanno sul guscio**
 ([DashboardPage](../frontend/src/components/DashboardPage.tsx)): sono i due
 filtri che il server capisce, cioè quelli che decidono quali righe arrivano, e
-valgono per tutte e quattro. Restano nell'indirizzo, che è la loro unica copia,
+valgono per tutte e tre. Restano nell'indirizzo, che è la loro unica copia,
 e arrivano alle viste nel contesto dell'`Outlet` (`useDashboardScope` in
 [dashboardViews](../frontend/src/components/dashboardViews.ts)), così le viste
-non ne tengono quattro letture libere di divergere. Cambiando linguetta si
-portano dietro: è quello che rende le quattro schermate una sezione sola.
+non ne tengono tre letture libere di divergere. Cambiando linguetta si
+portano dietro: è quello che rende le tre schermate una sezione sola.
 Quelli interni a una vista invece restano dov'è la vista, perché sono la prova
 di cui si stanno leggendo i grafici e non un modo di restringerla: il canale e
-il tipo di test nei punteggi, la scelta fra avatar e test nei contenuti.
+il tipo di test nei punteggi.
 
 L'indirizzo della sezione senza vista (`/app/admin/dashboard`) porta ai
 punteggi tenendosi i filtri: un collegamento salvato prima della
 riorganizzazione arriva dove arrivava, con il periodo che portava con sé.
 
-Il server risponde alle tre viste nuove da un prefisso suo,
+Il server risponde alle due viste nuove da un prefisso suo,
 [`/api/dashboards`](../backend/routers/dashboards.py), e le letture su cui si
 appoggiano sono le stesse dei rendiconti, spostate in
 [report_rows.py](../backend/report_rows.py) perché adesso a chiederle sono in
@@ -1435,70 +1478,81 @@ fuori dal router che li mostra, per la stessa ragione per cui ci sta
 
 ### I percorsi
 
-Risponde alla domanda di chi il percorso lo ha composto, e prima di questa
-vista ci si rispondeva aprendo le assegnazioni una per una nella gestione
-percorsi.
+Risponde alla domanda di chi il percorso lo ha composto, prima in quattro
+numeri e poi persona per persona. I numeri: quanti percorsi sono stati
+assegnati e a quante persone, quanti sono arrivati in fondo (con quanti in
+ritardo), in quanti giorni in media, e quanti hanno una tappa oltre il
+termine. La vista aveva anche una scheda per percorso con la riuscita tappa
+per tappa e la tabella delle prossime scadenze, e sono state tolte: quello che
+serve dopo i quattro numeri è la tabella qui sotto.
 
 Il progresso di ogni assegnazione resta quello di
 [training_progress.py](../backend/training_progress.py), che è l'unico posto
 in cui si decide se una tappa è superata: qui si contano soltanto gli esiti
-che ne escono, percorso per percorso e tappa per tappa.
+che ne escono.
 
-**Una tappa si misura su chi ci è arrivato**, non su tutti gli assegnatari.
-L'ultima tappa di un percorso lungo la sbloccano in pochi, e contarne le
-riuscite su tutti direbbe che non funziona quando invece nessuno ci è ancora
-arrivato: è esattamente il numero su cui si deciderebbe di riscriverla. Per
-questo la riga porta anche su quante persone è calcolata, e dove non è
-arrivato nessuno i valori medi restano vuoti invece di essere zero, che
-sarebbe un voto.
+**Sotto i numeri, chi sta percorrendo cosa**
+([DashboardAssignmentCards](../frontend/src/components/DashboardAssignmentCards.tsx)):
+una scheda per persona e percorso, le stesse assegnazioni che legge la
+gestione percorsi (`GET /api/training/assignments`) e nello stesso ordine, per
+cognome, nome, email (`PERSON_ORDER` in
+[user_fields.py](../backend/user_fields.py)). Sono due letture e non una: i
+quattro numeri passano dal progresso di ogni assegnazione e le schede ce
+l'hanno già dentro, e una risposta che portasse le due cose insieme sarebbe
+l'elenco ricopiato dentro la dashboard. Il periodo della sezione vale anche
+per le schede, tagliate sul posto per data di assegnazione (`assignedWithin`
+in [trainingFormat](../frontend/src/components/trainingFormat.ts)) con la
+stessa regola del server: un elenco che sotto quei numeri mostrasse anche le
+assegnazioni di prima li smentirebbe.
 
-Una tappa che nessuno supera non è un dettaglio: tiene chiuse tutte quelle
-dopo di lei, quindi ferma il percorso di tutti.
+**Schede e non righe.** Era una tabella con due colonne di testo e una barra,
+da leggere una cella alla volta, e la domanda di chi la guarda è visiva:
+quanto manca a ognuno. La scheda
+([AssignmentCard](../frontend/src/components/AssignmentCard.tsx)) lo dice con
+l'anello e i trattini che l'allievo vede di sé nel proprio elenco
+([PathProgressRing](../frontend/src/components/PathProgressRing.tsx) con
+`showPercent`, perché il conto delle tappe sta già scritto accanto, e
+[PathStepDots](../frontend/src/components/PathStepDots.tsx)): l'amministratore
+guarda la stessa cosa dall'altro lato, e due disegni diversi per lo stesso
+avanzamento si leggerebbero come due numeri diversi. I trattini sono verde
+superata, arancione superata in ritardo, viola aperta adesso, rosso oltre il
+termine, grigio ancora da aprire, con il nome nel tooltip. In fondo lo stato
+e, se la tappa aperta ha una data, la scadenza con il tono di
+[StepDeadline](../frontend/src/components/StepDeadline.tsx), che è la tappa su
+cui si può ancora fare qualcosa; senza una data resta il nome della tappa.
+Tre schede per riga, si sfoglia a pagine come le schede dei percorsi nella
+gestione. Si perde l'ordinamento per colonna della tabella, e con lui la
+fila intera delle tappe che si apriva sotto la riga: per quella c'è la mappa
+del percorso, che è di chi lo percorre.
 
-**Le scadenze sono l'unica cosa dell'applicazione che guarda avanti.** Tutto
-il resto racconta prove già svolte; qui c'è la tappa aperta di ogni percorso
-in corso che porti una data, dalla più vicina e con le scadute in cima, perché
-sono le uniche su cui si può ancora fare qualcosa. Della tappa ancora chiusa
-la data non compare: vale, ma su qualcosa che il percorso non ha aperto non
-c'è niente da fare.
+Il filtro per percorso è una tendina accanto alla ricerca, sopra la griglia,
+e non in cima insieme a periodo e organizzazione: quelli valgono per tutta la
+sezione, questo parla delle sole schede sotto. Sono passate di qui anche le
+pastiglie con il conteggio, il gruppo compatto dentro una fascia di filtri e
+il selettore con ricerca, e la tendina è quella che è rimasta. Lavora sulle
+schede già scaricate invece
+di richiedere al server le assegnazioni di un percorso, perché sono un
+sottoinsieme di quelle che si stanno già guardando. Il percorso scelto sta
+nell'indirizzo (`?percorso=`), come la persona nei punteggi: ci si arriva dalla
+scheda del percorso nella gestione, e un collegamento mandato a qualcuno deve
+aprire lo stesso elenco. Cambiando organizzazione, o azzerando i filtri, se ne
+va insieme alla persona, perché quel percorso non è più fra quelli che la
+tendina offre.
 
-`days` qui restringe alle assegnazioni **affidate** nel periodo, e non alle
+**Qui non si ritira niente**: la dashboard legge e basta, e il cestino che la
+tabella aveva nella gestione percorsi non si è spostato con lei. Il ritiro si
+fa dalla finestra di assegnazione della scheda del percorso, che dice chi lo
+sta percorrendo e lo dice anche al contrario.
+
+**Il tempo di chiusura si misura sui soli percorsi chiusi**, dall'assegnazione
+all'ultima tappa superata: su uno ancora in corso il conto sarebbe "quanti
+giorni sono passati", che è un'altra cosa e la dice già lo stato. Finché
+nessuno ha chiuso niente il numero resta vuoto, non zero, perché zero giorni
+si leggerebbe come "chiusi all'istante".
+
+`days` qui restringe alle assegnazioni **assegnate** nel periodo, e non alle
 prove svolte: quello che si guarda è come vanno i percorsi consegnati adesso,
 e tagliare le prove renderebbe non superata una tappa chiusa il mese scorso.
-
-### I contenuti
-
-Le stesse righe della vista dei punteggi, raggruppate per avatar e per test
-invece che per persona. Sono due domande e non due schermate della stessa: chi
-guarda qui ha scritto la scheda persona o le domande, e cerca la riga su cui
-si va peggio. Le due metà arrivano già ordinate dalla media più bassa, quindi
-la prima riga è la risposta.
-
-**Il criterio più debole accanto alla media** è la ragione per cui la tabella
-degli avatar esiste: la media dice che con questo interlocutore si va male, il
-criterio dice su cosa, ed è la differenza fra sapere che qualcosa non funziona
-e sapere cosa cambiare. Si cerca fra i criteri che quell'avatar ha davvero
-prodotto, perché una valutazione vecchia può averne avuti altri.
-
-Sui test la quota di risposte esatte sta accanto al voto medio perché dicono
-due cose diverse: il voto tiene conto anche del tempo impiegato (vedi
-[simulatore.md](simulatore.md)), la quota è quante ne sapevano. Un test con
-voti bassi e risposte quasi tutte esatte è cronometrato male, non difficile.
-
-**Una riga si apre sulle sue domande, una per una**
-(`GET /api/dashboards/content/simulations/{id}`). È il passo che nessuna media
-sa fare: una domanda che sbagliano tutti, dentro una media di dieci domande,
-non si vede, e quella non è un test difficile, è una domanda scritta male. Le
-risposte in bianco si contano a parte da quelle sbagliate, perché dicono
-un'altra cosa: la domanda non è stata capita, o è arrivata quando il tempo era
-finito.
-
-Le domande si raggruppano per id e non per posizione: si estraggono da un
-serbatoio più grande, quindi "la terza" non è la stessa domanda per due
-persone. E si leggono solo aprendo la riga: stanno nella fotografia di ogni
-tentativo, che è la colonna più pesante di quella tabella, e portarle
-nell'elenco vorrebbe dire scaricare le consegne di ogni test del tenant per
-aprirne una.
 
 ### L'utilizzo
 
@@ -1718,7 +1772,7 @@ pastiglie con dentro "scelta multipla" e "risposta aperta", e la casella di
 ricerca. Ora la linguetta sceglie da sola cosa si guarda, e chi restringe sta
 una riga più sotto, dove ci sono le righe da restringere.
 
-Il filtro è **una tendina e non più una fila di pulsanti**: quattro tipi più
+Il filtro è **una tendina e non più una fila di pulsanti**: tre tipi più
 "tutti" scritti per esteso erano più larghi delle linguette che dovevano
 accompagnare. Le opzioni restano quelle della dashboard, scritte una volta
 sola accanto alla parola che il badge mostra (`MODE_FILTERS` in
@@ -2122,7 +2176,7 @@ quella riga non ha diritto di sapere che c'è.
 
 **Servono almeno tre prove svolte**, altrimenti la risposta è 409 e dice
 quante ne servono e quante ce ne sono, come una simulazione che non si
-pubblica finché il serbatoio non è pieno. Con una prova sola il debriefing
+pubblica finché non ha le domande di un tentativo. Con una prova sola il debriefing
 sarebbe la valutazione riscritta con altre parole, con due sarebbe il
 confronto, che esiste già e non costa niente: quello che questo strumento
 aggiunge comincia quando le prove sono tante abbastanza da avere qualcosa in
@@ -2222,12 +2276,12 @@ conservazione segue le prove che ha letto, come il quadro di una persona.
 
 ### Cosa il modello legge
 
-| | |
-| --- | --- |
-| Rotte | `GET` e `POST /api/training/paths/{path_id}/debriefing` |
-| File | [path_debriefing_source.py](../backend/path_debriefing_source.py), [path_debriefing.py](../backend/path_debriefing.py), le rotte in [routers/training.py](../backend/routers/training.py) |
-| Serve | Almeno 3 persone in percorso e almeno 6 prove svolte sulle tappe, altrimenti 409 |
-| Tetto | 10 all'ora per persona (`DEBRIEFING_PERCORSO`) |
+|       |                                                                                                                                                                                           |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rotte | `GET` e `POST /api/training/paths/{path_id}/debriefing`                                                                                                                                   |
+| File  | [path_debriefing_source.py](../backend/path_debriefing_source.py), [path_debriefing.py](../backend/path_debriefing.py), le rotte in [routers/training.py](../backend/routers/training.py) |
+| Serve | Almeno 3 persone in percorso e almeno 6 prove svolte sulle tappe, altrimenti 409                                                                                                          |
+| Tetto | 10 all'ora per persona (`DEBRIEFING_PERCORSO`)                                                                                                                                            |
 
 **Solo le prove che il percorso conta.** Una conversazione svolta prima che la
 sua tappa si aprisse non supera quella tappa (vedi
@@ -2294,10 +2348,10 @@ gruppo è migliorato» sarebbe una frase su due insiemi di persone diversi. Non
 lo stava percorrendo, un'hash degli id delle assegnazioni, e il confronto
 dipende da quella.
 
-| Quando il quadro nuovo viene scritto | Cosa succede |
-| ------------------------------------ | ------------ |
-| Il gruppo è lo stesso di allora | Il quadro precedente entra nel materiale, e ne escono la direzione e il racconto del cambiamento. Gli scarti delle medie li calcola il backend, mai il modello |
-| Il gruppo è cambiato | La direzione non viene chiesta affatto, gli scarti restano vuoti, e la schermata scrive che il confronto non si può fare perché il gruppo è cambiato |
+| Quando il quadro nuovo viene scritto | Cosa succede                                                                                                                                                   |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Il gruppo è lo stesso di allora      | Il quadro precedente entra nel materiale, e ne escono la direzione e il racconto del cambiamento. Gli scarti delle medie li calcola il backend, mai il modello |
+| Il gruppo è cambiato                 | La direzione non viene chiesta affatto, gli scarti restano vuoti, e la schermata scrive che il confronto non si può fare perché il gruppo è cambiato           |
 
 Che il confronto non si possa fare è una notizia, non un dato mancante:
 tacere lascerebbe credere che il modello non abbia voluto sbilanciarsi.
@@ -2310,10 +2364,10 @@ contrario.
 
 Il secondo qui è nuovo rispetto al quadro di una persona:
 
-| Perché non vale più | Cosa vuol dire |
-| ------------------- | --------------- |
-| `prove` | Il gruppo ha svolto altre prove dopo l'ultima che il modello ha letto: il testo è ancora vero, ma non le ha viste |
-| `percorso` | Le tappe sono state riscritte dopo: il testo parla di una fila che non esiste più |
+| Perché non vale più | Cosa vuol dire                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `prove`             | Il gruppo ha svolto altre prove dopo l'ultima che il modello ha letto: il testo è ancora vero, ma non le ha viste |
+| `percorso`          | Le tappe sono state riscritte dopo: il testo parla di una fila che non esiste più                                 |
 
 Il server risponde quale dei due, e non un sì o un no, perché a schermo si
 dicono diversamente. Come ovunque, niente si rigenera da solo: si dice a chi

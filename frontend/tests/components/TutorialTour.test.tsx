@@ -4,8 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const updateUser = vi.hoisted(() => vi.fn())
 const utenteCorrente = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
+/* Se la sessione nasce da un accesso appena fatto o è ripresa dal cookie: la
+ * guida parte solo nel primo caso. */
+const sessioneDaAccesso = vi.hoisted(() => ({ current: true }))
 vi.mock('../../src/hooks/useAuth', () => ({
-  useAuth: () => ({ user: utenteCorrente.current, updateUser }),
+  useAuth: () => ({
+    user: utenteCorrente.current,
+    sessionFromLogin: sessioneDaAccesso.current,
+    updateUser,
+  }),
 }))
 
 const markSeen = vi.hoisted(() => ({ mutate: vi.fn() }))
@@ -32,8 +39,9 @@ const utente = {
   tutorial_seen_at: null as string | null,
 }
 
-function renderGuida(over: Record<string, unknown> = {}) {
+function renderGuida(over: Record<string, unknown> = {}, { daAccesso = true } = {}) {
   utenteCorrente.current = { ...utente, ...over }
+  sessioneDaAccesso.current = daAccesso
   render(<TutorialTour />)
 }
 
@@ -54,8 +62,18 @@ describe('a chi compare', () => {
     expect(screen.getByText('Passo 1 di 9')).toBeInTheDocument()
   })
 
-  it('non torna a chi l’ha già vista', () => {
+  /* TEMPORANEO: finché la guida parte a ogni accesso, a chi l'ha già vista
+     torna comunque. Da ripristinare insieme alla riga commentata in
+     TutorialTour: allora questo test tornerà a rendere senza accesso e ad
+     aspettarsi nessuna finestra. */
+  it('per ora torna anche a chi l’ha già vista, a ogni accesso', () => {
     renderGuida({ tutorial_seen_at: '2026-02-01T09:00:00Z' })
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('non riparte da una sessione ripresa dal cookie', () => {
+    renderGuida({}, { daAccesso: false })
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
@@ -179,7 +197,8 @@ describe('chiudere', () => {
 
 describe('rivederla dal proprio profilo', () => {
   it('riparte dal principio', async () => {
-    renderGuida({ tutorial_seen_at: '2026-02-01T09:00:00Z' })
+    renderGuida({ tutorial_seen_at: '2026-02-01T09:00:00Z' }, { daAccesso: false })
+
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     openTutorial()
@@ -188,7 +207,8 @@ describe('rivederla dal proprio profilo', () => {
   })
 
   it('chiuderla la seconda volta non riscrive niente sul server', async () => {
-    renderGuida({ tutorial_seen_at: '2026-02-01T09:00:00Z' })
+    renderGuida({ tutorial_seen_at: '2026-02-01T09:00:00Z' }, { daAccesso: false })
+
     openTutorial()
     await screen.findByRole('dialog')
 

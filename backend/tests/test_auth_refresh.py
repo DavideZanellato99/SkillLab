@@ -31,8 +31,9 @@ from token_denylist import is_jti_revoked
 REFRESH = "/api/auth/refresh"
 LOGOUT = "/api/auth/logout"
 
-# Come si presenta il client di prova: sono i due valori che compongono il
-# legame, e le righe seminate qui devono portare gli stessi.
+# Come si presenta il client di prova: lo User-Agent è il valore che compone
+# il legame, l'IP resta registrato a fianco. Le righe seminate qui devono
+# portare gli stessi.
 IP_DEL_CLIENT = "testclient"
 UA_DEL_CLIENT = "testclient"
 
@@ -192,13 +193,13 @@ def test_senza_il_cookie_del_rinnovo_non_c_e_niente_da_rinnovare(client):
     assert "Refresh token mancante" in risposta.json()["detail"]
 
 
-def test_un_rinnovo_da_un_altro_posto_uccide_la_sessione_prima_di_coniare(
+def test_un_rinnovo_da_un_altro_browser_uccide_la_sessione_prima_di_coniare(
     client, db_session, cognito
 ):
     """Il controllo che conta: si ferma **prima** della chiamata a Cognito,
     quindi il token nuovo non nasce nemmeno. Se aspettasse la verifica
     dopo, un token legato al ladro sarebbe già stato emesso."""
-    _semina_ancora(db_session, "jti-1", ip="198.51.100.4")
+    _semina_ancora(db_session, "jti-1", user_agent="un-altro-browser")
     # Un rinnovo che arrivasse fino a Cognito farebbe fallire il test qui:
     # AssertionError non è fra le eccezioni che l'endpoint assorbe
     revocati = cognito(

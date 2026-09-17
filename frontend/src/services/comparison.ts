@@ -1,9 +1,10 @@
 /* Confronto fra i tentativi di una persona.
  *
  * Sempre una persona sola con se stessa: lo studente vede i propri, un
- * admin ne apre uno alla volta fra quelli del proprio tenant. Non esiste un
- * modo di mettere due persone a confronto, ed è voluto (vedi
- * backend/routers/comparison.py). */
+ * admin ne apre uno alla volta fra quelli del proprio tenant. Da qui non
+ * esiste un modo di mettere due persone a confronto, ed è voluto (vedi
+ * backend/routers/comparison.py): le medie di più persone, nell'altro
+ * riquadro della stessa pagina, arrivano dai report della dashboard. */
 
 import { apiFetch } from './api'
 import type { EvaluationCriterionScore } from './admin'

@@ -14,7 +14,7 @@
  * dicendo. Da qui la pausa sulla sincronizzazione mentre una chiamata o una
  * chat sono in corso. */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -129,12 +129,15 @@ export default function ChatPage() {
   /* Sincronizza i messaggi dalla conversazione caricata, ma non mentre una
    * sessione è viva: le battute di una chiamata e le risposte di una chat
    * arrivano prima qui e il database insegue, quindi rileggerlo adesso le
-   * cancellerebbe. */
-  useEffect(() => {
-    if (conversationData?.messages && !voiceActive && !chat.started) {
-      setMessages(conversationData.messages)
-    }
-  }, [conversationData, voiceActive, chat.started])
+   * cancellerebbe. Si ricorda quale lettura è già stata copiata, e la si
+   * copia durante il render invece che in un effetto dopo: così la
+   * conversazione appena aperta non mostra mai, nemmeno per un disegno, i
+   * messaggi di quella di prima. */
+  const [syncedData, setSyncedData] = useState(conversationData)
+  if (conversationData !== syncedData && !voiceActive && !chat.started) {
+    setSyncedData(conversationData)
+    if (conversationData?.messages) setMessages(conversationData.messages)
+  }
 
   /* La dipendenza è `chat.reset` e non `chat`: l'oggetto dell'hook è nuovo a
    * ogni render, la funzione dentro no, e prenderlo intero rifarebbe questi
@@ -154,13 +157,16 @@ export default function ChatPage() {
 
   /* Una seconda notifica sullo stesso avatar cambia solo la query string, e
    * la pagina non viene rimontata: senza questo resterebbe aperta la
-   * conversazione di prima. */
-  useEffect(() => {
+   * conversazione di prima. Il cambio si riconosce durante il render
+   * confrontando con la richiesta precedente. */
+  const [seenRequest, setSeenRequest] = useState(requestedConversationId)
+  if (requestedConversationId !== seenRequest) {
+    setSeenRequest(requestedConversationId)
     if (requestedConversationId) {
       setCurrentConversationId(requestedConversationId)
       resetChat()
     }
-  }, [requestedConversationId, resetChat])
+  }
 
   const startNewConversation = useCallback(() => {
     setCurrentConversationId(null)
@@ -274,6 +280,9 @@ export default function ChatPage() {
   // Chatta apre sempre una conversazione NUOVA, quindi si offre solo quando
   // non c'è una trascrizione a schermo in attesa di essere continuata.
   const canStartChat = !voiceActive && !isChatMode && currentConversationId === null
+
+  // Una chiamata viva, o una chat che si può ancora continuare.
+  const conversationInProgress = voiceActive || (isChatMode && !isConversationClosed)
 
   // Le note che il docente ha appuntato su questa trascrizione, indicizzate
   // per messaggio: ognuna si legge sotto la riga di cui parla.
@@ -465,8 +474,18 @@ export default function ChatPage() {
         {/* Se questa conversazione è la tappa di un percorso, l'obiettivo da
             raggiungere sta qui e non solo sulla mappa da cui si è usciti.
             Sotto la testata e non dentro: parla della prova, non di con chi la
-            si sta facendo, e non compare quasi mai. */}
-        <PathStepNotice kind="avatar" targetId={avatarId} className="mx-8 mt-3 max-[480px]:mx-4" />
+            si sta facendo, e non compare quasi mai. Mentre la conversazione è
+            in corso sparisce, come la pastiglia del voto: è una cosa in più da
+            guardare proprio quando l'attenzione sta sull'avatar, e torna a
+            conversazione finita, che è il momento in cui dice se il voto
+            appena preso basta. */}
+        {!conversationInProgress && (
+          <PathStepNotice
+            kind="avatar"
+            targetId={avatarId}
+            className="mx-8 mt-3 max-[480px]:mx-4"
+          />
+        )}
 
         <ChatMessages
           avatar={avatar}
@@ -507,7 +526,9 @@ export default function ChatPage() {
           canStartChat={canStartChat}
           voiceActive={voiceActive}
           recordingPlayerRef={recordingPlayerRef}
+          chatInputRef={chat.inputRef}
           chat={chat}
+
           onNewConversation={startNewConversation}
           onVoiceConversationId={handleVoiceConversationId}
           onVoiceTranscript={handleVoiceTranscript}

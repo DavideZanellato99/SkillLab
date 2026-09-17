@@ -90,9 +90,6 @@ def _key_of(question, kind: str) -> str:
     if kind == "ordering":
         passi = "; ".join(str(s) for s in (question.ordered_steps or []))
         return f"Sequenza corretta: {passi}"
-    if kind == "matching":
-        coppie = "; ".join(f"{p.get('left')} -> {p.get('right')}" for p in (question.pairs or []))
-        return f"Abbinamenti corretti: {coppie}"
     options = question.options or []
     index = question.correct_option
     righe = [

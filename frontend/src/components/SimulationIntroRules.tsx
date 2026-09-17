@@ -6,7 +6,6 @@ import {
   CheckIcon,
   ChecklistIcon,
   ClockIcon,
-  CompareIcon,
   EyeIcon,
   FileTextIcon,
   GripIcon,
@@ -47,23 +46,22 @@ import {
  * scintille sono le domande scritte dal modello. Sono le stesse icone che
  * hanno lo stesso significato altrove nell'applicazione.
  *
- * I quattro tipi di test hanno regole diverse e questo componente le dice
+ * I tre tipi di test hanno regole diverse e questo componente le dice
  * diverse. Il cronometro ce l'ha solo la scelta multipla: chi se lo
- * aspettasse altrove risponderebbe di corsa senza motivo. E su tre tipi su
- * quattro una risposta può essere giusta a metà, che è la cosa che va detta
+ * aspettasse altrove risponderebbe di corsa senza motivo. E su due tipi su
+ * tre una risposta può essere giusta a metà, che è la cosa che va detta
  * prima: chi si aspettasse un giudizio secco non capirebbe uno 0,6. */
 
 /* Cosa si fa davanti a una domanda, in una riga.
  *
  * È il gemello di `kindHint`, e non lo stesso testo: quello è la coda della
- * descrizione di un test nell'elenco ("Due colonne da accoppiare, una voce
- * alla volta"), qui si parla a chi il test sta per farlo, quindi è una frase
- * intera che dice cosa gli si chiede. */
+ * descrizione di un test nell'elenco ("I passi di una procedura da rimettere
+ * nell'ordine giusto"), qui si parla a chi il test sta per farlo, quindi è
+ * una frase intera che dice cosa gli si chiede. */
 const ANSWER_HINTS: Record<SimulationKind, string> = {
   multiple: 'Per ogni domanda scegli una risposta fra le alternative proposte.',
   open: 'Per ogni domanda scrivi una risposta di qualche riga con parole tue.',
   ordering: 'Per ogni domanda trascini i passi della procedura nelle posizioni corrette.',
-  matching: 'Per ogni domanda abbini fra loro le voci di due colonne.',
 }
 
 /** Cosa si legge nel riepilogo finale, che è la parte che dipende dal tipo. */
@@ -71,16 +69,13 @@ const RECAPS: Record<SimulationKind, string> = {
   multiple: 'la risposta corretta accanto a quella che hai fornito',
   open: 'gli elementi attesi nella risposta e quelli che mancano',
   ordering: 'la sequenza corretta accanto a quella che hai indicato',
-  matching: 'le associazioni corrette accanto a quelle che hai indicato',
 }
 
 /* Il gesto con cui si risponde, disegnato: la spunta della scelta, la matita
- * di chi scrive, i puntini di chi trascina i passi, le due colonne da
- * accoppiare. */
+ * di chi scrive, i puntini di chi trascina i passi. */
 function AnswerIcon({ kind }: { kind: SimulationKind }) {
   if (kind === 'open') return <PencilIcon size={13} />
   if (kind === 'ordering') return <GripIcon size={13} />
-  if (kind === 'matching') return <CompareIcon size={13} />
   return <CheckIcon size={13} />
 }
 
@@ -160,9 +155,7 @@ export default function SimulationIntroRules({ simulation }: { simulation: Simul
               ? 'Il punteggio dipende dalla completezza della risposta.'
               : kind === 'ordering'
                 ? 'Il punteggio dipende dai passi collocati nella posizione corretta.'
-                : kind === 'matching'
-                  ? 'Il punteggio dipende dalle associazioni corrette.'
-                  : 'Il punteggio tiene conto anche del tempo di risposta.'}
+                : 'Il punteggio tiene conto anche del tempo di risposta.'}
           </span>
         </Rule>
         {timed ? (
@@ -180,9 +173,7 @@ export default function SimulationIntroRules({ simulation }: { simulation: Simul
           <Rule icon={<CheckIcon size={13} />}>
             {kind === 'open'
               ? 'Ogni domanda vale fino a un punto, assegnato in proporzione agli elementi attesi che hai indicato.'
-              : kind === 'ordering'
-                ? 'Ogni domanda vale fino a un punto, quindi quattro passi su cinque al posto giusto valgono otto decimi.'
-                : 'Ogni domanda vale fino a un punto, quindi quattro associazioni su cinque valgono otto decimi.'}
+              : 'Ogni domanda vale fino a un punto, quindi quattro passi su cinque al posto giusto valgono otto decimi.'}
           </Rule>
         )}
         <Rule icon={<MinusIcon size={13} />}>
@@ -190,9 +181,7 @@ export default function SimulationIntroRules({ simulation }: { simulation: Simul
             ? 'Una risposta non fornita vale zero.'
             : kind === 'ordering'
               ? 'Una sequenza lasciata incompleta vale zero.'
-              : kind === 'matching'
-                ? 'Le voci lasciate senza abbinamento valgono zero.'
-                : 'Una risposta errata o lasciata in bianco vale zero.'}
+              : 'Una risposta errata o lasciata in bianco vale zero.'}
         </Rule>
       </RuleGroup>
 

@@ -29,11 +29,15 @@ interface ChatDockProps {
   canStartChat: boolean
   voiceActive: boolean
   recordingPlayerRef: RefObject<CallRecordingPlayerHandle | null>
+  /* Fuori dall'oggetto `chat` e non dentro: un oggetto che contiene un ref
+     viene trattato come un ref, e leggerne i campi durante il render
+     diventa un errore. */
+  chatInputRef: RefObject<HTMLTextAreaElement | null>
   chat: {
     input: string
     setInput: (value: string) => void
-    inputRef: RefObject<HTMLTextAreaElement | null>
     isSending: boolean
+
     isEnding: boolean
     start: () => void
     send: () => void
@@ -57,8 +61,10 @@ export default function ChatDock({
   canStartChat,
   voiceActive,
   recordingPlayerRef,
+  chatInputRef,
   chat,
   onNewConversation,
+
   onVoiceConversationId,
   onVoiceTranscript,
   onVoiceError,
@@ -118,7 +124,8 @@ export default function ChatDock({
           <div className="flex items-end gap-4">
             <div className="flex min-w-0 flex-1 items-end gap-2 rounded-2xl border border-white/6 bg-slate-800/50 px-4 py-2 transition focus-within:border-violet-600 focus-within:shadow-[0_0_0_3px_rgba(124,58,237,0.1)]">
               <textarea
-                ref={chat.inputRef}
+                ref={chatInputRef}
+
                 className="max-h-32 flex-1 resize-none border-none bg-transparent py-2 text-sm leading-relaxed text-slate-100 outline-none placeholder:text-slate-500"
                 rows={1}
                 maxLength={2000}

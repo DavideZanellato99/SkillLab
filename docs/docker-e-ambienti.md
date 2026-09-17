@@ -344,16 +344,16 @@ backend/venv/Scripts/python.exe demo/dati_mock.py --rimuovi  # toglie
 Tre organizzazioni che raccontano tre situazioni diverse (una che si allena
 tutti i giorni, una tiepida dove meno della metà degli account si allena, una
 ferma), con le loro persone, gli avatar, i test, le conversazioni valutate, i
-tentativi e i percorsi affidati, questi ultimi in tutti gli stati che la
+tentativi e i percorsi assegnati, questi ultimi in tutti gli stati che la
 dashboard deve saper distinguere, chiusi in tempo, chiusi in ritardo, in corso
 e scaduti.
 
 **La scala è quella di un cliente vero**: venticinque o trenta persone per
 organizzazione, ottocento conversazioni e trecento test in due mesi. È il
 punto: a quattro persone per tenant ogni pagina sembra funzionare, mentre a
-questa misura si vede quello che va guardato davvero, il confronto fra utenti
-che diventa una colonna da scorrere, le medie che smettono di oscillare per
-una prova storta, e una tappa su cui si ferma il venti per cento che sono
+questa misura si vede quello che va guardato davvero, un confronto fra utenti
+con un'aula intera fra cui scegliere, le medie che smettono di oscillare per
+una prova storta, e un percorso scaduto per il venti per cento che sono
 cinque persone da richiamare. Resta comunque sotto il tetto che il server
 mette alle sue letture (`REPORT_ROW_CAP`), così le medie che si leggono sono
 quelle di tutto lo storico e non delle prove più recenti.
@@ -399,12 +399,11 @@ cd ~/SkillLab
 docker compose run --rm --no-deps -v "$PWD/demo:/app/demo:ro" -e PYTHONPATH=/app   backend python demo/dati_mock.py --persone-in med
 ```
 
-I tentativi coprono i quattro tipi di test. La fotografia delle risposte la
+I tentativi coprono i tre tipi di test. La fotografia delle risposte la
 scrive [demo/risposte.py](../demo/risposte.py), con le stesse chiavi e gli
 stessi conti della consegna vera: sulla scelta multipla una crocetta e un
 tempo, sull'ordinamento i passi con qualche scambio fra vicini, come si
-sbaglia un ordine che si conosce a metà, sull'abbinamento le coppie non
-sapute che si scambiano l'abbinato fra loro, sulla risposta aperta un testo
+sbaglia un ordine che si conosce a metà, sulla risposta aperta un testo
 che riprende in prosa una parte della risposta attesa, con il giudizio pari
 alla quota ripresa. Le pagine che riaprono un tentativo non distinguono uno
 finto da uno vero.

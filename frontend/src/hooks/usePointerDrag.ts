@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 /* Trascinare qualcosa da una zona a un'altra, con il mouse o con un dito.
@@ -66,54 +66,53 @@ export function usePointerDrag<T>(onDrop: (item: T, zone: string) => void) {
     width: number
   } | null>(null)
 
-  /* Il rilascio e lo stato corrente letti dai gestori globali, che vivono
-   * quanto la pressione e non quanto il render: senza le ref l'ascolto si
-   * smonterebbe e rimonterebbe a ogni pixel di movimento. */
-  const onDropRef = useRef(onDrop)
-  onDropRef.current = onDrop
-  const dragRef = useRef<DragState<T> | null>(null)
-  dragRef.current = drag
   /* Il gesto appena finito era un trascinamento. Serve perché un
    * trascinamento che finisce dov'era cominciato è comunque un click per il
    * browser, e chi offre anche il tocco secco lo prenderebbe per tale. */
   const draggedRef = useRef(false)
 
+  /* Il movimento e il rilascio letti dai gestori globali, che vivono quanto
+   * la pressione e non quanto il render: come Effect Event vedono sempre
+   * l'ultimo `drag` e l'ultima `onDrop`, senza che l'ascolto si smonti e
+   * rimonti a ogni pixel di movimento. */
+  const move = useEffectEvent((event: PointerEvent) => {
+    if (!pressed) return
+    const distance = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y)
+    if (!drag && distance < DRAG_THRESHOLD_PX) return
+    draggedRef.current = true
+    setDrag({
+      item: pressed.item,
+      x: event.clientX,
+      y: event.clientY,
+      left: event.clientX - pressed.grabX,
+      top: event.clientY - pressed.grabY,
+      width: pressed.width,
+      zone: zoneAt(event.clientX, event.clientY),
+    })
+  })
+
+  /* Fuori da una zona il trascinamento finisce e basta: l'elemento torna
+   * dov'era, che è il modo in cui si annulla un gesto cominciato per
+   * sbaglio. `pointercancel` arriva quando il sistema si riprende il
+   * puntatore, ed è la stessa cosa. */
+  const end = useEffectEvent(() => {
+    if (drag?.zone) onDrop(drag.item, drag.zone)
+    setPressed(null)
+    setDrag(null)
+  })
+
   useEffect(() => {
     if (!pressed) return
 
-    const move = (event: PointerEvent) => {
-      const distance = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y)
-      if (!dragRef.current && distance < DRAG_THRESHOLD_PX) return
-      draggedRef.current = true
-      setDrag({
-        item: pressed.item,
-        x: event.clientX,
-        y: event.clientY,
-        left: event.clientX - pressed.grabX,
-        top: event.clientY - pressed.grabY,
-        width: pressed.width,
-        zone: zoneAt(event.clientX, event.clientY),
-      })
-    }
-
-    /* Fuori da una zona il trascinamento finisce e basta: l'elemento torna
-     * dov'era, che è il modo in cui si annulla un gesto cominciato per
-     * sbaglio. `pointercancel` arriva quando il sistema si riprende il
-     * puntatore, ed è la stessa cosa. */
-    const end = () => {
-      const dragging = dragRef.current
-      if (dragging?.zone) onDropRef.current(dragging.item, dragging.zone)
-      setPressed(null)
-      setDrag(null)
-    }
-
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', end)
-    window.addEventListener('pointercancel', end)
+    const onMove = (event: PointerEvent) => move(event)
+    const onEnd = () => end()
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
     return () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', end)
-      window.removeEventListener('pointercancel', end)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
     }
   }, [pressed])
 

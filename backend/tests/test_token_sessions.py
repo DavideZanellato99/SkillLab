@@ -1,8 +1,10 @@
 """Il legame fra un token e il browser che se lo è fatto emettere.
 
-È la difesa contro il cookie rubato: un token che arriva da un indirizzo o
-da un browser diversi da quelli in cui è nato viene rifiutato e portato via
-insieme a tutta la sessione. Si prova qui, sulle funzioni, e non solo
+È la difesa contro il cookie rubato: un token che arriva da un browser diverso
+da quello in cui è nato viene rifiutato e portato via insieme a tutta la
+sessione. L'indirizzo si registra ma non conta: lo stesso browser cambia
+indirizzo da solo dietro un tunnel o su una rete dual stack, e legarlo a quello
+buttava fuori chi stava lavorando. Si prova qui, sulle funzioni, e non solo
 attraverso un endpoint, perché il caso che conta, il token usato da un
 altro, è proprio quello che nessuna richiesta legittima produce e che quindi
 in una prova di endpoint andrebbe costruito a mano lo stesso.
@@ -14,6 +16,7 @@ cookie si registrerebbe come proprietario al primo rinnovo, che è
 esattamente il contrario di quello che serve.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -133,18 +136,18 @@ def test_il_rinnovo_non_riscrive_l_ancora_della_sessione(db_session):
     proprietario al primo rinnovo e il legame non proteggerebbe più niente.
     """
     claims = {"jti": "jti-login", "origin_jti": "origin-condiviso"}
-    bind_access_token(db_session, claims, _request(ip="198.51.100.4"))
+    bind_access_token(db_session, claims, _request(user_agent="Firefox/120.0"))
 
-    # Stessa sessione, altro token, altro posto: è il rinnovo di chi ha rubato
+    # Stessa sessione, altro token, altro browser: è il rinnovo di chi ha rubato
     bind_access_token(
         db_session,
         {"jti": "jti-rinnovo", "origin_jti": "origin-condiviso"},
-        _request(ip="192.0.2.66"),
+        _request(user_agent="Chrome/120.0"),
     )
 
-    assert db_session.get(TokenSession, "origin-condiviso").client_ip == "198.51.100.4"
+    assert db_session.get(TokenSession, "origin-condiviso").user_agent == "Firefox/120.0"
     # La riga del nuovo token invece è sua, ed è quella che lo tradisce
-    assert db_session.get(TokenSession, "jti-rinnovo").client_ip == "192.0.2.66"
+    assert db_session.get(TokenSession, "jti-rinnovo").user_agent == "Chrome/120.0"
 
 
 def test_le_righe_scadute_spariscono_quando_se_ne_scrive_una_nuova(db_session):
@@ -185,17 +188,30 @@ def test_l_ancora_riconosce_chi_ha_fatto_il_login(db_session):
     assert session_anchor_matches(db_session, {"origin_jti": "o"}, richiesta) is True
 
 
-def test_l_ancora_non_riconosce_un_altro_posto_o_un_altro_browser(db_session):
+def test_l_ancora_non_riconosce_un_altro_browser(db_session):
     bind_access_token(
         db_session,
         {"jti": "j", "origin_jti": "o"},
         _request(ip="198.51.100.4", user_agent="Firefox/120.0"),
     )
 
-    altrove = _request(ip="192.0.2.66", user_agent="Firefox/120.0")
     altro_browser = _request(ip="198.51.100.4", user_agent="Chrome/120.0")
-    assert session_anchor_matches(db_session, {"origin_jti": "o"}, altrove) is False
     assert session_anchor_matches(db_session, {"origin_jti": "o"}, altro_browser) is False
+
+
+def test_l_ancora_riconosce_lo_stesso_browser_da_un_altro_indirizzo(db_session):
+    """Dietro un tunnel o su una rete dual stack lo stesso browser arriva
+    ora in IPv4 ora in IPv6 da una connessione all'altra: se l'indirizzo
+    contasse, la sessione morirebbe a metà lavoro senza che nessuno l'abbia
+    rubata."""
+    bind_access_token(
+        db_session,
+        {"jti": "j", "origin_jti": "o"},
+        _request(ip="198.51.100.4", user_agent="Firefox/120.0"),
+    )
+
+    altrove = _request(ip="2001:db8::4", user_agent="Firefox/120.0")
+    assert session_anchor_matches(db_session, {"origin_jti": "o"}, altrove) is True
 
 
 def test_un_rinnovo_senza_ancora_non_passa(db_session):
@@ -232,10 +248,10 @@ def test_un_token_usato_da_un_altro_viene_rifiutato_e_revocato(db_session):
     molto meno di una sessione in mano a qualcun altro.
     """
     claims = {"jti": "jti-rubato", "origin_jti": "origin-rubata"}
-    bind_access_token(db_session, claims, _request(ip="198.51.100.4"))
+    bind_access_token(db_session, claims, _request(user_agent="Firefox/120.0"))
 
     with pytest.raises(HTTPException) as errore:
-        enforce_session_binding(db_session, claims, _request(ip="192.0.2.66"))
+        enforce_session_binding(db_session, claims, _request(user_agent="Chrome/120.0"))
 
     assert errore.value.status_code == 401
     # Non solo il token presentato: tutta la sessione, cioè anche i token
@@ -244,11 +260,32 @@ def test_un_token_usato_da_un_altro_viene_rifiutato_e_revocato(db_session):
     assert is_jti_revoked(db_session, "origin-rubata") is True
 
 
+def test_il_rifiuto_lascia_traccia_nel_log(db_session, caplog):
+    """Il 401 da solo non dice niente: senza questa riga la sessione uccisa
+    si scopre solo al rinnovo dopo, quando è già in denylist."""
+    claims = {"jti": "jti-rubato"}
+    bind_access_token(db_session, claims, _request(user_agent="Firefox/120.0"))
+
+    with caplog.at_level(logging.WARNING, logger="token_sessions"), pytest.raises(HTTPException):
+        enforce_session_binding(db_session, claims, _request(user_agent="Chrome/120.0"))
+
+    assert "Session binding violato" in caplog.text
+    assert "jti=jti-rubato" in caplog.text
+
+
 def test_il_proprietario_passa_senza_che_succeda_niente(db_session):
     richiesta = _request()
     bind_access_token(db_session, {"jti": "jti-buono"}, richiesta)
 
     enforce_session_binding(db_session, {"jti": "jti-buono"}, richiesta)
+
+    assert is_jti_revoked(db_session, "jti-buono") is False
+
+
+def test_il_proprietario_passa_anche_se_cambia_indirizzo(db_session):
+    bind_access_token(db_session, {"jti": "jti-buono"}, _request(ip="198.51.100.4"))
+
+    enforce_session_binding(db_session, {"jti": "jti-buono"}, _request(ip="2001:db8::4"))
 
     assert is_jti_revoked(db_session, "jti-buono") is False
 

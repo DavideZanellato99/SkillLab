@@ -69,13 +69,16 @@ export default function VoiceButton({
   const ringbackRef = useRef<Ringback | null>(null)
   const callCancelledRef = useRef(false)
 
-  // Live callbacks without re-creating the call client
+  // Live callbacks without re-creating the call client. Written after each
+  // commit, not during render: a ref must not be touched while rendering.
   const onTranscriptRef = useRef(onTranscript)
-  onTranscriptRef.current = onTranscript
   const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
   const onSessionEndRef = useRef(onSessionEnd)
-  onSessionEndRef.current = onSessionEnd
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript
+    onErrorRef.current = onError
+    onSessionEndRef.current = onSessionEnd
+  })
 
   useEffect(() => {
     onActiveChange(isRinging || isConnected)

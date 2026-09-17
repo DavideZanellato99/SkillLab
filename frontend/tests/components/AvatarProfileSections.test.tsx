@@ -57,7 +57,7 @@ describe('AvatarProfileSections', () => {
   it('apre tutte le sezioni in un gesto, e le richiude allo stesso modo', async () => {
     renderSections()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Apri Tutte le Sezioni' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Apri tutte le sezioni' }))
     expect(screen.getByLabelText(CAMPO_IN_FONDO)).toBeInTheDocument()
     expect(screen.getByLabelText(CAMPO_IN_CIMA)).toBeInTheDocument()
 

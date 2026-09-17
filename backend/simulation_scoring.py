@@ -60,9 +60,9 @@ GRADE_SCALE = 10
 # Da quanti punti in su una risposta si conta fra quelle esatte, dove i punti
 # non sono zero o uno.
 #
-# Vale per le tre forme che ammettono una risposta giusta a metà: il giudizio
-# del modello su una risposta scritta, i passi al posto giusto, le coppie
-# indovinate. Accanto al voto resta scritto "quante ne sapeva", e quella è una
+# Vale per le due forme che ammettono una risposta giusta a metà: il giudizio
+# del modello su una risposta scritta e i passi al posto giusto. Accanto al
+# voto resta scritto "quante ne sapeva", e quella è una
 # conta: da qualche parte la riga va tirata. Sei decimi è la sufficienza, la
 # stessa soglia con cui il voto finale si colora a schermo, quindi una domanda
 # conta come saputa quando da sola varrebbe la sufficienza.
@@ -130,17 +130,16 @@ def open_answer_points(quality: float | None) -> float:
 
 
 def matched_points(matched: int, total: int) -> float:
-    """I punti di una risposta indovinata a metà: la quota di elementi giusti.
+    """I punti di una risposta indovinata a metà: la quota di passi giusti.
 
-    È la scala dell'ordinamento e dell'abbinamento, dove una risposta non è
-    giusta o sbagliata ma giusta *in parte*: quattro passi su sei al posto
-    giusto valgono 0,7 come quattro coppie su sei indovinate. Un elemento
-    vale quanto un altro, ed è voluto: dire che il primo passo di una
-    procedura pesa più dell'ultimo vorrebbe dire scriverlo da qualche parte,
-    domanda per domanda, e nessuno lo farebbe.
+    È la scala dell'ordinamento, dove una risposta non è giusta o sbagliata
+    ma giusta *in parte*: quattro passi su sei al posto giusto valgono 0,7.
+    Un passo vale quanto un altro, ed è voluto: dire che il primo passo di
+    una procedura pesa più dell'ultimo vorrebbe dire scriverlo da qualche
+    parte, domanda per domanda, e nessuno lo farebbe.
 
-    Sull'ordinamento si contano le **posizioni esatte** e non le coppie in
-    ordine relativo. Un passo spostato all'inizio fa scalare tutti gli altri
+    Si contano le **posizioni esatte** e non le coppie in ordine relativo.
+    Un passo spostato all'inizio fa scalare tutti gli altri
     e con questa scala costa caro, il che è un difetto vero; in cambio il
     numero che finisce nell'esito è "quattro passi su sei al posto giusto",
     che chi prende un voto basso capisce e sa come rimediare, mentre "dieci

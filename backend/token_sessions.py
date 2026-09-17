@@ -7,19 +7,26 @@ user_agent, expires_at). A row is also written for the token's origin_jti
 token — which is what the refresh endpoint validates.
 
 On every authenticated request, after signature and denylist checks, the
-caller's IP + User-Agent are compared with the row of the token's jti.
-A mismatch (or a token with no binding at all) means the cookie left the
+caller's User-Agent is compared with the row of the token's jti. A
+mismatch (or a token with no binding at all) means the cookie left the
 owner's browser: the jti AND the whole session (origin_jti) are pushed
 into the denylist and the request gets 401. Intentionally the legitimate
 owner is kicked out too — better one extra login than a hijacked session.
 
+The IP is recorded but not enforced: behind a tunnel or a dual-stack
+network the same browser shows up now in IPv4, now in IPv6, from one
+connection to the next, and binding on it kicked legitimate users out
+mid-session. It stays in the row for auditing and for the personal data
+export.
+
 Trust note: client_ip honours the first hop of X-Forwarded-For. Behind a
 reverse proxy make sure it overwrites any client-supplied value, or the
-IP half of the binding can be spoofed (the User-Agent half still holds).
+recorded address is whatever the client claims.
 
 Datetimes are naive UTC, consistent with token_denylist.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, Request, status
@@ -27,6 +34,8 @@ from sqlalchemy.orm import Session
 
 from models import TokenSession
 from token_denylist import revoke_jtis
+
+logger = logging.getLogger(__name__)
 
 _UA_MAX_LEN = 400
 
@@ -140,38 +149,32 @@ def revoke_user_sessions(db: Session, user_id, keep: set[str] | None = None) -> 
     return len(entries)
 
 
+def _context_matches(row: TokenSession | None, request: Request) -> bool:
+    return row is not None and row.user_agent == _user_agent(request)
+
+
 def session_anchor_matches(db: Session, claims: dict, request: Request) -> bool:
     """
-    True when the caller's context matches the session anchor (origin_jti)
+    True when the caller's browser matches the session anchor (origin_jti)
     recorded at login. Used by the refresh endpoint: a stolen refresh
-    token replayed from another device/browser must not mint new tokens.
+    token replayed from another browser must not mint new tokens.
     """
     origin_jti = claims.get("origin_jti")
     if not origin_jti:
         return False
-    row = db.get(TokenSession, origin_jti)
-    return (
-        row is not None
-        and row.client_ip == client_ip(request)
-        and row.user_agent == _user_agent(request)
-    )
+    return _context_matches(db.get(TokenSession, origin_jti), request)
 
 
 def access_binding_matches(db: Session, claims: dict, request: Request) -> bool:
     """
-    True when the caller's context matches the binding recorded for this
+    True when the caller's browser matches the binding recorded for this
     access token's jti. Tokens without a jti (the local mock admin) match
     trivially; a jti with no binding row does NOT match.
     """
     jti = claims.get("jti")
     if not jti:
         return True
-    row = db.get(TokenSession, jti)
-    return (
-        row is not None
-        and row.client_ip == client_ip(request)
-        and row.user_agent == _user_agent(request)
-    )
+    return _context_matches(db.get(TokenSession, jti), request)
 
 
 def enforce_session_binding(db: Session, claims: dict, request: Request) -> None:
@@ -184,6 +187,12 @@ def enforce_session_binding(db: Session, claims: dict, request: Request) -> None
     if access_binding_matches(db, claims, request):
         return
 
+    # Senza questa riga il 401 nel log resta muto e la sessione uccisa si
+    # scopre solo al rinnovo successivo, quando ormai è già in denylist
+    logger.warning(
+        "Session binding violato: User-Agent diverso da quello del login "
+        f"(jti={claims.get('jti')}, ip={client_ip(request)})"
+    )
     revoke_jtis(db, revocation_entries(claims))
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

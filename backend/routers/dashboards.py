@@ -1,16 +1,11 @@
-"""Le dashboard: quattro domande sulle prove che l'applicazione registra.
+"""Le dashboard: tre domande sulle prove che l'applicazione registra.
 
 La dashboard dei punteggi vive in ``routers/admin`` insieme ai rendiconti da
-cui legge, e risponde a "chi è messo bene". Qui stanno le altre quattro, che
+cui legge, e risponde a "chi è messo bene". Qui stanno le altre tre, che
 guardano le stesse prove da altri lati:
 
 - ``/paths`` — **il programma funziona?** Quante assegnazioni si chiudono, in
-  quanti giorni, e su quale tappa si ferma il gruppo. È l'unica schermata che
-  guarda anche avanti, con le scadenze delle tappe aperte;
-- ``/content`` — **cosa è tarato male?** Gli stessi voti raggruppati per
-  avatar e per test invece che per persona, e per un test le sue domande una
-  per una (``/content/simulations/{id}``): una domanda che sbagliano tutti in
-  una media di dieci domande non si vede;
+  quanti giorni, e quante sono scadute;
 - ``/usage`` — **chi sta usando la piattaforma?** Utilizzo per organizzazione,
   del solo super admin, perché è l'unico che guarda più di un tenant;
 - ``/me`` — **sto migliorando?** La stessa domanda fatta su di sé da chi si
@@ -26,7 +21,7 @@ e il periodo è lo stesso ``days`` del resto dell'area di amministrazione.
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import Date, cast, func
 from sqlalchemy.orm import Session
 
@@ -37,7 +32,7 @@ from auth_dependency import (
     get_current_super_admin,
     resolve_admin_scope,
 )
-from dashboard_stats import content_dashboard, paths_dashboard, simulation_items
+from dashboard_stats import paths_dashboard
 from database import get_db
 from models import (
     CONVERSATION_MODE_TEXT,
@@ -59,20 +54,16 @@ from report_rows import (
     conversation_scope,
     criteria_scores,
     duration_seconds,
-    evaluation_report_rows,
     message_stats,
-    simulation_report_rows,
     since_from_days,
 )
 from routers.training import _loaded_assignments
 from schemas import (
-    ContentDashboard,
     MyProgress,
     MyProgressConversation,
     MyProgressSimulation,
     OrganizationUsage,
     PathsDashboard,
-    SimulationItemsReport,
     UsageDashboard,
     UsageDay,
 )
@@ -80,13 +71,6 @@ from simulation_scoring import attempt_score
 from training_progress import proofs_by_key
 
 router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
-
-# Quanti tentativi si aprono per analizzare le domande di un test. Sono
-# l'unica lettura di queste pagine che tira su la fotografia delle risposte,
-# cioè la colonna più pesante della tabella: mille consegne dicono già su
-# quale domanda si inciampa, e le più recenti sono quelle sulla versione
-# attuale delle domande.
-ITEM_ATTEMPT_CAP = 1000
 
 
 @router.get("/paths", response_model=PathsDashboard)
@@ -96,15 +80,15 @@ def paths_dashboard_view(
     current_admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    """L'avanzamento dei percorsi affidati, percorso per percorso e tappa per
-    tappa.
+    """I percorsi assegnati in quattro numeri: quanti, chiusi, in quanti
+    giorni, scaduti.
 
     Legge le stesse assegnazioni della gestione percorsi e con lo stesso
     caricamento anticipato: là si guarda una persona per riga, qui si contano
     tutte insieme. Il progresso resta quello di ``training_progress``, che è
     l'unico posto in cui si decide se una tappa è superata.
 
-    `days` restringe alle assegnazioni **affidate** negli ultimi N giorni, e
+    `days` restringe alle assegnazioni **assegnate** negli ultimi N giorni, e
     non alle prove svolte: quello che si sta guardando è come vanno i
     percorsi consegnati in questo periodo, e tagliare le prove renderebbe non
     superata una tappa che qualcuno ha chiuso il mese scorso.
@@ -118,93 +102,6 @@ def paths_dashboard_view(
         query = query.filter(TrainingPathAssignment.created_at >= since)
     assignments = query.order_by(TrainingPathAssignment.created_at.desc()).all()
     return paths_dashboard(assignments, proofs_by_key(db, assignments))
-
-
-@router.get("/content", response_model=ContentDashboard)
-def content_dashboard_view(
-    organization_id: UUID | None = None,
-    days: int | None = Query(None, ge=1, le=3650),
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db),
-):
-    """Quanto è difficile quello che è stato scritto: gli avatar e i test.
-
-    Le due letture sono quelle della dashboard dei punteggi, con lo stesso
-    tetto e lo stesso periodo: cambia soltanto come si raggruppano, per
-    contenuto invece che per persona. Restano due query separate come
-    ovunque, così un tenant che non usa il simulatore non paga la scansione
-    dei tentativi per scoprire che non ne ha.
-    """
-    scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    since = since_from_days(days)
-    evaluations, labels, eval_truncated = evaluation_report_rows(db, scope_org_id, since)
-    attempts, attempts_truncated = simulation_report_rows(db, scope_org_id, since)
-    return content_dashboard(
-        evaluations,
-        labels,
-        attempts,
-        truncated=eval_truncated or attempts_truncated,
-    )
-
-
-@router.get("/content/simulations/{simulation_id}", response_model=SimulationItemsReport)
-def simulation_items_view(
-    simulation_id: UUID,
-    organization_id: UUID | None = None,
-    days: int | None = Query(None, ge=1, le=3650),
-    current_admin: User = Depends(get_current_admin),
-    db: Session = Depends(get_db),
-):
-    """Le domande di un test, ognuna con quante volte è stata data giusta.
-
-    Si apre da una riga della dashboard dei contenuti, e si legge solo
-    allora: le risposte date stanno nella fotografia di ogni tentativo, che è
-    la colonna più pesante di quella tabella, e portarle nell'elenco vorrebbe
-    dire scaricare le consegne di ogni test del tenant per aprirne una.
-
-    I tentativi sono confinati dall'organizzazione di **chi li ha svolti**,
-    come nel resto della dashboard: un test prestato a un altro tenant non
-    entra nei numeri di questo. La simulazione invece si guarda per quello
-    che è, e fuori dal proprio tenant è un 404, cioè lo stesso niente che
-    l'elenco mostra.
-    """
-    scope_org_id = resolve_admin_scope(current_admin, organization_id)
-    simulation = db.query(TechnicalSimulation).filter(TechnicalSimulation.id == simulation_id)
-    if current_admin.organization_id is not None:
-        simulation = simulation.filter(
-            TechnicalSimulation.organization_id == current_admin.organization_id
-        )
-    found = simulation.first()
-    if not found:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Simulazione non trovata."
-        )
-
-    query = (
-        db.query(SimulationAttempt.answers)
-        .join(User, User.id == SimulationAttempt.user_id)
-        .filter(SimulationAttempt.simulation_id == simulation_id)
-    )
-    if scope_org_id is not None:
-        query = query.filter(User.organization_id == scope_org_id)
-    since = since_from_days(days)
-    if since is not None:
-        query = query.filter(SimulationAttempt.created_at >= since)
-
-    # Una in più del tetto, come nei rendiconti: è così che si sa se ce
-    # n'erano altre, e la risposta lo dice invece di tacerlo.
-    rows = query.order_by(SimulationAttempt.created_at.desc()).limit(ITEM_ATTEMPT_CAP + 1).all()
-    truncated = len(rows) > ITEM_ATTEMPT_CAP
-    answer_sets = [row[0] or [] for row in rows[:ITEM_ATTEMPT_CAP]]
-
-    return SimulationItemsReport(
-        simulation_id=found.id,
-        simulation_title=found.title,
-        simulation_kind=found.kind,
-        attempts=len(answer_sets),
-        items=simulation_items(answer_sets),
-        truncated=truncated,
-    )
 
 
 @router.get("/usage", response_model=UsageDashboard)

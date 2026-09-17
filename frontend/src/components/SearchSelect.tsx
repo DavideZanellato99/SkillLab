@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { matchesSearch } from './tableSearch'
 
 /* Selezione tramite ricerca, per elenchi lunghi (es. filtro utente della
@@ -57,11 +57,20 @@ export default function SearchSelect({
   const [activeIndex, setActiveIndex] = useState(-1)
   /* Nella variante a campo il campo di ricerca non c'è mentre la scelta è
    * fatta: il fuoco va rimesso quando è tornato nella pagina, non nell'istante
-   * in cui si toglie la chip. */
-  const [wantsFocus, setWantsFocus] = useState(false)
+   * in cui si toglie la chip. Un ref e non uno stato: non c'è niente da
+   * ridisegnare, è il campo stesso a leggerlo quando compare. */
+  const wantsFocus = useRef(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLUListElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const attachInput = useCallback((el: HTMLInputElement | null) => {
+    inputRef.current = el
+    if (el && wantsFocus.current) {
+      wantsFocus.current = false
+      el.focus()
+    }
+  }, [])
+
   const listboxId = useId()
 
   const selected = options.find((o) => o.value === value)
@@ -97,14 +106,8 @@ export default function SearchSelect({
   const clear = () => {
     onChange('')
     if (inputRef.current) inputRef.current.focus()
-    else setWantsFocus(true)
+    else wantsFocus.current = true
   }
-
-  useEffect(() => {
-    if (!wantsFocus) return
-    setWantsFocus(false)
-    inputRef.current?.focus()
-  }, [wantsFocus])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     switch (e.key) {
@@ -206,7 +209,7 @@ export default function SearchSelect({
             <path d="m21 21-4.3-4.3" />
           </svg>
           <input
-            ref={inputRef}
+            ref={attachInput}
             id={id}
             type="text"
             role="combobox"

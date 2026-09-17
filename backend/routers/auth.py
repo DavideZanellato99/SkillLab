@@ -429,9 +429,9 @@ def refresh_access_token(request: Request, response: Response, db: Session = Dep
     Rotate the access token cookie using the refresh token cookie.
 
     Session binding: the new access token is only issued if the caller's
-    IP + User-Agent match the session anchor (origin_jti) recorded at
-    login. A stolen refresh token replayed from another browser/device
-    kills the whole session instead of minting fresh tokens.
+    User-Agent matches the session anchor (origin_jti) recorded at login.
+    A stolen refresh token replayed from another browser kills the whole
+    session instead of minting fresh tokens.
     """
     ip_key = client_ip(request)
     _too_many(_refresh_limiter, ip_key, "Troppi tentativi di rinnovo.")
@@ -483,7 +483,7 @@ def refresh_access_token(request: Request, response: Response, db: Session = Dep
                 revoke_jtis(db, revocation_entries(old_claims))
                 _revoke_refresh_upstream(refresh_token, "Refresh")
                 return _rejected(
-                    "Refresh rifiutato: contesto diverso dal binding del vecchio "
+                    "Refresh rifiutato: User-Agent diverso dal binding del vecchio "
                     f"access token (ip={client_ip(request)})"
                 )
 
@@ -506,13 +506,13 @@ def refresh_access_token(request: Request, response: Response, db: Session = Dep
             return _rejected("Refresh rifiutato: sessione revocata.")
 
         if not session_anchor_matches(db, claims, request):
-            # Context mismatch (or session never bound): kill everything —
+            # Browser mismatch (or session never bound): kill everything —
             # denylist the fresh token + session anchor and revoke the
             # refresh token upstream on Cognito
             revoke_jtis(db, revocation_entries(claims))
             _revoke_refresh_upstream(refresh_token, "Refresh")
             return _rejected(
-                "Refresh rifiutato: contesto client diverso da quello della sessione "
+                "Refresh rifiutato: User-Agent diverso da quello della sessione "
                 f"(ip={client_ip(request)})"
             )
 

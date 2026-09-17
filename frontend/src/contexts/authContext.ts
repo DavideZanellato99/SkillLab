@@ -12,6 +12,9 @@ export interface AuthContextType {
   user: AuthUser | null
   isAuthenticated: boolean
   isLoading: boolean
+  /** Il profilo in memoria viene da un accesso fatto in questa scheda, e non
+   *  da una sessione ripresa dal cookie al caricamento della pagina. */
+  sessionFromLogin: boolean
   login: (email: string, password: string) => Promise<AuthResult>
   completeNewPassword: (email: string, newPassword: string, session: string) => Promise<void>
   logout: () => void

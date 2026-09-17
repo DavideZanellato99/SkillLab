@@ -30,6 +30,13 @@ scadenza. Quindi:
   fatto prima dell'assegnazione non superava un obiettivo. L'avatar e il
   test restano liberi da galleria e pagina delle simulazioni, ma il
   percorso li conta solo dal suo turno;
+- **una prova supera una tappa sola**: la conversazione che apre una
+  tappa è la stessa che ha superato quella prima, ed è già stata spesa
+  lì. La tappa appena aperta la vede come il momento del proprio sblocco,
+  non come una prova, e vuole una conversazione nuova anche se quella
+  vecchia ne raggiungerebbe le soglie. Altrimenti un percorso di cinque
+  tappe sullo stesso avatar, a soglie crescenti, si chiuderebbe in una
+  conversazione sola, e la fila non sarebbe una fila;
 - **la scadenza invece non aspetta lo sblocco**: è una data a calendario
   scritta sulla tappa quando si compone il percorso (vedi
   ``TrainingPathStep.due_at``), quindi vale anche su una tappa ancora
@@ -334,7 +341,9 @@ def _step_progress(
             achieved_at=None,
         )
 
-    relevant = [proof for proof in proofs if proof.at >= unlocked_at]
+    # Strettamente dopo: la prova con la stessa data dello sblocco è quella
+    # che ha superato la tappa prima, e ha aperto questa invece di contarci.
+    relevant = [proof for proof in proofs if proof.at > unlocked_at]
     best_score = max((proof.score for proof in relevant), default=None)
     # Il meglio criterio per criterio, e solo sui criteri che la tappa
     # chiede: gli altri sei numeri della valutazione non sono una condizione

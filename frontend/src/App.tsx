@@ -11,7 +11,6 @@ import {
   AvatarAdminPage,
   ChatPage,
   ComparisonPage,
-  DashboardContent,
   DashboardPage,
   DashboardPaths,
   DashboardScores,
@@ -209,8 +208,8 @@ function App() {
                     </RequireRole>
                   }
                 />
-                {/* La dashboard è un guscio con dentro quattro viste, una
-                    per rotta: sono quattro domande diverse sulle stesse
+                {/* La dashboard è un guscio con dentro tre viste, una
+                    per rotta: sono tre domande diverse sulle stesse
                     prove, ognuna con i propri dati e il proprio indirizzo da
                     mandare a qualcuno. Il periodo e l'organizzazione stanno
                     sul guscio e valgono per tutte (vedi DashboardPage).
@@ -230,7 +229,6 @@ function App() {
                   <Route index element={<DashboardHome />} />
                   <Route path="punteggi" element={<DashboardScores />} />
                   <Route path="percorsi" element={<DashboardPaths />} />
-                  <Route path="contenuti" element={<DashboardContent />} />
                   {/* L'utilizzo confronta le organizzazioni fra loro, quindi
                       è di chi le amministra tutte: il server risponde 403 a
                       chiunque altro, e la rotta dice la stessa cosa. */}

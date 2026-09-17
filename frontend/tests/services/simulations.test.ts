@@ -11,6 +11,7 @@ import {
   MAX_DOCUMENT_BYTES,
   POOL_COUNT,
   QUESTION_COUNT,
+  REQUIRED_POOL,
   createSimulation,
   deleteSimulation,
   deleteSimulationAttempt,
@@ -25,7 +26,6 @@ import {
   fetchSimulations,
   generateSimulationQuestions,
   replaceSimulationDocument,
-  requiredPool,
   saveSimulationQuestions,
   startSimulation,
   submitSimulation,
@@ -45,16 +45,17 @@ beforeEach(() => {
   apiFetchBlob.mockResolvedValue(new Blob())
 })
 
-/* Il serbatoio pieno alla generazione non costa niente, cinquanta domande
- * sono la stessa attesa di dieci; a mano sono cinquanta domande scritte una
- * per una, e il minimo diventa quanto serve a comporre un tentativo. */
-describe('requiredPool', () => {
-  it('chiede il serbatoio pieno alle domande generate', () => {
-    expect(requiredPool('ai')).toBe(POOL_COUNT)
+/* La generazione scrive cinquanta domande, ma il minimo per pubblicare è
+ * quanto serve a comporre un tentativo, qualunque sia l'origine: chi toglie
+ * da un serbatoio generato le domande che non reggono deve poter pubblicare
+ * senza rigenerare tutto. */
+describe('serbatoio', () => {
+  it('per pubblicare bastano le domande di un tentativo', () => {
+    expect(REQUIRED_POOL).toBe(QUESTION_COUNT)
   })
 
-  it('a mano si accontenta di un tentativo intero', () => {
-    expect(requiredPool('manual')).toBe(QUESTION_COUNT)
+  it('la generazione scrive più domande di quante ne servano', () => {
+    expect(POOL_COUNT).toBeGreaterThan(REQUIRED_POOL)
   })
 })
 

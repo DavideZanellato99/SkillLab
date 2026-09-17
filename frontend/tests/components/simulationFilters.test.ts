@@ -88,14 +88,14 @@ describe('filterSimulations', () => {
  * tipi non dipenda da com'è fatto il catalogo. */
 describe('kindFilterOptions', () => {
   it('porta solo i tipi presenti, in ordine, con quanti ne contengono', () => {
-    const abbinamento = simulazione({ id: 'coppie', kind: 'matching' })
-    const options = kindFilterOptions([aperta, abbinamento, mai, fatto])
+    const ordinamento = simulazione({ id: 'passi', kind: 'ordering' })
+    const options = kindFilterOptions([aperta, ordinamento, mai, fatto])
 
     expect(options).toEqual([
       { value: 'all', label: 'Tutti', count: 4 },
       { value: 'multiple', label: 'Scelta multipla', count: 2 },
       { value: 'open', label: 'Risposta aperta', count: 1 },
-      { value: 'matching', label: 'Abbinamento', count: 1 },
+      { value: 'ordering', label: 'Ordinamento', count: 1 },
     ])
   })
 
@@ -165,7 +165,7 @@ describe('filterAdminSimulations', () => {
     expect(
       filterAdminSimulations(elenco, filtri({ kind: 'open' }), '', true).map((s) => s.id),
     ).toEqual(['aperta'])
-    expect(filterAdminSimulations(elenco, filtri({ kind: 'matching' }), '', true)).toHaveLength(0)
+    expect(filterAdminSimulations(elenco, filtri({ kind: 'ordering' }), '', true)).toHaveLength(0)
   })
 
   /* La terza domanda: le domande di un modello sono quelle da rileggere. */
@@ -248,13 +248,7 @@ describe('le opzioni della gestione', () => {
     expect(ADMIN_SOURCE_OPTIONS.map((o) => o.label)).toEqual(['Tutte le origini', 'IA', 'Manuale'])
   })
 
-  it('elenca i quattro tipi di test', () => {
-    expect(ADMIN_KIND_OPTIONS.map((o) => o.value)).toEqual([
-      'all',
-      'multiple',
-      'open',
-      'ordering',
-      'matching',
-    ])
+  it('elenca i tre tipi di test', () => {
+    expect(ADMIN_KIND_OPTIONS.map((o) => o.value)).toEqual(['all', 'multiple', 'open', 'ordering'])
   })
 })

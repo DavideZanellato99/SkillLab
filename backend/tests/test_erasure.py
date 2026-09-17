@@ -24,6 +24,7 @@ from models import (
     AuditLog,
     Avatar,
     AvatarCategory,
+    AvatarRequest,
     ChatConversation,
     ChatMessage,
     ConversationRecording,
@@ -48,6 +49,7 @@ _SEEDED_TABLES = {
     "organizations",
     "avatars",
     "avatar_categories",
+    "avatar_requests",
     "token_session",
     "notification_reads",
     "training_paths",
@@ -145,6 +147,18 @@ def _seed_everything(db_session, victim: User, other: User, avatar, make_assigne
     # Il quadro d'insieme del percorso, che questa persona ha fatto scrivere.
     # Non parla di lei e non parla di nessuno: resta al percorso, e quello che
     # se ne va è la sua firma sopra.
+    # La richiesta di un avatar, che è dell'organizzazione e resta: di lei se
+    # ne va solo la firma.
+    avatar_request = AvatarRequest(
+        organization_id=avatar.organization_id,
+        category="clienti",
+        first_name="Luisa",
+        last_name="Bianchi",
+        scenario_type="Reclamo",
+        problem="Un addebito che non riconosce.",
+    )
+    db_session.add(avatar_request)
+
     path_debriefing = PathDebriefing(
         path_id=assignment.path_id,
         content={"summary": "Il gruppo si ferma alla seconda tappa.", "themes": []},
@@ -238,6 +252,7 @@ def _seed_everything(db_session, victim: User, other: User, avatar, make_assigne
         (Organization, avatar.organization_id),
         (Avatar, avatar.id),
         (AvatarCategory, avatar.category_id),
+        (AvatarRequest, avatar_request.id),
         (TechnicalSimulation, simulation.id),
         (User, other.id),
         (PathDebriefing, path_debriefing.id),

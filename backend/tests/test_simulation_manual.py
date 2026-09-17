@@ -10,9 +10,9 @@ tutto quello che presuppone un documento (generare, sostituirlo) deve
 rispondere di no invece di lavorare su un serbatoio vuoto.
 
 Identiche all'uscita: chi svolge il test riceve dieci domande estratte a caso
-dal serbatoio, e non ha modo di sapere da dove vengano. Cambia solo quante
-domande servono per pubblicare, dieci invece di cinquanta, perché a mano ogni
-domanda è tempo di una persona.
+dal serbatoio, e non ha modo di sapere da dove vengano. Identiche anche alla
+pubblicazione: dieci domande bastano in entrambi i casi, perché cinquanta è
+quello che la generazione scrive e non quello che si pretende.
 """
 
 import io
@@ -20,7 +20,6 @@ import io
 import pytest
 
 from models import (
-    SIMULATION_POOL_COUNT,
     SIMULATION_QUESTION_COUNT,
     SIMULATION_SOURCE_MANUAL,
     SIMULATION_STATUS_DRAFT,
@@ -253,9 +252,12 @@ def test_meno_di_dieci_domande_non_bastano(admin_client, manual_simulation):
     assert str(SIMULATION_QUESTION_COUNT) in risposta.json()["detail"]
 
 
-def test_una_simulazione_generata_continua_a_volerne_cinquanta(
+def test_dieci_domande_bastano_anche_su_una_simulazione_generata(
     admin_client, db_session, organization
 ):
+    """Chi rilegge cinquanta domande generate e ne toglie quelle che non
+    reggono deve poter pubblicare senza rigenerare tutto: il minimo è quello
+    di un tentativo, non quello che il modello scrive."""
     simulation = TechnicalSimulation(
         title="Procedure dal manuale",
         organization_id=organization.id,
@@ -280,8 +282,8 @@ def test_una_simulazione_generata_continua_a_volerne_cinquanta(
     risposta = admin_client.put(
         f"/api/admin/simulations/{simulation.id}/status", json={"status": "published"}
     )
-    assert risposta.status_code == 409
-    assert str(SIMULATION_POOL_COUNT) in risposta.json()["detail"]
+    assert risposta.status_code == 200
+    assert risposta.json()["status"] == "published"
 
 
 # ── Chi svolge il test ────────────────────────────────────────────────
@@ -301,7 +303,7 @@ def test_un_test_a_mano_si_svolge_come_gli_altri(user_client, manual_simulation)
     for domanda in domande:
         # I campi che servono a mostrare una domanda, uno per tipo di test:
         # nessuna chiave, come su una simulazione generata
-        assert set(domanda) == {"id", "position", "text", "options", "steps", "left", "right"}
+        assert set(domanda) == {"id", "position", "text", "options", "steps"}
 
 
 def test_chi_svolge_il_test_sa_chi_ha_scritto_le_domande(user_client, manual_simulation):

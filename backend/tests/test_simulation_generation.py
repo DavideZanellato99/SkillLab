@@ -25,7 +25,6 @@ import pytest
 import simulation_questions
 from models import (
     SIMULATION_GENERATED_ITEMS,
-    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_MULTIPLE,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
@@ -36,7 +35,6 @@ from simulation_questions import (
     MAX_TOPICS,
     QUESTIONS_PER_CALL,
     _batch_input,
-    _clean_pairs,
     _has_duplicates,
     _normalize_questions,
     _normalize_topics,
@@ -58,10 +56,6 @@ def _domanda_multipla(**extra) -> dict:
 
 def _passi(quanti=SIMULATION_GENERATED_ITEMS) -> list[str]:
     return [f"Passo numero {i}" for i in range(quanti)]
-
-
-def _coppie(quante=SIMULATION_GENERATED_ITEMS) -> list[dict]:
-    return [{"left": f"Caso {i}", "right": f"Ufficio {i}"} for i in range(quante)]
 
 
 # ── Gli argomenti ─────────────────────────────────────────────────────
@@ -132,37 +126,6 @@ def test_due_elementi_uguali_a_meno_di_spazi_e_maiuscole_sono_lo_stesso():
     assert _has_duplicates(["Verifica il documento", "Registra la pratica"]) is False
 
 
-# ── Le coppie di un abbinamento ───────────────────────────────────────
-
-
-def test_le_coppie_buone_passano_pulite():
-    coppie = [{"left": " Reclamo ", "right": " Ufficio reclami "}, *_coppie(4)]
-
-    assert _clean_pairs(coppie) == [{"left": "Reclamo", "right": "Ufficio reclami"}, *_coppie(4)]
-
-
-def test_una_coppia_con_un_lato_vuoto_annulla_la_domanda():
-    """Non se ne possono tenere quattro su cinque: la domanda ha un numero
-    fisso di righe, e una riga in meno è una domanda diversa da quella
-    scritta."""
-    assert _clean_pairs([*_coppie(4), {"left": "Caso", "right": ""}]) is None
-
-
-def test_un_numero_di_coppie_diverso_annulla_la_domanda():
-    assert _clean_pairs(_coppie(SIMULATION_GENERATED_ITEMS - 1)) is None
-    assert _clean_pairs([]) is None
-
-
-def test_un_abbinato_che_vale_per_due_casi_annulla_la_domanda():
-    """Chi conosce la procedura sbaglierebbe lo stesso, ed è il modo più
-    veloce di rendere odiato un tipo di test."""
-    assert _clean_pairs([*_coppie(4), {"left": "Caso nuovo", "right": "Ufficio 0"}]) is None
-
-
-def test_una_riga_che_non_e_nemmeno_una_coppia_annulla_la_domanda():
-    assert _clean_pairs(["Reclamo -> Ufficio reclami"]) is None
-
-
 # ── La pulizia delle domande, tipo per tipo ───────────────────────────
 
 
@@ -175,7 +138,6 @@ def test_una_domanda_a_scelta_multipla_esce_con_i_campi_degli_altri_tipi_vuoti()
     assert domanda["correct_option"] == 1
     assert domanda["expected_answer"] == ""
     assert domanda["ordered_steps"] is None
-    assert domanda["pairs"] is None
 
 
 @pytest.mark.parametrize(
@@ -235,23 +197,6 @@ def test_un_ordinamento_con_due_passi_identici_si_scarta():
 
     assert [d["text"] for d in domande] == ["Buona"]
     assert domande[0]["ordered_steps"] == _passi()
-
-
-def test_un_abbinamento_valido_esce_con_le_sue_coppie():
-    domande = _normalize_questions(
-        {
-            "questions": [
-                {"text": "Storta", "pairs": _coppie(2)},
-                {"text": "Buona", "pairs": _coppie()},
-            ]
-        },
-        {1},
-        SIMULATION_KIND_MATCHING,
-        10,
-    )
-
-    assert [d["text"] for d in domande] == ["Buona"]
-    assert domande[0]["pairs"] == _coppie()
 
 
 def test_una_riga_che_non_e_una_domanda_non_fa_cadere_le_altre():
@@ -366,7 +311,6 @@ def test_ogni_argomento_arriva_al_modello_con_i_passaggi_che_ne_parlano(modello)
     [
         (SIMULATION_KIND_OPEN, "risposta aperta"),
         (SIMULATION_KIND_ORDERING, "rimettere in ordine"),
-        (SIMULATION_KIND_MATCHING, "abbinare gli elementi"),
         (SIMULATION_KIND_MULTIPLE, "risposta multipla"),
     ],
 )
@@ -376,7 +320,6 @@ def test_il_tipo_del_test_cambia_solo_cosa_si_chiede_di_scrivere(modello, kind, 
             {"text": f"Aperta {i}", "expected_answer": "Deve dire che..."}
         ],
         SIMULATION_KIND_ORDERING: lambda i: [{"text": f"Ordina {i}", "ordered_steps": _passi()}],
-        SIMULATION_KIND_MATCHING: lambda i: [{"text": f"Abbina {i}", "pairs": _coppie()}],
         SIMULATION_KIND_MULTIPLE: _dieci_multiple,
     }[kind]
     stato = modello(contenuti)

@@ -24,6 +24,10 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  /* Un ricaricamento della pagina riprende la sessione dal cookie e non è un
+     accesso: chi vuole fare qualcosa solo quando si entra davvero (la guida
+     introduttiva) guarda qui, non alla sola presenza del profilo. */
+  const [sessionFromLogin, setSessionFromLogin] = useState(false)
   const queryClient = useQueryClient()
 
   // On mount, resume the cookie session (HttpOnly: JS can't inspect it,
@@ -51,6 +55,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // has set the auth cookies — only the user profile reaches the JS
     if (!isNewPasswordRequired(result)) {
       setUser((result as LoginResponse).user)
+      setSessionFromLogin(true)
     }
 
     return result
@@ -60,6 +65,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (email: string, newPassword: string, session: string): Promise<void> => {
       const result = await authCompleteNewPassword(email, newPassword, session)
       setUser(result.user)
+      setSessionFromLogin(true)
     },
     [],
   )
@@ -72,6 +78,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * perché la galleria trovava la chiave già piena e non chiedeva niente. */
   const forgetSession = useCallback(() => {
     setUser(null)
+    setSessionFromLogin(false)
     queryClient.clear()
   }, [queryClient])
 
@@ -105,6 +112,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     isAuthenticated: !!user,
     isLoading,
+    sessionFromLogin,
     login,
     completeNewPassword,
     logout,

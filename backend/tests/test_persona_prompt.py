@@ -81,3 +81,16 @@ def test_le_regole_del_mezzo_escono_anche_a_scheda_muta():
     assert "## STILE DI CONVERSAZIONE" in prompt
     assert "Parla come si parla davvero al telefono" in prompt
     assert "La lunghezza è un vincolo" in prompt
+
+
+def test_al_telefono_il_nome_storpiato_non_e_un_affronto():
+    """La trascrizione del parlato sbaglia una lettera nei nomi propri, e
+    l'avatar si risentiva per un errore che l'operatore non aveva commesso,
+    con la valutazione che lo contava a suo carico. In chat il nome arriva
+    come l'operatore lo ha scritto, e la regola non ha ragione di esserci."""
+    voce = _prompt("Media", CHANNEL_VOICE).split("## REGOLE FERREE")[1]
+    chat = _prompt("Media", CHANNEL_TEXT)
+
+    assert "leggermente diverso dal tuo" in voce
+    assert "NON reagire e NON correggerlo" in voce
+    assert "leggermente diverso dal tuo" not in chat

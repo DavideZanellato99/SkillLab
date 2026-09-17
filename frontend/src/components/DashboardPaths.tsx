@@ -1,41 +1,36 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useSearchParams } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
-import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { usePathsDashboard } from '../hooks/useDashboards'
-import type { PathDeadline, PathStats } from '../services/dashboards'
+import { useAssignments, usePaths } from '../hooks/useTraining'
+import type { PathAssignment } from '../services/training'
 import { isAdmin, isSuperAdmin } from '../services/auth'
-import AssignmentStatusBadge from './AssignmentStatusBadge'
-import DataTable, { Td, Tr } from './DataTable'
-import { useDashboardScope } from './dashboardViews'
-import { formatDateTime } from './dateFormat'
+import { errorMessage } from '../services/errors'
+import DashboardAssignmentCards from './DashboardAssignmentCards'
+import { PATH_PARAM, useDashboardScope } from './dashboardViews'
 import EmptyState from './EmptyState'
 import LoadError from './LoadError'
 import LoadingState from './LoadingState'
 import { formatDecimal } from './numberFormat'
-import { KpiCard, RateRow } from './scoreCharts'
-import { cardCls, formatScore } from './scoreFormat'
+import { KpiCard } from './scoreCharts'
 import StaleContent from './StaleContent'
-import { matchesSearch } from './tableSearch'
-import Tooltip from './Tooltip'
+import { assignedWithin } from './trainingFormat'
 
 /* La vista dei percorsi: il programma di allenamento funziona?
  *
  * Le altre viste raccontano prove già svolte, una per una o in media. Questa
- * racconta un piano: quante persone stanno percorrendo cosa, quante ci
- * arrivano in fondo, in quanto tempo, e su quale tappa si ferma il gruppo.
- * È la domanda di chi il percorso lo ha composto, e finché non c'era si
- * rispondeva aprendo le assegnazioni una alla volta nella gestione percorsi.
+ * racconta un piano, prima in quattro numeri e poi persona per persona:
+ * quanti percorsi sono stati assegnati, quanti sono arrivati in fondo, in
+ * quanto tempo, quanti hanno una tappa oltre il termine, e sotto chi sta
+ * percorrendo cosa e a che punto è. È la domanda di chi il percorso lo ha
+ * composto; comporlo e assegnarlo si fa nella gestione percorsi, che è
+ * l'altra metà dello stesso lavoro.
  *
- * La tappa è il pezzo che vale la pena guardare: una tappa che nessuno
- * supera è un obiettivo tarato male, e siccome tiene chiuse tutte quelle
- * dopo di lei ferma il percorso di tutti. Per questo la quota di riuscita si
- * misura su chi ci è arrivato e non su tutti gli assegnatari, che in fondo a
- * un percorso lungo sarebbero quasi tutti gente che non ha ancora
- * cominciato.
- *
- * In coda le scadenze, che sono l'unica cosa in tutta l'applicazione che
- * guarda avanti: le tappe aperte con una data, dalla più vicina, scadute
- * comprese. */
+ * I quattro numeri arrivano già contati dal server, le righe sono le stesse
+ * assegnazioni che legge la gestione percorsi: due letture e non una, perché
+ * i conteggi passano dal progresso di ogni assegnazione e le righe ce l'hanno
+ * già dentro, e chiedere al server una risposta che portasse le due cose
+ * insieme sarebbe stato ricopiare l'elenco dentro la dashboard. */
 
 /** Come si scrive un numero di giorni: "3,5 giorni", "1 giorno". */
 function formatDays(days: number | null): string {
@@ -45,101 +40,45 @@ function formatDays(days: number | null): string {
   return `${written} ${rounded === 1 ? 'giorno' : 'giorni'}`
 }
 
-/** Su quanti si sta misurando una tappa, scritto come si legge. */
-function reachedNote(reached: number): string {
-  if (reached === 0) return 'Nessuno ci è ancora arrivato'
-  return `${reached} ${reached === 1 ? 'persona ci è arrivata' : 'persone ci sono arrivate'}`
-}
-
-/* L'organizzazione accanto al conteggio solo per chi ne guarda più di una:
- * a chi amministra la propria è il nome della stanza in cui si trova già, e
- * l'app non glielo scrive da nessuna parte. */
-function PathCard({ path, showOrganization }: { path: PathStats; showOrganization: boolean }) {
-  return (
-    <div className={`${cardCls} mb-6`}>
-      <div className="mb-4 flex items-baseline justify-between gap-4 max-sm:flex-col max-sm:gap-1">
-        <div className="min-w-0">
-          <Tooltip content={path.title} truncateOnly>
-            <h2 className="truncate text-sm font-semibold text-slate-300">{path.title}</h2>
-          </Tooltip>
-          <p className="mt-1 text-xs text-slate-500">
-            {path.assignments} {path.assignments === 1 ? 'persona' : 'persone'}
-            {showOrganization && path.organization_name ? ` · ${path.organization_name}` : ''} ·
-            chiusi in media in {formatDays(path.avg_days_to_complete)}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3 text-xs text-slate-400">
-          <span className="text-emerald-400">{path.completed + path.completed_late} chiusi</span>
-          <span className="text-cyan-400">{path.active} in corso</span>
-          <span className="text-red-400">{path.overdue} scaduti</span>
-        </div>
-      </div>
-
-      {path.steps.length === 0 ? (
-        <p className="py-4 text-center text-sm italic text-slate-500">
-          Percorso ancora senza tappe.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {path.steps.map((step) => (
-            <RateRow
-              key={step.position}
-              label={`${step.position}. ${step.label}`}
-              sub={`${reachedNote(step.reached)} · obiettivo ${formatScore(step.target_score)}${
-                step.avg_attempts !== null
-                  ? ` · ${formatScore(step.avg_attempts)} prove in media`
-                  : ''
-              }`}
-              rate={step.reached ? (step.passed / step.reached) * 100 : 0}
-              note={
-                step.overdue > 0 ? (
-                  <Tooltip content="Persone ferme su questa tappa con il termine già passato">
-                    <span className="text-[0.72rem] font-semibold text-red-400">
-                      {step.overdue} in ritardo
-                    </span>
-                  </Tooltip>
-                ) : undefined
-              }
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-const DEADLINE_COLUMNS = [
-  { key: 'persona', label: 'Persona', width: '24%', sortValue: (d: PathDeadline) => d.user_name },
-  {
-    key: 'percorso',
-    label: 'Percorso',
-    width: '24%',
-    sortValue: (d: PathDeadline) => d.path_title,
-  },
-  { key: 'tappa', label: 'Tappa', width: '26%', sortValue: (d: PathDeadline) => d.step_position },
-  { key: 'scadenza', label: 'Scadenza', width: '16%', sortValue: (d: PathDeadline) => d.due_at },
-  { key: 'stato', label: 'Stato', width: '10%', sortValue: (d: PathDeadline) => d.status },
-]
+/* Il vuoto da mostrare finché le righe non sono arrivate: una costante e
+ * non `?? []` sul posto, che sarebbe un array nuovo a ogni render e
+ * rifarebbe il filtro sotto a ogni battuta scritta nella ricerca. */
+const NO_ASSIGNMENTS: PathAssignment[] = []
 
 export default function DashboardPaths() {
   const { user } = useAuth()
   const { organizationId, days, period } = useDashboardScope()
-  const [search, setSearch] = useState('')
-  const debouncedSearch = useDebouncedValue(search)
+
+  /* Il percorso scelto sta nell'indirizzo, che è la sua unica copia: ci si
+     arriva anche da fuori, dalla scheda del percorso nella gestione, e un
+     collegamento mandato a qualcuno deve aprire la stessa tabella. */
+  const [params, setParams] = useSearchParams()
+  const pathFilter = params.get(PATH_PARAM) ?? ''
+  const setPathFilter = (value: string) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(PATH_PARAM, value)
+    else next.delete(PATH_PARAM)
+    setParams(next, { replace: true })
+  }
 
   const { data, isPending, isPlaceholderData, error, refetch } = usePathsDashboard(
     organizationId,
     days,
     isAdmin(user),
   )
+  const {
+    data: assignments = NO_ASSIGNMENTS,
+    isPending: isLoadingAssignments,
+    error: assignmentsError,
+    refetch: reloadAssignments,
+  } = useAssignments(organizationId, undefined, isAdmin(user))
+  const { data: paths = [] } = usePaths(organizationId, isAdmin(user))
 
-  const deadlines = useMemo(
-    () =>
-      (data?.deadlines ?? []).filter((d) =>
-        matchesSearch(debouncedSearch, d.user_name, d.user_email, d.path_title, d.step_label),
-      ),
-    [data, debouncedSearch],
-  )
+  /* Il periodo della sezione vale anche per le righe, e si applica qui: i
+     quattro numeri contano le assegnazioni fatte negli ultimi N giorni, e
+     una tabella che sotto ne mostrasse altre li smentirebbe. Le righe sono
+     già tutte in mano, e la data di assegnazione è sulla riga. */
+  const rows = useMemo(() => assignedWithin(assignments, days), [assignments, days])
 
   if (error) {
     return (
@@ -156,11 +95,11 @@ export default function DashboardPaths() {
   if (!data || data.assignments === 0) {
     return (
       <EmptyState
-        title="Nessun percorso affidato"
+        title="Nessun percorso assegnato"
         hint={
           period === 'all'
-            ? 'I numeri compariranno quando un percorso verrà affidato a qualcuno dalla gestione percorsi'
-            : 'Nessun percorso affidato nel periodo selezionato, scegline uno più ampio per vedere i dati disponibili'
+            ? 'I numeri compariranno quando un percorso verrà assegnato a qualcuno dalla gestione percorsi'
+            : 'Nessun percorso assegnato nel periodo selezionato, scegline uno più ampio per vedere i dati disponibili'
         }
       />
     )
@@ -169,12 +108,12 @@ export default function DashboardPaths() {
   const closed = data.completed + data.completed_late
 
   return (
-    /* Il periodo è appena cambiato e queste sono ancora le righe di prima:
-       attenuate finché non arrivano quelle nuove, invece di una rotella al
+    /* Il periodo è appena cambiato e questi sono ancora i numeri di prima:
+       attenuati finché non arrivano quelli nuovi, invece di una rotella al
        posto della pagina. */
     <StaleContent isStale={isPlaceholderData}>
       <div className="mb-6 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
-        <KpiCard label="Percorsi Affidati">
+        <KpiCard label="Percorsi Assegnati">
           <p className="font-heading text-4xl font-bold text-slate-100">{data.assignments}</p>
           <p className="mt-1 text-xs text-slate-500">
             a {data.people} {data.people === 1 ? 'persona' : 'persone'}
@@ -194,7 +133,7 @@ export default function DashboardPaths() {
           <p className="font-heading text-4xl font-bold text-slate-100">
             {formatDays(data.avg_days_to_complete)}
           </p>
-          <p className="mt-1 text-xs text-slate-500">dall’affidamento all’ultima tappa</p>
+          <p className="mt-1 text-xs text-slate-500">dall’assegnazione all’ultima tappa</p>
         </KpiCard>
         <KpiCard label="Percorsi Scaduti">
           <p
@@ -208,47 +147,35 @@ export default function DashboardPaths() {
         </KpiCard>
       </div>
 
-      {data.paths.map((path) => (
-        <PathCard key={path.path_id} path={path} showOrganization={isSuperAdmin(user)} />
-      ))}
-
       <div className="mb-3">
-        <h2 className="text-sm font-semibold text-slate-300">Scadenze</h2>
+        <h2 className="text-sm font-semibold text-slate-300">Chi sta percorrendo cosa</h2>
         <p className="text-xs text-slate-500">
-          Le tappe aperte con un termine, dalla più vicina. Quelle già passate stanno in cima
+          Una scheda per persona e percorso, con le tappe in fila: verde superata, arancione
+          superata in ritardo, viola aperta adesso, rosso oltre il termine
         </p>
       </div>
-      <DataTable
-        columns={DEADLINE_COLUMNS}
-        items={deadlines}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Cerca per persona, percorso o tappa..."
-        pageResetKey={`${organizationId}|${period}|${debouncedSearch}`}
-        emptyMessage={
-          debouncedSearch
-            ? 'Nessuna scadenza corrisponde alla ricerca'
-            : 'Nessuna tappa aperta con un termine'
-        }
-        renderRow={(d) => (
-          <Tr key={d.assignment_id}>
-            <Td align="left">
-              <span className="block truncate text-[0.85rem] font-medium text-slate-100">
-                {d.user_name}
-              </span>
-              <span className="block truncate text-[0.72rem] text-slate-500">{d.user_email}</span>
-            </Td>
-            <Td className="text-[0.85rem] text-slate-300">{d.path_title}</Td>
-            <Td className="text-[0.85rem] text-slate-300">
-              {d.step_position}. {d.step_label}
-            </Td>
-            <Td className="text-[0.82rem] text-slate-400">{formatDateTime(d.due_at)}</Td>
-            <Td>
-              <AssignmentStatusBadge status={d.status} />
-            </Td>
-          </Tr>
-        )}
-      />
+      {/* Le righe hanno la loro lettura e il loro errore, separati dai
+          quattro numeri: un elenco caduto non è una dashboard vuota, e i
+          conteggi arrivati restano dove sono. */}
+      {isLoadingAssignments ? (
+        <LoadingState message="Caricamento assegnazioni..." />
+      ) : assignmentsError ? (
+        <LoadError
+          message={errorMessage(assignmentsError, 'Impossibile caricare le assegnazioni.')}
+          variant="page"
+          onRetry={() => void reloadAssignments()}
+          className="py-8"
+        />
+      ) : (
+        <DashboardAssignmentCards
+          assignments={rows}
+          paths={paths}
+          pathFilter={pathFilter}
+          onPathFilterChange={setPathFilter}
+          showOrganization={isSuperAdmin(user)}
+          pageResetKey={`${organizationId}|${period}`}
+        />
+      )}
     </StaleContent>
   )
 }

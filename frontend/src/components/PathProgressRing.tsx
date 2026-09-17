@@ -15,10 +15,15 @@ export default function PathProgressRing({
   done,
   total,
   size = 56,
+  showPercent = false,
 }: {
   done: number
   total: number
   size?: number
+  /** La percentuale al posto di «3/6»: dove il conto delle tappe sta già
+   *  scritto accanto, come sulle schede della dashboard, e il numero grande
+   *  deve dire quanto manca e non ripeterlo. */
+  showPercent?: boolean
 }) {
   // Senza i due punti, che dentro un `url(#...)` non tutti i browser digeriscono
   const gradientId = `ring${useId().replace(/:/g, '')}`
@@ -58,7 +63,7 @@ export default function PathProgressRing({
         />
       </svg>
       <span className="absolute inset-0 flex items-center justify-center text-[0.78rem] font-bold tabular-nums text-slate-100">
-        {done}/{total}
+        {showPercent ? `${Math.round(value * 100)}%` : `${done}/${total}`}
       </span>
     </div>
   )

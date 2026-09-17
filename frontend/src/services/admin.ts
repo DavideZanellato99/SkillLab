@@ -157,6 +157,9 @@ export interface AdminAvatarPayload {
   /** Required owning tenant: the avatar is private to that organization. */
   organization_id: string
   profile: Record<string, string>
+  /** La richiesta da cui l'avatar nasce: salvarlo la chiude come pubblicata.
+   *  Solo in creazione (vedi services/avatarRequests). */
+  request_id?: string
 }
 
 /** List all avatars with their full persona sheet (Super Admin only).

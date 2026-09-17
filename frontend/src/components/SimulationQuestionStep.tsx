@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { SimulationQuestion } from '../services/simulations'
 import PrimaryButton from './PrimaryButton'
 import {
@@ -80,46 +80,44 @@ export default function SimulationQuestionStep({
   /* Da qui si misurano sia il tempo che resta sia quello impiegato, che è la
    * stessa cosa vista dai due capi: un solo istante di partenza, così i
    * secondi che si vedono scendere e quelli che valgono punti non possono
-   * raccontare due storie diverse. */
-  const startedAt = useRef(Date.now())
-  const deadline = useRef(startedAt.current + QUESTION_SECONDS * 1000)
-  /* La risposta letta allo scadere del tempo: dentro l'intervallo lo stato
-   * sarebbe quello del render in cui l'effetto è partito. */
-  const selectedRef = useRef<number | null>(null)
+   * raccontare due storie diverse. Uno stato che non si aggiorna mai, e non
+   * un ref: l'inizializzatore pigro legge l'orologio una volta sola, al
+   * montaggio, e il valore si può leggere durante il render. */
+  const [startedAt] = useState(() => Date.now())
+  const deadline = startedAt + QUESTION_SECONDS * 1000
+
   /* Il tempo può finire nello stesso istante in cui si preme il pulsante:
    * consegnare due volte la stessa domanda farebbe saltare un avanzamento. */
   const answered = useRef(false)
-  /* Il cronometro parte una volta sola e si porta dietro la `onAnswer` di
-   * quel momento: tenuta in un ref, allo scadere chiama sempre l'ultima. */
-  const notify = useRef(onAnswer)
-  useEffect(() => {
-    notify.current = onAnswer
-  })
 
   const answer = (choice: number | null) => {
     if (answered.current) return
     answered.current = true
-    notify.current(choice, Date.now() - startedAt.current)
+    onAnswer(choice, Date.now() - startedAt)
   }
+
+  /* Il battito del cronometro come Effect Event: legge la risposta scelta e
+   * la `onAnswer` dell'ultimo render, non quelle del render in cui il
+   * cronometro è partito. Restituisce se il tempo è finito. */
+  const tick = useEffectEvent(() => {
+    const left = deadline - Date.now()
+    setRemaining(left > 0 ? left : 0)
+    if (left <= 0) answer(selected)
+    return left <= 0
+  })
 
   /* Un solo cronometro per tutta la vita del componente, che è la vita di una
    * domanda: le dipendenze sono vuote apposta, quello che serve dentro
-   * l'intervallo sta nei ref proprio per non doverlo far ripartire. */
+   * l'intervallo lo legge il battito qui sopra. */
   useEffect(() => {
     const id = setInterval(() => {
-      const left = deadline.current - Date.now()
-      setRemaining(left > 0 ? left : 0)
-      if (left <= 0) {
-        clearInterval(id)
-        answer(selectedRef.current)
-      }
+      if (tick()) clearInterval(id)
     }, TICK_MS)
     return () => clearInterval(id)
   }, [])
 
   const pick = (index: number) => {
     if (answered.current) return
-    selectedRef.current = index
     setSelected(index)
   }
 

@@ -50,6 +50,7 @@ from authorship import DELETED_ACTOR_EMAIL
 from models import (
     CONVERSATION_CHILDREN,
     Avatar,
+    AvatarRequest,
     ChatConversation,
     NotificationRead,
     Organization,
@@ -88,7 +89,18 @@ _USER_OWNED = (
 # una persona: parla di tappe e di un gruppo, non nomina nessuno (vedi
 # ``PathDebriefing``), quindi resta al percorso a cui appartiene e di lui si
 # anonimizza solo la firma di chi lo ha fatto scrivere.
-_AUTHORED = (User, Organization, Avatar, TechnicalSimulation, TrainingPath, PathDebriefing)
+# La richiesta di un avatar è dell'organizzazione che l'ha mandata, non
+# della persona che ha premuto il bottone: resta, e chi l'ha scritta diventa
+# un'etichetta.
+_AUTHORED = (
+    User,
+    Organization,
+    Avatar,
+    AvatarRequest,
+    TechnicalSimulation,
+    TrainingPath,
+    PathDebriefing,
+)
 
 
 def erase_conversations(db: Session, conversation_ids: Sequence[UUID]) -> int:

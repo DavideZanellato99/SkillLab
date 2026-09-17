@@ -22,7 +22,7 @@
  * Il velo, il ritaglio e il riquadro li disegna `TutorialSpotlight`; cosa
  * dicono i passi sta in `tutorialSteps`. */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useMarkTutorialSeen } from '../hooks/useTutorial'
 import { CloseIcon } from './icons'
@@ -34,7 +34,7 @@ import { OPEN_TUTORIAL_EVENT, setTutorialUserMenu } from './tutorialEvents'
 import { tutorialSteps } from './tutorialSteps'
 
 export default function TutorialTour() {
-  const { user, updateUser } = useAuth()
+  const { user, sessionFromLogin, updateUser } = useAuth()
   const markSeen = useMarkTutorialSeen()
   const titleId = useId()
 
@@ -43,15 +43,19 @@ export default function TutorialTour() {
   const [index, setIndex] = useState<number | null>(null)
   /* Partita una volta, in questa sessione non riparte da sola: senza, un
      errore nello scriverla come vista la farebbe ricomparire al primo
-     ridisegno, cioè subito. */
-  const started = useRef(false)
-
-  useEffect(() => {
-    if (started.current || steps.length === 0) return
-    if (!user || user.tutorial_seen_at !== null) return
-    started.current = true
+     ridisegno, cioè subito. La partenza si decide durante il render, così
+     il primo passo compare insieme alla pagina e non un disegno dopo. */
+  const [started, setStarted] = useState(false)
+  /* TEMPORANEO: la guida parte a ogni accesso, senza guardare se è già
+     stata vista. Da ripristinare con la riga commentata qui sotto. Un
+     ricaricamento della pagina non è un accesso: la sessione ripresa dal
+     cookie non la fa ripartire. */
+  const shouldStart = user !== null && sessionFromLogin
+  // const shouldStart = user !== null && user.tutorial_seen_at === null
+  if (!started && steps.length > 0 && shouldStart) {
+    setStarted(true)
     setIndex(0)
-  }, [steps, user])
+  }
 
   /* La riapertura a mano, dal proprio profilo. Chi la chiede la conosce già,
      quindi riparte dal primo passo come la prima volta. */

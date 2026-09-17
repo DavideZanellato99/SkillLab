@@ -30,6 +30,7 @@ from models import (
     ORG_STATUS_SUSPENDED,
     Avatar,
     AvatarCategory,
+    AvatarRequest,
     ChatConversation,
     ConversationEvaluation,
     Organization,
@@ -426,6 +427,13 @@ def delete_organization(
         db.query(TechnicalSimulation).filter(TechnicalSimulation.organization_id == org.id).all()
     ):
         db.delete(simulation)
+
+    # Le richieste di avatar del tenant, prima degli avatar e delle categorie
+    # a cui puntano: la domanda se ne va con chi l'ha fatta, e non resta a
+    # dipendere da un SET NULL che il database potrebbe non avere.
+    db.query(AvatarRequest).filter(AvatarRequest.organization_id == org.id).delete(
+        synchronize_session=False
+    )
 
     # Then the private avatars and the organization itself. The categories
     # go after the avatars that point at them, never before: they exist only

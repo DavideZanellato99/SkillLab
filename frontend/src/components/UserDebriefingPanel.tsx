@@ -123,8 +123,7 @@ export default function UserDebriefingPanel({
             </span>
           ) : (
             <span className="text-xs text-slate-500">
-              Gli elementi ricorrenti nelle prove di {userName}, che una prova alla volta non
-              emergono
+              Una visione generale sull'andament di {userName}
             </span>
           )}
         </div>
@@ -156,8 +155,7 @@ export default function UserDebriefingPanel({
 
       {tooFewProofs && (
         <p className="py-4 text-center text-[0.85rem] italic text-slate-500">
-          Servono almeno {MIN_EVIDENCE} prove svolte per un quadro d'insieme. Con un numero
-          inferiore riprodurrebbe le valutazioni già disponibili
+          Servono almeno {MIN_EVIDENCE} prove svolte per un quadro d'insieme
         </p>
       )}
 

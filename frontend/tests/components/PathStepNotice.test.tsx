@@ -97,7 +97,7 @@ describe('PathStepNotice', () => {
 
     expect(useMyAssignments).toHaveBeenCalledWith(true)
     expect(screen.getByText(/Tappa 2 di 2 di/)).toHaveTextContent('Onboarding')
-    expect(screen.getByText(/Obiettivo/)).toHaveTextContent('7,5 su 10')
+    expect(screen.getByText(/^Obiettivo su 10/)).toHaveTextContent('7,5 su 10')
   })
 
   /* Il collegamento porta alla tappa già aperta sulla mappa: si torna al

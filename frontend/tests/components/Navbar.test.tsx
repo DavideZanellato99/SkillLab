@@ -177,6 +177,28 @@ describe('menu di chi è entrato', () => {
     expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
   })
 
+  /* Il click fuori chiude anche dentro la barra: il velo di prima partiva
+   * sotto di essa, e un click sul logo lasciava il menu aperto. */
+  it('si chiude con un click fuori, anche sulla barra', async () => {
+    renderNavbar('user')
+
+    await apriMenu()
+    await userEvent.click(document.body)
+    expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
+
+    await apriMenu()
+    await userEvent.click(screen.getByRole('link', { name: /SkillLab/ }))
+    expect(screen.queryByRole('link', { name: /Profilo/ })).not.toBeInTheDocument()
+  })
+
+  it('resta aperto cliccando al suo interno', async () => {
+    renderNavbar('user')
+
+    await apriMenu()
+    await userEvent.click(screen.getByText('anna@test.it'))
+    expect(screen.getByRole('link', { name: /Profilo/ })).toBeInTheDocument()
+  })
+
   it('mostra chi si è e con che ruolo', async () => {
     renderNavbar('super_admin')
 
@@ -297,6 +319,14 @@ describe('la navigazione su schermo stretto', () => {
     const pannello = screen.getByRole('navigation', { name: 'Sezioni' })
     await userEvent.click(within(pannello).getByRole('link', { name: /Confronto/ }))
 
+    expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
+  })
+
+  it('si chiude con un click fuori', async () => {
+    renderNavbar('user')
+    await apriPannello()
+
+    await userEvent.click(document.body)
     expect(screen.queryByRole('navigation', { name: 'Sezioni' })).not.toBeInTheDocument()
   })
 

@@ -27,7 +27,7 @@ import { formatDate } from './dateFormat'
 /* La metà scritta del confronto: due test consegnati, uno accanto all'altro.
  *
  * Si sceglie fra le prove che i due filtri lasciano passare, il tipo e il
- * test: i quattro tipi si correggono con quattro scale diverse, quindi un
+ * test: i tre tipi si correggono con tre scale diverse, quindi un
  * dieci preso a crocette e un dieci preso a risposte scritte non sono lo
  * stesso dieci. Il test è una scelta obbligatoria, come lo scenario
  * nell'altra metà: due tentativi su documenti diversi misurano due

@@ -1,11 +1,12 @@
 """Comparing one person's attempts at a scenario.
 
 A student sees their own attempts and nobody else's. An admin picks someone
-from their own scope and reads that person's, one person at a time: there
-is deliberately no way to put two different people side by side, because
-this screen exists to answer "sono migliorato?" and a ranking between
+from their own scope and reads that person's, one person at a time: these
+endpoints deliberately offer no way to put two different people side by
+side, because they exist to answer "sono migliorato?" and a ranking between
 students is a different question with different consequences in a
-classroom.
+classroom. The averages of several people that an admin composes on the
+same page come from the dashboard reports, not from here.
 
 The tenant boundary is the usual one (resolve_admin_scope), so an
 organization admin only ever opens its own students.

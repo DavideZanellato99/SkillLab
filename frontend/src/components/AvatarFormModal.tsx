@@ -21,6 +21,7 @@ import { useLeaveConfirmation } from '../hooks/useLeaveConfirmation'
 import { getAvatarImageUrl } from '../services/api'
 import type { AdminAvatar } from '../services/admin'
 import { fetchVoicePreview } from '../services/admin'
+import type { AvatarRequest } from '../services/avatarRequests'
 import { errorMessage } from '../services/errors'
 import { resizeAvatarImage } from '../services/imageResize'
 import type { AvatarFormState } from './avatarForm'
@@ -29,9 +30,12 @@ import {
   avatarFormChanged,
   avatarFormError,
   avatarFormFrom,
+  avatarFormFromRequest,
   avatarPayload,
+  draftTextFromRequest,
   emptyAvatarForm,
   isExternalImageUrl,
+  requestedCategoryId,
 } from './avatarForm'
 import { ALL_PROFILE_KEYS, countFilled, missingEssentials } from './avatarProfileConfig'
 import AvatarProfileSections from './AvatarProfileSections'
@@ -54,6 +58,10 @@ const sectionTitleCls =
 interface AvatarFormModalProps {
   /** L'avatar da modificare, oppure 'new' per crearne uno. */
   target: AdminAvatar | 'new'
+  /** La richiesta di un organization admin da cui l'avatar nasce: la scheda
+   *  parte già con tenant, categoria, nome e scenario, e salvarla chiude la
+   *  richiesta come pubblicata. Ha senso solo con `target: 'new'`. */
+  request?: AvatarRequest
   organizationOptions: { value: string; label: string }[]
   onClose: () => void
   onSaved: (message: string) => void
@@ -63,6 +71,7 @@ interface AvatarFormModalProps {
 
 export default function AvatarFormModal({
   target,
+  request,
   organizationOptions,
   onClose,
   onSaved,
@@ -71,7 +80,7 @@ export default function AvatarFormModal({
   const isNew = target === 'new'
 
   const [form, setForm] = useState<AvatarFormState>(() =>
-    isNew ? emptyAvatarForm() : avatarFormFrom(target),
+    !isNew ? avatarFormFrom(target) : request ? avatarFormFromRequest(request) : emptyAvatarForm(),
   )
   const [validationError, setValidationError] = useState('')
   const [voicePreviewError, setVoicePreviewError] = useState('')
@@ -113,10 +122,27 @@ export default function AvatarFormModal({
   const isSaving = createMutation.isPending || updateMutation.isPending
 
   /* La scheda com'era all'apertura, per sapere se c'è qualcosa da perdere.
-     Un ref e non uno stato: è il termine di paragone, non cambia mai, e non
-     deve far ridisegnare niente quando lo si legge. */
-  const openedWith = useRef(form)
-  const isDirty = avatarFormChanged(form, openedWith.current)
+     Uno stato e non un ref perché si legge durante il render: cambia una
+     volta sola, quando arriva la categoria della richiesta, qui sotto. */
+  const [openedWith, setOpenedWith] = useState(form)
+  const isDirty = avatarFormChanged(form, openedWith)
+
+  /* La richiesta porta il nome della categoria, non un id: quando le
+   * categorie del tenant arrivano, se una ha quel nome la scheda la sceglie
+   * da sola, e la mette anche nel termine di paragone, perché fa parte di
+   * com'era all'apertura e non è una modifica da confermare alla chiusura.
+   * Solo finché la tendina è vuota, così non scavalca una scelta fatta a
+   * mano. Se nessuna corrisponde, la nota sotto la tendina lo dice. */
+  const requestedId = request ? requestedCategoryId(request, categories) : ''
+  const requestedCategoryMissing = Boolean(request) && categories.length > 0 && !requestedId
+  const [appliedRequestedId, setAppliedRequestedId] = useState('')
+  if (requestedId && requestedId !== appliedRequestedId) {
+    setAppliedRequestedId(requestedId)
+    if (!form.categoryId) {
+      setForm({ ...form, categoryId: requestedId })
+      setOpenedWith({ ...openedWith, categoryId: requestedId })
+    }
+  }
 
   // Il ricaricamento e la chiusura della scheda del browser, che non passano
   // di qui: l'avviso lo scrive il browser, con parole sue.
@@ -246,8 +272,15 @@ export default function AvatarFormModal({
 
     try {
       if (isNew) {
-        const created = await createMutation.mutateAsync(avatarPayload(form))
-        onSaved(`Avatar ${created.name} creato con successo.`)
+        const created = await createMutation.mutateAsync({
+          ...avatarPayload(form),
+          request_id: request?.id,
+        })
+        onSaved(
+          request
+            ? `Avatar ${created.name} pubblicato: ${request.organization_name} riceverà una notifica.`
+            : `Avatar ${created.name} creato con successo.`,
+        )
       } else {
         const updated = await updateMutation.mutateAsync({
           avatarId: target.id,
@@ -288,6 +321,13 @@ export default function AvatarFormModal({
               {Math.round((filledCount / ALL_PROFILE_KEYS.length) * 100)}%
             </strong>{' '}
             ({filledCount} campi su {ALL_PROFILE_KEYS.length})
+            {request && (
+              <>
+                {' '}
+                · richiesto da{' '}
+                <strong className="text-slate-300">{request.organization_name}</strong>
+              </>
+            )}
           </p>
         </div>
         {/* Le due cose che si fanno a una scheda senza uscire da qui: farsela
@@ -394,6 +434,12 @@ export default function AvatarFormModal({
                 }
                 disabled={isSaving || !form.organizationId}
               />
+              {requestedCategoryMissing && (
+                <p className="text-[0.7rem] text-amber-400">
+                  La richiesta indica la categoria "{request?.category}", che l'organizzazione non
+                  ha ancora: creala da Gestisci Categorie e poi selezionala.
+                </p>
+              )}
               <button
                 type="button"
                 className="w-fit cursor-pointer border-none bg-transparent p-0 text-[0.7rem] text-violet-400 underline-offset-2 transition hover:underline"
@@ -564,7 +610,11 @@ export default function AvatarFormModal({
       {/* La bozza si apre sopra la scheda, e la scheda resta lì dietro: è
           quello che sta per essere riempito. */}
       {showDraft && (
-        <PersonaDraftModal onClose={() => setShowDraft(false)} onDrafted={handleDrafted} />
+        <PersonaDraftModal
+          onClose={() => setShowDraft(false)}
+          onDrafted={handleDrafted}
+          initialText={request ? draftTextFromRequest(request) : undefined}
+        />
       )}
 
       {/* Non è una conferma di cortesia: qui dietro ci sono fino a settanta

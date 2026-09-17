@@ -49,11 +49,15 @@ interface Props {
   onClose: () => void
   /** La bozza pronta, che il form fa entrare nella scheda con le sue regole. */
   onDrafted: (profile: Record<string, string>) => void
+  /** Il caso già raccontato da qualcun altro: la richiesta di un
+   *  organization admin arriva qui come descrizione, così chi compila la
+   *  scheda non la ricopia. */
+  initialText?: string
 }
 
-export default function PersonaDraftModal({ onClose, onDrafted }: Props) {
+export default function PersonaDraftModal({ onClose, onDrafted, initialText = '' }: Props) {
   const [source, setSource] = useState<PersonaDraftSource>('descrizione')
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialText)
 
   const draftMutation = useDraftPersona()
   const isPending = draftMutation.isPending

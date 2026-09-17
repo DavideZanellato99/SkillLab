@@ -211,15 +211,19 @@ def _add_columns() -> None:
                 "expected_answer TEXT NOT NULL DEFAULT ''"
             )
         )
-        # Le chiavi dei due tipi aggiunti dopo: i passi nell'ordine giusto e
-        # le coppie da abbinare. Nascono vuote e restano vuote su tutte le
-        # domande di prima, che sono di un tipo che non le usa: è la stessa
-        # cosa che vale fra ``options`` e ``expected_answer``, dove ogni
-        # domanda riempie la colonna del proprio tipo e lascia stare le altre.
+        # La chiave dell'ordinamento: i passi nell'ordine giusto. Nasce vuota
+        # e resta vuota su tutte le domande di prima, che sono di un tipo che
+        # non la usa: è la stessa cosa che vale fra ``options`` e
+        # ``expected_answer``, dove ogni domanda riempie la colonna del
+        # proprio tipo e lascia stare le altre.
         conn.execute(
             text("ALTER TABLE simulation_questions ADD COLUMN IF NOT EXISTS ordered_steps JSONB")
         )
-        conn.execute(text("ALTER TABLE simulation_questions ADD COLUMN IF NOT EXISTS pairs JSONB"))
+        # Le coppie dell'abbinamento, un tipo di test che non esiste più: la
+        # colonna se ne va insieme alle simulazioni che la riempivano (vedi
+        # ``_drop_matching_simulations``). Su un database nuovo non nasce
+        # proprio, perché il modello non la ha più.
+        conn.execute(text("ALTER TABLE simulation_questions DROP COLUMN IF EXISTS pairs"))
         # Alternative e indice della corretta diventano nullable: su una
         # domanda aperta non esistono, e riempirli di finto significherebbe
         # far leggere a chi rilegge il test una scelta che nessuno ha fatto.
@@ -264,6 +268,32 @@ def _add_columns() -> None:
                 "covered_group VARCHAR(64) NOT NULL DEFAULT ''"
             )
         )
+        # La categoria di una richiesta di avatar è un nome scritto da chi
+        # chiede, non più una chiave verso l'anagrafica (vedi
+        # ``AvatarRequest``): chi chiede può volere un gruppo che la sua
+        # galleria non ha ancora. Le righe che avevano la chiave prendono il
+        # nome della categoria a cui puntavano, prima che la colonna se ne
+        # vada; quelle rimaste senza (categoria eliminata nell'attesa) restano
+        # con il nome vuoto, e lo scrive il super admin compilando la scheda.
+        conn.execute(
+            text("ALTER TABLE avatar_requests ADD COLUMN IF NOT EXISTS category VARCHAR(50)")
+        )
+        legacy_key = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'avatar_requests' AND column_name = 'category_id'"
+            )
+        ).first()
+        if legacy_key:
+            conn.execute(
+                text(
+                    "UPDATE avatar_requests r SET category = c.name FROM avatar_categories c "
+                    "WHERE r.category IS NULL AND r.category_id = c.id"
+                )
+            )
+            conn.execute(text("ALTER TABLE avatar_requests DROP COLUMN category_id"))
+        conn.execute(text("UPDATE avatar_requests SET category = '' WHERE category IS NULL"))
+        conn.execute(text("ALTER TABLE avatar_requests ALTER COLUMN category SET NOT NULL"))
 
 
 def _add_authorship_columns() -> None:
@@ -843,6 +873,29 @@ def _drop_user_selections() -> None:
         conn.execute(text("DROP TABLE IF EXISTS user_selections"))
 
 
+def _drop_matching_simulations() -> None:
+    """Portare via i test di abbinamento, un tipo che non esiste più.
+
+    Erano due colonne da accoppiare, e il tipo è stato tolto: né il
+    pannello lo propone più, né il simulatore saprebbe mostrarne una
+    domanda o correggerne una risposta. Una simulazione di quel tipo
+    rimasta nel database sarebbe un test che compare nell'elenco e non si
+    può svolgere, e un tentativo su di essa un esito che nessuna pagina sa
+    leggere.
+
+    Si cancellano le simulazioni e basta: passaggi, domande e tentativi se
+    ne vanno per il vincolo in cascata, e così le tappe dei percorsi che
+    puntavano a quei test, che è quello che fa già l'eliminazione di una
+    simulazione dal pannello. Un percorso che aveva una tappa su un
+    abbinamento ne perde una e la fila si richiude, come quando si cancella
+    un avatar.
+
+    Idempotente: il WHERE guarda un tipo che nessuno scrive più.
+    """
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM technical_simulations WHERE kind = 'matching'"))
+
+
 def _index_audit_logs() -> None:
     """Index the audit trail the way it is read.
 
@@ -1017,6 +1070,7 @@ def _run_backfills() -> None:
     _version_debriefings()
     _drop_avatar_difficulty()
     _drop_user_selections()
+    _drop_matching_simulations()
 
 
 def run_startup_migrations() -> None:

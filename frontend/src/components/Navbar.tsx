@@ -47,10 +47,14 @@ export default function Navbar() {
 
   /* Arrivati alla pagina il menu non serve più. Chiuderlo al click della voce
      non basterebbe: si va altrove anche dal logo o tornando indietro con il
-     browser, e resterebbe aperto sopra la pagina nuova. */
-  useEffect(() => {
+     browser, e resterebbe aperto sopra la pagina nuova. Il cambio di pagina
+     si riconosce durante il render, confrontando con quella di prima, così
+     il menu non compare mai sopra la pagina nuova. */
+  const [menuPath, setMenuPath] = useState(pathname)
+  if (pathname !== menuPath) {
+    setMenuPath(pathname)
     setOpenMenu(null)
-  }, [pathname])
+  }
 
   /* I pulsanti delle pagine pubbliche chiedono di aprire la modale con
      questo evento: la modale vive qui, e loro non la conoscono. */

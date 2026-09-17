@@ -66,7 +66,6 @@ from database import get_db
 from models import (
     ALL_SIMULATION_KINDS,
     ALL_SIMULATION_SOURCES,
-    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_MULTIPLE,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
@@ -174,7 +173,6 @@ def _admin_detail(db: Session, simulation: TechnicalSimulation, admin: User) -> 
                 # chi svolge il test: qui la chiave si rilegge, non si
                 # indovina
                 ordered_steps=q.ordered_steps,
-                pairs=q.pairs,
                 explanation=q.explanation,
                 source_chunks=q.source_chunks,
             )
@@ -266,19 +264,6 @@ def _unfinished_question(simulation: TechnicalSimulation) -> str | None:
             if _duplicated([str(s) for s in steps]):
                 return f"La domanda {position} ha due passi uguali."
             continue
-        if simulation.is_matching:
-            pairs = list(question.pairs or [])
-            if any(not str(p.get("left") or "").strip() for p in pairs):
-                return f"La domanda {position} ha una voce da abbinare vuota."
-            if any(not str(p.get("right") or "").strip() for p in pairs):
-                return f"La domanda {position} ha un abbinamento vuoto."
-            # Come sopra, ma su una colonna sola: un elemento di destra che
-            # vale per due voci di sinistra fa sbagliare chi sa la procedura
-            if _duplicated([str(p.get("left")) for p in pairs]):
-                return f"La domanda {position} ha due voci uguali da abbinare."
-            if _duplicated([str(p.get("right")) for p in pairs]):
-                return f"La domanda {position} ha due abbinamenti uguali."
-            continue
         options = question.options or []
         if any(not str(o).strip() for o in options):
             return f"La domanda {position} ha un'alternativa vuota."
@@ -314,10 +299,6 @@ def _missing_key(
         if question.ordered_steps is None:
             return "non ha i passi da rimettere in ordine."
         return None
-    if simulation.is_matching:
-        if question.pairs is None:
-            return "non ha le coppie da abbinare."
-        return None
     if question.options is None:
         return "non ha le alternative fra cui scegliere."
     return None
@@ -336,14 +317,11 @@ def _key_columns(kind: str, question: SimulationQuestionPayload) -> dict:
         "correct_option": None,
         "expected_answer": "",
         "ordered_steps": None,
-        "pairs": None,
     }
     if kind == SIMULATION_KIND_OPEN:
         return {**empty, "expected_answer": question.expected_answer.strip()}
     if kind == SIMULATION_KIND_ORDERING:
         return {**empty, "ordered_steps": question.ordered_steps}
-    if kind == SIMULATION_KIND_MATCHING:
-        return {**empty, "pairs": [p.model_dump() for p in question.pairs or []]}
     return {**empty, "options": question.options, "correct_option": question.correct_option}
 
 
@@ -682,7 +660,6 @@ def _store_questions(db: Session, admin: User, simulation_id: UUID, generated: l
                 correct_option=question["correct_option"],
                 expected_answer=question["expected_answer"],
                 ordered_steps=question["ordered_steps"],
-                pairs=question["pairs"],
                 explanation=question["explanation"],
                 source_chunks=question["source_chunks"],
             )
@@ -704,8 +681,9 @@ async def generate_simulation_questions(
     Cinquanta domande, non dieci: dieci sono quelle che ogni tentativo
     estrae a caso al momento di cominciare. Se il modello ne restituisce
     meno, quelle che ci sono si scrivono lo stesso e la simulazione resta in
-    bozza, che è il posto in cui chi amministra decide se rigenerare o
-    completare a mano.
+    bozza, che è il posto in cui chi amministra decide se rigenerare,
+    completare a mano o pubblicare così com'è: cinquanta è il tetto, il
+    minimo per pubblicare è dieci (vedi ``update_status``).
 
     Rigenerare riporta la simulazione in bozza anche se era pubblicata: le
     domande nuove non le ha ancora lette nessuno, e la revisione umana prima
@@ -896,7 +874,7 @@ def save_questions(
     La chiave che una domanda deve portare dipende dal tipo del test, e il
     tipo si sa qui e non nel payload (vedi ``SimulationQuestionPayload``):
     alternative con l'indice di quella giusta, la traccia della risposta
-    attesa, i passi in ordine, le coppie. Quelle degli altri tipi, se
+    attesa, i passi in ordine. Quelle degli altri tipi, se
     arrivano, si buttano invece di restare scritte in colonne che nessuno
     leggerà più.
 
@@ -918,21 +896,21 @@ def save_questions(
     # Le citazioni al documento si conservano dove la domanda è rimasta la
     # stessa: sono ordinali di passaggi, non qualcosa che chi amministra
     # possa riscrivere nel form, e perderle a ogni correzione di un refuso
-    # toglierebbe a chi sbaglia il rimando alla procedura.
-    previous = {q.position: q for q in simulation.questions}
+    # toglierebbe a chi sbaglia il rimando alla procedura. La domanda si
+    # ritrova per testo e non per posizione: togliendone una dal serbatoio
+    # tutte quelle dopo scalano di un posto, e sono le stesse di prima.
+    previous = {q.text: q.source_chunks for q in simulation.questions}
     db.query(SimulationQuestion).filter(SimulationQuestion.simulation_id == simulation.id).delete()
     for position, question in enumerate(payload.questions, start=1):
-        old = previous.get(position)
+        text = question.text.strip()
         db.add(
             SimulationQuestion(
                 simulation_id=simulation.id,
                 position=position,
-                text=question.text.strip(),
+                text=text,
                 **_key_columns(simulation.kind, question),
                 explanation=question.explanation.strip(),
-                source_chunks=old.source_chunks
-                if old and old.text == question.text.strip()
-                else None,
+                source_chunks=previous.get(text),
             )
         )
     db.commit()
@@ -951,13 +929,11 @@ def update_status(
 ):
     """Pubblica la simulazione o la ritira.
 
-    Pubblicare chiede il serbatoio: cinquanta domande su una simulazione
-    generata, di cui ogni tentativo ne estrarrà dieci. Il numero non è quello
-    che chi svolge il test vede, è quello che rende diversa una prova dalla
-    successiva, e pubblicarne una con venti domande vorrebbe dire un test che
-    al terzo tentativo è già tutto noto. Su una scritta a mano il minimo è
-    dieci, perché lì ogni domanda è tempo di qualcuno (vedi
-    ``TechnicalSimulation.required_pool``).
+    Pubblicare chiede le domande di un tentativo: dieci, qualunque sia
+    l'origine del serbatoio. La generazione ne scrive cinquanta perché non
+    costano niente, ma chi le rilegge deve poter togliere quelle che non
+    reggono e pubblicare lo stesso, senza rigenerare tutto per una domanda
+    storta (vedi ``TechnicalSimulation.required_pool``).
 
     E le pretende finite, non solo contate: una domanda a metà si salva ma non
     si pubblica (vedi ``_unfinished_question``). Il messaggio dice quale, ed è

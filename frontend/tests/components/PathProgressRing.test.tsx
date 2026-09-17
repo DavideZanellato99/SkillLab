@@ -53,3 +53,12 @@ describe('PathProgressRing', () => {
     expect(svg).toHaveAttribute('height', '80')
   })
 })
+
+/* Dove il conto delle tappe sta già scritto accanto, come sulle schede della
+ * dashboard, il numero grande dice quanto manca invece di ripeterlo. */
+it('scrive la percentuale quando gli si chiede', () => {
+  render(<PathProgressRing done={2} total={5} showPercent />)
+
+  expect(screen.getByText('40%')).toBeInTheDocument()
+  expect(screen.queryByText('2/5')).not.toBeInTheDocument()
+})

@@ -66,7 +66,6 @@ KIND_LABELS = {
     "open": "Risposta aperta",
     "multiple": "Scelta multipla",
     "ordering": "Ordinamento",
-    "matching": "Abbinamento",
 }
 
 # Le soglie dei colori del voto, gli stessi della dashboard.
@@ -529,24 +528,6 @@ def _ordering_rows(answer: SimulationAnswerResult) -> list[tuple[str, Rgb, str]]
     return rows
 
 
-def _matching_rows(answer: SimulationAnswerResult) -> list[tuple[str, Rgb, str]]:
-    """Gli abbinamenti fatti, ognuno col suo esito.
-
-    Si parte dalle coppie giuste e non da quelle proposte, cosi' le voci
-    lasciate scoperte compaiono comunque: una voce senza abbinamento e' una
-    coppia sbagliata come le altre, e non vederla nell'elenco farebbe
-    sembrare la domanda piu' corta di com'era.
-    """
-    given = {_item_key(p.left): p.right for p in answer.given_pairs}
-    rows = []
-    for pair in answer.correct_pairs:
-        mine = given.get(_item_key(pair.left), "")
-        is_right = _same_item(mine, pair.right)
-        text = f"{pair.left}  ->  {mine}" if mine else f"{pair.left}  ->  (nessun abbinamento)"
-        rows.append((text, GOOD if is_right else BAD, "" if is_right else f"era: {pair.right}"))
-    return rows
-
-
 def _numbered(steps: list[str]) -> list[str]:
     """I passi con il loro numero davanti, per l'elenco dell'ordine giusto."""
     return [f"{index}.  {step}" for index, step in enumerate(steps, start=1)]
@@ -563,16 +544,14 @@ def _same_item(a: str, b: str) -> bool:
 def _answer_rows(answer: SimulationAnswerResult, kind: str) -> list[tuple[str, Rgb, str]]:
     """Il corpo di una domanda corretta, riga per riga, qualunque sia il tipo.
 
-    Le alternative, i passi disposti o gli abbinamenti fatti finiscono tutti
-    nella stessa forma (testo, colore, targhetta), cosi' la scheda che li
-    stampa e' una sola: sulla carta le tre cose si leggono allo stesso modo,
-    un elenco con accanto detto cosa non andava. Le risposte scritte non
+    Le alternative e i passi disposti finiscono tutti nella stessa forma
+    (testo, colore, targhetta), cosi' la scheda che li stampa e' una sola:
+    sulla carta le due cose si leggono allo stesso modo, un elenco con
+    accanto detto cosa non andava. Le risposte scritte non
     passano di qui, perche' non sono un elenco.
     """
     if kind == "ordering":
         return _ordering_rows(answer)
-    if kind == "matching":
-        return _matching_rows(answer)
     return _option_rows(answer)
 
 
@@ -580,8 +559,6 @@ def _is_blank(answer: SimulationAnswerResult, kind: str) -> bool:
     """Se la domanda e' stata lasciata in bianco, secondo il proprio tipo."""
     if kind == "ordering":
         return not answer.given_steps
-    if kind == "matching":
-        return not answer.given_pairs
     return answer.selected_option is None
 
 
@@ -775,15 +752,14 @@ def simulation_attempt_pdf(
     passage of the document the question comes from. The kinds of test
     differ only in the body of a question — the options with the right one
     marked, the written answer next to the expected one, the steps in the
-    order they were put, the pairs as they were matched — exactly as on
-    screen.
+    order they were put — exactly as on screen.
 
     Written in the third person even when it is the student downloading it:
     a sheet that says "you" cannot be handed to anybody else, and being
     handed over is what this document is for.
     """
     written = kind == "open"
-    partial = kind in ("ordering", "matching")
+    partial = kind == "ordering"
     pdf = Report(title="Esito del test", subtitle="simulatore tecnico")
     pdf.add_page()
 

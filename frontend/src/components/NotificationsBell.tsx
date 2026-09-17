@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useNavigate } from 'react-router'
+import { useCloseOnClickOutside } from '../hooks/useCloseOnClickOutside'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { useNotifications, useMarkNotificationsRead } from '../hooks/useNotifications'
 import type { AppNotification, NotificationKind } from '../services/notifications'
@@ -78,6 +79,40 @@ const ICONS: Record<NotificationKind, { path: React.ReactNode; cls: string }> = 
       </>
     ),
   },
+  /* La persona col più: qualcuno chiede un avatar nuovo, ed è una cosa da
+   * fare per il super admin. */
+  'avatar_request.pending': {
+    cls: 'border-violet-500/30 bg-violet-500/10 text-violet-300',
+    path: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <line x1="19" y1="8" x2="19" y2="14" />
+        <line x1="16" y1="11" x2="22" y2="11" />
+      </>
+    ),
+  },
+  /* La spunta: l'avatar chiesto è in galleria. */
+  'avatar_request.published': {
+    cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+    path: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <polyline points="8 12 11 15 16 9" />
+      </>
+    ),
+  },
+  /* La croce: la richiesta è stata rifiutata, e il motivo sta nel testo. */
+  'avatar_request.rejected': {
+    cls: 'border-red-500/30 bg-red-500/10 text-red-300',
+    path: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <line x1="15" y1="9" x2="9" y2="15" />
+        <line x1="9" y1="9" x2="15" y2="15" />
+      </>
+    ),
+  },
 }
 
 /* Costruito una volta sola e non a ogni avviso: il perché sta su
@@ -113,7 +148,9 @@ interface NotificationsBellProps {
 export default function NotificationsBell({ isOpen, onToggle, onClose }: NotificationsBellProps) {
   const navigate = useNavigate()
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   useCloseOnEscape(isOpen, onClose, triggerRef)
+  useCloseOnClickOutside(isOpen, onClose, [triggerRef, panelRef])
 
   /* Gli errori restano silenziosi di proposito: la campanella è un
    * accessorio, un errore di rete qui non deve piazzare un avviso rosso in
@@ -164,95 +201,83 @@ export default function NotificationsBell({ isOpen, onToggle, onClose }: Notific
       </button>
 
       {isOpen && (
-        <>
-          {/* Il velo copre la pagina ma non la barra, come per gli altri due
-              pannelli: il pulsante che ha aperto la campanella resta quello
-              che la richiude, e le altre voci della barra restano
-              raggiungibili con un colpo solo. */}
-          <div
-            className="fixed inset-x-0 bottom-0 top-16 z-[99]"
-            onClick={onClose}
-            aria-hidden="true"
-          />
-          <div
-            id="notifications-panel"
-            className="absolute right-0 top-[calc(100%+8px)] z-[100] w-[360px] animate-menu-in rounded-2xl border border-white/6 bg-gray-900/95 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl max-[480px]:w-[calc(100vw-2rem)]"
-          >
-            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-              <span className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">
-                Notifiche
-              </span>
-              {unread > 0 && (
-                <button
-                  type="button"
-                  className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-0.5 text-[0.72rem] font-semibold text-violet-300 transition hover:bg-violet-500/15"
-                  onClick={markAll}
-                >
-                  Segna Tutte come Lette
-                </button>
-              )}
-            </div>
-
-            {items.length === 0 ? (
-              <p className="px-2 py-8 text-center text-[0.82rem] text-slate-500">
-                Nessuna notifica
-              </p>
-            ) : (
-              <div className="flex max-h-[60vh] flex-col overflow-y-auto">
-                {items.map((notification) => {
-                  const icon = ICONS[notification.kind]
-                  return (
-                    <button
-                      type="button"
-                      key={notification.key}
-                      className={`flex w-full cursor-pointer items-start gap-2.5 rounded-xl border-none p-2 text-left transition hover:bg-white/8 ${
-                        notification.read ? 'bg-transparent' : 'bg-violet-500/8'
-                      }`}
-                      onClick={() => open(notification)}
-                    >
-                      <span
-                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${icon.cls}`}
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          {icon.path}
-                        </svg>
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5">
-                          <span
-                            className={`text-[0.82rem] font-semibold ${
-                              notification.read ? 'text-slate-400' : 'text-slate-100'
-                            }`}
-                          >
-                            {notification.title}
-                          </span>
-                          {!notification.read && (
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
-                          )}
-                        </span>
-                        <span className="block text-[0.78rem] leading-relaxed text-slate-500">
-                          {notification.body}
-                        </span>
-                        <span className="block text-[0.68rem] text-slate-600">
-                          {relativeTime(notification.at)}
-                        </span>
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+        <div
+          ref={panelRef}
+          id="notifications-panel"
+          className="absolute right-0 top-[calc(100%+8px)] z-[100] w-[360px] animate-menu-in rounded-2xl border border-white/6 bg-gray-900/95 p-2 shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_40px_rgba(124,58,237,0.06)] backdrop-blur-2xl max-[480px]:w-[calc(100vw-2rem)]"
+        >
+          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+            <span className="text-[0.72rem] font-semibold uppercase tracking-wide text-slate-400">
+              Notifiche
+            </span>
+            {unread > 0 && (
+              <button
+                type="button"
+                className="cursor-pointer rounded-lg border-none bg-transparent px-2 py-0.5 text-[0.72rem] font-semibold text-violet-300 transition hover:bg-violet-500/15"
+                onClick={markAll}
+              >
+                Segna tutte come lette
+              </button>
             )}
           </div>
-        </>
+
+          {items.length === 0 ? (
+            <p className="px-2 py-8 text-center text-[0.82rem] text-slate-500">Nessuna notifica</p>
+          ) : (
+            <div className="flex max-h-[60vh] flex-col overflow-y-auto">
+              {items.map((notification) => {
+                const icon = ICONS[notification.kind]
+                return (
+                  <button
+                    type="button"
+                    key={notification.key}
+                    className={`flex w-full cursor-pointer items-start gap-2.5 rounded-xl border-none p-2 text-left transition hover:bg-white/8 ${
+                      notification.read ? 'bg-transparent' : 'bg-violet-500/8'
+                    }`}
+                    onClick={() => open(notification)}
+                  >
+                    <span
+                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${icon.cls}`}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        {icon.path}
+                      </svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[0.82rem] font-semibold ${
+                            notification.read ? 'text-slate-400' : 'text-slate-100'
+                          }`}
+                        >
+                          {notification.title}
+                        </span>
+                        {!notification.read && (
+                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
+                        )}
+                      </span>
+                      <span className="block text-[0.78rem] leading-relaxed text-slate-500">
+                        {notification.body}
+                      </span>
+                      <span className="block text-[0.68rem] text-slate-600">
+                        {relativeTime(notification.at)}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

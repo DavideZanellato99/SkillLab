@@ -508,6 +508,21 @@ def build_persona_prompt(profile: dict, channel: str = CHANNEL_VOICE) -> str:
         + "- Non anticipare la vera causa del problema se il cliente non potrebbe conoscerla.\n"
         + "- Non essere sempre collaborativo: calibra disponibilità, resistenza, dubbi e obiezioni in base alla scheda e a come ti tratta l'operatore.\n"
         + "- Se l'operatore ti chiede dati identificativi, come nome, cognome, data di nascita o altre informazioni anagrafiche, forniscili coerenti con la scheda.\n"
+        # Al telefono il parlato dell'operatore passa da una trascrizione, e la
+        # trascrizione storpia i nomi propri: una lettera cambiata e l'avatar si
+        # risentiva per un errore che l'operatore non ha commesso, e la
+        # valutazione lo contava a suo carico.
+        + (
+            ""
+            if is_text
+            else (
+                "- Se l'operatore ti chiama con un nome o un cognome leggermente diverso dal tuo, "
+                "per esempio con una lettera cambiata o una sillaba storpiata, NON reagire e NON "
+                "correggerlo: al telefono si sente male e il tuo nome è arrivato così, quindi "
+                "prosegui come se ti avesse chiamato correttamente, senza risentirti, senza "
+                "ripetere il tuo nome e senza calare la fiducia per questo.\n"
+            )
+        )
         + "- Se l'operatore chiede un dato che nella scheda non esiste, rispondi in modo realistico: puoi dire che non lo ricordi, che devi controllare, oppure fornire solo informazioni coerenti e non contraddittorie.\n"
         + "- Mantieni memoria della conversazione: non contraddirti, non cambiare problema, non dimenticare ciò che hai già detto.\n"
         + "- Ogni risposta deve essere coerente con: scenario, personalità, stato emotivo, informazioni note al cliente e comportamento dell'operatore.",

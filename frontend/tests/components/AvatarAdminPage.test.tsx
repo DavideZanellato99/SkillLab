@@ -16,6 +16,10 @@ vi.mock('../../src/hooks/useOrganizations', () => ({
 const stato = vi.hoisted(() => ({
   catalogo: { data: [] as unknown[], isPending: false, error: null as unknown },
   chiesto: { includeDeleted: null as boolean | null },
+  richieste: [] as unknown[],
+}))
+vi.mock('../../src/hooks/useAvatarRequests', () => ({
+  useAvatarRequests: () => ({ data: stato.richieste }),
 }))
 const elimina = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
@@ -39,9 +43,22 @@ vi.mock('../../src/hooks/useAdminAvatars', () => ({
 }))
 
 vi.mock('../../src/components/AvatarFormModal', () => ({
-  default: ({ target, onSaved }: { target: unknown; onSaved: (m: string) => void }) => (
+  default: ({
+    target,
+    request,
+    onSaved,
+  }: {
+    target: unknown
+    request?: { first_name: string; last_name: string }
+    onSaved: (m: string) => void
+  }) => (
     <div>
       scheda: {target === 'new' ? 'nuovo avatar' : (target as { name: string }).name}
+      {request && (
+        <span>
+          dalla richiesta: {request.first_name} {request.last_name}
+        </span>
+      )}
       <button onClick={() => onSaved('Avatar salvato.')}>salva</button>
     </div>
   ),
@@ -54,6 +71,20 @@ vi.mock('../../src/components/AvatarDetailModal', () => ({
     </div>
   ),
 }))
+vi.mock('../../src/components/AvatarRequestRejectModal', () => ({
+  default: ({
+    request,
+    onRejected,
+  }: {
+    request: { first_name: string }
+    onRejected: (m: string) => void
+  }) => (
+    <div>
+      rifiuto: {request.first_name}
+      <button onClick={() => onRejected('Richiesta rifiutata.')}>conferma rifiuto</button>
+    </div>
+  ),
+}))
 vi.mock('../../src/components/AvatarCategoriesModal', () => ({
   default: ({ organizationId }: { organizationId?: string }) => (
     <div>categorie: {organizationId ?? 'tutte'}</div>
@@ -61,6 +92,7 @@ vi.mock('../../src/components/AvatarCategoriesModal', () => ({
 }))
 
 import type { AdminAvatar } from '../../src/services/admin'
+import type { AvatarRequest } from '../../src/services/avatarRequests'
 import AvatarAdminPage from '../../src/components/AvatarAdminPage'
 
 const avatar = (over: Partial<AdminAvatar> = {}): AdminAvatar =>
@@ -101,8 +133,29 @@ function renderPage(righe: AdminAvatar[] = [avatar()], percorso = '/app/admin/av
   )
 }
 
+const richiesta = (over: Partial<AvatarRequest> = {}): AvatarRequest => ({
+  id: 'r-1',
+  organization_id: 'org-1',
+  organization_name: 'Banca Esempio',
+  category: 'Clienti',
+  first_name: 'Giovanni',
+  last_name: 'Salemmi',
+  scenario_type: 'Reclamo',
+  problem: 'Vede due addebiti uguali sulla carta.',
+  status: 'pending',
+  avatar_id: null,
+  rejection_reason: null,
+  resolved_at: null,
+  created_at: '2026-03-01T10:00:00Z',
+  created_by_email: 'admin@banca.it',
+  updated_at: '2026-03-01T10:00:00Z',
+  updated_by_email: 'admin@banca.it',
+  ...over,
+})
+
 beforeEach(() => {
   stato.chiesto.includeDeleted = null
+  stato.richieste = []
   elimina.mutateAsync.mockReset()
   elimina.mutateAsync.mockResolvedValue({ message: 'Avatar archiviato.', success: true })
   elimina.reset.mockReset()
@@ -437,5 +490,63 @@ describe('archiviazione e ripristino', () => {
 
     expect(screen.getByRole('button', { name: 'Ripristina Cliente storico' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Ripristina Cliente antico' })).toBeEnabled()
+  })
+})
+
+/* Le richieste degli organization admin: la lista delle cose da fare in
+ * cima alla pagina, da cui la scheda parte già compilata o la richiesta
+ * viene rifiutata con un motivo. */
+describe('richieste di avatar', () => {
+  it("non mostra la sezione quando non c'è niente in attesa", () => {
+    renderPage()
+
+    expect(screen.queryByText('Richieste in attesa')).not.toBeInTheDocument()
+  })
+
+  it('elenca le richieste in attesa con chi le manda', () => {
+    stato.richieste = [richiesta()]
+    renderPage()
+
+    expect(screen.getByText(/Richieste in attesa/)).toBeInTheDocument()
+    expect(screen.getByText('Giovanni Salemmi')).toBeInTheDocument()
+    expect(screen.getByText('Vede due addebiti uguali sulla carta.')).toBeInTheDocument()
+    expect(screen.getByText(/admin@banca\.it/)).toBeInTheDocument()
+  })
+
+  it('apre la scheda nuova già compilata dalla richiesta', async () => {
+    stato.richieste = [richiesta()]
+    renderPage()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Compila la scheda di Giovanni Salemmi' }),
+    )
+
+    expect(screen.getByText('scheda: nuovo avatar')).toBeInTheDocument()
+    expect(screen.getByText('dalla richiesta: Giovanni Salemmi')).toBeInTheDocument()
+  })
+
+  it('una scheda nuova aperta dalla testata non porta nessuna richiesta', async () => {
+    stato.richieste = [richiesta()]
+    renderPage()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Nuovo Avatar' }))
+
+    expect(screen.getByText('scheda: nuovo avatar')).toBeInTheDocument()
+    expect(screen.queryByText(/dalla richiesta/)).not.toBeInTheDocument()
+  })
+
+  it('il rifiuto passa dalla conferma con il motivo', async () => {
+    stato.richieste = [richiesta()]
+    renderPage()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Rifiuta la richiesta per Giovanni Salemmi' }),
+    )
+    expect(screen.getByText('rifiuto: Giovanni')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'conferma rifiuto' }))
+
+    expect(screen.queryByText('rifiuto: Giovanni')).not.toBeInTheDocument()
+    expect(screen.getByText('Richiesta rifiutata.')).toBeInTheDocument()
   })
 })

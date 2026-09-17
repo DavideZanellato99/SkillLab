@@ -2,7 +2,6 @@ import { MAX_OPTIONS, MIN_OPTIONS } from '../services/simulations'
 import type { SimulationKind, SimulationQuestionPayload } from '../services/simulations'
 import { textareaCls } from './Field'
 import { PlusIcon, TrashIcon } from './icons'
-import SimulationPairsEditor from './SimulationPairsEditor'
 import SimulationStepsEditor from './SimulationStepsEditor'
 import { optionLabel } from './simulationFormat'
 import Tooltip from './Tooltip'
@@ -10,7 +9,7 @@ import Tooltip from './Tooltip'
 /* Una domanda in revisione: il testo, la chiave e la spiegazione che leggerà
  * chi sbaglia.
  *
- * La chiave è una cosa diversa in ognuno dei quattro tipi di test, e questo
+ * La chiave è una cosa diversa in ognuno dei tre tipi di test, e questo
  * componente ne mostra una sola, quella del tipo. Su una domanda a scelta
  * multipla sono le alternative, e la corretta si sceglie cliccando la sua
  * lettera invece che da una tendina a parte: la tendina lascerebbe scrivere
@@ -19,9 +18,9 @@ import Tooltip from './Tooltip'
  * Su una domanda aperta è la traccia della risposta attesa, che è il metro
  * con cui il modello giudicherà quello che l'operatore scrive: qui il super
  * admin non sta correggendo un refuso, sta scrivendo la regola del voto.
- * Sulle altre due è un elenco che si scrive già risolto, i passi in sequenza
- * o le coppie accoppiate, e sta in un componente suo perché non somiglia a
- * niente di quello che c'è qui.
+ * Sull'ordinamento è un elenco che si scrive già risolto, i passi in
+ * sequenza, e sta in un componente suo perché non somiglia a niente di
+ * quello che c'è qui.
  *
  * Quante siano le alternative lo decide chi scrive, da due a sei, domanda per
  * domanda: il modello ne scrive quattro, ma una domanda a mano può averne due
@@ -36,8 +35,8 @@ interface SimulationQuestionEditorProps {
   /** Il tipo del test, che decide quale chiave si scrive. */
   kind: SimulationKind
   onChange: (question: SimulationQuestionPayload) => void
-  /** Toglie la domanda dal serbatoio. Assente dove il serbatoio è fisso. */
-  onRemove?: () => void
+  /** Toglie la domanda dal serbatoio, generato o scritto a mano che sia. */
+  onRemove: () => void
   /* Cosa il controllo del serbatoio ha trovato su questa domanda. Le
    * segnalazioni stanno anche in cima all'elenco, nel loro pannello, ma
    * quello si legge una volta e poi si scende a correggere: senza il segno
@@ -99,19 +98,17 @@ export default function SimulationQuestionEditor({
         <span className="text-xs font-semibold tracking-wide text-slate-500">
           Domanda {index + 1}
         </span>
-        {onRemove && (
-          <Tooltip content="Elimina la domanda">
-            <button
-              type="button"
-              onClick={onRemove}
-              disabled={disabled}
-              aria-label={`Elimina la domanda ${index + 1}`}
-              className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-600 transition hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-600"
-            >
-              <TrashIcon size={14} />
-            </button>
-          </Tooltip>
-        )}
+        <Tooltip content="Elimina la domanda">
+          <button
+            type="button"
+            onClick={onRemove}
+            disabled={disabled}
+            aria-label={`Elimina la domanda ${index + 1}`}
+            className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-600 transition hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-600"
+          >
+            <TrashIcon size={14} />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Sopra il testo e non sotto: è la cosa da sapere prima di rileggere
@@ -143,13 +140,6 @@ export default function SimulationQuestionEditor({
           index={index}
           steps={question.ordered_steps ?? []}
           onChange={(ordered_steps) => onChange({ ...question, ordered_steps })}
-          disabled={disabled}
-        />
-      ) : kind === 'matching' ? (
-        <SimulationPairsEditor
-          index={index}
-          pairs={question.pairs ?? []}
-          onChange={(pairs) => onChange({ ...question, pairs })}
           disabled={disabled}
         />
       ) : kind === 'open' ? (

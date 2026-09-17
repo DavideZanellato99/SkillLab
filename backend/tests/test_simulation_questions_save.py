@@ -19,7 +19,6 @@ import pytest
 
 from models import (
     SIMULATION_GENERATED_ITEMS,
-    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_MULTIPLE,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
@@ -47,10 +46,6 @@ def simulazione(db_session, organization):
 
 def _passi(quanti=SIMULATION_GENERATED_ITEMS) -> list[str]:
     return [f"Passo numero {i}" for i in range(quanti)]
-
-
-def _coppie(quante=SIMULATION_GENERATED_ITEMS) -> list[dict]:
-    return [{"left": f"Caso {i}", "right": f"Ufficio {i}"} for i in range(quante)]
 
 
 def _domanda(**campi) -> dict:
@@ -109,17 +104,6 @@ def test_un_ordinamento_conserva_i_passi_nell_ordine_giusto(admin_client, simula
     (domanda,) = risposta.json()["questions"]
     assert domanda["ordered_steps"] == _passi()
     assert domanda["expected_answer"] == ""
-    assert domanda["pairs"] is None
-
-
-def test_un_abbinamento_conserva_le_coppie_gia_accoppiate(admin_client, simulazione):
-    test = simulazione(SIMULATION_KIND_MATCHING)
-
-    risposta = _salva(admin_client, test, [_domanda(pairs=_coppie())])
-
-    (domanda,) = risposta.json()["questions"]
-    assert domanda["pairs"] == _coppie()
-    assert domanda["ordered_steps"] is None
 
 
 # ── La chiave del tipo deve esserci ───────────────────────────────────
@@ -129,7 +113,6 @@ def test_un_abbinamento_conserva_le_coppie_gia_accoppiate(admin_client, simulazi
     ("kind", "domanda", "atteso"),
     [
         (SIMULATION_KIND_ORDERING, {}, "non ha i passi da rimettere in ordine"),
-        (SIMULATION_KIND_MATCHING, {}, "non ha le coppie da abbinare"),
         (SIMULATION_KIND_MULTIPLE, {}, "non ha le alternative fra cui scegliere"),
     ],
 )
@@ -240,6 +223,47 @@ def test_riscrivere_il_testo_di_una_domanda_ne_stacca_le_citazioni(
     )
 
     assert risposta.json()["questions"][0]["source_chunks"] is None
+
+
+def test_togliere_una_domanda_non_stacca_le_citazioni_di_quelle_dopo(
+    admin_client, simulazione, db_session
+):
+    """Tolta la prima, la seconda scala al primo posto ed è ancora la stessa
+    domanda: il rimando al documento la segue, perché si ritrova per testo
+    e non per posizione."""
+    test = simulazione(SIMULATION_KIND_MULTIPLE)
+    for position, (text, chunks) in enumerate(
+        [("Entro quanto si registra un reclamo?", [3, 7]), ("Chi autorizza il rimborso?", [12])],
+        start=1,
+    ):
+        db_session.add(
+            SimulationQuestion(
+                simulation_id=test.id,
+                position=position,
+                text=text,
+                options=["Prima", "Seconda", "Terza", "Quarta"],
+                correct_option=1,
+                explanation="Perché sì.",
+                source_chunks=chunks,
+            )
+        )
+    db_session.flush()
+
+    risposta = _salva(
+        admin_client,
+        test,
+        [
+            _domanda(
+                text="Chi autorizza il rimborso?",
+                options=["Prima", "Seconda", "Terza", "Quarta"],
+                correct_option=1,
+            )
+        ],
+    )
+
+    rimasta = risposta.json()["questions"]
+    assert [q["position"] for q in rimasta] == [1]
+    assert rimasta[0]["source_chunks"] == [12]
 
 
 def test_salvare_meno_domande_di_prima_toglie_quelle_in_fondo(

@@ -123,7 +123,7 @@ flowchart TD
     B -->|no| X[401]
     B -->|sì| C{jti o origin_jti<br/>nella denylist?}
     C -->|sì| X
-    C -->|no| D{IP + User-Agent<br/>uguali al binding?}
+    C -->|no| D{User-Agent<br/>uguale al binding?}
     D -->|no| Y[revoca l'intera sessione, poi 401]
     D -->|sì| E{account e organizzazione<br/>attivi?}
     E -->|no| X
@@ -164,17 +164,24 @@ intera, non solo il token in mano.
 
 Al login, e a ogni rinnovo, il backend registra in `token_session` il contesto
 per cui il token è stato emesso: `jti`, IP e User-Agent
-([token_sessions.py](../backend/token_sessions.py)). A ogni richiesta i due
-valori vengono confrontati.
+([token_sessions.py](../backend/token_sessions.py)). A ogni richiesta lo
+User-Agent viene confrontato con quello registrato.
 
-Se non combaciano, o se il token non ha nessun binding, il token **e tutta la
-sessione** finiscono nella denylist e la richiesta prende 401. Anche il
-proprietario legittimo viene buttato fuori, ed è voluto: meglio un accesso in
-più da rifare che una sessione rubata che continua.
+Se non combacia, o se il token non ha nessun binding, il token **e tutta la
+sessione** finiscono nella denylist, la richiesta prende 401 e nel log resta un
+warning con il jti e l'indirizzo da cui è arrivata. Anche il proprietario
+legittimo viene buttato fuori, ed è voluto: meglio un accesso in più da rifare
+che una sessione rubata che continua.
 
-Una nota che riguarda il deploy: la metà IP del binding legge il primo valore
-di `X-Forwarded-For`. Il proxy davanti deve **sovrascriverlo**, non accodarlo,
-altrimenti quella metà si può falsificare. La metà User-Agent regge comunque.
+L'IP si registra ma **non conta** nel confronto. Dietro un tunnel, o su una
+rete dual stack, lo stesso browser arriva ora in IPv4 ora in IPv6 da una
+connessione all'altra, e finché l'indirizzo faceva parte del vincolo la
+sessione moriva a metà lavoro senza che nessuno l'avesse rubata. Resta nella
+riga per l'audit e per l'esportazione dei dati personali.
+
+Una nota che riguarda il deploy: l'IP registrato legge il primo valore di
+`X-Forwarded-For`. Il proxy davanti deve **sovrascriverlo**, non accodarlo,
+altrimenti nella riga finisce quello che dichiara il client.
 
 ### Lo stato dell'account, a ogni richiesta
 

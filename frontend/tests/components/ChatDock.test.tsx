@@ -35,8 +35,8 @@ const avatar = {
 const chat = {
   input: '',
   setInput: vi.fn(),
-  inputRef: createRef<HTMLTextAreaElement>(),
   isSending: false,
+
   isEnding: false,
   start: vi.fn(),
   send: vi.fn(),
@@ -54,7 +54,9 @@ function renderDock(over: Partial<React.ComponentProps<typeof ChatDock>> = {}) {
     canStartChat: true,
     voiceActive: false,
     recordingPlayerRef: createRef<CallRecordingPlayerHandle>(),
+    chatInputRef: createRef<HTMLTextAreaElement>(),
     chat: { ...chat },
+
     onNewConversation: vi.fn(),
     onVoiceConversationId: vi.fn(),
     onVoiceTranscript: vi.fn(),

@@ -7,6 +7,7 @@
  * dimenticato qui è un dato che si perde aprendo una scheda e salvandola. */
 
 import type { AdminAvatar, AdminAvatarPayload } from '../services/admin'
+import type { AvatarRequest } from '../services/avatarRequests'
 import { emptyProfile } from './avatarProfileConfig'
 
 export interface AvatarFormState {
@@ -29,6 +30,44 @@ export function emptyAvatarForm(): AvatarFormState {
     organizationId: '',
     profile: emptyProfile(),
   }
+}
+
+/* La scheda che parte da una richiesta di un organization admin: il tenant
+ * e il nome sono già decisi da chi ha chiesto, e quello che è successo al
+ * cliente va nel campo dello scenario. La vera causa del problema resta vuota
+ * di proposito: è la soluzione dell'esercizio, e la decide chi compila la
+ * scheda, non chi l'ha chiesta. La categoria qui resta vuota: la richiesta
+ * porta un nome e non un id, e a farlo corrispondere a una categoria del
+ * tenant ci pensa la scheda quando le ha caricate (`requestedCategoryId`). */
+export function avatarFormFromRequest(request: AvatarRequest): AvatarFormState {
+  return {
+    ...emptyAvatarForm(),
+    description: request.scenario_type,
+    organizationId: request.organization_id,
+    profile: {
+      ...emptyProfile(),
+      NOME: request.first_name,
+      COGNOME: request.last_name,
+      TIPO_SCENARIO: request.problem,
+    },
+  }
+}
+
+/* La categoria del tenant che ha il nome scritto nella richiesta, o vuoto se
+ * non c'è ancora: in quel caso il super admin la crea prima di salvare. Il
+ * confronto ignora maiuscole e spazi ai bordi, perché "clienti" e "Clienti"
+ * sono la stessa richiesta e non due categorie. */
+export function requestedCategoryId(
+  request: AvatarRequest,
+  categories: { id: string; name: string }[],
+): string {
+  const wanted = request.category.trim().toLowerCase()
+  return categories.find((c) => c.name.trim().toLowerCase() === wanted)?.id ?? ''
+}
+
+/** Il caso come lo racconta la richiesta, pronto per la bozza del modello. */
+export function draftTextFromRequest(request: AvatarRequest): string {
+  return `${request.scenario_type}. ${request.problem}`
 }
 
 export function avatarFormFrom(avatar: AdminAvatar): AvatarFormState {

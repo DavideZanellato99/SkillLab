@@ -15,16 +15,21 @@
  * `GalleryHero`: qui restano solo i numeri e le parole, che sono la parte
  * che distingue le due schermate. */
 
+import type { ReactNode } from 'react'
+
 import { useAvatars, useCategories } from '../hooks/useAvatars'
 import GalleryHero from './GalleryHero'
 
-export default function Header() {
+/** `actions` è l'angolo in alto a destra della fascia, subito sotto la barra:
+ *  ci sta il pulsante con cui chi amministra un tenant chiede un avatar. */
+export default function Header({ actions }: { actions?: ReactNode }) {
   const { data: avatars = [], isLoading: loadingAvatars } = useAvatars()
   const { data: categories = [], isLoading: loadingCategories } = useCategories()
 
   return (
     <GalleryHero
       id="hero"
+      actions={actions}
       className="px-8 pb-12 pt-16 max-md:px-4 max-md:pb-8 max-md:pt-12"
       title="Scegli il tuo"
       highlight="Avatar"

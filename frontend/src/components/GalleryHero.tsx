@@ -15,6 +15,8 @@
  * `main` di una schermata e una volta la fascia sopra di esso, e le due
  * hanno bisogno di margini diversi. */
 
+import type { ReactNode } from 'react'
+
 interface HeroStat {
   value: number
   label: string
@@ -32,6 +34,11 @@ interface GalleryHeroProps {
   /** Margini e imbottitura, che cambiano da una schermata all'altra. */
   className?: string
   id?: string
+  /** Un'azione in alto a destra della fascia, subito sotto la barra: la
+   *  testata è centrata e l'azione non ne fa parte, sta nell'angolo come in
+   *  ogni altra intestazione dell'app. Su uno schermo stretto l'angolo non
+   *  c'è, e l'azione entra nel flusso sopra il titolo, allineata a destra. */
+  actions?: ReactNode
 }
 
 const statValueCls =
@@ -56,6 +63,7 @@ export default function GalleryHero({
   stats,
   className = '',
   id,
+  actions,
 }: GalleryHeroProps) {
   return (
     <section className={`relative overflow-hidden text-center ${className}`} id={id}>
@@ -64,6 +72,12 @@ export default function GalleryHero({
         className="pointer-events-none absolute -top-1/2 left-1/2 z-0 h-[800px] w-[800px] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,rgba(124,58,237,0.12)_0%,rgba(6,182,212,0.06)_30%,transparent_60%)]"
         aria-hidden="true"
       />
+
+      {actions && (
+        <div className="absolute right-8 top-6 z-20 max-md:static max-md:mb-6 max-md:flex max-md:justify-end">
+          {actions}
+        </div>
+      )}
 
       <div className="relative z-10">
         <h1 className="mb-4 animate-fade-in-up font-heading text-[clamp(2.5rem,6vw,4rem)] font-extrabold leading-[1.1] [animation-delay:0.1s]">

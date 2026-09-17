@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { useMyAssignments } from '../hooks/useTraining'
@@ -81,14 +81,21 @@ export default function PathStepNotice({
   /* La tappa vista in corso su questa prova, per ritrovarla quando smette di
      essere quella di adesso. È legata al bersaglio a schermo: passando a un
      altro avatar la memoria non vale più, o la striscia parlerebbe della
-     tappa di prima sulla prova sbagliata. */
-  const seen = useRef<{ targetId: string; stepId: string } | null>(null)
+     tappa di prima sulla prova sbagliata. Uno stato aggiornato durante il
+     render, perché si legge nel render: un ref non si può. */
+  const [seen, setSeen] = useState<{ targetId: string; stepId: string } | null>(null)
 
   const live = stepInProgressFor(assignments, kind, targetId)
-  if (live && targetId) seen.current = { targetId, stepId: live.step.id }
-  else if (seen.current && seen.current.targetId !== targetId) seen.current = null
+  const current =
+    live && targetId
+      ? { targetId, stepId: live.step.id }
+      : seen && seen.targetId === targetId
+        ? seen
+        : null
+  if (current?.targetId !== seen?.targetId || current?.stepId !== seen?.stepId) setSeen(current)
 
-  const found = live ?? (seen.current ? stepById(assignments, seen.current.stepId) : null)
+  const found = live ?? (current ? stepById(assignments, current.stepId) : null)
+
   if (!found) return null
   const { assignment, step } = found
 

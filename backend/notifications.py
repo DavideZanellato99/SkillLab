@@ -28,11 +28,17 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from models import (
+    AVATAR_REQUEST_PENDING,
+    AVATAR_REQUEST_PUBLISHED,
+    AVATAR_REQUEST_REJECTED,
+    ROLE_ORGANIZATION_ADMIN,
+    ROLE_SUPER_ADMIN,
     ROLE_USER,
     Avatar,
+    AvatarRequest,
     ChatConversation,
     ConversationReview,
     MessageAnnotation,
@@ -55,6 +61,11 @@ KIND_DUE_SOON = "assignment.due_soon"
 KIND_OVERDUE = "assignment.overdue"
 KIND_PATH_COMPLETED = "assignment.completed"
 KIND_REVIEW = "review.published"
+# Le richieste di avatar: una domanda per il super admin, e le due risposte
+# per chi l'ha mandata (vedi routers/avatar_requests)
+KIND_AVATAR_REQUEST_PENDING = "avatar_request.pending"
+KIND_AVATAR_REQUEST_PUBLISHED = "avatar_request.published"
+KIND_AVATAR_REQUEST_REJECTED = "avatar_request.rejected"
 
 # How early a deadline starts being announced. Three days is enough to do
 # something about it and short enough that the notice does not sit around
@@ -322,9 +333,87 @@ def _review_items(db: Session, user: User) -> list[NotificationItem]:
     ]
 
 
+def _avatar_request_items(db: Session, user: User) -> list[NotificationItem]:
+    """Le richieste di avatar, da una parte e dall'altra dello sportello.
+
+    Al super admin ogni richiesta ancora in attesa: sono cose da fare, e
+    restano nella campanella finché non sono chiuse, in un modo o
+    nell'altro. Una richiesta evasa smette semplicemente di comparire,
+    che è il vantaggio di derivare le notifiche invece di salvarle.
+
+    A chi l'ha mandata l'esito, quando arriva: l'avatar pubblicato o il
+    rifiuto con il suo motivo. Al mittente e non a tutti gli admin del
+    tenant, perché è lui ad aspettare una risposta. Se il suo account nel
+    frattempo è stato eliminato la firma è stata tolta e la notifica non
+    ha più nessuno a cui andare, che è giusto così.
+    """
+    if user.ruolo == ROLE_SUPER_ADMIN:
+        pending = (
+            db.query(AvatarRequest)
+            .options(joinedload(AvatarRequest.organization))
+            .filter(AvatarRequest.status == AVATAR_REQUEST_PENDING)
+            .all()
+        )
+        return [
+            NotificationItem(
+                key=f"{KIND_AVATAR_REQUEST_PENDING}:{request.id}",
+                kind=KIND_AVATAR_REQUEST_PENDING,
+                title="Nuova richiesta di avatar",
+                body=f"{request.organization.name} chiede {request.name} ({request.scenario_type}).",
+                at=_naive(request.created_at),
+                read=False,
+                link="/app/admin/avatars",
+            )
+            for request in pending
+        ]
+
+    if user.ruolo != ROLE_ORGANIZATION_ADMIN:
+        return []
+
+    resolved = (
+        db.query(AvatarRequest)
+        .filter(
+            AvatarRequest.created_by == user.id,
+            AvatarRequest.status.in_((AVATAR_REQUEST_PUBLISHED, AVATAR_REQUEST_REJECTED)),
+            AvatarRequest.resolved_at.isnot(None),
+        )
+        .all()
+    )
+    items: list[NotificationItem] = []
+    for request in resolved:
+        if request.status == AVATAR_REQUEST_PUBLISHED:
+            items.append(
+                NotificationItem(
+                    key=f"{KIND_AVATAR_REQUEST_PUBLISHED}:{request.id}",
+                    kind=KIND_AVATAR_REQUEST_PUBLISHED,
+                    title="Un avatar richiesto è stato pubblicato",
+                    body=f"{request.name} è ora nella galleria della tua organizzazione.",
+                    at=_naive(request.resolved_at),
+                    read=False,
+                    # La galleria e non la chat dell'avatar: chi ha chiesto
+                    # un cliente per i suoi vuole vederlo in catalogo, non
+                    # cominciare a parlarci.
+                    link="/app",
+                )
+            )
+        else:
+            items.append(
+                NotificationItem(
+                    key=f"{KIND_AVATAR_REQUEST_REJECTED}:{request.id}",
+                    kind=KIND_AVATAR_REQUEST_REJECTED,
+                    title="Una richiesta di avatar è stata rifiutata",
+                    body=f"{request.name}: {request.rejection_reason or 'nessun motivo indicato'}",
+                    at=_naive(request.resolved_at),
+                    read=False,
+                    link="/app",
+                )
+            )
+    return items
+
+
 def for_user(db: Session, user: User) -> list[NotificationItem]:
     """Everything there is to tell `user`, newest first, read flag included."""
-    items = _assignment_items(db, user) + _review_items(db, user)
+    items = _assignment_items(db, user) + _review_items(db, user) + _avatar_request_items(db, user)
     read_keys = {
         key for (key,) in db.query(NotificationRead.key).filter(NotificationRead.user_id == user.id)
     }

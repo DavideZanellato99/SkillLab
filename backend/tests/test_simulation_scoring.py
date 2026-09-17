@@ -5,8 +5,8 @@ che decide i voti: ogni altra cosa nel simulatore si può correggere dopo, un
 voto sbagliato è già stato letto da chi lo ha preso.
 
 Le scale sono tre: quella a tempo delle risposte multiple, quella del
-giudizio delle risposte aperte, e quella degli elementi al posto giusto, che
-ordinamento e abbinamento condividono. Finiscono tutte nello stesso
+giudizio delle risposte aperte, e quella dei passi al posto giusto
+dell'ordinamento. Finiscono tutte nello stesso
 intervallo, da 0 a 1 per domanda, ed è quello che permette a un voto in
 decimi di significare la stessa cosa in tutti i tipi.
 """

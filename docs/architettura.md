@@ -173,7 +173,7 @@ conservazione da dentro l'applicazione invece che da un cron esterno.
 | `/api/comparison` | [comparison.py](../backend/routers/comparison.py) | Autenticati, gli admin anche su altri |
 | `/api/training` | [training.py](../backend/routers/training.py) | Utenti per i propri percorsi, admin per comporli e assegnarli |
 | `/api/notifications` | [notifications.py](../backend/routers/notifications.py) | Autenticati |
-| `/api/dashboards` | [dashboards.py](../backend/routers/dashboards.py) | Admin per percorsi, contenuti e utilizzo (l'ultimo solo super admin), utenti per i propri progressi |
+| `/api/dashboards` | [dashboards.py](../backend/routers/dashboards.py) | Admin per percorsi e utilizzo (il secondo solo super admin), utenti per i propri progressi |
 | `/api/admin/...` | [admin.py](../backend/routers/admin.py), [admin_avatars.py](../backend/routers/admin_avatars.py), [admin_simulations.py](../backend/routers/admin_simulations.py), [admin_voices.py](../backend/routers/admin_voices.py), [organizations.py](../backend/routers/organizations.py), [audit_logs.py](../backend/routers/audit_logs.py) | Admin, con il tenant che li confina |
 
 **5. `/static`**, che serve i ritratti degli avatar dal disco del backend.
@@ -210,7 +210,7 @@ sequenceDiagram
 
     B->>P: GET /api/avatars (cookie HttpOnly)
     P->>A: inoltro, X-Forwarded-For sovrascritto
-    A->>A: get_current_user: firma del token, denylist, binding IP+UA
+    A->>A: get_current_user: firma del token, denylist, binding sullo User-Agent
     A->>D: SELECT sull'utente e sui suoi permessi
     A->>A: filtro per organizzazione
     A->>D: la query vera

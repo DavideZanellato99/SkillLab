@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useCloseGuard } from '../hooks/useCloseGuard'
 import { useLeaveConfirmation } from '../hooks/useLeaveConfirmation'
 import {
@@ -16,7 +16,7 @@ import {
   MIN_OPTIONS,
   POOL_COUNT,
   QUESTION_COUNT,
-  requiredPool,
+  REQUIRED_POOL,
 } from '../services/simulations'
 import type {
   SimulationKind,
@@ -50,9 +50,11 @@ import { formatDateTime } from './dateFormat'
  *
  * Le domande arrivano da due strade e il pannello è lo stesso: generate dal
  * documento con un bottone, oppure scritte una per una da chi prepara il
- * test. Cambia il modo di riempire l'elenco, non l'elenco: le stesse
- * correzioni, lo stesso salvataggio in blocco, la stessa pubblicazione. Da
- * quale strada venga la simulazione lo dice `source`, deciso alla creazione.
+ * test. Cambia il modo di riempire l'elenco la prima volta, non l'elenco:
+ * le stesse correzioni, le stesse domande da togliere o aggiungere a mano,
+ * lo stesso salvataggio in blocco, la stessa pubblicazione. Da quale strada
+ * venga la simulazione lo dice `source`, deciso alla creazione, e l'unica
+ * cosa che apre è il bottone della generazione.
  *
  * Sta tutto in una modale perché è un gesto solo, con un ordine che non si
  * può saltare: la pubblicazione è in fondo, dopo le domande, e il bottone
@@ -69,7 +71,6 @@ function toPayload(questions: SimulationQuestionAdmin[]): SimulationQuestionPayl
     correct_option: q.correct_option,
     expected_answer: q.expected_answer,
     ordered_steps: q.ordered_steps ? [...q.ordered_steps] : null,
-    pairs: q.pairs ? q.pairs.map((p) => ({ ...p })) : null,
     explanation: q.explanation,
   }))
 }
@@ -90,14 +91,12 @@ const KEY_NAMES: Record<SimulationKind, string> = {
   multiple: 'le alternative',
   open: 'la risposta attesa',
   ordering: 'i passi nella sequenza corretta',
-  matching: 'le coppie corrette',
 }
 
 const GENERATED_KEY_NAMES: Record<SimulationKind, string> = {
   multiple: 'con quattro alternative ciascuna',
   open: 'con la traccia della risposta attesa',
   ordering: 'con cinque passi da riordinare ciascuna',
-  matching: 'con cinque coppie da abbinare ciascuna',
 }
 
 function blankQuestion(kind: SimulationKind): SimulationQuestionPayload {
@@ -107,13 +106,6 @@ function blankQuestion(kind: SimulationKind): SimulationQuestionPayload {
     correct_option: null,
     expected_answer: '',
     ordered_steps: kind === 'ordering' ? Array<string>(NEW_ITEM_COUNT).fill('') : null,
-    /* `from` e non `fill`: `fill` metterebbe lo stesso oggetto in tutte e
-     * cinque le righe, e la prima modifica che lo mutasse cambierebbe la
-     * domanda intera. */
-    pairs:
-      kind === 'matching'
-        ? Array.from({ length: NEW_ITEM_COUNT }, () => ({ left: '', right: '' }))
-        : null,
     explanation: '',
   }
 }
@@ -129,8 +121,7 @@ function isBlank(question: SimulationQuestionPayload): boolean {
     !question.explanation.trim() &&
     !question.expected_answer.trim() &&
     (question.options ?? []).every((o) => !o.trim()) &&
-    (question.ordered_steps ?? []).every((s) => !s.trim()) &&
-    (question.pairs ?? []).every((p) => !p.left.trim() && !p.right.trim())
+    (question.ordered_steps ?? []).every((s) => !s.trim())
   )
 }
 
@@ -141,15 +132,6 @@ function isComplete(question: SimulationQuestionPayload, kind: SimulationKind): 
   if (kind === 'ordering') {
     const steps = question.ordered_steps ?? []
     return steps.length >= MIN_ITEMS && steps.every((s) => s.trim()) && !hasDuplicates(steps)
-  }
-  if (kind === 'matching') {
-    const pairs = question.pairs ?? []
-    return (
-      pairs.length >= MIN_ITEMS &&
-      pairs.every((p) => p.left.trim() && p.right.trim()) &&
-      !hasDuplicates(pairs.map((p) => p.left)) &&
-      !hasDuplicates(pairs.map((p) => p.right))
-    )
   }
   const options = question.options ?? []
   return (
@@ -204,16 +186,21 @@ export default function SimulationEditorModal({
    * della query: chi ha scritto venti domande, è passato al documento aperto
    * in un'altra finestra e torna qui se le ritroverebbe com'erano sul
    * server. Il confronto è sul contenuto, che cambia dopo una generazione o
-   * un salvataggio e resta uguale quando il server rimanda quelle di prima. */
-  const synced = useRef<string | null>(null)
-  useEffect(() => {
-    if (!simulation) return
+   * un salvataggio e resta uguale quando il server rimanda quelle di prima.
+   *
+   * Il riallineamento avviene durante il render e non in un effetto dopo:
+   * la firma del serbatoio copiato è uno stato, e appena quella del server
+   * è diversa la copia si rifà nello stesso disegno. */
+  const server = useMemo(() => {
+    if (!simulation) return null
     const questions = toPayload(simulation.questions)
-    const signature = JSON.stringify(questions)
-    if (signature === synced.current) return
-    synced.current = signature
-    setDraft(questions)
+    return { questions, signature: JSON.stringify(questions) }
   }, [simulation])
+  const [synced, setSynced] = useState<string | null>(null)
+  if (server && server.signature !== synced) {
+    setSynced(server.signature)
+    setDraft(server.questions)
+  }
 
   /* Titolo e descrizione in scrittura stanno qui e non nel pannello che li
    * disegna: chi corregge il titolo e passa alle domande non deve ritrovarlo
@@ -222,10 +209,19 @@ export default function SimulationEditorModal({
   const [details, setDetails] = useState({ title: '', description: '' })
   const serverTitle = simulation?.title
   const serverDescription = simulation?.description ?? ''
-  useEffect(() => {
-    if (serverTitle === undefined) return
+  /* Gli ultimi valori del server copiati nei campi: finché non cambiano, i
+     campi restano quello che si sta scrivendo. */
+  const [syncedDetails, setSyncedDetails] = useState<{
+    title: string
+    description: string
+  } | null>(null)
+  if (
+    serverTitle !== undefined &&
+    (serverTitle !== syncedDetails?.title || serverDescription !== syncedDetails.description)
+  ) {
+    setSyncedDetails({ title: serverTitle, description: serverDescription })
     setDetails({ title: serverTitle, description: serverDescription })
-  }, [serverTitle, serverDescription])
+  }
 
   const busy =
     generate.isPending ||
@@ -237,11 +233,10 @@ export default function SimulationEditorModal({
   const isPublished = simulation?.status === 'published'
   const kind = simulation?.kind ?? 'multiple'
   const isManual = simulation?.source === 'manual'
-  const required = requiredPool(simulation?.source ?? 'ai')
   /* Le righe che contano: una appena aggiunta e ancora vuota non è una
    * domanda, quindi non si salva e non si conta verso il serbatoio. */
   const written = draft.filter((q) => !isBlank(q))
-  const enough = written.length >= required
+  const enough = written.length >= REQUIRED_POOL
   const allWritten = written.every((q) => isComplete(q, kind))
   const complete = enough && allWritten
 
@@ -250,7 +245,7 @@ export default function SimulationEditorModal({
    * vuote appena aggiunte non contano, come non contano nel salvataggio: una
    * finestra che chiede conferma per una riga aperta e mai riempita insegna
    * a rispondere senza leggere. */
-  const questionsChanged = JSON.stringify(written) !== synced.current
+  const questionsChanged = JSON.stringify(written) !== synced
   const detailsChanged =
     simulation !== undefined &&
     (details.title !== simulation.title || details.description !== (simulation.description ?? ''))
@@ -278,10 +273,10 @@ export default function SimulationEditorModal({
 
   /* Le segnalazioni raccolte per domanda, così ogni riga porta le proprie.
    * La chiave è la posizione e non l'indice nell'elenco: sono lo stesso
-   * numero finché nessuno tocca il serbatoio, ma su una simulazione scritta
-   * a mano una domanda si può togliere, e da quel momento l'esito parla di
-   * una fila che non c'è più. A dirlo è comunque `is_stale`, e qui una
-   * posizione che non esiste semplicemente non trova nessuna riga. */
+   * numero finché nessuno tocca il serbatoio, ma una domanda si può
+   * togliere, e da quel momento l'esito parla di una fila che non c'è più.
+   * A dirlo è comunque `is_stale`, e qui una posizione che non esiste
+   * semplicemente non trova nessuna riga. */
   const findingsByPosition = new Map<number, string[]>()
   for (const finding of simulation?.review?.findings ?? []) {
     for (const position of finding.positions) {
@@ -399,7 +394,7 @@ export default function SimulationEditorModal({
                     {isManual ? (
                       <>
                         Ogni domanda comprende {KEY_NAMES[kind]} e la spiegazione mostrata a chi ha
-                        risposto. Ne servono almeno {required}, e ogni tentativo ne estrae{' '}
+                        risposto. Ne servono almeno {REQUIRED_POOL}, e ogni tentativo ne estrae{' '}
                         {QUESTION_COUNT} a caso: redigerne un numero maggiore riduce la
                         sovrapposizione fra due prove.
                       </>
@@ -407,12 +402,17 @@ export default function SimulationEditorModal({
                       <>
                         La generazione analizza il documento, individua gli argomenti verificabili e
                         redige {POOL_COUNT} domande {GENERATED_KEY_NAMES[kind]}, sui passaggi che li
-                        riguardano. Ogni tentativo ne estrae {QUESTION_COUNT} a caso. L'operazione
-                        può richiedere qualche minuto.
+                        riguardano. Ogni tentativo ne estrae {QUESTION_COUNT} a caso, e ne servono
+                        almeno {REQUIRED_POOL} per pubblicare. L'operazione può richiedere qualche
+                        minuto.
                       </>
                     )}
                   </p>
-                  {isManual && (
+                  {/* Dove le domande si scrivono a mano è il gesto principale;
+                      su una generata il gesto principale è il bottone della
+                      generazione, in fondo, e l'aggiunta a mano resta
+                      possibile senza contendergli il posto. */}
+                  {isManual ? (
                     <PrimaryButton
                       icon={<PlusIcon size={16} />}
                       onClick={addQuestion}
@@ -420,6 +420,16 @@ export default function SimulationEditorModal({
                     >
                       Aggiungi la Prima Domanda
                     </PrimaryButton>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={addQuestion}
+                      disabled={busy}
+                      className={secondaryButtonCls}
+                    >
+                      <PlusIcon size={16} />
+                      Aggiungi una Domanda a Mano
+                    </button>
                   )}
                 </div>
               ) : (
@@ -455,22 +465,19 @@ export default function SimulationEditorModal({
                         onChange={(updated) =>
                           setDraft((prev) => prev.map((q, i) => (i === index ? updated : q)))
                         }
-                        /* Togliere una domanda ha senso dove il serbatoio si
-                         * scrive a mano. Su una generata il serbatoio è
-                         * cinquanta o niente, e una domanda in meno sarebbe
-                         * solo una pubblicazione bloccata. */
-                        onRemove={
-                          isManual
-                            ? () => {
-                                setSaved(false)
-                                setDraft((prev) => prev.filter((_, i) => i !== index))
-                              }
-                            : undefined
-                        }
+                        /* Anche su una generata: una domanda che non regge
+                         * si toglie, e il serbatoio resta pubblicabile finché
+                         * ne ha abbastanza per un tentativo. */
+                        onRemove={() => {
+                          setSaved(false)
+                          setDraft((prev) => prev.filter((_, i) => i !== index))
+                        }}
                       />
                     ))}
                   </ol>
-                  {isManual && draft.length < POOL_COUNT && (
+                  {/* Il tetto è lo stesso per tutte: cinquanta è quanto la
+                      generazione scrive, non un numero da superare a mano. */}
+                  {draft.length < POOL_COUNT && (
                     <button
                       type="button"
                       onClick={addQuestion}
@@ -577,13 +584,15 @@ export default function SimulationEditorModal({
             <div className="flex flex-wrap items-center justify-between gap-3">
               {/* La generazione esiste solo dove c'è un documento da leggere.
                   A mano il posto in cui l'elenco cresce è l'elenco stesso, in
-                  fondo alle domande. */}
+                  fondo alle domande, e qui resta il conto. Su una generata il
+                  conto lo dice già il bottone di pubblicazione quando manca
+                  qualcosa, e la scheda delle domande sempre. */}
               {isManual ? (
                 <span className="text-xs text-slate-500">
                   {written.length === 1
                     ? '1 domanda inserita'
                     : `${written.length} domande inserite`}
-                  {written.length < required && `, ne servono ${required}`}
+                  {written.length < REQUIRED_POOL && `, ne servono ${REQUIRED_POOL}`}
                 </span>
               ) : (
                 <button
@@ -667,7 +676,7 @@ export default function SimulationEditorModal({
                        * cercare, invece di contare righe che tornano. */
                       'Completa le domande incomplete'
                     ) : (
-                      `Servono ${required} domande, attualmente ${written.length}`
+                      `Servono ${REQUIRED_POOL} domande, attualmente ${written.length}`
                     )}
                   </PrimaryButton>
                 )}

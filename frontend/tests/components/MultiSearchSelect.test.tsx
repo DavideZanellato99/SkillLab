@@ -73,6 +73,13 @@ describe('scegliere', () => {
 })
 
 describe('disfare una scelta', () => {
+  /* A lista chiusa nient'altro direbbe quante persone sono state scelte. */
+  it('dice quante sono le scelte', () => {
+    renderSelect(['u-1', 'u-2'])
+
+    expect(screen.getByText('2 scelte')).toBeInTheDocument()
+  })
+
   it('azzera tutte le scelte', async () => {
     const onChange = renderSelect(['u-1', 'u-2'])
 

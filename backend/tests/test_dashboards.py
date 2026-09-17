@@ -1,11 +1,10 @@
-"""Le quattro dashboard: percorsi, contenuti, utilizzo e i propri progressi.
+"""Le tre dashboard: percorsi, utilizzo e i propri progressi.
 
 Nessuna di loro salva niente: sono aggregati calcolati in lettura sulle
 righe che esistono già, quindi qui si fissa la derivazione, che è la parte
-che può sbagliare in silenzio. Una tappa contata su chi non l'ha ancora
-sbloccata, una organizzazione ferma che sparisce dall'elenco invece di
-comparire a zero, una domanda in bianco contata come sbagliata: sono tutti
-numeri che si leggono come veri.
+che può sbagliare in silenzio. Un tempo di chiusura che conta anche i
+percorsi ancora aperti, una organizzazione ferma che sparisce dall'elenco
+invece di comparire a zero: sono tutti numeri che si leggono come veri.
 
 Il confine del tenant è quello di sempre e vale anche qui, quindi ogni
 sezione ne ha la sua prova.
@@ -25,7 +24,6 @@ from models import (
     Organization,
     SimulationAttempt,
     TechnicalSimulation,
-    TrainingPathAssignment,
     User,
 )
 
@@ -166,65 +164,54 @@ def test_percorsi_contano_gli_stati_e_la_quota_di_chiusura(
     assert dashboard["completion_rate"] == 50.0
 
 
-def test_una_tappa_si_misura_su_chi_ci_e_arrivato(
+def test_il_tempo_di_chiusura_si_misura_sui_soli_percorsi_chiusi(
     admin_client, db_session, standard_user, organization, make_avatar, make_assigned_path
 ):
-    """La seconda tappa la sblocca solo chi ha superato la prima.
+    """Un percorso chiuso in tre giorni e uno ancora aperto da dieci.
 
-    Contarla su tutti gli assegnatari direbbe che non funziona quando invece
-    nessuno ci è ancora arrivato, ed è esattamente il numero su cui si
-    deciderebbe di riscriverla.
+    La media è tre e non sei e mezzo: su un percorso in corso il conto
+    sarebbe "quanti giorni sono passati", che è un'altra cosa e la dice già
+    lo stato. E finché nessuno ha chiuso niente resta vuota, non zero.
     """
+    avatar = make_avatar(name="Mario Rossi")
+    altro = _make_user_in(db_session, organization)
+    tre_giorni_fa = _now() - timedelta(days=3)
+    make_assigned_path(standard_user, [{"avatar": avatar, "target": 7.0}], created_at=tre_giorni_fa)
+    make_assigned_path(
+        altro, [{"avatar": avatar, "target": 7.0}], created_at=_now() - timedelta(days=10)
+    )
+
+    assert admin_client.get("/api/dashboards/paths").json()["avg_days_to_complete"] is None
+
+    _seed_conversation(db_session, standard_user, avatar, 8.0)
+
+    dashboard = admin_client.get("/api/dashboards/paths").json()
+
+    assert dashboard["completed"] == 1
+    assert round(dashboard["avg_days_to_complete"]) == 3
+
+
+def test_i_percorsi_scaduti_sono_quelli_con_una_tappa_oltre_il_termine(
+    admin_client, db_session, standard_user, organization, make_avatar, make_assigned_path
+):
+    """Il termine passato conta anche su una tappa che il percorso non ha
+    ancora aperto: la data sta sul calendario, e il percorso è scaduto con
+    lei. Quello senza date resta in corso."""
     primo = make_avatar(name="Mario Rossi")
     secondo = make_avatar(name="Luisa Bianchi")
     altro = _make_user_in(db_session, organization)
-    steps = [{"avatar": primo, "target": 7.0}, {"avatar": secondo, "target": 7.0}]
-    assegnazione = make_assigned_path(standard_user, steps)
-    db_session.add(TrainingPathAssignment(path_id=assegnazione.path_id, user_id=altro.id))
-    db_session.flush()
-    # Solo il primo supera la tappa di apertura
-    _seed_conversation(db_session, standard_user, primo, 8.0)
-
-    paths = admin_client.get("/api/dashboards/paths").json()["paths"]
-
-    assert len(paths) == 1
-    apertura, seguito = paths[0]["steps"]
-    assert apertura["reached"] == 2
-    assert apertura["passed"] == 1
-    assert seguito["reached"] == 1
-    assert seguito["passed"] == 0
-    # Nessuno ha ancora fatto niente sulla seconda: il meglio non è zero,
-    # è che non c'è
-    assert seguito["avg_best_score"] is None
-
-
-def test_le_scadenze_sono_quelle_della_tappa_aperta(
-    admin_client, db_session, standard_user, organization, make_avatar, make_assigned_path
-):
-    """Una data si legge quando è il turno della sua tappa.
-
-    Quella della tappa ancora chiusa non compare: la data vale, ma su una
-    tappa che il percorso non ha aperto non c'è niente da fare. Quella
-    passata compare per prima ed è marcata scaduta.
-    """
-    primo = make_avatar(name="Mario Rossi")
-    secondo = make_avatar(name="Luisa Bianchi")
     ieri = _now() - timedelta(days=1)
-    fra_una_settimana = _now() + timedelta(days=7)
     make_assigned_path(
         standard_user,
-        [
-            {"avatar": primo, "target": 7.0, "due_at": ieri},
-            {"avatar": secondo, "target": 7.0, "due_at": fra_una_settimana},
-        ],
+        [{"avatar": primo, "target": 7.0}, {"avatar": secondo, "target": 7.0, "due_at": ieri}],
     )
+    make_assigned_path(altro, [{"avatar": primo, "target": 7.0}])
 
-    deadlines = admin_client.get("/api/dashboards/paths").json()["deadlines"]
+    dashboard = admin_client.get("/api/dashboards/paths").json()
 
-    assert len(deadlines) == 1
-    assert deadlines[0]["step_position"] == 1
-    assert deadlines[0]["step_label"] == "Mario Rossi"
-    assert deadlines[0]["status"] == "overdue"
+    assert dashboard["overdue"] == 1
+    assert dashboard["active"] == 1
+    assert dashboard["completion_rate"] == 0.0
 
 
 def test_percorsi_di_un_altro_tenant_non_si_leggono(
@@ -242,111 +229,6 @@ def test_percorsi_di_un_altro_tenant_non_si_leggono(
     dashboard = org_admin_client.get("/api/dashboards/paths").json()
 
     assert dashboard["assignments"] == 1
-
-
-# ── I contenuti ─────────────────────────────────────────
-
-
-def test_contenuti_ordinano_dal_piu_duro_e_dicono_il_criterio_debole(
-    admin_client, db_session, standard_user, make_avatar
-):
-    """Il voto medio dice che si va male, il criterio dice su cosa.
-
-    In cima sta l'avatar con la media più bassa, che è quello che si sta
-    cercando aprendo questa pagina.
-    """
-    difficile = make_avatar(name="Cliente Ostile")
-    facile = make_avatar(name="Cliente Cortese")
-    _seed_conversation(
-        db_session, standard_user, difficile, 4.0, criteria={"empatia": 3.0, "chiarezza": 7.0}
-    )
-    _seed_conversation(
-        db_session, standard_user, facile, 9.0, criteria={"empatia": 9.0, "chiarezza": 9.0}
-    )
-
-    avatars = admin_client.get("/api/dashboards/content").json()["avatars"]
-
-    assert [a["avatar_name"] for a in avatars] == ["Cliente Ostile", "Cliente Cortese"]
-    assert avatars[0]["avg_score"] == 4.0
-    assert avatars[0]["below_pass"] == 1
-    assert avatars[0]["weakest_criterion_key"] == "empatia"
-    assert avatars[0]["weakest_criterion_avg"] == 3.0
-
-
-def test_un_test_porta_la_quota_di_risposte_esatte(
-    admin_client, db_session, standard_user, organization
-):
-    """Il voto tiene conto anche del tempo, la quota di esatte no.
-
-    Sono due numeri diversi e stanno accanto: un test con voti bassi e
-    risposte quasi tutte esatte è cronometrato male, non difficile.
-    """
-    simulazione = _make_simulation(db_session, organization, title="Cassa")
-    _seed_attempt(db_session, standard_user, simulazione, 5.0)
-    _seed_attempt(db_session, standard_user, simulazione, 7.0)
-
-    simulazioni = admin_client.get("/api/dashboards/content").json()["simulations"]
-
-    assert len(simulazioni) == 1
-    riga = simulazioni[0]
-    assert riga["attempts"] == 2
-    assert riga["people"] == 1
-    assert riga["correct_rate"] == 60.0
-    assert riga["below_pass"] == 1
-
-
-def test_le_domande_si_leggono_una_per_una_dalla_piu_sbagliata(
-    admin_client, db_session, standard_user, organization
-):
-    """Una domanda che sbagliano tutti, in una media di dieci, non si vede.
-
-    Una lasciata in bianco è dentro le volte in cui è stata posta e fuori da
-    quelle in cui è stata data giusta: è una domanda a cui non si è saputo
-    rispondere, non una domanda mai vista.
-    """
-    simulazione = _make_simulation(db_session, organization, title="Cassa")
-    risposte = [
-        {
-            "question_id": "q1",
-            "position": 1,
-            "text": "Quando si apre il fondo cassa?",
-            "selected_option": 0,
-            "is_correct": True,
-            "elapsed_ms": 4000,
-        },
-        {
-            "question_id": "q2",
-            "position": 2,
-            "text": "Qual è il limite di contante?",
-            "selected_option": None,
-            "is_correct": False,
-            "elapsed_ms": None,
-        },
-    ]
-    _seed_attempt(db_session, standard_user, simulazione, 5.0, answers=risposte)
-    _seed_attempt(db_session, standard_user, simulazione, 5.0, answers=risposte)
-
-    report = admin_client.get(f"/api/dashboards/content/simulations/{simulazione.id}").json()
-
-    assert report["attempts"] == 2
-    prima, seconda = report["items"]
-    assert prima["question_id"] == "q2"
-    assert prima["correct_rate"] == 0.0
-    assert prima["unanswered"] == 2
-    assert seconda["correct_rate"] == 100.0
-    assert seconda["avg_seconds"] == 4.0
-
-
-def test_le_domande_di_un_test_di_un_altro_tenant_non_esistono(org_admin_client, db_session):
-    """Fuori dal proprio tenant un test è lo stesso niente dell'elenco."""
-    altra = Organization(name="Tenant vicino", slug=f"vicino-{uuid.uuid4()}")
-    db_session.add(altra)
-    db_session.flush()
-    simulazione = _make_simulation(db_session, altra, title="Riservato")
-
-    risposta = org_admin_client.get(f"/api/dashboards/content/simulations/{simulazione.id}")
-
-    assert risposta.status_code == 404
 
 
 # ── L'utilizzo ──────────────────────────────────────────

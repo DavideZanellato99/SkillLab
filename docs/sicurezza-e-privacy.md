@@ -86,7 +86,7 @@ Descritte per esteso in [autenticazione.md](autenticazione.md), in sintesi:
 | Limite a finestra scorrevole, su database | Tentativi di password a raffica, anche distribuiti | [rate_limit.py](../backend/rate_limit.py) |
 | Messaggio di errore unico | Scoprire quali email esistono | [routers/auth.py](../backend/routers/auth.py) |
 | Denylist dei token | Il logout che altrimenti non varrebbe fino alla scadenza | [token_denylist.py](../backend/token_denylist.py) |
-| Session binding a IP e User-Agent | Un cookie portato via dal browser del proprietario | [token_sessions.py](../backend/token_sessions.py) |
+| Session binding sullo User-Agent | Un cookie portato via dal browser del proprietario | [token_sessions.py](../backend/token_sessions.py) |
 | Stato di account e organizzazione a ogni richiesta | Sospensioni che varrebbero solo al login successivo | [auth_dependency.py](../backend/auth_dependency.py) |
 | Il `client_id` confrontato dopo la firma | Un token emesso per un altro app client dello stesso pool | [cognito_service.py](../backend/cognito_service.py) |
 | Tutte le sessioni chiuse al cambio password | Una password nuova che lascia in piedi quello che la vecchia aveva aperto | [routers/auth.py](../backend/routers/auth.py) |
@@ -116,8 +116,7 @@ e nasce da una constatazione: il cookie `HttpOnly` protegge il token, non la
 sessione. Uno script iniettato non può portarsi via il cookie, ma non ne ha
 bisogno: gira nella pagina, e ogni `fetch` che scrive parte col cookie
 attaccato dal browser. Potrebbe leggere le trascrizioni e mandarle altrove, e
-il session binding non se ne accorgerebbe, perché è lo stesso browser dallo
-stesso indirizzo.
+il session binding non se ne accorgerebbe, perché è lo stesso browser.
 
 Gli header stanno tutti in [caddy/Caddyfile](../caddy/Caddyfile), in un blocco
 solo, perché di lì passa tutto: la React servita da nginx, l'API, e i ritratti
@@ -388,7 +387,7 @@ la parte fatta qui non basta:
   escono già cifrati con age, a chiave pubblica, quindi sulla macchina che li
   produce c'è solo la chiave per cifrare ([db/backup.sh](../db/backup.sh));
 - **HTTPS e l'header di provenienza sovrascritto** dal proxy, senza cui i
-  cookie `Secure` non funzionano e la metà IP del binding si può falsificare;
+  cookie `Secure` non funzionano e l'indirizzo registrato accanto alle sessioni si può falsificare;
 - **il tenere i backup fuori dalla macchina**, e con le stesse finestre di
   conservazione, altrimenti ricreano il problema che la pulizia risolve;
 - **il custodire la chiave privata dei backup** da qualche altra parte. È

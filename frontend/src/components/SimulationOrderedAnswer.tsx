@@ -1,9 +1,9 @@
 import type { SimulationAnswerResult } from '../services/simulations'
 
-/* Come si rilegge una domanda di ordinamento o di abbinamento: quello che è
- * stato risposto, con accanto la chiave.
+/* Come si rilegge una domanda di ordinamento: quello che è stato risposto,
+ * con accanto la chiave.
  *
- * Sono i due tipi in cui una risposta può essere giusta a metà, e per questo
+ * È il tipo in cui una risposta può essere giusta a metà, e per questo
  * l'esito non può limitarsi a una crocetta: chi ha preso 0,7 deve vedere
  * *quale* passo era fuori posto, altrimenti il voto è un numero da accettare
  * e non una cosa da cui imparare. Ogni riga porta quindi il proprio esito, e
@@ -13,19 +13,25 @@ import type { SimulationAnswerResult } from '../services/simulations'
  * scelta multipla, e non sono l'unico segnale: accanto a ogni riga sbagliata
  * c'è scritto dove andava. */
 
-/* `items-center` e non `items-start`: l'esito in fondo alla riga ("va al 4",
- * "era: …") è scritto più piccolo del passo, e allineato in alto restava
+/* `items-center` e non `items-start`: l'esito in fondo alla riga ("va al 4")
+ * è scritto più piccolo del passo, e allineato in alto restava
  * sospeso sopra la metà del riquadro. Lo stesso vale per le alternative a
  * scelta multipla in `SimulationResult`. */
 const rowCls = 'flex items-center gap-2 rounded-xl border px-3 py-2 text-[0.85rem]'
 const rightCls = 'border-emerald-500/30 bg-emerald-500/8 text-emerald-200'
 const wrongCls = 'border-red-500/30 bg-red-500/8 text-red-200'
 
-/** Se due elementi sono lo stesso, come li confronta il server. */
+/** Se due passi sono lo stesso, come li confronta il server. */
 const same = (a: string, b: string) =>
   a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase()
 
-export function OrderedAnswer({ answer, own }: { answer: SimulationAnswerResult; own: boolean }) {
+export default function SimulationOrderedAnswer({
+  answer,
+  own,
+}: {
+  answer: SimulationAnswerResult
+  own: boolean
+}) {
   if (answer.given_steps.length === 0) {
     return (
       <>
@@ -80,40 +86,5 @@ function CorrectOrder({ steps }: { steps: string[] }) {
         ))}
       </ol>
     </div>
-  )
-}
-
-export function MatchedAnswer({ answer, own }: { answer: SimulationAnswerResult; own: boolean }) {
-  /* Si parte dalle coppie giuste e non da quelle date, così le voci lasciate
-     scoperte compaiono comunque: una voce senza abbinamento è una coppia
-     sbagliata come le altre, e non vederla farebbe sembrare la domanda più
-     corta di com'era. */
-  const given = new Map(answer.given_pairs.map((p) => [p.left.trim().toLowerCase(), p.right]))
-  return (
-    <>
-      {answer.given_pairs.length === 0 && (
-        <p className="mb-3 text-xs italic text-slate-500">
-          {own ? 'Hai lasciato questa domanda in bianco.' : 'Domanda lasciata in bianco.'}
-        </p>
-      )}
-      <ul className="mb-3 flex list-none flex-col gap-1.5">
-        {answer.correct_pairs.map((pair, index) => {
-          const mine = given.get(pair.left.trim().toLowerCase()) ?? ''
-          const isRight = same(mine, pair.right)
-          return (
-            <li key={index} className={`${rowCls} ${isRight ? rightCls : wrongCls}`}>
-              <span className="flex-1">
-                <span className="text-slate-300">{pair.left}</span>
-                <span aria-hidden className="mx-2 opacity-50">
-                  →
-                </span>
-                <span className={mine ? '' : 'italic opacity-70'}>{mine || 'nessuna scelta'}</span>
-              </span>
-              {!isRight && <span className="shrink-0 text-xs opacity-70">era: {pair.right}</span>}
-            </li>
-          )
-        })}
-      </ul>
-    </>
   )
 }

@@ -21,7 +21,6 @@ import pytest
 
 from models import (
     SIMULATION_GENERATED_ITEMS,
-    SIMULATION_KIND_MATCHING,
     SIMULATION_KIND_MULTIPLE,
     SIMULATION_KIND_OPEN,
     SIMULATION_KIND_ORDERING,
@@ -72,7 +71,6 @@ def _domanda_generata(indice: int) -> dict:
         "correct_option": indice % 4,
         "expected_answer": "",
         "ordered_steps": None,
-        "pairs": None,
         "explanation": f"Spiegazione {indice}.",
         "source_chunks": [1],
     }
@@ -473,13 +471,6 @@ def _colonne_complete(kind: str, position: int) -> dict:
         return {"expected_answer": "Deve dire che si verifica il documento."}
     if kind == SIMULATION_KIND_ORDERING:
         return {"ordered_steps": [f"Passo {i}" for i in range(SIMULATION_GENERATED_ITEMS)]}
-    if kind == SIMULATION_KIND_MATCHING:
-        return {
-            "pairs": [
-                {"left": f"Caso {i}", "right": f"Ufficio {i}"}
-                for i in range(SIMULATION_GENERATED_ITEMS)
-            ]
-        }
     return {"options": ["Prima", "Seconda", "Terza", "Quarta"], "correct_option": position % 4}
 
 
@@ -495,7 +486,6 @@ def _pubblica(admin_client, simulazione):
         SIMULATION_KIND_MULTIPLE,
         SIMULATION_KIND_OPEN,
         SIMULATION_KIND_ORDERING,
-        SIMULATION_KIND_MATCHING,
     ],
 )
 def test_un_serbatoio_completo_si_pubblica_qualunque_sia_il_tipo(
@@ -551,35 +541,6 @@ def test_un_ordinamento_con_due_passi_uguali_non_si_pubblica(admin_client, simul
 
     assert risposta.status_code == 409
     assert "ha due passi uguali" in risposta.json()["detail"]
-
-
-@pytest.mark.parametrize(
-    ("coppie", "atteso"),
-    [
-        ([{"left": "  ", "right": "Ufficio"}], "ha una voce da abbinare vuota"),
-        ([{"left": "Caso", "right": "  "}], "ha un abbinamento vuoto"),
-        (
-            [
-                {"left": "Reclamo", "right": "Ufficio A"},
-                {"left": " reclamo ", "right": "Ufficio B"},
-            ],
-            "ha due voci uguali da abbinare",
-        ),
-        (
-            [{"left": "Reclamo", "right": "Ufficio A"}, {"left": "Rimborso", "right": "ufficio a"}],
-            "ha due abbinamenti uguali",
-        ),
-    ],
-)
-def test_un_abbinamento_ambiguo_o_incompleto_non_si_pubblica(
-    admin_client, simulazione_di_tipo, coppie, atteso
-):
-    simulazione = simulazione_di_tipo(SIMULATION_KIND_MATCHING, {"pairs": coppie})
-
-    risposta = _pubblica(admin_client, simulazione)
-
-    assert risposta.status_code == 409
-    assert atteso in risposta.json()["detail"]
 
 
 def test_ritirare_una_simulazione_non_chiede_niente(

@@ -4,6 +4,9 @@ import { useOrganizations } from '../hooks/useOrganizations'
 import { isSuperAdmin } from '../services/auth'
 import {
   dashboardPath,
+  ORG_PARAM,
+  PATH_PARAM,
+  PERIOD_PARAM,
   viewFromPath,
   visibleViews,
   type DashboardScope,
@@ -19,31 +22,27 @@ import TabBar from './TabBar'
 /* Il guscio della sezione dashboard: il titolo, i due filtri che valgono per
  * tutte le viste e le linguette con cui si passa dall'una all'altra.
  *
- * Le viste sono quattro schermate e non quattro pannelli della stessa: sono
- * quattro domande diverse sulle stesse prove ("chi è messo bene", "il
- * programma funziona", "cosa è tarato male", "chi sta usando la
- * piattaforma"), e ognuna legge dati suoi. Quindi ognuna è una rotta, con il
+ * Le viste sono tre schermate e non tre pannelli della stessa: sono tre
+ * domande diverse sulle stesse prove ("chi è messo bene", "il programma
+ * funziona", "chi sta usando la piattaforma"), e ognuna legge dati suoi. Quindi ognuna è una rotta, con il
  * proprio indirizzo da mandare a qualcuno e il proprio file che il browser
  * scarica solo entrandoci: aprire i punteggi non paga la scansione dei
  * percorsi per scoprire che non li si sta guardando.
  *
  * Periodo e organizzazione stanno qui e non nelle viste perché sono i due
  * filtri che il server capisce, cioè quelli che decidono quali righe
- * arrivano, e sono gli stessi per tutte e quattro: chi cambia linguetta li
+ * arrivano, e sono gli stessi per tutte e tre: chi cambia linguetta li
  * ritrova dove li ha lasciati. Restano nell'indirizzo, che è la loro unica
  * copia, e viaggiano nel contesto dell'`Outlet` perché le viste non ne
- * tengano quattro letture libere di divergere. */
+ * tengano tre letture libere di divergere. */
 
-/* Come le due scelte del guscio si scrivono nell'indirizzo. In italiano come
- * le rotte, e corte: è un indirizzo che finisce copiato in una chat. */
-const ORG_PARAM = 'organizzazione'
-const PERIOD_PARAM = 'periodo'
-
-/* I filtri delle singole viste che il guscio conosce, e per un motivo solo:
- * scelgono delle persone, e le persone stanno dentro l'organizzazione. Quando
- * quella cambia, o quando si azzera tutto, se ne vanno con lei: resterebbero
- * un filtro attivo e un confronto composto su gente che non è più in elenco. */
-const PEOPLE_PARAMS = ['persona', 'confronto']
+/* I due filtri delle viste che il guscio conosce, e per un motivo solo:
+ * scelgono una persona o un percorso, e tutti e due stanno dentro
+ * l'organizzazione. Quando quella cambia, o quando si azzera tutto, se ne
+ * vanno con lei: resterebbe un filtro attivo su qualcosa che non è più in
+ * elenco. */
+const USER_PARAM = 'persona'
+const SCOPED_PARAMS = [USER_PARAM, PATH_PARAM]
 
 /** Il valore letto dall'indirizzo, se è uno di quelli che esistono. */
 function pickOption<T extends string>(
@@ -66,11 +65,11 @@ export default function DashboardPage() {
   const views = visibleViews(isSuperAdmin(user))
   const current = views.find((v) => v.value === view) ?? views[0]
 
-  const setParam = (name: string, value: string, daTogliere?: string[]) => {
+  const setParam = (name: string, value: string, daTogliere: string[] = []) => {
     const next = new URLSearchParams(params)
     if (value) next.set(name, value)
     else next.delete(name)
-    for (const altro of daTogliere ?? []) next.delete(altro)
+    for (const param of daTogliere) next.delete(param)
     /* Sempre sostituendo il passo: qui si cambia filtro di continuo, e ogni
        scelta lasciata in cronologia sarebbe un tasto indietro che non riporta
        alla pagina di prima ma al periodo di prima. */
@@ -90,22 +89,22 @@ export default function DashboardPage() {
   const days = period === 'all' ? undefined : Number(period)
 
   /* Azzerare riporta la sezione a tutta la storia e a tutte le
-     organizzazioni, e con loro se ne vanno le persone scelte: stanno
-     nell'elenco che l'organizzazione porta, come quando la si cambia. I
-     filtri interni a una vista (il canale, il tipo di test) restano, che sono
-     la prova di cui si stanno leggendo i grafici e non un modo di
+     organizzazioni, e con loro se ne vanno la persona e il percorso scelti:
+     stanno nell'elenco che l'organizzazione porta, come quando la si cambia.
+     I filtri interni a una vista (il canale, il tipo di test) restano, che
+     sono la prova di cui si stanno leggendo i grafici e non un modo di
      restringerli. */
   const resetFilters = () => {
     const next = new URLSearchParams(params)
     next.delete(PERIOD_PARAM)
     next.delete(ORG_PARAM)
-    for (const nome of PEOPLE_PARAMS) next.delete(nome)
+    for (const param of SCOPED_PARAMS) next.delete(param)
     setParams(next, { replace: true })
   }
 
   /* Cambiare linguetta cambia indirizzo e si porta dietro i filtri: sono di
-     tutta la sezione, e ritrovarli accesi è quello che rende le quattro viste
-     una schermata sola invece di quattro pagine slegate. */
+     tutta la sezione, e ritrovarli accesi è quello che rende le tre viste
+     una schermata sola invece di tre pagine slegate. */
   const openView = (next: DashboardView) => {
     navigate(`${dashboardPath(next)}${search}`)
   }
@@ -127,10 +126,11 @@ export default function DashboardPage() {
           showOrgFilter ? organizations.map((o) => ({ value: o.id, label: o.name })) : undefined
         }
         organizationId={organizationId}
-        /* Cambiando organizzazione le persone scelte non sono più fra quelle
-           in elenco: se ne vanno con il filtro che le ha portate. */
+        /* Cambiando organizzazione la persona e il percorso scelti non sono
+           più fra quelli in elenco: se ne vanno con il filtro che li ha
+           portati. */
         onOrganizationChange={
-          showOrgFilter ? (value) => setParam(ORG_PARAM, value, PEOPLE_PARAMS) : undefined
+          showOrgFilter ? (value) => setParam(ORG_PARAM, value, SCOPED_PARAMS) : undefined
         }
         onReset={resetFilters}
       />

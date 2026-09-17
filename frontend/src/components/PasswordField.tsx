@@ -12,7 +12,8 @@
  * vuoto lasciato "in chiaro" mostrerebbe in chiaro la password successiva,
  * scritta da chi non ha chiesto di vederla. */
 
-import { useEffect, useState, type ComponentType } from 'react'
+import { useState, type ComponentType } from 'react'
+
 import Field, { TextInput, litIconCls } from './Field'
 import PasswordToggle from './PasswordToggle'
 import type { IconProps } from './icons'
@@ -52,9 +53,14 @@ export default function PasswordField({
 }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false)
 
-  useEffect(() => {
+  /* Il valore del render precedente, per accorgersi dello svuotamento mentre
+     si disegna e non in un effetto dopo: così il campo non compare mai,
+     nemmeno per un istante, vuoto e in chiaro. */
+  const [lastValue, setLastValue] = useState(value)
+  if (value !== lastValue) {
+    setLastValue(value)
     if (!value) setVisible(false)
-  }, [value])
+  }
 
   const errorId = `${id}-error`
 

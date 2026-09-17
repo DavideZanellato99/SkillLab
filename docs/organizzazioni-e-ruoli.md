@@ -6,11 +6,11 @@ perché è fatto in un punto solo.
 
 ## I tre ruoli
 
-| Ruolo | Organizzazione | Cosa può fare |
-| --- | --- | --- |
-| `super_admin` | Nessuna (`organization_id` NULL) | Sta sopra i tenant. Crea organizzazioni, avatar e utenti, e vede tutto |
-| `organization_admin` | La sua | Amministra la propria: legge le conversazioni e i tentativi dei suoi utenti, compone percorsi, scrive i test tecnici, corregge valutazioni |
-| `user` | La sua | Si allena, e vede solo la propria roba |
+| Ruolo                | Organizzazione                   | Cosa può fare                                                                                                                                                                                                                                  |
+| -------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `super_admin`        | Nessuna (`organization_id` NULL) | Sta sopra i tenant. Crea organizzazioni, avatar e utenti, e vede tutto                                                                                                                                                                         |
+| `organization_admin` | La sua                           | Amministra la propria: legge le conversazioni e i tentativi dei suoi utenti, compone percorsi, scrive i test tecnici, corregge valutazioni, chiede al super admin gli avatar che gli mancano (vedi [avatar-e-persona.md](avatar-e-persona.md)) |
+| `user`               | La sua                           | Si allena, e vede solo la propria roba                                                                                                                                                                                                         |
 
 Il super admin è l'unico a non avere un'organizzazione, ed è esattamente questo
 che lo mette al di sopra: ogni filtro per tenant lo lascia passare per come è
@@ -35,13 +35,13 @@ decisione venga presa una seconda volta.
 Sul lato di chi non è admin la stessa idea prende la forma di una query
 condivisa per area:
 
-| Area | Funzione | Regola |
-| --- | --- | --- |
-| Avatar | `_visible_avatars` in [avatars.py](../backend/routers/avatars.py) | Solo quelli della propria organizzazione, tutti per il super admin |
-| Categorie degli avatar | `get_categories` in [avatars.py](../backend/routers/avatars.py) | Come sopra. Il legame con l'avatar è una chiave esterna composta che porta con sé il tenant, così cambiare categoria non può spostare l'avatar di organizzazione (vedi [avatar-e-persona.md](avatar-e-persona.md)) |
-| Simulazioni | `visible_query` in [simulations.py](../backend/routers/simulations.py) | Come sopra, più le bozze escluse fuori dall'amministrazione. È la stessa query a servire chi i test li scrive, chiesta con le bozze incluse (vedi [simulatore.md](simulatore.md)) |
-| Conversazioni | `_owned_conversation_or_404` in [chat.py](../backend/routers/chat.py) | Solo le proprie, sempre |
-| Tentativi | `_readable_attempt_or_404` in [simulations.py](../backend/routers/simulations.py) | I propri, e per un admin quelli di chi sta nella sua organizzazione |
+| Area                   | Funzione                                                                          | Regola                                                                                                                                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Avatar                 | `_visible_avatars` in [avatars.py](../backend/routers/avatars.py)                 | Solo quelli della propria organizzazione, tutti per il super admin                                                                                                                                                 |
+| Categorie degli avatar | `get_categories` in [avatars.py](../backend/routers/avatars.py)                   | Come sopra. Il legame con l'avatar è una chiave esterna composta che porta con sé il tenant, così cambiare categoria non può spostare l'avatar di organizzazione (vedi [avatar-e-persona.md](avatar-e-persona.md)) |
+| Simulazioni            | `visible_query` in [simulations.py](../backend/routers/simulations.py)            | Come sopra, più le bozze escluse fuori dall'amministrazione. È la stessa query a servire chi i test li scrive, chiesta con le bozze incluse (vedi [simulatore.md](simulatore.md))                                  |
+| Conversazioni          | `_owned_conversation_or_404` in [chat.py](../backend/routers/chat.py)             | Solo le proprie, sempre                                                                                                                                                                                            |
+| Tentativi              | `_readable_attempt_or_404` in [simulations.py](../backend/routers/simulations.py) | I propri, e per un admin quelli di chi sta nella sua organizzazione                                                                                                                                                |
 
 ## 404 e non 403
 
@@ -137,10 +137,10 @@ la password temporanea, e la riga locale che porta ruolo e organizzazione.
 
 Due stati, e la differenza conta:
 
-| Stato | Reversibile | Cosa significa |
-| --- | --- | --- |
-| `suspended` | Sì | Bloccato adesso, si riattiva |
-| `disabled` | No | Chiuso: da lì si può solo cancellare |
+| Stato       | Reversibile | Cosa significa                       |
+| ----------- | ----------- | ------------------------------------ |
+| `suspended` | Sì          | Bloccato adesso, si riattiva         |
+| `disabled`  | No          | Chiuso: da lì si può solo cancellare |
 
 Entrambi bloccano il login **e** uccidono le sessioni già aperte.
 

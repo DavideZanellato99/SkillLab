@@ -31,11 +31,21 @@ function displayName(user: AuthUser): string {
 interface NavbarUserMenuProps {
   user: AuthUser
   isOpen: boolean
+  /** La guida introduttiva lo tiene aperto per parlare di una voce che sta
+   *  qui dentro: il click fuori, che è quello sui pulsanti della guida, non
+   *  lo chiude. */
+  heldOpen?: boolean
   onToggle: () => void
   onClose: () => void
 }
 
-export default function NavbarUserMenu({ user, isOpen, onToggle, onClose }: NavbarUserMenuProps) {
+export default function NavbarUserMenu({
+  user,
+  isOpen,
+  heldOpen = false,
+  onToggle,
+  onClose,
+}: NavbarUserMenuProps) {
   const { logout } = useAuth()
   const { pathname } = useLocation()
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -43,7 +53,7 @@ export default function NavbarUserMenu({ user, isOpen, onToggle, onClose }: Navb
   useCloseOnEscape(isOpen, onClose, triggerRef)
   /* Il click fuori chiude: non un velo steso sotto il menu, che nella
      barra non funzionava, ma un ascolto sul documento (vedi l'hook). */
-  useCloseOnClickOutside(isOpen, onClose, [triggerRef, menuRef])
+  useCloseOnClickOutside(isOpen && !heldOpen, onClose, [triggerRef, menuRef])
 
   const groups = profileMenuGroups(user)
 

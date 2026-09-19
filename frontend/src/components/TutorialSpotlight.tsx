@@ -57,6 +57,7 @@ export default function TutorialSpotlight({
      stato, come fa il tooltip: sono il risultato di una misura presa dal
      nodo stesso, e passare da uno stato vorrebbe dire un secondo render per
      ogni pixel di scorrimento. */
+  const lastAnchor = useRef<string | undefined>(undefined)
   useLayoutEffect(() => {
     const el = boxRef.current
     if (!el) return
@@ -66,8 +67,20 @@ export default function TutorialSpotlight({
       { width: box.width, height: box.height },
       { width: window.innerWidth, height: window.innerHeight },
     )
+    /* La transizione sulle coordinate serve a seguire un elemento che si
+       muove, non a cambiare passo: al passo nuovo il riquadro compare
+       direttamente dove va, senza attraversare lo schermo dal punto in cui
+       stava. La transizione si spegne per questa sola scrittura e si
+       riaccende dopo aver costretto il browser a prenderne atto. */
+    const stepChanged = lastAnchor.current !== anchor
+    lastAnchor.current = anchor
+    if (stepChanged) el.style.transition = 'none'
     el.style.top = `${top}px`
     el.style.left = `${left}px`
+    if (stepChanged) {
+      void el.offsetHeight
+      el.style.transition = ''
+    }
   })
 
   return createPortal(
@@ -75,8 +88,15 @@ export default function TutorialSpotlight({
       {/* Raccoglie i click, e basta: nessuna chiusura per sbaglio. */}
       <div className="fixed inset-0 z-[400]" aria-hidden="true" />
 
+      {/* La chiave è l'ancora: un passo nuovo è un ritaglio nuovo, che nasce
+          già sul suo elemento. Senza, React riuserebbe lo stesso nodo del
+          passo prima (o del velo pieno, che è un div nello stesso posto) e
+          la transizione qui sotto lo farebbe scivolare da lì. La transizione
+          resta per l'elemento che si sposta a passo fermo: lo scroll, il
+          menu che si apre. */}
       {rect ? (
         <div
+          key={anchor}
           className="pointer-events-none fixed z-[401] rounded-xl shadow-[0_0_0_9999px_rgba(2,6,23,0.78)] ring-2 ring-violet-500/70 transition-[top,left,width,height] duration-200"
           style={{
             top: rect.top - SPOTLIGHT_PADDING,
@@ -90,7 +110,11 @@ export default function TutorialSpotlight({
         /* Nessun elemento da illuminare: il buio è pieno, e il riquadro sta
            al centro. È il benvenuto, il commiato, e ogni passo la cui voce
            su questo schermo non è in fila. */
-        <div className="pointer-events-none fixed inset-0 z-[401] bg-night/80" aria-hidden="true" />
+        <div
+          key="veil"
+          className="pointer-events-none fixed inset-0 z-[401] bg-night/80"
+          aria-hidden="true"
+        />
       )}
 
       {/* Fuori dallo schermo al primo giro: le coordinate arrivano

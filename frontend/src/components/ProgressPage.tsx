@@ -252,8 +252,8 @@ export default function ProgressPage() {
         <StaleContent isStale={isPlaceholderData}>
           <TabBar
             items={[
-              { value: 'conversazioni', label: `Conversazioni (${conversations.length})` },
-              { value: 'simulazioni', label: `Test tecnici (${simulations.length})` },
+              { value: 'conversazioni', label: 'Conversazioni' },
+              { value: 'simulazioni', label: 'Test tecnici' },
             ]}
             value={section}
             onChange={(value) => setParam(SECTION_PARAM, value === 'conversazioni' ? '' : value)}

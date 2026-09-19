@@ -69,10 +69,19 @@ export default function Navbar() {
      trovano davvero, invece di disegnarne una copia. Lo chiede con un evento
      perché quale pannello è aperto lo sa solo la barra, e resta lei a
      deciderlo. Alla fine del passo il menu si richiude, ma solo se è ancora
-     quello aperto: nel frattempo può averlo sostituito un altro. */
+     quello aperto: nel frattempo può averlo sostituito un altro.
+
+     Finché è la guida a tenerlo aperto, il click fuori non lo chiude: il
+     pulsante Avanti sta fuori dal menu, e il `pointerdown` su di lui lo
+     chiudeva, facendo sparire la voce illuminata e spostando il riquadro al
+     centro prima del `mouseup`. Il click non si completava, e ogni passo nel
+     menu si vedeva due volte. Sotto al velo della guida un click fuori
+     davvero non può arrivare, quindi non c'è niente da chiudere. */
+  const [tutorialHoldsUserMenu, setTutorialHoldsUserMenu] = useState(false)
   useEffect(() => {
     const onTutorialMenu = (event: Event) => {
       const open = (event as CustomEvent<{ open: boolean }>).detail?.open === true
+      setTutorialHoldsUserMenu(open)
       setOpenMenu((current) => (open ? 'user' : current === 'user' ? null : current))
     }
     window.addEventListener(TUTORIAL_USER_MENU_EVENT, onTutorialMenu)
@@ -186,6 +195,7 @@ export default function Navbar() {
                 <NavbarUserMenu
                   user={user}
                   isOpen={openMenu === 'user'}
+                  heldOpen={tutorialHoldsUserMenu}
                   onToggle={() => toggleMenu('user')}
                   onClose={closeMenus}
                 />

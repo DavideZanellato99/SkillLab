@@ -37,6 +37,11 @@ function visibleTarget(selector: string): Element | null {
   return null
 }
 
+function measure(selector: string): AnchorRect | null {
+  const box = visibleTarget(selector)?.getBoundingClientRect()
+  return box ? { top: box.top, left: box.left, width: box.width, height: box.height } : null
+}
+
 const same = (a: AnchorRect | null, b: AnchorRect | null) =>
   a === b ||
   (a !== null &&
@@ -54,6 +59,18 @@ export function useAnchorRect(selector: string | undefined, active: boolean): An
     selector: string
     rect: AnchorRect | null
   } | null>(null)
+
+  /* La prima misura di un passo si prende durante il render, non in un
+     effetto: un effetto arriva un disegno dopo, e in quel disegno il passo
+     nuovo non avrebbe ancora una misura, cioè si vedrebbe un velo pieno per
+     un frame, dal quale il ritaglio partirebbe per scivolare fino
+     all'elemento. Misurare qui è il modo in cui il ritaglio compare
+     direttamente dove deve stare. È il caso in cui React consente di
+     aggiornare lo stato mentre si disegna: ripete il render subito, prima di
+     toccare la pagina. */
+  if (active && selector && measured?.selector !== selector) {
+    setMeasured({ selector, rect: measure(selector) })
+  }
 
   useEffect(() => {
     if (!active || !selector) return
@@ -73,11 +90,7 @@ export function useAnchorRect(selector: string | undefined, active: boolean): An
 
     let frame = 0
     const read = () => {
-      const el = visibleTarget(selector)
-      const box = el?.getBoundingClientRect()
-      const next = box
-        ? { top: box.top, left: box.left, width: box.width, height: box.height }
-        : null
+      const next = measure(selector)
       setMeasured((prev) =>
         prev?.selector === selector && same(prev.rect, next) ? prev : { selector, rect: next },
       )

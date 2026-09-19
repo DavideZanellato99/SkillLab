@@ -325,7 +325,12 @@ copia insegnerebbe un gesto che poi non si ritrova. Quale pannello è aperto lo
 sa solo la barra, quindi la guida glielo chiede con un evento
 (`TUTORIAL_USER_MENU_EVENT`), come le pagine pubbliche chiedono la modale di
 accesso: il menu resta aperto finché si parla di quella voce e si richiude
-appena si passa oltre.
+appena si passa oltre. Finché è la guida a tenerlo aperto (`heldOpen` su
+`NavbarUserMenu`), il click fuori non lo chiude: il pulsante Avanti sta fuori
+dal menu, e il `pointerdown` su di lui chiudeva il menu, la voce illuminata
+spariva e il riquadro si spostava al centro prima del `mouseup`, così il click
+non si completava e ogni passo nel menu si vedeva due volte. Sotto al velo un
+click fuori davvero non può arrivare, quindi non c'è niente da chiudere.
 
 La misura dell'elemento si rifà a ogni frame finché la guida è aperta, e non a
 ogni evento che potrebbe spostarlo: gli eventi da ascoltare sarebbero lo
@@ -333,6 +338,17 @@ scroll, il ridimensionamento, il menu che si apre con la sua animazione e un
 elenco che arriva dal server e allunga la pagina sotto. Un
 `getBoundingClientRect` per frame su un elemento solo non si sente, e lo stato
 cambia unicamente quando la misura cambia davvero.
+
+**Al passo nuovo ritaglio e riquadro compaiono già al loro posto.** La prima
+misura di un passo si prende durante il render e non in un effetto, che
+arriverebbe un disegno dopo lasciando per un frame il velo pieno, e il
+ritaglio ha per chiave la propria ancora, così è un nodo nuovo e non lo stesso
+del passo prima (o del velo, che è un `div` nello stesso punto dell'albero) da
+cui la transizione lo farebbe scivolare. Il riquadro invece è uno solo per
+tutta la guida, quindi al cambio di ancora spegne la transizione per quella
+sola scrittura delle coordinate. La transizione resta per quello che si muove a
+passo fermo: lo scroll che porta l'elemento in vista, il menu dell'account che
+si apre.
 
 Un velo trasparente raccoglie i click: la guida si sfoglia con i propri
 pulsanti, con le frecce o con Esc, e non toccando quello che illumina. Un click

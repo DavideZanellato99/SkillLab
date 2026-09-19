@@ -1649,8 +1649,8 @@ vive nella memoria del browser come le risposte, quindi un test abbandonato a
 metà non lascia né l'uno né le altre. All'esito il registratore si ferma, il
 file si chiude, e parte `POST /api/simulations/attempts/{id}/screen-recording`
 con il corpo grezzo e il Content-Type di MediaRecorder, come per l'audio di
-una chiamata: si legge a pezzi, si smette al primo che supera i **150 MB**
-(`MAX_SCREEN_RECORDING_BYTES`, con il gemello a 160 MB in Caddy su quella
+una chiamata: si legge a pezzi, si smette al primo che supera i **300 MB**
+(`MAX_SCREEN_RECORDING_BYTES`, con il gemello a 320 MB in Caddy su quella
 rotta), un secondo caricamento sostituisce il primo. Sopra l'esito
 [ScreenRecordingUploadStatus](../frontend/src/components/ScreenRecordingUploadStatus.tsx)
 dice che sta salendo, che è salito, o che non è salito e si riprova: il file

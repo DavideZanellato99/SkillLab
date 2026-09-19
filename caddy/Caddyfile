@@ -145,7 +145,7 @@
 
 	# Quanto può pesare quello che arriva. È il tetto che manca a monte: gli
 	# endpoint che ricevono un file hanno i loro (2 MB un ritratto, 10 MB un
-	# documento, 50 MB la registrazione di una chiamata, 150 MB lo schermo
+	# documento, 50 MB la registrazione di una chiamata, 300 MB lo schermo
 	# registrato durante un test), ma quei controlli guardano i byte quando
 	# sono già arrivati. Un multipart lo legge intero FastAPI prima di
 	# passarlo alla funzione, e finisce in un file temporaneo dentro il
@@ -174,7 +174,7 @@
 			max_size 55MB
 		}
 		request_body @registrazione_schermo {
-			max_size 160MB
+			max_size 320MB
 		}
 		request_body @altre_scritture {
 			max_size 12MB

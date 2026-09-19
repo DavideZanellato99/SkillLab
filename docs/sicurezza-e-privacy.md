@@ -133,10 +133,10 @@ degli avatar sotto `/static`.
 
 Nello stesso blocco, e per un motivo diverso, ci sono anche **tre tetti su
 quanto può pesare una richiesta**: 55 MB sulla rotta che riceve la
-registrazione di una chiamata, 160 MB su quella che riceve lo schermo
+registrazione di una chiamata, 320 MB su quella che riceve lo schermo
 registrato durante un test, 12 MB su tutto il resto dell'API. Gli endpoint
 che ricevono un file hanno già i loro (2 MB un ritratto, 10 MB un documento,
-50 MB un audio, 150 MB un video),
+50 MB un audio, 300 MB un video),
 ma quei controlli guardano i byte **quando sono già arrivati**: un multipart lo
 legge per intero FastAPI prima di passarlo alla funzione, e finisce in un file
 temporaneo dentro il container, quindi un caricamento da svariati giga veniva

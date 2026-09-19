@@ -24,7 +24,7 @@
  * Il bitrate è tenuto basso di proposito. Uno schermo mentre si risponde a
  * un test è quasi fermo, e cinque fotogrammi al secondo a 600 kbit/s bastano
  * a leggere cosa c'era aperto: mezz'ora di test aperto sono un centinaio di
- * megabyte, sotto il tetto di 150 MB del server (`MAX_SCREEN_RECORDING_BYTES`). */
+ * megabyte, ben sotto il tetto di 300 MB del server (`MAX_SCREEN_RECORDING_BYTES`). */
 
 /** Il video di un test, pronto da caricare. */
 export interface ScreenRecording {

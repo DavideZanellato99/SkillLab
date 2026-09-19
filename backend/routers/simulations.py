@@ -108,9 +108,10 @@ router = APIRouter(prefix="/api/simulations", tags=["simulations"])
 # una chiamata (50 MB) perché un test a risposta aperta non ha limite di
 # tempo, e mezz'ora di schermo a cinque fotogrammi al secondo sono un
 # centinaio di megabyte anche con il bitrate tenuto basso dal browser (vedi
-# ``screenRecording.ts``). Il gemello sta in Caddy, che rifiuta prima che il
-# corpo arrivi qui.
-MAX_SCREEN_RECORDING_BYTES = 150 * 1024 * 1024
+# ``screenRecording.ts``): il tetto lascia spazio a un test che ne dura più
+# di un'ora. Il gemello sta in Caddy, che rifiuta prima che il corpo arrivi
+# qui.
+MAX_SCREEN_RECORDING_BYTES = 300 * 1024 * 1024
 # Solo il container: i parametri del codec che il browser attacca dietro
 # ("video/webm;codecs=vp9") non contano per accettare o rifiutare.
 _ALLOWED_SCREEN_RECORDING_TYPES = {"video/webm", "video/mp4"}
